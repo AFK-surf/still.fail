@@ -469,6 +469,9 @@ struct Node {
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
+  /// a block of a windowed list (View::scrolls_window): laid out by the list as a root of its own, as wide as the list,
+  /// as tall as it comes to, placed where the list puts it; no box of what holds it, nothing over it laid out again for it
+  mut own_root : Bool
   /// a boundary's (View::boundary): told of a fault under it
   mut fault_to : ((String) -> Unit)?
   /// drawn by what hosts the tree (View::hosted)
@@ -787,6 +790,11 @@ pub struct Tree {
   mut rows_grid : Double
   /// the nodes holding such a list's rows (Node's list_rows), let go or not
   rows_lists : Array[Int]
+  /// the windowed lists (View::scrolls_window), each by the node holding its blocks (its index and making) and what
+  /// lays them out once all else is laid out (placing them too, or not: Tree::measured_now); and whether one of their
+  /// blocks is to be laid out again (a block's own, Node's own_root)
+  lists : Array[(Int, Int, (Bool) -> Bool)]
+  mut lists_due : Bool
   /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
   /// yield_thumbs, Tree::thumb_at)
   thumbs : Map[Int, NodeId]
@@ -951,6 +959,8 @@ pub fn Tree::new(
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
+    lists: [],
+    lists_due: false,
     thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
@@ -1064,6 +1074,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.parent = parent
       n.allow_ellipsis = false
       n.slot = false
+      n.own_root = false
       n.fault_to = None
       n.hosted = false
       n.on_press = None
@@ -1224,6 +1235,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         takes_ver: None,
         drag_end: None,
         slot: false,
+        own_root: false,
         fault_to: None,
         hosted: false,
         said: None,
@@ -1675,17 +1687,24 @@ fn Tree::marked(self : Tree) -> Unit {
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
-  self.layout_due = true
-  // (what was laid out to be read no more where it stands)
-  self.measured_gen = -1
   self.hits = self.hits + 1
-  self.marked()
   let mut i = at
   while i >= 0 {
     let n = self.nodes[i]
     n.flex.dirty = true
+    // (in a windowed list's block, laid out by its list as a root of its own: the list to lay it out again once all
+    // else is, nothing over it)
+    if n.own_root {
+      self.lists_due = true
+      self.marked()
+      return
+    }
     i = n.parent
   }
+  self.layout_due = true
+  // (what was laid out to be read no more where it stands)
+  self.measured_gen = -1
+  self.marked()
 }
 
 ///|
@@ -2949,6 +2968,104 @@ fn Tree::rows_list(self : Tree, at : Int) -> Unit {
 }
 
 ///|
+/// Node `holder` holds a windowed list's blocks (View::scrolls_window), laid out by `lay` once all else is laid out and
+/// placed, each a root of its own (View::block): `lay(place)` lays them out and puts them where they go, placing them
+/// too where `place` says (not where what asks only lays out to read: Tree::measured_now), and says whether it placed
+/// any. As long as the holder lives.
+fn Tree::lays_blocks(self : Tree, holder : View, lay : (Bool) -> Bool) -> Unit {
+  self.lists.push((holder.at, holder.gen, lay))
+  self.lists_due = true
+  self.marked()
+  holder.owns(fn() {
+    match self.lists.search_by(fn(l) { l.0 == holder.at && l.1 == holder.gen }) {
+      Some(i) => self.lists.remove(i) |> ignore
+      None => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The windowed lists' blocks laid out by their lists (Tree::lays_blocks), each living: once, and once more where one
+/// of their blocks was marked meanwhile (in another's, by what one made); whether any placed anything.
+fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
+  if self.lists.is_empty() {
+    self.lists_due = false
+    return false
+  }
+  let mut placed = false
+  let mut rounds = 0
+  while rounds < 2 {
+    self.lists_due = false
+    for l in self.lists.copy() {
+      let (at, gen, lay) = l
+      let n = self.nodes[at]
+      if n.live && n.gen == gen && lay(place) {
+        placed = true
+      }
+    }
+    rounds = rounds + 1
+    if !self.lists_due {
+      break
+    }
+  }
+  placed
+}
+
+///|
+/// A block of the windowed list `self` holds (Tree::lays_blocks): made by `make` as the `i`th of what it holds (its
+/// place among them, in their order), laid out by the list as a root of its own: no box of the holder's, nothing over
+/// it laid out again for it.
+fn View::block(self : View, i : Int, make : (View) -> Unit) -> View {
+  guard self.live() is Some(n) else { return self.tree.none() }
+  let v = self.tree.made(self.at)
+  self.tree.nodes[v.at].own_root = true
+  let i = if i < 0 { 0 } else if i > n.kids.length() { n.kids.length() } else { i }
+  n.kids.insert(i, v.at)
+  v.owning(fn() { make(v) })
+  v
+}
+
+///|
+/// Block `v` of the windowed list `self` holds let go and taken out of it (View::block): nothing of the holder's laid
+/// out again for it.
+fn View::block_gone(self : View, v : View) -> Unit {
+  v.let_go()
+  guard self.live() is Some(n) else { return }
+  match n.kids.search(v.at) {
+    Some(i) => n.kids.remove(i) |> ignore
+    None => ()
+  }
+  self.tree.order_marked()
+}
+
+///|
+/// Block `v` of a windowed list laid out as a root of its own (View::block), `w` wide, as tall as it comes to: its
+/// height then.
+fn View::block_laid(self : View, w : Double) -> Double {
+  guard self.live() is Some(n) else { return 0.0 }
+  self.tree.work.computes = self.tree.work.computes + 1
+  @flex.compute(n.flex, width=w, round=false, reuse=true)
+  n.flex.height
+}
+
+///|
+/// Block `v` of a windowed list put `y` down what holds it (and `x` across), as laid out (View::block_laid): placed
+/// there, what of it was laid out anew placed by it, where `place` says (else only where it lies, for what asks).
+fn View::block_put(self : View, x : Double, y : Double, gen : Int, place : Bool) -> Unit {
+  guard self.live() is Some(n) else { return }
+  n.flex.left = x
+  n.flex.top = y
+  if place {
+    if gen >= 0 {
+      self.tree.walk(self.at, gen, true)
+    } else {
+      self.tree.place(self.at)
+    }
+  }
+}
+
+///|
 /// The first row of the list node `at` holds: what it holds first, through any slot, not left out of its row (-1: none).
 fn Tree::first_row(self : Tree, at : Int) -> Int {
   for k in self.nodes[at].kids {
@@ -3067,6 +3184,8 @@ fn Tree::measured_now(self : Tree) -> Unit {
         self.walk_from = g
       }
     }
+    // (the windowed lists' blocks laid out by their lists as they are now, placed by none of it)
+    self.lists_laid(false) |> ignore
   })
   if shown != at {
     @signals.untracked(fn() {
@@ -5159,6 +5278,10 @@ fn View::slot(self : View) -> View {
 /// The boxes node `at` lays out as its own, in order: its own, or a slot's, those of what it holds.
 fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
   let n = self.nodes[at]
+  // (a windowed list's block: laid out by its list, none of its holder's)
+  if n.own_root {
+    return
+  }
   if n.slot {
     for k in n.kids {
       self.boxes(k, into)
@@ -6173,7 +6296,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
-  let placing = self.layout_due || !self.places_due.is_empty()
+  let mut placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
     self.layout_due = false
     // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
@@ -6193,6 +6316,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.measured_gen = -1
     self.walk_from = -1
     self.walk(0, gen, true)
+  }
+  // (the windowed lists' blocks, all else laid out and placed: each list as tall and wide as it came to, its blocks
+  // laid out by it, each a root of its own, and placed where it puts them, in this same pass)
+  if self.lists_laid(true) {
+    placing = true
   }
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
@@ -6284,6 +6412,10 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.laid_out(upto)
     }
     self.withins_passing = false
+  }
+  // (a windowed list's block marked again as the lists were laid out, past what they took then: for the next)
+  if self.lists_due && !self.due {
+    self.marked()
   }
 }
 
@@ -6533,7 +6665,9 @@ fn Tree::walk(self : Tree, at : Int, gen : Int, holder_laid : Bool) -> Unit {
   if n.slot {
     if holder_laid {
       for k in n.kids {
-        self.walk(k, gen, holder_laid)
+        if !self.nodes[k].own_root {
+          self.walk(k, gen, holder_laid)
+        }
       }
     }
     return
@@ -6554,7 +6688,10 @@ fn Tree::walk(self : Tree, at : Int, gen : Int, holder_laid : Bool) -> Unit {
   self.place(at)
   if laid {
     for k in n.kids {
-      self.walk(k, gen, laid)
+      // (a windowed list's block: laid out and placed by its list, Tree::lists_laid)
+      if !self.nodes[k].own_root {
+        self.walk(k, gen, laid)
+      }
     }
   }
 }

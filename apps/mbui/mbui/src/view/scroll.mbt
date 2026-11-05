@@ -646,7 +646,13 @@ pub fn View::scrolls(
   // (how far it can go: as tall as what it holds is, less as tall as it shows; told as laid out)
   s.room = fn() {
     match content_extent {
-      Some(extent) => return self.laid_size_told().map(fn(v) { extent() - (if across { v.0 } else { v.1 }) })
+      // (counted by what lays it out, in the same pass as it is laid out: as tall as it is laid out now, told with that
+      // count where it is another)
+      Some(extent) =>
+        return match self.live() {
+          Some(n) if n.placed => Some(extent() - (if across { n.flex.width } else { n.flex.height }))
+          _ => None
+        }
       None => ()
     }
     match inner.val {
