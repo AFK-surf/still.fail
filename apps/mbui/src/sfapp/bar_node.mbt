@@ -6,10 +6,12 @@
 
 ///|
 /// Said each time the bar is told what it goes by (bar_tell): its ways set out anew, what reads them read again.
+// kept across runs: a count whose changes alone are read (what reads it read again), never its value
 let bar_said : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// Said as all of the bar's ways have come to rest (the moment of their end, View::at_moment).
+// kept across runs: a count whose changes alone are read (what reads it read again), never its value
 let bar_ways_rested : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
