@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync, constants } from "node:sqlite";
 import { test } from "node:test";
 import { archiveMarksReady, archiveMarksStep, installArchiveMarkIndex } from "../src/store/archive-mark-index.ts";
 import { Store } from "../src/store/store.ts";
@@ -86,6 +90,44 @@ test("old marks are prepared in bounded batches as writers change them", () => {
     }
     check(store);
   } finally { store.close(); }
+});
+
+test("another connection's old writes stay exact during and after mark preparation", () => {
+  const dir = mkdtempSync(join(tmpdir(), "archive-mark-writers-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db, old = new DatabaseSync(path);
+  try {
+    dropIndex(store);
+    db.exec("INSERT INTO pins(rowid,viewer,session,at) VALUES(1,'a','one',1),(2,'b','two',1),(3,'c','three',1)");
+    db.exec("INSERT INTO kept_chats(rowid,viewer,thread) VALUES(1,'a',1),(2,'b',2),(3,'c',3)");
+    installArchiveMarkIndex(db);
+    assert.deepEqual(archiveMarksStep(db, 1), { done: false, visited: 1 });
+    old.exec("UPDATE OR REPLACE kept_chats SET rowid=-30,thread=4 WHERE viewer='b'; DELETE FROM kept_chats WHERE viewer='a'");
+    old.exec("UPDATE OR REPLACE pins SET rowid=1000,session='four' WHERE viewer='b'; DELETE FROM pins WHERE viewer='a'");
+    old.exec("INSERT INTO pins(viewer,session,at) VALUES('d','new',1); INSERT INTO kept_chats(viewer,thread) VALUES('d',5)");
+    while (!archiveMarksReady(db)) assert.ok(archiveMarksStep(db, 1).visited <= 1);
+    check(store);
+    old.exec("DELETE FROM pins WHERE viewer='c'; DELETE FROM kept_chats WHERE viewer='c'");
+    old.exec("INSERT OR REPLACE INTO pins(viewer,session,at) VALUES('d','new',2); UPDATE kept_chats SET thread=6 WHERE viewer='d'");
+    check(store);
+    assert.equal(store.archiveMarks().pinned("four"), true);
+    assert.equal(store.archiveMarks().pinned("three"), false);
+    assert.equal(store.archiveMarks().kept(6), true);
+    assert.equal(store.archiveMarks().kept(3), false);
+  } finally { old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a failed version marker leaves no partially installed archive mark lookup", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    dropIndex(store);
+    db.setAuthorizer((action, name) => action === constants.SQLITE_INSERT && name === "archive_mark_meta"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    assert.throws(() => installArchiveMarkIndex(db));
+    db.setAuthorizer(null);
+    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name LIKE 'archive_pin_%' OR name LIKE 'archive_keep_%' OR name='archive_mark_meta'").get(), undefined);
+    installArchiveMarkIndex(db);
+    assert.equal(archiveMarksReady(db), true);
+  } finally { db.setAuthorizer(null); store.close(); }
 });
 
 test("a failed mark batch rolls back the rows and its cursor", () => {

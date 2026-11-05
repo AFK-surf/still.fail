@@ -96,3 +96,34 @@ test("automatic archive waits for old marks, then keeps pinned sessions", async 
     assert.equal(timer, null);
   } finally { stop(); ready.resolve(); await r.close(); }
 });
+
+test("stopping the archive timer cancels pending mark preparation", async () => {
+  const r = new Rig(), db = r.store.db, ready = Promise.withResolvers<void>();
+  let timer: { ms: number; run: () => void } | null = null, signal: AbortSignal | undefined;
+  const time = { after(ms: number, run: () => void) {
+    const next = { ms, run }; timer = next;
+    return () => { if (timer === next) timer = null; };
+  } };
+  let stop = () => {};
+  try {
+    r.store.insertSession({ key: "pinned", connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w/pinned", token: "pinned", createdAt: 1, lastActiveAt: 1 });
+    for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE 'archive_pin_%' OR name LIKE 'archive_keep_%')").all() as { name: string }[]) db.exec(`DROP TRIGGER ${row.name}`);
+    db.exec("DROP TABLE archive_pin_rows; DROP TABLE archive_keep_rows; DROP TABLE archive_pin_replaced; DROP TABLE archive_keep_replaced; DROP TABLE archive_mark_meta");
+    db.exec("INSERT INTO pins(viewer,session,at) VALUES('person','pinned',1)");
+    installArchiveMarkIndex(db);
+    stop = startAutoArchiveTimer(r.hub, time, {
+      prepareSaid: async () => {}, prepareSessionBindings: async () => {}, prepareSessionUpJobs: async () => {},
+      prepareArchiveMarks: (s) => { signal = s; return ready.promise; },
+    });
+    const task = timer as { ms: number; run: () => void } | null;
+    assert.ok(task); assert.equal(task.ms, 60_000); timer = null; task.run();
+    stop();
+    assert.equal(signal?.aborted, true);
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+    assert.equal(timer, null);
+    assert.equal(r.store.getSession("pinned")?.archivedAt, null);
+  } finally { stop(); ready.resolve(); await r.close(); }
+});
