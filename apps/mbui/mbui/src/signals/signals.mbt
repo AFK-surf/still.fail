@@ -414,6 +414,57 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
 pub let effect_runs_most : Int = 64
 
 ///|
+/// How deep each of a few calls ran in itself (a probe: what runs a Wasm build's stack out, 2026-11-05): now, and at
+/// most since last asked. 0 an effect run, 1 a watch's read, 2 a computed's get, 3 a tree's change at its cause, 4 its
+/// layout pass, 5 its sizes told.
+let nest_now : FixedArray[Int] = FixedArray::make(6, 0)
+
+///|
+let nest_top : FixedArray[Int] = FixedArray::make(6, 0)
+
+///|
+let nest_names : FixedArray[String] = ["effect", "read", "computed", "cause", "laid", "sizes"]
+
+///|
+/// Where a nesting past 64 is said (the host's log, set by mbui/ui), with every count then.
+pub let nest_deep_said : Ref[(String) -> Unit] = Ref(fn(_) {  })
+
+///|
+pub fn nest_in(i : Int) -> Unit {
+  nest_now[i] += 1
+  if nest_now[i] > nest_top[i] {
+    nest_top[i] = nest_now[i]
+  }
+  if nest_now[i] == 65 || nest_now[i] % 1000 == 0 {
+    (nest_deep_said.val)("NEST deep \{nest_names[i]} \{nest_now[i]}: \{nest_said(nest_now)}")
+  }
+}
+
+///|
+pub fn nest_out(i : Int) -> Unit {
+  nest_now[i] -= 1
+}
+
+///|
+fn nest_said(a : FixedArray[Int]) -> String {
+  let parts = []
+  for i in 0..<a.length() {
+    parts.push("\{nest_names[i]}:\{a[i]}")
+  }
+  parts.join(",")
+}
+
+///|
+/// The most each ran in itself since last asked (`effect:1,read:3,…`), and from now what runs now.
+pub fn nest_most() -> String {
+  let said = nest_said(nest_top)
+  for i in 0..<nest_top.length() {
+    nest_top[i] = nest_now[i]
+  }
+  said
+}
+
+///|
 /// Where a cycle of effects is said instead of ending the program (a test's; none: abort).
 pub let effect_cycle_said : Ref[((String) -> Unit)?] = Ref(None)
 
@@ -461,7 +512,9 @@ fn run_effect(e : ReactiveNode) -> Unit {
   if run.effect_nesting > run.effect_nesting_most {
     run.effect_nesting_most = run.effect_nesting
   }
+  nest_in(0)
   run_effect_inner(e)
+  nest_out(0)
   run.effect_nesting -= 1
 }
 
@@ -603,6 +656,14 @@ pub fn after_all_flushed(f : () -> Unit) -> Unit {
 ///|
 /// The computed's value, worked out again first if what it read changed since (computedOper).
 pub fn[T] Computed::get(self : Computed[T]) -> T {
+  nest_in(2)
+  let v = self.get_now()
+  nest_out(2)
+  v
+}
+
+///|
+fn[T] Computed::get_now(self : Computed[T]) -> T {
   let node = self.0
   let state = self.1
   let flags = node.flags
@@ -937,6 +998,14 @@ pub fn watch(changed : () -> Unit) -> Watch {
 /// was touched as it ran (Watch::touch), which it keeps. What
 /// was reading before it does not read what it reads.
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
+  nest_in(1)
+  let v = self.read_now(f)
+  nest_out(1)
+  v
+}
+
+///|
+fn[T] Watch::read_now(self : Watch, f : () -> T) -> T {
   let e = self.node
   if watch_reading.depth == 0 {
     watch_reading.sets.clear()

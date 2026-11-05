@@ -1889,6 +1889,13 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
+  @signals.nest_in(3)
+  self.at_cause_now(f)
+  @signals.nest_out(3)
+}
+
+///|
+fn Tree::at_cause_now(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
   } else {
@@ -6026,6 +6033,40 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
 /// things are as an event finds them in the middle of its change: Tree::laid_now).
 fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+  laid_nesting.val += 1
+  if laid_nesting.val > laid_nesting_most.val {
+    laid_nesting_most.val = laid_nesting.val
+  }
+  @signals.nest_in(4)
+  self.laid_out_pass(upto)
+  @signals.nest_out(4)
+  laid_nesting.val -= 1
+}
+
+///|
+let laid_nesting : Ref[Int] = Ref(0)
+
+///|
+let laid_nesting_most : Ref[Int] = Ref(0)
+
+///|
+/// (a probe: a size told otherwise while layout passes run 60 to 68 deep in each other, said on the log)
+fn size_changed_deep(at : Int, what : String, was : String, now : String) -> Unit {
+  if laid_nesting.val >= 60 && laid_nesting.val <= 68 {
+    (@signals.nest_deep_said.val)("NEST size pass \{laid_nesting.val} node \{at} \{what} \{was} -> \{now}")
+  }
+}
+
+///|
+/// How deep a layout pass ran inside another at most since this was last asked, and from now none.
+pub fn laid_out_nesting_most() -> Int {
+  let most = laid_nesting_most.val
+  laid_nesting_most.val = laid_nesting.val
+  most
+}
+
+///|
+fn Tree::laid_out_pass(self : Tree, upto : Double) -> Unit {
   let w = self.last_w
   let h = self.last_h
   if !self.due {
@@ -6170,6 +6211,14 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
 ///|
 /// The sizes followed (View::laid_size_told), all of it laid out, told as one change: whether any was told otherwise.
 fn Tree::sizes_told(self : Tree) -> Bool {
+  @signals.nest_in(5)
+  let told = self.sizes_told_now()
+  @signals.nest_out(5)
+  told
+}
+
+///|
+fn Tree::sizes_told_now(self : Tree) -> Bool {
   let keep = []
   // (each once, however often it was asked: a set, not the array gone through for each)
   let kept : Set[Int] = Set::new()
@@ -6186,6 +6235,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
           let rect = if self.out_at(at) { None } else { Some(self.handle(at).placed_window_now()) }
           if @signals.untracked(fn() { cell.get() }) != rect {
             told.val = true
+            size_changed_deep(at, "rect", @signals.untracked(fn() { cell.get() }).to_string(), rect.to_string())
             cell.set(rect)
           }
         }
@@ -6199,6 +6249,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
           }
           if @signals.untracked(fn() { cell.get() }) != rect {
             told.val = true
+            size_changed_deep(at, "rect", @signals.untracked(fn() { cell.get() }).to_string(), rect.to_string())
             cell.set(rect)
           }
         }
@@ -6215,6 +6266,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
           let size = Some((n.flex.width, n.flex.height))
           if @signals.untracked(fn() { cell.get() }) != size {
             told.val = true
+            size_changed_deep(at, "size", @signals.untracked(fn() { cell.get() }).to_string(), size.to_string())
             cell.set(size)
           }
         }
@@ -6225,6 +6277,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
         Some(cell) =>
           if @signals.untracked(fn() { cell.get() }) != n.went {
             told.val = true
+            size_changed_deep(at, "went", "", "")
             cell.set(n.went)
           }
         None => ()

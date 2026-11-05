@@ -261,7 +261,7 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   let p = frame_perf()
   h_log(
-    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} whole=\{scene.parts.why()} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} why=\{built_why.val.escape()} painted_why=\{painted_why.val.escape()}",
+    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} whole=\{scene.parts.why()} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} why=\{built_why.val.escape()} painted_why=\{painted_why.val.escape()} nest=\{@signals.nest_most()}",
   )
 }
 
@@ -283,4 +283,10 @@ fn perf_told() -> Unit {
 pub fn perf_size() -> Double {
   perf_written.get() |> ignore
   @hostapi.perf_size()
+}
+
+///|
+fn init {
+  // (a call run past 64 deep in itself said on the log at once, with how deep each other probe was then)
+  @signals.nest_deep_said.val = fn(s) { h_log(s) }
 }

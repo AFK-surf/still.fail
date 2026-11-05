@@ -35,3 +35,48 @@ test "entering a chat from the list on a phone runs its effects one inside anoth
   let leaving = @signals.effect_nesting_most()
   assert_eq((entering <= 2, leaving <= 2), (true, true), msg="entering \{entering}, leaving \{leaving}")
 }
+
+///|
+test "probe: how deep layout passes run in each other leaving a chat" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-long", w=390.0, h=844.0, platform=2)
+  t.set_frame_period(1000.0 / 120.0)
+  t.run_for(@ui.move_most_ms)
+  @view.laid_out_nesting_most() |> ignore
+  t.back_told(t.time())
+  t.run_as_host(@ui.move_most_ms)
+  let long = @view.laid_out_nesting_most()
+  let t2 = wide_tester(calls, mode="long", w=390.0, h=844.0, platform=2)
+  t2.set_frame_period(1000.0 / 120.0)
+  t2.run_for(@ui.move_most_ms)
+  match t2.find("整理发布清单") {
+    Some((x, y)) => {
+      t2.touch_at(0, x, y, t2.time())
+      t2.touch_at(2, x, y, t2.time())
+    }
+    None => abort("no chat in the list")
+  }
+  t2.run_as_host(@ui.move_most_ms)
+  @view.laid_out_nesting_most() |> ignore
+  t2.back_told(t2.time())
+  t2.run_as_host(@ui.move_most_ms)
+  let short = @view.laid_out_nesting_most()
+  assert_eq((long, short), (0, 0))
+}
+
+///|
+test "probe: how deep calls run in themselves leaving a long chat at the emulator's size, its bars on" {
+  let calls : Array[Made] = []
+  let said = []
+  for bars in [(0.0, 0.0), (170.0 / 3.25, 63.0 / 3.25)] {
+    let t = wide_tester(calls, mode="chat-long", w=1140.0 / 3.25, h=2616.0 / 3.25, platform=2)
+    t.set_frame_period(1000.0 / 120.0)
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{bars.0},\"bottom\":\{bars.1},\"left\":0,\"right\":0}}")
+    t.run_for(@ui.move_most_ms)
+    let start = @signals.nest_most()
+    t.back_told(t.time())
+    t.run_as_host(@ui.move_most_ms)
+    said.push("bars \{bars}: start \{start}; leaving \{@signals.nest_most()}")
+  }
+  assert_eq(said, [])
+}
