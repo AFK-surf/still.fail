@@ -1506,6 +1506,17 @@ fn Ctx::tree_draw_node(
       let bw = if c.edge.0 > 0.0 && tree.holds_drawn(c.id) { c.edge.0 * s } else { 0.0 }
       push_inset_clip(x, y, c.w * s, c.h * s, fn(j) { corners[j] }, bw)
       p.clipping.push(c.id)
+      // (and across only between where it says, as it is painted, View::cut_across: a second cut, straight, popped with
+      // its own as what it holds ends)
+      match c.cut_across {
+        Some((from, to)) => {
+          let from = dclamp(from, 0.0, c.w)
+          let to = dclamp(to, 0.0, c.w)
+          push_clip(x + from * s, y, x + dmax(from, to) * s, y + c.h * s)
+          p.clipping.push(c.id)
+        }
+        None => ()
+      }
     }
   }
   // (a hosted old view is what the node holds, so it is cut before it is painted; a tree node's own ground and shadow
@@ -1848,6 +1859,14 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       None => ()
     }
   }
+  // (its notch, View::notch, on its glass, its fill and its edge as each is emitted, none on its shadow, as an old view's
+  // box's: Ctx::notch_last)
+  let notched = fn() {
+    let (ny, nr, nf) = c.notch
+    if nr > 0.0 {
+      self.notch_last_at(ny, nr, nf)
+    }
+  }
   match (if bone_whole { None } else { c.glass }) {
     Some(gl) if solid => {
       if blur > 0.0 {
@@ -1855,11 +1874,15 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
         each()
       }
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
+      notched()
       each()
     }
     Some(gl) => {
       glass_at = self.ninst - start
       self.glass_inst(0.0, 0.0, c.w, c.h, c.radius, gl, 1.0)
+      if !gl.liquid {
+        notched()
+      }
       each()
       if blur > 0.0 && !gl.liquid {
         self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 1.0, dy, 0.0, 0.0)
@@ -1868,7 +1891,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     }
     None =>
       if blur > 0.0 {
-        self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+        // (outside its outline only where it says so, View::shadow_outside: as an old view's box's `shadow_out`)
+        let out = c.shadow_out
+        self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, if out { 1.0 } else { 0.0 }, if out { dy } else { 0.0 }, 0.0, 0.0)
         each()
       }
   }
@@ -1885,6 +1910,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   if ew > 0.0 && edge_after {
     if (ground_c & 0xFFL) != 0L {
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, ground_c, ew, 0L, 1.0)
+      notched()
       each()
     }
     ring_at = self.ninst - start
@@ -1892,12 +1918,14 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       self.emit_dashes(0.0, 0.0, c.w, c.h, c.radius, ew, ec, 1.0)
     } else {
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, 0L, ew, ec, 1.0)
+      notched()
       each()
     }
     ring_count = self.ninst - start - ring_at
   } else if (ground_c & 0xFFL) != 0L || edged {
     // (its edge's colour as it says it, drawn or not, as an old view's box's border_color is given whatever its border)
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, ground_c, if edged && !c.edge_dashed { ew } else { 0.0 }, if c.edge_dashed { 0L } else { ec }, 1.0)
+    notched()
     each()
     if edged && c.edge_dashed {
       self.emit_dashes(0.0, 0.0, c.w, c.h, c.radius, ew, ec, 1.0)
@@ -4967,6 +4995,8 @@ priv struct LayerFocus {
   mut fresh : Bool
   /// to give the focus to the first of what it holds that takes it, once that is built (View::focus_opens_first)
   mut first : Bool
+  /// what it gives the focus back to instead, where that is there then and takes it (View::returns_focus_to)
+  mut back_to : @view.NodeId?
 }
 
 ///|
@@ -5036,6 +5066,16 @@ fn focus_node_of(id : Int) -> @view.NodeId? {
 fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[(@view.NodeId, @view.NodeId?)]) -> Unit {
   let c = g()
   let going = layer_focus_open.filter(fn(l) { gone.contains(l.layer) })
+  // (one said to give it back to what opened it (View::returns_focus_to): to that, where it is there and takes it now)
+  for l in going {
+    match l.back_to {
+      Some(to) if t.can_focus(to) => {
+        l.back = tree_said_id(to)
+        l.back_in = layer_focus_holding(t, l.back)
+      }
+      _ => ()
+    }
+  }
   // (given back through what goes: each in it given back to what it would have, till none is)
   for l in going {
     for m in layer_focus_open {
@@ -5081,8 +5121,17 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
         layer_focus_open[i].back_in = had_in
         layer_focus_open[i].fresh = true
         layer_focus_open[i].first = t.opens_first(layer)
+        layer_focus_open[i].back_to = t.focus_back_of(layer)
       }
-      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true, first: t.opens_first(layer) })
+      None =>
+        layer_focus_open.push({
+          layer,
+          back: had,
+          back_in: had_in,
+          fresh: true,
+          first: t.opens_first(layer),
+          back_to: t.focus_back_of(layer),
+        })
     }
     // (one that gives the focus nothing as it opens (View::focus_returns): what had it before it still what had it, for
     // what opens over it)

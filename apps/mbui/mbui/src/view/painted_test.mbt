@@ -130,3 +130,190 @@ test "a card at least 360 and at most 560 within its room: said, not read back" 
   assert_eq(at.val.unwrap().rect().2, 560.0)
   tree.dispose()
 }
+
+///|
+test "Laid::drawn: where another is drawn this frame, its drawn_off and scale counted, in the frame it moved in; Laid::at the frame's moment" {
+  let off = @signals.signal(0.0)
+  let at : Ref[(@view.View, @view.View)?] = Ref(None)
+  let seen : Array[Double] = []
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(r) {
+        let row = r.box(fn(c) {
+          c
+          .width(Is(Some(40.0)))
+          .height(Is(Some(20.0)))
+          .offset(Is((10.0, 100.0)))
+          .drawn_off(By(fn() { (0.0, off.get()) }))
+          |> ignore
+        })
+        let flyer = r.box(fn(g) {
+          g.over(Is(true)).width(Is(Some(10.0))).height(Is(Some(10.0))) |> ignore
+          // (on the row as it is drawn, wherever it is drawn off to)
+          g.offset(
+            Painted(fn(laid) {
+              seen.push(laid.at())
+              laid.drawn(row).map(fn(d) { (d.0, d.1) }).unwrap_or((0.0, 0.0))
+            }),
+          )
+          |> ignore
+        })
+        at.val = Some((row, flyer))
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  let (_, flyer) = at.val.unwrap()
+  assert_eq((flyer.rect().0, flyer.rect().1), (10.0, 100.0))
+  let computes = tree.work().computes
+  off.set(-30.0)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_eq((flyer.rect().0, flyer.rect().1), (10.0, 70.0), msg="on the row as drawn off, the same frame")
+  assert_eq(tree.work().computes - computes, 0, msg="nothing laid out")
+  assert_eq(seen.last(), Some(16.0), msg="the frame's moment")
+  tree.dispose()
+}
+
+///|
+test "Layout::report: what a box's own layout says, read by what holds it as it measures it, in the same layout" {
+  let lines = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let at : Ref[@view.NodeId?] = Ref(None)
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(page) {
+        page
+        .width(Is(Some(300.0)))
+        .height(Is(Some(400.0)))
+        .layout_box(Is(()), fn(l, _) {
+          let composer = l.child("composer", fn(c) {
+            c.layout_box(By(fn() { lines.get() }), sized=true, fn(cl, n) {
+              cl.report("cap", 10.0 + 30.0 * (n - 1.0))
+              cl.size_to(20.0 * n + 16.0)
+            })
+            |> ignore
+          })
+          let note = l.child("note", fn(n) { at.val = Some(n.id()); n.width(Is(Some(10.0))).height(Is(Some(10.0))) |> ignore })
+          let (_, ch) = l.measure(composer, l.width)
+          l.measure(note, 10.0) |> ignore
+          l.place(composer, 0.0, l.height - ch)
+          // (by the cap the composer reported: over its last line's top)
+          let cap = l.reported(composer, "cap").unwrap_or(0.0)
+          l.place(note, 0.0, l.height - ch + cap - 10.0)
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  let note_y = fn() { tree.drawn_of(at.val.unwrap()).unwrap().y }
+  let one = note_y()
+  let computes = tree.work().computes
+  lines.set(3.0)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  // (one line: 36 tall, cap 10, at 364 + 10 − 10; three: 76 tall, cap 70, at 324 + 70 − 10)
+  assert_eq((one, note_y()), (364.0, 384.0))
+  assert_eq(tree.work().computes - computes, 1, msg="one layout")
+  tree.dispose()
+}
+
+///|
+test "Roomed: a width worked out from how big a node holding it is laid out, layers down, in the same layout" {
+  let wide = @signals.signal(400.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(talk) {
+        talk.width(By(fn() { Some(wide.get()) })).height(Is(Some(300.0))) |> ignore
+        talk.box(fn(bar) {
+          bar.row(Is(true)).padding(Is((8.0, 0.0, 8.0, 0.0))) |> ignore
+          bar.box(fn(group) {
+            group.grow(Is(1.0)) |> ignore
+            group.box(fn(title) {
+              ids["title"] = title.id()
+              title.height(Is(Some(20.0))).width(Roomed(talk, fn(w, _) { Some(if 0.42 * w > 80.0 { 0.42 * w } else { 80.0 }) })) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.frame(800.0, 600.0, now=0.0) |> ignore
+  let w = fn() { tree.drawn_of(ids["title"]).unwrap().w }
+  let at_400 = w()
+  let computes = tree.work().computes
+  wide.set(100.0)
+  tree.frame(800.0, 600.0, now=16.0) |> ignore
+  assert_eq((at_400, w()), (168.0, 80.0))
+  assert_eq(tree.work().computes - computes, 1, msg="one layout")
+  tree.dispose()
+}
+
+///|
+test "opens_across: as wide as its share of what it holds, what it holds laid out whole, in one layout as the share changes" {
+  let share = @signals.signal(Some(0.5), same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(row) {
+        row.row(Is(true)).height(Is(Some(20.0))) |> ignore
+        row.box(fn(cut) {
+          ids["cut"] = cut.id()
+          cut.opens_across(By(fn() { share.get() })).clips(Is(true)) |> ignore
+          cut.box(fn(words) {
+            ids["words"] = words.id()
+            words.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.frame(800.0, 600.0, now=0.0) |> ignore
+  let ws = fn() { (tree.drawn_of(ids["cut"]).unwrap().w, tree.drawn_of(ids["words"]).unwrap().w) }
+  let half = ws()
+  let computes = tree.work().computes
+  share.set(None)
+  tree.frame(800.0, 600.0, now=16.0) |> ignore
+  assert_eq((half, ws()), ((100.0, 200.0), (200.0, 200.0)))
+  assert_eq(tree.work().computes - computes, 1, msg="one layout")
+  tree.dispose()
+}
+
+///|
+test "panic: Layout::reported read of a child not measured in the same layout aborts" {
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page
+      .width(Is(Some(300.0)))
+      .height(Is(Some(300.0)))
+      .layout_box(Is(()), fn(l, _) {
+        let c = l.child("c", fn(c) {
+          c.layout_box(Is(()), sized=true, fn(cl, _) {
+            cl.report("cap", 10.0)
+            cl.size_to(20.0)
+          })
+          |> ignore
+        })
+        // (read before it is measured: what a layout before said, never this one's)
+        l.reported(c, "cap") |> ignore
+        l.measure(c, l.width) |> ignore
+        l.place(c, 0.0, 0.0)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+}

@@ -377,3 +377,19 @@ fn dmax(a : Double, b : Double) -> Double {
     b
   }
 }
+
+///|
+/// Where a motion by this spec is `ms` after its cause, from `from` to `to`, as long as it goes there (Spec::duration,
+/// as fast as nothing at its start): worked out where what it moves is drawn, from the cause's moment and a length known
+/// only as things are laid out (a sidebar's width: `move(over=whole)`, whole read in `Painted` as it is laid out), each
+/// frame from those alone, nothing kept or told.
+pub fn Spec::at_since(self : Spec, ms : Double, from : Double, to : Double) -> Double {
+  if ms <= 0.0 {
+    return from
+  }
+  let dur = self.duration(from, to, 0.0)
+  if dur <= 0.0 || ms >= dur {
+    return self.value_at(dur.ceil(), dur, from, to, 0.0).0
+  }
+  self.value_at(ms, dur, from, to, 0.0).0
+}

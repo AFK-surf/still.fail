@@ -112,6 +112,7 @@ pub fn place_beside(
 ///|
 /// What a node goes beside (View::beside): its anchor, on which side of it, lined up how, how far off, kept how far
 /// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it.
+/// `as_wide`: as wide as its anchor is drawn.
 pub(all) struct Beside {
   anchor : NodeId
   side : Side
@@ -119,6 +120,7 @@ pub(all) struct Beside {
   offset : Double
   padding : Double
   at_pointer : Bool
+  as_wide : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -129,7 +131,9 @@ pub(all) struct Beside {
 /// last went beside it: it follows its anchor while both are there, and never goes anywhere else. `at_pointer`: beside
 /// the point in the window the pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as
 /// the anchor were that point (a tip by the pointer along a tall thin thing); the pointer gone off it, by the point of
-/// it the pointer was last at (following the anchor still); never on it, beside all of it.
+/// it the pointer was last at (following the anchor still); never on it, beside all of it. `as_wide`: as wide as its
+/// anchor is drawn (a menu as wide as the field it opens from), laid out at that width as it is placed by it, in the
+/// same pass.
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -138,9 +142,18 @@ pub fn View::beside(
   offset? : Double = 4.0,
   padding? : Double = 8.0,
   at_pointer? : Bool = false,
+  as_wide? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
-  n.beside = Some({ anchor, side, along, offset, padding, at_pointer })
+  let was_wide = n.beside is Some(b) && b.as_wide
+  n.beside = Some({ anchor, side, along, offset, padding, at_pointer, as_wide })
+  // (as wide as its anchor: laid out alone after it, none of what holds it laying it out, Tree::besides_placed)
+  if was_wide != as_wide {
+    match self.parent() {
+      Some(p) => p.boxes_again()
+      None => ()
+    }
+  }
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -249,6 +262,21 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     let (hx, hy, hs) = match self.window_place(n.parent) {
       Some(p) => p
       None => (0.0, 0.0, 1.0)
+    }
+    // (as wide as its anchor is drawn (a menu as wide as the field it opens from): laid out alone here, at that width, once,
+    // its anchor placed before it in this same pass; none of what holds it lays it out (Tree::boxes))
+    if b.as_wide && hs > 0.0 {
+      let want = a.lw * ascale / hs
+      // (laid out again only as its anchor's width or what it holds changed)
+      if want > 0.0 && (n.flex.width != want || n.flex.dirty) {
+        if n.flex.width != want {
+          n.flex.style.set_width(Pt(want))
+        }
+        self.work.computes = self.work.computes + 1
+        let g = @flex.computes() + 1
+        @flex.compute(n.flex, width=want, height=self.last_h / hs, round=false, reuse=true)
+        self.walk(at, g, true)
+      }
     }
     // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)
     let (aw, ah) = (a.lw * ascale, a.lh * ascale)

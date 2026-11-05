@@ -18,6 +18,8 @@ pub struct Layout {
   priv placed : Array[Int]
   /// how tall what it holds is, as `place` says (Layout::size_to): a box sized by what it holds is as tall as that
   priv said_h : Ref[Double]
+  /// the children measured in this layout (Layout::measure, fit): what Layout::reported reads of, none else
+  priv measured : Set[Int]
 }
 
 ///|
@@ -68,12 +70,36 @@ pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View
 ///|
 /// The child measured `width` wide (`height` tall, where said) now, before another that needs its height: as flex
 /// measures one (the layout's guard, what measuring reads (a font's theme) read as ever), the same one at the same
-/// constraints not measured again; no other layout of the tree begun, nothing told.
-pub fn Layout::measure(self : Layout, child : View, width : Double, height? : Double) -> (Double, Double) {
+/// constraints not measured again; no other layout of the tree begun, nothing told. `foot`: how much room to leave under
+/// what it holds and how much of its foot is covered (a list under a composer: the composer measured first), given it
+/// as a constraint of this layout, as its own `foot_room` and `foot_cover` (View::scrolls_anchored, Layout::given_foot):
+/// what it holds laid out again where that changed, in the same layout.
+pub fn Layout::measure(
+  self : Layout,
+  child : View,
+  width : Double,
+  height? : Double,
+  foot? : (Double, Double),
+) -> (Double, Double) {
   self.check(child)
+  match foot {
+    Some(f) => {
+      let tree = child.tree
+      if tree.feet.get(child.at) != Some(f) {
+        tree.feet[child.at] = f
+        // (what reads it laid out again, in this layout: Layout::given_foot)
+        match tree.foot_readers.get(child.at) {
+          Some(r) if tree.nodes[r].live => tree.layout_marked_at(r)
+          _ => ()
+        }
+      }
+    }
+    None => ()
+  }
   // (the tree's layout owner still this box: what the child does to another branch aborted)
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child(child.tree.nodes[child.at].flex, width, height?, containing_height=self.height)
+  self.measured.add(child.at)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
@@ -84,6 +110,7 @@ pub fn Layout::fit(self : Layout, child : View, most : Double) -> (Double, Doubl
   self.check(child)
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child_fitted(child.tree.nodes[child.at].flex, most, containing_height=self.height)
+  self.measured.add(child.at)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
@@ -136,9 +163,12 @@ pub fn[K : Eq] View::layout_box(
       seen: Set::new(),
       placed: [],
       said_h: Ref(0.0 / 0.0),
+      measured: Set::new(),
     }
     // Only the final state is published by Tree::walk, so a child kept hidden and then placed never disappears.
     for at in n.kids { self.tree.nodes[at].flex.line = -1 }
+    // (what it reports said anew by this layout: Layout::report)
+    self.tree.reports.remove(self.at)
     match value.val {
       Some(v) => {
         let guard_before = @signals.set_access_guard(Some("layout_box node \{self.at} must use content and constraints"))
@@ -234,4 +264,82 @@ pub fn Layout::let_go(self : Layout, key : String) -> Unit {
     Some(i) => self.used.remove(i) |> ignore
     None => ()
   }
+}
+
+///|
+/// The room under what it holds and how much of its foot is covered, as what holds it (or a holder of that) gave it as
+/// it measured it (Layout::measure's `foot`), in this layout: None where none did. Read so, it is laid out again as
+/// that changes.
+pub fn Layout::given_foot(self : Layout) -> (Double, Double)? {
+  let tree = self.owner.tree
+  let mut i = self.owner.at
+  while i >= 0 {
+    match tree.feet.get(i) {
+      Some(f) => {
+        tree.foot_readers[i] = self.owner.at
+        return Some(f)
+      }
+      None => ()
+    }
+    i = tree.nodes[i].parent
+  }
+  None
+}
+
+///|
+/// A number this box's layout says of what it laid out (`name`: a composer's cap, how tall its words' first line sits),
+/// for what holds it to read as it measures it in the same layout (Layout::reported): no signal, nothing told; said
+/// again by each layout of it, what it does not say again gone.
+pub fn Layout::report(self : Layout, name : String, v : Double) -> Unit {
+  self.report_span(name, (v, v))
+}
+
+///|
+/// A span this box's layout says of what it laid out (`name`: where the words a quote names lie in a row, their top and
+/// their foot), as Layout::report says a number.
+pub fn Layout::report_span(self : Layout, name : String, v : (Double, Double)) -> Unit {
+  guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
+    abort("a layout context is only used inside its own callback")
+  }
+  let tree = self.owner.tree
+  match tree.reports.get(self.owner.at) {
+    Some(m) => m[name] = v
+    None => {
+      let m : Map[String, (Double, Double)] = {}
+      m[name] = v
+      tree.reports[self.owner.at] = m
+    }
+  }
+}
+
+///|
+/// What `child` (a child of this box, measured in this layout: Layout::measure, fit) or the box of a layout of its own
+/// it holds reported by `name` as it was laid out (Layout::report), the nearest such: read by what holds it alone. None
+/// where it said none.
+pub fn Layout::reported(self : Layout, child : View, name : String) -> Double? {
+  self.reported_span(child, name).map(fn(s) { s.0 })
+}
+
+///|
+/// The span `child` reported by `name` (Layout::report_span), as Layout::reported reads a number.
+pub fn Layout::reported_span(self : Layout, child : View, name : String) -> (Double, Double)? {
+  self.check(child)
+  // (what it said in this layout, measured here first: never what a layout before said, read before it is measured)
+  guard self.measured.contains(child.at) else {
+    abort("Layout::reported: a child is read only after it is measured in the same layout (Layout::measure, fit)")
+  }
+  let tree = child.tree
+  // (the nearest of it and what it holds that says it, from it down)
+  let todo = [child.at]
+  let mut i = 0
+  while i < todo.length() {
+    let at = todo[i]
+    i = i + 1
+    match tree.reports.get(at).bind(fn(m) { m.get(name) }) {
+      Some(v) => return Some(v)
+      None => ()
+    }
+    todo.append(tree.nodes[at].kids)
+  }
+  None
 }

@@ -224,6 +224,13 @@ fn bucket(px : Double) -> Int {
 }
 
 ///|
+/// The size a picture is decoded at to be shown `px` pixels on its long side (Ctx::image_want, image_ready: one decode for
+/// every size it stands for): what asks for a picture at sizes that change (a list as its width does) asks once for each.
+pub fn image_decoded_px(px : Double) -> Int {
+  bucket(px)
+}
+
+///|
 fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
   if self.state == 0 {
     let st = h_image_info(self.id, image_info_out)
@@ -835,4 +842,23 @@ fn image_decoded(id : Int, at : Double) -> Unit {
       }
     }
   }
+}
+
+///|
+/// Whether each of `pictures` (a source and how many pixels its long side is to be shown at) is decoded at that size, or
+/// failed, followed: told again as the host says a decode of one is done. What waits for pictures it knows from its
+/// data (a first page's avatars and pictures, asked for with Ctx::image_want) asks by them, never by what a frame drew.
+/// It starts no decode of its own.
+pub fn images_ready(pictures : Array[(String, Double)]) -> Bool {
+  pictures
+  .iter()
+  .all(fn(p) {
+    let (src, px) = p
+    image_decodes_read(src)
+    let want = bucket(px)
+    match image_cache.get(src) {
+      Some(list) => list.iter().any(fn(e) { e.state == -1 || (e.state == 1 && e.px == want) })
+      None => false
+    }
+  })
 }

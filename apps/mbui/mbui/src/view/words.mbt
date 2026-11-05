@@ -84,6 +84,7 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
   let (set, ink) = match look {
     Is(l) => (Is((l.code_scale, l.words, l.code_ground != 0L, l.max_lines, l.breaks)), Is((l.link, l.pressed, l.code_ink, l.code_ground)))
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       (
         By(fn() {
@@ -317,6 +318,14 @@ pub fn View::ink(self : View, ink : Live[Int64]) -> View {
 /// blur: none), as it changes: paint's.
 pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
   self.bind(Shadow, cast, Paint, fn(c) { self.tree.nodes[self.at].look.shadow = c })
+  self
+}
+
+///|
+/// Its shadow (View::shadow) cast outside its outline only, none under it (what is under it seen through it, its own
+/// ground or glass frosting none of it), as an old view's box's `shadow_out`, as it changes: paint's.
+pub fn View::shadow_outside(self : View, out : Live[Bool]) -> View {
+  self.bind(ShadowOut, out, Paint, fn(o) { self.tree.nodes[self.at].look.shadow_out = o })
   self
 }
 
@@ -672,6 +681,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
   match on {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })

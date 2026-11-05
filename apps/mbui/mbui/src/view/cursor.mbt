@@ -60,6 +60,7 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
   match shape {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })

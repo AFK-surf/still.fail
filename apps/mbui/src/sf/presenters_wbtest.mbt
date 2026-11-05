@@ -59,6 +59,7 @@ fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button
 fn beside_of(from : Anchor) -> Beside {
   match from {
     Anchor::Of(id) => Of(id)
+    Anchor::Node(n) => Node(n)
     Anchor::At(x, y, w, h) => At(x, y, w, h)
     Unanchored => abort("a menu or a pick is opened beside what opened it")
   }

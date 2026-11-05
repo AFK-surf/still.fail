@@ -456,8 +456,7 @@ export class Jobs {
   private line(): { waiting: Waiting[]; running: Started[] } {
     const waiting: Waiting[] = [];
     const running: Started[] = [];
-    for (const j of this.store.jobsRunning()) {
-      if (!queues(j)) continue;
+    for (const j of this.store.remoteQueueJobs()) {
       if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt, ...(j.small ? { small: true } : {}) });
       else running.push({ id: j.id, screen: j.screen === true, ...(j.small ? { small: true } : {}) });
     }

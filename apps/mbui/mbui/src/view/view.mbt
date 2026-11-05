@@ -31,11 +31,15 @@
 ///|
 /// A property's value: set once (`Is`), or worked out (`By`), tracked, and set again as what it read changes; or, of a
 /// place or a look alone, worked out as the frame is painted (`Painted`), after its one layout, from where things were
-/// laid out in it (`Laid`): what it reads of layout read there and nowhere else (retained.md, "Layout read back").
+/// laid out in it (`Laid`): what it reads of layout read there and nowhere else (retained.md, "Layout read back"); or,
+/// of what layout reads, worked out as it is laid out from how big a node holding it is laid out (`Roomed`: its width
+/// and height as its holder lays it out, else the room it is given, in the same layout: a title no wider than a share of
+/// its page, a field's lines as many as fit a share of its page's height), what else it reads followed.
 pub(all) enum Live[T] {
   Is(T)
   By(() -> T)
   Painted((Laid) -> T)
+  Roomed(View, (Double, Double) -> T)
 }
 
 ///|
@@ -73,9 +77,70 @@ pub fn Laid::size(self : Laid, v : View) -> (Double, Double)? {
 }
 
 ///|
+/// Where `v` is drawn in the window this frame, and how big: as Laid::rect, with what it and its holders are drawn off by
+/// (View::drawn_off: a list's rows on their way as it glides) and how big they are drawn (View::scale), the value
+/// View::drawn_window_told tells, read here as it is painted and never told (what flies to a row as that row is drawn).
+/// Each `Painted` reads what was placed before it: the layout's, and the `Painted` said before it; one said after it,
+/// none of it. None: let go, or laid out nowhere.
+pub fn Laid::drawn(self : Laid, v : View) -> (Double, Double, Double, Double)? {
+  guard physical_equal(v.tree, self.tree) && v.live() is Some(n) else { return None }
+  if self.tree.out_at(v.at) {
+    return None
+  }
+  let (x, y, _, s) = self.tree.projected(v.at, drawing=true)
+  Some((x, y, n.lw * s, n.lh * s))
+}
+
+///|
+/// The moment this frame is drawn at (Tree::drawn_at), followed: what is worked out from the time as it is painted (a
+/// flight's place on its way) worked out again as it goes.
+pub fn Laid::at(self : Laid) -> Double {
+  self.tree.drawn_at()
+}
+
+///|
 /// What reads it abort here: a property `Painted` is a place's or a look's, worked out as the frame is painted.
 fn[T] not_painted(what : String) -> T {
   abort("View: \{what} is no place nor look: a Painted value is worked out only as the frame is painted")
+}
+
+///|
+/// What reads it abort here: a property `Roomed` is one layout reads, worked out as what holds it is laid out.
+fn[T] not_roomed() -> T {
+  abort("View: what is said here is not laid out: a Roomed value is worked out only as what holds it is laid out")
+}
+
+///|
+/// What node `at` (made `gen`) works out of how big `of` is laid out (Live's Roomed), told as `of` is (its flex node's
+/// on_room), each in the order said.
+fn Tree::roomed_add(self : Tree, of : Int, at : Int, gen : Int, run : (Double, Double) -> Unit) -> Unit {
+  match self.roomed.get(of) {
+    Some(all) => all.push((at, gen, run))
+    None => {
+      let all = [(at, gen, run)]
+      self.roomed[of] = all
+      self.nodes[of].flex.on_room = Some(fn(w, h) {
+        for e in all.copy() {
+          (e.2)(w, h)
+        }
+      })
+    }
+  }
+}
+
+///|
+/// What node `at` (made `gen`) worked out of how big `of` is laid out, let go.
+fn Tree::roomed_drop(self : Tree, of : Int, at : Int, gen : Int) -> Unit {
+  match self.roomed.get(of) {
+    Some(all) => {
+      all.retain(fn(e) { e.0 != at || e.1 != gen })
+      if all.is_empty() {
+        self.roomed.remove(of)
+        self.nodes[of].flex.on_room = None
+      }
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -119,6 +184,14 @@ pub(all) struct Look {
   /// the edge drawn round its ground, inside it (how wide, its colour; 0 wide: none): View::edge
   mut edge : (Double, Int64)
   mut edge_dashed : Bool
+  /// the notch cut into its top (where its circle's middle is below the top, its radius, its fillets'; a radius of 0:
+  /// none): its ground's, its glass's and its edge's, as an old view's box's (Ctx::box `notch_*`): View::notch
+  mut notch : (Double, Double, Double)
+  /// its shadow cast outside its outline only (none under it), as an old view's box's `shadow_out`: View::shadow_outside
+  mut shadow_out : Bool
+  /// where across it cuts what it holds (from, to, in its own terms; None: all of it), as it is painted, where it clips
+  /// (View::clips): View::cut_across
+  mut cut_across : (Double, Double)?
   /// the picture it shows over its ground, all of it filled (its source as what hosts the tree keeps pictures by, what
   /// stands in for it till it is decoded at the size it is drawn ("" none), the most pixels it is asked at), drawn as
   /// what hosts the tree draws one (None: none): View::image
@@ -210,6 +283,12 @@ pub(all) struct Content {
   /// the edge round its ground (View::edge)
   edge : (Double, Int64)
   edge_dashed : Bool
+  /// the notch cut into its top (View::notch)
+  notch : (Double, Double, Double)
+  /// its shadow outside its outline only (View::shadow_outside)
+  shadow_out : Bool
+  /// where across it cuts what it holds (View::cut_across)
+  cut_across : (Double, Double)?
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
@@ -287,6 +366,12 @@ pub(all) struct Drawn {
   /// the edge round its ground (View::edge)
   edge : (Double, Int64)
   edge_dashed : Bool
+  /// the notch cut into its top (View::notch)
+  notch : (Double, Double, Double)
+  /// its shadow outside its outline only (View::shadow_outside)
+  shadow_out : Bool
+  /// where across it cuts what it holds (View::cut_across)
+  cut_across : (Double, Double)?
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
@@ -806,6 +891,17 @@ pub struct Tree {
   focus_gone : Array[NodeId]
   /// the layers that give the focus to the first of what they hold that takes it as they open (View::focus_opens_first)
   focus_firsts : Set[NodeId]
+  /// the layers that give the focus back as they go to a node said, not to what had it as they opened
+  /// (View::returns_focus_to)
+  focus_backs : Map[NodeId, NodeId]
+  /// the room under what it holds and its foot covered, given each node measured so (Layout::measure's `foot`), and
+  /// the box that reads it under it (Layout::given_foot)
+  feet : Map[Int, (Double, Double)]
+  foot_readers : Map[Int, Int]
+  /// what each box's layout reported of what it laid out, by name (Layout::report)
+  reports : Map[Int, Map[String, (Double, Double)]]
+  /// what each node works out of how big a node holding it is laid out, by that node (Live's Roomed)
+  roomed : Map[Int, Array[(Int, Int, (Double, Double) -> Unit)]]
   mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId?)]) -> Unit
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
@@ -1001,6 +1097,11 @@ pub fn Tree::new(
     focus_opened: [],
     focus_gone: [],
     focus_firsts: Set::new(),
+    focus_backs: {},
+    feet: {},
+    foot_readers: {},
+    reports: {},
+    roomed: {},
     on_layers_focus: fn(_, _) {  },
     point_stop: None,
     gone: false,
@@ -1080,6 +1181,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       let n = self.nodes[i]
       n.gen = n.gen + 1
       n.live = true
+      // (what was given the one at this place before (Layout::measure's `foot`), none of its own)
+      self.feet.remove(i)
+      self.foot_readers.remove(i)
+      self.reports.remove(i)
+      self.roomed.remove(i)
       n.flex = @flex.Node::new()
       n.look.ground = 0L
       n.look.ink = 0L
@@ -1102,6 +1208,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.corners = None
       n.look.edge = (0.0, 0L)
       n.look.edge_dashed = false
+      n.look.notch = (0.0, 0.0, 0.0)
+      n.look.shadow_out = false
+      n.look.cut_across = None
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
       n.look.image_cover = false
@@ -1230,7 +1339,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2051,6 +2160,9 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
 /// two that set the same thing two ways one binding (Width: View::width in points, View::width_share as a share;
 /// Words: View::words, View::words_runs), any other its own, so that one bound never lets go of another's.
 priv enum Prop {
+  CutAcross
+  Notch
+  ShadowOut
   Width
   Height
   Padding
@@ -2121,6 +2233,7 @@ priv enum Prop {
   Fades
   Stretch
   Opens
+  OpensAcross
   CutsSoftly
   DrawnOff
   GroundDrawn
@@ -2193,6 +2306,50 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         marked()
       })
       n.props[prop] = stop
+    }
+    Roomed(of, f) => {
+      match phase {
+        Layout => ()
+        _ => abort("view: Roomed is for what layout reads alone; what is drawn or placed by layout is Painted")
+      }
+      // (by what holds it: worked out as that is laid out, before it is)
+      let mut i = n.parent
+      while i >= 0 && i != of.at {
+        i = tree.nodes[i].parent
+      }
+      guard physical_equal(of.tree, tree) && i == of.at && of.alive() else {
+        abort("view: Roomed by a node that does not hold it")
+      }
+      let last : Ref[T?] = Ref(None)
+      let gen = self.gen
+      // (what else it reads, followed: changed, what holds it laid out again)
+      let watch = @signals.watch(fn() { tree.layout_marked_at(at) })
+      let run = fn(w : Double, h : Double) {
+        let n = tree.nodes[at]
+        if !n.live || n.gen != gen {
+          return
+        }
+        let v = watch.read(fn() { f(w, h) })
+        if last.val != Some(v) {
+          last.val = Some(v)
+          apply(v)
+          // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
+          let mut j = at
+          while j >= 0 && j != of.at {
+            let fl = tree.nodes[j].flex
+            fl.dirty = true
+            fl.cache_n = 0
+            fl.p_ok = false
+            j = tree.nodes[j].parent
+          }
+        }
+      }
+      tree.roomed_add(of.at, at, gen, run)
+      tree.layout_marked_at(at)
+      n.props[prop] = fn() {
+        watch.stop()
+        tree.roomed_drop(of.at, at, gen)
+      }
     }
     Painted(f) => {
       match phase {
@@ -2291,6 +2448,7 @@ pub fn View::pad(self : View, p : Live[Double]) -> View {
     match p {
       Is(v) => Is((v, v, v, v))
       Painted(_) => not_painted("what is said here")
+      Roomed(_, _) => not_roomed()
       By(f) =>
         By(fn() {
           let v = f()
@@ -2308,6 +2466,7 @@ pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
     match lr {
       Is(v) => Is((v.0, 0.0, v.1, 0.0))
       Painted(_) => not_painted("what is said here")
+      Roomed(_, _) => not_roomed()
       By(f) =>
         By(fn() {
           let v = f()
@@ -2402,6 +2561,15 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
 /// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
 pub fn View::clips(self : View, on : Live[Bool]) -> View {
   self.bind(Clips, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
+  self
+}
+
+///|
+/// Where across it cuts what it holds, where it clips (View::clips), as it changes (from and to in its own terms, met by
+/// its own cut; none left between them: nothing of what it holds drawn; None: all of it), as an old view's
+/// Ctx::cut_across_by: paint's. Its cut is another, so what it holds is drawn again, all of it.
+pub fn View::cut_across(self : View, across : Live[(Double, Double)?]) -> View {
+  self.bind(CutAcross, across, Paint, fn(a) { self.tree.nodes[self.at].look.cut_across = a })
   self
 }
 
@@ -2708,6 +2876,15 @@ pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
 }
 
 ///|
+/// The notch cut into its top, as it changes: a circle about the middle of its top, its middle `y` below the edge
+/// (above it when negative), of radius `r`, met by the edge through fillets of `f` (a radius of 0: none); its ground,
+/// its glass and its edge cut alike, as an old view's box's (Ctx::box `notch_y`, `notch_r`, `notch_fillet`): paint's.
+pub fn View::notch(self : View, notch : Live[(Double, Double, Double)]) -> View {
+  self.bind(Notch, notch, Paint, fn(n) { self.tree.nodes[self.at].look.notch = n })
+  self
+}
+
+///|
 /// Whether its edge is dashed, as an old view's dashed border. Its width, colour and corner stay the edge's;
 /// painting only, no measured geometry read back by the page.
 pub fn View::edge_dashed(self : View, on : Live[Bool]) -> View {
@@ -2953,6 +3130,21 @@ pub fn View::opens(self : View, share : Live[Double?]) -> View {
         st.content_share = 0.0 / 0.0
         st.justify = FlexStart
       }
+    }
+  })
+  self
+}
+
+///|
+/// A room opening across what it holds (`share` of it open, 0 … 1; None: as wide as what it holds, or as said), as it
+/// changes: as wide as that share of what it holds comes to, what it holds laid out at its whole width from its start
+/// (past its end as it is not all open: cut where it clips, View::clips), in the same layout, whatever that comes to as
+/// it opens (an activity's words and its time folding into a row's end). Layout's.
+pub fn View::opens_across(self : View, share : Live[Double?]) -> View {
+  self.bind(OpensAcross, share, Layout, fn(k) {
+    self.tree.nodes[self.at].flex.style.content_share_across = match k {
+      Some(k) => k
+      None => 0.0 / 0.0
     }
   })
   self
@@ -3332,6 +3524,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   match on {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -3368,6 +3561,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
   match on {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -3559,6 +3753,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
   match on {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -4405,6 +4600,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   match on {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -5300,6 +5496,10 @@ fn View::slot(self : View) -> View {
 /// The boxes node `at` lays out as its own, in order: its own, or a slot's, those of what it holds.
 fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
   let n = self.nodes[at]
+  // (one as wide as what it goes beside laid out alone, after its anchor: none of what holds it lays it out, View::beside)
+  if n.beside is Some(b) && b.as_wide {
+    return
+  }
   if n.slot {
     for k in n.kids {
       self.boxes(k, into)
@@ -6308,18 +6508,23 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     self.walk_from = -1
     self.walk(0, gen, true)
   }
-  // (what is worked out as the frame is painted, from where this layout put things: its place or its look set, then
-  // placed or drawn again below with the rest)
-  self.painted_now()
   // (placed or faded by its own: it alone composed again)
-  for at in self.places_due {
-    let n = self.nodes[at]
-    if n.live && n.place_due {
-      self.work.visited = self.work.visited + 1
-      self.place(at)
+  let places_done = fn() {
+    for at in self.places_due {
+      let n = self.nodes[at]
+      if n.live && n.place_due {
+        self.work.visited = self.work.visited + 1
+        self.place(at)
+      }
     }
+    self.places_due.clear()
   }
-  self.places_due.clear()
+  places_done()
+  // (what is worked out as the frame is painted, from where this layout and what moved by its own put things (each
+  // reading where the one said before it put its own: Laid::drawn): its place or its look set, then placed or drawn
+  // again with the rest)
+  self.painted_now()
+  places_done()
   if placing {
     // (a page's list's first row on the pixels from where it is now laid out, whatever moved: Tree::rows_placed)
     if self.rows_grid > 0.0 {
@@ -6972,6 +7177,9 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     corners: n.look.corners,
     edge: n.look.edge,
     edge_dashed: n.look.edge_dashed,
+    notch: n.look.notch,
+    shadow_out: n.look.shadow_out,
+    cut_across: n.look.cut_across,
     image: n.look.image,
     image_for: n.look.image_for,
     image_cover: n.look.image_cover,
@@ -7280,6 +7488,9 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     corners: c.corners,
     edge: c.edge,
     edge_dashed: c.edge_dashed,
+    notch: c.notch,
+    shadow_out: c.shadow_out,
+    cut_across: c.cut_across,
     image: c.image,
     image_for: c.image_for,
     image_cover: c.image_cover,

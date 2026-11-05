@@ -168,6 +168,8 @@ pub let beside : @ui.Style
 
 pub fn beside_look(@ui.Size, inner? : @ui.Style, most? : Double) -> (@ui.Ctx, @kit.PopState, () -> Unit) -> Unit
 
+pub fn beside_node(@view.View) -> Beside
+
 pub fn bleed_end(Double) -> @ui.Style
 
 pub fn bleed_start(Double) -> @ui.Style
@@ -685,6 +687,8 @@ pub fn fill_chip(@ui.Ctx, Int32, String, String, String, small? : Bool, compact?
 pub let fill_chip_corner : Double
 
 pub let fill_chip_h : Double
+
+pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () -> String, small? : Bool, said? : () -> String, tips? : TipLayer) -> @view.View
 
 pub let fill_chip_small_h : Double
 
@@ -1724,6 +1728,8 @@ pub fn playlist_of(Array[String], (String) -> Bool) -> Array[String]
 
 pub fn pointed_or_finger(@ui.Ctx, Bool) -> Bool
 
+pub fn pointed_or_finger_node(@view.View) -> Bool
+
 pub fn pointer_hotspot(String) -> (Double, Double)
 
 pub fn pointer_image(@ui.Ctx, shape? : String) -> String
@@ -1776,6 +1782,8 @@ pub fn progress(@ui.Ctx, String, Double?, w? : @ui.Size, color? : Int64) -> Unit
 
 pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, failed~ : Bool) -> Bool
 
+pub fn progress_key_node(@view.View, Double, Double, String, () -> String, () -> Double??, () -> Bool, () -> Unit) -> @view.View
+
 pub fn progress_node(@view.View, () -> Double?, () -> Int64, () -> Int64, h? : Double, period? : Double) -> @view.View
 
 pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
@@ -1795,6 +1803,8 @@ pub let quieter : @ui.TextStyle
 pub fn quota_chip(@ui.Ctx, @json.Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
 
 pub fn quota_chips(@ui.Ctx, @json.Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
+
+pub fn quota_chips_node(@view.View, () -> @json.Json?, small? : Bool, marked? : Bool, gap? : Double, tips? : TipLayer) -> Unit
 
 pub fn quota_said(@json.Json?) -> String
 
@@ -1914,6 +1924,8 @@ pub let row_corner : Double
 
 pub fn row_corner_keys(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn row_corner_keys_node(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
+
 pub let row_foot_in_y : Double
 
 pub let row_grown_in : @motion.Trans
@@ -1927,6 +1939,8 @@ pub let row_in_y : Double
 pub let row_key : @ui.Len
 
 pub let row_key_box : @ui.Style
+
+pub fn row_key_node(@view.View, TipLayer, String, Double, (Bool) -> Int64, () -> String, () -> String, () -> Unit, busy? : () -> Bool, spin? : Double) -> @view.View
 
 pub fn row_keys_room(Int32) -> Double
 
@@ -2208,6 +2222,8 @@ pub fn station_glyph(@ui.Ctx, GlyphCounts, Double, Int64, Int64) -> Int32
 
 pub fn station_glyph_icon(GlyphCounts) -> String
 
+pub fn station_glyph_node(@view.View, () -> GlyphCounts, Double, () -> Int64, () -> Int64) -> @view.View
+
 pub fn station_icon(@ui.Ctx, String, String, Double, Int64, here? : Bool) -> Unit
 
 pub fn station_lead(() -> Bool, () -> String, () -> String, () -> Int32) -> RowLead
@@ -2268,6 +2284,8 @@ pub let switch_w : Double
 
 pub fn sync_key(@ui.Ctx, String, Double, Double, Bool, String) -> Unit
 
+pub fn sync_key_node(@view.View, TipLayer, Double, Double, () -> Bool, () -> String) -> Unit
+
 pub fn system_top_room(Double) -> @ui.Space
 
 pub fn t(String, args? : Array[(String, String)]) -> String
@@ -2321,6 +2339,8 @@ pub fn theme() -> Theme
 pub fn theme_words(@ui.TextSize, line? : @ui.Leading, weight? : Int32, wrap? : Bool) -> @view.WordsLook
 
 pub fn tile_avatar(@ui.Ctx, String, String, String, Double, corner? : Double) -> Unit
+
+pub fn tile_avatar_node(@view.View, () -> String, () -> String, () -> String, Double, corner? : Double) -> Unit
 
 pub fn tile_whole() -> Bool
 
@@ -2696,6 +2716,7 @@ pub let workspace_tile_mark : Double
 #derive(Eq)
 pub(all) enum Anchor {
   Of(Int32)
+  Node(Pressed)
   At(Double, Double, Double, Double)
   Unanchored
 }
@@ -2724,6 +2745,7 @@ pub(all) struct Bars {
 #derive(Eq)
 pub(all) enum Beside {
   Of(Int32)
+  Node(Pressed)
   At(Double, Double, Double, Double)
 }
 pub fn Beside::anchor(Self) -> Anchor
@@ -3207,6 +3229,11 @@ pub(all) struct Playing {
   mut subtitle_of : String
   mut keeps : Int32
 }
+
+pub(all) struct Pressed {
+  view : @view.View
+}
+pub impl Eq for Pressed
 
 pub(all) struct QuoteCardDone {
   jumped : Bool

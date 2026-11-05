@@ -192,3 +192,16 @@ test "a way going read by nothing, or by what is let go as it goes: no frame ask
   )
   assert_eq(let_go, [(true, true), (false, false), (false, false)])
 }
+
+///|
+test "a move timed by a length known as it is laid out: where it is a moment after its cause, worked out from those alone, as a way said that far is" {
+  let _ = @ui.Tester::new(fn(_c) {  })
+  let said = @motion.Way::new(0.0)
+  said.go(1.0, @motion.move(over=460.0), at=set_out_at)
+  let spec = @motion.move(over=460.0)
+  let at = fn(t : Double) { spec.at_since(t - set_out_at, 0.0, 1.0) }
+  assert_eq(
+    (at(set_out_at - 10.0), at(set_out_at + 100.0), at(set_out_at + 5000.0)),
+    (0.0, said.value_at(set_out_at + 100.0), said.value_at(set_out_at + 5000.0)),
+  )
+}
