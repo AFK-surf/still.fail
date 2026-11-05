@@ -3,11 +3,6 @@
 // The existing flex engine and motion solver are reused without their scheduler.
 
 ///|
-struct Row {
-  height : Cell[Double]
-}
-
-///|
 #derive(Eq, Debug)
 enum Intrinsic {
   Fixed(Double)
@@ -101,9 +96,10 @@ struct Kernel {
   // geometry notification, or general callback in the layout/presentation API.
   store : Store
   inputs : LayoutInputs
-  placement : Query[(Double, Double), Layout]
+  placement : Query[(Double, Double, Double), Layout]
   mut logic_at : Double
   mut page : Trajectory
+  mut scroll : Trajectory
   mut leaves_at : Double?
   mut alive : Bool
   mut owner_releases : Int
@@ -115,7 +111,8 @@ struct Kernel {
 // The query owns render resources only. It cannot own the Kernel that commits
 // model changes, and row creation has no application callback or cleanup.
 struct LayoutInputs {
-  rows : Array[Row]
+  rows : IndexedRows
+  index : IndexedList
   composer_input : Cell[Intrinsic]
   anchor : Cell[Int]
   leaves : Map[Int, Leaf]
@@ -128,19 +125,28 @@ enum Change {
   Composer(Double)
   ComposerText(@ui.FieldLaid)
   RowHeight(Int, Double)
+  RowText(Int, @ui.FieldLaid)
   Anchor(Int)
+  ScrollTo(Double, @motion.Spec)
   Leave(Double, @motion.Spec)
   Return(@motion.Spec)
 }
 
 ///|
 fn Kernel::new(count : Int) -> Kernel {
+  Kernel::with_rows(Array::makei(count, fn(_) { Fixed(40.0) }))
+}
+
+///|
+fn Kernel::with_rows(values : Array[Intrinsic]) -> Kernel {
   let store = Store::new()
   let work : Work = { layouts: 0, row_reads: 0, measures: 0, made: 0, released: 0 }
+  let rows = IndexedRows::new(store, values)
   let inputs : LayoutInputs = {
-    rows: Array::makei(count, fn(_) { { height: store.cell(40.0, fn(a, b) { a == b }) } }),
+    rows,
+    index: IndexedList::new(rows),
     composer_input: store.cell(Fixed(60.0), fn(a, b) { a == b }),
-    anchor: store.cell(count - 1, fn(a, b) { a == b }),
+    anchor: store.cell(values.length() - 1, fn(a, b) { a == b }),
     leaves: {},
     composer: { node: @flex.Node::new(), revision: -1, width: -1.0, height: 0.0 },
     work,
@@ -148,9 +154,10 @@ fn Kernel::new(count : Int) -> Kernel {
   {
     store,
     inputs,
-    placement: store.query(fn(size) { inputs.layout(size.0, size.1) }),
+    placement: store.query(fn(size) { inputs.layout(size.0, size.1, size.2) }),
     logic_at: 0.0,
     page: Trajectory::still(0.0),
+    scroll: Trajectory::still(0.0),
     leaves_at: None,
     alive: true,
     owner_releases: 0,
@@ -186,14 +193,23 @@ fn Kernel::commit(self : Kernel, at : Double, change : Change) -> Unit {
       self.inputs.composer_input.set(tx, Editor(field))
     }
     RowHeight(i, height) => {
-      if i >= 0 && i < self.inputs.rows.length() {
-        self.inputs.rows[i].height.set(tx, height)
+      if i >= 0 && i < self.inputs.rows.values.length() {
+        self.inputs.rows.set(tx, i, Fixed(height))
+      }
+    }
+    RowText(i, text) => {
+      if i >= 0 && i < self.inputs.rows.values.length() {
+        self.inputs.rows.set(tx, i, Editor(text))
       }
     }
     Anchor(i) => {
-      if i >= 0 && i < self.inputs.rows.length() {
+      if i >= 0 && i < self.inputs.rows.values.length() {
         self.inputs.anchor.set(tx, i)
+        self.scroll = Trajectory::still(0.0)
       }
+    }
+    ScrollTo(distance, spec) => {
+      self.scroll = self.scroll.toward(distance, at, spec)
     }
     Leave(distance, spec) => {
       self.page = self.page.toward(distance, at, spec)
@@ -226,19 +242,16 @@ fn LayoutInputs::measure(self : LayoutInputs, leaf : Leaf, revision : Int, width
 }
 
 ///|
-fn LayoutInputs::layout(self : LayoutInputs, width : Double, height : Double) -> Layout {
+fn LayoutInputs::layout(self : LayoutInputs, width : Double, height : Double, distance : Double) -> Layout {
   self.work.layouts += 1
   // The common parent owns both measurements. The composer's result is a local
   // value passed straight to the list, never a signal sent back into structure.
   let composer_h = self.measure(self.composer, self.composer_input.revision, width, self.composer_input.get())
   let viewport_h = if height > composer_h { height - composer_h } else { 0.0 }
-  let rows : Array[(Int, Box)] = []
+  let rows = self.index.sample(self.anchor.get(), distance, width, viewport_h).rev()
   let used : Set[Int] = Set::new()
-  let mut bottom = viewport_h
-  let mut i = self.anchor.get()
-  while i >= 0 && bottom > 0.0 {
+  for (i, rect) in rows {
     self.work.row_reads += 1
-    let row = self.rows[i]
     let leaf = match self.leaves.get(i) {
       Some(leaf) => leaf
       None => {
@@ -248,11 +261,10 @@ fn LayoutInputs::layout(self : LayoutInputs, width : Double, height : Double) ->
         leaf
       }
     }
-    let h = self.measure(leaf, row.height.revision, width, Fixed(row.height.get()))
+    // The intrinsic height was already computed by the index. Flex consumes
+    // that answer; it must not shape the same text a second time.
+    self.measure(leaf, self.rows.values[i].revision, width, Fixed(rect.height)) |> ignore
     used.add(i)
-    bottom -= h
-    rows.push((i, { x: 0.0, y: bottom, width, height: h }))
-    i -= 1
   }
   // Only previously visible leaves are visited here, never the source history.
   let gone = self.leaves.keys().filter(fn(i) { !used.contains(i) }).collect()
@@ -269,7 +281,7 @@ fn LayoutInputs::layout(self : LayoutInputs, width : Double, height : Double) ->
 fn Kernel::frame(self : Kernel, now : Double, presented_at : Double, width : Double, height : Double) -> Picture {
   self.advance(now)
   let layout = if self.alive {
-    self.placement.get((width, height))
+    self.placement.get((width, height, self.scroll.sample(now).0))
   } else {
     { composer: { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
       viewport: { x: 0.0, y: 0.0, width, height }, rows: [] }

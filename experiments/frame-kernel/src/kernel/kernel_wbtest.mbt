@@ -46,7 +46,8 @@ test "an offscreen row update does no layout until the row is requested" {
   assert_eq(k.work.row_reads, reads)
   k.commit(150.0, Anchor(0))
   let shown = k.frame(150.0, 158.0, 390.0, 844.0)
-  assert_eq(shown.layout.rows[0].1.height, 75.0)
+  let first = shown.layout.rows[shown.layout.rows.length() - 1]
+  assert_eq((first.0, first.1.y, first.1.height), (0, 0.0, 75.0))
 }
 
 ///|
@@ -139,4 +140,56 @@ test "a late observation records the deadline's cause and rejects late owner inp
   assert_eq(k.owner_released_at, Some(400.0))
   assert_eq(k.owner_releases, 1)
   assert_eq(k.page.target, 390.0)
+}
+
+///|
+test "composer changes, measured scrolling and interrupted page motion share one frame-independent picture" {
+  let run = fn(step : Int) -> Picture raise {
+    let k = Kernel::with_rows(Array::makei(100, fn(i) { Fixed(if i % 2 == 0 { 40.0 } else { 80.0 }) }))
+    defer { k.placement.release() }
+    k.commit(0.0, Anchor(0))
+    k.commit(0.0, ScrollTo(1000.0, @motion.tween(1000.0, ease=Linear)))
+    k.frame(0.0, 0.0, 300.0, 200.0) |> ignore
+    let between = fn(from : Int, upto : Int) {
+      if step > 0 {
+        for at = from + step; at < upto; at = at + step {
+          k.frame(at.to_double(), at.to_double() + 8.0, 300.0, 200.0) |> ignore
+        }
+      }
+    }
+    between(0, 250)
+    k.commit(250.0, Composer(100.0))
+    between(250, 300)
+    k.commit(300.0, Leave(300.0, @motion.tween(400.0, ease=Linear)))
+    between(300, 350)
+    k.commit(350.0, RowHeight(16, 120.0))
+    between(350, 450)
+    let before = k.page.sample(450.0)
+    k.commit(450.0, Return(@motion.spring()))
+    assert_eq(k.page.sample(450.0), before)
+    between(450, 1000)
+    let picture = k.frame(1000.0, 1008.0, 300.0, 200.0)
+    assert_eq(picture.layout.viewport.height, 100.0)
+    assert_eq(picture.layout.rows.map(fn(row) { (row.0, row.1.y) }), [(17, 80.0), (16, -40.0)])
+    assert_eq(picture.row_at(picture.offset + 10.0, 1.0), Some(16))
+    assert_eq(k.owner_releases, 0)
+    picture
+  }
+  assert_eq(run(0), run(8))
+  assert_eq(run(0), run(16))
+  assert_eq(run(0), run(127))
+}
+
+///|
+test "presentation prediction cannot move the layout's scroll moment" {
+  let k = Kernel::new(100)
+  defer { k.placement.release() }
+  k.commit(0.0, Anchor(0))
+  k.commit(0.0, ScrollTo(1000.0, @motion.tween(1000.0, ease=Linear)))
+  let actual = k.frame(200.0, 200.0, 300.0, 160.0)
+  let passes = k.work.layouts
+  let predicted = k.frame(200.0, 1000.0, 300.0, 160.0)
+  assert_eq(predicted.layout, actual.layout)
+  assert_eq(predicted.layout.rows.map(fn(row) { row.0 }), [7, 6, 5])
+  assert_eq(k.work.layouts, passes)
 }

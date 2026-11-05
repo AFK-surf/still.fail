@@ -46,3 +46,34 @@ test "the existing editor and the independent parent's allocation agree on the f
   assert_eq(field.text(), "a\nb")
   assert_eq(field.selection(), (3, 3))
 }
+
+///|
+test "a changed text row is measured once and its allocation reaches flex in the same frame" {
+  let k = Kernel::new(3000)
+  defer { k.placement.release() }
+  let field = @ui.Field::new(text="a")
+  let now = Ref(0.0)
+  let picture : Ref[Picture?] = Ref(None)
+  let snapshot = fn() -> @ui.FieldLaid {
+    { words: field.composed_said(), font_size: 16.0, line: 21.0, text_line: 0.0,
+      min_lines: 1, max_lines: 8, trim: false }
+  }
+  k.commit(0.0, RowText(2999, snapshot()))
+  let tester = @ui.Tester::new(fn(c) {
+    picture.val = Some(k.frame(now.val, now.val, 300.0, 400.0))
+    c.box(w=@ui.Px(300.0), h=@ui.Px(400.0), fn() { }) |> ignore
+  }, w=300.0, h=400.0, time=0.0, platform=0)
+  assert_eq(picture.val.unwrap().layout.rows[0].1.height, 21.0)
+  let measures = k.inputs.index.measures
+  let layouts = k.work.layouts
+  now.val = 100.0
+  field.set("a\nb")
+  k.commit(100.0, RowText(2999, snapshot()))
+  assert_eq(k.inputs.index.measures, measures)
+  tester.frame_at(100.0)
+  let changed = picture.val.unwrap().layout.rows[0]
+  assert_eq((changed.0, changed.1.height), (2999, 42.0))
+  assert_eq(k.inputs.leaves.get(2999).unwrap().node.height, 42.0)
+  assert_eq(k.inputs.index.measures - measures, 1)
+  assert_eq(k.work.layouts - layouts, 1)
+}

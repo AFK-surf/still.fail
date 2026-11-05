@@ -73,10 +73,18 @@ nested lazy containers, live core data, full owner trees, scrolling physics,
 focus/IME migration, overlays and actual app visual parity are not implemented
 here. The legacy editor measurement still reads its host/font environment;
 recorded resource inputs and invalidation must replace that implicit dependency
-before it is a production cache. Leaf allocation is an internal render
+  before it is a production cache. Leaf allocation is an internal render
 cache; its work may differ between frame schedules. Semantic owners must remain
 independent of that cache. This slice has one semantic owner and does not yet
 prove the general case.
+
+The composer allocation, indexed rows, timed scrolling and page trajectory now
+share one `Kernel`. A combined input tape changes composer and row heights,
+scrolls, leaves and interrupts the page motion; optional frames may warm caches
+but may not change the final allocation or hit result. A real `FieldLaid` row
+also passes its measured height into flex without measuring the text twice.
+Layout samples the logical frame moment; presentation prediction samples only
+the page transform. The slice has no overscroll or signed-distance gesture model.
 
 ## Comparison that would justify adoption
 
@@ -111,5 +119,10 @@ PROBE_WASM=$(rg --files _build/wasm/release/build | rg '/probe/probe.wasm$')
 ```
 
 `WASMTIME_BIN` names the installed development runtime. The preload supplies
-ASCII diagnostic printing; it is not an application host. The executable tests
+ASCII diagnostic printing and an outer benchmark clock; it is not an application host. The executable tests
 the computation under a 512 KiB Wasm stack, not Android rendering or throughput.
+
+`src/perfprobe` builds similarly and times isolated computations using an outer
+clock. Each workload is calibrated toward 300 ms and sampled three times; it
+reports whole milliseconds and the iteration count. The linear reference is a
+comparison for index traversal cost, not the existing application's runtime.
