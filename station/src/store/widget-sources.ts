@@ -26,13 +26,12 @@ const conflicts = `SELECT e.thread, e.n FROM entries e WHERE e.thread = NEW.thre
   UNION SELECT e.thread, e.target FROM entries e WHERE NEW.ts IS NOT NULL AND e.thread = NEW.thread AND e.ts = NEW.ts AND e.target IS NOT NULL
   UNION SELECT e.thread, e.n FROM entries e WHERE e.rowid = NEW.rowid AND e.kind = 'message'
   UNION SELECT e.thread, e.target FROM entries e WHERE e.rowid = NEW.rowid AND e.target IS NOT NULL`;
-// Most messages carry no files. They need no projection work unless a replacement displaces a source, or an edit
-// already names the new message. A file-free edit only matters if its target already has projected files (or an error).
-const needsInsert = `((NEW.kind = 'message' OR NEW.target IS NOT NULL)
-    AND NEW.attachments IS NOT NULL AND NEW.attachments <> '[]')
-  OR (NEW.kind = 'message' AND EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.target=NEW.n))
-  OR (NEW.target IS NOT NULL AND (EXISTS (SELECT 1 FROM widget_source_rows i WHERE i.thread=NEW.thread AND i.n=NEW.target)
-    OR EXISTS (SELECT 1 FROM widget_source_invalid i WHERE i.thread=NEW.thread AND i.n=NEW.target)))
+// A new message without a conflict can be added directly below. An edit needs the old projection only when it becomes
+// the latest and actually changes the effective files; replacements may also displace other messages or edits.
+const needsInsert = `(NEW.kind = 'message' AND NEW.target IS NOT NULL)
+  OR (NEW.target IS NOT NULL AND EXISTS (SELECT 1 FROM merged m
+    WHERE m.thread=NEW.thread AND m.n=NEW.target AND m.attachments IS NOT NEW.attachments
+      AND NOT EXISTS (SELECT 1 FROM entries x WHERE x.thread=NEW.thread AND x.target=NEW.target AND x.n>NEW.n)))
   OR EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.n=NEW.n)
   OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.ts=NEW.ts))
   OR EXISTS (SELECT 1 FROM entries e WHERE e.rowid=NEW.rowid)`;
@@ -75,6 +74,7 @@ const reconcile = `UPDATE widget_source_changed SET dirty=1 WHERE (thread,n) IN 
   ${insertRows(affected)} ${insertInvalid(affected)} DELETE FROM widget_source_changed;`;
 const oldMessages = `SELECT OLD.thread AS thread, OLD.n AS n WHERE OLD.kind = 'message'
   UNION SELECT OLD.thread, OLD.target WHERE OLD.target IS NOT NULL`;
+const newMessage = "SELECT NEW.thread AS thread, NEW.n AS n";
 const afterDelete = `DELETE FROM widget_source_rows WHERE (thread,n) IN (${oldMessages});
   DELETE FROM widget_source_invalid WHERE (thread,n) IN (${oldMessages});
   ${insertRows(oldMessages)} ${insertInvalid(oldMessages)}
@@ -99,6 +99,12 @@ export function installWidgetSources(db: DatabaseSync): void {
         attachments TEXT, at INTEGER, dirty INTEGER NOT NULL, PRIMARY KEY(thread,n)) WITHOUT ROWID;
       CREATE TRIGGER widget_source_before_add BEFORE INSERT ON entries WHEN ${trackedInsert} BEGIN ${stage(false)} END;
       CREATE TRIGGER widget_source_add AFTER INSERT ON entries WHEN EXISTS (SELECT 1 FROM widget_source_changed) BEGIN ${reconcile} END;
+      CREATE TRIGGER widget_source_fast_add AFTER INSERT ON entries WHEN NEW.kind='message' AND NEW.target IS NULL
+        AND EXISTS (SELECT 1 FROM widget_source_scopes WHERE thread=NEW.thread)
+        AND NOT EXISTS (SELECT 1 FROM widget_source_changed)
+        AND ((NEW.attachments IS NOT NULL AND NEW.attachments <> '[]')
+          OR EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.target=NEW.n))
+        BEGIN ${insertRows(newMessage)} ${insertInvalid(newMessage)} END;
       CREATE TRIGGER widget_source_before_change BEFORE UPDATE OF rowid,_rowid_,oid,thread,n,kind,target,ts,attachments,at ON entries
         WHEN (${updated}) AND (${trackedUpdate}) BEGIN ${stage(true)} END;
       CREATE TRIGGER widget_source_change AFTER UPDATE OF rowid,_rowid_,oid,thread,n,kind,target,ts,attachments,at ON entries

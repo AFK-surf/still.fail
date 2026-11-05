@@ -12,7 +12,7 @@ const original = `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name')
   WHERE m.attachments IS NOT NULL AND json_extract(a.value, '$.path') = ?2 ORDER BY m.created_at DESC LIMIT 1`;
 const plain = (row: unknown) => row === undefined ? null : { ...(row as object) };
 const beforeIndex = (db: DatabaseSync) => db.exec(`
-  DROP TRIGGER widget_source_before_add; DROP TRIGGER widget_source_add;
+  DROP TRIGGER widget_source_before_add; DROP TRIGGER widget_source_add; DROP TRIGGER widget_source_fast_add;
   DROP TRIGGER widget_source_before_change; DROP TRIGGER widget_source_change;
   DROP TRIGGER widget_source_drop; DROP TRIGGER widget_source_drop_thread;
   DROP TABLE widget_source_rows; DROP TABLE widget_source_invalid;
@@ -170,6 +170,21 @@ test("an edit that leaves the effective files unchanged does not rewrite them", 
       CREATE TEMP TRIGGER source_delete AFTER DELETE ON widget_source_rows BEGIN INSERT INTO source_writes VALUES (1); END;`);
     put.run(thread, 2, "edit", 1, 2, files);
     assert.equal((db.prepare("SELECT count(*) AS n FROM source_writes").get() as { n: number }).n, 0);
+  } finally { store.close(); }
+});
+
+test("a message inserted after its edit is indexed with that edit's files", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "EMBER", "late-message", null, null).id;
+    widgetSourcesStep(db, thread);
+    store.joinThread(thread, "a", "ember");
+    const path = "/w/item.html", files = JSON.stringify([{ path, name: "edited" }]);
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
+      VALUES(?,?,?,?,'agent','a',?,?)`);
+    put.run(thread, 10, "edit", 1, 10, files);
+    put.run(thread, 1, "message", null, 1, "[]");
+    assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
   } finally { store.close(); }
 });
 
