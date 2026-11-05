@@ -35,6 +35,19 @@ const keptForGood: Plugin = {
 };
 
 /**
+ * still.fail/status (site/status.html, with the incidents people write down, site/incidents.json): written out as it
+ * is, not one of the build's pages, which would have it wait on the one sheet of every style. It has to load when the
+ * rest does not.
+ */
+const statusPage: Plugin = {
+  name: "stillfail-site-status",
+  apply: (_, env) => !env.isSsrBuild,
+  generateBundle() {
+    for (const file of ["status.html", "incidents.json"]) this.emitFile({ type: "asset", fileName: file, source: readFileSync(here(`../site/${file}`)) });
+  },
+};
+
+/**
  * The core's formula typesetter (MathJax: a tenth of the demo's script, run as it loads) stood in for: the demo's
  * made-up chats have no formulas, and one a visitor writes in it stays readable as its source, as one MathJax refuses.
  */
@@ -73,7 +86,7 @@ export default defineConfig({
   root: here("../site"),
   publicDir: here("public"),
   base: "/",
-  plugins: [react(), vanillaExtractPlugin(), keptForGood, noFormulas, ...(beta ? [betaHead] : [])],
+  plugins: [react(), vanillaExtractPlugin(), keptForGood, statusPage, noFormulas, ...(beta ? [betaHead] : [])],
   define: {
     __SITE_BETA__: JSON.stringify(beta),
     __SITE_RELEASE__: JSON.stringify(lastRelease()),

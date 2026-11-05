@@ -60,7 +60,7 @@ const ZH = {
   phoneTitle: "still.fail 手机版",
   install: ["一条命令", "加入一台电脑"],
   installSteps: ["→ 下载 still.fail station · 加入 workspace「Acme」", "→ 注册为登录启动的服务", "✓ station 已上线"],
-  web: "网页版", terms: "服务条款", privacy: "隐私政策", trademark: "商标", legal: "",
+  web: "网页版", status: "状态", terms: "服务条款", privacy: "隐私政策", trademark: "商标", legal: "",
   theme: { label: "主题", system: "跟随系统", light: "浅色", dark: "深色" },
 };
 
@@ -111,7 +111,7 @@ const EN: typeof ZH = {
   phoneTitle: "still.fail on a phone",
   install: ["One command", "adds a computer"],
   installSteps: ["→ Downloading still.fail station · joining workspace “Acme”", "→ Registering it to start at login", "✓ Station online"],
-  web: "Web app", terms: "Terms", privacy: "Privacy", trademark: "Trademark", legal: "/en",
+  web: "Web app", status: "Status", terms: "Terms", privacy: "Privacy", trademark: "Trademark", legal: "/en",
   theme: { label: "Theme", system: "System", light: "Light", dark: "Dark" },
 };
 
