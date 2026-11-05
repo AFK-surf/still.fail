@@ -17,6 +17,8 @@ import { SaidBuilder } from "./said-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";
 import { RecentChatBuilder } from "./recent-chat-builder.ts";
 import { RECENT_CHAT_PENDING } from "./recent-chat.ts";
+import { SessionListBuilder } from "./session-list-builder.ts";
+import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
@@ -111,6 +113,7 @@ export class Readers {
   private said: SaidBuilder | null = null;
   private turns: TurnBuilder | null = null;
   private recentChats: RecentChatBuilder | null = null;
+  private sessionList: SessionListBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -220,6 +223,7 @@ export class Readers {
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
     if (op === "recentChatList") return this.recentChatRead(args, lang, told, signal);
+    if (op === "sessions") return this.sessionListRead(args, lang, told, signal);
     return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
@@ -336,6 +340,18 @@ export class Readers {
         if (!(error instanceof HttpError) || error.message !== RECENT_CHAT_PENDING) throw error;
         this.recentChats ??= new RecentChatBuilder(join(this.data, "stillfail.db"), this.backfill);
         await this.covered(this.recentChats.readyScope({ ws, home }, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    while (!this.closed) {
+      try { return await this.saidRead("sessions", args, lang, told, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== SESSION_LIST_PENDING) throw error;
+        this.sessionList ??= new SessionListBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.sessionList.readyIndex(signal), signal);
       }
     }
     throw new HttpError(502, "station stopping");
@@ -462,6 +478,7 @@ export class Readers {
     if (this.said !== null) void this.said.close();
     if (this.turns !== null) void this.turns.close();
     if (this.recentChats !== null) void this.recentChats.close();
+    if (this.sessionList !== null) void this.sessionList.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
