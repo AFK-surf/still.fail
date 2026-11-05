@@ -26,3 +26,11 @@ test "back with a page to go back to the app's; with none, the system's own, the
   assert_eq(nav.depth(), 1)
   assert_eq(t.backs_out(), 3)
 }
+
+///|
+test "back told between frames, the app taking none: the system's own" {
+  let t = Tester::new(fn(_c) {  }, platform=2)
+  t.draw()
+  t.back_told(t.time())
+  assert_eq(t.backs_out(), 1)
+}

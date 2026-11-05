@@ -283,7 +283,5 @@ pub fn Tester::run_as_host(self : Tester, ms : Double) -> Unit {
 ///|
 /// The system's back (Tester::back's) the host says came at `at`, told now: no frame drawn.
 pub fn Tester::back_told(self : Tester, at : Double) -> Unit {
-  self.fake.event_at = at
-  on_back(2, 0.0, 1.0, 0)
-  self.fake.event_at = -1.0
+  self.back_raw(2, 0.0, at)
 }
