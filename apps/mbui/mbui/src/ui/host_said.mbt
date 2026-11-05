@@ -51,6 +51,7 @@ pub fn[T] on_host_said(owner : @view.View, kind~ : String, said : () -> T?, f : 
 ///|
 /// Whether what the host has once is being asked as a frame begins (host_said_arrive): that frame's, though it is not
 /// counted yet (a Tester's fake host says what it was given before it from then: shared_in).
+// kept across runs: true only while host_said_arrive asks, false again before it returns
 let host_said_asking : Ref[Bool] = Ref(false)
 
 ///|
