@@ -1388,7 +1388,7 @@ test("a file kept: its bytes in base64 under its name; opened, shown as its text
   r.core.close();
 });
 
-test("turning the lock off: the person's own secrets opened first, then written into the plain library once it is off", async () => {
+test("turning the lock off: the person's own secrets opened first (asked once), then written into the plain library once it is off", async () => {
   const r = await rig();
   r.putLock();
   const { made } = await r.ask("vault.setup", {});
@@ -1406,7 +1406,9 @@ test("turning the lock off: the person's own secrets opened first, then written 
   r.st.plainLock.on = true;
   const asked = r.host.secureAsked.length;
   await r.ask("lock.disable", {});
-  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY, ""], "the vault opened, then the person asked to turn it off");
+  // (asked once, the vault's prompt saying it turns security mode off: no second prompt after it, as there was, two in a
+  // row for one tap, till the end-to-end flow on Android found it)
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => [a.key, a.reason]), [[BOX_KEY, t("core-misc.lock.reason.disable")]]);
   // The station hears the lock is off a little later: tried again until it takes it.
   assert.equal(r.st.plain.size, 0);
   r.st.plainLock.on = false;
