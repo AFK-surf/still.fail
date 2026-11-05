@@ -750,7 +750,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                 s.glide_where(c.x + to_end, kept=false)
               }
             }
-            _ => ()
+            // (said to follow its end and short of it, nothing taking it there: what was its end as it was sent there
+            // is no more (a row come since, its room opened), so on to where its end is now)
+            _ =>
+              if !at_end && to_tail > 0.5 && s.glides_till() is None && @signals.untracked(fn() { follows.get() }) {
+                s.glide_where(c.x + to_tail, kept=false)
+              }
           }
         })
       },
