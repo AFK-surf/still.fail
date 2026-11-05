@@ -119,3 +119,23 @@ for (const recursive of [false, true]) for (const how of ["insert", "update"] as
     } finally { store.close(); }
   });
 }
+
+for (const recursive of [false, true]) test(`a changed message cannot leave its workspace ordering stale (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(id);
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare before the message changes. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [id], total: 1 });
+    db.prepare("UPDATE entries SET at = 30 WHERE thread = ? AND n = 1").run(id);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the changed ordering has not yet been accounted");
+  } finally { store.close(); }
+});
