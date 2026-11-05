@@ -743,14 +743,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // (asked to its end: where its end will be once the rooms opening now are open, each row as tall as it is (or is
         // counted to be): one glide there, not one to where the end is this frame and another after)
         // (no more than so many rows under its first laid out: further, it is taken to its end at once, as to_end does)
-        let to_end_open = if end_asked.val && n - r.first <= anchored_ask_rows {
+        let to_end_open = if (end_asked.val || glide is Some(_)) && n - r.first <= anchored_ask_rows {
           let mut foot = r.tops.get(0).unwrap_or(h)
           for i in r.first..<n {
             foot += heights.get(key_at(i)).unwrap_or(mean())
           }
           dmax(0.0, foot - h)
         } else {
-          0.0
+          to_tail
         }
         // (told once all of it is laid out, to what reads it there and after: what is in sight, whether it is at its
         // end, how far it is counted to be scrolled (what holds its rows moved by as much as they were placed for: what
@@ -801,7 +801,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             (Some((_, from_top)), Some(top)) => {
               // (as far as the hand has it to go: by how far its top is under its cover, or to its end as counted)
               let to_top = top - c.cover
-              let to_end = to_tail
+              let to_end = to_end_open
               if from_top && to_top < to_end - 0.5 {
                 s.glide_where(c.x + to_top, kept=false)
                 follows.set(false)
