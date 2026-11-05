@@ -138,6 +138,53 @@ model/motion dependency boundary, native input exports and complete-frame
 accounting to that reference (`ce0ae7f3ec`); its 33 framework and 28 chat tests
 pass. It does not adopt the experimental intrinsic-height graph or extent index.
 
+### Actual-host correctness and scheduler attribution
+
+A subsequent three-way run used that pinned current reference, the independent
+integration and the narrow reference changes, with the same Android shell and
+keyboard inset. Current and narrow-reference open/scroll/input scripts completed.
+The independent integration terminated with SIGILL while leaving the chat. Its
+eight fake-host classic-Wasm open/back cases subsequently passed at the same
+512 KiB stack limit, at both screen scales and with/without the top bar. That
+probe therefore does not explain or clear the actual Android failure.
+
+More importantly, all three input screenshots showed five text lines with an
+empty sixth-line caret, even though the model and the renderer's emitted text
+contained all six lines. A successful script or matching draw list was not
+sufficient evidence of a correct displayed frame. The final host record sent
+no damage region for that changed text.
+
+The cause is at the retained-paint boundary: a drawing dependency marked its
+layer's instances stale, but did not add either the previous or new drawing
+extent to the host's damage. Layout-originated changes already supplied those
+extents. Paint-only text updates therefore changed the draw list while a partial
+renderer preserved the previous pixels. A new input regression failed with
+`changed=true`, 23 recorded instances and `damage=[]`. Carrying paint dependency,
+timed wake and glyph-retry changes through previous/new extent invalidation made
+the complete UI package pass 1624 tests, including caret disappearance and
+reappearance. The narrow reference change is `1de556022c`; actual-host visual
+confirmation is still required before calling it complete.
+
+The traces join explicit frame-phase timestamps to the same GL thread's
+scheduler records. Measured intervals have complete recorded state coverage.
+The current-reference scroll's 57 measured frames contained 806 ms of complete
+callback time: 399 ms scheduled as running, 405 ms runnable and 2 ms blocked.
+The framework-work portion was 384 ms, of which 187 ms was running; tree work
+was 31 ms and drawing/old-frame work was 353 ms. Thus a large part of elapsed
+time was scheduling, but the remaining framework work was mainly outside the
+new tree's layout boundary. On opening, the current reference's worst drawing
+interval was 133 ms, with 111 ms running. It cannot all be dismissed as thread
+waiting.
+
+These are diagnostic classifications, not an adoption speedup: frame schedules
+differed, the emulator's running state does not exclude host-side virtual-CPU
+descheduling, and input presentation was incorrect. The trace configuration
+also reported missing flush/discard-buffer configuration warnings and unsupported
+ftrace setup events; interval coverage was checked rather than assuming every
+requested event was recorded. Both current and narrow-reference startup logs
+reported hitting the 512-pass layout guard. Those loops and the independent
+Android trap remain correctness failures to investigate, not benchmark noise.
+
 ## Contracts and counterexamples
 
 The scoped Wasm-GC suite passed 29/29 tests. These cover controlled model

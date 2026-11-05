@@ -121,6 +121,23 @@ dependency path between them. Whole snapshots are ingested once. A transform
 does not reshape text; a color does not lay out a list. The same distinction must
 continue through retained scene records to host uploads and GPU damage.
 
+The actual Android input counterexample makes the last boundary explicit:
+rebuilding the right draw records is not enough if the host is told that no
+pixels changed. A committed scene change must carry its previous and resulting
+paint extent into the same presentation packet as the updated records. The
+host adapter must not independently infer whether those records need painting.
+The old extent clears removed or shrinking content, and the resulting extent
+covers new content. Ancestor traversal needed to compose an affected child does
+not itself mean the entire ancestor is damaged. Paint dependencies, scheduled
+paint changes and resource completion must all enter this protocol; layout is
+only one source of scene changes.
+
+Presentation tests must therefore check both the content and the pixels the
+host is instructed to replace. A model assertion, a paint callback having run,
+or equality of full-render screenshots cannot prove partial presentation is
+correct. This protocol is a requirement discovered in the application adapter;
+the standalone kernel slice has not implemented a GPU presentation packet.
+
 There is an information limit for unknown variable heights: finding the row at
 an arbitrary absolute pixel distance requires knowing the intervening heights,
 or deliberately defining an estimate-based operation. No cache design makes
