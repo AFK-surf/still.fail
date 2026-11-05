@@ -26,9 +26,9 @@ const tokenConflict = (extra: string) => `(SELECT key FROM sessions WHERE token 
 const tokenConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE token = NEW.token ${extra})`;
 const changesHome = `OLD.key IS NOT NEW.key OR (OLD.ws IS NULL AND NEW.ws IS NOT NULL)
   OR (OLD.ws IS NOT NULL AND NEW.ws IS NULL)`;
-const markMember = (thread: string, session: string) => {
+const markMember = (thread: string, session: string, home = false) => {
   const ws = `(SELECT ws FROM sessions WHERE key = ${session})`;
-  const relevant = `(EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL)
+  const relevant = home ? "1" : `(EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL)
     OR EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread}))`;
   return `
     UPDATE recent_scope_member_dirty SET revision = revision + 1
@@ -167,7 +167,16 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_order_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${markOrder("OLD.id")} END;
       CREATE TRIGGER recent_scope_order_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${markOrder("NEW.id")} END;
       CREATE TRIGGER recent_scope_visibility_thread_change AFTER UPDATE OF id, home ON threads
-        WHEN OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home BEGIN ${markVisibility("OLD.id")} END;
+        WHEN (OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home) AND
+          (OLD.id IS NOT NEW.id OR OLD.home IS NULL OR NEW.home IS NULL OR
+            EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = OLD.id))
+        BEGIN ${markVisibility("OLD.id")} END;
+      -- With two named homes, only those sessions can contribute. Journal each one directly instead of queuing
+      -- a global visibility pass; an already running pass above still needs its revision advanced.
+      CREATE TRIGGER recent_scope_named_home_change AFTER UPDATE OF home ON threads
+        WHEN OLD.id IS NEW.id AND OLD.home IS NOT NULL AND NEW.home IS NOT NULL AND OLD.home IS NOT NEW.home BEGIN
+          ${markMember("NEW.id", "OLD.home", true)} ${markMember("NEW.id", "NEW.home", true)}
+        END;
       CREATE TRIGGER recent_scope_visibility_thread_move AFTER UPDATE OF id ON threads
         WHEN OLD.id IS NOT NEW.id BEGIN ${markVisibility("NEW.id")} END;
       CREATE TRIGGER recent_scope_order_thread_drop AFTER DELETE ON threads BEGIN ${markOrder("OLD.id")} ${markVisibility("OLD.id")} END;

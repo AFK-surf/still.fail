@@ -3,6 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 export type RecentChatPage = { ids: number[]; total: number };
+export const RECENT_GLOBAL_PAGE = "SELECT thread FROM recent_chat_rows INDEXED BY recent_chat_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?";
 
 // Do not use INSERT OR IGNORE inside a trigger: an outer INSERT OR REPLACE can override that conflict policy. The
 // existence test keeps one pending entry even when an older process writes with its own conflict mode.
@@ -123,8 +124,7 @@ export function readGlobalRecentChatIndex(db: DatabaseSync, limit: number): Rece
   try {
     const meta = db.prepare("SELECT total, complete FROM recent_chat_meta WHERE id = 1").get() as { total: number; complete: number };
     if (meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_chat_dirty LIMIT 1").get() !== undefined) return null;
-    const rows = db.prepare("SELECT thread FROM recent_chat_rows INDEXED BY recent_chat_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?")
-      .all(limit) as { thread: number }[];
+    const rows = db.prepare(RECENT_GLOBAL_PAGE).all(limit) as { thread: number }[];
     return { ids: rows.map((row) => row.thread), total: meta.total };
   } finally { db.exec("RELEASE recent_chat_page"); }
 }

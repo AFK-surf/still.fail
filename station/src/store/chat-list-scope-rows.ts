@@ -14,6 +14,8 @@ export const RECENT_SCOPE_VISIBILITY_PENDING = `SELECT COUNT(*) AS n,
   MAX(d.ambiguous OR COALESCE(d.home_ws = ?1, 0) OR
     EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
   FROM (SELECT thread, home_ws, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d`;
+export const RECENT_WORKSPACE_PAGE = `SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?
+  ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`;
 
 function atomic<T>(db: DatabaseSync, f: () => T): T {
   db.exec("SAVEPOINT recent_scope_contribution");
@@ -54,24 +56,30 @@ export function removeRecentScopeSource(db: DatabaseSync, ws: string, thread: bi
   });
 }
 
-/// Only a builder that has checked all change journals may mark a scope complete. This is not connected to a reader.
+/// The caller holds a read snapshot while using this count and the corresponding rows.
+export function preparedRecentWorkspaceTotal(db: DatabaseSync, ws: string): number | null {
+  const meta = db.prepare("SELECT total, complete FROM recent_scope_tracked WHERE kind = 1 AND ws = ?").get(ws) as
+    { total: number; complete: number } | undefined;
+  if (!meta || meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) !== undefined ||
+      db.prepare("SELECT 1 FROM recent_scope_member_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
+      db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined)
+    return null;
+  const visibility = db.prepare(RECENT_SCOPE_VISIBILITY_PENDING).get(ws) as { n: number; affects: number | null };
+  if (visibility.n > 64 || visibility.affects === 1) return null;
+  const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get(ws) as { n: number; affects: number | null };
+  if (pending.n > 64 || pending.affects === 1) return null;
+  return meta.total;
+}
+
+/// Only a builder that has checked all change journals may mark a scope complete.
 export function readPreparedRecentWorkspace(db: DatabaseSync, ws: string, limit: number): RecentChatPage | null {
   if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent workspace page size must be nonnegative");
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_scope_page");
   try {
-    const meta = db.prepare("SELECT total, complete FROM recent_scope_tracked WHERE kind = 1 AND ws = ?").get(ws) as
-      { total: number; complete: number } | undefined;
-    if (!meta || meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) !== undefined ||
-        db.prepare("SELECT 1 FROM recent_scope_member_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
-        db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined)
-      return null;
-    const visibility = db.prepare(RECENT_SCOPE_VISIBILITY_PENDING).get(ws) as { n: number; affects: number | null };
-    if (visibility.n > 64 || visibility.affects === 1) return null;
-    const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get(ws) as { n: number; affects: number | null };
-    if (pending.n > 64 || pending.affects === 1) return null;
-    const rows = db.prepare(`SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?
-      ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`).all(ws, limit) as { thread: number }[];
-    return { ids: rows.map((row) => row.thread), total: meta.total };
+    const total = preparedRecentWorkspaceTotal(db, ws);
+    if (total === null) return null;
+    const rows = db.prepare(RECENT_WORKSPACE_PAGE).all(ws, limit) as { thread: number }[];
+    return { ids: rows.map((row) => row.thread), total };
   } finally { db.exec("RELEASE recent_scope_page"); }
 }

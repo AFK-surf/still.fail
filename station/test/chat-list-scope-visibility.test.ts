@@ -12,6 +12,34 @@ import { readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.t
 import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
 
+for (const recursive of [false, true]) test(`many named home moves do not block an unrelated workspace (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["a", "a"], ["b", "b"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "target-named-moves", "Target", null, "here").id;
+    const moving: number[] = [];
+    for (let i = 0; i < 70; i++) moving.push(store.openThreadOf("ember", "EMBER", `moving-${i}`, "Moving", null, "a").id);
+    installRecentScopeJournal(db);
+    for (const ws of ["a", "b", "here"]) {
+      trackRecentScope(db, { kind: "workspace", workspace: ws });
+      while (!scanRecentWorkspaceStep(db, ws, 8).sourceDone) { /* Prepare the existing scopes. */ }
+    }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+    const move = db.prepare("UPDATE threads SET home = 'b' WHERE id = ?");
+    for (const id of moving) move.run(id);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "unrelated named home changes need no global wait");
+    for (const ws of ["a", "b"]) {
+      assert.equal(readPreparedRecentWorkspace(db, ws, 5), null, "a changed workspace must wait for its own updates");
+      while (!settleRecentWorkspaceMemberStep(db, ws, 8).membersDone) { /* Account for its changed homes. */ }
+      assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+    }
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`a frequently moving chat does not prevent another workspace from settling (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
@@ -29,10 +57,12 @@ for (const recursive of [false, true]) test(`a frequently moving chat does not p
     while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the target workspace. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+    move.run(null, target);
     move.run("away", target);
     assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
     let page = null;
     for (let i = 0; i < 16 && page === null; i++) {
+      move.run(null, hot);
       move.run(i % 2 === 0 ? "b" : "a", hot);
       assert.ok(settleRecentScopeVisibilityStep(db, 1).visited <= 1);
       page = readPreparedRecentWorkspace(db, "here", 5);
@@ -60,7 +90,9 @@ test("visibility work keeps its turn across rollback and reopening", () => {
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the workspace. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    move.run(null, hot);
     move.run("b", hot);
+    move.run(null, target);
     move.run("away", target);
     db.setAuthorizer((action, name) => action === constants.SQLITE_UPDATE && name === "recent_scope_visibility_dirty"
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
@@ -97,8 +129,10 @@ for (const recursive of [false, true]) test(`newer chats cannot continually pass
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the workspace. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    move.run(null, first);
     move.run("b", first);
     settleRecentScopeVisibilityStep(db, 1);
+    move.run(null, target);
     move.run("away", target);
     let page = null;
     for (let i = 0; i < 16 && page === null; i++) {
@@ -222,8 +256,10 @@ for (const recursive of [false, true]) for (const home of ["two", null]) {
         done = batch.visibilityDone;
       }
       assert.ok(done);
-      for (const ws of ["here", "elsewhere"])
+      for (const ws of ["here", "elsewhere"]) {
+        while (!settleRecentWorkspaceMemberStep(db, ws, 2).membersDone) { /* Account for changed named homes. */ }
         assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+      }
     } finally { store.close(); }
   });
 }

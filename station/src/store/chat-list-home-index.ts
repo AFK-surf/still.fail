@@ -225,19 +225,26 @@ export function settleRecentHomeOrderStep(db: DatabaseSync, limit = 64): { order
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-/// Prototype for the default range alone; do not expose it until the home union is covered. It reads count and
-/// rows on the same snapshot and waits for the journals currently implemented.
+export const RECENT_DEFAULT_HOME_PAGE = "SELECT thread FROM recent_home_rows INDEXED BY recent_home_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?";
+
+/// The caller holds a read snapshot while using this count and the corresponding rows.
+export function preparedDefaultHomeTotal(db: DatabaseSync): number | null {
+  const meta = db.prepare("SELECT scan_done, total FROM recent_home_meta WHERE id = 1").get() as { scan_done: number; total: number };
+  if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() !== undefined ||
+      db.prepare("SELECT 1 FROM recent_home_order_dirty LIMIT 1").get() !== undefined ||
+      db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' LIMIT 1").get() !== undefined) return null;
+  return meta.total;
+}
+
+/// Read the default range alone on one snapshot.
 export function readPreparedDefaultHome(db: DatabaseSync, limit: number): RecentChatPage | null {
   if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent default home page size must be nonnegative");
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_home_page");
   try {
-    const meta = db.prepare("SELECT scan_done, total FROM recent_home_meta WHERE id = 1").get() as { scan_done: number; total: number };
-    if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() !== undefined ||
-        db.prepare("SELECT 1 FROM recent_home_order_dirty LIMIT 1").get() !== undefined ||
-        db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' LIMIT 1").get() !== undefined) return null;
-    const rows = db.prepare("SELECT thread FROM recent_home_rows INDEXED BY recent_home_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?")
-      .all(limit) as { thread: number }[];
-    return { ids: rows.map((row) => row.thread), total: meta.total };
+    const total = preparedDefaultHomeTotal(db);
+    if (total === null) return null;
+    const rows = db.prepare(RECENT_DEFAULT_HOME_PAGE).all(limit) as { thread: number }[];
+    return { ids: rows.map((row) => row.thread), total };
   } finally { db.exec("RELEASE recent_home_page"); }
 }
