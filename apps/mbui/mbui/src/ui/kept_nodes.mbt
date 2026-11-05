@@ -149,6 +149,10 @@ priv struct NodesRun {
   mut aside : Int
   mut kept : Int
   mut built : Int
+  /// how many it had kept and built as a Tester's build keeping none began (rows_check_begin), put back once that is
+  /// over: a test's check, no work of the frame's, as scene_unrecorded's is not scene_work's (-1: none began)
+  mut kept_before_check : Int
+  mut built_before_check : Int
   /// how many rows of lists that show only what they read were built since the run began (a test's:
   /// Tester::rows_read_built)
   mut built_read : Int
@@ -172,6 +176,8 @@ let nodes_run : NodesRun = {
   aside: 0,
   kept: 0,
   built: 0,
+  kept_before_check: -1,
+  built_before_check: -1,
   built_read: 0,
   kept_at: [],
   on: true,
@@ -1295,6 +1301,8 @@ fn Ctx::rows_check_begin(self : Ctx, kept0 : Int) -> Bool {
     }
   }
   rows_checking.val = Some({ lines: self.frame_said_lines(), rows, whole: None, at: -1, tells: self.tells.copy() })
+  nodes_run.kept_before_check = nodes_run.kept
+  nodes_run.built_before_check = nodes_run.built
   nodes_run.fresh = true
   nodes_run.whole = true
   // (one pass of the frame, as a host builds it: not counted, FramePerf's `passes`)
@@ -1310,6 +1318,12 @@ fn Ctx::rows_check_begin(self : Ctx, kept0 : Int) -> Bool {
 /// built (from what no signal says), kept rows or not, and the next frame builds it so.
 fn Ctx::rows_check_end(self : Ctx) -> Bool {
   guard rows_checking.val is Some(was) else { return false }
+  // (what the build keeping none kept and built, no host's: the frame's counts as its pass that kept rows left them,
+  // once that build is over)
+  let uncount = fn() {
+    nodes_run.kept = nodes_run.kept_before_check
+    nodes_run.built = nodes_run.built_before_check
+  }
   let now = self.frame_said_lines()
   match was.whole {
     None => {
@@ -1318,6 +1332,7 @@ fn Ctx::rows_check_end(self : Ctx) -> Bool {
         rows_checking.val = None
         self.tells.clear()
         self.tells.append(was.tells)
+        uncount()
         return false
       }
       // (apart: built once more keeping none, to know whether what parts them is the rows kept)
@@ -1333,6 +1348,7 @@ fn Ctx::rows_check_end(self : Ctx) -> Bool {
       if lines_apart(whole, now) >= 0 {
         self.tells.clear()
         self.tells.append(was.tells)
+        uncount()
         return false
       }
     }

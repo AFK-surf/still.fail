@@ -41,6 +41,9 @@ priv struct Run {
   flush_trail : Array[String]
   /// the effect or watch running now, the innermost (what it writes is its own, however untracked: effect_round)
   mut running : ReactiveNode?
+  /// how many computeds are being worked out now, one inside another: what is set meanwhile (a getter's own
+  /// bookkeeping) told, but nothing that follows it run till the outermost is worked out (computed_done)
+  mut computing : Int
 }
 
 ///|
@@ -60,6 +63,7 @@ let run : Run = {
   draining: false,
   flush_trail: [],
   running: None,
+  computing: 0,
 }
 
 ///|
@@ -238,7 +242,7 @@ pub fn end_batch() -> Unit {
   run.batch_depth -= 1
   // An unchanged batch inside a queued watcher adds no work of its own. Let the outer flush finish the queue
   // instead of nesting every independent watcher. A batch that writes still commits before its caller continues.
-  if run.batch_depth == 0 && (run.flushing == 0 || run.batch_changed) {
+  if run.batch_depth == 0 && run.computing == 0 && (run.flushing == 0 || run.batch_changed) {
     flush()
   }
 }
@@ -361,7 +365,7 @@ pub fn trigger(f : () -> Unit) -> Unit {
     }
   }
   run.batch_depth -= 1
-  if run.batch_depth == 0 {
+  if run.batch_depth == 0 && run.computing == 0 {
     flush()
   }
 }
@@ -388,7 +392,9 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   let prev_sub = set_active_sub(Some(c))
   run.cycle += 1
   let old_value = state.value
+  run.computing += 1
   let value = (state.getter)(old_value)
+  run.computing -= 1
   state.value = Some(value)
   run.active_sub = prev_sub
   c.flags = c.flags & RECURSED_CHECK.lnot()
@@ -636,11 +642,14 @@ fn[T] Computed::read_value(self : Computed[T]) -> T {
   } else if flags == 0 {
     node.flags = MUTABLE | RECURSED_CHECK
     let prev_sub = set_active_sub(Some(node))
+    run.computing += 1
     state.value = Some((state.getter)(None))
+    run.computing -= 1
     run.active_sub = prev_sub
     node.flags = node.flags & RECURSED_CHECK.lnot()
   }
   track(node)
+  computed_done()
   state.value.unwrap()
 }
 
@@ -684,7 +693,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
         let was = setting.val
         setting.val = Some(loc)
         propagate(subs, run.run_depth != 0)
-        if run.batch_depth == 0 {
+        if run.batch_depth == 0 && run.computing == 0 {
           flush()
         }
         setting.val = was
@@ -832,7 +841,7 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
   match node.subs {
     Some(subs) => {
       propagate(subs, run.run_depth != 0)
-      if run.batch_depth == 0 {
+      if run.batch_depth == 0 && run.computing == 0 {
         flush()
       }
     }
@@ -1091,4 +1100,15 @@ pub fn Watch::changed_now(self : Watch) -> Bool {
 pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
   guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
   o.marked.val = Some(f)
+}
+
+///|
+/// A computed worked out (Computed::get, as it was read or as what read it asked whether it changed): the outermost over,
+/// what was set as it was worked out told now, once what it made is in place for what follows it to read (else they run
+/// in the middle of it, see it not yet changed and are told no more: a page's list kept on a chat's view before the
+/// core's answer, 2026-11-05).
+fn computed_done() -> Unit {
+  if run.computing == 0 && run.batch_depth == 0 && run.flushing == 0 && run.notify_index < run.queued_length {
+    flush()
+  }
 }
