@@ -542,9 +542,26 @@ jobs:
           nohup bash -c 'E2E_APP="$0/app" bash apps/mbui/e2e/win.sh > "$0/log" 2>&1; echo $? > "$0/status"' "$E" > /dev/null 2>&1 &
       - name: The core's bytecode (Hermes)
         run: |
-          bash apps/mbui/scripts/win.sh core
+          bash apps/mbui/scripts/win.sh core | tee "$RUNNER_TEMP/core.log"
           [ ! -d .ci/hbc ] || echo "HBC_CACHE: $(ls .ci/hbc | wc -l) files, $(du -sm .ci/hbc | cut -f1) MB"
           [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
+      # A branch's core.hbc kept for its next push, by its key (scripts/core.sh hbc_key: the core's trees and what makes
+      # it): main's cache (the newest 8) is main's alone to save, and a branch off arch/next, whose core is not main's,
+      # made it again on every push: esbuild, Babel and hermesc beside the app's compile, 19 s on one push and 175 s on
+      # the next of the same commit (#4146, 2026-11-05), the job stopped at its 5 minutes. Its one file alone (the
+      # restore above takes the branch's own before main's), the rest let go (core.hbc is made by then).
+      - name: The branch's core bytecode, by its key
+        if: github.ref != 'refs/heads/main'
+        run: |
+          k=$(grep -o 'kept as [0-9a-f]*' "$RUNNER_TEMP/core.log" | head -1 | cut -d' ' -f3)
+          [ -n "$k" ] && [ -f ".ci/hbc/$k.hbc" ] || exit 0
+          find .ci/hbc -type f ! -name "$k.hbc" -delete
+          echo "HBC_OWN_KEY=mbui-win-hbc-b-$k" >> "$GITHUB_ENV"
+      - if: github.ref != 'refs/heads/main' && env.HBC_OWN_KEY != '' && env.HBC_OWN_KEY != steps.hbc.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/hbc
+          key: ${{ env.HBC_OWN_KEY }}
       - name: Build (APP=stillfail)
         id: build
         run: |
