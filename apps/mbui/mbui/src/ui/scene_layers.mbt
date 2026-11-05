@@ -1303,6 +1303,20 @@ fn Ctx::scene_drawn(
 }
 
 ///|
+/// The layers a frame of the tree alone draws again: those marked (something of them made again), and those placed
+/// otherwise where they are drawn (turned, their grounds drawn in boxes of their own, what they hold faded otherwise),
+/// each drawn as it keeps how it is drawn.
+fn scene_alone_due() -> Array[@view.NodeId] {
+  let due = scene.marked.keys().collect()
+  for id, _ in scene.moved_layers {
+    if !scene.marked.contains(id) {
+      due.push(id)
+    }
+  }
+  due
+}
+
+///|
 /// Whether the frame may be drawn by the tree alone (scene_alone): nothing the old frame draws changed, nothing let
 /// go, and each layer to be drawn again one drawn by the tree alone, kept where it was.
 fn scene_alone_may() -> Bool {
@@ -1310,11 +1324,8 @@ fn scene_alone_may() -> Bool {
     "\{scene.removed} let go"
   } else if scene.fresh {
     "nothing kept"
-  } else if scene.marked.is_empty() {
+  } else if scene.marked.is_empty() && scene.moved_layers.is_empty() {
     "no layer marked"
-  } else if !scene.moved_layers.is_empty() {
-    // (each drawn where it is put now, what holds it with it: the old frame paints it)
-    "\{scene.moved_layers.length()} moved"
   } else if scene.parts.whole_said() {
     "drawn whole"
   } else {
@@ -1323,7 +1334,7 @@ fn scene_alone_may() -> Bool {
   if scene.alone_why != "" {
     return false
   }
-  for id, _ in scene.marked {
+  for id in scene_alone_due() {
     match scene.layers.get(id) {
       Some(l) if l.seen == scene.frame && l.start >= 0 && !l.own_only && !l.each => ()
       Some(l) => {
@@ -1469,8 +1480,9 @@ fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
 /// was kept) where one does not: the old frame paints it.
 fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -> Bool {
   guard scene_alone_may() else { return false }
+  let due = scene_alone_due()
   // (each drawn where it was drawn, as it was drawn in: else the old frame paints it, all it is in gone through)
-  for id, _ in scene.marked {
+  for id in due {
     match scene.layers.get(id) {
       Some(l) if scene_place_now(tree, l) != Some(l.held) => {
         scene.alone_why = "layer \{id.at}: drawn elsewhere"
@@ -1482,11 +1494,11 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   let (recorded0, parts0) = (scene_work.recorded, scene.parts.work())
   // (those held by none other drawn again: each draws what it holds)
   let todo : Array[SceneLayer] = []
-  for id, _ in scene.marked {
+  for id in due {
     let mut under = false
     let mut h = tree.holder_of(id)
     while h is Some(n) && !under {
-      if scene.marked.contains(n) && scene.layers.contains(n) {
+      if (scene.marked.contains(n) || scene.moved_layers.contains(n)) && scene.layers.contains(n) {
         under = true
       }
       h = tree.holder_of(n)
