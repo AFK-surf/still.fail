@@ -623,7 +623,8 @@ pub fn ChatRows::take(
     self.gone.truncate(gone_from)
     self.gone.push_iter(gone.iter())
   }
-  // (the keys gone kept as many as chat_rows_gone_kept: a list that read none since those let go of reads all anew)
+  // (the keys gone kept as many as chat_rows_gone_kept: a list that read none since those let go of checks the rows it
+  // knows are still among them, those it holds and has held, not the chat's: scrolls_anchored's forget_missing)
   if self.gone.length() > chat_rows_gone_kept {
     let drop = self.gone.length() - chat_rows_gone_kept / 2
     self.gone_from = self.gone[drop - 1].0

@@ -1,6 +1,0 @@
-options(
-  targets: {
-    "access_debug.mbt": [ "debug" ],
-    "access_release.mbt": [ "release" ],
-  },
-)

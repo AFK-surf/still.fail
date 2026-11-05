@@ -123,3 +123,19 @@ test "an indexed list forgets removed keys even when its change history was lost
   assert_true(c.live[99].row_place().0 != id)
   c.tree.dispose()
 }
+
+///|
+test "an indexed list whose change history was lost checks the rows it knows, as few for 3000 rows as for 30" {
+  let checks = fn(n : Int) {
+    let c = indexed_case(n)
+    c.count.val -= 1
+    c.lost.val = true
+    c.checks.val = 0
+    c.revision.set(1)
+    c.tree.frame(390.0, 844.0, now=10.0) |> ignore
+    let k = c.checks.val
+    c.tree.dispose()
+    k
+  }
+  assert_eq(checks(3000), checks(30))
+}
