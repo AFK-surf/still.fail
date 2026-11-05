@@ -85,6 +85,7 @@ fn reset() -> Unit {
   splash_owner.val = None
   first_shown.val = false
   first_waiting.val = false
+  first_by_node.val = false
   @sfbase.first_page_waits.set(false)
   first_has.val = 0
   frame_bare.val = false
@@ -395,7 +396,10 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     first_shown.val = true
     first_waiting.val = false
   }
-  first_hide(first_waiting.val)
+  // (the narrow shell's said by its own node: first_page_node)
+  if !first_by_node.val {
+    first_hide(first_waiting.val)
+  }
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
@@ -1264,6 +1268,11 @@ let first_shown : Ref[Bool] = Ref(false)
 ///|
 /// Whether this frame's first page is built and not shown yet (signed_in, view_in).
 let first_waiting : Ref[Bool] = Ref(false)
+
+///|
+/// Whether a node of the window's tree says the first page's wait (narrow_shell's first_page_node, while it lives):
+/// view_in says it none then.
+let first_by_node : Ref[Bool] = Ref(false)
 
 ///|
 /// The chats' lists made once drawn at none while `on` (sfbase's first_page_waits), told only as it changes.
