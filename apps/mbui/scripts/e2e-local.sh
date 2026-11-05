@@ -23,6 +23,8 @@
 #   scripts/e2e-local.sh peer-wait  until that peer has ended (its output; fails as it failed)
 #   scripts/e2e-local.sh android-pin PIN   the emulator's screen lock set to PIN (a phone with a lock, as the vault needs)
 #   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
+#   scripts/e2e-local.sh intruder-refused CMD…  e2e/peer.ts as a device the cloud signed in as alice and the lock never
+#                                   took in, asked CMD: INTRUDER REFUSED once the station refused it
 #   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
@@ -330,6 +332,24 @@ down() {
 peer() {
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/peer-home; mkdir -p $HOME
    E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+}
+
+# a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
+# and the lock never took in: e2e/peer.ts with a data directory of its own, the test chat's address given it.
+# `intruder-refused CMD…`: that peer asked CMD, which the station must refuse: INTRUDER REFUSED, else it fails
+intruder() {
+  mkdir -p $WORK/intruder && cp $WORK/peer/chat.json $WORK/intruder/chat.json
+  (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/intruder-home; mkdir -p $HOME
+   E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/intruder E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+}
+intruder_refused() {
+  local out rc
+  # (its failure kept, not set -e's end of the script)
+  out=$(intruder "$@" 2>&1) && rc=0 || rc=$?
+  echo "$out"
+  # (refused by the lock, as the station says it: not merely failed)
+  if [ $rc = 0 ] || ! echo "$out" | grep -q '"code":"lock_unconfirmed"'; then echo "INTRUDER NOT REFUSED BY THE LOCK"; return 1; fi
+  echo "INTRUDER REFUSED"
 }
 
 # e2e/peer.ts left running beside the run (a device online to be met face to face: `peer-bg lock-await 120`), its
@@ -669,6 +689,7 @@ case "${1:-all}" in
   peer-bg) shift; peer_bg "$@" ;;
   peer-said) shift; peer_said "$@" ;;
   peer-wait) peer_wait ;;
+  intruder-refused) shift; intruder_refused "$@" ;;
   android-unlock) android_unlock "$2" ;;
   lock-state) lock_state ;;
   android-pin) shift; android_pin "$@" ;;
