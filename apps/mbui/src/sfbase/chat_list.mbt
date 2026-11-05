@@ -546,13 +546,12 @@ fn message_key(m : Json) -> String {
 pub let linger_ms : Double = 600.0
 
 ///|
-/// An agent whose turn ended, its activity still shown (with_lingering): its moment's count (anew each time its
-/// messages stop coming out of its avatar).
+/// An agent whose turn ended, its activity still shown (with_lingering): its moment counted from when its messages last
+/// stopped coming out of its avatar (Emits.released), else from when it came to linger.
 pub(all) struct Lingering {
   agent : Agent
   /// which of the chat's lingerings it is (Reading.lingered): its timers its own, never an earlier one's run out
   id : Int
-  mut n : Int
 }
 
 ///|
@@ -598,7 +597,7 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
       rd.lingered += 1
-      rd.linger[k] = { agent: a, id: rd.lingered, n: 0 }
+      rd.linger[k] = { agent: a, id: rd.lingered }
       linger_told(rd)
     }
   }
@@ -612,7 +611,7 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
           !rd.running.contains(a.key) &&
           !rd.linger.contains(a.key) => {
           rd.lingered += 1
-          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0 }
+          rd.linger[a.key] = { agent: a, id: rd.lingered }
           linger_told(rd)
         }
         _ => ()
@@ -683,9 +682,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     return
   }
   rd.ticked = frame
-  // while its messages still come out of its avatar it stays whole (ChatMotion.keeps): each build they are still coming
-  // it takes a new count (`n`, its timers' keys), so the count it keeps, asked first in the last of those builds, runs
-  // from there (linger_wbtest: gone 600 ms after the last frame they came)
+  // while its messages still come out of its avatar it stays whole (ChatMotion.keeps); its moment counted from when the
+  // last of them was out, as that was declared (Emits.released), at any frame rate or none: not from the last frame
+  // drawn while they came (linger_wbtest: gone 600 ms after the last is out)
   let keeps = emit_keeps(em)
   let over : Array[String] = []
   for k, l in rd.linger {
@@ -693,13 +692,10 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       over.push(k)
       continue
     }
-    if keeps.contains(k) {
-      l.n += 1
-    }
-    let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
     let held = keeps.contains(k)
-    // (asked while held too: its count starts at the last build they were still coming)
-    if @kit.after(c, at + "/gone", true, linger_ms) && !held {
+    // (asked while held too; let go, from then: none came out, from when it came to linger)
+    let since = if held { -1.0 } else { em.released.get(k).unwrap_or(-1.0) }
+    if @kit.after(c, "linger/" + rk + "/" + k + "/\{l.id}/gone", true, linger_ms, since~) && !held {
       over.push(k)
     }
   }

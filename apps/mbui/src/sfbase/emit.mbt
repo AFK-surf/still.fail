@@ -89,6 +89,10 @@ pub(all) struct Emits {
   /// each message out of an avatar coming out (its seq's): its words' way in, 0 to 1 over emit_out_ms_most from the
   /// avatar landing on it (emit_out)
   out_at : Map[String, @motion.Anim]
+  /// when each agent's messages last stopped coming out of its avatar: the moment the turn that let it go was declared
+  /// to end (its Return's), or the moment all of them were let out at once (emit_step): what its activity's stay after
+  /// its turn is counted from (chat_tick), whatever frames were drawn as they came
+  released : Map[String, Double]
   /// how many times it changed, as a signal (Emits::changed): what reads it (a message's row, an activity's:
   /// Emits::read) is built again as it does, kept or not (mbui's kept_nodes.mbt)
   said : @signals.Signal[Int]
@@ -132,6 +136,7 @@ pub fn emits_of(key : String) -> Emits {
         out_key: "",
         taken: None,
         out_at: {},
+        released: {},
         said: @signals.signal(0),
       }
       emits[key] = e
@@ -422,8 +427,17 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     c.wake_in(dmax(way.ends() - now, 0.0))
   }
   if !e.watched || @ui.reduced_motion() {
+    // (each let go now by what was coming out of its avatar)
+    let at = turns.moment(c)
+    for q in e.queue {
+      e.released[q.2] = at
+    }
+    match e.current {
+      Some(t) => e.released[t.agent] = at
+      None => ()
+    }
     emit_release(e)
-    turns.over(c, Emits, turns.moment(c))
+    turns.over(c, Emits, at)
     return
   }
   if e.current is None {
@@ -517,6 +531,8 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
         }
       Return => {
         e.done[seq_s(t.seq)] = true
+        // (its agent let go by its avatar where this was declared to end, unless its next message takes it up again)
+        e.released[t.agent] = at
         emit_next(c, e, t.agent, at~)
         // none left: their turn is over where this one was declared to end
         if e.current is None {

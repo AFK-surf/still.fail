@@ -68,8 +68,31 @@ test "its answer out of its avatar past its activity's whole stay: it stays its 
   // its turn over while its answer was still coming out of its avatar, the way out longer than the whole stay
   assert_true(turn_over_at >= 0.0 && last_keep_at > turn_over_at)
   assert_true(emit_all_ms() > linger_ms)
-  // its moment from the last frame its answer was still coming: gone 600 ms on (the frame that reaches it)
-  let frame = 16.0
-  assert_true(gone_at >= last_keep_at + linger_ms && gone_at < last_keep_at + linger_ms + frame)
+  // its moment from when the last was out of its avatar, as that was declared (after the last frame that drew it
+  // still coming, by the next): gone 600 ms on (the frame that reaches it)
+  let frame = t.frame_period()
+  let out_at = em.released.values().fold(init=-1.0, fn(a, b) { if b > a { b } else { a } })
+  assert_true(out_at > last_keep_at && out_at <= last_keep_at + frame, msg="\{out_at} \{last_keep_at}")
+  assert_true(gone_at >= out_at + linger_ms && gone_at < out_at + linger_ms + frame, msg="\{gone_at} \{out_at}")
   t.assert_idle()
+}
+
+///|
+test "its answer out of its avatar past its activity's whole stay, the frames drawn only as anything is due: it goes when its moment from when the last is out ends all the same" {
+  // (as a run that draws no frame between what is due draws it, floor_wbtest's: at the moment it goes at the display's
+  // every frame, the test above, not at one counted from the last frame drawn while its answer came)
+  let t = linger_core()
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  let gone_at = Ref(-1.0)
+  t.each_frame(
+    Some(fn() {
+      if gone_at.val < 0.0 && em.released.length() > 0 && readings.get("ws1/st1\u{1}s-c1").unwrap().linger.length() == 0 {
+        gone_at.val = t.time()
+      }
+    }),
+  )
+  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms() + linger_ms)
+  t.each_frame(None)
+  let out_at = em.released.values().fold(init=-1.0, fn(a, b) { if b > a { b } else { a } })
+  assert_eq(gone_at.val, out_at + linger_ms)
 }
