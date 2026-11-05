@@ -168,7 +168,11 @@ fn tree_place(v : @view.View) -> Array[Int] {
   let up : Array[Int] = []
   let mut at = v
   while at.parent() is Some(p) {
-    let i = p.kids().search_by(fn(k) { k.id() == at.id() }).unwrap_or(0)
+    // (a windowed list's block: by its key's place, whichever of the others are made)
+    let i = match at.block_place() {
+      Some(i) => i
+      None => p.kids().search_by(fn(k) { k.id() == at.id() }).unwrap_or(0)
+    }
     up.push(i)
     at = p
   }

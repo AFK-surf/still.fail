@@ -472,6 +472,9 @@ struct Node {
   /// a block of a windowed list (View::scrolls_window): laid out by the list as a root of its own, as wide as the list,
   /// as tall as it comes to, placed where the list puts it; no box of what holds it, nothing over it laid out again for it
   mut own_root : Bool
+  /// such a block's place among its list's blocks as their keys have them now (-1: none): its order among what holds it,
+  /// whichever of them are made (View::block_place)
+  mut block_place : Int
   /// a boundary's (View::boundary): told of a fault under it
   mut fault_to : ((String) -> Unit)?
   /// drawn by what hosts the tree (View::hosted)
@@ -1074,6 +1077,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.allow_ellipsis = false
       n.slot = false
       n.own_root = false
+      n.block_place = -1
       n.fault_to = None
       n.hosted = false
       n.on_press = None
@@ -1235,6 +1239,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drag_end: None,
         slot: false,
         own_root: false,
+        block_place: -1,
         fault_to: None,
         hosted: false,
         said: None,
@@ -3052,6 +3057,16 @@ fn View::block(self : View, i : Int, make : (View) -> Unit) -> View {
   n.kids.insert(i, v.at)
   v.owning(fn() { make(v) })
   v
+}
+
+///|
+/// Where it is among the blocks of the windowed list that holds it, as their keys have them now (View::block): its order
+/// among what holds it, whichever of them are made; None for any other node.
+pub fn View::block_place(self : View) -> Int? {
+  match self.live() {
+    Some(n) if n.own_root && n.block_place >= 0 => Some(n.block_place)
+    _ => None
+  }
 }
 
 ///|

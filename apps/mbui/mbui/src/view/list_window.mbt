@@ -171,6 +171,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     index_keys.val = Some(all)
     for k, b in blocks {
       b.i = at.get(k).unwrap_or(-1)
+      tree.nodes[b.slot.at].block_place = b.i
     }
     // (rows known by names for keys gone: forgotten)
     for k in row_ids.keys().collect() {
@@ -283,6 +284,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     })
     guard content.val is Some(c) else { return }
     let b : Block = { slot, content: c, i, slot_h: -1.0, y: -1.0, unplaced: -1 }
+    tree.nodes[slot.at].block_place = i
     blocks[k] = b
     lay_block(k, b, w) |> ignore
   }
