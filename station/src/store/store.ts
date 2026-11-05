@@ -44,6 +44,7 @@ import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiv
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
+import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsReady } from "./session-up-jobs.ts";
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
@@ -375,6 +376,7 @@ export class Store {
       installSessionCounts(db);
       installSessionListIndex(db);
       installSessionBindingsIndex(db);
+      installSessionUpJobs(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);
@@ -1118,6 +1120,7 @@ export class Store {
         this.#run(sessionBindingsReady(this.db) ? SESSION_BINDINGS_DELETE : "DELETE FROM bindings WHERE session_key = ?", key);
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
+        this.#run("DELETE FROM session_up_job_scopes WHERE session = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
         this.#deleteMarks(PIN_MARKS, key);
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
@@ -2497,8 +2500,13 @@ export class Store {
   }
 
   /// Its running jobs and services waiting to restart: what must stop when it is archived.
-  upJobIds(session: string): string[] {
-    return this.#all(UP_JOBS_OF_SESSION, session).map((r) => r.id);
+  upJobIds(session: string, old = false): string[] {
+    return this.#all(!old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION, session).map((r) => r.id);
+  }
+
+  /// Null means this old session's jobs have not been prepared yet.
+  sessionHasUpJob(session: string): boolean | null {
+    return sessionUpJobsReady(this.db, session) ? this.#one(SESSION_UP_JOB, session) !== undefined : null;
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and

@@ -166,7 +166,7 @@ test("the archive timer retries when the old boundary is ready", async () => {
     r.store.setRead("me", thread, 1);
     r.store.db.prepare("UPDATE threads SET created_at=0 WHERE id=?").run(thread);
     r.store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(thread);
-    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (ids) => { calls.push([...ids]); return ready.promise; }, prepareSessionBindings: async () => {} });
+    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (ids) => { calls.push([...ids]); return ready.promise; }, prepareSessionBindings: async () => {}, prepareSessionUpJobs: async () => {} });
     time.fire(60_000);
     assert.equal(r.store.getThread(thread)?.hiddenAt, null);
     assert.deepEqual(calls, [[thread]]);
@@ -197,7 +197,7 @@ test("stopping the archive timer cancels its pending old-chat work", async () =>
     r.store.setRead("me", thread, 1);
     r.store.db.prepare("UPDATE threads SET created_at=0 WHERE id=?").run(thread);
     r.store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(thread);
-    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (_ids, s) => { signal = s; return ready.promise; }, prepareSessionBindings: async () => {} });
+    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (_ids, s) => { signal = s; return ready.promise; }, prepareSessionBindings: async () => {}, prepareSessionUpJobs: async () => {} });
     time.fire(60_000);
     stop();
     assert.equal(signal?.aborted, true);
