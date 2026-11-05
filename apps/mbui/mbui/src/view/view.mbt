@@ -7046,13 +7046,22 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.lpx = px
   n.lpy = py
   if went {
-    self.work.composed = self.work.composed + 1
-    self.composed.push({ at, gen: n.gen })
-    self.placed_pending.push({ at, gen: n.gen })
+    self.composed_again(at)
   }
   if sized || n.look_due {
     self.made_again(at)
   }
+}
+
+///|
+/// Node `at` composed elsewhere than it was in what holds it (placed again, or beside what it goes beside:
+/// Tree::besides_placed): composed again there, and the scene told so at this cause, what it draws drawn where it is now
+/// (Tree::take_placed), however it came to be there.
+fn Tree::composed_again(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  self.work.composed = self.work.composed + 1
+  self.composed.push({ at, gen: n.gen })
+  self.placed_pending.push({ at, gen: n.gen })
 }
 
 ///|
