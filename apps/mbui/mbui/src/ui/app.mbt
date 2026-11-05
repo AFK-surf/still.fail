@@ -94,6 +94,8 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  // The host owns the frame's work interval, including the retained tree before the old view is drawn.
+  let t0 = work_now()
   let z = window_zoom_wanted.get()
   if z != window_zoom_drawn.val {
     let ratio = window_zoom_drawn.val / z
@@ -121,7 +123,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
   view_frame(w, h, scale, t)
-  let t0 = frame_drawn(c, w, h, scale, t)
+  frame_drawn(c, w, h, scale, t) |> ignore
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
   // what is built took them (inputs_taken), else as what it read changed (frame_watch.mbt)
