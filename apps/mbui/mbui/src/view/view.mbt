@@ -774,6 +774,8 @@ pub struct Tree {
   pending : Array[NodeId]
   /// the nodes placed, faded, turned or cut otherwise since the host last took them (Tree::take_placed)
   placed_pending : Array[NodeId]
+  /// the nodes what each holds is drawn in another order since the host last took them (Tree::take_ordered)
+  ordered_pending : Array[NodeId]
   mut drawn_due : Bool
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
@@ -955,6 +957,7 @@ pub fn Tree::new(
     removed: [],
     pending: [],
     placed_pending: [],
+    ordered_pending: [],
     drawn_due: false,
     before_causes: 0,
     standing: false,
@@ -5456,6 +5459,20 @@ fn View::boxes_again(self : View) -> Unit {
 }
 
 ///|
+/// What node `at` holds put in another order: drawn so, told the scene that draws it (Tree::take_ordered) as the node
+/// that holds them in its order (itself, or the first not a slot holding it).
+fn Tree::ordered_at(self : Tree, at : Int) -> Unit {
+  let mut at = at
+  while self.nodes[at].slot && self.nodes[at].parent >= 0 {
+    at = self.nodes[at].parent
+  }
+  let id = { at, gen: self.nodes[at].gen }
+  if !self.ordered_pending.contains(id) {
+    self.ordered_pending.push(id)
+  }
+}
+
+///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
   v.let_go()
@@ -5617,6 +5634,7 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
         kids.push(v)
       }
       slot.boxes_again()
+      tree.ordered_at(slot.at)
     }
   })
   slot.owns(stop) |> ignore

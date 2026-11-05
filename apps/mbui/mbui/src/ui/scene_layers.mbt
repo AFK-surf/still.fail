@@ -418,11 +418,14 @@ fn scene_plots_drawn() -> Unit {
 /// What the tree changed since it was last taken, told the scene at its causes (view_changes_taken): each node made
 /// again, placed otherwise or let go drawn again where it reached, and once drawn where it reaches; its layer drawn
 /// again; where it was placed, or cuts, fades or sets the glyphs of what it holds, all of that drawn again with it.
+/// `ordered`: the nodes what each holds is drawn in another order (Tree::take_ordered), the layer each is drawn in drawn
+/// again in it.
 fn scene_told(
   tree : @view.Tree,
   changed : Array[@view.NodeId],
   placed : Array[@view.NodeId],
   removed : Array[@view.NodeId],
+  ordered? : Array[@view.NodeId] = [],
 ) -> Unit {
   // (the layer the scene keeps that each layer is drawn in, found once for all those told at once: a page made, each
   // of its thousands of nodes told, goes up through the same layers, none of them kept yet)
@@ -454,13 +457,27 @@ fn scene_told(
     // placed otherwise, nothing of it made again, drawn where it is put now as it keeps how it is drawn)
     let at = kept_of(tree.layer_of(id))
     match at {
-      Some(l) if placed && l == id => scene_moved_layer(l)
+      Some(l) if placed && l == id =>
+        match scene.layers.get(l) {
+          // (drawn in the frame kept: in how what holds it is drawn, as that keeps it)
+          Some(x) if x.seen == scene.frame => scene_moved_layer(l)
+          // (not drawn then (left out of its row as it was drawn): in none of how what holds it is drawn, that drawn
+          // again to find it)
+          _ =>
+            match kept_of(tree.holder_of(l).bind(fn(h) { tree.layer_of(h) })) {
+              Some(o) => scene_mark(o)
+              None => ()
+            }
+        }
       Some(l) => scene_mark(l)
       None => ()
     }
   }
   for id in changed {
     tell(id, tree.draws_round(id), false)
+  }
+  for id in ordered {
+    tell(id, false, false)
   }
   for id in placed {
     tell(id, true, true)
@@ -982,6 +999,10 @@ fn Ctx::scene_copied(
   }
   guard !l.told && !scene.marked.contains(id) else { return not("marked, told \{l.told}") }
   guard !scene.holding.contains(id) else { return not("holds one marked") }
+  // (placed otherwise: what its node's place draws of it (turned, its ground drawn in a box of its own, what it holds
+  // faded, stretched, glyphed by it) may be another where it is drawn in the same place; drawn as it keeps how it is
+  // drawn, its node's place as it is now)
+  guard !scene.moved_layers.contains(id) else { return not("placed otherwise") }
   // (what it was drawn in, as it is drawn in now: its key; another, drawn anew)
   guard scene_began_same(l, held, fading, stretching, glyphing) else { return not("drawn in otherwise") }
   let n = l.count

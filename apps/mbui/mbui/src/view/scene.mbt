@@ -14,6 +14,16 @@ pub fn Tree::take_placed(self : Tree) -> Array[NodeId] {
 }
 
 ///|
+/// The nodes what each holds is drawn in another order since this was last asked (an `each`'s rows moved among
+/// themselves, what is leaving kept where it was): the scene draws again what each is drawn in, in its order now.
+/// Taken: asked again, only those since.
+pub fn Tree::take_ordered(self : Tree) -> Array[NodeId] {
+  let out = self.ordered_pending.copy()
+  self.ordered_pending.clear()
+  out
+}
+
+///|
 /// Whether node `id` begins a layer of the scene: what it and all it holds draw is kept as one, made again only where
 /// something of it changed, the rest of the window left as it was. The window's root; what the root holds (its pages,
 /// what is over them); what a `show`, `pick` or `each` made (a page, a sheet, a row); a list's rows; an old view; what
@@ -230,7 +240,11 @@ pub fn Tree::placed_of(self : Tree, id : NodeId) -> (Double, Double, Double, Dou
 
 ///|
 /// Whether anything was told the scene since it last took what changed (Tree::take_changed, take_placed,
-/// take_removed): a node made again, placed otherwise or let go, not yet taken.
+/// take_removed, take_ordered): a node made again, placed otherwise, let go or what it holds put in another order, not
+/// yet taken.
 pub fn Tree::scene_told_since(self : Tree) -> Bool {
-  !self.pending.is_empty() || !self.placed_pending.is_empty() || !self.removed.is_empty()
+  !self.pending.is_empty() ||
+  !self.placed_pending.is_empty() ||
+  !self.removed.is_empty() ||
+  !self.ordered_pending.is_empty()
 }

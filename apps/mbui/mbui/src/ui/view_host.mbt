@@ -704,7 +704,7 @@ fn view_changes_taken(tree : @view.Tree) -> Unit {
   }
   let placed = tree.take_placed()
   // (the scene told, at their causes: what of it is drawn again, and where the window changed, scene_layers.mbt)
-  scene_told(tree, changed, placed, removed)
+  scene_told(tree, changed, placed, removed, ordered=tree.take_ordered())
   // (an old view placed, faded or let go otherwise, or what holds one: the old frame paints it where it is now)
   if old_islands.length() > 0 &&
     (placed + changed + removed).iter().any(fn(id) {
