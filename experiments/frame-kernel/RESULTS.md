@@ -561,3 +561,16 @@ rendering system. It still performs repeated layout and does not enforce the
 experimental model's write permissions or frame-independent semantic ownership.
 Android development-target frame and memory measurements remain necessary; the
 phone goal is not achieved by the results above.
+
+The first large-screen drag was traced to the shortcut handler reading editor
+focus even when no focus shortcut was pressed. Testing the action before
+reading focus removes that subscription; the first drag now builds no old
+island. The related composer/reference checks pass (55 of 58; the same three
+host-work checks still fail).
+
+Page departure now saves positions and releases native resources in a retained
+reaction to the navigation lifetime, without waiting for a build. The player
+regression sends Back and a later input with no frame between: the previous
+source loses the saved position, the new source saves it and closes the view.
+All 35 player, chat and chat-open checks pass. This does not yet remove the
+remaining small-screen departure rebuilds or glass damage expansion.

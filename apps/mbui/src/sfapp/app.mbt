@@ -280,9 +280,11 @@ fn home() -> Unit {
 }
 
 ///|
-/// The pages left since a build last began, told so (where each was left, what it held let go).
+/// The pages whose departure ended, told so (where each was left, what it held let go).
 fn pages_left(src : Source) -> Unit {
-  for p in left_pages {
+  let pages = left_pages.copy()
+  left_pages.clear()
+  for p in pages {
     match p {
       Chat(r) => {
         chat_left(src, r)
@@ -303,7 +305,6 @@ fn pages_left(src : Source) -> Unit {
       _ => ()
     }
   }
-  left_pages.clear()
 }
 
 ///|
@@ -351,10 +352,12 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
-  // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
-  @sfbase.left_said.get() |> ignore
-  if left_pages.length() > 0 {
-    c.after_build("pages-left", fn() { pages_left(src) })
+  // The tree handles departure at its event. An old-only application keeps its after-build adapter.
+  if !@ui.old_islands_around() {
+    @sfbase.left_said.get() |> ignore
+    if left_pages.length() > 0 {
+      c.after_build("pages-left", fn() { pages_left(src) })
+    }
   }
   // everything in still.fail's theme, as this frame's palette has it (light or dark, a phone's or a desktop's): the
   // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
@@ -482,6 +485,8 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 /// theme, the window's sides, the layers over it).
 pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
+    // Releasing a page's subscriptions and saving its place belong to the departure, independent of drawing.
+    root.reacts(fn() { @sfbase.left_said.get() }, fn(_) { pages_left(src) })
     // (the library's words, the app's catalog's, and their language as the core's prefs say it, said before any page of
     // nodes is made: what one says on its first frame is its words in that language, not their keys or the device's
     // laid out and then said again; the old frame tells them each build, the same)

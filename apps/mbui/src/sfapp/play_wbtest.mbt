@@ -4,12 +4,12 @@
 ///|
 test "the player left: where it was kept on the device (drive.place), its view closed" {
   let t = drive_tester("player-video")
-  t.back()
-  // the page's way out; once it is gone (the frame after), where it was kept and its view closed (app.mbt's
-  // left_pages are let go of at the start of a frame after that one, which nothing asks for yet: drawn here)
-  nav_rested(t)
-  t.draw()
-  t.draw()
+  t.record_host()
+  t.back_told(t.time())
+  // The next input comes after the departure. It must find the player released even if no frame was presented
+  // between the two inputs; saving the position and closing the native view belong to the page's lifetime.
+  let after = t.time() + @ui.move_most_ms
+  t.touch_at(0, -100.0, -100.0, after)
   match fix_places.get(fix_films + "/第02集.mp4") {
     Some(p) => {
       assert_eq(number(Some(p), "at"), 312000.0)
@@ -18,7 +18,8 @@ test "the player left: where it was kept on the device (drive.place), its view c
     None => fail("no place kept")
   }
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("close") }))
-  t.assert_idle()
+  assert_eq(t.host_frames().length(), 0, msg="no frame is needed to release the page")
+  t.touch_at(2, -100.0, -100.0, after)
 }
 
 ///|

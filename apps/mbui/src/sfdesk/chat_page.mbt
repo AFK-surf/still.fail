@@ -76,7 +76,7 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   if @settings.action_pressed(c, prefs, "chat.screen", in_field=true) {
     chat_screen_first(r, v.screens)
   }
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
+  if @settings.action_pressed(c, prefs, "composer.focus") && !c.field_focused() && !switcher_open() {
     composer_focus()
   }
   if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
