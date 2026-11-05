@@ -771,7 +771,7 @@ pub struct Tree {
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
   mut before_causes : Int
-  /// measuring or placing the tree: its outputs belong to this layout, not a new change to settle inside it
+  /// sampling or laying out the tree: its outputs do not admit a new input or advance logical deadlines
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
   mut settle_asked : Bool
@@ -1458,9 +1458,16 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 ///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
+  // Sampling a display time is output work. Its observers may update the picture, but neither settle a new
+  // input nor advance deadlines to that time: a predicted frame can be ahead of the next input.
   let was = self.bringing_at
+  let was_standing = self.standing
+  self.standing = true
   self.bringing_at = ms
-  defer { self.bringing_at = was }
+  defer {
+    self.bringing_at = was
+    self.standing = was_standing
+  }
   self.clock_to(ms)
   self.beat_set(ms)
 }
@@ -1771,7 +1778,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = self.time_now()
+      told_at.val = if self.standing { self.cause_now() } else { self.time_now() }
       self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
@@ -1904,14 +1911,22 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
+  } else if self.standing {
+    self.logic
   } else {
     self.time_now()
   }
-  self.advance_logic(at)
+  // Geometry and display-clock notifications derive from the current change. They do not admit another input
+  // or execute its deadlines, even when the picture being sampled is in the future.
+  if !self.standing {
+    self.advance_logic(at)
+  }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
   @signals.start_batch()
-  self.advance_clock(at)
+  if !self.standing {
+    self.advance_clock(at)
+  }
   let was = self.cause_at
   self.cause_at = at
   self.committing += 1
