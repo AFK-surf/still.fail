@@ -224,7 +224,9 @@ export class Secrets {
           d.db.prepare("INSERT INTO vault_grants (ws, id, session, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET body = excluded.body")
             .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses, ...(h.until === undefined ? {} : { until: h.until }) }));
         },
-        forget: (id) => d.db.prepare("DELETE FROM vault_grants WHERE id = ?").run(id),
+        forget: (h) => {
+          if (h.request.vault === PLAIN) d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(h.request.ws, h.request.id);
+        },
       },
     });
     this.plain = d.plain;
