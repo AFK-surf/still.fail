@@ -1,23 +1,31 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ccSessionReady, CcIndexPreparation } from "./cc-thread-index.ts";
 
+const VERSION = 1;
+
 // cc_session_rows already orders the non-ember members of a requested session. Keep only its ember members here,
 // so choosing a session's latest chat can take one candidate from each order. This table starts empty even on an old
 // station: its old members are prepared in batches, not by building an index over the old projection at startup.
 export function installSessionChatIndex(db: DatabaseSync): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS session_chat_scopes (
+  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_chat_meta'").get() !== undefined;
+  if (installed()) { checkSessionChatIndex(db); return; }
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!installed()) db.exec(`CREATE TABLE session_chat_meta (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL) WITHOUT ROWID;
+  INSERT INTO session_chat_meta VALUES(1,${VERSION});
+  CREATE TABLE session_chat_scopes (
     session TEXT PRIMARY KEY, scan_after INTEGER, scan_end INTEGER, complete INTEGER NOT NULL DEFAULT 0
   ) WITHOUT ROWID;
-  CREATE TABLE IF NOT EXISTS session_chat_ember (
+  CREATE TABLE session_chat_ember (
     session TEXT NOT NULL, has_last INTEGER NOT NULL, last_at NOT NULL, created_at INTEGER NOT NULL, thread INTEGER NOT NULL,
     PRIMARY KEY(session, has_last DESC, last_at DESC, created_at DESC, thread DESC)
   ) WITHOUT ROWID;
-  CREATE TRIGGER IF NOT EXISTS session_chat_cc_add AFTER INSERT ON cc_session_rows
+  CREATE TRIGGER session_chat_cc_add AFTER INSERT ON cc_session_rows
     WHEN NEW.surface='ember' AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session) BEGIN
       INSERT OR IGNORE INTO session_chat_ember(session,has_last,last_at,created_at,thread)
         VALUES(NEW.session,NEW.last_at IS NOT NULL,COALESCE(NEW.last_at,0),NEW.created_at,NEW.thread);
   END;
-  CREATE TRIGGER IF NOT EXISTS session_chat_cc_change AFTER UPDATE ON cc_session_rows
+  CREATE TRIGGER session_chat_cc_change AFTER UPDATE ON cc_session_rows
     WHEN OLD.session IS NOT NEW.session OR OLD.thread IS NOT NEW.thread OR OLD.surface IS NOT NEW.surface
       OR OLD.last_at IS NOT NEW.last_at OR OLD.created_at IS NOT NEW.created_at BEGIN
       DELETE FROM session_chat_ember WHERE OLD.surface='ember' AND session=OLD.session
@@ -27,11 +35,19 @@ export function installSessionChatIndex(db: DatabaseSync): void {
         SELECT NEW.session,NEW.last_at IS NOT NULL,COALESCE(NEW.last_at,0),NEW.created_at,NEW.thread
         WHERE NEW.surface='ember' AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session);
   END;
-  CREATE TRIGGER IF NOT EXISTS session_chat_cc_drop AFTER DELETE ON cc_session_rows BEGIN
+  CREATE TRIGGER session_chat_cc_drop AFTER DELETE ON cc_session_rows BEGIN
     DELETE FROM session_chat_ember WHERE OLD.surface='ember' AND session=OLD.session
       AND has_last=(OLD.last_at IS NOT NULL) AND last_at IS COALESCE(OLD.last_at,0)
       AND created_at IS OLD.created_at AND thread=OLD.thread;
   END;`);
+    else checkSessionChatIndex(db);
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+export function checkSessionChatIndex(db: DatabaseSync): void {
+  const row = db.prepare("SELECT version FROM session_chat_meta WHERE id=1").get() as { version: number } | undefined;
+  if (row?.version !== VERSION) throw new Error(`session chat index version ${row?.version ?? "missing"} is incompatible with ${VERSION}`);
 }
 
 // The flag lets the single ordered primary key represent NULL timestamps without a second lookup index. NULL sorts
@@ -46,6 +62,7 @@ export const SESSION_CHAT_INDEXED = `WITH own AS MATERIALIZED (${SESSION_CHAT_EM
   ORDER BY c.last_at DESC,c.created_at DESC,c.thread DESC LIMIT 1`;
 
 export function sessionChatReady(db: DatabaseSync, session: string): boolean {
+  checkSessionChatIndex(db);
   const row = db.prepare("SELECT complete FROM session_chat_scopes WHERE session=?").get(session) as { complete: number } | undefined;
   return row?.complete === 1 && ccSessionReady(db, session);
 }
@@ -68,6 +85,7 @@ export class SessionChatPreparation {
 
   step(db: DatabaseSync, session: string, limit = 64): { done: boolean; visited: number } {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) throw new RangeError("session chat batch must be between 1 and 128");
+    checkSessionChatIndex(db);
     if (!ccSessionReady(db, session)) {
       const progress = this.#cc.step(db, session, limit);
       return { done: false, visited: progress.visited };
@@ -75,6 +93,7 @@ export class SessionChatPreparation {
     db.exec("BEGIN IMMEDIATE");
     try {
       // Another writer may have changed the projection before this transaction took the write lock.
+      checkSessionChatIndex(db);
       if (!ccSessionReady(db, session)) { db.exec("COMMIT"); return { done: false, visited: 0 }; }
       db.prepare(`INSERT INTO session_chat_scopes(session,scan_end)
         SELECT ?1,(SELECT thread FROM cc_session_rows WHERE session=?1 ORDER BY thread DESC LIMIT 1)

@@ -108,6 +108,10 @@ test("the two orders keep SQLite's tie breaking and old non-integer times", () =
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, ids[0]);
     assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    db.prepare("UPDATE entries SET at=? WHERE thread=? AND n=1").run("z-old-text-time", ids[1]!);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, ids[1]);
+    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
   } finally { store.close(); }
 });
 
@@ -195,5 +199,49 @@ test("readiness and the chosen chat share a snapshot with another writer", () =>
     assert.equal(sessionChatReady(db, "s"), false);
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, later);
+  } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an incompatible session chat index is neither read nor prepared", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installSessionChatIndex(db);
+    db.prepare("UPDATE session_chat_meta SET version=2 WHERE id=1").run();
+    assert.throws(() => installSessionChatIndex(db), /incompatible/);
+    assert.throws(() => sessionChatReady(db, "s"), /incompatible/);
+    assert.throws(() => new SessionChatPreparation().step(db, "s"), /incompatible/);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes").get()?.n, 0);
+  } finally { store.close(); }
+});
+
+test("a writer between readiness and a preparation transaction is not missed", () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-handover-")), path = join(dir, "stillfail.db");
+  const store = Store.open(path), db = store.db, writer = new DatabaseSync(path);
+  try {
+    installSessionChatIndex(db);
+    const first = store.openThread("ember", "C", "first", null, null).id;
+    const later = store.openThread("slack", "C", "later", null, null).id;
+    store.joinThread(first, "s", "c"); store.joinThread(later, "s", "c");
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',10)").run(first);
+    prepare(store, "s");
+    let changed = false;
+    const proxy = new Proxy(db, {
+      get(target, property) {
+        if (property === "exec") return (sql: string) => {
+          if (sql === "BEGIN IMMEDIATE" && !changed) {
+            writer.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',20)").run(later);
+            changed = true;
+          }
+          return target.exec(sql);
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.equal(new SessionChatPreparation().step(proxy, "s").done, false);
+    assert.ok(changed);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, later);
+    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
   } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
