@@ -18,6 +18,7 @@ import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./u
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
+import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -514,7 +515,7 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
       state: agent ? markOf(agent) : null,
     };
   }
-  if (kind === "ember" || kind === "stillfail") return { kind: "ember", name: brand.name(), mine: false };
+  if (isStationAuthor(kind)) return { kind: "ember", name: brand.name(), mine: false };
   const mine = isViewer(me, author, slackUsers);
   const member = members.find((m) => sameEmail(get(m, "email"), author));
   const name = mine ? t("core-views.present.you") : (str(get(member, "name")) || saidName || author);

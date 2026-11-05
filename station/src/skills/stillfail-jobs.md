@@ -20,7 +20,7 @@ available to workspace members through its returned link.
 - To wait on CI or another remote run, start a job (or background command) that polls it and exits on the first
   failure: its completion wakes you. Do not end `waiting` on a guessed duration with nothing watching.
 - Inside long jobs, `stillfail-job notify "<words>"` reports meaningful milestones or trouble, not every line.
-  `ember-job` is an alias. Notices arrive via="ember"; relay only what matters and act on failures.
+  `ember-job` is an alias. Notices arrive via="station"; relay only what matters and act on failures.
 - Completion includes the exit code and log tail. `job_log` reads more (up to 1000 lines); `job_list` shows your
   jobs; `job_stop` stops one. A completed step needs no separate user post unless it is useful news.
 

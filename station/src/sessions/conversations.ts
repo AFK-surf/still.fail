@@ -258,7 +258,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
       card.type === "login" && chat.loginCards === true
         ? 'a login card is shown here only for a login of this station that waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
         : chat.cards === true
-          ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
+          ? 'a login card is shown only in still.fail chats (CHAT/… or EMBER/…); here post its link in the text and end with kind "need_human"'
           : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
     );
   }

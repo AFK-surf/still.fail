@@ -111,6 +111,8 @@ export type FeishuSurfaceOptions = {
 /// Feishu pings every two minutes; the station asks more often, to find a connection cut on the way sooner.
 const PING_MS = 15_000;
 const STALE_MS = 45_000;
+/// How long a person known without an email is left before their email is asked for again.
+const EMAIL_AGAIN_MS = 24 * 60 * 60_000;
 
 export class FeishuSurface extends ConnectedSurface {
   protected readonly kind = "feishu";
@@ -500,9 +502,19 @@ export class FeishuSurface extends ConnectedSurface {
     }
   }
 
+  /// A person for the book: what this connection knows when that has an email, else what the platform says now.
+  private async relearned(user: string): Promise<Person | null> {
+    const known = this.names.get(user);
+    if (known?.email) return known;
+    const person = await this.lookUp(user);
+    if (person) this.names.set(user, person);
+    return person ?? known ?? null;
+  }
+
   knownPerson(user: string): Person | null {
     if (!this.book) return this.names.get(user) ?? null;
-    return this.book.person(personKey(this.connect, user), () => this.profile(user));
+    // One without an email may get one: a person the app may read later on, or who fills it in.
+    return this.book.person(personKey(this.connect, user), () => this.relearned(user), (known, ageMs) => known.email === "" && ageMs >= EMAIL_AGAIN_MS);
   }
 
   knownChannel(channel: string): string | null {

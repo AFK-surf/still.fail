@@ -179,7 +179,9 @@ export class PhoneGrants {
 
   /// The grants live for `session` (the agent's), and those of `owner` (their devices': which chats their phone is lent to).
   held(session: string): PhoneRequest[] {
-    return this.#bySession(session).filter((r) => r.status === "granted" && this.#live(r));
+    // #save writes the indexed status and the body's status together, including for requests made by older stations.
+    return this.#load("SELECT body FROM adb_requests WHERE session = ? AND status = 'granted'", session)
+      .filter((r) => r.status === "granted" && this.#live(r));
   }
   ofOwner(owner: string, workspace?: string): PhoneRequest[] {
     return this.#load("SELECT body FROM adb_requests WHERE owner = ? AND status IN ('pending', 'granted')", owner.toLowerCase())
@@ -219,9 +221,12 @@ export class PhoneGrants {
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
     const owner = this.starter(session);
     if (owner === null) throw new Refused("this chat has no person who started it: nobody to lend a phone");
-    const thread = this.#d.hub.store.latestThread(session);
+    const pending = this.#load("SELECT body FROM adb_requests WHERE session = ? AND status = 'pending' ORDER BY rowid LIMIT 1", session)[0];
+    // A still-joined original chat already proves the session has a chat. A reused request does not need to choose
+    // the latest one: a reasked card goes back to its original place. Older requests may not record that place.
+    const original = pending?.thread == null ? null : this.#d.hub.store.sessionThreadById(session, pending.thread);
+    const thread = original ?? this.#d.hub.store.latestThread(session);
     if (thread === null) throw new Refused("this session has no chat to ask in");
-    const pending = this.#bySession(session).find((r) => r.status === "pending");
     const r: PhoneRequest = pending ?? {
       id: this.#d.id?.() ?? `p_${this.#d.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
       session, chat: threadAddress(thread.thread.channel, thread.thread.threadTs), owner, reason: reason.trim(), at: this.#secs(), status: "pending",

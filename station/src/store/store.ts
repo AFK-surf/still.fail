@@ -65,6 +65,9 @@ export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 export const SESSION_THREAD_BY_ID = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
   WHERE ts.thread = ?1 AND ts.session = ?2`;
+export const SESSION_HOME_THREAD = `SELECT t.*, ts.connect FROM threads t INDEXED BY threads_home
+  CROSS JOIN thread_sessions ts WHERE t.home = ?1 AND ts.thread = t.id AND ts.session = ?1
+  ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`;
 // Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
 // needed only after the limit. Applying the connect filter outside the limit preserves the prior cross-connect order.
 export const RECENT_CONNECT_THREADS = `WITH recent AS MATERIALIZED (
@@ -1304,6 +1307,12 @@ export class Store {
   /// One thread of a session, by its id, and the connect it posts through there.
   sessionThreadById(session: string, thread: number): SessionThread | null {
     const r = this.#one(SESSION_THREAD_BY_ID, thread, session);
+    return r ? toSessionThread(r) : null;
+  }
+
+  /// A session's own chat among those it joined, with the same order as sessionThreads.
+  sessionHomeThread(session: string): SessionThread | null {
+    const r = this.#one(SESSION_HOME_THREAD, session);
     return r ? toSessionThread(r) : null;
   }
 

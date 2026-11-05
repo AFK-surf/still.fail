@@ -252,7 +252,7 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
   const author = str(m.author) ?? "";
   const saidName = str(m.authorName) || null;
   m.mine = kind === "person" && present.isViewer(viewer, author, slackUsers);
-  m.system = kind === "ember" || kind === "stillfail";
+  m.system = isStationAuthor(kind);
   if (kind === "agent") {
     const agent = agents.find((a) => get(get(a, "session"), "key") === author);
     const session = agent ? agent.session : undefined;
@@ -275,7 +275,7 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
         runtime,
       };
     }
-  } else if (kind === "ember" || kind === "stillfail") {
+  } else if (isStationAuthor(kind)) {
     m.by = { name: brandName() };
     m.notice = noticeOf(str(m.text) ?? "", str(m.profile) !== null);
   }
@@ -292,6 +292,7 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
 
 import * as brand from "../brand.ts";
 import { noticeOf } from "../notice.ts";
+import { isOwnSurface, isStationAuthor } from "../titles.ts";
 export { noticeOf };
 const brandName = () => brand.name();
 
@@ -2251,7 +2252,7 @@ export class Views implements Owner {
     const viewer = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const some = merge(arr(get(held.ok, "entries"))).filter((m) => {
-      if (isLetter(m, keys) || m.authorKind === "ember" || m.authorKind === "stillfail") return false;
+      if (isLetter(m, keys) || isStationAuthor(m.authorKind)) return false;
       return (Array.isArray(m.attachments) && m.attachments.length > 0) || (str(m.text) ?? "").includes("://");
     });
     const shown = some.map((m) => shownMessage(m, agents, viewer, [], members_, [], thread?.creator));
@@ -2456,7 +2457,7 @@ export class Views implements Owner {
   #whereIn(station: string, agents: J[], surface: string, channel: string, channelName: string, threadTs: string): { place: string | null; slackUrl: string | null; slackApp: string | null; feishuUrl: string | null } {
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
-    const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
+    const slack = !isOwnSurface(surface) && !feishu;
     const place = format.placeName(surface, channel, channelName);
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);

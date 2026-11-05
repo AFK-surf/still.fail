@@ -8,6 +8,7 @@ import { t } from "./i18n.ts";
 import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
+import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -67,7 +68,7 @@ function fileOf(text: string): string | null {
   return null;
 }
 
-/// A message a prompt carried; `station`: a notice of the station's own (via="ember"), not a person's; `agent`: an
+/// A message a prompt carried; `station`: a notice of the station's own (via="station"; "ember" before), not a person's; `agent`: an
 /// agent's (marked `bot`: another session's letter, a bot in the thread), its words Markdown.
 export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean; station: boolean; agent: boolean };
 
@@ -198,7 +199,7 @@ export function parsePrompt(text: string): [Sourced[], string] {
       thread: attr(attrs, "thread"),
       // A person in a Feishu chat is told as one in Slack is (docs/feishu.md).
       slack: attr(attrs, "via") === "slack" || attr(attrs, "via") === "feishu",
-      station: ["ember", "stillfail"].includes(attr(attrs, "via") ?? ""),
+      station: isStationAuthor(attr(attrs, "via")),
       agent: bare(attrs, "bot"),
     });
     rest += text.slice(at, open);
