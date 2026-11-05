@@ -235,10 +235,11 @@ for t in $targets; do
     if [ "$n" != 4 ]; then echo 1; return; fi
     case "$1 $2 $3" in
       "-p "*) echo 1 ;;
-      "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
-      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 1 ;;
+      # (corners' three runs on a runner of their own since, beside the four: its English run alone 240 s of the second's
+      # 252 on arch/next, its Chinese 200 of the first's, each push near its 5 minutes and some cut, ci-corners-once
+      # 42003619842, 2026-11-05: back among the four once a screen opens in one build, as on main)
+      "src/sfapp/corners_wbtest.mbt "*) echo corners ;;
       "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
-      "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
@@ -251,8 +252,8 @@ for t in $targets; do
     mine=()
     for r in "${runs[@]}"; do
       [ -n "${r// /}" ] || continue
-      # (APP_GROUP=contrast: contrast's run alone, on a runner of its own, beside the four)
-      if [ "$APP_GROUP" = contrast ]; then [ "$(app_group_of 4 $r)" = contrast ] && mine+=("$r")
+      # (APP_GROUP=contrast, corners: that sweep's runs alone, on a runner of their own, beside the four)
+      if [ "$APP_GROUP" = contrast ] || [ "$APP_GROUP" = corners ]; then [ "$(app_group_of 4 $r)" = "$APP_GROUP" ] && mine+=("$r")
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
