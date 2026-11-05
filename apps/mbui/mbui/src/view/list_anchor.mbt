@@ -506,6 +506,16 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
           r.height
         }
+        // (shown nowhere yet: no room to show anything in, as a page pushed on is before it is laid out where it goes.
+        // Nothing of this one kept as how it was laid out, no put taken: laid out where it shows, it lays its rows out
+        // from where it was, what it was asked to put then put; what it had made kept made meanwhile)
+        if h <= 0.0 {
+          match laid.val {
+            Some(was) => for k in was.keys { slot_of(k) |> ignore }
+            None => ()
+          }
+          return
+        }
         // (put at a row, its top that far under the window's top)
         let putting = c.put_n > put_laid.val && c.put is Some(_)
         match c.put {
