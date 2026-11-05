@@ -319,10 +319,10 @@ fn dismiss_node(
   let shown = fn() { key() is Some(_) && (asked() || resolved()) && asking() && !let_go() }
   let live = fn() { shown() && !resolved() }
   under_node(b, shown, lead~, scale_out=archive_scale, out=archive_tween, about=(0.0, 0.0), fn(u) {
-    u.padding(Is((0.0, 2.0, 0.0, 0.0))) |> ignore
     u.box(fn(w) {
       let hot = fn() { live() && w.pointed() }
       w
+      .padding(Is((0.0, 2.0, 0.0, 0.0)))
       .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
       .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
       .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
