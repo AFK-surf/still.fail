@@ -300,7 +300,11 @@ function PairSteps({ lock }: { lock: LockView }) {
         {pair.untilText && <span className={css.mNote}>{pair.untilText}</span>}
         <Button primary={false} label={t("web-pages.security.pairAgain")} onClick={() => { setCode(""); void run("lock.pair", { workspace: ws }, t("web-pages.security.pairAgain")); }} />
       </>}
-  </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
+  </> : pair?.state === "finding" || asking ? <>
+    <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
+    {/* asked again while it looks: a trusted device opened and nothing came up (2026-11-06) */}
+    {!asking && <Button primary={false} label={t("web-pages.security.pairRetry")} onClick={() => void run("lock.pair", { workspace: ws }, t("web-pages.security.pairRetry"))} />}
+  </>
     : <>
       <span className={pair?.state === "failed" ? css.mFailed : css.mNote}>
         {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}

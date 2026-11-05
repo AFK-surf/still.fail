@@ -13,7 +13,12 @@
 // A new device (`lock.pair`, its waiting page): dials them all, and once one or more show a code, proves the code typed
 // (`lock.pairCode`) to each; the one whose code it was approves it. `me.pair` says how far it got. A trusted device that
 // ends it while nothing is typed (turned away, the code too old, gone) is heard at once, not once a code is typed: the
-// page says why and asks again (2026-10-30: the boxes stayed after the code was gone).
+// page says why and asks again (2026-10-30: the boxes stayed after the code was gone). One not reached (its app not
+// open, a phone's put away) is dialled again every PAIR_REDIAL_MS, PAIR_DIAL_TRIES times in all, a code shown elsewhere
+// or not: one the person opens after asking shows its code too (2026-11-05: they asked first, then went to open their
+// phone and other computers, and nothing came up on any; each had been dialled once, for 20 seconds, when they asked).
+// One reached is not dialled again in that try, whatever came of it: it shows its code once (the user: 「每 10 秒一次
+// 也可以，但是比如说最多找 6 次这样。并且如果已经弹出来了，就不要重复弹」; a trusted device met again shows a new code).
 //
 // The wire, a line of JSON each way at a time on one stream: new → `hello {workspaces: [{ws, credential}], kind, label,
 // sign_key}`; trusted → `code {workspaces}` (the ones it approves) or `no {error}`; new → `pake {y}`; trusted → `pake
@@ -49,8 +54,15 @@ export const PAIR_WAIT_MS = 5 * 60_000;
 /// How long the new device waits past PAIR_WAIT_MS before it takes a code for gone though its trusted device said
 /// nothing (the connection lost without a word, an app put away).
 export const PAIR_GRACE_MS = 10_000;
-/// How long the new device tries to reach each trusted one.
-export const PAIR_DIAL_MS = 20_000;
+/// How often the new device dials a trusted one it has not reached (from when the last dial began), and how long each
+/// dial tries to reach it: the person may open one only after asking.
+export const PAIR_REDIAL_MS = 10_000;
+export const PAIR_DIAL_MS = PAIR_REDIAL_MS;
+/// How many times in all the new device dials a trusted one it does not reach, once asked (the first, then one each
+/// PAIR_REDIAL_MS: about a minute).
+export const PAIR_DIAL_TRIES = 6;
+/// How long the new device waits for a trusted device it reached to say whether it shows a code.
+const PAIR_ANSWER_MS = 30_000;
 /// Who signs member credentials, and what kind they are (station/src/cloud/provider.ts STILLFAIL `credential`).
 const ISSUERS = ["stillfail-cloud"];
 const TYPES = ["stillfail-member+jwt"];
@@ -282,7 +294,8 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// This device's try: how far it got, the trusted devices showing a code.
 /// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number };
+/// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]> };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -298,9 +311,12 @@ function mine(inner: Inner, ws: string): J | null {
   }
   const until = Math.max(0, ...[...y.met.values()].map((m) => m.until ?? 0));
   const typing = y.state === "code" || y.state === "wrong";
+  // The devices that may approve it here, each whether it shows a code for here now (the lock's view names them).
+  const approvers = (y.approvers?.get(ws) ?? []).map((id) => ({ id, showing: y.met.get(id)?.workspaces.includes(ws) === true }));
   return {
     state: y.state, devices: y.met.size, ...(y.left !== undefined ? { left: y.left } : {}), ...(y.error !== undefined ? { error: y.error } : {}),
     ...(typing && until > 0 ? { until, untilText: untilText(inner, until) } : {}),
+    ...(y.approvers !== undefined ? { approvers } : {}),
   };
 }
 
@@ -314,9 +330,11 @@ function drop(y: Trying): void {
 /// The workspaces this device waits in (a lock without it, or, an app, one where it does not sign with its key), and
 /// the devices that may approve it in them: its person's own that sign, and the owners' and admins' while the person
 /// has none that signs (their first; as the checked lock says, where it checks out: views/pair.ts `placesFor`).
-function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted: string[] } {
+/// `approvers`: those of each workspace; `trusted`: all of them, each once.
+function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted: string[]; approvers: Map<string, string[]> } {
   const workspaces: string[] = [];
   const trusted = new Set<string>();
+  const approvers = new Map<string, string[]>();
   const signer = signerOf(inner);
   for (const [ws, sub] of inner.workspaces.owned()) {
     const h = held(inner, ws);
@@ -331,14 +349,39 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted:
       checked = checkLock(h.entries, Math.floor(inner.host.nowMs() / 1000));
     } catch {}
     const first = checked === null || !checked.signed.has(sub);
+    const here: string[] = [];
     for (const d of f.devices.values()) {
       const role = f.members.get(d.sub)?.role;
       const own = checked === null || checked.devices.get(d.id)?.own === true;
-      if (d.id !== base && own && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || (first && (role === "owner" || role === "admin")))) trusted.add(d.id);
+      if (d.id !== base && own && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || (first && (role === "owner" || role === "admin")))) {
+        trusted.add(d.id);
+        here.push(d.id);
+      }
     }
+    approvers.set(ws, here);
   }
-  return { workspaces, trusted: [...trusted] };
+  return { workspaces, trusted: [...trusted], approvers };
 }
+
+/// Where the new device reaches a trusted one: its mesh's endpoint, dialling the trusted device's id on PAIR_ALPN
+/// (tests put a line of their own here).
+export const dialer = {
+  open(inner: Inner, id: string, relays: string[]): Effect.Effect<Duplex, CoreError> {
+    return Effect.gen(function* () {
+      const endpoint = (yield* inner.mesh()).endpoint();
+      const connection = yield* Effect.mapError(endpoint.connect({ id, relays }, PAIR_ALPN, []), (e) => CoreError.plainly("pair", e));
+      const stream = yield* Effect.mapError(connection.openBi(), (e) => {
+        connection.close(0, "done");
+        return CoreError.plainly("pair", e);
+      });
+      return streamDuplex(stream, () => connection.close(0, "done"));
+    });
+  },
+};
+
+/// Whether this device's try `y` still looks for trusted devices: the one it is on, not over (approved, ended, or
+/// given up on: none reached in PAIR_DIAL_TRIES dials each).
+const looking = (inner: Inner, y: Trying) => tryings.get(inner) === y && y.state !== "done" && y.state !== "failed" && y.state !== "none";
 
 /// `lock.pair`: the trusted devices dialled, each that answers asked to show a code.
 function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
@@ -347,9 +390,10 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     const base = mesh.deviceId();
     const before = tryings.get(inner);
     if (before) drop(before);
-    const { workspaces, trusted } = waitingIn(inner, base);
+    const { workspaces, trusted, approvers } = waitingIn(inner, base);
     if (workspaces.length === 0) return yield* Effect.fail(CoreError.invalid("this device waits in no workspace"));
     const y = trying(inner, workspaces);
+    y.approvers = approvers;
     // What it says of itself, in each workspace: a credential for its main endpoint; an app's signing key.
     const credentials: J[] = [];
     for (const ws of workspaces) {
@@ -362,7 +406,8 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(
       Effect.gen(function* () {
-        yield* Effect.forEach(trusted, (id) => Effect.ignore(Effect.timeout(dial(inner, y, id, relays, hello), PAIR_DIAL_MS)), { concurrency: "unbounded", discard: true });
+        yield* Effect.forEach(trusted, (id) => seek(inner, y, id, relays, hello), { concurrency: "unbounded", discard: true });
+        // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials.
         if (tryings.get(inner) !== y || y.state !== "finding") return;
         y.state = y.met.size > 0 ? "code" : "none";
         changed(inner, y);
@@ -372,17 +417,38 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
   });
 }
 
-/// One trusted device, dialled: kept once it shows a code.
-function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): Effect.Effect<void, CoreError> {
+/// One trusted device, dialled until it is reached, this try is over, or PAIR_DIAL_TRIES dials did not reach it: one
+/// each PAIR_REDIAL_MS from when the last began. Reached, it is not dialled again, whatever it answered: a code (kept),
+/// that it shows none, or nothing (its answer lost: it may show a code all the same, and met again it would show
+/// another). A code shown by another meanwhile, it is still dialled: the person may have this one at hand, not that.
+function seek(inner: Inner, y: Trying, id: string, relays: string[], hello: J): Effect.Effect<void> {
   return Effect.gen(function* () {
-    const endpoint = (yield* inner.mesh()).endpoint();
-    const connection = yield* Effect.mapError(endpoint.connect({ id, relays }, PAIR_ALPN, []), (e) => CoreError.plainly("pair", e));
-    const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("pair", e));
-    const d = streamDuplex(stream, () => connection.close(0, "done"));
-    yield* d.send(hello);
-    const answer = yield* d.next();
-    if (tryings.get(inner) !== y || !isObject(answer) || answer.t !== "code") return d.close();
-    keep(inner, y, id, d, arr(answer.workspaces).filter((w): w is string => typeof w === "string"));
+    for (let n = 0; n < PAIR_DIAL_TRIES && looking(inner, y) && !y.met.has(id); n++) {
+      const began = inner.host.nowMs();
+      const reached = yield* Effect.orElseSucceed(dial(inner, y, id, relays, hello), () => false);
+      if (reached) return;
+      const wait = PAIR_REDIAL_MS - (inner.host.nowMs() - began);
+      if (wait > 0 && n + 1 < PAIR_DIAL_TRIES) yield* Effect.sleep(wait);
+    }
+  });
+}
+
+/// One trusted device, dialled (PAIR_DIAL_MS to reach it): kept once it shows a code. Whether it was reached (it was
+/// told who asks); not reached, it fails.
+function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): Effect.Effect<boolean, CoreError> {
+  return Effect.gen(function* () {
+    const reached = yield* Effect.timeoutOption(dialer.open(inner, id, relays), PAIR_DIAL_MS);
+    if (reached._tag === "None") return yield* Effect.fail(CoreError.plainly("pair", "not reached"));
+    const d = reached.value;
+    yield* Effect.onError(d.send(hello), () => Effect.sync(() => d.close()));
+    const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
+    // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
+    if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") {
+      d.close();
+      return true;
+    }
+    keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
+    return true;
   });
 }
 

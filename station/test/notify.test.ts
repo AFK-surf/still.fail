@@ -111,6 +111,13 @@ test("a notice reads its chat's name and whom to tell, nothing counted over the 
   const entries = store.entriesBefore(chat.id, null, 1);
   const heard = ops.saidNotices!(reader, { thread: chat.id, entries: entries.map((e) => ({ ...e, kind: "message", authorKind: "person", author: "bob@x.com", text: "在吗" })), since: 0, lang: "zh" }) as any[];
   assert.deepEqual(heard.map((n) => [n.kind, n.to.join(","), n.text]), [["message", "ada@x.com", "在吗"]]);
+  store.setChatMuted("ADA@x.com", chat.id, true);
+  const muted = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
+  assert.deepEqual(muted.notices.map((n: any) => n.to), [["bob@x.com"]], "the other participant still receives a push");
+  assert.deepEqual(ops.saidNotices!(reader, { thread: chat.id, entries: entries.map((e) => ({ ...e, kind: "message", authorKind: "person", author: "bob@x.com", text: "在吗" })), since: 0, lang: "zh" }), []);
+  store.setChatMuted("ada@x.com", chat.id, false);
+  const unmuted = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
+  assert.deepEqual(unmuted.notices[0].to, ["ada@x.com", "bob@x.com"]);
   assert.deepEqual(asked.filter((sql) => /\bCOUNT\(/i.test(sql)), []);
 });
 

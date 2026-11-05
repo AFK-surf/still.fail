@@ -13,6 +13,9 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
   if filter == "watching" {
     params["watching"] = Json::boolean(true)
   }
+  if filter == "hidden" {
+    params["hidden"] = Json::boolean(true)
+  }
   let (read, topic) = chats_read.read(src, params)
   let error = match topic.error {
     Some(e) => Some(text(Some(e), "message"))
@@ -84,7 +87,7 @@ pub fn filter_of(src : Source, ws : String) -> String {
       }
     }
   }
-  if f == "mine" || f == "watching" {
+  if f == "mine" || f == "watching" || f == "hidden" {
     f
   } else {
     "all"

@@ -635,7 +635,7 @@ fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@
 /// The tab the place shown is in (rail_nav's `selected`).
 fn tab_of_place(lit : String) -> String {
   match lit {
-    "chats" | "mine" | "watching" | "archive" => "place/chats"
+    "chats" | "mine" | "watching" | "hidden" | "archive" => "place/chats"
     "files" => "place/files"
     "stations" => "place/stations"
     // (the settings, opened from the workspace's button: no tab of theirs)

@@ -132,6 +132,10 @@ pub(all) struct ChatItem {
   pinned : Bool?
   /// the viewer kept it out of the archive (保留), pinned or not
   kept : Bool
+  /// Personal list visibility (None: a station from before hiding).
+  hidden : Bool?
+  /// Personal notification setting (None: a station from before muting).
+  muted : Bool?
   /// the key a chat asked for here went by before its station made it ("" for none): its row is the same row
   /// throughout
   client_key : String
@@ -303,6 +307,16 @@ pub fn chat_item(v : Json) -> ChatItem {
       _ => None
     },
     kept: flag(s, "kept"),
+    hidden: match field(s, "hidden") {
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => None
+    },
+    muted: match field(s, "muted") {
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => None
+    },
     client_key: text(s, "clientKey"),
     opener: opener_of(s),
   }

@@ -315,7 +315,7 @@ test("changes are told as events, rows by what changed, read only to its viewer"
   assert.equal(events.inUse(), false);
 });
 
-test("what a viewer marks (a pin, a card dismissed, a chat kept) is told as written to their streams alone", async () => {
+test("what a viewer marks is told as written to their streams alone", async () => {
   const { events, change } = setup(testClock().clock);
   const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   const b = reader((await events.open(viewer("b@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
@@ -323,9 +323,11 @@ test("what a viewer marks (a pin, a card dismissed, a chat kept) is told as writ
   change({ type: "pins", viewer: "a@x", session: "s", at: 5 });
   change({ type: "dismissed", viewer: "a@x", card: { thread: 3, n: 7 } });
   change({ type: "dismissed", viewer: "a@x", kept: { thread: 3, kept: false } });
+  change({ type: "hidden", viewer: "a@x", thread: 3, hidden: true });
+  change({ type: "muted", viewer: "a@x", thread: 3, muted: true });
   await settle();
-  const told = (got: { event?: string; data?: any }[]) => got.filter((e) => e.event === "pin" || e.event === "dismiss" || e.event === "kept").map((e) => [e.event, e.data]);
-  assert.deepEqual(told(a.got), [["pin", { session: "s", at: 5 }], ["dismiss", { thread: 3, n: 7 }], ["kept", { thread: 3, kept: false }]]);
+  const told = (got: { event?: string; data?: any }[]) => got.filter((e) => e.event === "pin" || e.event === "dismiss" || e.event === "kept" || e.event === "hidden" || e.event === "muted").map((e) => [e.event, e.data]);
+  assert.deepEqual(told(a.got), [["pin", { session: "s", at: 5 }], ["dismiss", { thread: 3, n: 7 }], ["kept", { thread: 3, kept: false }], ["hidden", { thread: 3, hidden: true }], ["muted", { thread: 3, muted: true }]]);
   assert.deepEqual(told(b.got), []);
   // What is written of a chat beside what is said in it, to those who see it.
   change({ type: "chatMark", thread: 3, session: "s", archive: { suggested: 4 } });

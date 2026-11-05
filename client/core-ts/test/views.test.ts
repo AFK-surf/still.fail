@@ -518,6 +518,25 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
 });
 
+test("a_hidden_chat_that_needs_the_viewer_remains_in_attention", async () => {
+  const t = setup();
+  const [list, marks] = [ui(), ui()];
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.subscribe(2, { topic: "workspaceMarks" });
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const r = deciding("hidden", 7, 5, t.host.nowMs(), false);
+  r.hidden = true;
+  r.mine = true;
+  r.unread = true;
+  t.set(rows("ws/st"), [r]);
+  await t.readAll([[list, 1], [marks, 2]]);
+  assert.deepEqual(ids(list.value), []);
+  assert.deepEqual(marks.value.workspaces.ws.items.map((item: J) => [item.kind, item.session]), [["wait", "hidden"]]);
+});
+
 test("待处理_is_what_went_wrong_till_let_go_or_waits_not_looked_at_since_of_what_the_badge_counts", async () => {
   const t = setup();
   const marks = ui();
@@ -1036,6 +1055,31 @@ test("mine_keeps_the_rows_the_station_says_are_the_viewers", async () => {
   assert.deepEqual(ids(all.value), ["1", "k", "1", "j"]);
   assert.deepEqual(ids(mine.value), ["1", "j"]);
   assert.equal(mine.value.days[0].items[1].station, "ws/b");
+});
+
+test("a_hidden_chat_stays_out_of_normal_lists_but_is_findable_and_can_be_restored", async () => {
+  const t = setup();
+  const [all, hidden, found] = [ui(), ui(), ui()];
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.subscribe(2, { topic: "chats", scope: "ws", hidden: true });
+  t.subscribe(3, { topic: "chatSearch", scope: "ws", query: "标题" });
+  t.set(workspace(), oneStation());
+  const now = t.host.nowMs();
+  const hiddenRow = { ...row("7", now), hidden: true, mine: true };
+  t.set(rows("ws/st"), [hiddenRow, { ...row("8", now - 1), hidden: false }]);
+  await t.readAll([[all, 1], [hidden, 2], [found, 3]]);
+  assert.deepEqual(ids(all.value), ["8"]);
+  assert.deepEqual(ids(hidden.value), ["7"]);
+  assert.deepEqual(found.value.items.map((item: J) => [item.id, item.hidden]), [["7", true], ["8", false]]);
+  // A new message or completion changes the row, but does not restore it.
+  t.set(rows("ws/st"), [{ ...hiddenRow, unread: true, lastActiveAt: now + 1 }, { ...row("8", now - 1), hidden: false }]);
+  await t.readAll([[all, 1], [hidden, 2]]);
+  assert.deepEqual(ids(all.value), ["8"]);
+  assert.deepEqual(ids(hidden.value), ["7"]);
+  t.set(rows("ws/st"), [{ ...hiddenRow, hidden: false }, { ...row("8", now - 1), hidden: false }]);
+  await t.readAll([[all, 1], [hidden, 2]]);
+  assert.deepEqual(ids(all.value), ["7", "8"]);
+  assert.deepEqual(ids(hidden.value), []);
 });
 
 test("watching_keeps_the_rows_one_of_whose_agents_keeps_watch_marked_so", async () => {

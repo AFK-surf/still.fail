@@ -82,7 +82,7 @@ pub fn chats_lists_node(
     p.reacts(fn() { filter_menu_opened.get() }, fn(n) {
       if n > opened_before {
         for k in 0..<list_filters.length() {
-          shown_once[k].set(true)
+          if list_filters[k] != "hidden" { shown_once[k].set(true) }
         }
       }
     })
@@ -436,6 +436,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
           match filter {
             "mine" => @sf.words_node(b, fn() { @sf.t("web-main.sidebar.noneMine") }, fn() { said_words }) |> ignore
             "watching" => @sf.words_node(b, fn() { @sf.t("web-main.sidebar.noneWatching") }, fn() { said_words }) |> ignore
+            "hidden" => @sf.words_node(b, fn() { @sf.t("web-main.filter.hiddenEmpty") }, fn() { said_words }) |> ignore
             _ =>
               b.pick(fn() { stations() > 0 }, fn(q, some) {
                 if some {
@@ -465,6 +466,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
             "mine" => @sf.words_node(b, fn() { @sf.t("android-chat.home.empty.mine") }, fn() { empty_words }) |> ignore
             "watching" =>
               @sf.words_node(b, fn() { @sf.t("android-chat.home.empty.watching") }, fn() { empty_words }) |> ignore
+            "hidden" => @sf.words_node(b, fn() { @sf.t("web-main.filter.hiddenEmpty") }, fn() { empty_words }) |> ignore
             _ => {
               @sf.words_node(b, fn() {
                 @sf.t(if stations() > 1 { "android-chat.home.empty.many" } else { "android-chat.home.empty.one" })

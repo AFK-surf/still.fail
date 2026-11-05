@@ -59,10 +59,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 58259:a244971f
     #|waiting-dark narrow 28177:273f1828
     #|waiting-dark wide 58084:4a3c4ffb
-    #|finding narrow 33120:e0cb13d0
-    #|finding wide 63795:4253fa07
-    #|finding-dark narrow 33233:7bd3d895
-    #|finding-dark wide 63817:b1865c8c
+    #|finding narrow 34240:be2ffdf1
+    #|finding wide 64907:f005a39f
+    #|finding-dark narrow 34337:52a2c840
+    #|finding-dark wide 64913:db26b2fc
     #|code narrow 26964:88a7f87b
     #|code wide 57101:41b2c7fb
     #|code-dark narrow 26856:ce8b5d5e
@@ -88,6 +88,7 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|nocode-dark narrow 28177:273f1828
     #|nocode-dark wide 58084:4a3c4ffb
     #|
+
 
 
 

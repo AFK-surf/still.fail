@@ -107,7 +107,7 @@ export class Notices {
       if (first) continue;
       const found = noticed(row, old, me, slackUsers, members);
       if (found !== null && found[0] === "block") next.told = needSeq(row);
-      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
+      if (found !== null && get(row, "muted") !== true) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
     }
     return added;
   }

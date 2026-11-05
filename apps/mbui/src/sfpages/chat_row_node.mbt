@@ -221,7 +221,9 @@ pub fn chat_row_node(
           }
           n.box(fn(w) {
             w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            @sf.words_node(w, fn() { item().title }, fn() {
+            @sf.words_node(w, fn() {
+              if item().hidden == Some(true) { item().title + " · " + @sf.t("web-main.filter.hidden") } else { item().title }
+            }, fn() {
               let look = t().chat_list
               let title = if item().unread { look.title_unread } else { look.title }
               if offline() || item().settled {

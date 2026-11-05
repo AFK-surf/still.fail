@@ -170,6 +170,7 @@ fn filter_named(filter : String) -> String {
     "archive" => @sf.t("web-main.filter.archived")
     "mine" => @sf.t("web-main.filter.chats.mine")
     "watching" => @sf.t("web-main.filter.watching")
+    "hidden" => @sf.t("web-main.filter.hidden")
     _ => @sf.t("web-main.filter.all")
   }
 }

@@ -159,7 +159,7 @@ export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL S
 // These marks are keyed by viewer first. For a large table seek once per viewer instead of scanning everybody's other
 // chats. On a small table a scan can be cheaper, especially when most viewers have one mark. A rowid span bounds the
 // number of rows without counting them; the viewer probes are capped so choosing a plan does not scan a long history.
-function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins", key: "thread" | "session") {
+function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "hidden_chats" | "muted_chats" | "pins", key: "thread" | "session") {
   const choice = `WITH RECURSIVE few(viewer, count) AS (
     SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
     UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
@@ -185,6 +185,8 @@ function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins",
 export const READ_MARKS = deleteViewerMarks("reads", "thread");
 const DISMISSED_MARKS = deleteViewerMarks("dismissed", "thread");
 const KEPT_MARKS = deleteViewerMarks("kept_chats", "thread");
+const HIDDEN_MARKS = deleteViewerMarks("hidden_chats", "thread");
+const MUTED_MARKS = deleteViewerMarks("muted_chats", "thread");
 const PIN_MARKS = deleteViewerMarks("pins", "session");
 export const DELETE_READS_OF_THREAD = READ_MARKS.indexed;
 export const DELETE_DISMISSED_OF_THREAD = DISMISSED_MARKS.indexed;
@@ -250,6 +252,10 @@ export const PENDING_SESSIONS = `WITH RECURSIVE
 /// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
 /// (schema.ts sessions_models), not each session's row (1.2 s on a station, as an agent opened a chat).
 export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM sessions INDEXED BY sessions_models WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model";
+/// How many of someone's chats on a runtime and model (`IS`: null for its default) since a time ran at each effort they
+/// named, the most used first, then the latest (`effortsUsedBy`).
+export const EFFORTS_USED_BY =
+  "SELECT effort, COUNT(*) AS n, MAX(created_at) AS last FROM sessions INDEXED BY sessions_efforts WHERE created_by = ? AND runtime = ? AND model IS ? AND created_at >= ? AND effort IS NOT NULL AND effort != '' GROUP BY effort ORDER BY n DESC, last DESC";
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
@@ -941,6 +947,12 @@ export class Store {
     return r ? toOpened(r) : null;
   }
 
+  /// The efforts `createdBy`'s chats on `runtime` and `model` here since `since` ran at, the most used first (what
+  /// chat_create runs when it is told no effort).
+  effortsUsedBy(createdBy: string, runtime: string, model: string | null, since: number): { effort: string; n: number }[] {
+    return this.#all(EFFORTS_USED_BY, createdBy, runtime, model, since).map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
+  }
+
   /// Who opened session `child` of this station, if another agent did.
   openerOf(child: string): Opened | null {
     const r = this.#one("SELECT * FROM opened_chats WHERE child_station = '' AND child = ?", child);
@@ -1197,6 +1209,8 @@ export class Store {
           this.#deleteMarks(DISMISSED_MARKS, thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
           this.#deleteMarks(KEPT_MARKS, thread);
+          this.#deleteMarks(HIDDEN_MARKS, thread);
+          this.#deleteMarks(MUTED_MARKS, thread);
           // Its published snapshots go with it.
           for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
           this.#run("DELETE FROM published WHERE thread = ?", thread);
@@ -1913,6 +1927,25 @@ export class Store {
       const now = this.readPosition(viewer, thread);
       changes.push({ type: "read", viewer, thread, n: now });
       return now;
+    });
+  }
+
+  /// A personal list mark: it does not affect the task, archive policy, or another viewer.
+  setChatHidden(viewer: string, thread: number, hidden: boolean): void {
+    this.#with((changes) => {
+      if (hidden) this.#run("INSERT OR IGNORE INTO hidden_chats (viewer, thread) VALUES (?, ?)", viewer, thread);
+      else this.#run("DELETE FROM hidden_chats WHERE viewer = ? AND thread = ?", viewer, thread);
+      changes.push({ type: "hidden", viewer, thread, hidden });
+    });
+  }
+
+  /// A separate personal notification mark; pending decisions stay visible in 待处理.
+  setChatMuted(viewer: string, thread: number, muted: boolean): void {
+    this.#with((changes) => {
+      const email = viewer.toLowerCase();
+      if (muted) this.#run("INSERT OR IGNORE INTO muted_chats (viewer, thread) VALUES (?, ?)", email, thread);
+      else this.#run("DELETE FROM muted_chats WHERE viewer = ? AND thread = ?", email, thread);
+      changes.push({ type: "muted", viewer, thread, muted });
     });
   }
 

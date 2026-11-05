@@ -810,6 +810,14 @@ web-main.chat.agentCard.context
 web-main.chat.agentCard.cost
 web-main.chat.agentCard.plan
 web-main.chat.archive
+web-main.chat.hide
+web-main.chat.unhide
+web-main.chat.hiddenNotice
+web-main.chat.unhiddenNotice
+web-main.chat.mute
+web-main.chat.unmute
+web-main.chat.mutedNotice
+web-main.chat.unmutedNotice
 web-main.chat.archiveFailed
 web-main.chat.archiveNamed
 web-main.chat.archivedNamed
@@ -905,6 +913,8 @@ web-main.file.uploadingPart
 web-main.file.view
 web-main.filter.all
 web-main.filter.archived
+web-main.filter.hidden
+web-main.filter.hiddenEmpty
 web-main.filter.chats
 web-main.filter.chats.all
 web-main.filter.chats.mine

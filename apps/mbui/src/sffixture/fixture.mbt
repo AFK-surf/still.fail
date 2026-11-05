@@ -21,6 +21,8 @@ pub(all) struct Fixture {
   /// automatic updates chosen (the prefs' `appUpdate`: off; "" on)
   mut app_update : String
   archived : Map[String, Bool]
+  hidden : Map[String, Bool]
+  muted : Map[String, Bool]
   filters : Map[String, String]
   /// the faces chosen (the prefs' `fonts`), and those whose files the core has (fonts_fixture.mbt)
   fonts : Map[String, String]
@@ -443,6 +445,24 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
   } else {
     today
   }
+  // A station that supports personal hiding (used to exercise its menu and list).
+  let today = if f.mode == "home-hide" {
+    today.map(fn(r) {
+      match r {
+        Object(m) => {
+          let v = m.copy()
+          let first = text(Some(r), "id") == "c1"
+          v["hidden"] = Json::boolean(first && f.hidden.get("c1").unwrap_or(false))
+          v["muted"] = Json::boolean(first && f.muted.get("c1").unwrap_or(false))
+          if first { v["thread"] = Json::number(17.0) }
+          Json::object(v)
+        }
+        _ => r
+      }
+    })
+  } else {
+    today
+  }
   let yesterday = [
     row("c6", "和 Ana 一起看新版的引导页", "ws1/st1", "昨天 21:14", {
       "last": last("Ana：第二屏的插画可以再小一点"),
@@ -609,6 +629,24 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     }
   } else {
     []
+  }
+  let hidden = params.get("hidden") is Some(True)
+  let days = if f.mode == "home-hide" {
+    days.filter_map(fn(d) {
+      match d {
+        Object(m) => {
+          let v = m.copy()
+          let found = items(Some(d), "items").filter(fn(r) { flag(Some(r), "hidden") == hidden })
+          v["items"] = Json::array(found)
+          if found.is_empty() { None } else { Some(Json::object(v)) }
+        }
+        _ => None
+      }
+    })
+  } else if hidden {
+    []
+  } else {
+    days
   }
   let empty = days.iter().all(fn(d) { items(Some(d), "items").length() == 0 })
   Some({
@@ -1083,6 +1121,8 @@ pub fn fixture(mode : String) -> Source {
     haptics: "",
     app_update: "",
     archived: {},
+    hidden: {},
+    muted: {},
     filters: {},
     fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
     fonts_fetched: {},
@@ -1300,6 +1340,20 @@ pub fn fixture(mode : String) -> Source {
           let session = text(Some(params), "session")
           f.archived[session.view(start_offset=2).to_owned()] = true
           f.changed()
+          done(Ok(Json::object({})))
+        }
+        "chat.hide" => {
+          if f.mode == "home-hide" && field(Some(params), "thread") is Some(Number(17.0, ..)) {
+            f.hidden["c1"] = flag(Some(params), "hidden")
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
+        "chat.mute" => {
+          if f.mode == "home-hide" && field(Some(params), "thread") is Some(Number(17.0, ..)) {
+            f.muted["c1"] = flag(Some(params), "muted")
+            f.changed()
+          }
           done(Ok(Json::object({})))
         }
         // a visualization's widget kept nothing yet; what it keeps is taken (viz.mbt)

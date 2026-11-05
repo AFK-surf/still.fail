@@ -242,7 +242,7 @@ fn lists_band_node(
               let now = shown()
               let lit = if now == "chats" { "all" } else { now }
               let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
-                ("watching", "web-main.filter.watching"), ("archive", "web-main.filter.archived")].map(fn(p) {
+                ("watching", "web-main.filter.watching"), ("hidden", "web-main.filter.hidden"), ("archive", "web-main.filter.archived")].map(fn(p) {
                   ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == lit, "")
                 })
               Some({

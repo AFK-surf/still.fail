@@ -164,6 +164,44 @@ fn tap_home_filter(t : @ui.Tester) -> Unit {
 }
 
 ///|
+test "hiding a running chat leaves it in the hidden list, where it can be restored" {
+  let t = tester("home-hide")
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
+  t.release(x, y)
+  t.frame()
+  t.tap_text("关闭提醒")
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
+  t.release(x, y)
+  t.frame()
+  assert_true(t.find("开启提醒") is Some(_))
+  t.tap_text("隐藏")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("整理发布清单") is None)
+  tap_home_filter(t)
+  t.tap_text("已隐藏")
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = t.find("整理发布清单 · 已隐藏").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
+  t.release(x, y)
+  t.frame()
+  assert_true(t.find("开启提醒") is Some(_))
+  t.tap_text("取消隐藏")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("整理发布清单 · 已隐藏") is None)
+  let (x, y, w, h) = t.query(Button, label="筛选会话：已隐藏").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.tap_text("全部会话")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("整理发布清单") is Some(_))
+}
+
+///|
 test "small screen home: filter on the left, workspace and settings on the right" {
   for platform in [0, 2] {
     for width in [320.0, 390.0, 599.0] {
