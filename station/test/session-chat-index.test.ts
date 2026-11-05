@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { ccSessionReady, CcIndexPreparation } from "../src/store/cc-thread-index.ts";
-import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_EMBER, SESSION_CHAT_OTHER,
+import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_EMBER, SESSION_CHAT_MANY, SESSION_CHAT_OTHER, SESSION_CHAT_SMALL,
   SessionChatPreparation, sessionChatReady } from "../src/store/session-chat-index.ts";
 
 function prepare(store: Store, session: string, limit = 8): number {
@@ -97,6 +97,60 @@ test("both chat candidates seek their own ordered index", () => {
       assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
     }
   } finally { store.close(); }
+});
+
+test("the small-session check reads at most two memberships through their index", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const plan = (sql: string) => db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("s").map((row) => String(row.detail)).join(" | ");
+    assert.match(plan(SESSION_CHAT_SMALL), /SEARCH thread_sessions USING INDEX thread_sessions_session \(session=\?\)/);
+    assert.match(plan(SESSION_CHAT_MANY), /SEARCH thread_sessions USING COVERING INDEX thread_sessions_session \(session=\?\)/);
+    assert.match(SESSION_CHAT_SMALL, /LIMIT 2/);
+    assert.match(SESSION_CHAT_MANY, /LIMIT 1 OFFSET 1/);
+  } finally { store.close(); }
+});
+
+test("a single-chat answer keeps its snapshot while a second chat joins", () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-single-")), path = join(dir, "stillfail.db");
+  const store = Store.open(path), db = store.db, writer = new DatabaseSync(path);
+  try {
+    const first = store.openThread("ember", "CHAT", "first", null, null).id;
+    const second = store.openThread("ember", "CHAT", "second", null, null).id;
+    store.joinThread(first, "s", "ember");
+    let joined = false;
+    const proxy = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const query = target.prepare(sql);
+          if (sql !== SESSION_CHAT_SMALL) return query;
+          return new Proxy(query, {
+            get(statement, key) {
+              if (key === "get") return (...args: never[]) => {
+                const row = statement.get(...args);
+                if (!joined) {
+                  writer.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(?,'s','ember',1)").run(second);
+                  joined = true;
+                }
+                return row;
+              };
+              const value = Reflect.get(statement, key, statement);
+              return typeof value === "function" ? value.bind(statement) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    (store as any).db = proxy;
+    const requests: string[] = [];
+    store.requestSessionChat = (session) => requests.push(session);
+    assert.equal(store.sessionChat("s")?.thread.id, first);
+    assert.equal(joined, true);
+    assert.deepEqual(requests, []);
+    assert.equal(store.sessionChat("s")?.thread.id, second);
+    assert.deepEqual(requests, ["s"]);
+  } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("the two orders keep SQLite's tie breaking and old non-integer times", () => {
