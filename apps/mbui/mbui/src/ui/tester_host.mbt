@@ -117,10 +117,6 @@ fn host_work_now() -> Array[(String, Int)] {
     }
     None => []
   }
-  // (what waited for changes told whole, done, and what stood behind each as it was taken: @signals.drain_work)
-  let (done, behind) = @signals.drain_work()
-  out.push(("waited", done))
-  out.push(("behind", behind))
   for c in host_counts {
     out.push((c.0, (c.1)()))
   }
