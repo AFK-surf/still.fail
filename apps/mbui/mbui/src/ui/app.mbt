@@ -124,6 +124,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   view_frame(w, h, scale, t)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
+  // (what the tree said to tell once its frame is painted, told now the frame is whole, its checks done: view_host.mbt)
+  view_after_paint()
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
   // what is built took them (inputs_taken), else as what it read changed (frame_watch.mbt)
   c.took_input = fed
@@ -554,7 +556,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()
   c.anchors_after_paint()
-  view_after_paint()
+  view_after_paint_taken()
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
   c.back_node = c.back_node_next

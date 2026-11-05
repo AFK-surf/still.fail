@@ -5654,15 +5654,31 @@ fn old_placed_said() -> String {
 let old_painted_at : Ref[String] = Ref("")
 
 ///|
-/// What the tree said to be told once its frame is painted (Tree::take_after_paint: a list's rows sighted, a node first
-/// drawn), told now, as the frame's paint is over, each untracked: what it asks the host for asked at the frame that
-/// drew it.
-fn view_after_paint() -> Unit {
+/// What the tree said to tell once its frame is painted, taken as the paint ends (Tree::take_after_paint: a list's rows
+/// sighted, a node first drawn), told once the frame is whole (view_after_paint): not while a Tester checks it, painting
+/// it again from nothing, which takes none of them again.
+let after_paint_due : Array[() -> Unit] = []
+
+///|
+/// As a frame's paint ends: what the tree said to tell once it is painted, kept for its end.
+fn view_after_paint_taken() -> Unit {
   match view_tree() {
-    Some(tree) =>
-      for f in tree.take_after_paint() {
-        @signals.untracked(f)
-      }
+    Some(tree) => after_paint_due.append(tree.take_after_paint())
     None => ()
+  }
+}
+
+///|
+/// Once the frame is whole (its paint, the Tester's checks of it, in_frame over): what its paint took told, each
+/// untracked, in order: what it asks the host for asked at the frame that drew it; what that sets (an answer come at
+/// once) is shown by the frame after, owed as any change between frames is.
+fn view_after_paint() -> Unit {
+  if after_paint_due.is_empty() {
+    return
+  }
+  let due = after_paint_due.copy()
+  after_paint_due.clear()
+  for f in due {
+    @signals.untracked(f)
   }
 }
