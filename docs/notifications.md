@@ -33,6 +33,7 @@ notifications), and only for people who take part in them (the sidebar's
 | `block` | an agent's turn ended blocked (`chat_post kind:"block"` / `chat_state block`) on something new that waits for the person: its card still pending, else the message its need asks with, which no earlier blocked turn of it told (a turn blocked on what was told before, or on nothing waiting, is noticed as `done`) | `需要处理 · <its last message>` |
 | `failed` | something went wrong: the station says so in the chat, `⚠️` first (a turn that failed, an agent that could not start) | `出错了 · <what it says>` |
 | `message` | another person said something in the chat, while no agent there is at work | `<name>: <text>` |
+| `pair` | a new device of the person's asks to be approved in security mode, and this device is one of their primary trusted ones (docs/workspace-lock.md 主授信设备): pushed by the cloud as the new device asks (`/v1/workspaces/:ws/lock/wake`), shown locally as it reaches this one with the app behind; one tag per new device (`pair/<its id>`), opening the app; never the code | `「<device>」申请加入「<workspace>」，打开 still.fail 查看安全码` |
 
 The title is the chat's title as the sidebar shows it. Texts are one line
 (whitespace collapsed), cut to 140 characters. A notification opens the chat at

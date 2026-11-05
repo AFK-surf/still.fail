@@ -78,6 +78,11 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - **直连受信任设备**：新设备从锁里挑出能批准它的设备（自己账号下带 `sign_key` 的 app 设备，和 owner、admin 的），用 iroh 按 id 直连（ALPN `stillfail/pair/1`，relay 用账号和 workspace 的 relay 列表），每台连上的发 `hello {workspaces: [{ws, credential}], kind, label, sign_key}`。app 的主 endpoint 带这个 ALPN 接受连接（`mesh.ts` `takes`）。
 - **受信任设备核对**：用自己核对过签名的锁（`vault/lock-check.ts` `checkLock`）里的 cloud 公钥验每个 workspace 的成员凭证（EdDSA，`device` 必须是连上来的那个 endpoint id），确认这台设备在那个 workspace 能为此人批准（owner/admin，或本人自己的设备），然后弹出码（`lockPrompts` 的 `pairing`，在哪个 workspace 都弹）：只有码和「拒绝」，没有批准按钮。码是 6 位数字（约 20 bit：每次连接最多试 3 次，每次都会在受信任设备上弹出），只显示不发送；新设备上是 6 个格子，弹数字键盘，输满自动提交，输错清空重来（2026-10-19 用户：「好输入一点」）。
 - **每 10 秒找一次，最多 6 次**：新设备每 `PAIR_REDIAL_MS`（10 秒，从上一次开始算）连一次还没连上的受信任设备，每次以 `PAIR_DIAL_MS`（同样 10 秒）为限，每台最多 `PAIR_DIAL_TRIES`（6）次，大约 1 分钟。人常常是先点「发送批准请求」，再去打开手机、电脑上的 still.fail：以前每台只在点的那一刻连一次 20 秒，之后才打开的设备什么也不弹，新设备说「未找到在线的受信任设备」（2026-11-05 用户：「开好几个自己已经进这个 workspace 的设备，根本就弹不出来」；「每 10 秒一次也可以，但是比如说最多找 6 次这样。并且如果已经弹出来了，就不要重复弹」「一直找 10 分钟也太夸张了吧」）。已经有一台弹了码，没连上的也照样接着连：码可能弹在不在手边的那台上，打开手边这台它也弹一个，两个码输哪个都行。连上了（把 `hello` 交给了它）的不再连，不管它回的是码、`no`（它在这些 workspace 都不能批准这台），还是什么也没回（回话丢了：它可能已经弹了码，再连一次它会换一个新码再弹）：一台设备一次请求只弹一次。每台都连上了或 6 次都没连上，又没有一台弹码，才是 `none`，页面说「未找到在线的受信任设备」，要再点一次才重新找。批准了、被拒绝、码过期了、再点一次（旧的这一轮作废）或取消（`lock.pairCancel`），都不再连。
+- **主授信设备**（2026-11-05 用户：「加一个主授信设备的选项。每一台都可以选择加入主授信设备。就是如果一个都没有开启呢，那就跟以前一模一样。但是如果你开启了，那么除了跟以前一样之外，一定会在那几台主授信设备上尝试弹出来」）：能签名的客户端在「设置 › 安全」里可以把自己设为主授信设备（`lock.primary {on}`；记在这台设备上，`src/lock-primary.ts`，哪个 workspace 都算这台的；`lock` topic 的 `primary`、`canBePrimary`）。一台都没设，什么都不变。设了的：
+  - 推送登记带 `primary: true`（`sync/cloud.ts` `pushRegistered`，改了就重新登记），cloud 记在 push 表的 `lock_primary`，只记 fcm、apns 的：网页版不能批准别人。
+  - 新设备点「发送批准请求」时，每个账号请求一次 `POST /v1/workspaces/:ws/lock/wake {device, label}`（`views/pair.ts` `begin`）。cloud 给这个账号的主授信设备推一条 `type: notice`、`kind: pair` 的通知：「有新设备申请加入」「「<设备名>」申请加入「<workspace>」，打开 still.fail 查看安全码」，tag 是 `pair/<新设备的 id>`，点开打开 app（`cloud/src/push.ts` `lockWake`）。同一个账号 `LOCK_WAKE_SECS`（10 秒）内只推一次。通知里没有安全码：码只在受信任设备的 app 里显示，cloud 也不知道。安卓收到后照普通通知的路子问 core 显不显示（`notice.pushed`：`kind` 是 `pair` 时，是主授信设备、app 不在眼前才显示）。
+  - 新设备连上主授信设备、那边的 app 在后台（电脑版在托盘或最小化、手机在后台还没被冻结）时，那边自己也弹一条一样的通知（`attention.ts` `pairing`，tag 相同，不会弹两条），不带码。
+  - 点开通知就打开 app；新设备还在每 10 秒连一次，连上就弹码。
 - **CPace**：新设备输入码，两边各自用「码 + 双方 endpoint id（各自从连接上看到的）+ workspace 列表」生成 ristretto255 上的生成元，交换一次 share，算出同一把钥匙再互发 MAC。新设备先验受信任设备的 MAC 才回自己的；受信任设备验过新设备的 MAC 才在每个 workspace 签 `device` 条目（app 带 `sign_key`，网页版 30 天到期）。连错了对象（假的锁、中间人）时双方的 id 不一致，码对也算不出同一把钥匙。
 - **次数和时限**：一次连接最多试 `PAIR_TRIES`（3）次，码 `PAIR_WAIT_MS`（5 分钟）内有效；受信任设备上点「拒绝」（`lockPrompt.deny`），码立即作废；关掉弹窗（点旁边、Esc、返回，`lockPrompt.hide`）只是不再显示，码照样有效（人看完码顺手关掉弹窗是常事，以前关掉就作废，新设备上输对了也报「错误次数过多」，2026-10-25）。
 - **没批成时说原因**：受信任设备结束时回 `no {error}`（`tries` 次数用完、`denied` 被拒绝、`late` 码过期），新设备照它说（`core-misc.lock.pairTries` / `pairDenied` / `pairLate`），连接断了、对方没说原因就说连不上显示安全码的设备（`pairGone`），不再一律说错误次数过多。受信任设备核对通过、却一个 workspace 都没签进去（`approved` 的 `workspaces` 为空，原因在 `failed`）时，新设备不算获批，照 `failed` 说原因（`pairUnsigned`）；以前当成功，弹框一关回到等待页，什么也不说（2026-10-26）。
@@ -129,4 +134,4 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 ## 还没做
 
-passkey 的注册和签名；新设备加入、快到期时用系统通知推送到这个人的其他设备（现在是 app 开着时弹窗，快到期只在页面里显示）。web 发版签名和多地比对哈希另开。
+passkey 的注册和签名；网页版快到期时用系统通知推送到这个人的其他设备（现在只在页面里显示）。新设备加入时，只有主授信设备会收到推送（见「新设备」），其余的还是 app 开着时弹窗。web 发版签名和多地比对哈希另开。

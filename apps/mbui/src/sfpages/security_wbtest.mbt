@@ -194,6 +194,12 @@ test "安全, at each width and with either hand: another device taken out of th
     let at = "\{w} platform \{platform}"
     let name = "Ana 的 MacBook Air"
     scrolled_to(t, w, name)
+    // (its name brought up to the page's upper half: narrow, its 移除 is a line under its words, and the page grew
+    // longer above it (主授信设备), which left that line at the box's foot)
+    match t.find(name) {
+      Some((_, y)) if y > 450.0 => t.wheel(w / 2.0, 450.0, y - 300.0)
+      _ => ()
+    }
     // (移除 on each but this device's: Ana's MacBook's, the first not above its name, at its end wide, under its
     // words narrow)
     let (_, y) = t.find(name).unwrap()
@@ -243,5 +249,36 @@ test "开启安全模式, at each width and with either hand: its people, the de
     tap_words(t, "取消")
     t.draw()
     assert_false(app.nav.pages().contains(Setting(SecurityOpen)), msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: 主授信设备's switch, on as the core says, turns this device off as one" {
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let calls : Array[(String, Json)] = []
+    let t = setting_tester(Security, w, platform~, over=fn(base) {
+      {
+        ..base,
+        call: fn(name, params, done) {
+          if name == "lock.primary" {
+            calls.push((name, params))
+            done(Ok(Json::null()))
+          } else {
+            (base.call)(name, params, done)
+          }
+        },
+      }
+    })
+    scrolled_to(t, w, "把这台设为主授信设备")
+    assert_true(t.find("主授信设备") is Some(_), msg=at)
+    assert_true(t.find("新设备申请加入时一定会通知这台，手机上 App 没开也能收到，点开就弹出安全码") is Some(_), msg=at)
+    let s = t.get(Switch, label="把这台设为主授信设备")
+    assert_eq(s.check, Some(@view.On), msg=at)
+    t.click(Switch, label="把这台设为主授信设备")
+    t.frame()
+    assert_eq(calls.length(), 1, msg=at)
+    assert_eq(calls[0].1, Json::object({ "workspace": Json::string("ws1"), "on": Json::boolean(false) }), msg=at)
   }
 }

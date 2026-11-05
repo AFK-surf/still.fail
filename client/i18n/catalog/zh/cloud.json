@@ -95,5 +95,8 @@
   "cloud.preview.host": "这是 still.fail 的预览地址：在 still.fail 中打开预览",
   "cloud.preview.socket.notOpen": "WebSocket 尚未连接",
   "cloud.preview.socket.notWebSocket": "不是 WebSocket 地址：{url}",
-  "cloud.preview.startFailed": "无法启动预览：{error}"
+  "cloud.preview.startFailed": "无法启动预览：{error}",
+  "cloud.push.pair.title": "有新设备申请加入",
+  "cloud.push.pair.body": "「{device}」申请加入「{workspace}」，打开 still.fail 查看安全码",
+  "cloud.push.pair.someDevice": "一台新设备"
 }

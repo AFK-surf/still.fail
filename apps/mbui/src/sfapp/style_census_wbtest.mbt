@@ -77,11 +77,14 @@ test "styles: how many values of each kind the app's screens use" {
   // The settings' list and 关于 on the window's tree keep their list's scroll bar's thumb as a node while at rest (unseen
   // then), so its existing look is counted where the old list built none at rest: a corner of 1.5 and the bar's two inks
   // (24272B42, ECECED42), no token of its own.
+  // 安全 has a switch since 主授信设备 (a device that signs made one of its person's primary trusted devices): the
+  // library's switch's own corners (9, 11, 13: its track 26 or 22 high by the screen and its knob inside it,
+  // sf/parts.mbt switch_size), used on pages before but on none counted here, no corner of its own.
   inspect(counts.to_string(), content=(
     #|text 37
     #|weight 4
     #|space 25
-    #|radius 21
+    #|radius 24
     #|color 70
     #|
 

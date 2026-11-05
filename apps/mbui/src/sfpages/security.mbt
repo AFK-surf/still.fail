@@ -296,6 +296,34 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
       })
     })
   }
+  // this device one of its person's primary trusted devices, or not (主授信设备, the core's `lock.primary`: told wherever
+  // its app is when a new device of theirs asks; docs/workspace-lock.md): an app that signs here
+  if flag(lock, "canBePrimary") {
+    blocks.push(fn() {
+      @sf.section(c, @sf.t("web-pages.security.primaryTitle"), heads=true, fn() {
+        sec_group(c, look, fn() {
+          let on = flag(lock, "primary")
+          let busy = is_doing(core, ["lock.primary"], [("workspace", ws)])
+          let now = @sf.switch_row(
+            c,
+            "lock-primary/" + ws,
+            @sf.t("web-pages.security.primarySwitch"),
+            on,
+            note=@sf.t("web-pages.security.primaryNote"),
+            busy~,
+          )
+          if now != on {
+            @settings.act(
+              core,
+              @sf.t("web-pages.security.primarySwitch"),
+              "lock.primary",
+              obj([("workspace", str(ws)), ("on", Json::boolean(now))]),
+            )
+          }
+        })
+      })
+    })
+  }
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.security.people"), heads=true, fn() {
       sec_group(c, look, fn() {

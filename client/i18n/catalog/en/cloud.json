@@ -98,5 +98,8 @@
   "cloud.preview.host": "This is a still.fail preview address; open a preview in still.fail",
   "cloud.preview.socket.notOpen": "WebSocket not connected yet",
   "cloud.preview.socket.notWebSocket": "Not a WebSocket URL: {url}",
-  "cloud.preview.startFailed": "Couldn't start preview: {error}"
+  "cloud.preview.startFailed": "Couldn't start preview: {error}",
+  "cloud.push.pair.title": "A new device asks to join",
+  "cloud.push.pair.body": "“{device}” asks to join “{workspace}”. Open still.fail to see the security code",
+  "cloud.push.pair.someDevice": "A new device"
 }

@@ -237,6 +237,8 @@
   "core-misc.lock.pairGone": "无法连接显示安全码的设备，请重新发送批准请求",
   "core-misc.lock.pairUnsigned": "显示安全码的设备没能批准此设备：{error}",
   "core-misc.lock.pairElsewhere": "此设备已在「{names}」获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准",
+  "core-misc.lock.pairNotice.title": "有新设备申请加入",
+  "core-misc.lock.pairNotice.body": "「{device}」申请加入「{workspace}」，打开 still.fail 查看安全码",
   "core-misc.lock.keyNotKept": "无法在系统钥匙串中保存此设备的密钥：{error}",
   "core-misc.lock.inWorkspace": "「{name}」：{error}",
   "core-misc.lock.listSep": "；",

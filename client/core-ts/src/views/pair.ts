@@ -41,6 +41,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
+import { isPrimary } from "../lock-primary.ts";
 import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -192,6 +193,11 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     };
     all.set(peer, asking);
     told(inner);
+    // One of its person's primary trusted devices, its app behind: a notification says a device asks (never the code).
+    if (isPrimary(inner)) {
+      const names = places.map((p) => nameOf(inner, p.ws)).join(t("core-misc.lock.listSep"));
+      inner.attention?.pairing(peer, deviceText(asking), places[0]!.ws, names);
+    }
     const session = pairSession(peer, me, places.map((p) => p.ws));
     yield* Effect.ensuring(
       Effect.gen(function* () {
@@ -404,6 +410,16 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     if (signer) signerKnown(inner, signer.id);
     const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
+    // Its person's primary trusted devices told, wherever their app is (the cloud pushes to them, cloud/src/push.ts
+    // lockWake), once for each account it waits for: one woken opens its app, and the next dial reaches it.
+    const woken = new Set<string>();
+    for (const ws of workspaces) {
+      const sub = inner.workspaces.owner(ws);
+      if (sub === null || woken.has(sub)) continue;
+      woken.add(sub);
+      const asked = inner.provider.request(sub, "POST", `/v1/workspaces/${encodeURIComponent(ws)}/lock/wake`, { device: base, label: hello.label });
+      inner.runner.fork(Effect.ignore(asked, { log: "Unhandled", message: "primary trusted devices woken" }));
+    }
     inner.runner.fork(
       Effect.gen(function* () {
         yield* Effect.forEach(trusted, (id) => seek(inner, y, id, relays, hello), { concurrency: "unbounded", discard: true });

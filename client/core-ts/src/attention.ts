@@ -8,6 +8,8 @@ import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
 import type { Call } from "./core/calls.ts";
 import type { Owner } from "./core/routing.ts";
+import { t } from "./i18n.ts";
+import { loadPrimary } from "./lock-primary.ts";
 import { Notices, type Changed } from "./notices.ts";
 import * as prefs from "./prefs.ts";
 import type { Topic } from "./protocol.ts";
@@ -85,6 +87,20 @@ export class Attention implements Owner {
     return core.workspaces.owned().flatMap(([id]) =>
       arr(get(core.data.get({ topic: "workspace", workspace: id }), "stations")).flatMap((s) => (typeof get(s, "id") === "string" ? [`${id}/${s.id}`] : [])),
     );
+  }
+
+  /// A new device asks this one, one of its person's primary trusted devices (lock-primary.ts), for a code (views/pair.ts):
+  /// with the app behind (a desktop's in the notification area, a phone's not in front), a notification says so,
+  /// opening the app, where the code is shown. Its tag the cloud's push about it has too (cloud/src/push.ts lockWake):
+  /// shown once.
+  pairing(device: string, deviceText: string, workspace: string, workspaceName: string): void {
+    const at = this.#core.host.nowMs();
+    // (of no chat: no station, no session; it opens the app, wherever it is)
+    const n = {
+      id: `pair/${device}/${at}`, kind: "pair", station: "", stationId: "", session: "", workspace, tag: `pair/${device}`, url: "/", at,
+      title: t("core-misc.lock.pairNotice.title"), body: t("core-misc.lock.pairNotice.body", { device: deviceText, workspace: workspaceName }),
+    };
+    if (this.attend.told(n)) this.#core.store.invalidateAll((t) => t.topic === "notify");
   }
 
   /// Rows of a station that changed: what is new is noticed, and what a page is to show goes out.
@@ -171,6 +187,10 @@ export class Attention implements Owner {
             return { show };
           });
         case "pushed": {
+          // A new device of this person's asking to be approved (cloud/src/push.ts lockWake): shown where this is one of
+          // their primary trusted devices, the app not in view (in view, the code comes up by itself). Read as kept: a
+          // push's core may have started for it just now (Push.java), before the start read it.
+          if (c.notice === "pair") return Effect.map(loadPrimary(core), (primary) => ({ show: primary && attend.on() && !attend.seen() }));
           // (the title as a notice of it shows: of a workspace the viewer is not in, its name first)
           const names = new Map(this.#workspaces().map((w) => [w.id as string, w.name as string]));
           const show = attend.pushed(c.workspace, c.notice);

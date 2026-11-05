@@ -36,6 +36,8 @@ export const ENROLLMENT_TTL_SEC = 60 * 60;
 /** How long a device's request to be confirmed into the lock waits before it is dropped (one long gone, a browser profile thrown away). */
 export const LOCK_REQUEST_TTL_SEC = 7 * 24 * 60 * 60;
 const LIMITS = { openInvitations: 50, pushPerUser: 32 };
+/** How soon an account's primary trusted devices are woken again for a new device asking to be approved (lockWakeTargets). */
+export const LOCK_WAKE_SECS = 10;
 /**
  * What an account may create and how many people each workspace it created may hold (its creator among them). A code
  * or the admin's say makes an account standard (#standard); the admin's own go up to the old bounds.
@@ -90,6 +92,9 @@ export type PushDevice =
 export type PushRegistration = PushDevice & { id: string; lang: Lang; shows: Shows | null };
 
 export class Directory extends DurableObject<Env> {
+  /** When each account's primary trusted devices were last woken (lockWakeTargets): kept while the object runs. */
+  readonly #lockWoken = new Map<string, number>();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // (its pushes' words name its product)
@@ -148,6 +153,9 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "shows")) this.#run("ALTER TABLE push ADD COLUMN shows TEXT");
     // Nor whether an APNs token is a development build's (1) or not, before there was APNs.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "sandbox")) this.#run("ALTER TABLE push ADD COLUMN sandbox INTEGER");
+    // Nor whether a device is one of its person's primary trusted ones (1: woken when a new device of theirs asks to
+    // be approved in security mode, push.ts lockWake), before there were any.
+    if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lock_primary")) this.#run("ALTER TABLE push ADD COLUMN lock_primary INTEGER");
     // Nor had workspaces a mark of their own (an emoji, an icon, as a station's), before they could; their first letter till then.
     const marked = new Set(this.#rows("PRAGMA table_info(workspaces)").map((r) => r.name as string));
     for (const column of ["emoji TEXT", "icon TEXT"]) {
@@ -1089,17 +1097,20 @@ export class Directory extends DurableObject<Env> {
   // each, which belongs to the sign-in session that registered it last; signing that session out takes it
   // (revokeSessions).
 
-  /** Registers a device's push subscription or token to an account's session (moving it there from the account's other). */
-  registerPush(sub: string, sid: string, device: PushDevice, lang: Lang = "zh", shows: Shows | null = null): void {
+  /**
+   * Registers a device's push subscription or token to an account's session (moving it there from the account's other).
+   * `primary`: an app the person made one of their primary trusted devices (a web page approves no one: never).
+   */
+  registerPush(sub: string, sid: string, device: PushDevice, lang: Lang = "zh", shows: Shows | null = null, primary = false): void {
     const [column, value] = device.kind === "web" ? ["endpoint", device.endpoint] : ["token", device.token];
     this.#run(`DELETE FROM push WHERE sub = ? AND ${column} = ?`, sub, value);
     const said = shows ? JSON.stringify(shows) : null;
     if (device.kind === "web") {
       this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created, lang, shows) VALUES (?, ?, ?, 'web', ?, ?, ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds(), lang, said);
     } else if (device.kind === "apns") {
-      this.#run("INSERT INTO push (id, sub, sid, kind, token, sandbox, created, lang, shows) VALUES (?, ?, ?, 'apns', ?, ?, ?, ?, ?)", ulid(), sub, sid, device.token, device.sandbox ? 1 : 0, nowSeconds(), lang, said);
+      this.#run("INSERT INTO push (id, sub, sid, kind, token, sandbox, created, lang, shows, lock_primary) VALUES (?, ?, ?, 'apns', ?, ?, ?, ?, ?, ?)", ulid(), sub, sid, device.token, device.sandbox ? 1 : 0, nowSeconds(), lang, said, primary ? 1 : 0);
     } else {
-      this.#run("INSERT INTO push (id, sub, sid, kind, token, created, lang, shows) VALUES (?, ?, ?, 'fcm', ?, ?, ?, ?)", ulid(), sub, sid, device.token, nowSeconds(), lang, said);
+      this.#run("INSERT INTO push (id, sub, sid, kind, token, created, lang, shows, lock_primary) VALUES (?, ?, ?, 'fcm', ?, ?, ?, ?, ?)", ulid(), sub, sid, device.token, nowSeconds(), lang, said, primary ? 1 : 0);
     }
     // An account's oldest go past a few dozen devices.
     this.#run("DELETE FROM push WHERE sub = ? AND id NOT IN (SELECT id FROM push WHERE sub = ? ORDER BY id DESC LIMIT ?)", sub, sub, LIMITS.pushPerUser);
@@ -1117,6 +1128,31 @@ export class Directory extends DurableObject<Env> {
       if (device.kind === "web") this.#run("DELETE FROM push WHERE endpoint = ?", device.endpoint);
       else this.#run("DELETE FROM push WHERE token = ?", device.token);
     }
+  }
+
+  /**
+   * Where a new device's ask to be approved in `workspace` goes (push.ts lockWake): its person's primary trusted
+   * devices' registrations (apps': a web page approves no one), and the workspace's name; null for one not a member,
+   * or asked again within LOCK_WAKE_SECS (a new device asking in several workspaces at once wakes them once).
+   */
+  lockWakeTargets(sub: string, workspace: string): { name: string; devices: PushRegistration[] } | null {
+    if (!this.#one("SELECT 1 FROM members WHERE workspace = ? AND sub = ?", workspace, sub)) return null;
+    const now = nowSeconds();
+    const last = this.#lockWoken.get(sub) ?? 0;
+    if (now - last < LOCK_WAKE_SECS) return null;
+    this.#lockWoken.set(sub, now);
+    const name = (this.#one("SELECT name FROM workspaces WHERE id = ?", workspace)?.name as string | undefined) ?? "";
+    const devices = this.#rows(
+      "SELECT id, kind, token, sandbox, lang, shows FROM push WHERE sub = ? AND lock_primary = 1 AND kind IN ('fcm', 'apns') ORDER BY id LIMIT ?",
+      sub, LIMITS.pushPerUser,
+    ).map((r): PushRegistration => {
+      const lang = langOf(r.lang as string | null);
+      const shows = typeof r.shows === "string" ? showsOf(JSON.parse(r.shows) as Record<string, unknown>) : null;
+      const id = r.id as string;
+      if (r.kind === "apns") return { id, lang, shows, kind: "apns", token: r.token as string, sandbox: r.sandbox === 1 };
+      return { id, lang, shows, kind: "fcm", token: r.token as string };
+    });
+    return { name, devices };
   }
 
   /**

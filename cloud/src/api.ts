@@ -14,7 +14,7 @@ import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySi
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { serveModels } from "./models";
 import { receiveFeedback } from "./feedback";
-import { pushKey, registration, stationNotify } from "./push";
+import { lockWake, pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveIncidents, serveStatus } from "./status";
@@ -292,6 +292,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (method === "POST") return directory(() => dir.appendLock(sub, ws, input.entries));
     if (method === "DELETE") return directory(() => dir.clearLock(sub, ws));
   }
+  // A new device of this account asks to be approved here: its primary trusted devices told (push.ts lockWake).
+  if (kind === "lock" && target === "wake" && !action && method === "POST") return lockWake(env, sub, ws, input);
   if (kind === "lock" && target === "requests") {
     if (!action && method === "GET") return directory(() => dir.lockRequests(sub, ws));
     if (!action && method === "POST") return directory(() => dir.requestLock(sub, ws, input));

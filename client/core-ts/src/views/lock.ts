@@ -19,6 +19,8 @@
 //   pair                    this device asks a trusted device of its person's, met face to face, to approve it in every
 //                           workspace it waits in (views/pair.ts); pairCode {code} the code that one shows, typed;
 //                           pairCancel given up
+//   primary {on}            this device (an app) made one of its person's primary trusted devices, or no longer: told
+//                           wherever its app is when a new device of theirs asks (lock-primary.ts)
 // Calls (lockPrompt.<name> {device}), on a new device showing this one's code (views/pair.ts):
 //   deny                    turned away
 //   hide                    its prompt closed: no longer shown, the code still good
@@ -33,6 +35,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, type Head, Signer, WEB_DEVICE_SECS, entryHash, next, readHead, shortCode } from "../lock.ts";
+import { isPrimary, loadPrimary, setPrimary } from "../lock-primary.ts";
 import * as prefs from "../prefs.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -259,6 +262,13 @@ export function install(inner: Inner): void {
   // The signing key, once (it is the device's).
   inner.runner.fork(
     Effect.map(Effect.orElseSucceed(Signer.load(inner.host), () => null), (s) => signerKnown(inner, s?.id ?? null)),
+  );
+  // Whether it is one of its person's primary trusted devices (lock-primary.ts): its push registration says so once read.
+  inner.runner.fork(
+    Effect.flatMap(loadPrimary(inner), (on) => {
+      inner.store.invalidateAll((t) => t.topic === "lock");
+      return on ? Effect.ignore(inner.cloudSync.pushRegistered(), { log: "Unhandled", message: "push registration sent" }) : Effect.void;
+    }),
   );
   // The workspace view says how far the cloud's lock goes and how many wait: read again when that changes.
   inner.data.onChange((topic) => {
@@ -591,6 +601,10 @@ export function lockView(inner: Inner, ws: string): J {
     // Whether this device signs (an app whose key the lock names), whether it could (an app).
     canSign: inner.host.appKeys === true,
     signs,
+    // Whether it is one of its person's primary trusted devices (lock-primary.ts: for every workspace, it is the
+    // device's), and whether it may be made one here: an app that signs.
+    primary: isPrimary(inner),
+    canBePrimary: inner.host.appKeys === true && signs,
     me: {
       device: base, code: base ? shortCode(base) : null, kind: inner.host.appKeys ? "app" : "web",
       confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - at) : null,
@@ -743,6 +757,16 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "open":
         result = yield* lock.open();
         break;
+      // This device made one of its person's primary trusted devices, or no longer (lock-primary.ts): told to the cloud
+      // with its push registration. An app only: a web page approves no one.
+      case "primary": {
+        const on = c.params.on === true;
+        if (on && inner.host.appKeys !== true) return yield* Effect.fail(CoreError.invalid("a web page approves no one"));
+        yield* setPrimary(inner, on);
+        yield* Effect.ignore(inner.cloudSync.pushRegistered(), { log: "Unhandled", message: "push registration sent" });
+        inner.store.invalidateAll((t) => t.topic === "lock");
+        return null;
+      }
       // Approved face to face (views/pair.ts): asked, the code typed, given up.
       case "pair":
       case "pairCode":

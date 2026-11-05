@@ -19,6 +19,7 @@ import { equal, isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
 import type { LockClaim } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
+import { isPrimary } from "../lock-primary.ts";
 
 /// The first wait before an events socket is opened again; it doubles up to a minute, back to the first after one
 /// held a minute.
@@ -478,7 +479,10 @@ export class CloudSync {
       // What it shows of notices (which kinds, whether what was said: the cloud makes each push so) changed since it
       // was given, or its language: given again to every account.
       const shows = core.attention?.attend.shows() ?? null;
-      if (lang !== code || !equal(raw.shows ?? null, shows)) {
+      // Whether it is one of its person's primary trusted devices (lock-primary.ts): the cloud wakes those when a new
+      // device of theirs asks to be approved. Changed since it was given: given again too.
+      const primary = isPrimary(core);
+      if (lang !== code || !equal(raw.shows ?? null, shows) || (raw.primary === true) !== primary) {
         withSubs = [];
         lang = code;
       }
@@ -486,6 +490,8 @@ export class CloudSync {
       if (isObject(registration)) {
         registration.lang = code;
         if (shows) Object.assign(registration, shows);
+        if (primary) registration.primary = true;
+        else delete registration.primary;
       }
       let failed: CoreError | null = null;
       for (const account of accounts.filter((a) => !withSubs.includes(a.sub))) {
@@ -493,7 +499,7 @@ export class CloudSync {
         if (sent._tag === "Success") withSubs.push(account.sub);
         else failed = sent.failure;
       }
-      yield* Effect.ignore(core.host.storageSet(PUSH_KEY, toJsonBytes({ registration, with: withSubs, lang, shows })), { log: "Unhandled", message: "push registration kept" });
+      yield* Effect.ignore(core.host.storageSet(PUSH_KEY, toJsonBytes({ registration, with: withSubs, lang, shows, ...(primary ? { primary } : {}) })), { log: "Unhandled", message: "push registration kept" });
       if (failed) return yield* Effect.fail(failed);
       return null;
     });

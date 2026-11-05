@@ -2300,6 +2300,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("owner", Json::boolean(true)),
           ("canSign", Json::boolean(true)),
           ("signs", Json::boolean(true)),
+          // (this phone one of its person's primary trusted devices: 主授信设备's switch on)
+          ("primary", Json::boolean(true)),
+          ("canBePrimary", Json::boolean(true)),
           ("signers", Json::number(5.0)),
           ("protected", Json::number(1.0)),
           ("attention", Json::number(0.0)),

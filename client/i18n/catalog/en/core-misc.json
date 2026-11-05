@@ -237,6 +237,8 @@
   "core-misc.lock.pairGone": "Couldn't reach the device showing the code; request approval again",
   "core-misc.lock.pairUnsigned": "The device showing the code couldn't approve this one: {error}",
   "core-misc.lock.pairElsewhere": "This device was approved in {names}; here it still needs approval from this workspace's admin or a trusted device of yours here",
+  "core-misc.lock.pairNotice.title": "A new device asks to join",
+  "core-misc.lock.pairNotice.body": "“{device}” asks to join “{workspace}”. Open still.fail to see the security code",
   "core-misc.lock.keyNotKept": "Couldn't keep this device's key in the system keychain: {error}",
   "core-misc.lock.inWorkspace": "“{name}”: {error}",
   "core-misc.lock.listSep": "; ",

@@ -10,7 +10,7 @@ import type { PushDevice, PushRegistration } from "./directory";
 import type { Env } from "./env";
 import { apnsKey, apnsPush } from "./apns";
 import { fcmPush, serviceAccount } from "./fcm";
-import { langOf, requestLang, type Lang } from "./i18n.ts";
+import { langOf, requestLang, tr, type Lang } from "./i18n.ts";
 import { line, noticeBodyFor, shown, showsOf, type Shows } from "./noticeText";
 import { FORMER_NOTICE_PREFIX } from "./compat";
 import { stationSender } from "./tracing";
@@ -83,9 +83,54 @@ export async function registration(request: Request, env: Env, sub: string, sid:
   }
   // The language its notifications are said in: the one the client says, else its request's.
   const lang = typeof input.lang === "string" && input.lang ? langOf(input.lang) : requestLang(request);
-  // What it shows of notices (its kinds, whether what was said), as its settings say: none said, all in full.
-  await dir.registerPush(sub, sid, device, lang, showsOf(input));
+  // What it shows of notices (its kinds, whether what was said), as its settings say: none said, all in full. An app
+  // that is one of its person's primary trusted devices says so (`primary`): woken when a new device asks (lockWake).
+  await dir.registerPush(sub, sid, device, lang, showsOf(input), device.kind !== "web" && input.primary === true);
   return new Response(null, { status: 204 });
+}
+
+/**
+ * POST /v1/workspaces/:ws/lock/wake `{ device, label }`: a new device of this account asks to be approved in `ws`
+ * (security mode, face to face: docs/workspace-lock.md 主授信设备), so the account's primary trusted devices are told,
+ * wherever their app is: a notification that a device asks (never a code: each shows its own once the new device
+ * reaches it, as without this), opening the app → `{ sent }`. Once in LOCK_WAKE_SECS for an account (a device waiting
+ * in several workspaces asks in each); none for one not a member.
+ */
+export async function lockWake(env: Env, sub: string, ws: string, input: Record<string, unknown>): Promise<Response> {
+  const device = typeof input.device === "string" && /^[0-9a-f]{64}$/.test(input.device) ? input.device : null;
+  if (!device || (input.label !== undefined && typeof input.label !== "string")) return reply({ error: "invalid_request" }, 400);
+  const label = line(typeof input.label === "string" ? input.label.slice(0, 120) : "");
+  const dir = env.DIRECTORY.getByName("primary");
+  const targets = await dir.lockWakeTargets(sub, ws);
+  if (!targets || targets.devices.length === 0) return reply({ sent: 0 });
+  const fcm = serviceAccount(env.FCM_SERVICE_ACCOUNT);
+  const apns = apnsKey(env.APNS_KEY);
+  const at = String(clock.now());
+  const pushes: Promise<{ device: PushRegistration; outcome: Outcome }>[] = [];
+  for (const target of targets.devices) {
+    // (as a notice of its own kind, so an app that shows notices shows it: its tag one per new device, a newer
+    // replacing the one shown; it opens the app, where the code comes up)
+    const said: Record<string, string> = {
+      type: "notice",
+      kind: "pair",
+      title: tr(target.lang, "cloud.push.pair.title"),
+      body: tr(target.lang, "cloud.push.pair.body", { device: label || tr(target.lang, "cloud.push.pair.someDevice"), workspace: line(targets.name) }),
+      tag: `pair/${device}`,
+      url: "/",
+      workspace: ws,
+      at,
+    };
+    const push = target.kind === "apns" ? (apns ? apnsPush(apns, target.token, target.sandbox, said) : null) : target.kind === "fcm" && fcm ? fcmPush(fcm, target.token, said) : null;
+    if (!push) continue;
+    pushes.push(push.then((outcome) => ({ device: target, outcome }), (error) => {
+      console.warn(`push: ${error}`);
+      return { device: target, outcome: "failed" as const };
+    }));
+  }
+  const results = await Promise.all(pushes);
+  const gone = results.filter((r) => r.outcome === "gone").map((r) => r.device);
+  if (gone.length) await dir.dropPush(gone);
+  return reply({ sent: results.filter((r) => r.outcome === "sent").length });
 }
 
 interface Notice {

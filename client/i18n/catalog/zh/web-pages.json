@@ -1437,6 +1437,9 @@
   "web-pages.security.otherApps": "其他",
   "web-pages.security.ownerOnly": "只有 owner 能开启",
   "web-pages.security.people": "成员和设备",
+  "web-pages.security.primaryTitle": "主授信设备",
+  "web-pages.security.primarySwitch": "把这台设为主授信设备",
+  "web-pages.security.primaryNote": "新设备申请加入时一定会通知这台，手机上 App 没开也能收到，点开就弹出安全码",
   "web-pages.security.peopleCount": {
     "one": "{n} 人",
     "other": "{n} 人"

@@ -1512,6 +1512,9 @@
   "web-pages.security.otherApps": "Other",
   "web-pages.security.ownerOnly": "Only the owner can turn it on",
   "web-pages.security.people": "Members and devices",
+  "web-pages.security.primaryTitle": "Primary trusted device",
+  "web-pages.security.primarySwitch": "Make this one primary",
+  "web-pages.security.primaryNote": "When a new device asks to join, this one is always told, even with the app closed on a phone; open it to see the security code",
   "web-pages.security.peopleCount": {
     "one": "{n} person",
     "other": "{n} people"

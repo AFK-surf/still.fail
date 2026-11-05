@@ -41,9 +41,10 @@ export function kindsOf(v: J, base: Kinds = ALL_KINDS): Kinds {
   return { wait: flag("wait"), failed: flag("failed"), done: ["off", "away", "always"].includes(k.done) ? k.done : base.done, message: flag("message") };
 }
 
-/// A notice's body with `preview` off: what kind of thing happened, not what was said.
+/// A notice's body with `preview` off: what kind of thing happened, not what was said (a new device asking to be
+/// approved says only that: what it says is the device's name and the workspace's).
 function hidden(kind: unknown): string {
-  return t(kind === "wait" || kind === "block" ? "core-misc.notice.hidden.wait" : kind === "failed" ? "core-misc.notice.hidden.failed" : kind === "message" ? "core-misc.notice.hidden.message" : "core-misc.notice.hidden.done");
+  return t(kind === "wait" || kind === "block" ? "core-misc.notice.hidden.wait" : kind === "failed" ? "core-misc.notice.hidden.failed" : kind === "message" ? "core-misc.notice.hidden.message" : kind === "pair" ? "core-misc.lock.pairNotice.title" : "core-misc.notice.hidden.done");
 }
 
 function is(c: ChatOf, station: string, thread: number | null, session: string | null): boolean {
@@ -376,6 +377,16 @@ export class Attend {
     const before = this.#show.length;
     this.#show = this.#show.filter(([n]) => n.id !== id);
     return this.#show.length < before;
+  }
+
+  /// A notice of this device's own to show now, not of a chat (a new device asking to be approved: views/pair.ts):
+  /// unless notifications are off or a page is in view (it shows what it is about itself). Whether it is to be shown.
+  told(n: J): boolean {
+    if (!this.on() || this.seen()) return false;
+    const now = this.#host.nowMs();
+    this.#show = this.#show.filter(([m, at]) => now - at < SHOW_FOR_MS && m.tag !== n.tag);
+    this.#show.push([structuredClone(n), now]);
+    return true;
   }
 
   /// A push came: shown unless notifications are off, a page is in view, its kind is off, or its workspace is.

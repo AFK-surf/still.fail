@@ -1606,6 +1606,8 @@ export const SHAPES: Record<string, Shape> = {
     ["owner", "bool"],
     ["canSign", "bool", { doc: "An app: it may sign (a web page may not)." }],
     ["signs", "bool", { doc: "This device signs for the lock." }],
+    ["primary", "bool", { default: true, doc: "This device is one of its person's primary trusted devices (主授信设备, `lock.primary`): told\nwherever its app is when a new device of theirs asks to be approved. The device's, in every workspace." }],
+    ["canBePrimary", "bool", { default: true, doc: "This device may be made one: an app that signs here." }],
     ["me", opt("LockMe")],
     ["signers", "u32"],
     ["members", vec("LockPerson")],
@@ -2561,7 +2563,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tag", "String"],
     ["url", "String"],
     ["at", "i64", { client: "I54" }],
-  ], { doc: "A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something\nnew to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),\n`url` opens it." }),
+  ], { doc: "A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something\nnew to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),\n`url` opens it. Or a new device asking this one, one of its person's primary trusted devices, for a code (`pair`:\nno station or session, `tag` the new device's, `url` the app's start; the code shown only in the app)." }),
   StatusItem: struct([
     ["state", "String"],
     ["text", "String", { said: true }],

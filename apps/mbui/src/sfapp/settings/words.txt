@@ -1416,6 +1416,9 @@ web-pages.security.pairNote
 web-pages.security.pairTitle
 web-pages.security.pairWrong
 web-pages.security.people
+web-pages.security.primaryTitle
+web-pages.security.primarySwitch
+web-pages.security.primaryNote
 web-pages.security.promptFor
 web-pages.security.protected
 web-pages.security.recent

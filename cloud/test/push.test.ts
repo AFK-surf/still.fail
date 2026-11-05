@@ -483,3 +483,47 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     await h.close();
   }
 });
+
+test("a new device asking to be approved wakes its person's primary trusted devices only, once in a while", async () => {
+  const { privateKey } = await generateKeyPair("RS256", { extractable: true });
+  const account = { type: "service_account", project_id: "stillfail-test", client_email: "push@stillfail-test.iam.gserviceaccount.com", private_key: await exportPKCS8(privateKey), token_uri: "https://oauth.example/token" };
+  const got: OutboundRequest[] = [];
+  const h = await harness({
+    fcm: JSON.stringify(account),
+    push: (request) => {
+      got.push(request);
+      if (request.url === account.token_uri) return { status: 200, body: JSON.stringify({ access_token: "fcm-access", expires_in: 3600, token_type: "Bearer" }) };
+      return { status: 200, body: JSON.stringify({ name: "projects/stillfail-test/messages/1" }) };
+    },
+  });
+  try {
+    const { id, aliceTokens, bobTokens } = await workspace(h);
+    // Alice's phone is one of her primary trusted devices, her tablet is not; Bob's phone is one of his.
+    assert.equal((await register(h, aliceTokens, "POST", { kind: "fcm", token: "alice-phone", primary: true })).status, 204);
+    assert.equal((await register(h, aliceTokens, "POST", { kind: "fcm", token: "alice-tablet" })).status, 204);
+    assert.equal((await register(h, bobTokens, "POST", { kind: "fcm", token: "bob-phone", primary: true })).status, 204);
+    const wake = (tokens: { access_token: string }, body: unknown) =>
+      h.fetch(`/v1/workspaces/${id}/lock/wake`, { method: "POST", headers: { authorization: `Bearer ${tokens.access_token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const device = "ab".repeat(32);
+    assert.equal((await wake(aliceTokens, { label: "Chrome · Windows" })).status, 400, "the new device named");
+    assert.deepEqual(await (await wake(aliceTokens, { device, label: "Chrome · Windows" })).json(), { sent: 1 });
+    const sends = got.filter((r) => r.url.endsWith("messages:send")).map((r) => JSON.parse(new TextDecoder().decode(r.body)).message);
+    assert.deepEqual(sends.map((m) => m.token), ["alice-phone"], "her primary one, not her tablet, not Bob's");
+    assert.deepEqual(sends[0].data, {
+      type: "notice", kind: "pair", title: "有新设备申请加入", body: "「Chrome · Windows」申请加入「Home」，打开 still.fail 查看安全码",
+      tag: `pair/${device}`, url: "/", workspace: id, at: sends[0].data.at,
+    });
+    assert.ok(!Object.values(sends[0].data).some((v) => /\b\d{6}\b/.test(String(v))), "no code in it");
+    // Asked again at once (in another workspace it waits in, or pressed twice): not woken again so soon.
+    assert.deepEqual(await (await wake(aliceTokens, { device })).json(), { sent: 0 });
+    // A browser is never a primary one (it approves no one); Bob is woken for his own new devices only.
+    const other = await h.login("carol");
+    assert.deepEqual(await (await wake(other, { device })).json(), { sent: 0 }, "not a member");
+    assert.deepEqual(await (await wake(bobTokens, { device: "cd".repeat(32), label: "" })).json(), { sent: 1 });
+    const bobs = JSON.parse(new TextDecoder().decode(got.filter((r) => r.url.endsWith("messages:send")).at(-1)!.body)).message;
+    assert.equal(bobs.token, "bob-phone");
+    assert.equal(bobs.data.body, "「一台新设备」申请加入「Home」，打开 still.fail 查看安全码");
+  } finally {
+    await h.close();
+  }
+});

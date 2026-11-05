@@ -5014,6 +5014,13 @@ export interface LockView {
 	canSign: boolean;
 	/** This device signs for the lock. */
 	signs: boolean;
+	/**
+	 * This device is one of its person's primary trusted devices (主授信设备, `lock.primary`): told
+	 * wherever its app is when a new device of theirs asks to be approved. The device's, in every workspace.
+	 */
+	primary?: boolean;
+	/** This device may be made one: an app that signs here. */
+	canBePrimary?: boolean;
 	me?: LockMe;
 	signers: number;
 	members: LockPerson[];
@@ -5844,7 +5851,8 @@ export interface NewChatView {
 /**
  * A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
  * new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
- * `url` opens it.
+ * `url` opens it. Or a new device asking this one, one of its person's primary trusted devices, for a code (`pair`:
+ * no station or session, `tag` the new device's, `url` the app's start; the code shown only in the app).
  */
 export interface Notice {
 	id: string;
