@@ -657,6 +657,8 @@ pub struct Tree {
   /// structure's, what reacts reads: Tree::queued, Tree::structured): where things are laid out read in one is refused
   /// (Tree::layout_read)
   mut reads_followed : Int
+  /// what each of those reads is, as said where it is refused (Tree::layout_read)
+  reading : Array[() -> String]
   /// how many hit tests run now, one in another (Tree::hit_test): where things are placed read in them, inside what is
   /// followed too
   mut hit_testing : Int
@@ -916,6 +918,7 @@ pub fn Tree::new(
     laying: false,
     measuring: false,
     reads_followed: 0,
+    reading: [],
     hit_testing: 0,
     placed_bounds: Map([]),
     placed_due: [],
@@ -1661,6 +1664,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   // (let go, it is read by nothing: a read cut short as it was refused (a test's abort) counted no more)
   self.reads_followed = 0
   self.hit_testing = 0
+  self.reading.clear()
   // A child's cleanup may change state read by its parent or siblings. Publish those changes only once
   // every scope in this tree has stopped, as one removal; no observer may rebuild a half-disposed tree.
   @signals.start_batch()
@@ -1936,6 +1940,7 @@ fn[T] Tree::queued(
   placed? : Bool = false,
   laid? : Bool = false,
   root? : Int = -1,
+  about? : () -> String = fn() { "a binding" },
 ) -> () -> Unit {
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
@@ -1995,7 +2000,7 @@ fn[T] Tree::queued(
     told_at.val = -1.0
     // (one worked out of where things are laid out reads them, as the tree is placed or laid out; any other reads none:
     // Tree::layout_read)
-    let v = if b.placed { w.read(read) } else { self.read_followed(w, read) }
+    let v = if b.placed { w.read(read) } else { self.read_followed(w, read, about) }
     let was = self.cause_at
     self.cause_at = at
     @signals.untracked(fn() { then(v) })
@@ -2042,11 +2047,29 @@ fn[T] Tree::queued(
 }
 
 ///|
+/// Node `at` named for what is said of it where something goes wrong: its number and the names it and what holds it are
+/// drawn as (View::drawn_as), the nearest first.
+fn Tree::named_up(self : Tree, at : Int) -> String {
+  let names = []
+  let mut i = at
+  while i >= 0 && names.length() < 4 {
+    let name = self.nodes[i].look.drawn_as
+    if name != "" {
+      names.push(name)
+    }
+    i = self.nodes[i].parent
+  }
+  "node \{at}" + (if names.is_empty() { "" } else { " in " + names.join(" < ") })
+}
+
+///|
 /// `read` read by watch `w` as what it reads is followed to make, lay out or say something (a binding's read, a
 /// structure's, what reacts reads): where things are laid out read in it refused (Tree::layout_read).
-fn[T] Tree::read_followed(self : Tree, w : @signals.Watch, read : () -> T) -> T {
+fn[T] Tree::read_followed(self : Tree, w : @signals.Watch, read : () -> T, about : () -> String) -> T {
   self.reads_followed = self.reads_followed + 1
+  self.reading.push(about)
   let v = w.read(read)
+  self.reading.pop() |> ignore
   self.reads_followed = self.reads_followed - 1
   v
 }
@@ -2071,7 +2094,11 @@ fn[T] Tree::hit_test(self : Tree, f : () -> T) -> T {
 fn Tree::layout_read(self : Tree, what : String, loc : SourceLoc) -> Unit {
   if self.hit_testing == 0 && (self.reads_followed > 0 || @signals.computing()) {
     let by = if self.reads_followed > 0 { "what a binding, a structure or reacts reads" } else { "a computed" }
-    let s = "\{what} read at \{loc} in \{by}: where things are laid out is read as the tree is placed, painted, at a cause or once a change is committed, never by what makes, lays out or says something, its change never told it (docs/retained.md rule 10)"
+    let reader = match self.reading.last() {
+      Some(f) => " (\{f()})"
+      None => ""
+    }
+    let s = "\{what} read at \{loc} in \{by}\{reader}: where things are laid out is read as the tree is placed, painted, at a cause or once a change is committed, never by what makes, lays out or says something, its change never told it (docs/retained.md rule 10)"
     // (said where the test that ran into it says what failed, as a trap says nothing of why)
     println(s)
     abort(s)
@@ -2116,7 +2143,12 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 /// that change's moment: what it makes reads the state as it is then, what leaves starts leaving then), what had left
 /// by that moment let go first. Layout, words and paint of what it makes wait for the frame. Run now with the target
 /// it starts at. What stops it.
-fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+fn[T : Eq] Tree::structured(
+  self : Tree,
+  read : () -> T,
+  then : (T) -> Unit,
+  about? : () -> String = fn() { "a structure" },
+) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
   // (the moment of the change that marked it, first since it was last told: its cause's, wherever it is told)
@@ -2132,7 +2164,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
     self.at_cause_of(at, fn() {
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
-      let v = self.read_followed(w, read)
+      let v = self.read_followed(w, read, about)
       // (what marked it before this read is read by it, however long after it was told the read is (one waiting for
       // its change to be told whole): no moment of it left for the next change)
       told_at.val = -1.0
@@ -2155,7 +2187,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   // (marked by what changed nothing it read: no change's, its moment none)
   w.on_unchanged(fn() { told_at.val = -1.0 })
   watch.val = Some(w)
-  let v = self.read_followed(w, read)
+  let v = self.read_followed(w, read, about)
   told_at.val = -1.0
   last.val = Some(v)
   // (one change, as each after it is: Tree::at_cause)
@@ -2381,6 +2413,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       placed~,
       laid~,
       root~,
+      about=fn() { "a property's binding of " + tree.named_up(at) },
     )
     n.props[prop] = stop
   }
@@ -5842,7 +5875,14 @@ fn View::drop(self : View, v : View) -> Unit {
 
 ///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
-pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0) -> Unit {
+#callsite(autofill(loc))
+pub fn View::show(
+  self : View,
+  when : () -> Bool,
+  then : (View) -> Unit,
+  leave? : Double = 0.0,
+  loc~ : SourceLoc,
+) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot()
   let had : Ref[View?] = Ref(None)
@@ -5870,13 +5910,14 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
       }
       _ => ()
     }
-  })
+  }, about=fn() { "what shows, said at \{loc}" })
   slot.owns(stop) |> ignore
 }
 
 ///|
 /// A node made by `make` for what `which` is, made anew (the one before let go) as that changes, kept as it does not.
-pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit, loc~ : SourceLoc) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot()
   let had : Ref[(K, View)?] = Ref(None)
@@ -5894,7 +5935,7 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
         had.val = Some((k, v))
       }
     }
-  })
+  }, about=fn() { "what is picked, said at \{loc}" })
   slot.owns(stop) |> ignore
 }
 
@@ -5902,12 +5943,14 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
 /// A node for each of `items` by its key, made as its key comes, kept while it stays, moved as the order changes, let
 /// go as it goes. Each is given its item as a signal of its own, set again only as the item comes out otherwise (by
 /// its data, not by which object it is): a row whose item is the same runs nothing.
+#callsite(autofill(loc))
 pub fn[T : Eq, K : Hash + Eq] View::each(
   self : View,
   items : () -> Array[T],
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
   leave? : Double = 0.0,
+  loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot()
@@ -5992,7 +6035,7 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
       slot.boxes_again()
       tree.ordered_at(slot.at)
     }
-  })
+  }, about=fn() { "which rows, said at \{loc}" })
   slot.owns(stop) |> ignore
 }
 
@@ -8419,11 +8462,12 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
 /// `f` done with what `read` gives (as it is now, then as of each change of it: at its cause's moment, committed as a
 /// structure's change is), whatever frames are drawn: what is to be done as a state comes to hold, said so, never found
 /// by watching it frame by frame. The node's: done no more once it is let go.
-pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, loc~ : SourceLoc) -> Unit {
   // (made, and done each time, owned by the node's scope: what it makes let go with the node, its watch none of what
   // was running as it was said, whose running again would let it go)
   self.owning(fn() {
-    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) })
+    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) }, about=fn() { "what reacts reads, said at \{loc}" })
     self.owns(stop) |> ignore
   })
 }
