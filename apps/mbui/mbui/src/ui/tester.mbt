@@ -186,6 +186,7 @@ fn reset_globals() -> Unit {
   draw_log.val = -1
   draw_frames.val = 0
   fx_reset(None)
+  @view.reset_globals()
   outside_told.val = false
   commit_counts[0] = 0
   commit_counts[1] = 0

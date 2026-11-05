@@ -30,6 +30,7 @@
   "globals": {
     "roots": [
       "src/ui",
+      "src/view",
       "src/kit",
       "src/motion",
       "src/kitdemo"
