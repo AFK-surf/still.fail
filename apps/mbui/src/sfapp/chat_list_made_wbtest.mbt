@@ -17,7 +17,6 @@ test "a chat's messages made once: at their end, the last message over the list'
             src,
             r,
             fn() { view_of_chat(src, r).0 },
-            fn() { view_of_chat(src, r).1 },
             fn() { 0.0 },
             fn() { 0.0 },
             settings_core(src, w),

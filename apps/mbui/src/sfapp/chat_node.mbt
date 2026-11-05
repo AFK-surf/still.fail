@@ -13,8 +13,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     p.grow(Is(1.0)).min_height(Is(Some(0.0))).padding(By(fn() { (0.0, 0.0, 0.0, frame().foot) }))
     .ground(By(fn() { @sf.theme().p.bg })) |> ignore
     guard @signals.untracked(fn() { workspace_in_view(src).0 }) is Some(w) else { return }
-    let view = fn() { view_of_chat(src, r).0 }
-    let entries = fn() { view_of_chat(src, r).1 }
+    let view = fn() { @sfbase.chat_view_now(src, r) }
     let width = fn() { p.window().0 }
     let height = fn() { p.window().1 }
     // (the list's way to its end, once it is made: what words sent take it to)
@@ -45,7 +44,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         }))
       }))
       |> ignore
-      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot())
+      let list = @sfpages.chat_list_node(l, src, r, view, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot())
       latest.val = list.to_latest
       landing.val = list.landing_of
     })

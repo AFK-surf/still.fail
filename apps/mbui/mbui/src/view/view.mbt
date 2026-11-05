@@ -363,6 +363,8 @@ struct Node {
   /// what that row is known by where it is made anew for the same key (View::row_known_as: a windowed list's block,
   /// its slot let go as it leaves the window): what is picked in it found in it again as it comes back
   mut row_id : NodeId?
+  /// A virtual row's position among all its siblings, including those outside the window.
+  mut row_index : Int?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -597,6 +599,8 @@ pub struct Tree {
   /// those marked as what they read changed, since they last ran (Tree::pull)
   pulls_marked : Array[Int]
   mut layout_due : Bool
+  /// the node whose own layout (View::layout_box) is running now, building and measuring its children (-1 none)
+  mut layout_owner : Int
   mut order_due : Bool
   mut due : Bool
   /// the host is being told that a frame is due (Tree::marked)
@@ -864,6 +868,7 @@ pub fn Tree::new(
     advancing: false,
     logic: start,
     layout_due: true,
+    layout_owner: -1,
     order_due: true,
     due: true,
     telling_due: false,
@@ -1067,6 +1072,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.said_cell = None
       n.each_row = false
       n.row_id = None
+      n.row_index = None
       n.focusable = false
       n.focus_typing = false
       n.focus_keys = 0
@@ -1161,6 +1167,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         said_cell: None,
         each_row: false,
         row_id: None,
+        row_index: None,
         focusable: false,
         focus_typing: false,
         input_cell: None,
@@ -1650,6 +1657,20 @@ fn Tree::marked(self : Tree) -> Unit {
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
+  if self.layout_owner >= 0 {
+    // A layout callback is building its own children before measuring them. Nothing outside that layout is dirty.
+    let mut i = at
+    while i >= 0 && i != self.layout_owner {
+      let flex = self.nodes[i].flex
+      flex.dirty = true
+      // The child may already have been probed in this compute. Its previous measurements no longer describe
+      // the style the owning layout has just assigned, even though it was touched in the current generation.
+      flex.cache_n = 0
+      flex.p_ok = false
+      i = self.nodes[i].parent
+    }
+    return
+  }
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
   self.measured_gen = -1
@@ -1976,6 +1997,7 @@ priv enum Prop {
   BoundsInput
   OverScrim
   Measured
+  LayoutBox
   WordsCentered
   EllipsisPast
   Points
@@ -6246,6 +6268,22 @@ fn Tree::sizes_told(self : Tree) -> Bool {
 /// it is as the ones inside it moved it. Once, at this cause (the focus come to it): nothing brings it back of itself
 /// after.
 pub fn Tree::show_in_sight(self : Tree, id : NodeId, within? : () -> (Double, Double)?) -> Unit {
+  // (a list that keeps itself holding it told now, at this cause: it lays it out in sight, Scroll's `reveal`)
+  if self.alive_id(id) {
+    // (what part of it, as it is now: its top and its foot in its own terms)
+    let part = match within {
+      Some(f) => @signals.untracked(f)
+      None => None
+    }
+    let mut i = self.nodes[id.at].parent
+    while i >= 0 {
+      match self.scrolls_at.get(i) {
+        Some(s) => (s.reveal)(id, part)
+        None => ()
+      }
+      i = self.nodes[i].parent
+    }
+  }
   self.shows_due.push((id, within.unwrap_or(fn() { None })))
   self.marked()
 }

@@ -78,7 +78,7 @@ pub fn chat_flight_layer_made(@sfbase.ChatRef, @view.View) -> Unit
 
 pub fn chat_key(@sfbase.ChatRef) -> String
 
-pub fn chat_list_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Array[@sfbase.Entry], () -> Double, () -> Double, @settings.Core, foot_gap? : Double, follows? : @signals.Signal[Bool]) -> ChatListNode
+pub fn chat_list_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, @settings.Core, foot_gap? : Double, follows? : @signals.Signal[Bool]) -> ChatListNode
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
 

@@ -1011,6 +1011,9 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : MeasureFn?
+  // A bounded container that measures and places its own children. Called only for the final layout, with its
+  // content width/height and content origin; intrinsic size probes never build children.
+  mut layout_children : ((Double, Double, Double, Double) -> Unit)?
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1070,6 +1073,7 @@ pub fn Node::new() -> Node {
     style: Style::new(),
     children: [],
     measure: None,
+    layout_children: None,
     left: 0.0,
     top: 0.0,
     width: 0.0,

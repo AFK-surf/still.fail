@@ -38,6 +38,8 @@ pub fn[K : Hash + Eq] keyed() -> Keyed[K]
 
 pub fn last_set_at() -> String
 
+pub fn set_access_guard(String?) -> String?
+
 pub fn set_active_sub(ReactiveNode?) -> ReactiveNode?
 
 pub fn set_owner(ReactiveNode?) -> ReactiveNode?
