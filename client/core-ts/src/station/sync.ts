@@ -149,6 +149,10 @@ export class StationsSync {
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
+  /// How a station's link changed (views/device-cache.ts).
+  linkChanged: (address: string) => void = () => {};
+  /// One of a station's chats opened (views/device-cache.ts).
+  chatOpened: (address: string) => void = () => {};
   onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
   /// The loopback relays of logins this device takes the callback of (docs/remote-login.md).
   readonly relays: Relays;
@@ -167,7 +171,10 @@ export class StationsSync {
       goesOn: (address, how) => this.#goesOn(address, how),
       event: (address, name, raw) => this.onEvent(address, name, raw),
       toldMissed: (address) => this.#tally(address),
-      changed: (address, what) => this.onChange(address, what),
+      changed: (address, what) => {
+        this.onChange(address, what);
+        if (what === "link") this.linkChanged(address);
+      },
       gone: (address) => this.channels.forget(address),
     });
     // A thread caught up on brought its latest: one less to catch up on.

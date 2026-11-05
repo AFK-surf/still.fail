@@ -36,6 +36,7 @@ export const hooks: {
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
+  deviceCache?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.

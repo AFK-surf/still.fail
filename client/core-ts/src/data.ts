@@ -959,10 +959,11 @@ export class Data {
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];
     }
-    if (table === "place" || table === "link" || table === "heard" || table === "memberships" || table === "keepsMarks") {
+    if (table === "place" || table === "link" || table === "heard" || table === "memberships" || table === "keepsMarks" || table === "deviceFill") {
       // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
       // (`place`, `<address>/<thread>`), how its link was last time (`link`), the last event its stream told (`heard`,
-      // written with what it told), the workspaces it is in (`memberships`, views/memberships.ts). Read with what shows
+      // written with what it told), the workspaces it is in (`memberships`, views/memberships.ts), what its person's other
+      // devices brought while it was down (`deviceFill`, views/device-cache.ts). Read with what shows
       // them, not on the way.
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `${table}:${key}`]];
