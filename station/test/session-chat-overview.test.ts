@@ -63,3 +63,28 @@ test("a session moved to another workspace while names are prepared is not shown
     assert.deepEqual(result.automaticDecisions.recent, []);
   } finally { store.close(); }
 });
+
+test("a home-workspace session deleted during name preparation does not keep the overview waiting", async () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "s", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThread("ember", "CHAT", "s", "Old title", null);
+    store.joinThread(thread.id, "s", "ember");
+    let requests = 0;
+    const hub: any = { processes: () => [], config: () => ({ dataDir: "/" }),
+      prepareSessionChatNames: async () => {
+        assert.equal(++requests, 1, "a removed session cannot be prepared again");
+        store.deleteSession("s");
+      } };
+    const accounts: any = { profilesView: () => [], loginsView: () => [], apiProviders: () => [], machineLogins: () => [],
+      decisionModels: () => [], automaticDecisionsView: (_viewer: unknown, options: any) => ({
+        recent: options.visible("s") ? [{ session: "s", title: options.title("s") }] : [],
+      }) };
+    const viewer = { sub: "s", email: "p@example.test", name: "P", role: "admin" as const,
+      workspace: "mine", device: "d", home: true };
+    const result: any = await overview({ store, hub, accounts, cloud: { state: null } as any, config: () => ({ connects: [] }) }, viewer, "en");
+    assert.deepEqual(result.automaticDecisions.recent, [{ session: "s", title: "s" }]);
+    assert.equal(requests, 1);
+  } finally { store.close(); }
+});
