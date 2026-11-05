@@ -144,3 +144,32 @@ for (const recursive of [false, true]) test(`a message time change cannot leave 
     assert.equal(readPreparedDefaultHome(db, 5)?.ids[0], first);
   } finally { store.close(); }
 });
+
+for (const recursive of [false, true]) for (const how of ["number", "timestamp", "timestamp update", "state"] as const) {
+  test(`replacing ${how} keeps the default home order exact (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      const chat = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(chat);
+      db.prepare("UPDATE threads SET created_at = 50 WHERE id = ?").run(other);
+      db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,1,'message','same','person','p','hello',1)").run(chat);
+      if (how === "timestamp update")
+        db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,2,'edit','different','person','p','edit',2)").run(chat);
+      installRecentHomeIndex(db);
+      while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Enqueue the chats. */ }
+      while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Prepare their ordering. */ }
+      assert.deepEqual(readPreparedDefaultHome(db, 5), recentChatIds(db, "home", "home", 5));
+      if (how === "number")
+        db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'edit','person','p','edit',2)").run(chat);
+      else if (how === "timestamp")
+        db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,2,'edit','same','person','p','edit',2)").run(chat);
+      else if (how === "timestamp update") db.prepare("UPDATE OR REPLACE entries SET ts = 'same' WHERE thread = ? AND n = 2").run(chat);
+      else db.prepare("INSERT OR REPLACE INTO thread_state(thread,last_n,said_n,person_n,letters) VALUES (?,1,NULL,NULL,0)").run(chat);
+      assert.equal(readPreparedDefaultHome(db, 5), null, "the displaced message cannot leave a stale page");
+      while (!settleRecentHomeOrderStep(db, 2).ordersDone) { /* Account the changed ordering. */ }
+      assert.deepEqual(readPreparedDefaultHome(db, 5), recentChatIds(db, "home", "home", 5));
+    } finally { store.close(); }
+  });
+}

@@ -117,6 +117,7 @@ export function stepRecentChatIndex(db: DatabaseSync, limit = 64): { done: boole
 
 /// Null means old or changed chats are still being accounted. The caller waits outside the reader and asks again.
 export function readGlobalRecentChatIndex(db: DatabaseSync, limit: number): RecentChatPage | null {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent chat page size must be nonnegative");
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_chat_page");
   try {

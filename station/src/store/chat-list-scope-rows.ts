@@ -56,6 +56,7 @@ export function removeRecentScopeSource(db: DatabaseSync, ws: string, thread: bi
 
 /// Only a builder that has checked all change journals may mark a scope complete. This is not connected to a reader.
 export function readPreparedRecentWorkspace(db: DatabaseSync, ws: string, limit: number): RecentChatPage | null {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent workspace page size must be nonnegative");
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_scope_page");
   try {

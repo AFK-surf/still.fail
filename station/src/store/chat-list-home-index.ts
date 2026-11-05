@@ -223,6 +223,7 @@ export function settleRecentHomeOrderStep(db: DatabaseSync, limit = 64): { order
 /// Prototype for the default range alone; do not expose it until the home union is covered. It reads count and
 /// rows on the same snapshot and waits for the journals currently implemented.
 export function readPreparedDefaultHome(db: DatabaseSync, limit: number): RecentChatPage | null {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent default home page size must be nonnegative");
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_home_page");
   try {

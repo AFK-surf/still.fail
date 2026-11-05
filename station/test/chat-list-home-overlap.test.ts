@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
-import { constants } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
 import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap, readPreparedRecentHome, scanRecentHomeOverlapStep, settleRecentHomeOverlapStep } from "../src/store/chat-list-home-overlap.ts";
-import { scanRecentWorkspaceStep } from "../src/store/chat-list-scope-build.ts";
+import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep } from "../src/store/chat-list-scope-build.ts";
 import { trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
+import { settleRecentWorkspaceOrderStep } from "../src/store/chat-list-scope-order.ts";
 import { putRecentScopeSource, removeRecentScopeSource } from "../src/store/chat-list-scope-rows.ts";
+import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const recursive of [false, true]) test(`home and workspace overlap is counted once as both change (recursive triggers ${recursive})`, () => {
@@ -70,6 +75,73 @@ for (const recursive of [false, true]) test(`home and workspace overlap is count
       assert.deepEqual(readPreparedRecentHome(db, ws, 5), recentChatIds(db, ws, ws, 5));
     }
   } finally { db.setAuthorizer(null); store.close(); }
+});
+
+test("a home union reads its rows and overlap count on one snapshot", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-home-snapshot-"));
+  const path = join(dir, "station.db"), store = Store.open(path), db = store.db;
+  let reader: DatabaseSync | undefined;
+  try {
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "home" });
+    const old = store.openThread("ember", "EMBER", "old", "Old", null).id;
+    store.joinThread(old, "one", "ember");
+    store.joinThread(old, "missing", "ember");
+    installRecentHomeIndex(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "home" });
+    while (!scanRecentWorkspaceStep(db, "home", 2).sourceDone) { /* Prepare the workspace. */ }
+    while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Prepare the default range. */ }
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Add the default rows. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'home'").run();
+    installRecentHomeOverlap(db);
+    while (!scanRecentHomeOverlapStep(db, 2).scanDone) { /* Schedule old overlaps. */ }
+    while (!settleRecentHomeOverlapStep(db, 2).overlapsDone) { /* Count the intersection. */ }
+    assert.deepEqual(readPreparedRecentHome(db, "home", 5), { ids: [old], total: 1 });
+    reader = new DatabaseSync(path, { readOnly: true });
+    let added: number | null = null;
+    const observed = new Proxy(reader, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (sql !== "SELECT scan_done FROM recent_home_overlap_meta WHERE id = 1") return statement;
+          return new Proxy(statement, {
+            get(row, member) {
+              if (member === "get") return (...args: Parameters<typeof row.get>) => {
+                const result = row.get(...args);
+                if (added === null) {
+                  added = store.openThread("ember", "EMBER", "added", "Added", null).id;
+                  store.joinThread(added, "one", "ember");
+                  store.joinThread(added, "missing", "ember");
+                  db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(9_999_999_999_999, added);
+                  for (let i = 0; i < 50; i++) {
+                    settleRecentScopeVisibilityStep(db, 2);
+                    settleRecentWorkspaceMemberStep(db, "home", 2);
+                    settleRecentWorkspaceOrderStep(db, "home", 2);
+                    settleRecentHomeChatStep(db, 2);
+                    settleRecentHomeOverlapStep(db, 2);
+                    if (readPreparedRecentHome(db, "home", 5) !== null) break;
+                  }
+                  assert.deepEqual(readPreparedRecentHome(db, "home", 5), { ids: [added, old], total: 2 });
+                }
+                return result;
+              };
+              const value = Reflect.get(row, member, row);
+              return typeof value === "function" ? value.bind(row) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.deepEqual(readPreparedRecentHome(observed, "home", 5), { ids: [old], total: 1 });
+    assert.ok(added !== null);
+    assert.deepEqual(readPreparedRecentHome(reader, "home", 5), { ids: [added, old], total: 2 });
+  } finally {
+    reader?.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 for (const recursive of [false, true]) test(`home overlap survives new scopes and repeated home changes between batches (recursive triggers ${recursive})`, () => {
