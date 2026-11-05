@@ -589,3 +589,37 @@ moment; the real window fixture uses the input timeline, with the old-only
 runtime adapter retained. Both sparse/dense and no-drawn-frame regressions first
 failed, then passed in that 55-check selection. These checks correct the test
 source's input semantics; they do not measure real core or Android performance.
+
+Menu commands now complete on their inputs: text/link choices run immediately;
+image copies finish on the decode notification (or immediately when decoded).
+The pending command belongs to the window, independently of a menu or page's
+drawn lifetime, and owns one cancellable decode watch. A failed source also
+completes a later larger pixel request as failed unless an adequate decode is
+already pending. Both actual-chat copy cases assert zero host frames between
+the choice and clipboard completion; the original decoded-copy case and the
+larger-failed-request case failed before their changes. All 1615 UI checks pass.
+
+Fixture subscriptions now retain immutable topic snapshots and notify only
+when that topic's value or error changes. The unrelated-preferences regression
+failed first; a second check covers in-place nested preference mutations. With
+the unused menu build removed, the long-chat departure work contract passes on
+small and large screens. The 137-test app selection has 135 passes; the two
+remaining host-work failures concern typing damage and scroll damage.
+
+All six before/after pairs were inspected: image menus and long-chat typing at
+390x844, 720x900 and 1280x900, rendered from the actual app with fixture data at
+scale 2. Every pair is byte-identical. The source-checked baseline Wasm is
+`ac84ed43e6a592c7f987e52de0876cc635ee1b1f294f2bd21f0c521c463ff024`
+and the updated Wasm is
+`57713195c2c7bf66b528cb6b173b027df08c0c2f3b0e8195ed97ec159fa2ee88`.
+The menu preparation activates the medium chat pane before addressing its
+message list, without a fixed delay.
+
+The glass trace shows why the two damage checks remain: foreground text/button
+damage is expanded to the whole padded glass capture; scrolling can then cross
+the half-window fallback threshold. Simply removing that expansion would read
+the previous glass/foreground as a new backdrop. Fixing it requires independent
+backdrop ownership and dependencies. That work is deferred behind removing
+hover/layout feedback and migrating the complete chat layout path. These seam
+fixes do not establish one-pass layout, complete runtime adoption or an Android
+speedup. The branch remains an unmerged experiment.

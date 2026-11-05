@@ -687,6 +687,21 @@ let fix_typed : @signals.Signal[Int] = @signals.signal(0)
 let fixture_answers : Map[String, Topic] = {}
 
 ///|
+/// A subscription's answer belongs to that version. The fixture mutates maps in place (preferences, for example),
+/// unlike a core subscription's replacement values; keeping those maps here would change an old answer silently.
+fn fixture_snapshot(value : Json) -> Json {
+  match value {
+    Array(a) => Json::array(a.map(fixture_snapshot))
+    Object(o) => {
+      let copy : Map[String, Json] = {}
+      for k, v in o { copy[k] = fixture_snapshot(v) }
+      Json::object(copy)
+    }
+    _ => value
+  }
+}
+
+///|
 /// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
 fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], version : Int) -> Topic {
   let value = fixture_topic_inner(f, name, params)
@@ -1068,6 +1083,9 @@ pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Sou
 pub fn fixture(mode : String) -> Source {
   fixture_answers.clear()
   fixture_preview(mode)
+  // The fixture has one input clock, but a reader follows its topic alone, as it does with a real core. A reply
+  // elsewhere may make this answer be checked; unchanged contents cannot notify the reader or change its version.
+  let topics : Map[String, @signals.Computed[Topic]] = {}
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },
     workspace: "ws1",
@@ -1215,7 +1233,28 @@ pub fn fixture(mode : String) -> Source {
     }
   }
   {
-    topic: fn(name, params) { fixture_topic(f, name, params) },
+    topic: fn(name, params) {
+      let key = name + "\u{1}" + Json::object(params).stringify()
+      let topic = match topics.get(key) {
+        Some(topic) => topic
+        None => {
+          let topic = @signals.computed(fn(was : Topic?) {
+            let now = fixture_topic(f, name, params)
+            match was {
+              Some(old) if old.value == now.value && old.error == now.error => old
+              _ => {
+                value: now.value.map(fixture_snapshot),
+                error: now.error.map(fixture_snapshot),
+                version: was.map(fn(old) { old.version + 1 }).unwrap_or(1),
+              }
+            }
+          }, same=fn(a, b) { a.version == b.version })
+          topics[key] = topic
+          topic
+        }
+      }
+      topic.get()
+    },
     call: fn(name, params, done) {
       match fixture_kept(name, params, None) {
         Some(r) => {

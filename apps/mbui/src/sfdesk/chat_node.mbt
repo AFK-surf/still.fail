@@ -220,8 +220,6 @@ fn chat_over(
   latest : () -> Unit,
   pane_at : () -> (Double, Double, Double, Double)?,
 ) -> Unit {
-  // (what a menu's choice in its messages left: menus.mbt)
-  @sfpages.chat_menus_frame(c)
   let chat = (src.topic)("chat", chat_params(r)).value
   let view = view_of_chat(src, r).0
   let key = chat_key(r)

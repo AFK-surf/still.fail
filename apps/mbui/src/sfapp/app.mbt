@@ -487,6 +487,7 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
     // Releasing a page's subscriptions and saving its place belong to the departure, independent of drawing.
     root.reacts(fn() { @sfbase.left_said.get() }, fn(_) { pages_left(src) })
+    @sfpages.chat_menu_inputs(root)
     // (the library's words, the app's catalog's, and their language as the core's prefs say it, said before any page of
     // nodes is made: what one says on its first frame is its words in that language, not their keys or the device's
     // laid out and then said again; the old frame tells them each build, the same)

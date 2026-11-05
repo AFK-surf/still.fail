@@ -18,6 +18,39 @@ pub(all) enum ImagePixels {
 let pixels_read : Map[String, ImagePixels] = {}
 
 ///|
+/// Requests pixels as an action. `done` is called once, at once if already decoded, otherwise as the host finishes
+/// or fails the decode, without waiting for a drawn frame. The caller owns the returned cancellation; a reactive
+/// scope that owns the request also stops it when it goes. The callback never receives PixelsComing.
+pub fn read_image_pixels(src : String, px : Int, done : (ImagePixels) -> Unit) -> () -> Unit {
+  let live = Ref(true)
+  let watch : Ref[@signals.Watch?] = Ref(None)
+  let stop = fn() {
+    live.val = false
+    match watch.val {
+      Some(w) => {
+        watch.val = None
+        w.stop()
+      }
+      None => ()
+    }
+  }
+  let check = fn() {
+    guard live.val && watch.val is Some(w) && !w.gone() else { return }
+    // The read follows only host input. Requesting a decode and reading its pixels are commands, outside the read.
+    w.read(fn() { image_decodes_read(src) })
+    let p = @signals.untracked(fn() { g().image_pixels(src, px) })
+    // A host may finish synchronously while the request is being made, and tell this watch there.
+    if live.val && !w.gone() && p != PixelsComing {
+      stop()
+      done(p)
+    }
+  }
+  watch.val = Some(@signals.watch(check))
+  check()
+  stop
+}
+
+///|
 /// The pixels of the image at `src` (a path, an http(s) URL, a key given to image_bytes) decoded to at most `px` on its
 /// long side (a larger original made smaller; a smaller one as it is): coming until it is decoded, a frame asked for
 /// as it is.
@@ -41,7 +74,10 @@ pub fn Ctx::image_pixels(self : Ctx, src : String, px : Int) -> ImagePixels {
     }
     _ =>
       match image_cache.get(src) {
-        Some(list) if list.iter().any(fn(e) { e.state == -1 && e.px >= want }) => PixelsFailed
+        // image_for does not start another decode of a failed source. Unless an adequate decode is already on
+        // its way, nothing can finish a request at another size either.
+        Some(list) if list.iter().any(fn(e) { e.state == -1 }) &&
+          !list.iter().any(fn(e) { e.state == 0 && e.px >= want }) => PixelsFailed
         _ => PixelsComing
       }
   }

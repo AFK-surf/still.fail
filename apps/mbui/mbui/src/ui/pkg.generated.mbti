@@ -476,6 +476,8 @@ pub let press_space : Int32
 
 pub fn[T : Eq] read_drawn(@view.View, () -> T, (T) -> Unit) -> Unit
 
+pub fn read_image_pixels(String, Int32, (ImagePixels) -> Unit) -> () -> Unit
+
 pub fn redraw_vector_pictures() -> Unit
 
 pub fn reduced_motion() -> Bool

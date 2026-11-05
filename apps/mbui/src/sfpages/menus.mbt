@@ -2,14 +2,12 @@
 // text's held link): one menu for both, the presenters' (@sf.menu: a sheet with a finger short of Large, else a small
 // panel at the pointer). A link: open it, copy it; a file: quote or download it, a picture also copied (read whole, onto the
 // clipboard as a PNG).
-// What a choice does is done in the frame after it, by the list that offered it (menus_frame).
+// A choice is an input: links and words are done then; a picture is copied when its decode completes. The window
+// owns that pending command, so closing the menu or leaving the message's page cannot cancel a choice already made.
 
 ///|
-/// What a menu's choice left to do: a link to open, words to copy, a picture to copy.
+/// A picture chosen to copy, and what offered the current menu.
 priv struct MenuDoing {
-  /// (told: the list that offered it built again to do it)
-  open : @signals.Signal[String]
-  copy : @signals.Signal[String]
   image : @signals.Signal[String]
   mut offered : String
   /// the file whose menu a finger held opened (its box's id, 0 none), and that menu (the presenters' serial)
@@ -19,8 +17,6 @@ priv struct MenuDoing {
 
 ///|
 let menu_doing : MenuDoing = {
-  open: @signals.signal("", same=fn(a, b) { a == b }),
-  copy: @signals.signal("", same=fn(a, b) { a == b }),
   image: @signals.signal("", same=fn(a, b) { a == b }),
   offered: "",
   held_for: 0,
@@ -35,8 +31,6 @@ pub fn offered_image() -> String {
 
 ///|
 fn menus_reset() -> Unit {
-  menu_doing.open.set("")
-  menu_doing.copy.set("")
   menu_doing.image.set("")
   menu_doing.offered = ""
   menu_doing.held_for = 0
@@ -60,8 +54,8 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
   @sf.link_menu(
     href,
     from=@sf.at_point(x, y),
-    fn() { menu_doing.open.set(href) },
-    fn() { menu_doing.copy.set(href) },
+    fn() { @ui.open_url(href) |> ignore },
+    fn() { copy_link(@ui.current(), href) },
   )
 }
 
@@ -73,12 +67,7 @@ fn link_held_node(href : String, at : (Double, Double, Double, Double)) -> Unit 
     @ui.haptic(LongPress)
   }
   let (x, y, w, h) = at
-  // (chosen: done as it is, outside any build: menus_frame's open and copy)
-  @sf.link_menu(href, from=@sf.Beside::At(x, y, w, h), fn() { @ui.open_url(href) |> ignore }, fn() {
-    let c = @ui.current()
-    c.copy_text(href)
-    say(c, @sf.t("common.link.copied"))
-  })
+  @sf.link_menu(href, from=@sf.Beside::At(x, y, w, h), fn() { @ui.open_url(href) |> ignore }, fn() { copy_link(@ui.current(), href) })
 }
 
 ///|
@@ -121,41 +110,25 @@ fn file_menu(
 }
 
 ///|
-/// What a menu's choice in a chat drawn by nodes left, done (menus_frame), as an old view over it is built: a picture
-/// copied once it is read.
-pub fn chat_menus_frame(c : @ui.Ctx) -> Unit {
-  menus_frame(c)
-}
-
-///|
-/// What a menu's choice left, done: a link opened by the system once the frame is built, words copied, a picture read
-/// whole and put on the clipboard (as Electron's copyImage: decoded, as PNG) once it is read.
-fn menus_frame(c : @ui.Ctx) -> Unit {
-  // (taken when it is opened, not while the frame is built: a frame built again lets go of what its earlier builds
-  // said, Ctx::after_build)
-  if menu_doing.open.get() != "" {
-    let href = menu_doing.open.get()
-    c.after_build("menu-open", fn() {
-      menu_doing.open.set("")
-      @ui.open_url(href) |> ignore
-    })
-  }
-  if menu_doing.copy.get() != "" {
-    c.copy_text(menu_doing.copy.get())
-    menu_doing.copy.set("")
-    say(c, @sf.t("common.link.copied"))
-  }
-  if menu_doing.image.get() != "" {
-    match c.image_pixels(menu_doing.image.get(), image_copy_px) {
-      @ui.PixelsRead(w, h, rgba) =>
-        c.after_build("menu-copy-image", fn() {
-          menu_doing.image.set("")
-          @ui.clipboard_set_png(@pixels.png(w, h, unpremultiplied(rgba)))
-        })
-      @ui.PixelsFailed => menu_doing.image.set("")
-      @ui.PixelsComing => ()
+/// The window owns a pending copy, independent of the page or menu's drawn lifetime. A newer choice replaces one
+/// still decoding; reset or window disposal cancels it. Decoding done already: copied in the menu choice's turn.
+pub fn chat_menu_inputs(owner : @view.View) -> Unit {
+  let cancel : Ref[() -> Unit] = Ref(fn() { })
+  owner.reacts(fn() { menu_doing.image.get() }, fn(src) {
+    let previous = cancel.val
+    cancel.val = fn() { }
+    previous()
+    if src != "" {
+      cancel.val = @ui.read_image_pixels(src, image_copy_px, fn(p) {
+        menu_doing.image.set("")
+        match p {
+          @ui.PixelsRead(w, h, rgba) => @ui.clipboard_set_png(@pixels.png(w, h, unpremultiplied(rgba)))
+          _ => ()
+        }
+      })
     }
-  }
+  })
+  owner.owns(fn() { (cancel.val)() }) |> ignore
 }
 
 ///|
