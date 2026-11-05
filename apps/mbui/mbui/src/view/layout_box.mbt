@@ -16,6 +16,16 @@ pub struct Layout {
   priv seen : Set[String]
   /// the children placed, by their nodes, in the order they were last placed: the order the keyed are drawn and hit in
   priv placed : Array[Int]
+  /// how tall what it holds is, as `place` says (Layout::size_to): a box sized by what it holds is as tall as that
+  priv said_h : Ref[Double]
+}
+
+///|
+/// How tall what it holds is, said by `place` (as tall as the children it measured and placed go): the box's own height
+/// where it was laid out sized by them (View::layout_box's `sized`), given its width alone, in the same layout, as a
+/// leaf's measure says its height. Its `height` is then infinite: none is given.
+pub fn Layout::size_to(self : Layout, h : Double) -> Unit {
+  self.said_h.val = h
 }
 
 ///|
@@ -95,19 +105,37 @@ pub fn Layout::place(self : Layout, child : View, x : Double, y : Double) -> Uni
 }
 
 ///|
-/// The box's children laid out by `place` (a box of a bound size): what it reads taken by `content` before its layout,
+/// The box's children laid out by `place` (a box of a bound size, or `sized`: given its width alone, as tall as `place`
+/// says, Layout::size_to, a list of files or a card as tall as its words, in the same layout): what it reads taken by `content` before its layout,
 /// `place` given that and its constraints alone (any other read aborts), making the children it asks for
 /// (Layout::child), measuring and placing them in the order it needs; another branch changed or a geometry told from
 /// it aborts. Laid out again as its content, its constraints or a child it measured changes; nothing done else.
-pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout, K) -> Unit) -> View {
+pub fn[K : Eq] View::layout_box(
+  self : View,
+  content : Live[K],
+  place : (Layout, K) -> Unit,
+  sized? : Bool = false,
+) -> View {
   guard self.live() is Some(n) else { return self }
+  n.flex.sized_by_children = sized
   let value : Ref[K?] = Ref(None)
   let keyed : Map[String, View] = {}
   n.flex.layout_children = Some(fn(width, height, x, y) {
     let was_owner = self.tree.layout_owner
     self.tree.layout_owner = self.at
+    // (sized by what it holds, given no height: as tall as `place` says)
+    let unbounded = height != height
     let ctx : Layout = {
-      width, height, owner: self, origin: (x, y), live: Ref(true), keyed, used: [], seen: Set::new(), placed: [],
+      width,
+      height: if unbounded { @double.infinity } else { height },
+      owner: self,
+      origin: (x, y),
+      live: Ref(true),
+      keyed,
+      used: [],
+      seen: Set::new(),
+      placed: [],
+      said_h: Ref(0.0 / 0.0),
     }
     // Only the final state is published by Tree::walk, so a child kept hidden and then placed never disappears.
     for at in n.kids { self.tree.nodes[at].flex.line = -1 }
@@ -147,12 +175,18 @@ pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout,
     }
     ctx.live.val = false
     self.tree.layout_owner = was_owner
+    let said = ctx.said_h.val
+    if unbounded && said != said {
+      abort("layout_box node \{self.at}, sized by what it holds and given no height, said none: Layout::size_to")
+    }
+    said
   })
   self.bind(LayoutBox, content, Layout, fn(v) { value.val = Some(v) })
   self.owns(fn() {
     keyed.clear()
     value.val = None
     n.flex.layout_children = None
+    n.flex.sized_by_children = false
   }) |> ignore
   self
 }
@@ -170,14 +204,20 @@ pub fn[C : Eq, K : Show] View::by_room(
   content : Live[C],
   pick : (C, Double, Double) -> K,
   make : (View, K) -> Unit,
+  sized? : Bool = false,
 ) -> View {
-  self.layout_box(content, fn(l, c) {
+  self.layout_box(content, sized~, fn(l, c) {
     // (what it measures as it picks read as measuring reads it, Layout::measure's: a font's theme read as ever)
     let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
     let k = pick(c, l.width, l.height)
     @signals.set_access_guard(guard_before) |> ignore
     let child = l.child(k.to_string(), fn(v) { make(v, k) })
-    l.measure(child, l.width, height=l.height) |> ignore
+    // (sized by it: as tall as the child picked, given the width; else filling the room)
+    if l.height == @double.infinity {
+      l.size_to(l.measure(child, l.width).1)
+    } else {
+      l.measure(child, l.width, height=l.height) |> ignore
+    }
     l.place(child, 0.0, 0.0)
   })
 }

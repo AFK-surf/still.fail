@@ -22,6 +22,7 @@ fn kept_twice_tree(twice : Ref[Bool]) -> (@flex.Node, @flex.Node, @flex.Node) {
     }
     row.left = 0.0
     row.top = 0.0
+    0.0 / 0.0
   })
   (root, row, part)
 }
