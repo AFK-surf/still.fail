@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 // A projection only for sessions whose copy destinations have been requested. A thread change is distributed in
 // batches; a dirty session cannot be read until every relevant distribution and its own reconciliation have ended.
 const VERSION = 1;
+export const CC_SESSIONS_PENDING = "copy destination sessions pending:";
 const orderChange = (thread: string) => `
   INSERT INTO cc_order_dispatch(thread, after_session, through_session)
     SELECT ${thread}, NULL, (SELECT session FROM cc_session_rows INDEXED BY cc_rows_thread

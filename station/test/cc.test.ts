@@ -17,14 +17,26 @@ import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { newSession } from "../src/sessions/lifecycle.ts";
 import { Store } from "../src/store/store.ts";
+import { CcIndexPreparation, CcSessionsUnavailable } from "../src/store/cc-thread-index.ts";
 import { FakeChat, FakeDriver, Rig, message, settle, testClock } from "./hub-fakes.ts";
+
+function prepared(store: Store, thread: number): ReturnType<Store["ccThreads"]> {
+  const work = new CcIndexPreparation();
+  for (;;) {
+    try { return store.ccThreads(thread); }
+    catch (error) {
+      if (!(error instanceof CcSessionsUnavailable)) throw error;
+      for (const session of error.sessions) while (!work.step(store.db, session).done) {}
+    }
+  }
+}
 
 test("a chat can be copied to every Slack thread its agents are in, the one said in last first", async () => {
   // (a clock of the test's: what is said one after another is said at times apart, never in the same millisecond)
   const time = testClock();
   const r = new Rig({ clock: time.clock });
   const [key, chat] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
-  assert.deepEqual(r.store.ccThreads(chat.id), [], "a chat whose agent is in no Slack thread has none");
+  assert.deepEqual(prepared(r.store, chat.id), [], "a chat whose agent is in no Slack thread has none");
   const thread = (channel: string, ts: string) => {
     const t = r.store.openThread("slack:T1", channel, ts, null, "ada");
     r.store.joinThread(t.id, key, "cl");
@@ -32,15 +44,15 @@ test("a chat can be copied to every Slack thread its agents are in, the one said
     return t;
   };
   const first = thread("C1", "1700.000100");
-  assert.deepEqual(r.store.ccThreads(chat.id).map((o) => [o.thread.id, o.connect]), [[first.id, "cl"]]);
+  assert.deepEqual(prepared(r.store, chat.id).map((o) => [o.thread.id, o.connect]), [[first.id, "cl"]]);
   await time.adjust(1000);
   const second = thread("C2", "1700.000200");
-  assert.deepEqual(r.store.ccThreads(chat.id).map((o) => o.thread.id), [second.id, first.id], "the one said in last first");
+  assert.deepEqual(prepared(r.store, chat.id).map((o) => o.thread.id), [second.id, first.id], "the one said in last first");
   // Something said in the first again: it comes first.
   await time.adjust(1000);
   await r.accept(message({ channel: "C1", threadTs: "1700.000100", ts: "1700.000300", user: "UBO", text: "more", addressed: false }));
   await settle();
-  assert.deepEqual(r.store.ccThreads(chat.id).map((o) => o.thread.id), [first.id, second.id]);
+  assert.deepEqual(prepared(r.store, chat.id).map((o) => o.thread.id), [first.id, second.id]);
   await r.close();
 });
 
@@ -100,6 +112,40 @@ test("a copy that did not go is said in the chat", async () => {
   await r.close();
 });
 
+test("a copy prepares newly joined sessions again before choosing its destinations", async () => {
+  const r = new Rig();
+  try {
+    const [key, chat] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    const first = r.store.openThread("slack:T1", "C1", "1700.000100", null, "ada");
+    const second = r.store.openThread("slack:T1", "C2", "1700.000200", null, "ada");
+    r.store.joinThread(first.id, key, "cl");
+    r.store.joinThread(second.id, "later", "cl");
+    const prepare = r.hub.prepareCcSessions!, calls: string[][] = [];
+    r.hub.prepareCcSessions = async (sessions, signal) => {
+      calls.push([...sessions]);
+      await prepare(sessions, signal);
+      if (calls.length === 1) r.store.joinThread(chat.id, "later", "ember");
+    };
+    await cc(r.hub, chat.id, "Ada", "ada@x.com", "hi", [], [first.id, second.id]);
+    assert.deepEqual(calls, [[key], ["later"]]);
+    assert.deepEqual(r.chat.posts.map((p) => p[0].channel).sort(), ["C1", "C2"]);
+  } finally { await r.close(); }
+});
+
+test("a copy whose destinations could not be prepared is said in its chat", async () => {
+  const r = new Rig();
+  try {
+    const [key, chat] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    const target = r.store.openThread("slack:T1", "C1", "1700.000100", null, "ada");
+    r.store.joinThread(target.id, key, "cl");
+    r.hub.prepareCcSessions = async () => { throw new Error("preparation failed"); };
+    await cc(r.hub, chat.id, "Ada", "ada@x.com", "hi", [], [target.id]);
+    assert.deepEqual(r.chat.posts, []);
+    assert.equal(r.said(chat.id).at(-1)?.text,
+      tr(stationLang(), "station.cc.failed", { place: "Slack/Feishu", error: "preparation failed" }));
+  } finally { await r.close(); }
+});
+
 test("the pages: a chat says where it can be copied, and a message sent with cc is copied to those it names", async () => {
   const data = mkdtempSync(join(tmpdir(), "cc-"));
   const config = hubConfig({ profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }], connects: [{ id: "cl", bind: { runtime: "claude" } }] }, data);
@@ -112,6 +158,7 @@ test("the pages: a chat says where it can be copied, and a message sent with cc 
   const jobs = new Jobs({ store, data, notify: () => {}, link: () => null });
   hub.setJobs(jobs);
   const readers = new Readers(data, 1);
+  hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
   readers.processes = () => hub.processes();
   const admin = new Admin(readers, { store, agents: { hub, jobs } as any });
   const viewer = { sub: "u", email: "a@x", name: "Ada", role: "member", workspace: "w", device: "d" };

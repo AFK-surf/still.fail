@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CC_THREADS_SQL } from "../src/store/rows.ts";
+import { CC_SESSION_KEYS, CcIndexPreparation, CcSessionsUnavailable } from "../src/store/cc-thread-index.ts";
 import { Store } from "../src/store/store.ts";
+
+function prepared(store: Store, thread: number): ReturnType<Store["ccThreads"]> {
+  const work = new CcIndexPreparation();
+  for (;;) {
+    try { return store.ccThreads(thread); }
+    catch (error) {
+      if (!(error instanceof CcSessionsUnavailable)) throw error;
+      for (const session of error.sessions) while (!work.step(store.db, session).done) {}
+    }
+  }
+}
 
 test("copy destinations keep shared membership and the last entry's order", () => {
   const store = Store.open(":memory:"), db = store.db;
@@ -22,7 +33,7 @@ test("copy destinations keep shared membership and the last entry's order", () =
     put.run(later, 1, "message", null, 10);
     put.run(later, 2, "edit", 1, 30);
     put.run(other, 1, "message", null, 1_000);
-    const read = () => store.ccThreads(home).map(({ thread, connect }) => [thread.id, connect]);
+    const read = () => prepared(store, home).map(({ thread, connect }) => [thread.id, connect]);
     assert.deepEqual(read(), [[later, "a-slack"], [shared, "a-slack"], [empty, "b-slack"]]);
     store.leaveThread(later, "a");
     assert.deepEqual(read(), [[later, "a-slack"], [shared, "a-slack"], [empty, "b-slack"]]);
@@ -48,7 +59,7 @@ test("shared copy destinations are counted once before the twenty most recent ar
       put.run(id, n + 1);
       return id;
     });
-    assert.deepEqual(store.ccThreads(home).map(({ thread }) => thread.id), destinations.slice(5).reverse());
+    assert.deepEqual(prepared(store, home).map(({ thread }) => thread.id), destinations.slice(5).reverse());
   } finally { store.close(); }
 });
 
@@ -67,7 +78,7 @@ test("copy destinations with the same last entry time use creation time and thre
     };
     const first = make("first", 10, 5), second = make("second", 20, 5);
     const third = make("third", 20, 5), empty = make("empty", 30, null);
-    assert.deepEqual(store.ccThreads(home).map(({ thread }) => thread.id), [third, second, first, empty]);
+    assert.deepEqual(prepared(store, home).map(({ thread }) => thread.id), [third, second, first, empty]);
   } finally { store.close(); }
 });
 
@@ -88,13 +99,15 @@ test("a chat's copy destinations do not traverse its older linked threads", () =
     for (let n = 0; n < 40; n++) add(`old-${n}`, n + 1);
     let visits = 0;
     db.function("visited_cc_candidate", (_id) => { visits++; return 1; });
-    const sql = CC_THREADS_SQL.replace("t.surface !=", "visited_cc_candidate(t.id) AND t.surface !=");
-    assert.notEqual(sql, CC_THREADS_SQL, "the original candidate lookup is observed");
-    const read = () => db.prepare(sql).all(home).map((row) => row.id);
+    const sql = CC_SESSION_KEYS.replace("CAST(thread AS TEXT)", "visited_cc_candidate(thread)");
+    assert.notEqual(sql, CC_SESSION_KEYS, "the per-session candidate lookup is observed");
+    const read = () => db.prepare(sql).all("agent").map((row) => row.thread);
+    assert.deepEqual(prepared(store, home).map((row) => row.thread.id), recent);
     assert.deepEqual(read(), recent);
     const before = visits;
     assert.ok(before > 0);
     for (let n = 40; n < 400; n++) add(`old-${n}`, n + 1);
+    assert.deepEqual(prepared(store, home).map((row) => row.thread.id), recent);
     visits = 0;
     assert.deepEqual(read(), recent);
     assert.equal(visits, before, `copy destinations visited ${before} candidates, then ${visits}`);

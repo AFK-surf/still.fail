@@ -159,6 +159,27 @@ test("merged copy destinations keep SQLite's ordering of old non-integer entry t
   } finally { store.close(); }
 });
 
+test("merged copy destinations agree with the original across overlapping memberships", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const sessions = ["z", "agent a", "a/1", "甲", "β", "a\"b"];
+    const home = store.openThread("ember", "EMBER", "overlap", null, null).id;
+    for (const session of [...sessions].reverse()) store.joinThread(home, session, "ember");
+    let state = 42;
+    const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state; };
+    for (let n = 0; n < 70; n++) {
+      const id = store.openThread(n % 9 ? "slack:one" : "ember", "C", `overlap-${n}`, null, null).id;
+      const order = [...sessions].sort(() => (random() & 1) ? 1 : -1);
+      for (const session of order) if ((random() & 3) !== 0) store.joinThread(id, session, `connect-${session}`);
+      if (n % 11 !== 0) put(db, id, 1, random() % 8);
+    }
+    installCcIndex(db);
+    for (const session of sessions) { trackCcSession(db, session); finish(db, session); }
+    const select = (rows: Record<string, unknown>[]) => rows.map((r) => [r.id, r.connect]);
+    assert.deepEqual(select(indexedCcThreads(db, home)), select(db.prepare(CC_THREADS_SQL).all(home)));
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) {
   for (const alias of ["rowid", "_rowid_", "oid"]) test(`copy destination rows agree after ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
@@ -174,7 +195,7 @@ for (const recursive of [false, true]) {
       const matches = () => {
         finish(db, "agent");
         assert.deepEqual(ccSessionRows(db, "agent", 20).map((r) => r.thread),
-          store.ccThreads(home).map((r) => r.thread.id));
+          db.prepare(CC_THREADS_SQL).all(home).map((r) => r.id));
       };
       matches();
       db.exec("BEGIN");
