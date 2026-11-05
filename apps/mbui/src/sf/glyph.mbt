@@ -140,10 +140,9 @@ fn glyph_layer(d : String, fill : Int64, stroke : Int64, width : Double, even_od
 let glyph_blink_period : Double = 2600.0
 
 ///|
-/// The steps of the resident clock in the blink's loop each face it shows begins at: open, then shutting from 2288 ms,
-/// open again at its end.
+/// The steps of the resident clock in the blink's loop its eyes change at: shutting from 2288 ms, open again at its end.
 // kept across runs: a table, never written
-let glyph_blink_faces : Array[Double] = [0.0, 2300.0, 2400.0, 2500.0]
+let glyph_blink_steps : Array[Double] = [2300.0, 2400.0, 2500.0]
 
 ///|
 /// A link on its way: its arc's breath, 1.4 s, a declared endless decoration (resident).
@@ -157,12 +156,20 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
   let (arcs, dots) = glyph_layout(g)
   let still = @ui.reduced_motion()
   let blinking = if g.asleep { 0 } else { g.working }
-  // a blink: open most of the time, shut for a moment (2.6 s, shut at 93%: down over 130 ms, up over 182), on the
-  // resident clock's steps. Each face it shows drawn apart over the rest, shown by a look by the clock at its steps
-  // alone (Ctx::cycle_look), as the arc's breath is: what holds the glyph is not built again for them (built at each,
-  // the bar's part holding the stations' tab was built again five times a blink, the whole frame laid out and painted
-  // again with it, for as long as a station worked)
-  let blink = blinking > 0 && !still
+  // a blink: open most of the time, shut for a moment (2.6 s, shut at 93%: down over 130 ms, up over 182)
+  let mut eye = 1.0
+  if blinking > 0 && !still {
+    // (on the resident clock's steps, a frame only at those of the blink: open, it is the same at every other)
+    let t = (c.loop_at(glyph_blink_period, glyph_blink_steps) / @ui.cycle_step_ms).floor() * @ui.cycle_step_ms
+    if t >= 2288.0 {
+      eye = if t < 2418.0 {
+        1.0 - 0.9 * (t - 2288.0) / 130.0
+      } else {
+        0.1 + 0.9 * (t - 2418.0) / 182.0
+      }
+      eye = (eye * 10.0).round() / 10.0
+    }
+  }
   // a link on its way: its arc breathes between the track and ink (1.4 s), held halfway with motion reduced; breathing,
   // drawn apart over the rest in ink, its opacity a look by the clock (Ctx::cycle_look): what holds the glyph is not
   // built again for each step of it (built each step, the stations' tab on the phone's bar built the whole frame ten
@@ -183,78 +190,41 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
     let (x, y) = ring_at(d, glyph_r)
     layers.push(glyph_layer(ellipse_path(x, y, 1.25, 1.25), faded(red, whole), 0L, 0.0))
   }
-  // the robot: its face with its eyes (or, asleep, its shut eyes) cut out of it, its eyes `eye` open
-  let face = fn(eye : Double) {
-    let body = StringBuilder()
-    body.write_string(round_rect_path(7.1, 7.9, 9.8, 8.2, 3.0))
-    if g.asleep {
-      for x in [(9.2, 10.8), (13.2, 14.8)] {
-        body.write_string(" " + round_rect_path(x.0 - 0.6, 11.5, x.1 - x.0 + 1.2, 1.2, 0.6))
-      }
-    } else {
-      for i, x in [10.3, 13.7] {
-        let ry = 1.25 * (if blinking >= (if i == 1 { 1 } else { 2 }) { eye } else { 1.0 })
-        body.write_string(" " + ellipse_path(x, 12.0, 1.1, ry))
-      }
+  // the robot: its face with its eyes (or, asleep, its shut eyes) cut out of it
+  let body = StringBuilder()
+  body.write_string(round_rect_path(7.1, 7.9, 9.8, 8.2, 3.0))
+  if g.asleep {
+    for x in [(9.2, 10.8), (13.2, 14.8)] {
+      body.write_string(" " + round_rect_path(x.0 - 0.6, 11.5, x.1 - x.0 + 1.2, 1.2, 0.6))
     }
-    glyph_layer(body.to_string(), faded(tint, whole), 0L, 0.0, even_odd=true)
+  } else {
+    for i, x in [10.3, 13.7] {
+      let ry = 1.25 * (if blinking >= (if i == 1 { 1 } else { 2 }) { eye } else { 1.0 })
+      body.write_string(" " + ellipse_path(x, 12.0, 1.1, ry))
+    }
   }
-  if !blink {
-    layers.push(face(1.0))
-  }
-  let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking}/\{blink}/\{breathing}/\{red}/\{tint}"
-  if !breathing && !blink {
+  layers.push(glyph_layer(body.to_string(), faded(tint, whole), 0L, 0.0, even_odd=true))
+  let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking > 0}/\{eye}/\{breathing}/\{red}/\{tint}"
+  if !breathing {
     return draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
   }
-  // (as big as the glyph: the breath and the faces laid over it whole)
+  // (as big as the glyph: the breath laid over it whole)
   c.box(fn() {
     draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None) |> ignore
-    if breathing {
-      let breath = c.layer(fn() {
-        draw_drawable(c, "glyph-breath/" + key, { w: 24.0, h: 24.0, layers: breaths }, size, None) |> ignore
-      })
-      c.cycle_look(
-        breath,
-        glyph_breath_period,
-        fn(f) {
-          let p = f * 2.0
-          let p = if p < 1.0 { p } else { 2.0 - p }
-          @ui.look(alpha=((glyph_track + (0.85 - glyph_track) * standard_at(p)) * 20.0).round() / 20.0)
-        },
-        resident=true,
-      )
-    }
-    if blink {
-      for i, from in glyph_blink_faces {
-        let to = if i + 1 < glyph_blink_faces.length() { glyph_blink_faces[i + 1] } else { glyph_blink_period }
-        let eye = glyph_blink_eye(from)
-        let shown = c.layer(fn() {
-          draw_drawable(c, "glyph-face/\{eye}/" + key, { w: 24.0, h: 24.0, layers: [face(eye)] }, size, None) |> ignore
-        })
-        c.cycle_look(
-          shown,
-          glyph_blink_period,
-          fn(f) {
-            // (the step of the clock it is at, in the blink's loop)
-            let t = (f * glyph_blink_period / @ui.cycle_step_ms).round() * @ui.cycle_step_ms
-            @ui.look(alpha=if t >= from && t < to { 1.0 } else { 0.0 })
-          },
-          resident=true,
-        )
-      }
-    }
+    let breath = c.layer(fn() {
+      draw_drawable(c, "glyph-breath/" + key, { w: 24.0, h: 24.0, layers: breaths }, size, None) |> ignore
+    })
+    c.cycle_look(
+      breath,
+      glyph_breath_period,
+      fn(f) {
+        let p = f * 2.0
+        let p = if p < 1.0 { p } else { 2.0 - p }
+        @ui.look(alpha=((glyph_track + (0.85 - glyph_track) * standard_at(p)) * 20.0).round() / 20.0)
+      },
+      resident=true,
+    )
   })
-}
-
-///|
-/// How open the robot's eyes are at step `t` of its blink's loop (ms; open most of the time, shut from 2288 ms: down
-/// over 130 ms, up over 182), in tenths.
-fn glyph_blink_eye(t : Double) -> Double {
-  if t < 2288.0 {
-    return 1.0
-  }
-  let eye = if t < 2418.0 { 1.0 - 0.9 * (t - 2288.0) / 130.0 } else { 0.1 + 0.9 * (t - 2418.0) / 182.0 }
-  (eye * 10.0).round() / 10.0
 }
 
 ///|
