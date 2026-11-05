@@ -118,6 +118,51 @@ test("a membership replaced behind an old-session cursor is not missed", () => {
   } finally { store.close(); }
 });
 
+test("a changed thread does not inspect memberships of unprepared sessions", () => {
+  const counts: number[] = [];
+  for (const others of [40, 400]) {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      const thread = store.openThread("slack", "C", "shared", null, null);
+      store.joinThread(thread.id, "tracked", "slack");
+      db.exec("BEGIN");
+      for (let n = 0; n < others; n++) store.joinThread(thread.id, `other-${n}`, "slack");
+      db.exec("COMMIT");
+      let visited = 0, instrumented = false;
+      db.function("latest_thread_member_visited", (session) => { visited++; return session; });
+      const tables = ["thread_sessions", "latest_thread_members"];
+      const proxy = new Proxy(db, {
+        get(target, property) {
+          if (property === "exec") return (sql: string) => {
+            for (const table of tables) {
+              const from = `SELECT m.session,m.thread FROM ${table} m WHERE m.thread IN (`;
+              const into = `SELECT m.session,m.thread FROM ${table} m WHERE latest_thread_member_visited(m.session)=m.session AND m.thread IN (`;
+              if (sql.includes(from)) { instrumented = true; sql = sql.replaceAll(from, into); }
+            }
+            return target.exec(sql);
+          };
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      installLatestThreadIndex(proxy);
+      assert.equal(instrumented, true);
+      prepare(store, "tracked");
+      const table = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='latest_thread_members'").get()
+        ? "latest_thread_members" : "thread_sessions";
+      const plain = `SELECT m.session,m.thread FROM ${table} m WHERE m.thread IN (?)`;
+      const observed = `SELECT m.session,m.thread FROM ${table} m WHERE latest_thread_member_visited(m.session)=m.session AND m.thread IN (?)`;
+      const plan = (sql: string) => db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(thread.id).map((r) => r.detail);
+      assert.deepEqual(plan(observed), plan(plain), "counting preserves the membership query's plan");
+      visited = 0;
+      db.prepare("DELETE FROM threads WHERE id=?").run(thread.id);
+      assert.equal(indexedLatestThread(db, "tracked"), null);
+      counts.push(visited);
+    } finally { store.close(); }
+  }
+  assert.deepEqual(counts, [1, 1]);
+});
+
 for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
   test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
