@@ -596,10 +596,7 @@ fn scene_told(
               None => ()
             }
         }
-      Some(l) => {
-        if scene_probe.val { println("PROBE mark \{l.at}.\{l.gen} by \{id.at}.\{id.gen} moved=\{moved} placed=\{placed}") }
-        scene_mark(l)
-      }
+      Some(l) => scene_mark(l)
       None => ()
     }
   }
@@ -2466,6 +2463,3 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
   }
   None
 }
-
-///|
-pub let scene_probe : Ref[Bool] = Ref(false)
