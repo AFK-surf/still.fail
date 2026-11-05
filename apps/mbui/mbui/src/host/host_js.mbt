@@ -148,6 +148,10 @@ fn set_window_key(_f : FuncRef[(Int, Int) -> Int]) -> Unit {
 }
 
 ///|
+extern "js" fn wheel_kept(kept : Bool) -> Unit =
+  #|(k) => { if (globalThis.__mbhost) globalThis.__mbhost.wheelKept = k }
+
+///|
 fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],

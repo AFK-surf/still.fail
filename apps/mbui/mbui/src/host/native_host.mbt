@@ -16,6 +16,11 @@ impl @hostapi.Host for Native with set_window_key(_, f) {
 }
 
 ///|
+impl @hostapi.Host for Native with wheel_kept(_, kept) {
+  wheel_kept(kept)
+}
+
+///|
 fn init {
   @hostapi.set_host(Native::{  })
 }

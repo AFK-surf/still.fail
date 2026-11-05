@@ -455,6 +455,12 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 }
 
 ///|
+/// (a window's wheel is the app's alone: no page under it zooms by one it kept nothing of)
+fn wheel_kept(_kept : Bool) -> Unit {
+  ()
+}
+
+///|
 fn window_hold() -> Unit {
   ffi_window_hold()
 }
