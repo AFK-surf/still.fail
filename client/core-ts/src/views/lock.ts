@@ -521,7 +521,7 @@ export function lockView(inner: Inner, ws: string): J {
     return {
       id: d.id, kind, label, signs: trusted, older, mine, daysLeft: left,
       renewSoon: typeof d.exp === "number" && d.exp - at < RENEW_SECS,
-      recent, lastSeen,
+      recent, lastSeen, usedText: used,
       // taken out of the lock by this device, where it signs and may (owners and admins any but this one, members
       // their own others)
       removable: signs && !mine && (manages || d.sub === sub),
@@ -567,6 +567,24 @@ export function lockView(inner: Inner, ws: string): J {
   // was turned on were; or its key since lost): it may be made one that signs, approved face to face as a new one is.
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
+  const pair = locked && (mine === undefined || unsigned) ? pairs.mine(inner, ws) : null;
+  // The devices its try dials here, as people know them (which machine and app, when last used), the most lately used
+  // first, those showing a code before them: the person opens still.fail on one of those (2026-11-05: "到底是哪个设备会
+  // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing).
+  if (pair !== null && Array.isArray(pair.approvers)) {
+    pair.approvers = pair.approvers
+      .map((a: J) => {
+        const d = f.devices.get(a.id);
+        const v = d === undefined ? null : device(d);
+        return { id: a.id, showing: a.showing === true, nameText: v?.fullText ?? t("web-pages.security.appDevice"), usedText: v?.usedText ?? null, lastSeen: v?.lastSeen ?? null };
+      })
+      .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
+    // In words, for the page: which to open (all of them, while it looks), which show a code now.
+    const names = (list: J[]) => list.map((a) => a.nameText).join(t("core-misc.lock.listSep"));
+    const showing = pair.approvers.filter((a: J) => a.showing);
+    if (pair.approvers.length > 0) pair.approversText = t("core-misc.lock.pairApprovers", { names: names(pair.approvers) });
+    if (showing.length > 0) pair.showingText = t("core-misc.lock.pairShowingOn", { names: names(showing) });
+  }
   return {
     available: true,
     locked,
@@ -585,7 +603,7 @@ export function lockView(inner: Inner, ws: string): J {
       waiting: locked && base !== null && mine === undefined,
       ...(unsigned ? { unsigned: true } : {}),
       // Its try to be approved face to face (views/pair.ts), once it began.
-      pair: locked && (mine === undefined || unsigned) ? pairs.mine(inner, ws) : null,
+      pair,
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,

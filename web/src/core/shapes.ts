@@ -4755,6 +4755,23 @@ export interface Live {
 	offline?: boolean;
 }
 
+/**
+ * A trusted device that may approve this one, which this one dials while it waits: those showing a code
+ * first, then the most lately used.
+ */
+export interface LockApprover {
+	/** Its key (its iroh id). */
+	id: string;
+	/** It shows a code for this device now (to type here). */
+	showing: boolean;
+	/** Its machine and its app in a line, as people know it (LockDevice `fullText`). */
+	nameText: string;
+	/** When it was last used, in words (LockDevice `usedText`). */
+	usedText?: string;
+	/** When it last asked the cloud for a credential (s). */
+	lastSeen?: number;
+}
+
 /** A device in the workspace's lock: this one first, then the most lately used. */
 export interface LockDevice {
 	id: string;
@@ -4776,6 +4793,11 @@ export interface LockDevice {
 	 * may not know, or it has not in 31 days.
 	 */
 	lastSeen?: number;
+	/**
+	 * This device, or when it was last used, in words (一天内使用过, 3 天前使用过, 超过一个月未使用); none where the
+	 * viewer may not know.
+	 */
+	usedText?: string;
 	/**
 	 * This device may take it out of the lock (`lock.removeDevice`): it signs, the device is another, and the
 	 * viewer's own or the viewer manages the workspace.
@@ -4860,8 +4882,9 @@ export interface LockGroup {
 /** This device's try to be approved face to face (views/pair.ts). */
 export interface LockPair {
 	/**
-	 * `finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,
-	 * `wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`.
+	 * `finding` (dialling the person's trusted devices: each not reached again every PAIR_REDIAL_MS,
+	 * PAIR_DIAL_TRIES times), `code` (one shows a code: type it; the others still dialled), `checking`, `wrong` (that code
+	 * was not it), `none` (none showed a code: each reached, or not in its tries), `failed` (`error`), `done`.
 	 */
 	state: string;
 	/** How many trusted devices show a code now. */
@@ -4874,6 +4897,12 @@ export interface LockPair {
 	until?: number;
 	/** That, in words (14:05 前有效). */
 	untilText?: string;
+	/** The trusted devices it dials here: open still.fail on one of those (none from a core of before). */
+	approvers?: LockApprover[];
+	/** Those in words, for its page (在任意一台上打开 still.fail 就会弹出安全码：…); none where it dials none. */
+	approversText?: string;
+	/** Those showing a code now, in words (安全码弹在：…); none where none does. */
+	showingText?: string;
 }
 
 /** This device in the workspace's lock. */

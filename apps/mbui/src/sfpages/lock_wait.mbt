@@ -42,8 +42,17 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     })
     |> ignore
   }
+  // the core's words for the devices it dials (approversText: which to open) and those showing a code now
+  // (showingText: where to look), each a line of its own where it says any (2026-11-05: 「到底是哪个设备会弹出来呀？」)
+  let said = fn(key : String) {
+    match text(pair, key) {
+      "" => ()
+      words => note(words, false)
+    }
+  }
   if state == "code" || state == "wrong" || state == "checking" {
     note(@sf.t("web-pages.security.pairEnter"), false)
+    said("showingText")
     let key = "lock-code/" + ws
     // six boxes, three and three (CodeEntry), handed on once a code is typed; refused, they empty for the next try
     let typed = c.code_field(
@@ -92,9 +101,13 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     }
   } else if state == "finding" || asking {
     note(@sf.t("web-pages.security.pairFinding"), true)
+    said("approversText")
   } else {
     match state {
-      "none" => note(@sf.t("web-pages.security.pairNone"), false)
+      "none" => {
+        note(@sf.t("web-pages.security.pairNone"), false)
+        said("approversText")
+      }
       "failed" => c.text(text(pair, "error"), style=lock_failed) |> ignore
       _ =>
         note(
