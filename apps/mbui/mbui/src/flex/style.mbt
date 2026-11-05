@@ -1041,6 +1041,9 @@ pub(all) struct Node {
   // when the node's style, measure function or children change, and on
   // every node above it; its sizes are then found again.
   mut dirty : Bool
+  // the grid (device pixels a point) the compute it is the root of was last placed on: what a compute on another
+  // grid finds of what that one kept (compute)
+  mut laid_grid : Double
   // its last layout (perform), while not dirty: what it was asked (known
   // size, containing block) and what it came to
   mut p_ok : Bool
@@ -1091,6 +1094,7 @@ pub fn Node::new() -> Node {
     box_ver: -1,
     dirty: true,
     p_ok: false,
+    laid_grid: 0.0,
     p_gen: -1,
     p_kw: 0.0,
     p_kh: 0.0,

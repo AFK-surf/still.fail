@@ -374,7 +374,10 @@ pub fn compute(
   grid? : Double = 0.0,
 ) -> Unit {
   generation.val = generation.val + 1
-  reusing.val = reuse && !round && grid == placing_grid.val
+  // (what this root's compute last kept, kept on its own grid: another tree's on another grid between (an old view's on
+  // whole pixels and the window's tree) changes nothing of it)
+  reusing.val = reuse && !round && grid == root.laid_grid
+  root.laid_grid = grid
   placing_grid.val = grid
   absolute_seen.val = false
   let b = box_of(root.style, width, height)
