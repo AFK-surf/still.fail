@@ -102,6 +102,11 @@ struct TextCache {
   // the frame being drawn, and the last that let go of what was shaped longest ago (shapes_thin)
   mut frame : Int
   mut thinned : Int
+  // whether this frame had a glyph with no room in the atlas, the last frame that started the atlases over for one, and
+  // whether a whole atlas was too little for what is on the screen (none_short)
+  mut short : Bool
+  mut started_over : Int
+  mut too_much : Bool
   buf : FixedArray[Double]
   gbuf : FixedArray[Double]
 }
@@ -118,6 +123,9 @@ let text_cache : TextCache = {
   generation: -1,
   frame: 0,
   thinned: -1,
+  short: false,
+  started_over: -1,
+  too_much: false,
   buf: FixedArray::make(4 * 8192, 0.0),
   gbuf: FixedArray::make(8, 0.0),
 }
@@ -155,7 +163,36 @@ fn text_frame() -> Bool {
       return true
     }
   }
+  none_short()
   false
+}
+
+///|
+/// The atlases started over where the last frame had a glyph with no room in them. A plot is emptied only if the frame
+/// draws nothing from it, and glyphs placed at different times lie across the plots: with a glyph on the screen in each,
+/// no new one gets a place, frame after frame, until what is on the screen changes (words with gaps in them). Started
+/// over, what is on the screen lies together. Where the frame right after was short too, an atlas holds less than is on
+/// the screen: not started over again until a frame is not (it would draw them all every frame, and none would stay).
+fn none_short() -> Unit {
+  let short = text_cache.short
+  text_cache.short = false
+  if !short {
+    text_cache.too_much = false
+  } else if text_cache.started_over == text_cache.frame - 1 {
+    text_cache.too_much = true
+  } else if !text_cache.too_much {
+    text_cache.started_over = text_cache.frame
+    glyphs_forget()
+    // (the same numbers may come out of other pixels, as where the generation moves on)
+    presented.forget()
+  }
+}
+
+///|
+/// Whether the frame just drawn left a glyph out that the next, starting the atlases over, will draw: a frame owed
+/// though nothing else changes.
+fn glyphs_short_owed() -> Bool {
+  text_cache.short && !text_cache.too_much && text_cache.started_over != text_cache.frame
 }
 
 ///|
@@ -936,7 +973,7 @@ let glyph_scale_told : Ref[Bool] = Ref(false)
 ///|
 /// Glyph `key` as it is drawn at `sc` pixels a point: where it is in the atlas, drawn from in this frame. One not in it
 /// is drawn by the host and put there (its pixels its size at `sc`), in place of the glyphs drawn from longest ago where
-/// it is full (@hostapi.Atlas); with no room while this frame is drawn, it is not drawn in it (asked for again by the
+/// it is full (@hostapi.Atlas); with no room while this frame is drawn, it is not drawn in it (none_short, for the
 /// next). One put there at another scale is drawn and put again: its cell at this one would take in what lies beside it.
 fn glyph(key : Int, sc : Double) -> Glyph {
   match text_cache.glyphs.get(key) {
@@ -987,6 +1024,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
         }
         // (no room while this frame is drawn: what is made to be kept made again once there is, glyphs_still)
         None => {
+          text_cache.short = true
           glyph_kept(key, { ..no_glyph, u: -1.0, v: -1.0 })
           no_glyph
         }

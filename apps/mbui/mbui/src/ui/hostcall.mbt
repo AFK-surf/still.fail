@@ -730,8 +730,8 @@ fn h_glyph_put(key : Int, x : Int, y : Int) -> Unit {
 }
 
 ///|
-/// The side of a fake host's atlas: Android's and Windows' (its glyphs placed in it as a host's are), colour glyphs in
-/// it with the others.
+/// The side of a fake host's atlas: the web's (its glyphs placed in it as a host's are), colour glyphs in it with the
+/// others.
 let fake_atlas_size : Int = 2048
 
 ///|

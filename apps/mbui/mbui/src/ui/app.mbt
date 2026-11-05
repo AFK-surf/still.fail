@@ -166,7 +166,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let held = bench.held
   bench.held = false
   looks_left(c, held)
-  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() {
+  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() || glyphs_short_owed() {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
