@@ -329,6 +329,15 @@ fn Spr::value_at(self : Spr, t : Double) -> Double {
 }
 
 ///|
+/// Where it is as `c` paints and how fast: said to move while it goes (painted again each frame till its end, as
+/// Glide::painted is), its way read at the frame's moment.
+fn Spr::painted(self : Spr, c : @ui.Ctx) -> (Double, Double) {
+  let t = c.moment()
+  c.shows_motion(bar_clock.mover, t < self.end())
+  self.at(t)
+}
+
+///|
 /// There at once, at rest.
 fn Spr::put(self : Spr, x : Double) -> Unit {
   match self.ride {
@@ -1194,37 +1203,24 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, tint : Tin
       _ => @sf.icon(c, name, size=28.0, color~)
     }
   }
-  // the lit picture over it as opaque as it is lit: as it is, or as each frame is painted (`by`)
-  let lit_over = fn(v : Double, by : (() -> @ui.Look)?) {
-    c.layer(align=ACenter, fn() {
-      let over = c.box(h=Fill(1.0), justify=JCenter, opacity=v, fn() { icon(lit) |> ignore })
-      match by {
-        Some(f) => c.look_by(over, f)
-        None => ()
-      }
+  // how lit it is as each frame is painted: as it is, or on its way (its glide's)
+  let lit_now = match tint {
+    Lit(v) => fn() { v }
+    Going(g) => fn() { g.painted(@ui.current()) }
+  }
+  // both pictures, still or on its way, each shown as it is as each frame is painted (the idle one gone once nearly
+  // lit, the lit one as opaque as it is lit, gone once nearly dim): one come to rest lit or dim is built as it was on
+  // its way, nothing built again for it
+  let shown = icon(idle)
+  c.look_by(shown, fn() { @ui.look(alpha=if lit_now() < 0.999 { 1.0 } else { 0.0 }) })
+  c.layer(align=ACenter, fn() {
+    let over = c.box(h=Fill(1.0), justify=JCenter, fn() { icon(lit) |> ignore })
+    c.look_by(over, fn() {
+      let v = lit_now()
+      @ui.look(alpha=if v > 0.001 { v } else { 0.0 })
     })
-    |> ignore
-  }
-  match tint {
-    Lit(v) => {
-      if v < 0.999 {
-        icon(idle) |> ignore
-      }
-      if v > 0.001 {
-        lit_over(v, None)
-      }
-    }
-    // on its way: both pictures, each shown as it is as each frame is painted (the idle one gone once nearly lit, the lit
-    // one as opaque as it is lit, gone once nearly dim), as they are built when it is still
-    Going(g) => {
-      let shown = icon(idle)
-      c.look_by(shown, fn() { @ui.look(alpha=if g.painted(@ui.current()) < 0.999 { 1.0 } else { 0.0 }) })
-      lit_over(1.0, Some(fn() {
-        let v = g.painted(@ui.current())
-        @ui.look(alpha=if v > 0.001 { v } else { 0.0 })
-      }))
-    }
-  }
+  })
+  |> ignore
   if dot != 0L {
     c.layer(align=ACenter, fn() {
       c.box(h=Fill(1.0), justify=JCenter, fn() {
@@ -1668,30 +1664,27 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // that moment, whichever frames came
   m.sample()
   let now = bar_clock.now
-  // what goes is read in the phase that draws it. The notch opening or closing, each place lighting up or going dim
-  // and the bar going down or coming back change only how it is painted: read as each frame is painted, where they
-  // are drawn (BarModel::k_painted, Glide::painted), this built once for them, as where they go is told, and again as
-  // they end (what shows of it then: a disc gone with the notch closed). The panel, the ball (its size and its stretch
-  // are its shape), its lens, a bar chosen landing and the notch's icon swapping are read here: built each frame
+  // what goes is read in the phase that draws it. The notch opening or closing, each place lighting up or going dim,
+  // the bar going down or coming back or drawn up, the ball going, coming, held and let go (where it is, how big, its
+  // stretch, how faint), its lens and the notch's icon swapping change only how it is painted: read as each frame is
+  // painted, where they are drawn (BarModel::k_painted, Glide::painted, Spr::painted), this built once for them, as
+  // where they go is told, and again as they end (what shows of it then: a disc gone with the notch closed, the ball
+  // gone, the lens let go, the icon swapped out). The panel and a bar chosen landing are read here: built each frame
   // they go.
-  c.shows_motion(
-    bar_clock.mover,
-    dmax(
-      m.o.end(),
-      dmax(
-        dmax(m.held.end(), m.up.end()),
-        dmax(
-          dmax(m.ball_x.end(), m.ball_y.end()),
-          dmax(dmax(m.ball_alpha.end(), m.ball_scale.end()), m.icon_swap.end()),
-        ),
-      ),
-    ) >
-    now,
-  )
-  // (each as it ends, whichever ends first: what shows of each then is built at its own end)
-  let ends = [m.k.end(), m.o.end(), m.up.end(), m.vis.end()]
-  for _, g in m.tints {
-    ends.push(g.end())
+  c.shows_motion(bar_clock.mover, m.o.end() > now)
+  // (each as it ends, whichever ends first, where what shows of it then is built otherwise: built at its own end. The
+  // notch at rest, laid out and pressed where it rests; the bar gone; the ball gone; the lens let go; the icon swapped
+  // out. One that comes to rest showing is drawn as it rests by what painted it on its way: nothing built for it, a
+  // place come to be lit or dim too, its two pictures one of them drawn faint to nothing, place_face.)
+  let ends = [m.k.end(), m.o.end(), m.up.end(), m.icon_swap.end()]
+  if m.vis.target < 1.0 {
+    ends.push(m.vis.end())
+  }
+  if m.ball_alpha.target <= 0.0 {
+    ends.push(m.ball_alpha.end())
+  }
+  if m.held.to <= 0.01 {
+    ends.push(m.held.end())
   }
   for e in ends {
     if e > now {
@@ -1748,7 +1741,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   bar_action_anchor.val = action_id
   ignore(place_add)
   // the notch's icon: another one swaps in as the notch stays open (a short scale and fade); closed, at once
-  let swap_icon = show_icon(c)
+  let swap_icon = bar.icon_swap.value < bar.icon_swap.target
   let mut holder = -1
   c.layer(fn() {
     c.spacer()
@@ -1789,50 +1782,52 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
               Some(n) if k_moves || k_now > 0.9 => c.presses_to_node(n)
               _ => ()
             }
-            // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays
-            let v = swap_icon
+            // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays (how far, as
+            // each frame is painted)
             let css : @ui.Ease = Out
             let arrive : @ui.Ease = Out
             // (the one going out drawn while the swap goes, by the swap's time alone)
-            if bar.icon_was != "" && v < 1.0 {
-              let p = css.at(dclamp(v * 300.0 / 120.0, 0.0, 1.0))
+            if bar.icon_was != "" && swap_icon {
               let old = action_icon(c, bar.icon_was)
-              c.look(old, @ui.look(alpha=1.0 - p, scale=1.0 - 0.5 * p))
+              c.look_by(old, fn() {
+                let p = css.at(dclamp(bar.icon_swap.painted(@ui.current()) * 300.0 / 120.0, 0.0, 1.0))
+                @ui.look(alpha=1.0 - p, scale=1.0 - 0.5 * p)
+              })
               @motion.leaving(c, old, false)
             }
             if face != "" {
-              let ms = v * 300.0
               let now = action_icon(c, face)
-              if ms < 300.0 {
-                c.look(
-                  now,
-                  @ui.look(
-                    alpha=css.at(dclamp((ms - 60.0) / 180.0, 0.0, 1.0)),
-                    scale=0.5 + 0.5 * arrive.at(dclamp((ms - 60.0) / 240.0, 0.0, 1.0)),
-                  ),
-                )
+              if swap_icon {
+                c.look_by(now, fn() {
+                  let ms = show_icon(@ui.current()) * 300.0
+                  if ms < 300.0 {
+                    @ui.look(
+                      alpha=css.at(dclamp((ms - 60.0) / 180.0, 0.0, 1.0)),
+                      scale=0.5 + 0.5 * arrive.at(dclamp((ms - 60.0) / 240.0, 0.0, 1.0)),
+                    )
+                  } else {
+                    @ui.look()
+                  }
+                })
               }
             }
           },
         )
         disc_look(c, disc, action_moves, k_now, m.up.x)
       }
-      // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does
-      let scale = (1.0 + 0.06 * m.held.x) * m.ball_scale.value
-      let v = if (m.ball_x.to - m.ball_x.x).abs() < 0.5 { 0.0 } else { m.ball_x.v / 60.0 }
-      let (stretch, lower) = @kit.speed_stretch(v)
-      let bw = ball_size + stretch
-      let bh = ball_size - lower
-      let left = m.ball_x.x - ball_size / 2.0 - (if v < 0.0 { stretch } else { 0.0 })
-      let bcx = left + bw / 2.0
-      let sw = bw * scale
-      let sh = bh * scale
-      if m.ball_alpha.value > 0.0 {
-        let ball = at(c, bcx - sw / 2.0, m.ball_y.x - sh / 2.0, sw, sh, body=fn() {
+      // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does.
+      // Laid out round where it goes, at rest; where it is, how big, its stretch and how faint as each frame is
+      // painted (ball_at)
+      let ball_x0 = m.ball_x.to
+      let ball_y0 = m.ball_y.to
+      let ball_in = m.ball_alpha.target > 0.0 || m.ball_alpha.end() > now
+      let solid = c.glass_solid()
+      if ball_in {
+        let ball = at(c, ball_x0 - ball_size / 2.0, ball_y0 - ball_size / 2.0, ball_size, ball_size, body=fn() {
           c.box(
             w=Fill(1.0),
             h=Fill(1.0),
-            radius=dmin(sw, sh) / 2.0,
+            radius=ball_size / 2.0,
             glass=@sf.glass_bar_ball().sharing(),
             shadow=4.0,
             shadow_y=1.0,
@@ -1841,12 +1836,18 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           )
           |> ignore
         })
-        // (held, the lens over the places takes its place: it fades as the lens comes)
-        let lensed = if c.glass_solid() { 0.0 } else { dmin(1.0, m.held.x) }
-        let ball_shows = m.ball_alpha.value * (1.0 - lensed)
-        if ball_shows < 1.0 {
-          c.look(ball, @ui.look(alpha=ball_shows))
-        }
+        c.look_by(ball, fn() {
+          let b = ball_at(@ui.current())
+          // (held, the lens over the places takes its place: it fades as the lens comes)
+          let lensed = if solid { 0.0 } else { dmin(1.0, b.held) }
+          @ui.look(
+            alpha=b.alpha * (1.0 - lensed),
+            sx=b.sw / ball_size,
+            sy=b.sh / ball_size,
+            dx=b.cx - ball_x0,
+            dy=b.cy - ball_y0,
+          )
+        })
       }
       match swap {
         None => {
@@ -1889,14 +1890,26 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       }
       // the ball in the finger: a lens of liquid glass over the places as it is held (as it grows), what is under its
       // rim bent; gone as it is let go. Where glass is solid there is nothing to bend: the ball alone.
-      if m.held.x > 0.01 && m.ball_alpha.value > 0.0 && !c.glass_solid() {
-        let grow = 1.0 + lens_grow * m.held.x
-        let lw = sw * grow
-        let lh = sh * grow
-        let lens = at(c, bcx - lw / 2.0, m.ball_y.x - lh / 2.0, lw, lh, body=fn() {
+      // (laid out as the ball is, drawn as it is held as each frame is painted; none as it rests let go)
+      if (m.held.to > 0.01 || m.held.end() > now) && ball_in && !solid {
+        let lens = at(c, ball_x0 - ball_size / 2.0, ball_y0 - ball_size / 2.0, ball_size, ball_size, body=fn() {
           c.box(style=lens_box, glass=@sf.glass_lens(), fn() {  }) |> ignore
         })
-        c.look(lens, @ui.look(alpha=dmin(1.0, m.held.x) * m.ball_alpha.value))
+        c.look_by(lens, fn() {
+          let b = ball_at(@ui.current())
+          if b.held > 0.01 && b.alpha > 0.0 {
+            let grow = 1.0 + lens_grow * b.held
+            @ui.look(
+              alpha=dmin(1.0, b.held) * b.alpha,
+              sx=b.sw * grow / ball_size,
+              sy=b.sh * grow / ball_size,
+              dx=b.cx - ball_x0,
+              dy=b.cy - ball_y0,
+            )
+          } else {
+            @ui.look(alpha=0.0)
+          }
+        })
       }
       match swap {
         None => ()
@@ -1978,34 +1991,66 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // going down out of the way and back up: drawn so, laid out where it rests; going, it takes nothing
   // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
   // drawn up out from under a finger that has the bar: drawn so, a finger taken where it is laid out
-  let raised = bar_raise(c.height, foot, panel, status_top()) * m.up.x
-  // Keep the painted look until its declared end, when the build is scheduled again. The sampled value can round
-  // to 1 a fraction before then; dropping the look at that instant would make a kept build differ from a fresh one.
-  if now < m.vis.end() || m.vis.target < 1.0 {
-    let vis = m.vis
-    c.look_by(holder, fn() {
-      let v = vis.painted(@ui.current())
-      if v != vis.target {
-        @motion.log_frame(@ui.current(), "bar/vis", "value=\{v} to=\{vis.target}")
-      }
-      @ui.look(alpha=v, dy=(1.0 - v) * bar_drop - raised)
-    })
-  } else if raised != 0.0 {
-    c.look(holder, @ui.look(dy=-raised))
-  }
+  let raise_by = bar_raise(c.height, foot, panel, status_top())
+  // (painted so whether it goes or rests: what is built the same either way, nothing built again as it comes to rest)
+  let vis = m.vis
+  let up = m.up
+  c.look_by(holder, fn() {
+    let v = vis.painted(@ui.current())
+    if v != vis.target {
+      @motion.log_frame(@ui.current(), "bar/vis", "value=\{v} to=\{vis.target}")
+    }
+    let raised = raise_by * up.painted(@ui.current()).0
+    @ui.look(alpha=v, dy=(1.0 - v) * bar_drop - raised)
+  })
   @motion.leaving(c, holder, shown)
 }
 
 ///|
-/// How far the notch's icon's swap is this frame (0 to 1; bar_tell sets it out: another one swapping in for the one
+/// The ball as `c` paints: its middle, its size (stretched by its speed toward where it goes, grown as it is held and
+/// as it comes), how faint, how held.
+priv struct BallAt {
+  cx : Double
+  cy : Double
+  sw : Double
+  sh : Double
+  alpha : Double
+  held : Double
+}
+
+///|
+fn ball_at(c : @ui.Ctx) -> BallAt {
+  let m = bar
+  let held = m.held.painted(c).0
+  let (x, xv) = m.ball_x.painted(c)
+  let y = m.ball_y.painted(c).0
+  let scale = (1.0 + 0.06 * held) * m.ball_scale.painted(c)
+  let v = if (m.ball_x.to - x).abs() < 0.5 { 0.0 } else { xv / 60.0 }
+  let (stretch, lower) = @kit.speed_stretch(v)
+  let bw = ball_size + stretch
+  let bh = ball_size - lower
+  let left = x - ball_size / 2.0 - (if v < 0.0 { stretch } else { 0.0 })
+  {
+    cx: left + bw / 2.0,
+    cy: y,
+    sw: bw * scale,
+    sh: bh * scale,
+    alpha: m.ball_alpha.painted(c),
+    held,
+  }
+}
+
+///|
+/// How far the notch's icon's swap is as `c` paints (0 to 1; bar_tell sets it out: another one swapping in for the one
 /// shown, Bar.kt showIcon: 300 ms on the bar's clock, linear; the one going out by 120 ms, the one coming in from 60 ms;
 /// at once when none was shown or the notch was closed). Read only.
 fn show_icon(c : @ui.Ctx) -> Double {
   let sw = bar.icon_swap
-  if sw.value != sw.target {
-    @motion.log_frame(c, "bar/icon-swap", "value=\{sw.value} to=1")
+  let v = sw.painted(c)
+  if v != sw.target {
+    @motion.log_frame(c, "bar/icon-swap", "value=\{v} to=1")
   }
-  sw.value
+  v
 }
 
 ///|
