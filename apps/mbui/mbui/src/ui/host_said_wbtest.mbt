@@ -103,3 +103,37 @@ test "panic: two holders of one kind of what the host has once abort" {
   })
   _t.draw()
 }
+
+///|
+test "what the host has once handed on writes what another node's reaction follows, that reading where it is laid out: no fault, it told where" {
+  let host = OnceHad::new()
+  let flash = @signals.signal(0)
+  let seen : Array[(Int, Bool)] = []
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(Is(Some(100.0))).height(Is(Some(40.0))) |> ignore
+      // (another node's own reaction: what it follows read as told last)
+      b.reacts(fn() { (flash.get(), b.laid_window_told()) }, fn(now) { seen.push((now.0, now.1 is Some(_))) })
+    })
+    |> ignore
+    on_host_said(root, kind="notice-opened", fn() { host.said() }, fn(_) { flash.set(1) })
+  })
+  t.draw()
+  t.draw()
+  host.had.val = Some("opened")
+  t.draw()
+  assert_eq(seen.last(), Some((1, true)))
+}
+
+///|
+test "panic: what is laid out read by what is handed on itself, laid_window_told, aborts" {
+  let host = OnceHad::new()
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    on_host_said(root, kind="notice-opened", fn() { host.said() }, fn(_) { root.laid_window_told() |> ignore })
+  })
+  t.draw()
+  host.had.val = Some("opened")
+  t.draw()
+}

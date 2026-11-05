@@ -7758,8 +7758,10 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
 pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit) -> Unit {
   // (made, and done each time, owned by the node's scope: what it makes let go with the node, its watch none of what
   // was running as it was said, whose running again would let it go)
+  // (its own reads, of what is laid out too: as told last, what it follows; never another's that a write set it off
+  // in, what is laid out shut there, @ui.on_host_said's: reads_own)
   self.owning(fn() {
-    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) })
+    let stop = self.tree.structured(fn() { reads_own(read) }, fn(v) { self.owning(fn() { reads_own(fn() { f(v) }) }) })
     self.owns(stop) |> ignore
   })
 }
@@ -8259,6 +8261,17 @@ pub fn shut_layout_reads(why : String?) -> String? {
   let was = layout_reads_shut.val
   layout_reads_shut.val = why
   was
+}
+
+///|
+/// `g` done as one of a node's own (View::reacts): what is laid out open to it, as told last, wherever a write set it off
+/// (what a hand-off shut it in, shut_layout_reads, stays shut for that hand-off's own reads), shut again after it.
+fn[T] reads_own(g : () -> T) -> T {
+  let was = layout_reads_shut.val
+  layout_reads_shut.val = None
+  let r = g()
+  layout_reads_shut.val = was
+  r
 }
 
 ///|
