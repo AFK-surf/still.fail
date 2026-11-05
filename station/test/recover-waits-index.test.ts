@@ -3,8 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { installRecoverWaits, recoverWaitsReady, recoverWaitsStep, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
 
-function fixture() {
-  const db = new DatabaseSync(":memory:");
+function fixture(path = ":memory:") {
+  const db = new DatabaseSync(path);
   db.exec(`CREATE TABLE sessions (key TEXT PRIMARY KEY, token TEXT NOT NULL UNIQUE, running INTEGER NOT NULL DEFAULT 0,
       archived_at INTEGER, last_active_at INTEGER NOT NULL);
     CREATE TABLE turns (id TEXT PRIMARY KEY, session_key TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
@@ -106,6 +106,32 @@ test("a failed batch rolls its entries and cursor back together", () => {
   } finally { db.close(); }
 });
 
+test("statements prepared by the previous station keep the lookup current during and after backfill", async () => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "recovery-previous-writer-"));
+  const path = join(dir, "station.db");
+  const { db, session, turn, actual } = fixture(path);
+  const old = new DatabaseSync(path);
+  try {
+    session("a"); session("b");
+    turn("a-turn", "a", 1, "waiting"); turn("b-turn", "b", 1, "all_done");
+    const write = old.prepare("UPDATE turns SET declared=? WHERE id=?");
+    const archive = old.prepare("UPDATE sessions SET archived_at=? WHERE key=?");
+    installRecoverWaits(db);
+    assert.deepEqual(recoverWaitsStep(db, 1), { done: false, visited: 1 });
+    write.run("all_done", "a-turn");
+    write.run("waiting", "b-turn");
+    while (!recoverWaitsReady(db)) recoverWaitsStep(db, 1);
+    assert.deepEqual(actual(), ["b"]);
+    archive.run(2, "b");
+    assert.deepEqual(actual(), []);
+    archive.run(null, "b");
+    assert.deepEqual(actual(), ["b"]);
+  } finally { old.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the lookup agrees with the original latest-turn rule across changing sessions and turns", () => {
   for (const seed of [1, 9, 73]) {
     const { db, session, query } = fixture();
@@ -139,6 +165,32 @@ test("the lookup agrees with the original latest-turn rule across changing sessi
       }
     } finally { db.close(); }
   }
+});
+
+test("starting a session or declaring a running turn adds no lookup writes when no wait is recoverable", async () => {
+  const { mkdtempSync, rmSync, statSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "recovery-wait-wal-"));
+  try {
+    const measure = (withLookup: boolean, operation: "session" | "declare") => {
+      const path = join(dir, `${withLookup}-${operation}.db`);
+      const { db, session, turn } = fixture(path);
+      try {
+        db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0");
+        session("running");
+        db.prepare("UPDATE sessions SET running=1 WHERE key='running'").run();
+        turn("current", "running", 1, null, "completed", null, null);
+        if (withLookup) installRecoverWaits(db);
+        db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        if (operation === "session") session("new");
+        else db.prepare("UPDATE turns SET declared='waiting' WHERE id='current'").run();
+        return statSync(`${path}-wal`).size;
+      } finally { db.close(); }
+    };
+    for (const operation of ["session", "declare"] as const)
+      assert.equal(measure(true, operation), measure(false, operation), operation);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("recovery and backfill use the waiting lookup and bounded session seeks", () => {

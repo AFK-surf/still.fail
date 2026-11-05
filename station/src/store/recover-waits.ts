@@ -14,7 +14,7 @@ const reconcile = (stage: string) => `DELETE FROM session_recover_waits WHERE se
     AND NOT (${wanted("session_recover_waits.session")});
   INSERT INTO session_recover_waits (session) SELECT r.session FROM ${stage} r WHERE ${wanted("r.session")}
     AND NOT EXISTS (SELECT 1 FROM session_recover_waits w WHERE w.session = r.session);
-  DELETE FROM ${stage};`;
+  DELETE FROM ${stage} WHERE session IS NOT NULL;`;
 
 export const RECOVER_WAITS = `SELECT s.*, t.outcome AS recovery_outcome, t.detail AS recovery_detail
   FROM session_recover_waits w CROSS JOIN sessions s ON s.key = w.session
@@ -39,7 +39,7 @@ export function installRecoverWaits(db: DatabaseSync): void {
       INSERT INTO session_recover_wait_meta VALUES (1, NULL, NOT EXISTS (SELECT 1 FROM sessions LIMIT 1));
 
       CREATE TRIGGER session_recover_before_turn_add BEFORE INSERT ON turns BEGIN
-        DELETE FROM session_recover_turn_stage;
+        DELETE FROM session_recover_turn_stage WHERE session IS NOT NULL;
         INSERT INTO session_recover_turn_stage SELECT session_key FROM turns WHERE id = NEW.id;
       END;
       CREATE TRIGGER session_recover_turn_add AFTER INSERT ON turns BEGIN
@@ -47,7 +47,7 @@ export function installRecoverWaits(db: DatabaseSync): void {
         ${reconcile("session_recover_turn_stage")}
       END;
       CREATE TRIGGER session_recover_before_turn_move BEFORE UPDATE OF id ON turns WHEN OLD.id IS NOT NEW.id BEGIN
-        DELETE FROM session_recover_turn_stage;
+        DELETE FROM session_recover_turn_stage WHERE session IS NOT NULL;
         INSERT INTO session_recover_turn_stage SELECT session_key FROM turns WHERE id = NEW.id AND rowid != OLD.rowid;
       END;
       CREATE TRIGGER session_recover_turn_change AFTER UPDATE OF id, session_key, started_at, ended_at, outcome, detail, declared ON turns
@@ -60,7 +60,7 @@ export function installRecoverWaits(db: DatabaseSync): void {
       CREATE TRIGGER session_recover_turn_drop AFTER DELETE ON turns BEGIN ${sync("OLD.session_key")} END;
 
       CREATE TRIGGER session_recover_before_session_add BEFORE INSERT ON sessions BEGIN
-        DELETE FROM session_recover_session_stage;
+        DELETE FROM session_recover_session_stage WHERE session IS NOT NULL;
         INSERT INTO session_recover_session_stage SELECT key FROM sessions WHERE key = NEW.key OR token = NEW.token;
       END;
       CREATE TRIGGER session_recover_session_add AFTER INSERT ON sessions BEGIN
@@ -69,7 +69,7 @@ export function installRecoverWaits(db: DatabaseSync): void {
       END;
       CREATE TRIGGER session_recover_before_session_move BEFORE UPDATE OF key, token ON sessions
         WHEN OLD.key IS NOT NEW.key OR OLD.token IS NOT NEW.token BEGIN
-        DELETE FROM session_recover_session_stage;
+        DELETE FROM session_recover_session_stage WHERE session IS NOT NULL;
         INSERT INTO session_recover_session_stage SELECT key FROM sessions
           WHERE (key = NEW.key OR token = NEW.token) AND key != OLD.key;
       END;
