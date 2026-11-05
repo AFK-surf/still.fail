@@ -1446,7 +1446,7 @@ pub fn composer_place(pane : Double) -> ComposerPlace {
     return composer_alone
   }
   let h = capsule_h()
-  let (l, r, b) = @sf.foot_capsule(h, @sf.corner_inset, @sf.corner_inset)
+  let (l, r, b) = @sf.foot_capsule(h, d, d)
   {
     capsule_in: (l - d, r - d, b - d),
     capsule_pad: (h - @sf.theme().round.side) / 2.0 - capsule_extra(),
