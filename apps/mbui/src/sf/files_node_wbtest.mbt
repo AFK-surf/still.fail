@@ -38,3 +38,21 @@ test "a hung remove button takes presses where its corner is drawn" {
   t.click(Button, label="Remove preview")
   assert_eq(removed.val, 1)
 }
+
+///|
+test "a file card that cannot open still lets its retry button be pressed" {
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=300.0, platform=2)
+  let opened = Ref(0)
+  let retried = Ref(0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.padding(Is((20.0, 20.0, 20.0, 20.0))) |> ignore
+    file_card_node(root, fn() { file_card_info("draft.txt", 100.0, error="Transfer failed") }, composer=true,
+      open=fn() { opened.val += 1 }, open_shown=fn() { false },
+      retry=fn() { retried.val += 1 }, retry_label=fn() { "Try again" }) |> ignore
+  })
+  t.draw()
+  t.click(Button, label="Try again")
+  assert_eq(retried.val, 1)
+  assert_eq(opened.val, 0)
+}
