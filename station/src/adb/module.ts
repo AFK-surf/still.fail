@@ -8,6 +8,11 @@ import { wall } from "../ops/fibers.ts";
 import { AndroidScreens } from "../screens/android.ts";
 import { ControlPlane, Events, Parts, Paths, Previous, ScreenRegistry, Store } from "../services.ts";
 import { join } from "node:path";
+import { runnerId } from "../agents/process.ts";
+import { runnerOf } from "../agents/runner.ts";
+import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { platform } from "../platform/index.ts";
+import { gate } from "./door.ts";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { PhoneDisplays } from "./displays.ts";
@@ -35,7 +40,26 @@ export const AdbLive = Layer.effectDiscard(
     );
     const { data } = yield* Paths;
     const previous = yield* Previous;
-    const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath, join(data, "run", "adb-servers.json"))), (s) => Effect.promise(() => s.close()));
+    // Who may use a grant's adb server: its session, by the machine's processes (door.ts). None read on Windows.
+    let sessionOf = (_grant: string): string | null => null;
+    const admit = platform.os === "windows" ? null : (grant: string, holders: number[]) => gate({
+      session: (id) => {
+        const key = sessionOf(id);
+        return key === null ? null : { workspace: store.getSession(key)?.workspace ?? null };
+      },
+      table: () => platform.processTable(false),
+      runners: (id) => {
+        const key = sessionOf(id);
+        return key === null ? [] : RUNTIME_KINDS.flatMap((kind) => {
+          const r = runnerOf(data, runnerId(kind, key));
+          return r === undefined ? [] : [r.runner, r.pid];
+        });
+      },
+      jobs: () => store.jobsRunning().flatMap((j) => (j.pgid === null ? [] : [{ pgid: j.pgid, mine: (id: string) => j.sessionKey === sessionOf(id) }])),
+      cwds: (pids) => platform.cwds(pids),
+      self: process.pid,
+    }, grant, holders);
+    const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath, join(data, "run", "adb-servers.json"), admit)), (s) => Effect.promise(() => s.close()));
     void servers.reap(previous.gone).catch(() => undefined);
     // Chats' grants of people's phones (docs/adb-share.md): told to the owner's devices, their phones connected anew in
     // the grants' adb servers, a grant's server stopped as it ends.
@@ -72,6 +96,7 @@ export const AdbLive = Layer.effectDiscard(
       },
     });
     grantsOf = grants;
+    sessionOf = (id) => grants.get(id)?.session ?? null;
     shares = yield* Effect.acquireRelease(
       Effect.sync(
         () =>
