@@ -60,6 +60,7 @@ function world() {
   };
   let ids = 0;
   const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE thread_sessions(thread INTEGER NOT NULL,session TEXT NOT NULL,joined_at INTEGER NOT NULL,PRIMARY KEY(thread,session)); INSERT INTO thread_sessions VALUES(1,'s1',1)");
   const grants = new PhoneGrants({ db, hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
   return {
     db, grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },

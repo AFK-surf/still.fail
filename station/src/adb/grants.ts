@@ -36,6 +36,15 @@ export type PhoneRequest = {
 /// is tried again and again while unpaired, and says nothing new).
 const LINKS = new Set(["connected", "unpaired", "off", "unauthorized", "missing", "failed", "gone"]);
 
+// Inspect at most one more membership than there are sessions with shown titles. The outer ordering is applied only
+// after that limit, so an especially large shared chat is not sorted in full just to discover which side is smaller.
+export const TITLE_MEMBER_PROBE = `WITH candidates AS MATERIALIZED
+  (SELECT session,joined_at,rowid AS member_rowid FROM thread_sessions WHERE thread=?1 LIMIT ?2)
+  SELECT session FROM candidates ORDER BY joined_at,member_rowid`;
+export const TITLE_SHOWN_MEMBERS = `SELECT m.session FROM json_each(?2) j CROSS JOIN thread_sessions m
+  ON m.thread=?1 AND m.session=j.value ORDER BY m.joined_at,m.rowid`;
+export const TITLE_ONE_MEMBER = "SELECT session FROM thread_sessions WHERE thread=?1 AND session=?2";
+
 const SCHEMA = `CREATE TABLE IF NOT EXISTS adb_requests (
   id TEXT PRIMARY KEY,
   session TEXT NOT NULL,
@@ -101,7 +110,18 @@ export class PhoneGrants {
         // A renamed chat changes its list entry even when no adb command is run.
         // Only requests whose titles have been shown can need an update. Seek those ids rather than reading every
         // old active request of each participant. Preserve the session/status/rowid order of #bySession.
-        for (const { session } of this.#d.hub.store.threadSessions(c.id)) {
+        const count = this.#shownBySession.size;
+        let members: { session: string }[];
+        if (count === 1) {
+          const session = this.#shownBySession.keys().next().value!;
+          const member = this.#d.db.prepare(TITLE_ONE_MEMBER).get(c.id, session) as { session: string } | undefined;
+          members = member === undefined ? [] : [member];
+        } else {
+          const candidates = this.#d.db.prepare(TITLE_MEMBER_PROBE).all(c.id, count + 1) as { session: string }[];
+          members = candidates.length <= count ? candidates : this.#d.db.prepare(TITLE_SHOWN_MEMBERS)
+            .all(c.id, JSON.stringify([...this.#shownBySession.keys()])) as { session: string }[];
+        }
+        for (const { session } of members) {
           const shown = this.#shownBySession.get(session);
           if (!shown || shown.size === 0) continue;
           const requests = this.#load(`SELECT r.body FROM json_each(?1) j CROSS JOIN adb_requests r ON r.id=j.value
