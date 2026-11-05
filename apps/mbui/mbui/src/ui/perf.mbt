@@ -61,7 +61,32 @@ fn perf_frame_start() -> Unit {
     perf_at[j] = commit_counts[j]
   }
   perf_at[3] = 0
+  for j in 0..<3 {
+    perf_alone[j] = 0.0
+  }
+  perf_drew_at[0] = scene_work.layers
+  perf_drew_at[1] = scene_work.recorded
+  perf_drew_at[2] = scene_moved_insts.val
+  perf_drew_at[3] = perf_glass.val
 }
+
+///|
+/// What a frame of the window's tree alone spent (ms) on each of its steps (alone_frame), for its PERF line: what was
+/// told the tree taken and brought, its scene drawn again where it changed (Ctx::scene_alone), what a painted frame
+/// tells after it (the looks by the clock, the host told); none for a frame built or painted otherwise.
+// kept across runs: written by each frame before it is read
+let perf_alone : FixedArray[Double] = FixedArray::make(3, 0.0)
+
+///|
+/// Where the scene's counts stood as the frame began (the layers drawn again, the instances recorded and moved, the
+/// glass captured): what the frame drew, said on its PERF line.
+// kept across runs: written by each frame before it is read
+let perf_drew_at : FixedArray[Int] = FixedArray::make(4, 0)
+
+///|
+/// How many glass captures frames have composed (Ctx::glass_capture), counted on.
+// kept across runs: counts on
+let perf_glass : Ref[Int] = Ref(0)
 
 ///|
 /// What the last frame did (FramePerf).
@@ -261,7 +286,7 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   let p = frame_perf()
   h_log(
-    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} whole=\{scene.parts.why()} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} why=\{built_why.val.escape()} painted_why=\{painted_why.val.escape()}",
+    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} whole=\{scene.parts.why()} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} why=\{built_why.val.escape()} painted_why=\{painted_why.val.escape()} taken=\{perf_alone[0]} scene=\{perf_alone[1]} after=\{perf_alone[2]} layers=\{scene_work.layers - perf_drew_at[0]} recorded=\{scene_work.recorded - perf_drew_at[1]} moved=\{scene_moved_insts.val - perf_drew_at[2]} glass=\{perf_glass.val - perf_drew_at[3]}",
   )
 }
 
