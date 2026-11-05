@@ -5,7 +5,7 @@ test "a picture's progress and decode do not build the old frame of its chat" {
   let asked : Array[String] = []
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="chat-many-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
+  let t = wide_tester(calls, mode="chat-table-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
     { ..base, images, file: fn(station, key, name) {
       images.get(station, @sfbase.file_image_id(station, key, name), "mem:frame-test/" + name,
         fn(heard, done) {
