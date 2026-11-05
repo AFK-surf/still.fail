@@ -35,13 +35,34 @@ let host_erased : Int = 5
 /// page's, not the made-up source's.
 fn core_lists(base : Source) -> Source {
   let kept : Map[String, (Json, @rows.TopicList)] = {}
+  // (each topic told only as its answer comes out otherwise, as the core tells a subscription: the made-up core tells
+  // every reader of every topic of any change of it, and a page that read the workspaces or the prefs was built
+  // again for a chat read in the list)
+  let told : Map[String, @signals.Computed[String]] = {}
+  let topic = fn(name : String, params : Map[String, Json]) {
+    let key = name + "\u{1}" + Json::object(params).stringify()
+    let c = match told.get(key) {
+      Some(c) => c
+      None => {
+        let c = @signals.computed(fn(_) {
+          let t = (base.topic)(name, params)
+          Json::object({ "value": t.value.unwrap_or(Json::null()), "error": t.error.unwrap_or(Json::null()) }).stringify()
+        }, same=fn(a, b) { a == b })
+        told[key] = c
+        c
+      }
+    }
+    c.get() |> ignore
+    @signals.untracked(fn() { (base.topic)(name, params) })
+  }
   {
     ..base,
+    topic,
     list: fn(name, params, path, fields) {
       if name != "chat" {
         return (base.list)(name, params, path, fields)
       }
-      let v = (base.topic)(name, params).value
+      let v = topic(name, params).value
       let messages = match v {
         Some(Object(o)) => o.get("messages").unwrap_or(Json::null())
         _ => Json::null()
@@ -111,19 +132,36 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
   let room = match
     (t.query(Button, label=@sf.t("web-main.composer.attach")), t.query(Button, label=@sf.t("web-main.composer.send"))) {
     (Some(p), Some(s)) => {
-      // (its glass, the one round send: what a part reaching it copies again, all of it, @damage.Parts::take)
+      // (its glass, the one round send: what a part reaching it copies again, all of it, as the damage the frame is drawn
+      // by has it: "where a part reaches what a capture of glass copies, all of that is drawn again in that part, so the
+      // copy is of this frame's drawing, never of the last frame's glass", @damage's damage.mbt, Parts::take. Its
+      // capture as @damage.capture_of says it of the frame drawn, the blur's margin round the glass with it, cut to
+      // the window as the parts are; the smallest that holds send's middle)
       let cx = s.rect.0 + s.rect.2 / 2.0
       let cy = s.rect.1 + s.rect.3 / 2.0
-      match t.drawn_glass().search_by(fn(g) { cx >= g.0 && cx <= g.0 + g.2 && cy >= g.1 && cy <= g.1 + g.3 }) {
-        Some(i) => {
-          let g = t.drawn_glass()[i]
-          (dmin(p.rect.0, g.0) - 2.0, g.1 - 2.0, dmax(s.rect.0 + s.rect.2, g.0 + g.2) + 2.0, h)
+      let (a, n, _) = t.presented()
+      let mut cap : (Double, Double, Double, Double)? = None
+      for k in 0..<n {
+        match @damage.capture_of(a, k) {
+          Some((_, (x0, y0, x1, y1))) if cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1 =>
+            match cap {
+              Some((a0, b0, a1, b1)) if (a1 - a0) * (b1 - b0) <= (x1 - x0) * (y1 - y0) => ()
+              _ => cap = Some((x0, y0, x1, y1))
+            }
+          _ => ()
         }
+      }
+      match cap {
+        Some((x0, y0, x1, y1)) =>
+          (dmax(0.0, dmin(p.rect.0, x0)), dmax(0.0, y0), dmin(w, dmax(s.rect.0 + s.rect.2, x1)), h)
         None => abort("no glass round send")
       }
     }
     _ => abort("no ＋ or send")
   }
+  // (frames with no key, the field focused: what draws again of its own in them, motions going whatever is typed (a
+  // chat at work in the list, its glyph turning), measured here for what a key's frames are held to)
+  step("idle", 1500.0, fn() {  })
   for i, c in host_typed {
     step("typed \{i + 1}", t.frame_period() * 4.0, fn() { t.text_told(c, t.time()) })
   }
@@ -211,13 +249,26 @@ test "a key in a long chat's composer builds nothing of the old frame and draws 
   let out : Array[String] = []
   for w in [390.0, 1280.0] {
     let (steps, room) = host_walk_of("chat-long", w)
+    // (what draws again of its own with no key, measured in the walk's idle frames: a key's frames may draw that too,
+    // and the composer's glass's capture, nothing more)
+    let own : Array[(Double, Double, Double, Double)] = []
+    for s in steps {
+      if s.what == "idle" {
+        for f in s.frames {
+          own.append(f.damage)
+        }
+      }
+    }
+    let allowed = fn(r : (Double, Double, Double, Double)) {
+      host_within(r, room) || own.iter().any(fn(o) { host_within(r, (o.0, o.1, o.0 + o.2, o.1 + o.3)) })
+    }
     for s in steps {
       if !(s.what.has_prefix("typed") || s.what.has_prefix("erased") || s.what.has_prefix("arrow")) {
         continue
       }
       for f in s.frames {
-        if f.old_built || f.parts_built > 0 || !f.damage.iter().all(fn(r) { host_within(r, room) }) {
-          out.push("\{s.what} at \{w}, the composer \{room}: " + host_said(f))
+        if f.old_built || f.parts_built > 0 || !f.damage.iter().all(allowed) {
+          out.push("\{s.what} at \{w}, the composer \{room}, of its own \{own}: " + host_said(f))
         }
       }
     }

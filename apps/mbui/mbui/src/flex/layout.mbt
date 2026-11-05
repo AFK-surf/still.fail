@@ -304,6 +304,20 @@ let out_h : Ref[Double] = { val: 0.0 }
 let vague : Ref[Bool] = { val: false }
 
 ///|
+/// How tall the box is that the node whose own layout (Node's layout_children) is being called is laid out in: the
+/// content box of what holds it (its containing block), as tall as this compute lays that out; NaN where that is not
+/// known yet (what holds it probed without its height). What a long list laid out by what holds its rows shows of them
+/// (laying_room_h).
+let laying_room : Ref[Double] = { val: 0.0 / 0.0 }
+
+///|
+/// How tall the box is that the node whose own layout is being called now is laid out in (laying_room's), read in that
+/// layout alone.
+pub fn laying_room_h() -> Double {
+  laying_room.val
+}
+
+///|
 /// The space between items distribute found, beside the lead it returns.
 let out_b : Ref[Double] = { val: 0.0 }
 
@@ -713,7 +727,10 @@ fn size_uncached(
       // (given its width alone and tall as what it holds says: laid out as it is probed, in the same pass, its height
       // its own as a leaf's measure is)
       if node.sized_by_children && known(w) && !known(h) {
+        let room_was = laying_room.val
+        laying_room.val = cb_h
         let said = layout(fmax(w - pbw, 0.0), undef, b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+        laying_room.val = room_was
         out_h.val = clamp_size((if known(said) { said } else { 0.0 }) + pbh, b.min_h, b.max_h)
         // (what it holds laid out as it was probed, at what the probe gave it: laid out again by its own layout as that
         // is done, nothing of a compute before kept for it then)
@@ -730,7 +747,10 @@ fn size_uncached(
       // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
       if perform {
         guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
+        let room_was = laying_room.val
+        laying_room.val = cb_h
         layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t) |> ignore
+        laying_room.val = room_was
       }
       out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
       return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }
