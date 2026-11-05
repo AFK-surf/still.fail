@@ -3,7 +3,6 @@
 import { Effect, Layer } from "effect";
 import { writeLine } from "../mesh/serve.ts";
 import { readOnly } from "../mesh/credential.ts";
-import { titleOf } from "../read/views.ts";
 import { Agents } from "../sessions/agents.ts";
 import { wall } from "../ops/fibers.ts";
 import { AndroidScreens } from "../screens/android.ts";
@@ -12,6 +11,7 @@ import { join } from "node:path";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { PhoneDisplays } from "./displays.ts";
+import { grantChatTitle } from "./title.ts";
 import { adbTools, phoneTools, reached } from "./tool.ts";
 import { Shares, adbPath, answerAdb } from "./link.ts";
 
@@ -57,14 +57,7 @@ export const AdbLive = Layer.effectDiscard(
     );
     const grants = new PhoneGrants({
       db: store.db, hub: hub as any, home: () => plane.state.home(), now: () => wall.now(),
-      title: (r) => {
-        const slash = r.chat.indexOf("/");
-        const own = slash < 0 ? null : store.sessionThread(r.session, r.chat.slice(0, slash), r.chat.slice(slash + 1))?.thread ?? null;
-        const latest = store.sessionChat(r.session);
-        const thread = own ?? latest?.thread;
-        if (!thread) return null;
-        return titleOf(thread, latest?.thread.id === thread.id ? latest.firstText : null, null);
-      },
+      title: (r) => grantChatTitle(store, r),
       told: (r: PhoneRequest, workspace, change) => {
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
         if (change !== "grant") return;
