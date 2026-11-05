@@ -5133,6 +5133,19 @@ priv enum ShapeOf {
 let view_shape_of : Ref[ShapeOf] = Ref(OfOld)
 
 ///|
+/// The pointer's shape over node `id`, what is pointed at (Tree::cursor_of): the one it says; else, where it takes no
+/// press, the I-beam over words picked with the pointer under it (tree_sel_at), the arrow round them, as the old frame
+/// shows a page's (Ctx::show_cursor's sel_at): not the I-beam over all of what lends its words picking (words_picked).
+fn view_node_shape(tree : @view.Tree, id : @view.NodeId) -> Cursor {
+  let shape = tree.cursor_of(id)
+  guard shape == Arrow && tree.cursor_said(id) is None else { return shape }
+  match view_point.val {
+    Some((x, y)) if tree_sel_at(x, y) is Some(_) => IBeam
+    _ => shape
+  }
+}
+
+///|
 /// The host shown the pointer's shape, where it changed: while a press is held, the shape of what holds it (a node of
 /// the tree's it went down on, a resizing edge dragged off it: its own; the old views', theirs, Ctx::show_cursor keeping
 /// the one it was pressed with); else of what the pointer is over (view_shape_of): a node's (Tree::cursor_of: what it
@@ -5146,7 +5159,7 @@ fn view_cursor_tell() -> Unit {
     (Some(_), Some(Old(_, _))) => desk.old_shape
     (Some(tree), _) =>
       match view_shape_of.val {
-        OfNode(id) => tree.cursor_of(id).code()
+        OfNode(id) => view_node_shape(tree, id).code()
         OfOld => desk.old_shape
         OfGround => Cursor::Arrow.code()
       }
