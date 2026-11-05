@@ -86,6 +86,8 @@ export const PARAMS: Record<string, string> = {
   "session.settings": "key:string runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
+  "chat.hide": "hidden:boolean thread:number",
+  "chat.mute": "muted:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
   "chat.regenerateTitle": "thread:number",
   "chat.pin": "pinned?:boolean session:string",
@@ -390,6 +392,14 @@ function stationOp(name: string, params: unknown): Request | null {
       const thread = p.u64("thread");
       // Kept (the default), or let go (`kept: false`): offered for archiving again.
       return op(p.has("kept") && p.value("kept") === false ? "DELETE" : "PUT", () => `/threads/${thread}/keep`, null, { kind: "thread", archived: false });
+    }
+    case "chat.hide": {
+      const thread = p.u64("thread");
+      return op("PUT", () => `/threads/${thread}/hidden`, p.pick(["hidden"]), { kind: "thread", archived: false });
+    }
+    case "chat.mute": {
+      const thread = p.u64("thread");
+      return op("PUT", () => `/threads/${thread}/muted`, p.pick(["muted"]), { kind: "thread", archived: false });
     }
     case "chat.rename": {
       const thread = optU64("thread");

@@ -108,7 +108,7 @@ fn rail_shown(src : Source, w : Workspace) -> Array[String] {
 fn rail_lit(src : Source, w : Workspace, place : String) -> Bool {
   let lit = lit_place()
   match place {
-    "chats" | "mine" | "watching" | "archive" => {
+    "chats" | "mine" | "watching" | "hidden" | "archive" => {
       let list = list_place(list_mode(src, w))
       let shown_list = if rail_shown(src, w).contains(list) { list } else { "chats" }
       lit == "chats" && shown_list == place
@@ -138,11 +138,12 @@ pub fn side_place() -> String {
 /// filter), 已归档 3.
 pub fn list_mode(src : Source, w : Workspace) -> Int {
   match side_place() {
-    "archive" => 3
+    "archive" => 4
     _ =>
       match filter_of(src, w.id) {
         "mine" => 1
         "watching" => 2
+        "hidden" => 3
         _ => 0
       }
   }
@@ -154,7 +155,8 @@ fn list_place(mode : Int) -> String {
   match mode {
     1 => "mine"
     2 => "watching"
-    3 => "archive"
+    3 => "hidden"
+    4 => "archive"
     _ => "chats"
   }
 }
@@ -722,7 +724,7 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
     "attention" => {
       attention_set(!wide.attention_open.get())
     }
-    "chats" | "mine" | "watching" => {
+    "chats" | "mine" | "watching" | "hidden" => {
       // its list in the sidebar (Rail.tsx toList): 对话 all of them, the others theirs
       let f = if place == "chats" { "all" } else { place }
       if filter_of(src, w.id) != f {
@@ -939,6 +941,7 @@ fn rail_icon(place : String) -> String {
     "chats" => "chats"
     "mine" => "user"
     "watching" => "watch"
+    "hidden" => "eye-off"
     "archive" => "archive"
     "files" => "folder"
     "profiles" => "quota"

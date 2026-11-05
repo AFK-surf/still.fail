@@ -244,6 +244,10 @@ export type StoreChange =
   | { type: "threadRemoved"; id: number; ws?: string | null }
   /// A viewer's read position moved.
   | { type: "read"; viewer: string; thread: number; n: number }
+  /// A viewer hid a chat from their lists, or made it visible again.
+  | { type: "hidden"; viewer: string; thread: number; hidden: boolean }
+  /// A viewer changed whether a chat sends them notifications.
+  | { type: "muted"; viewer: string; thread: number; muted: boolean }
   /// The Slack users a viewer said are them changed.
   | { type: "identities"; viewer: string }
   /// The chats a viewer pinned changed.

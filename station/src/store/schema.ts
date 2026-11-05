@@ -162,6 +162,18 @@ CREATE TABLE IF NOT EXISTS reads (
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, thread)
 );
+-- A viewer's personal list visibility; this is independent of the thread's archived state.
+CREATE TABLE IF NOT EXISTS hidden_chats (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread)
+);
+-- Notifications can be silenced independently of list visibility.
+CREATE TABLE IF NOT EXISTS muted_chats (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread)
+);
 CREATE TABLE IF NOT EXISTS profile_status (
   profile TEXT PRIMARY KEY,
   check_json TEXT, checked_at INTEGER,

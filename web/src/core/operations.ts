@@ -21,6 +21,8 @@ export interface OperationParams {
   "session.settings": { key: string; runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { kept?: boolean | null | undefined; thread: number };
+  "chat.hide": { hidden: boolean; thread: number };
+  "chat.mute": { muted: boolean; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
   "chat.regenerateTitle": { thread: number };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
@@ -199,6 +201,8 @@ export function bindStationOperations(call: Call) {
     sessionSettings: <T = unknown>(params: OperationParams["session.settings"]) => call("session.settings", params) as Promise<T>,
     chatArchive: <T = unknown>(params: OperationParams["chat.archive"]) => call("chat.archive", params) as Promise<T>,
     chatKeep: <T = unknown>(params: OperationParams["chat.keep"]) => call("chat.keep", params) as Promise<T>,
+    chatHide: <T = unknown>(params: OperationParams["chat.hide"]) => call("chat.hide", params) as Promise<T>,
+    chatMute: <T = unknown>(params: OperationParams["chat.mute"]) => call("chat.mute", params) as Promise<T>,
     chatRename: <T = unknown>(params: OperationParams["chat.rename"] = {}) => call("chat.rename", params) as Promise<T>,
     chatRegenerateTitle: <T = unknown>(params: OperationParams["chat.regenerateTitle"]) => call("chat.regenerateTitle", params) as Promise<T>,
     chatPin: <T = unknown>(params: OperationParams["chat.pin"]) => call("chat.pin", params) as Promise<T>,

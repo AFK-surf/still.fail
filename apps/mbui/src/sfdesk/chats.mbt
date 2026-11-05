@@ -284,7 +284,7 @@ fn filter_button(
 ) -> Unit {
   if @sf.native_on() {
     let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
-      ("watching", "web-main.filter.watching"), ("archive", "web-main.filter.archived")].map(fn(p) {
+      ("watching", "web-main.filter.watching"), ("hidden", "web-main.filter.hidden"), ("archive", "web-main.filter.archived")].map(fn(p) {
         ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == (if shown == "chats" { "all" } else { shown }), "")
       })
     sidebar_glass(c, "sidebar/filter", @sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]), "filter", rows)
@@ -320,6 +320,7 @@ fn filter_named(filter : String) -> String {
     "archive" => @sf.t("web-main.filter.archived")
     "mine" => @sf.t("web-main.filter.chats.mine")
     "watching" => @sf.t("web-main.filter.watching")
+    "hidden" => @sf.t("web-main.filter.hidden")
     _ => @sf.t("web-main.filter.all")
   }
 }

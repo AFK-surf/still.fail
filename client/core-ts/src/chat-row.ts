@@ -17,6 +17,9 @@ export type Own = {
   dismissed: ReadonlySet<string>;
   /// The chats the viewer kept from archiving.
   kept: ReadonlySet<number>;
+  /// The viewer's list visibility; absent when the station predates this mark.
+  hidden?: ReadonlySet<number>;
+  muted?: ReadonlySet<number>;
   /// When the viewer pinned each agent's row, by its key.
   pins: ReadonlyMap<string, number>;
 };
@@ -46,6 +49,8 @@ export function rowFor(shared: J, own: Own, words: Words): J {
   row.mine = (Array.isArray(mineOf) ? mineOf : []).some((p: unknown) => own.mine(p));
   if (thread !== null) {
     row.archiveReminderDismissed = own.kept.has(thread);
+    if (own.hidden !== undefined) row.hidden = own.hidden.has(thread);
+    if (own.muted !== undefined) row.muted = own.muted.has(thread);
     for (const k of ["card", "need"] as const) {
       const c = row[k];
       if (c && typeof c === "object" && own.dismissed.has(`${thread}:${c.seq}`)) row[k] = { ...c, dismissed: true };

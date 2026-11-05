@@ -42,7 +42,7 @@ export type Call =
   | { kind: "op"; op: ops.Request }
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
-  | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean | null }
+  | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean | null; hidden: boolean | null; muted: boolean | null }
   | { kind: "widgetState"; op: ops.Request; key: string; path: string; state: unknown | undefined }
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
   | { kind: "stationJoin"; workspace: string; station: string; name: string | null }
@@ -1157,7 +1157,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     const op = ops.request(name, p)!;
     return { kind: "decisionDismiss", op, station: "station" in op.target ? op.target.station : "", thread: get(p, "thread") as number, seq: get(p, "seq") as number };
   }
-  if (name === "chat.rename" || name === "chat.pin" || name === "chat.keep") {
+  if (name === "chat.rename" || name === "chat.pin" || name === "chat.keep" || name === "chat.hide" || name === "chat.mute") {
     const p = orEmpty(params);
     const op = ops.request(name, p)!;
     const session = get(p, "session");
@@ -1172,6 +1172,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       title: name === "chat.rename" && title !== "" ? title : null,
       pinned: name === "chat.pin" ? get(p, "pinned") === true : null,
       keep: name === "chat.keep" ? get(p, "kept") !== false : null,
+      hidden: name === "chat.hide" ? get(p, "hidden") === true : null,
+      muted: name === "chat.mute" ? get(p, "muted") === true : null,
     };
   }
   const p = orEmpty(params);

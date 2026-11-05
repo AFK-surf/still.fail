@@ -1239,7 +1239,7 @@ test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_
 test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_held", async () => {
   // The station made every row again for every viewer at every change, 3 to 10 s each on a station (2026-11-03): made here
   // from the sessions' and threads' summaries and what the station keeps beside them, it reads none of its rows.
-  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
   const answers: J = { ...base(), "GET /chats?marks=1": marks, "GET /sessions": [{ ...session("k1"), creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } }] };
   answers["GET /chats"] = [];
   const { host, core, push, read } = await ui(answers);
@@ -1250,6 +1250,12 @@ test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_he
   push("made", { rows: true, marks: true });
   await coalesce(host);
   assert.deepEqual([held().thread, held().title, held().mine, held().agents.map((a: J) => a.key)], [7, t("core-views.new_chat"), true, ["k1"]]);
+  push("hidden", { thread: 7, hidden: true });
+  await coalesce(host);
+  assert.equal(held().hidden, true);
+  push("hidden", { thread: 7, hidden: false });
+  await coalesce(host);
+  assert.equal(held().hidden, false);
   // Kept: started again, the device reads the marks at once, not the sidebar made.
   assert.equal(core.inner.data.record("keepsMarks", ST), true);
   // What an agent said: its row's latest, unread; the viewer's pin: in place. Nothing of the sidebar read.
@@ -1271,7 +1277,7 @@ test("a_station_that_makes_the_chat_list_for_everyone_has_the_sidebar_made_of_it
   // A row is a chat, named by it: made here of the agents' and the chats' summaries, an agent whose chat the device did
   // not hold was a row of its own named by the agent (none), every chat a 新对话 on a Mac after its update (2026-11-04).
   // The station makes the chat list once for everyone; the device puts on it what is the viewer's own.
-  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: { k1: 9 }, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: { 7: 2 } };
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], muted: [], pins: { k1: 9 }, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: { 7: 2 } };
   const shared = (over: J = {}) => ({
     id: "k1", session: "k1", thread: 7, title: "", agents: [{ key: "k1", runtime: "claude" }], last: { seq: 3, authorKind: "agent", author: "k1", text: "好", createdAt: 3 },
     unread: false, mine: false, lastActiveAt: 3, connect: null, origin: null, creator: null, people: [],
@@ -1287,12 +1293,19 @@ test("a_station_that_makes_the_chat_list_for_everyone_has_the_sidebar_made_of_it
   await coalesce(host);
   const held = () => core.inner.data.chat(ST, "k1") as J;
   assert.deepEqual([held().thread, held().title, held().unread, held().mine, held().pinned], [7, "部署", true, true, 9]);
+  push("hidden", { thread: 7, hidden: true });
+  await coalesce(host);
+  assert.equal(held().hidden, true, "another device's mark is applied to this viewer's shared row");
+  push("muted", { thread: 7, muted: true });
+  await coalesce(host);
+  assert.equal(held().muted, true, "the separate notification setting is synced too");
   // Renamed: the row as the station made it again, told to everyone who sees it.
   push("chat-shared", shared({ named: { thread: { surface: "ember", title: "上线", autoTitle: "部署" }, firstText: null, channelName: null } }));
   // Read up to its latest: not unread.
   push("read", { viewer: "a@x.com", thread: 7, n: 3 });
   await coalesce(host);
   assert.deepEqual([held().title, held().unread], ["上线", false]);
+  assert.equal(held().hidden, true, "new activity does not reveal a hidden chat");
   push("chat-shared-removed", { id: "k1" });
   await coalesce(host);
   assert.equal(held(), undefined);

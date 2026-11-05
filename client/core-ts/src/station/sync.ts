@@ -80,7 +80,7 @@ const JOBS = "/jobs?chats=0";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
+const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept", "hidden", "muted"]);
 const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
@@ -1563,6 +1563,30 @@ export class StationsSync {
           link.marks.reads[String(thread)] = Math.max(link.marks.reads[String(thread)] ?? 0, n);
           this.#remake(address);
         }
+        return;
+      }
+      case "hidden": {
+        const thread = u64(get(data, "thread"));
+        const hidden = get(data, "hidden");
+        if (thread === null || typeof hidden !== "boolean") return;
+        const marks = this.#links.get(address)?.marks;
+        if (marks) {
+          marks.hidden = [...(marks.hidden ?? []).filter((id) => id !== thread), ...(hidden ? [thread] : [])];
+          return this.#remake(address);
+        }
+        for (const row of core.data.chatsOf(address, { thread })) if (isObject(row)) core.data.putChat(address, { ...row, hidden });
+        return;
+      }
+      case "muted": {
+        const thread = u64(get(data, "thread"));
+        const muted = get(data, "muted");
+        if (thread === null || typeof muted !== "boolean") return;
+        const marks = this.#links.get(address)?.marks;
+        if (marks) {
+          marks.muted = [...(marks.muted ?? []).filter((id) => id !== thread), ...(muted ? [thread] : [])];
+          return this.#remake(address);
+        }
+        for (const row of core.data.chatsOf(address, { thread })) if (isObject(row)) core.data.putChat(address, { ...row, muted });
         return;
       }
       case "pin": {

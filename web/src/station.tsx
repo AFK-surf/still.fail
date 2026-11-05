@@ -98,8 +98,8 @@ export type SidebarMode = ChatFilter | "archive";
  */
 export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
   const workspace = useWorkspaceId();
-  const mode: SidebarMode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
-  return [mode, (value) => setSidebarMode(workspace, value)];
+  const mode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
+  return [mode === "hidden" ? "all" : mode, (value) => setSidebarMode(workspace, value)];
 }
 
 /** Sets what the sidebar (the phone's list) shows in `workspace`, kept on this device. */

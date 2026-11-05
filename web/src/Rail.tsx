@@ -132,7 +132,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const view = usePrefs((p) => p.railView);
   // The list of chats each of the lists shows in the sidebar (its mode).
   const places = useRailPlaces();
-  const listOf = (item: RailItem): SidebarMode | undefined => places.find((p) => p.id === item)?.list;
+  const listOf = (item: RailItem): SidebarMode | undefined => {
+    const list = places.find((p) => p.id === item)?.list;
+    return list === "hidden" ? undefined : list;
+  };
   const listed = (m: SidebarMode): RailItem | undefined => places.find((p) => p.list === m)?.id;
   sidebarScope = scope;
   const railed = useRailItems();

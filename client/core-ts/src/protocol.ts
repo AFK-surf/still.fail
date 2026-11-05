@@ -82,7 +82,7 @@ export const TOPICS: Record<string, Spec> = {
   adminItem: { account: S, list: S, id: S },
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
-  chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"] },
+  chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"] },
   stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"] },
   profiles: { scope: S },
   connects: { scope: S, mine: ["bool", "def"] },
