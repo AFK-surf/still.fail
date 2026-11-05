@@ -287,12 +287,11 @@ fn sent_elsewhere_node(row : @view.View, src : Source, here : () -> MessageHere,
         })
         |> ignore
       } else {
-        agent_avatar_node(slot, fn() { s().by.maker }, fn() { s().by.runtime }, fn() {
+        let face = agent_avatar_node(slot, fn() { s().by.maker }, fn() { s().by.runtime }, fn() {
           if surface() == "feishu" { "feishu" } else { "slack" }
         })
-        |> ignore
         if @signals.untracked(agent) != "" {
-          agent_hover_node(slot, src, here, agent)
+          agent_hover_node(face, src, here, agent)
         }
       }
     })
