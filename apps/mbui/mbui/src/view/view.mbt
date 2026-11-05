@@ -569,6 +569,9 @@ pub struct Tree {
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
   mut cause_at : Double
+  /// the declared moment of the frame or sample being brought (-1: none): its own notifications do not ask the
+  /// host for a new moment while they are being handled
+  mut bringing_at : Double
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
@@ -855,6 +858,7 @@ pub fn Tree::new(
     outs_gone: [],
     time,
     cause_at: -1.0,
+    bringing_at: -1.0,
     measure,
     measure_runs,
     measure_shorter: match measure_shorter {
@@ -1454,6 +1458,9 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 ///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
+  let was = self.bringing_at
+  self.bringing_at = ms
+  defer { self.bringing_at = was }
   self.clock_to(ms)
   self.beat_set(ms)
 }
@@ -5568,6 +5575,9 @@ pub fn Tree::moment(self : Tree) -> Double? {
 ///|
 /// The time now, as a change is told (the host's, else the clock's).
 fn Tree::time_now(self : Tree) -> Double {
+  if self.bringing_at >= 0.0 {
+    return self.bringing_at
+  }
   match self.time {
     Some(f) => f()
     None => self.logic
@@ -5981,6 +5991,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     Some(n) => n
     None => @signals.untracked(fn() { self.clock.get() })
   }
+  let was = self.bringing_at
+  self.bringing_at = upto
+  defer { self.bringing_at = was }
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
@@ -6015,6 +6028,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
+  let was = self.bringing_at
+  self.bringing_at = at
+  defer { self.bringing_at = was }
   // (its logic first, to the moment, then what it draws drawn as of it (a frame to be shown later drawn ahead of it:
   // drawn again as of now, for where a press finds things), then what it marked)
   self.advance(at)
@@ -6030,6 +6046,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
 ///|
 /// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
 fn Tree::brought(self : Tree, upto : Double) -> Unit {
+  let was = self.bringing_at
+  self.bringing_at = upto
+  defer { self.bringing_at = was }
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
