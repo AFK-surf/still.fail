@@ -307,6 +307,45 @@ for (const recursive of [false, true]) {
   });
 }
 
+test("an ignored update cannot disturb later deliveries or a no-op update", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const a = store.openThread("slack", "C", "a", null, null);
+    const b = store.openThread("slack", "C", "b", null, null);
+    store.joinThread(a.id, "s", "a"); store.joinThread(b.id, "s", "b");
+    const put = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,1,'s',NULL)");
+    put.run(100, a.id); put.run(101, b.id);
+    installLatestThreadIndex(db); prepare(store, "s");
+    db.prepare("UPDATE OR IGNORE deliveries SET rowid=101 WHERE rowid=100").run();
+    db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(102,?,2,'s',NULL)").run(a.id);
+    db.prepare("UPDATE deliveries SET n=n WHERE rowid=102").run();
+    assert.equal(indexedLatestThread(db, "s")?.id, a.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_rows WHERE session='s' AND thread=?").get(a.id)?.n, 1);
+    db.prepare("UPDATE deliveries SET n=3 WHERE rowid=102").run();
+    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) {
+  test(`a thread update replacing another thread keeps the latest order (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? 1 : 0}`);
+      const a = store.openThread("slack", "C", "a", null, null);
+      const b = store.openThread("slack", "C", "b", null, null);
+      store.joinThread(a.id, "s", "a"); store.joinThread(b.id, "s", "b");
+      const put = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,1,'s',NULL)");
+      put.run(100, a.id); put.run(101, b.id);
+      installLatestThreadIndex(db); prepare(store, "s");
+      db.prepare("UPDATE OR REPLACE threads SET thread_ts='b' WHERE id=?").run(a.id);
+      assert.equal(indexedLatestThread(db, "s")?.id, a.id);
+      assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_rows WHERE session='s'").get()?.n, 1);
+    } finally { store.close(); }
+  });
+}
+
 for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
   test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;

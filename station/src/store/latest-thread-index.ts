@@ -12,33 +12,43 @@ const lastDelivery = (session: string, thread: string, extra = "") => `(SELECT d
   WHERE d.session=${session} AND d.thread=${thread} ${extra} ORDER BY d.rowid DESC LIMIT 1)`;
 const priorDelivery = lastDelivery("NEW.session", "NEW.thread", "AND d.rowid<>NEW.rowid");
 const changed = "EXISTS (SELECT 1 FROM latest_thread_changed LIMIT 1)";
-const stage = (keys: string) => `DELETE FROM latest_thread_changed;
-  INSERT INTO latest_thread_changed(session,thread,old_valid,old_has,old_last,old_joined,old_member)
+const updating = "EXISTS (SELECT 1 FROM latest_thread_updating LIMIT 1)";
+const stage = (keys: string, table = "latest_thread_changed") => `DELETE FROM ${table};
+  INSERT INTO ${table}(session,thread,old_valid,old_has,old_last,old_joined,old_member)
     SELECT k.session,k.thread,m.rowid IS NOT NULL AND t.id IS NOT NULL,
       ${lastDelivery("k.session", "k.thread")} IS NOT NULL,COALESCE(${lastDelivery("k.session", "k.thread")},0),m.joined_at,m.rowid
     FROM (${keys}) k LEFT JOIN thread_sessions m ON m.session=k.session AND m.thread=k.thread
       LEFT JOIN threads t ON t.id=k.thread
     WHERE k.session IS NOT NULL AND k.thread IS NOT NULL
       AND EXISTS (SELECT 1 FROM latest_thread_scopes s WHERE s.session=k.session);`;
-// The changed set holds the old ordered keys before a source write. An ignored insert may leave it behind, but did
-// not change the source or the order; the next staged write clears it before collecting its own affected pairs.
-const reconcile = `DELETE FROM latest_thread_rows WHERE (session,has_last,last_delivery,joined_at,member_rowid) IN
-    (SELECT session,old_has,old_last,old_joined,old_member FROM latest_thread_changed WHERE old_valid=1);
+// An UPDATE OR REPLACE can fire DELETE triggers for displaced rows before its own AFTER trigger. Keep its snapshot
+// apart from their staging, and advance affected snapshots after each nested reconciliation to the rank now stored.
+// An ignored write may leave a snapshot, but changes neither the source nor the order; the next same kind clears it.
+const refreshUpdating = `UPDATE latest_thread_updating AS u
+    SET (old_valid,old_has,old_last,old_joined,old_member) =
+      (SELECT m.rowid IS NOT NULL AND t.id IS NOT NULL,
+        ${lastDelivery("x.session", "x.thread")} IS NOT NULL,COALESCE(${lastDelivery("x.session", "x.thread")},0),m.joined_at,m.rowid
+        FROM latest_thread_changed x LEFT JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
+          LEFT JOIN threads t ON t.id=x.thread WHERE x.session=u.session AND x.thread=u.thread)
+    WHERE EXISTS (SELECT 1 FROM latest_thread_changed x WHERE x.session=u.session AND x.thread=u.thread);`;
+const reconcile = (table = "latest_thread_changed") => `DELETE FROM latest_thread_rows WHERE (session,has_last,last_delivery,joined_at,member_rowid) IN
+    (SELECT session,old_has,old_last,old_joined,old_member FROM ${table} WHERE old_valid=1);
   DELETE FROM latest_thread_members WHERE (thread,session) IN
-    (SELECT x.thread,x.session FROM latest_thread_changed x WHERE NOT EXISTS
+    (SELECT x.thread,x.session FROM ${table} x WHERE NOT EXISTS
       (SELECT 1 FROM thread_sessions m WHERE m.thread=x.thread AND m.session=x.session));
   INSERT INTO latest_thread_members(thread,session)
-    SELECT m.thread,m.session FROM latest_thread_changed x
+    SELECT m.thread,m.session FROM ${table} x
       CROSS JOIN thread_sessions m ON m.thread=x.thread AND m.session=x.session
     WHERE NOT EXISTS (SELECT 1 FROM latest_thread_members r WHERE r.thread=m.thread AND r.session=m.session);
   INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
     SELECT m.session,d.rowid IS NOT NULL,COALESCE(d.rowid,0),m.joined_at,m.rowid,m.thread
-    FROM latest_thread_changed x CROSS JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
+    FROM ${table} x CROSS JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
       CROSS JOIN threads t ON t.id=m.thread
       LEFT JOIN deliveries d ON d.rowid=${lastDelivery("m.session", "m.thread")}
     WHERE NOT EXISTS (SELECT 1 FROM latest_thread_rows r WHERE r.session=m.session AND r.has_last=(d.rowid IS NOT NULL)
       AND r.last_delivery=COALESCE(d.rowid,0) AND r.joined_at IS m.joined_at AND r.member_rowid=m.rowid);
-  DELETE FROM latest_thread_changed;`;
+  ${table === "latest_thread_changed" ? refreshUpdating : ""}
+  DELETE FROM ${table};`;
 const deliveryKeys = (update: boolean) => `SELECT NEW.session AS session,NEW.thread AS thread
   UNION SELECT d.session,d.thread FROM deliveries d WHERE d.rowid=NEW.rowid
   UNION SELECT d.session,d.thread FROM deliveries d WHERE d.thread=NEW.thread AND d.n=NEW.n AND d.session=NEW.session
@@ -53,10 +63,16 @@ const deliveryConflict = `EXISTS (SELECT 1 FROM deliveries WHERE rowid=NEW.rowid
   OR EXISTS (SELECT 1 FROM deliveries WHERE thread=NEW.thread AND n=NEW.n AND session=NEW.session)`;
 const memberConflict = `EXISTS (SELECT 1 FROM thread_sessions WHERE rowid=NEW.rowid)
   OR EXISTS (SELECT 1 FROM thread_sessions WHERE thread=NEW.thread AND session=NEW.session)`;
+const deliveryChanged = "OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.session IS NOT NEW.session";
+const memberChanged = "OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.joined_at IS NOT NEW.joined_at";
+const threadChanged = "OLD.id IS NOT NEW.id OR OLD.surface IS NOT NEW.surface OR OLD.channel IS NOT NEW.channel OR OLD.thread_ts IS NOT NEW.thread_ts";
 
 // A normal new delivery needs no staging or second identity index. Its previous last row is the last row other than
 // NEW, sought in the existing (session,thread) index; removing and reinserting the ordered row touches one tree.
-const fastDelivery = `DELETE FROM latest_thread_rows WHERE session=NEW.session AND thread=NEW.thread
+const fastDelivery = `INSERT INTO latest_thread_members(thread,session)
+    SELECT m.thread,m.session FROM thread_sessions m WHERE m.session=NEW.session AND m.thread=NEW.thread
+      AND NOT EXISTS (SELECT 1 FROM latest_thread_members r WHERE r.thread=m.thread AND r.session=m.session);
+  DELETE FROM latest_thread_rows WHERE session=NEW.session AND thread=NEW.thread
     AND has_last=(${priorDelivery} IS NOT NULL) AND last_delivery=COALESCE(${priorDelivery},0)
     AND joined_at IS (SELECT joined_at FROM thread_sessions WHERE session=NEW.session AND thread=NEW.thread)
     AND member_rowid=(SELECT rowid FROM thread_sessions WHERE session=NEW.session AND thread=NEW.thread);
@@ -97,36 +113,39 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
       CREATE TABLE latest_thread_changed(session TEXT NOT NULL,thread INTEGER NOT NULL,old_valid INTEGER NOT NULL,
         old_has INTEGER NOT NULL,old_last INTEGER NOT NULL,old_joined,old_member INTEGER,
         PRIMARY KEY(session,thread)) WITHOUT ROWID;
+      CREATE TABLE latest_thread_updating(session TEXT NOT NULL,thread INTEGER NOT NULL,old_valid INTEGER NOT NULL,
+        old_has INTEGER NOT NULL,old_last INTEGER NOT NULL,old_joined,old_member INTEGER,
+        PRIMARY KEY(session,thread)) WITHOUT ROWID;
 
       CREATE TRIGGER latest_delivery_before_add BEFORE INSERT ON deliveries
         WHEN ${changed} OR ${deliveryConflict} BEGIN ${stage(deliveryKeys(false))} END;
-      CREATE TRIGGER latest_delivery_add AFTER INSERT ON deliveries WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_delivery_add AFTER INSERT ON deliveries WHEN ${changed} BEGIN ${reconcile()} END;
       CREATE TRIGGER latest_delivery_fast_add AFTER INSERT ON deliveries
         WHEN EXISTS (SELECT 1 FROM latest_thread_scopes WHERE session=NEW.session)
           AND EXISTS (SELECT 1 FROM thread_sessions m JOIN threads t ON t.id=m.thread
             WHERE m.session=NEW.session AND m.thread=NEW.thread)
           AND (${priorDelivery} IS NULL OR NEW.rowid>${priorDelivery}) BEGIN ${fastDelivery} END;
       CREATE TRIGGER latest_delivery_before_change BEFORE UPDATE OF rowid,_rowid_,oid,thread,n,session ON deliveries
-        WHEN OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.session IS NOT NEW.session
-        BEGIN ${stage(deliveryKeys(true))} END;
+        WHEN ${deliveryChanged}
+        BEGIN ${stage(deliveryKeys(true), "latest_thread_updating")} END;
       CREATE TRIGGER latest_delivery_change AFTER UPDATE OF rowid,_rowid_,oid,thread,n,session ON deliveries
-        WHEN ${changed} BEGIN ${reconcile} END;
+        WHEN (${deliveryChanged}) AND ${updating} BEGIN ${reconcile("latest_thread_updating")} END;
       CREATE TRIGGER latest_delivery_before_drop BEFORE DELETE ON deliveries
         BEGIN ${stage("SELECT OLD.session AS session,OLD.thread AS thread")} END;
-      CREATE TRIGGER latest_delivery_drop AFTER DELETE ON deliveries WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_delivery_drop AFTER DELETE ON deliveries WHEN ${changed} BEGIN ${reconcile()} END;
 
       CREATE TRIGGER latest_member_before_add BEFORE INSERT ON thread_sessions
         WHEN ${changed} OR ${memberConflict} BEGIN ${stage(memberKeys(false))} END;
-      CREATE TRIGGER latest_member_add AFTER INSERT ON thread_sessions WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_member_add AFTER INSERT ON thread_sessions WHEN ${changed} BEGIN ${reconcile()} END;
       CREATE TRIGGER latest_member_fast_add AFTER INSERT ON thread_sessions BEGIN ${fastMember} END;
       CREATE TRIGGER latest_member_before_change BEFORE UPDATE OF rowid,_rowid_,oid,thread,session,joined_at ON thread_sessions
-        WHEN OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.joined_at IS NOT NEW.joined_at
-        BEGIN ${stage(memberKeys(true))} END;
+        WHEN ${memberChanged}
+        BEGIN ${stage(memberKeys(true), "latest_thread_updating")} END;
       CREATE TRIGGER latest_member_change AFTER UPDATE OF rowid,_rowid_,oid,thread,session,joined_at ON thread_sessions
-        WHEN ${changed} BEGIN ${reconcile} END;
+        WHEN (${memberChanged}) AND ${updating} BEGIN ${reconcile("latest_thread_updating")} END;
       CREATE TRIGGER latest_member_before_drop BEFORE DELETE ON thread_sessions
         BEGIN ${stage("SELECT OLD.session AS session,OLD.thread AS thread")} END;
-      CREATE TRIGGER latest_member_drop AFTER DELETE ON thread_sessions WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_member_drop AFTER DELETE ON thread_sessions WHEN ${changed} BEGIN ${reconcile()} END;
 
       CREATE TRIGGER latest_thread_before_add BEFORE INSERT ON threads
         BEGIN ${stage(threadKeys(`NEW.id,${displacedThread}`))} END;
@@ -134,21 +153,22 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
         INSERT INTO latest_thread_changed(session,thread,old_valid,old_has,old_last,old_joined,old_member)
           SELECT m.session,m.thread,0,0,0,NULL,NULL FROM latest_thread_members m WHERE m.thread=NEW.id
             AND NOT EXISTS (SELECT 1 FROM latest_thread_changed x WHERE x.session=m.session AND x.thread=m.thread);
-        ${reconcile}
+        ${reconcile()}
       END;
       CREATE TRIGGER latest_thread_before_change BEFORE UPDATE OF id,surface,channel,thread_ts ON threads
-        WHEN OLD.id IS NOT NEW.id OR OLD.surface IS NOT NEW.surface OR OLD.channel IS NOT NEW.channel OR OLD.thread_ts IS NOT NEW.thread_ts
-        BEGIN ${stage(threadKeys(`OLD.id,NEW.id,${displacedThread}`))} END;
+        WHEN ${threadChanged}
+        BEGIN ${stage(threadKeys(`OLD.id,NEW.id,${displacedThread}`), "latest_thread_updating")} END;
       CREATE TRIGGER latest_thread_change AFTER UPDATE OF id,surface,channel,thread_ts ON threads
-        WHEN ${changed} BEGIN ${reconcile} END;
+        WHEN (${threadChanged}) AND ${updating} BEGIN ${reconcile("latest_thread_updating")} END;
       CREATE TRIGGER latest_thread_before_drop BEFORE DELETE ON threads
         BEGIN ${stage(threadKeys("OLD.id"))} END;
-      CREATE TRIGGER latest_thread_drop AFTER DELETE ON threads WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_thread_drop AFTER DELETE ON threads WHEN ${changed} BEGIN ${reconcile()} END;
       CREATE TRIGGER latest_thread_session_drop AFTER DELETE ON sessions BEGIN
         DELETE FROM latest_thread_members WHERE (thread,session) IN
           (SELECT thread,session FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=OLD.key);
         DELETE FROM latest_thread_rows WHERE session=OLD.key;
         DELETE FROM latest_thread_changed WHERE session=OLD.key;
+        DELETE FROM latest_thread_updating WHERE session=OLD.key;
         DELETE FROM latest_thread_scopes WHERE session=OLD.key;
       END;`);
     else checkLatestThreadIndex(db);
