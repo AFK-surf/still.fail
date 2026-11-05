@@ -143,6 +143,27 @@ test("copy destination tracking alone does not prepare chat names", () => {
   } finally { store.close(); }
 });
 
+test("installing name ordering keeps copy rows from an older station", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("slack", "C", "before-upgrade", null, null).id;
+    store.joinThread(thread, "s", "c");
+    const work = new CcIndexPreparation();
+    while (!ccSessionReady(db, "s")) work.step(db, "s");
+    for (const trigger of ["session_chat_session_drop", "session_chat_scope_drop", "session_chat_cc_drop",
+      "session_chat_cc_name", "session_chat_cc_settled"]) db.exec(`DROP TRIGGER ${trigger}`);
+    db.exec(`DROP TABLE session_chat_rows; DROP TABLE session_chat_scopes; DROP TABLE session_chat_meta;
+      ALTER TABLE cc_session_rows DROP COLUMN name_present; ALTER TABLE cc_session_rows DROP COLUMN name_has_last;
+      ALTER TABLE cc_session_rows DROP COLUMN name_last_at; ALTER TABLE cc_session_rows DROP COLUMN name_created_at`);
+    const before = db.prepare("SELECT session,thread,surface,created_at,last_at FROM cc_session_rows").all();
+    installSessionChatIndex(db);
+    assert.deepEqual(db.prepare("SELECT session,thread,surface,created_at,last_at FROM cc_session_rows").all(), before);
+    assert.equal(ccSessionReady(db, "s"), true);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, thread);
+  } finally { store.close(); }
+});
+
 test("the chat candidate seeks its ordered index", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
