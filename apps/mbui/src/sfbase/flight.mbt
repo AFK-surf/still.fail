@@ -64,8 +64,8 @@ pub(all) struct SendFlight {
   /// one block
   lines : @ui.FieldLines?
   lead : Int
-  /// the composer's marks in its words (refs_sent_marks): drawn as the field drew them; and the runs their row draws
-  /// them in (refs_sent_runs: the core's; None, as they are), which their pieces land as
+  /// the composer's marks in its words (refs_sent_marks), and the runs their row draws them in (refs_sent_runs: the
+  /// core's; None, as they are), which they fly in from where the field drew them alike (refs_look)
   marks : Array[(Int, Int)]
   runs : Json?
   /// the files sent with them, from their tiles, and their quotes, from their cards
@@ -634,8 +634,7 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
         // laid out (its layer's corner, wherever the page is in the window: a pane beside the sidebar)
         let room = c.box(style=@ui.style(w=Fixed(f.field_w), h=Fixed(f.field_h), clip=true), fn() {
           let words = c.box(style=@sf.full_width, fn() {
-            // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced), its marks
-            // as it drew them
+            // in the face chosen for what people write (ChatHost.kt SendTextFaced), as their message will draw them
             c.rich(person_runs(f.text, f.runs, t.p.accent), key="flight/words", style=t.t.words, link_color=t.p.blue, trim=true, w=Fill(1.0), words=true)
             |> ignore
           })
@@ -687,23 +686,25 @@ pub(all) struct FlightPiece {
 /// The words sent cut into the pieces that go on their own (ChatHost.kt Flight.pieces), with their message's words as
 /// laid out: what is on one line in the field and on one line in the message, each from where it was typed to where
 /// the message has it, set alike in both (the theme's `words`), so that only where each is changes. None until their
-/// message's words are laid out, or when those are not the words sent (a reference to a chat is a chip there), nor for
+/// message's words are laid out, or when those are not the words sent (a run the core changed, such as a link written out), nor for
 /// a new chat's first words (they come up with its list): they go as one block.
 pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.WordsPiece)? {
   guard f.lines is Some(lines) && !f.carried else { return None }
   // (their shape, not where they lie: placed where they are as laid out, flight_pieces_drawn)
+  let gone = marks_brackets(f.marks)
+  let said = flight_said(f)
   guard c.words_shape_of(flight_words_key) is Some(w) &&
     w.pieces.length() == 1 &&
-    w.text == f.text else {
+    w.text == said else {
     return None
   }
   let wp = w.pieces[0]
   let lay = wp.layout
-  let n = f.text.length()
+  let n = said.length()
   // where a line starts in the field or in the message
   let cuts : Array[Int] = [0, n]
   for s in lines.starts {
-    let k = s - f.lead
+    let k = said_at(s - f.lead, gone)
     if k > 0 && k < n && !cuts.contains(k) {
       cuts.push(k)
     }
@@ -723,7 +724,7 @@ pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.Wo
     let a = cuts[i]
     // (without the break that ends its line)
     let mut b = cuts[i + 1]
-    while b > a && is_break(f.text.unsafe_charcode_at(b - 1)) {
+    while b > a && is_break(said.unsafe_charcode_at(b - 1)) {
       b = b - 1
     }
     if b <= a {
@@ -731,7 +732,7 @@ pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.Wo
     }
     match lay.rects(a, b) {
       [r] => {
-        let (fx, fy) = lines.place(f.lead + a)
+        let (fx, fy) = lines.place(f.lead + sent_at(a, gone))
         out.push({ a, b, from: (fx, fy), at: r })
         // scrolled out of the field: not seen there
         shown.push(fy + lh / 2.0 >= ry && fy + lh / 2.0 <= ry + rh)
@@ -757,6 +758,54 @@ pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.Wo
     }
   }
   Some((out, wp))
+}
+
+///|
+/// What the words sent say in their message: a mark's `[` and `]` are the field's alone, taking no room there.
+pub fn flight_said(f : SendFlight) -> String {
+  words_without(f.text, marks_brackets(f.marks))
+}
+
+///|
+/// Where marks `marks` (in words sent) have their `[` and `]`, in order.
+fn marks_brackets(marks : Array[(Int, Int)]) -> Array[Int] {
+  let out : Array[Int] = []
+  for m in marks {
+    out.push(m.0 + 1)
+    out.push(m.1 - 1)
+  }
+  out
+}
+
+///|
+/// Words `s` without what stands at `gone`.
+fn words_without(s : String, gone : Array[Int]) -> String {
+  let sb = StringBuilder()
+  let mut at = 0
+  for g in gone {
+    sb.write_string(s.view(start_offset=at, end_offset=g).to_string())
+    at = g + 1
+  }
+  sb.write_string(s.view(start_offset=at).to_string())
+  sb.to_string()
+}
+
+///|
+/// Offset `k` of words sent, in them without what stood at `gone`.
+fn said_at(k : Int, gone : Array[Int]) -> Int {
+  k - gone.filter(fn(g) { g < k }).length()
+}
+
+///|
+/// Offset `k` of words without what stood at `gone`, in them as sent.
+fn sent_at(k : Int, gone : Array[Int]) -> Int {
+  let mut at = k
+  for g in gone {
+    if g <= at {
+      at += 1
+    }
+  }
+  at
 }
 
 ///|
@@ -839,10 +888,7 @@ fn flight_pieces_drawn(
   let flying = f.placed && f.placed_frame != c.frame_number()
   let across = if flying { flight_across_of(c, f) } else { 0.0 }
   let up = if flying { flight_up_of(c, f) } else { 0.0 }
-  let runs = match f.runs {
-    Some(Array(parts)) => words_runs(parts, t.p.accent)
-    _ => [@ui.plain(f.text)]
-  }
+  let runs = person_runs(f.text, f.runs, t.p.accent)
   for k, p in pieces {
     let (ax, ay, aw, ah) = p.at
     let cut = c.box(style=@ui.style(w=Fixed(aw), h=Fixed(ah), clip=true), fn() {
