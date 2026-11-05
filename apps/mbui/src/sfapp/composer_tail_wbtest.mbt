@@ -29,7 +29,7 @@ fn tail_tester(w : Double, opened? : Bool = true) -> @ui.Tester {
     @ui.set_tree_theme(@sf.ui_theme_now)
     root.lies_along(Is(End)) |> ignore
     made.val = Some(@sfpages.chat_composer_node(root, src, r, fn() { Some(read()) },
-      fn() { @sfpages.composer_width(w) }, fn() { 600.0 }, fn() { @sfpages.composer_foot_in(w) },
+      fn() { @sfpages.composer_side() }, fn() { 600.0 }, fn() { @sfpages.composer_foot_in(w) },
       fn() { @sfpages.composer_alone }, fn(_) { }))
   })
   t.draw()

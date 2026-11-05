@@ -1406,11 +1406,18 @@ pub fn composer_place(pane : Double) -> ComposerPlace {
 }
 
 ///|
+/// How far in from its pane's sides the composer stands in a panel whose corners are given (composer_geometry's): as
+/// far as makes its box concentric with the panel's foot corners its round controls can follow.
+pub fn composer_side_in(radii : FixedArray[Double]?) -> Double {
+  @sf.pane_foot_in_of(radii, holds=@sf.theme().round.side)
+}
+
+///|
 /// The composer's width, foot inset and shape in a panel whose corners are given. Retained pages pass their own
 /// corners, so the composer follows that panel even while no old view of it is being built.
 pub fn composer_geometry(pane : Double, radii : FixedArray[Double]?) -> (Double, Double, ComposerPlace) {
   let side = @sf.theme().round.side
-  let d = @sf.pane_foot_in_of(radii, holds=side)
+  let d = composer_side_in(radii)
   let width = composer_width_in(pane, d)
   let across = width >= pane - 2.0 * d - 0.5
   let foot = if across { d } else { composer_foot_wide }

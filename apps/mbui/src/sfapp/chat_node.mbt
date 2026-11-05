@@ -70,7 +70,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         src,
         r,
         view,
-        fn() { @sfpages.composer_width(width()) },
+        fn() { @sfpages.composer_side() },
         height,
         fn() { @sfpages.composer_foot_in(width()) },
         fn() { @sfpages.composer_alone },

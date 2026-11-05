@@ -12,6 +12,7 @@ test "the visible words of a message are reachable by a scripted long press" {
     Dragged(id) => "dragged \{tree.view_of(id).unwrap().rect()}"
     Hosted(id) => "hosted \{tree.view_of(id).unwrap().rect()}"
     TopRow(_) => "window"
+    Off(id) => "off \{tree.view_of(id).unwrap().rect()}"
     Nothing => "nothing"
   } })
   assert_false(t.reachable(words).is_empty(), msg="visible words \{at}; targets \{targets}")
