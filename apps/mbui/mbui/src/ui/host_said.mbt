@@ -49,6 +49,11 @@ pub fn[T] on_host_said(owner : @view.View, kind~ : String, said : () -> T?, f : 
 }
 
 ///|
+/// Whether what the host has once is being asked as a frame begins (host_said_arrive): that frame's, though it is not
+/// counted yet (a Tester's fake host says what it was given before it from then: shared_in).
+let host_said_asking : Ref[Bool] = Ref(false)
+
+///|
 /// As a frame begins, as what was posted is taken (frame_drawn): each holder still there asked, in the order they said
 /// so, untracked; those let go dropped. A holder let go while another's `f` runs is not asked (the list as it was, each
 /// looked at as its turn comes).
@@ -57,10 +62,12 @@ fn host_said_arrive() -> Unit {
     return
   }
   let now = host_saids.copy()
+  host_said_asking.val = true
   for h in now {
     if h.live.val {
       @signals.untracked(h.take)
     }
   }
+  host_said_asking.val = false
   host_saids.retain(fn(h) { h.live.val })
 }

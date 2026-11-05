@@ -239,6 +239,9 @@ fn share_said() -> ((String, String?), Array[SharedFile])? {
 fn share_taken(got : ((String, String?), Array[SharedFile]), blur : () -> Unit) -> Unit {
   let ((words, title), files) = got
   @hostapi.log("share in: \{words.length()} characters, \{files.length()} files")
+  // (one change: what follows it (share_in_node's reacts) sees it taken whole, not shared with the sheet of one before
+  // still up, which puts a second sheet up as that one's is let go)
+  @signals.start_batch()
   share_in.shared.set(Some((words, title)))
   share_in.files.set(files)
   share_in.raised.set(false)
@@ -246,6 +249,7 @@ fn share_taken(got : ((String, String?), Array[SharedFile]), blur : () -> Unit) 
   share_in.choosing.set(false)
   share_in.opening.set(None)
   share_in.error.set("")
+  @signals.end_batch()
   blur()
 }
 
