@@ -10,7 +10,7 @@ import { readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.t
 import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
 
-for (const recursive of [false, true]) test(`home and workspace pages match the original across interleaved changes (recursive triggers ${recursive})`, () => {
+for (const recursive of [false, true]) for (const partial of [false, true]) test(`home and workspace pages match the original across interleaved changes (partial batches ${partial}, recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
@@ -18,7 +18,7 @@ for (const recursive of [false, true]) test(`home and workspace pages match the 
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     let seed = 0x845ab613, name = 0;
-    const pick = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
+    const pick = (n: number) => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % n; };
     const add = () => {
       const id = store.openThread("ember", "EMBER", `chat-${name++}`, "Chat", null).id;
       db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(20), id);
@@ -67,10 +67,17 @@ for (const recursive of [false, true]) test(`home and workspace pages match the 
     };
     const insert = db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','p','hello',?)");
     const sessions = ["one", "two", "default", "missing"];
-    for (let step = 0; step < 100; step++) {
+    const work = [
+      () => settleRecentScopeVisibilityStep(db, 2),
+      ...["A", "B"].flatMap((ws) => [() => settleRecentWorkspaceSessionStep(db, ws, 2),
+        () => settleRecentWorkspaceMemberStep(db, ws, 2), () => settleRecentWorkspaceOrderStep(db, ws, 2)]),
+      () => dispatchRecentScopeOrderStep(db, 2), () => settleRecentHomeSessionStep(db, 2),
+      () => settleRecentHomeChatStep(db, 2), () => settleRecentHomeOrderStep(db, 2), () => settleRecentHomeOverlapStep(db, 2),
+    ];
+    for (let step = 0; step < 200; step++) {
       const threads = db.prepare("SELECT id FROM threads ORDER BY id").all() as { id: number }[];
       const id = threads.length ? threads[pick(threads.length)]!.id : add();
-      switch (pick(7)) {
+      switch (pick(8)) {
         case 0: db.prepare("UPDATE threads SET home = ? WHERE id = ?").run([null, "one", "two", "missing"][pick(4)], id); break;
         case 1: store.joinThread(id, sessions[pick(sessions.length)]!, "ember"); break;
         case 2: db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = ?").run(id, sessions[pick(sessions.length)]); break;
@@ -78,10 +85,16 @@ for (const recursive of [false, true]) test(`home and workspace pages match the 
         case 4: db.prepare("UPDATE entries SET at = ? WHERE thread = ? AND n = ?").run(pick(100), id, 1 + pick(4)); break;
         case 5: db.prepare("UPDATE sessions SET ws = ? WHERE key = ?").run([null, "A", "B"][pick(3)], sessions[pick(3)]); break;
         case 6: if (threads.length > 3) db.prepare("DELETE FROM threads WHERE id = ?").run(id); else add(); break;
+        case 7: add(); break;
       }
       check(step);
-      drain();
+      if (partial) {
+        const steps = pick(5);
+        for (let i = 0; i < steps; i++) { work[pick(work.length)]!(); check(step); }
+      } else drain();
       check(step);
     }
+    drain();
+    check(200);
   } finally { store.close(); }
 });
