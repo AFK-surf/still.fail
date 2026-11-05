@@ -34,6 +34,8 @@ priv struct AnchoredIn[K] {
   /// is read from its top; what covers its top
   fresh : Array[(K, Bool)]
   cover : Double
+  /// what covers its foot (a composer over the rows under it): nothing is laid out by it; what is in sight is told by it
+  foot_cover : Double
   tucked : K?
   /// the row last asked to be brought into sight, and how often one was
   reveal : (K?, Int)
@@ -55,6 +57,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.rooms == b.rooms &&
   a.fresh == b.fresh &&
   a.cover == b.cover &&
+  a.foot_cover == b.foot_cover &&
   a.tucked == b.tucked &&
   a.reveal == b.reveal &&
   a.to_end == b.to_end
@@ -88,7 +91,8 @@ pub(all) struct AnchoredSource[K] {
 /// while it is there), as View::scrolls_window's from its end says, by its anchor. `follows` says whether it is at
 /// its end; `shown` is told the keys in sight; `put` puts a row's top that far under the window's top; `room` is a
 /// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
-/// though not in sight (a send's landing); `foot_room` room under the last row. An indexed source supplies its
+/// though not in sight (a send's landing); `foot_room` room under the last row. `foot_cover` what covers its foot (a composer over
+/// it): nothing laid out by it, told in `sighted` (what of the window is in sight). An indexed source supplies its
 /// keys by position instead of `keys`. `sighted` is told, once each frame is painted, the rows that came in sight or
 /// within `ahead` of it, or were gone past on the way, since it was last laid out, and how wide the list is
 /// laid out (what a row's pictures are decoded for: the same width the rows are drawn at): the same rows whether the frames
@@ -114,13 +118,14 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
+  foot_cover? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
   sighted? : (Sighted[K]) -> Unit,
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
     put?=put, rooms?=rooms, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
-    bar_clear~, foot_room~, indexed?=indexed, sighted?=sighted,
+    bar_clear~, foot_room~, foot_cover~, indexed?=indexed, sighted?=sighted,
   )
 }
 
@@ -147,6 +152,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
+  foot_cover? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
   fixed_estimate? : Bool = false,
   sighted? : (Sighted[K]) -> Unit,
@@ -166,6 +172,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // (where those in sight were told to be: told again as they move, the frame painted where they are)
   let sighted_rows : Ref[Array[(K, Double, Double)]] = Ref([])
   let sighted_h : Ref[Double] = Ref(-1.0)
+  let sighted_cover : Ref[(Double, Double)] = Ref((-1.0, -1.0))
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -395,6 +402,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             out
           },
           cover: cover(),
+          foot_cover: foot_cover(),
           tucked: tucked(),
           reveal: reveal_said.get(),
           to_end: s.to_end.get(),
@@ -825,11 +833,13 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               sighted_last.add(k)
             }
             let rows = Array::makei(r.keys.length(), fn(q) { (r.keys[q], r.tops[q], r.heights[q]) })
-            let moved = rows != sighted_rows.val || h != sighted_h.val
+            let covered = (c.cover, c.foot_cover)
+            let moved = rows != sighted_rows.val || h != sighted_h.val || covered != sighted_cover.val
+            sighted_cover.val = covered
             sighted_rows.val = rows
             sighted_h.val = h
             if !fresh_in.is_empty() || !left.is_empty() || moved {
-              let s : Sighted[K] = { came: fresh_in, left, width: l.width, rows, height: h }
+              let s : Sighted[K] = { came: fresh_in, left, width: l.width, rows, height: h, cover: covered }
               self.tree.said_after_paint(fn() { tell(s) })
             }
           }
@@ -1114,4 +1124,6 @@ pub(all) struct Sighted[K] {
   rows : Array[(K, Double, Double)]
   /// how tall the list's window is
   height : Double
+  /// how much of its window is covered at its top and at its foot (`cover`, `foot_cover`): what of it is in sight
+  cover : (Double, Double)
 }

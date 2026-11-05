@@ -232,3 +232,32 @@ test "scrolls_anchored: a short list's window grown or shrunk, its rows where th
   let shrunk = told[told.length() - 1]
   assert_eq((grown.height, grown.rows, shrunk.height, shrunk.rows), (300.0, rows, 150.0, rows))
 }
+
+///|
+test "scrolls_anchored: what covers its foot drawn back, the rows where they were: told again with what covers it" {
+  let told : Array[@view.Sighted[Int]] = []
+  let covered = @signals.signal(60.0, same=fn(a, b) { a == b })
+  let scroll = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.scrolls_anchored(scroll, fn() { Array::makei(30, fn(i) { i }) }, est=40.0, ahead=0.0, foot_cover=fn() { covered.get() }, sighted=fn(s) { told.push(s) }, fn(b, _) {
+        b.height(Is(Some(40.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let frame = fn(t : Double) {
+    tree.frame(390.0, 844.0, now=t) |> ignore
+    for f in tree.take_after_paint() {
+      f()
+    }
+  }
+  frame(0.0)
+  let before = told[told.length() - 1]
+  covered.set(0.0)
+  frame(16.0)
+  let after = told[told.length() - 1]
+  assert_eq((before.cover, after.cover, after.rows), ((0.0, 60.0), (0.0, 0.0), before.rows))
+}
