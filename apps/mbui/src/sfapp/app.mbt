@@ -797,15 +797,12 @@ fn page_view(
   // page at the stack's root is so with a page sliding in over it or back off it too (where it stands, not how deep
   // the stack is: Nav::under), its place's top bar kept
   let root = app.nav.under() is None
-  let e = if root { place_switch.get() } else { 1.0 }
   if root {
     bar_built(c, page)
   }
-  c.box(
+  let whole = c.box(
     w=Fill(1.0),
     h=Fill(1.0),
-    tx=app.switch_way.to_double() * switch_slide * (1.0 - e),
-    opacity=e,
     fn() {
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
@@ -854,7 +851,13 @@ fn page_view(
       }
     },
   )
-  |> ignore
+  if root {
+    // Move the place, including where it takes input, without rebuilding it on every frame.
+    c.moved_by(whole, fn(_, _) {
+      (app.switch_way.to_double() * switch_slide * (1.0 - place_switch.get()), 0.0)
+    })
+    c.look_by(whole, fn() { @ui.look(alpha=place_switch.get()) })
+  }
 }
 
 ///|
