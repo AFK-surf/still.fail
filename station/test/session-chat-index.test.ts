@@ -148,8 +148,25 @@ test("the chat candidate seeks its ordered index", () => {
   try {
     installSessionChatIndex(db);
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${SESSION_CHAT_INDEXED}`).all("s").map((row) => String(row.detail)).join("\n");
-    assert.match(plan, /SEARCH r USING COVERING INDEX session_chat_order \(session=\?\)/);
+    assert.match(plan, /SEARCH r USING PRIMARY KEY \(session=\?\)/);
     assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
+  } finally { store.close(); }
+});
+
+test("a recreated name scope rebuilds its order from surviving copy rows", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const older = store.openThread("slack", "C", "older", null, null).id;
+    const newer = store.openThread("ember", "C", "newer", null, null).id;
+    store.joinThread(older, "s", "c");
+    store.joinThread(newer, "s", "c");
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
+    db.prepare("DELETE FROM session_chat_scopes WHERE session=?").run("s");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_chat_rows WHERE session=?").get("s")?.n, 0);
+    prepare(store, "s");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_chat_rows WHERE session=?").get("s")?.n, 2);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
   } finally { store.close(); }
 });
 

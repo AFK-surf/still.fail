@@ -8,22 +8,23 @@ const VERSION = SESSION_CHAT_VERSION;
 // use thread_state instead, so their ordering cannot be reused for names. This order starts empty on an old station;
 // requested sessions are filled in batches using the copy worker's already-tracked membership set.
 const lastAt = (thread: string) => `(SELECT at FROM entries WHERE thread=${thread} ORDER BY n DESC LIMIT 1)`;
-const refresh = (session: string, thread: string) => `
-  DELETE FROM session_chat_rows WHERE session=${session} AND thread=${thread} AND NOT EXISTS
-    (SELECT 1 FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session=${session} AND m.thread=${thread});
-  UPDATE session_chat_rows SET
-    has_last=(${lastAt(thread)} IS NOT NULL),last_at=COALESCE(${lastAt(thread)},0),
-    created_at=(SELECT created_at FROM threads WHERE id=${thread})
-    WHERE session=${session} AND thread=${thread}
-      AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=${session})
-      AND EXISTS (SELECT 1 FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session=${session} AND m.thread=${thread})
-      AND (has_last IS NOT (${lastAt(thread)} IS NOT NULL) OR last_at IS NOT COALESCE(${lastAt(thread)},0)
-        OR created_at IS NOT (SELECT created_at FROM threads WHERE id=${thread}));
-  INSERT INTO session_chat_rows(session,thread,has_last,last_at,created_at)
-    SELECT m.session,m.thread,${lastAt("m.thread")} IS NOT NULL,COALESCE(${lastAt("m.thread")},0),t.created_at
-    FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session=${session} AND m.thread=${thread}
-      AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=m.session)
-      AND NOT EXISTS (SELECT 1 FROM session_chat_rows r WHERE r.session=m.session AND r.thread=m.thread);`;
+const exists = (session: string, thread: string) => `(EXISTS
+  (SELECT 1 FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session=${session} AND m.thread=${thread}))`;
+const refresh = (session: string, thread: string) => `UPDATE cc_session_rows SET
+    name_present=${exists(session, thread)},
+    name_has_last=CASE WHEN ${exists(session, thread)} THEN (${lastAt(thread)} IS NOT NULL) END,
+    name_last_at=CASE WHEN ${exists(session, thread)} THEN COALESCE(${lastAt(thread)},0) END,
+    name_created_at=(SELECT created_at FROM threads WHERE id=${thread})
+  WHERE session=${session} AND thread=${thread}
+    AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=${session})
+    AND (name_present IS NOT ${exists(session, thread)} OR (${exists(session, thread)} AND
+      (name_has_last IS NOT (${lastAt(thread)} IS NOT NULL) OR name_last_at IS NOT COALESCE(${lastAt(thread)},0)
+        OR name_created_at IS NOT (SELECT created_at FROM threads WHERE id=${thread}))))`;
+// A scope may have been removed and recreated while its copy rows survived. Restore its ordered row during the scan.
+const ensure = (session: string, thread: string) => `INSERT OR IGNORE INTO session_chat_rows(session,has_last,last_at,created_at,thread)
+  SELECT session,name_has_last,name_last_at,name_created_at,thread FROM cc_session_rows
+  WHERE session=${session} AND thread=${thread} AND name_present=1
+    AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=${session})`;
 
 export function installSessionChatIndex(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_chat_meta'").get() !== undefined;
@@ -35,11 +36,15 @@ export function installSessionChatIndex(db: DatabaseSync): void {
   CREATE TABLE session_chat_scopes (
     session TEXT PRIMARY KEY, scan_after INTEGER, scan_end INTEGER, complete INTEGER NOT NULL DEFAULT 0
   ) WITHOUT ROWID;
+  -- Store the old order key on the already-tracked copy row; this permits one ordered tree for names.
+  ALTER TABLE cc_session_rows ADD COLUMN name_present INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE cc_session_rows ADD COLUMN name_has_last INTEGER;
+  ALTER TABLE cc_session_rows ADD COLUMN name_last_at;
+  ALTER TABLE cc_session_rows ADD COLUMN name_created_at INTEGER;
   CREATE TABLE session_chat_rows (
-    session TEXT NOT NULL, thread INTEGER NOT NULL, has_last INTEGER NOT NULL, last_at NOT NULL, created_at INTEGER NOT NULL,
-    PRIMARY KEY(session,thread)
+    session TEXT NOT NULL, has_last INTEGER NOT NULL, last_at NOT NULL, created_at INTEGER NOT NULL, thread INTEGER NOT NULL,
+    PRIMARY KEY(session,has_last DESC,last_at DESC,created_at DESC,thread DESC)
   ) WITHOUT ROWID;
-  CREATE INDEX session_chat_order ON session_chat_rows(session,has_last DESC,last_at DESC,created_at DESC,thread DESC);
   CREATE TRIGGER session_chat_session_drop AFTER DELETE ON sessions BEGIN
     DELETE FROM session_chat_scopes WHERE session=OLD.key;
   END;
@@ -47,13 +52,24 @@ export function installSessionChatIndex(db: DatabaseSync): void {
     DELETE FROM session_chat_rows WHERE session=OLD.session;
   END;
   CREATE TRIGGER session_chat_cc_drop AFTER DELETE ON cc_session_rows BEGIN
-    DELETE FROM session_chat_rows WHERE session=OLD.session AND thread=OLD.thread;
+    DELETE FROM session_chat_rows WHERE session=OLD.session AND has_last=OLD.name_has_last AND last_at=OLD.name_last_at
+      AND created_at=OLD.name_created_at AND thread=OLD.thread AND OLD.name_present=1;
+  END;
+  CREATE TRIGGER session_chat_cc_name AFTER UPDATE OF name_present,name_has_last,name_last_at,name_created_at ON cc_session_rows
+    WHEN OLD.name_present IS NOT NEW.name_present OR OLD.name_has_last IS NOT NEW.name_has_last
+      OR OLD.name_last_at IS NOT NEW.name_last_at OR OLD.name_created_at IS NOT NEW.name_created_at BEGIN
+    DELETE FROM session_chat_rows WHERE session=OLD.session AND has_last=OLD.name_has_last AND last_at=OLD.name_last_at
+      AND created_at=OLD.name_created_at AND thread=OLD.thread AND OLD.name_present=1;
+    INSERT OR IGNORE INTO session_chat_rows(session,has_last,last_at,created_at,thread)
+      SELECT NEW.session,NEW.name_has_last,NEW.name_last_at,NEW.name_created_at,NEW.thread
+      WHERE NEW.name_present=1 AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session);
   END;
   -- Name scopes are created only after copy tracking is complete. Later changes become dirty before their copy row
   -- changes; refresh once as that work settles, even if the copy row itself was unchanged (an old partial deletion).
   CREATE TRIGGER session_chat_cc_settled AFTER DELETE ON cc_session_dirty
     WHEN EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=OLD.session) BEGIN
-      ${refresh("OLD.session", "OLD.thread")}
+      ${refresh("OLD.session", "OLD.thread")};
+      ${ensure("OLD.session", "OLD.thread")};
   END;`);
     else checkSessionChatIndex(db);
     db.exec("COMMIT");
@@ -66,7 +82,7 @@ export function checkSessionChatIndex(db: DatabaseSync): void {
 }
 
 // NULL entry times sort below non-NULL ones; creation time and thread id break ties in the original order.
-export const SESSION_CHAT_INDEXED = `SELECT t.* FROM session_chat_rows r INDEXED BY session_chat_order
+export const SESSION_CHAT_INDEXED = `SELECT t.* FROM session_chat_rows r
   CROSS JOIN threads t ON t.id=r.thread WHERE r.session=?1
   ORDER BY r.has_last DESC,r.last_at DESC,r.created_at DESC,r.thread DESC LIMIT 1`;
 
@@ -146,12 +162,9 @@ export class SessionChatPreparation {
       scan.setReadBigInts(true);
       const rows = (scope.scan_after === null ? scan.all(session, scope.scan_end, limit)
         : scan.all(session, scope.scan_after, scope.scan_end, limit)) as { thread: bigint }[];
-      const update = db.prepare(`INSERT INTO session_chat_rows(session,thread,has_last,last_at,created_at)
-        SELECT m.session,m.thread,${lastAt("m.thread")} IS NOT NULL,COALESCE(${lastAt("m.thread")},0),t.created_at
-        FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session=?1 AND m.thread=?2
-        ON CONFLICT(session,thread) DO UPDATE SET has_last=excluded.has_last,last_at=excluded.last_at,created_at=excluded.created_at
-        WHERE has_last IS NOT excluded.has_last OR last_at IS NOT excluded.last_at OR created_at IS NOT excluded.created_at`);
-      for (const row of rows) update.run(session, row.thread);
+      const update = db.prepare(refresh("?1", "?2"));
+      const insert = db.prepare(ensure("?1", "?2"));
+      for (const row of rows) { update.run(session, row.thread); insert.run(session, row.thread); }
       const done = rows.length < limit;
       db.prepare("UPDATE session_chat_scopes SET scan_after=?,complete=? WHERE session=?")
         .run(rows.at(-1)?.thread ?? scope.scan_after, done ? 1 : 0, session);
