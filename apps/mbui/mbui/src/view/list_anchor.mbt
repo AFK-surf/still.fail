@@ -67,6 +67,11 @@ let anchored_tail = 8
 let anchored_ask_rows = 64
 
 ///|
+/// How many rows past the last laid out a list from its end counts how far its end is below where it shows by
+/// (Scroll::end_below_told): further, or past one never measured, as far as can be.
+let anchored_end_rows = 64
+
+///|
 /// A keyed list that can be read by position without assembling all of its keys. Snapshot follows changes to the
 /// set or order and returns its revision and length. Key and find read that snapshot without signals; find may use
 /// near as a hint. Removed_since returns keys removed after a revision, or None if that history is no longer
@@ -785,6 +790,26 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         self.tree.once_laid_out(fn() { laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1) })
         let extent_now = extent()
         self.tree.once_laid_out(fn() { extent_said.set(extent_now) })
+        // (where its last row's foot is below where it shows to, laid out; as far as can be where it is not:
+        // Scroll::end_below_told)
+        let last_q = r.keys.length() - 1
+        // (past the last laid out, as far as the rows after it are measured, so many at most: past that, or one not
+        // measured, as far as can be)
+        let below = if n > 0 && last_q >= 0 {
+          let mut foot = r.tops[last_q] + r.heights[last_q]
+          let mut i = r.last + 1
+          while i < n && i - r.last <= anchored_end_rows {
+            match heights.get(key_at(i)) {
+              Some(t) => foot += t
+              None => break
+            }
+            i += 1
+          }
+          if i == n { foot - h } else { @double.infinity }
+        } else {
+          @double.infinity
+        }
+        self.tree.once_laid_out(fn() { s.end_below.set(below) })
         self.tree.once_laid_out(fn() {
           let in_sight = []
           for q in 0..<r.keys.length() {
