@@ -192,6 +192,9 @@ pub(all) struct Look {
   /// where across it cuts what it holds (from, to, in its own terms; None: all of it), as it is painted, where it clips
   /// (View::clips): View::cut_across
   mut cut_across : (Double, Double)?
+  /// the rect it cuts what it holds to (x, y, w, h, in its own terms; None: none of its own), as it is painted, whether
+  /// or not it clips to itself: View::clip_drawn
+  mut clip_drawn : (Double, Double, Double, Double)?
   /// the picture it shows over its ground, all of it filled (its source as what hosts the tree keeps pictures by, what
   /// stands in for it till it is decoded at the size it is drawn ("" none), the most pixels it is asked at), drawn as
   /// what hosts the tree draws one (None: none): View::image
@@ -289,6 +292,8 @@ pub(all) struct Content {
   shadow_out : Bool
   /// where across it cuts what it holds (View::cut_across)
   cut_across : (Double, Double)?
+  /// the rect it cuts what it holds to (View::clip_drawn)
+  clip_drawn : (Double, Double, Double, Double)?
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
@@ -372,6 +377,8 @@ pub(all) struct Drawn {
   shadow_out : Bool
   /// where across it cuts what it holds (View::cut_across)
   cut_across : (Double, Double)?
+  /// the rect it cuts what it holds to (View::clip_drawn)
+  clip_drawn : (Double, Double, Double, Double)?
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
@@ -1217,6 +1224,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.notch = (0.0, 0.0, 0.0)
       n.look.shadow_out = false
       n.look.cut_across = None
+      n.look.clip_drawn = None
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
       n.look.image_cover = false
@@ -1346,7 +1354,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2168,6 +2176,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
 /// two that set the same thing two ways one binding (Width: View::width in points, View::width_share as a share;
 /// Words: View::words, View::words_runs), any other its own, so that one bound never lets go of another's.
 priv enum Prop {
+  ClipDrawn
   CutAcross
   Notch
   ShadowOut
@@ -2578,6 +2587,16 @@ pub fn View::clips(self : View, on : Live[Bool]) -> View {
 /// Ctx::cut_across_by: paint's. Its cut is another, so what it holds is drawn again, all of it.
 pub fn View::cut_across(self : View, across : Live[(Double, Double)?]) -> View {
   self.bind(CutAcross, across, Paint, fn(a) { self.tree.nodes[self.at].look.cut_across = a })
+  self
+}
+
+///|
+/// The rect it cuts what it holds to, as it changes (x, y, w, h in its own terms, anywhere of it or beyond it; None: none
+/// of its own), whether or not it clips to itself (View::clips: both, where it does): what shows of a thing on its way
+/// cut as each frame is painted (a picture flying out of its thumbnail, cut where the list it was in leaves it seen),
+/// nothing laid out for it. Paint's: what it holds drawn again, all of it.
+pub fn View::clip_drawn(self : View, rect : Live[(Double, Double, Double, Double)?]) -> View {
+  self.bind(ClipDrawn, rect, Paint, fn(r) { self.tree.nodes[self.at].look.clip_drawn = r })
   self
 }
 
@@ -7262,6 +7281,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     notch: n.look.notch,
     shadow_out: n.look.shadow_out,
     cut_across: n.look.cut_across,
+    clip_drawn: n.look.clip_drawn,
     image: n.look.image,
     image_for: n.look.image_for,
     image_cover: n.look.image_cover,
@@ -7576,6 +7596,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     notch: c.notch,
     shadow_out: c.shadow_out,
     cut_across: c.cut_across,
+    clip_drawn: c.clip_drawn,
     image: c.image,
     image_for: c.image_for,
     image_cover: c.image_cover,

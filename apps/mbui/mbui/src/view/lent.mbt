@@ -143,8 +143,8 @@ pub fn Tree::view_of(self : Tree, id : NodeId) -> View? {
 }
 
 ///|
-/// What of the window node `id` can be seen in as what holds it cuts it (View::clips: each that does, as it was last
-/// placed, its scale with it): x0, y0, x1, y1 in the window, its own box not cut by itself.
+/// What of the window node `id` can be seen in as what holds it cuts it (View::clips, View::clip_drawn: each that does,
+/// as it was last placed, its scale with it): x0, y0, x1, y1 in the window, its own box not cut by itself.
 pub fn Tree::seen_bounds(self : Tree, id : NodeId, drawing? : Bool = false) -> (Double, Double, Double, Double) {
   let mut b = (-1.0e9, -1.0e9, 1.0e9, 1.0e9)
   if id.at < 0 || id.at >= self.nodes.length() {
@@ -157,6 +157,15 @@ pub fn Tree::seen_bounds(self : Tree, id : NodeId, drawing? : Bool = false) -> (
       let (x, y, _, sc) = self.projected(i, drawing~)
       let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
       b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))
+    }
+    // (and to the rect it cuts to as it is painted, View::clip_drawn)
+    match n.look.clip_drawn {
+      Some((cx, cy, cw, ch)) => {
+        let (x, y, _, sc) = self.projected(i, drawing~)
+        let (x0, y0) = (x + cx * sc, y + cy * sc)
+        b = (dmax(b.0, x0), dmax(b.1, y0), dmin(b.2, x0 + cw * sc), dmin(b.3, y0 + ch * sc))
+      }
+      None => ()
     }
     i = n.parent
   }
