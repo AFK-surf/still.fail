@@ -881,7 +881,33 @@ void mb_host_clipboard_secret_off(void) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret_off);
 }
 
+// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines, each kept
+// as it is said, the oldest let go
+#define MB_RECENT 12
+static char mb_recent[MB_RECENT][240];
+static int mb_recent_at, mb_recent_n;
+
+void mb_host_recent(void (*each)(const char *line)) {
+  for (int k = 0; k < mb_recent_n; k++) each(mb_recent[(mb_recent_at - mb_recent_n + k + MB_RECENT) % MB_RECENT]);
+}
+
+static void recent_keep(moonbit_string_t s) {
+  int32_t n = Moonbit_array_length(s);
+  if (n < 4) return;
+  int perf = 0;
+  for (int32_t k = 0; k + 3 < n && k < 16; k++)
+    if (s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') perf = 1;
+  if (!perf) return;
+  char *out = mb_recent[mb_recent_at];
+  int32_t m = n < (int32_t)sizeof mb_recent[0] - 1 ? n : (int32_t)sizeof mb_recent[0] - 1;
+  for (int32_t k = 0; k < m; k++) out[k] = s[k] < 128 ? (char)s[k] : '?';
+  out[m] = 0;
+  mb_recent_at = (mb_recent_at + 1) % MB_RECENT;
+  if (mb_recent_n < MB_RECENT) mb_recent_n++;
+}
+
 void mb_host_log(moonbit_string_t s) {
+  recent_keep(s);
   JNIEnv *env = env_();
   jstring j = jstr(env, s);
   (*env)->CallStaticVoidMethod(env, host_cls, m_log, j);

@@ -35,7 +35,9 @@ esac
 APP=${APP:-stillfail}
 t0=$SECONDS
 log=$O/moon.log
-if ! moon build --target wasm --release src/$APP > "$log" 2>&1; then
+# (--no-strip: the program keeps its functions' names, so that a trap's stack says them: the Android shell's report,
+# wasm_shell.c; without it the name section holds the module's name alone)
+if ! moon build --target wasm --release --no-strip src/$APP > "$log" 2>&1; then
   awk '/^Error/ { n=9 } n>0 { print substr($0,1,300); n-- }' "$log" >&2
   exit 1
 fi
@@ -74,7 +76,8 @@ if [ "${PLATFORM:-mac}" = android ]; then
   wasmtime_cli
   case "${ABI:-arm64-v8a}" in x86_64) target=x86_64-linux-android ;; *) target=aarch64-linux-android ;; esac
   t0=$SECONDS
-  "$WT_CLI" compile $WT_SAME --target $target "$program" -o "$O/app-android.cwasm"
+  # (its traps checked in its code, not by a signal: the Android shell's, wasm_shell.c)
+  "$WT_CLI" compile $WT_SAME -O signals-based-traps=n --target $target "$program" -o "$O/app-android.cwasm"
   echo "wasm-app: compiled for $target in $((SECONDS - t0)) s"
   if [ "${1:-build}" = run ]; then
     shift
