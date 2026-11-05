@@ -2389,6 +2389,10 @@ pub fn Viewer::wheeled(
   at : Double,
 ) -> Unit {
   let desk = @sf.pointer_rests()
+  // (a zoom's wheel over the picture is its own: a browser's page zooms by none of it)
+  if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd | @ui.wheel_mod_pinch)) != 0 {
+    @ui.keep_zoom_wheel()
+  }
   if desk && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
     if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
       let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < desk_pinch_step

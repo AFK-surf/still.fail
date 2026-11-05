@@ -478,7 +478,10 @@ fn bar_button_side() -> Double {
 
 ///|
 /// The independent page named by the panel's front tab, hosted by its retained shell.
-fn side_front(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, front : String, own_bar : Bool) -> Unit {
+fn side_front(
+  c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, front : String, own_bar : Bool,
+  screen_alone? : Bool = false,
+) -> Unit {
   if front == "jobs" {
     // a service up pressed: its own tab, in front (JobsTab onOpen)
     jobs_tab(c, src, r.station, chat_key(r), (src.topic)("chatJobs", chat_params(r)).value, fn(job) {
@@ -506,7 +509,7 @@ fn side_front(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatVie
     })
   } else if tab_file(front) is Some((session, path, name)) {
     file_pane(c, src, r, session, path, name)
-  } else if station_tab_pane(c, src, w, r, front) {
+  } else if station_tab_pane(c, src, w, r, front, own_bar=if screen_alone { Some(side_bar_tape()) } else { None }) {
     ()
   } else if front != "" {
     // one of its agents' execution histories

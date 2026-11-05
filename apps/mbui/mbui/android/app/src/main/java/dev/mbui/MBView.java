@@ -804,6 +804,13 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             // a number's: digits, its Enter a done key (Compose's ImeAction.Done, KeyboardType.Number)
             out.inputType = InputType.TYPE_CLASS_NUMBER;
             out.imeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        } else if (Device.imeAction == 4) {
+            // a secret's (a token, a password): a password's keyboard, nothing of it learnt or suggested (Compose's
+            // KeyboardType.Password); its Enter as the field's own
+            out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD;
+            out.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_ENTER_ACTION
+                    | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                    | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
         }
         out.initialSelStart = Host.selStart;
         out.initialSelEnd = Host.selEnd;

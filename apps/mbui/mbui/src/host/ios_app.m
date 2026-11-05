@@ -611,7 +611,13 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
   if (key_catching) return UIKeyboardTypeDefault;
   return ime_action_kind == 2 ? UIKeyboardTypeURL : ime_action_kind == 3 ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault;
 }
-- (UITextAutocorrectionType)autocorrectionType { return key_catching ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault; }
+- (UITextAutocorrectionType)autocorrectionType {
+  return key_catching || ime_action_kind == 4 ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault;
+}
+// (a secret's, hostapi ime_action 4, a token or a password: no corrections nor spelling, nothing of it suggested)
+- (UITextSpellCheckingType)spellCheckingType {
+  return key_catching || ime_action_kind == 4 ? UITextSpellCheckingTypeNo : UITextSpellCheckingTypeDefault;
+}
 - (UITextAutocapitalizationType)autocapitalizationType { return UITextAutocapitalizationTypeNone; }
 - (UITextSmartQuotesType)smartQuotesType { return UITextSmartQuotesTypeNo; }
 - (UITextSmartDashesType)smartDashesType { return UITextSmartDashesTypeNo; }
@@ -958,6 +964,11 @@ static MBController *the_controller;
 // side (the system's vertical bar) past the window's foot itself: the cards go on under the home indicator's line to
 // it (sfdesk frame.mbt), so they end on the keyboard from its first point on, at its own pace; past the safe area's
 // foot, they waited the first 34 for it and then went twice as fast (a hitch in what is at the list's end).
+// Where the system said the keyboard came to rest while its guide stayed at the foot (kb_said; -1 none): what the app
+// is then laid out above, for the guide said nothing (a phone's record, 2026-11-05: up at 358 of 678, the guide and its
+// mark at 678, the composer under the keyboard till the app was started again).
+static double kb_said_y = -1;
+
 static double ime_over(void) {
   MBController *c = the_controller;
   UIView *root = c.view;
@@ -972,7 +983,8 @@ static double ime_over(void) {
   if (@available(iOS 27.1, *))
     if (c.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified) foot = 0;
 #endif
-  double over = root.bounds.size.height - mark.frame.origin.y - foot;
+  double top = kb_said_y >= 0 ? MIN(kb_said_y, mark.frame.origin.y) : mark.frame.origin.y;
+  double over = root.bounds.size.height - top - foot;
   return over > 0 ? over : 0;
 }
 
@@ -1857,11 +1869,40 @@ static void watch_shown(void) {
   }];
 }
 
-// The soft keyboard put away by the person (an iPad's key, a hardware keyboard come, dragged down), not by the app:
-// what was typed into lets go of the focus, as Android's (MainActivity: Native.text 7); the app's own hiding comes
-// after its focus went (imeActive off by then), and one as the app leaves the front, or as something of the system's
-// comes over it (a picker, Safari's view, the share sheet: Android's window losing its focus), is the system's.
+static void kb_said(double y) {
+  if (y == kb_said_y) return;
+  kb_said_y = y;
+  [the_view requestFrame];
+}
+
+// The keyboard come to rest at `end` (the system's, on the screen): kept (kb_said_y) where its guide's mark is not there;
+// none where it is, or the keyboard is not over the app's foot (beside it, floating, gone).
+static void kb_rested(CGRect end) {
+  MBController *c = the_controller;
+  UIView *root = c.view;
+  if (!root.window || !c.kbMark) return;
+  CGRect at = [root convertRect:end fromCoordinateSpace:root.window.screen.coordinateSpace];
+  double h = root.bounds.size.height;
+  BOOL over = at.origin.y < h && CGRectGetMaxY(at) >= h - 1;
+  kb_said(over && fabs(c.kbMark.frame.origin.y - at.origin.y) > 2 ? at.origin.y : -1);
+}
+
 static void watch_keyboard(void) {
+  [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillHideNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+    kb_said(-1);
+  }];
+  // (its height changed, the window turned: where it rests now)
+  [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidChangeFrameNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+    kb_rested([n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue]);
+  }];
+  // The soft keyboard put away by the person (an iPad's key, a hardware keyboard come, dragged down), not by the app:
+  // what was typed into lets go of the focus, as Android's (MainActivity: Native.text 7); the app's own hiding comes
+  // after its focus went (imeActive off by then), and one as the app leaves the front, or as something of the system's
+  // comes over it (a picker, Safari's view, the share sheet: Android's window losing its focus), is the system's.
   [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillHideNotification object:nil
                                                    queue:NSOperationQueue.mainQueue
                                               usingBlock:^(NSNotification *n) {
@@ -1881,6 +1922,7 @@ static void watch_keyboard(void) {
     UIView *root = c.view;
     if (!root.window) return;
     CGRect end = [n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    kb_rested(end);
     CGRect at = [root convertRect:end fromCoordinateSpace:root.window.screen.coordinateSpace];
     double guide = root.keyboardLayoutGuide.layoutFrame.origin.y;
     double mark = c.kbMark ? c.kbMark.frame.origin.y : -1;

@@ -230,6 +230,9 @@ function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
   const summaries = store.listThreads(s, viewer.email, session, null);
   const seen = store.seenBy(s, viewer, summaries.flatMap((t) => t.sessions.map((m) => m.session)));
   const visible = summaries.filter((t) => t.sessions.some((m) => seen(m.session)));
+  // A pending chat would otherwise make the reader rebuild this whole list once for each unprepared session.
+  store.requireCcSessions(s, visible.flatMap((t) => t.thread.surface === store.STILLFAIL_SURFACE
+    ? t.sessions.map((m) => m.session) : []));
   const shares = store.chatShares(s, visible.map((t) => t.thread.home ?? t.sessions[0]?.session ?? ""));
   const published = store.publishedByThread(s, visible.map((t) => t.thread.id));
   return visible.map((t) => threadView(s, t, shares, published));

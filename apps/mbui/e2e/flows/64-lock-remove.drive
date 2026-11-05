@@ -1,0 +1,16 @@
+# Alice's other device (e2e/peer.ts, the one that turned the lock on) taken out of it from this phone (设置 › 安全 ›
+# 移除): said what that means first, then gone from the station's lock, this phone alice's one device left in it.
+#only android
+timeout 120000
+until 端到端测试
+tap icon:settings
+until =安全
+tap =安全
+until 成员和设备
+shot 1-security
+tap 移除
+until 该设备将无法再访问受保护的 station
+shot 2-confirm
+tap =移除
+until 已移除
+shot 3-removed

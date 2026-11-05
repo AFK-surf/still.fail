@@ -339,6 +339,7 @@ pub fn Tester::new(
     back_on: false,
     backs_out: 0,
     back_going: false,
+    wheel_kept: false,
     window_shows: 0,
     platform,
     keys: keys.unwrap_or(platform),
@@ -1857,6 +1858,13 @@ pub fn Tester::list_moving(self : Tester) -> Bool {
 /// Whether the host was told the app takes back.
 pub fn Tester::takes_back(self : Tester) -> Bool {
   self.fake.back_on
+}
+
+///|
+/// Whether the host was told the last wheel zoomed something of the app's (@hostapi.wheel_kept): a browser's page
+/// zooms by one that did not.
+pub fn Tester::wheel_kept(self : Tester) -> Bool {
+  self.fake.wheel_kept
 }
 
 ///|

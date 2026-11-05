@@ -12,6 +12,10 @@
 //   serve:<name>|<port>|<words>                 job_start a web service <name> on <port> (a page of two, served by
 //                                               python's http.server from the session's workspace), then chat_post
 //                                               <words> all_done
+//   secret:<item>|<command>                     secret_use the vault's <item> for <command> (a card for alice to approve
+//                                               in the app); its decision, told in the session, answered here: granted,
+//                                               secret_run <command> with the grant and chat_post what it printed all
+//                                               done; refused, chat_post so
 // What it writes of a turn goes to its transcript as the real claude's does (<config>/projects/<dir>/<session>.jsonl),
 // which is what the station reads an agent's execution history from.
 import fs from "node:fs";
@@ -120,6 +124,27 @@ async function turn(text) {
       `详见 https://example.com/e2e/${encodeURIComponent(words.split(" ").pop() ?? "x")}`,
     ].join("\n");
     said = await post(to, { text: md, kind: "all_done", done: "answered the question that was asked" });
+  } else if (/(^|\s)secret:/.test(text)) {
+    const [item, command] = line("secret:").split("|");
+    // (its chat and command kept for the decision, which comes as a station notice in no chat)
+    fs.writeFileSync(path.join(process.cwd(), `.e2e-secret-${sessionId}`), JSON.stringify({ to, command: command ?? "true" }));
+    const asked = await tool("secret_use", { item, reason: `端到端测试：用「${item}」跑一条命令`, command });
+    record("assistant", [{ type: "text", text: asked }]);
+    // (asked: the card is the station's, in the chat; the turn ends waiting for alice's decision)
+    said = asked.startsWith("Asked for")
+      ? await post(to, { text: `等你批准使用「${item}」`, kind: "need_human", need: `批准使用「${item}」` })
+      : await post(to, { text: `没能申请「${item}」：${asked}`, kind: "all_done", done: "the request could not be made" });
+  } else if (/Granted: 「[^」]*」, grant (r_[\w-]+)/.test(text) || /\(r_[\w-]+\) was (refused|let go)/.test(text)) {
+    const grant = /Granted: 「[^」]*」, grant (r_[\w-]+)/.exec(text)?.[1];
+    const kept = JSON.parse(fs.readFileSync(path.join(process.cwd(), `.e2e-secret-${sessionId}`), "utf8"));
+    if (grant) {
+      const command = kept.command;
+      const ran = await tool("secret_run", { grant, command, env: "E2E_SECRET" });
+      record("assistant", [{ type: "text", text: ran }]);
+      said = await post(kept.to, { text: `用密钥跑完了：${ran}`, kind: "all_done", done: "ran the command with the granted secret" });
+    } else {
+      said = await post(kept.to, { text: "密钥申请被拒绝了", kind: "all_done", done: "the request was refused" });
+    }
   } else if (text.includes("serve:")) {
     const [name, port, words] = line("serve:").split("|");
     // a port another process holds (another run's service on the same machine) is said, not served over: the page
@@ -160,7 +185,7 @@ async function turn(text) {
   say({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 1, session_id: sessionId, result: said });
 }
 
-const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:)/.test(text);
+const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:|secret:)/.test(text) || /Granted: 「[^」]*」, grant r_|\(r_[\w-]+\) was (refused|let go)/.test(text);
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   let msg = null;
   try {

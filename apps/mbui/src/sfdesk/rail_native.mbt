@@ -229,16 +229,17 @@ fn bar_chat(
   bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
-  let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
+  // (a screen alone in its panel has no × of its own there: this one, as one)
+  let icon = if screen_tab_alone(tabs) { "close" } else if tabs.length() > 0 { "panel-close" } else { "panel-open" }
   let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })
-  if agents.length() > 0 {
-    let key = agents[0].key
+  if agents.length() > 0 || tabs.length() > 0 {
+    let key = if agents.length() > 0 { Some(agents[0].key) } else { None }
     bar_action(history_item, title, icon, fn() {
       let (now, _) = side_now(src, r)
       if now.length() > 0 {
         side_change(src, r, "clear", None)
-      } else {
-        side_change(src, r, "open", Some(key))
+      } else if key is Some(_) {
+        side_change(src, r, "open", key)
       }
     }) |> ignore
   }
@@ -315,7 +316,7 @@ let bar_chat_of : Ref[(Source, ChatRef)?] = Ref(None)
 fn histories_ticked() -> Unit {
   guard bar_chat_of.val is Some((src, r)) else { return }
   let (tabs, _) = side_now(src, r)
-  let icon = @sf.icon_path(if tabs.length() > 0 { "panel-close" } else { "panel-open" })
+  let icon = @sf.icon_path(if screen_tab_alone(tabs) { "close" } else if tabs.length() > 0 { "panel-close" } else { "panel-open" })
   let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })
   for i, p in nav_page {
     let (item, act) = p

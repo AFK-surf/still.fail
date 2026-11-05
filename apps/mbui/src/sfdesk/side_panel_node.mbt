@@ -58,7 +58,9 @@ fn side_panel_node(
       if leaving() || now.0.is_empty() { side_leaving(chat_key(r)).unwrap_or(now) } else { now }
     }
     let alone = fn() { tape && tabs().0.length() == 1 }
-    let own_bar = fn() { alone() && tab_service(tabs().1) is Some(_) }
+    // (on its side the screen's tools are a rail, with no name of its own: the panel's row names it)
+    let screen_alone = fn() { tape && screen_tab_alone(tabs().0) && !column_short.get() && window_upright.get() }
+    let own_bar = fn() { (alone() && tab_service(tabs().1) is Some(_)) || screen_alone() }
     panel.grow(Is(1.0)).min_height(Is(Some(0.0))).ground(By(ground)) |> ignore
     panel.show(fn() { !own_bar() }, fn(bar) {
       bar.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(8.0))
@@ -102,7 +104,7 @@ fn side_panel_node(
           }
         }, tips~) |> ignore
       })
-      bar.show(fn() { !column_short.get() }, fn(button) {
+      bar.show(fn() { !column_short.get() && !(@sf.native_on() && screen_tab_alone(tabs().0)) }, fn(button) {
         @sf.icon_button_node(button, "panel-close", fn() { @sf.t("web-pages.chat.closePanel") }, fn() {
           side_change(src, r, "clear", None)
         }, tips~, icon_now=fn() { if alone() { "close" } else { "panel-close" } })
@@ -119,7 +121,7 @@ fn side_panel_node(
           let (was_tape, was_over) = (side_on_tape.val, side_over.val)
           side_on_tape.val = tape
           side_over.val = over()
-          side_front(c, src, w, r, current(), tabs().1, own_bar())
+          side_front(c, src, w, r, current(), tabs().1, own_bar(), screen_alone=screen_alone())
           side_on_tape.val = was_tape
           side_over.val = was_over
         })

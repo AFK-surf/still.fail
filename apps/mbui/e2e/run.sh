@@ -176,6 +176,9 @@ if [ $PLATFORM = android ]; then
     unlocked || { echo "the emulator keeps a screen lock this run cannot clear (not ${E2E_PIN:-1234}): wipe it (scripts/android.sh)"; exit 1; }
   fi
   $ADB shell wm dismiss-keyguard >/dev/null 2>&1
+  # (no system dialog over the app for another app's "isn't responding": the launcher's or System UI's on a loaded
+  # machine, which took the run's taps and typing; the system's own setting for test harnesses)
+  $ADB shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
   # (the program after the app's data is cleared: it lies in its files)

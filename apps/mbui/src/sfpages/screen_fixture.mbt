@@ -2,6 +2,7 @@
 // the same states said the same way): the screen's view opened over the chats, its states and frames (a JPEG of a
 // browser's tab: screen_fixture_frame.mbt) as the core would say them, each mode one of the Android test's pictures.
 //
+//   chat-screen-tab                     live, the only tab of a chat's side panel
 //   screen-audio                        live with system audio available (no sound emitted by the fixture)
 //   screen-connecting                   nothing said yet
 //   screen-live, -live-dark             live, driven, 李雷 also on it (the landscape one: the same, its window sideways)
@@ -53,6 +54,11 @@ let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", 
 ///|
 /// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.
 pub fn open_screen_fixture(mode : String) -> Unit {
+  // (a chat's side panel showing it, as fixture_tabs_shown keeps it)
+  if mode == "chat-screen-tab" {
+    screen_fix_mode.val = "screen-live"
+    return
+  }
   if !mode.has_prefix("screen-") {
     return
   }

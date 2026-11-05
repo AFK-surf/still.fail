@@ -1327,6 +1327,10 @@ fn tape_panel_edge(n : @view.View, holder : @view.View, tips : @sf.TipLayer, on 
 /// moves), the chat landed on, the window's buttons' row, the web services' pages let go.
 pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   c.mouse_drags_lists(pane_finger())
+  window_upright.set({
+    let (ww, wh) = c.window_size()
+    ww <= wh
+  })
   wide.side_place = side_place()
   side_follow(c, src, w.id)
   wide.tape = true
@@ -1360,3 +1364,17 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   // the pages of web services' and visualizations' tabs closed, no longer drawn, let go (service_tab.mbt)
   sv_sweep(c, src)
 }
+
+///|
+/// Whether the panel is a station's screen alone in a panel of its own on the tape: its top bar the panel's, named by it
+/// and closed from it, or from the system's bars where it has them (bar_chat; the user, 2026-11-05: its name twice, its ×
+/// alone in a row of its own, in the system's bars on a Duo).
+fn screen_tab_alone(tabs : Array[String]) -> Bool {
+  wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
+}
+
+///|
+/// Whether the window is as tall as it is wide or taller, as the tape's frame last said (tape_under): a screen alone in
+/// its panel takes the panel's bar only then (screen_tab_alone; side_panel_node).
+// kept across runs: said again each frame the tape is under
+let window_upright : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })

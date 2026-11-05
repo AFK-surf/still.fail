@@ -16,6 +16,7 @@ import { answerFiles } from "../src/slack/surface.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { type Attachment, Store } from "../src/store/store.ts";
 import { letterMessage } from "../src/store/rows.ts";
+import { CcIndexPreparation } from "../src/store/cc-thread-index.ts";
 
 type Json = any;
 
@@ -351,7 +352,7 @@ export class Rig {
 
   /// A hub over this rig's store and config (another station's, after a restart: given its own drivers).
   newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string; runners?: string[] }) {
-    return new Hub({
+    const hub = new Hub({
       config: () => this.config,
       store: this.store,
       chats: o.chats,
@@ -369,6 +370,11 @@ export class Rig {
         void work.then(() => this.background.delete(work), () => this.background.delete(work));
       },
     });
+    const cc = new CcIndexPreparation();
+    hub.prepareCcSessions = async (sessions) => {
+      for (const session of sessions) while (!cc.step(this.store.db, session).done) {}
+    };
+    return hub;
   }
 
   async accept(m: InboundMessage, connect = "cl") {

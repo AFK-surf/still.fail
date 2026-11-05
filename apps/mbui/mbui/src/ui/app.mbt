@@ -1691,7 +1691,9 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
+  zoom_wheel_kept.val = false
   view_event(fn() { on_wheel_now(x, y, dx, dy, phase) })
+  h_wheel_kept(zoom_wheel_kept.val)
 }
 
 ///|
@@ -1839,6 +1841,9 @@ fn old_wheel(
     wheels[target] = wheels.get(target).unwrap_or(0.0) + dy
     wheels_x[target] = wheels_x.get(target).unwrap_or(0.0) + dx
     wheel_mods[target] = mods
+    if captures.get(target).unwrap_or(false) && (mods & (wheel_mod_ctrl | wheel_mod_cmd | wheel_mod_pinch)) != 0 {
+      keep_zoom_wheel()
+    }
     wheel_taken()
     h_request_frame()
     return

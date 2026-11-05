@@ -1289,3 +1289,12 @@ test "Duo chat's screens menu opens beside the column, not over it" {
   assert_true(m.rect.0 + m.rect.2 <= 867.0, msg="its right edge at \{m.rect.0 + m.rect.2}")
   assert_true(m.rect.1 >= 120.0, msg="its top at \{m.rect.1}")
 }
+
+///|
+test "a screen alone in a chat's panel on an iPhone Duo: closed from the system's bars, no × of the panel's nor its own" {
+  let t = native_chat(669.0, 951.0, true, mode="chat-screen-tab")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(nav_icon_of(t, "page/chat/history"), Some(@sf.icon_path("close")))
+  assert_true(t.find(@sf.t("web-pages.chat.closePanel")) is None, msg="no × of the panel's")
+  assert_true(t.find(@sf.t("android-misc.screen.close")) is None, msg="nor of its own")
+}

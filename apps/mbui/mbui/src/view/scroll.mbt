@@ -867,6 +867,8 @@ pub fn View::scrolls(
   self
   // (the wheel up or down more than across, as an old view's box kept to a height takes it: sideways_wheel_moves)
   .on_wheel_moves(fn(w) {
+    // (a pinch zooms, never scrolls: an old view's list takes none of it either)
+    guard (w.mods & wheel_pinch) == 0 else { return false }
     // (across: the wheel across more than up or down, as an old view's box scrolled sideways takes it, as far as it
     // goes that way: sideways_wheel_moves)
     if across {
