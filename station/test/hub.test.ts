@@ -1183,6 +1183,46 @@ test("an agent that loses the station's tools is started again rather than nudge
   await r.close();
 });
 
+test("a process ended while its turn waits on its background work: it goes on at once, told what stopped", async () => {
+  // 2026-11-05: the station updated while an agent waited on CI with a background command; its process lost the tools
+  // and was ended at the turn's end, the command with it, and nothing brought it back until its wait ran out.
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  first.tasks = [{ id: "b1", kind: "command", description: "watch CI" }];
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "CI" });
+  first.events({ type: "toolsLost", why: "ECONNRESET: The socket connection was closed unexpectedly" });
+  first.complete();
+  await settle();
+  assert.ok(first.disposed, "the process that lost them ends, with its background work");
+  const second = r.claude.last();
+  assert.notEqual(second, first, "not left until its wait is over");
+  assert.equal(second.options.resume, first.sessionId);
+  assert.ok(matches(second.prompts[0]!, ["background was stopped", "- background command b1 (watch CI)\n"]), second.prompts[0]);
+  await r.close();
+});
+
+test("a process that exits while its turn waits on its background work: it goes on at once, told what stopped", async () => {
+  const r = new Rig();
+  await r.accept(message());
+  await settle();
+  const first = r.claude.last();
+  first.tasks = [{ id: "b1", kind: "command", description: "watch CI" }];
+  await r.call(first.options.route, "chat_state", { kind: "waiting", seconds: 600, for: "CI" });
+  first.complete();
+  await settle();
+  assert.equal(r.claude.last(), first, "its process holds its background work while it waits");
+  first.events({ type: "closed", why: "claude exited (0)" });
+  await settle();
+  const second = r.claude.last();
+  assert.notEqual(second, first);
+  assert.ok(matches(second.prompts[0]!, ["background was stopped", "- background command b1 (watch CI)\n"]), second.prompts[0]);
+  await r.close();
+});
+
 test("a turn given up on after its nudges shows the agent's last words, unless it posted", async () => {
   const r = new Rig({ maxNudges: 1 });
   const m = message();
