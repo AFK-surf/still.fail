@@ -126,3 +126,25 @@ test("a ready title is read once for repeated uses of the same chat", async () =
     assert.equal(w.titles(), 1);
   } finally { w.gate.resolve(); w.db.close(); }
 });
+
+test("a use keeps the session title when its latest-chat index is incompatible", async () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "s", connect: "slack", runtime: "claude", profile: "cc", workspace: "/w/s",
+      token: "s", createdAt: 1, lastActiveAt: 1 });
+    store.setTitle("s", "Session title");
+    let prepares = 0;
+    const hub = { store, link: () => null, prepareLatestThreads: async () => { prepares++; } } as any;
+    const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+      lock: () => ({} as never), proxy: {} as never,
+      vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
+      title: (session) => sender(hub, session)[0] });
+    const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
+      item: "item", session: "s", mode: "env", status: "granted" });
+    db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
+    db.exec("UPDATE latest_thread_meta SET version=2 WHERE id=1");
+    const rows = await secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    assert.equal(rows[0]?.chatTitle, "Session title");
+    assert.equal(prepares, 0);
+  } finally { store.close(); }
+});
