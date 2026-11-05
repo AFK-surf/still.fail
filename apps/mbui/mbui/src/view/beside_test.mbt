@@ -227,12 +227,11 @@ test "beside: two beside each other (a ring), and one beside what it holds: each
 }
 
 ///|
-test "went: the side it went on as it was last placed, read as the tree is placed: below, still below moved along its anchor or within the room it has, above the frame there is no room below, below again" {
+test "went: the side it went on as it was last placed: below, still below moved along its anchor or within the room it has, above the frame there is no room below, below again" {
   let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
   let ids : Map[String, @view.NodeId] = {}
   let b : Ref[@view.View?] = Ref(None)
-  let said : Ref[@view.Side?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(a) {
@@ -245,37 +244,26 @@ test "went: the side it went on as it was last placed, read as the tree is place
           b.width(Is(Some(60.0))).height(Is(Some(30.0))).beside(ids["a"], side=Bottom, along=Middle, offset=6.0) |> ignore
         }),
       )
-      // (what is drawn by it, as the tree is placed: Live's Placed)
-      root.box(fn(r) {
-        r
-        .height(Is(Some(1.0)))
-        .alpha(Placed(fn() {
-          said.val = b.val.unwrap().went()
-          1.0
-        }))
-        |> ignore
-      })
-      |> ignore
     },
     time=fn() { 0.0 },
   )
   let sides = []
   t.frame(400.0, 300.0) |> ignore
-  sides.push(said.val)
+  sides.push(b.val.unwrap().went())
   // (moved along it, and down within the room below it)
   t.event(10.0, fn() { ax.set(200.0) })
   t.frame(400.0, 300.0) |> ignore
-  sides.push(said.val)
+  sides.push(b.val.unwrap().went())
   t.event(20.0, fn() { ay.set(150.0) })
   t.frame(400.0, 300.0) |> ignore
-  sides.push(said.val)
+  sides.push(b.val.unwrap().went())
   // (no room below: above it)
   t.event(30.0, fn() { ay.set(260.0) })
   t.frame(400.0, 300.0) |> ignore
-  sides.push(said.val)
+  sides.push(b.val.unwrap().went())
   t.event(40.0, fn() { ay.set(100.0) })
   t.frame(400.0, 300.0) |> ignore
-  sides.push(said.val)
+  sides.push(b.val.unwrap().went())
   assert_eq(sides, [Some(@view.Side::Bottom), Some(Bottom), Some(Bottom), Some(Top), Some(Bottom)])
   assert_eq(b.val.unwrap().went(), Some(@view.Side::Bottom))
 }

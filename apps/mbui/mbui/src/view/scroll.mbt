@@ -4,15 +4,15 @@
 // end the wheel goes on to what holds it: View::on_wheel_moves), a finger or the pointer held on any of it and moved up
 // or down past the slop drags it (View::claims: what it went down on called off; across, or at its end, what holds it
 // is asked) and, let go, flings it on, slowing; the focus come to what it holds brings that into sight once laid out
-// (View::shows). As tall as what it holds
-// where there is the room, it gives way (to nothing) where what holds it is short of room (a dialog no taller than the
-// window). Where it is is the column's own (Scroll), let go with the node: a function of the time while it goes by
-// itself, and of how far it can go as it is laid out then, read plainly as the tree is placed (what it holds drawn off
-// by it, Live's Placed) and as an event comes, never told back as a change of its own (docs/retained.md rule 10). One
-// made as a page's list (Scroll::list) moves as an old view's list does on the platform it is on instead
-// (scroll_list.mbt). One made to scroll across (Scroll::across) is a row that scrolls sideways the same way (an old
-// view's Ctx::sideways): along its width, the wheel and a hold across, its bar along its foot, what holds it asked what
-// goes up or down.
+// (View::shows). As tall as what it holds where there is the room, it gives way (to nothing) where what holds it is
+// short of room (a dialog no taller than the window). Where it is is the column's own (Scroll), let go with the node: a
+// function of the time while it goes by itself, within how far it can go as it is laid out then, read plainly as the
+// tree is placed (what it holds drawn off by it, Live's Placed) and as an event comes; kept within that by its own
+// layout as that comes out otherwise (Scroll::kept_in, as a long list's is laid out from its anchor), never told back
+// as a change of what reads it (docs/retained.md rule 10). One made as a page's list (Scroll::list) moves as an old
+// view's list does on the platform it is on instead (scroll_list.mbt). One made to scroll across (Scroll::across) is a
+// row that scrolls sideways the same way (an old view's Ctx::sideways): along its width, the wheel and a hold across,
+// its bar along its foot, what holds it asked what goes up or down.
 
 ///|
 /// A fling under way: set out from `x0` at `v0` (points a ms, down the column) at `t0`, at rest at `end_x` at `end_t`;
@@ -30,12 +30,14 @@ priv struct Fling {
 
 ///|
 /// Brought on by the hand held past its edge (Scroll::edge_toward): from `x0` at `t0`, `v` points a ms, steady, as far
-/// as it can go that way (its top, or its foot as it is laid out: Edge::at), after which `parked` there (at `x0`, still
-/// said: on from there as the hand is moved again).
+/// as `bound` (how far it could go, or its top, as last laid out); at `end_t` there, after which `parked` (at `x0`,
+/// still said: what holds it laid out further, on again from there then).
 priv struct Edge {
   x0 : Double
   v : Double
   t0 : Double
+  bound : Double
+  end_t : Double
   parked : Bool
 }
 
@@ -48,9 +50,11 @@ pub struct Scroll {
   /// how far it can go, as laid out last (the node's and what it holds' heights, read plainly; none before they are
   /// first laid out)
   priv mut room : () -> Double?
-  /// a page's list's fling down toward its foot as it meets that foot where it is laid out now (Scroll::fling_now): the
-  /// fling said, the foot it was worked out for, and how it goes then; kept for the same of both
-  priv mut met : (Fling, Double, Fling)?
+  /// how far it could go as its layout last kept it within that (Scroll::kept_in; -1: not yet), and whether what it
+  /// holds above where it is grew since (Scroll::grew_above: a fling down toward its foot meeting it where it is laid out
+  /// then, however far it can go came out)
+  priv mut kept_most : Double
+  priv mut grew_laid : Bool
   /// what ends the fling's settling at its end (View::at_moment's), as it is called off
   priv mut settle_off : () -> Unit
   /// where the hand held on it was last (the window's, down) and when, and how fast it went (points a ms, down the
@@ -131,7 +135,8 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     x: @signals.signal(0.0, same=fn(a, b) { a == b }),
     fling: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     room: fn() { None },
-    met: None,
+    kept_most: -1.0,
+    grew_laid: false,
     settle_off: fn() {  },
     hand_y: 0.0,
     hand_wy: 0.0,
@@ -185,10 +190,10 @@ pub fn Scroll::glides_till_told(self : Scroll) -> Double? {
 fn Scroll::rest_now(self : Scroll) -> Double? {
   // (the hand past its edge: at its end as said now; at rest there, parked)
   match self.edge.get() {
-    Some(e) => return if e.parked { None } else { Some(e.end_at(self.most_now())) }
+    Some(e) => return if e.parked { None } else { Some(e.end_t) }
     None => ()
   }
-  match self.flung_now() {
+  match self.fling.get() {
     Some(f) =>
       match f.way {
         Some({ hit: Some({ back: Some(p), .. }), .. }) => Some(p.rest)
@@ -208,41 +213,6 @@ fn Scroll::rest_now(self : Scroll) -> Double? {
       }
     }
   }
-}
-
-///|
-/// The fling under way as it goes now, followed (what is said of it; how far it can go read plainly, as it is laid out
-/// now): Scroll::fling_met.
-fn Scroll::flung_now(self : Scroll) -> Fling? {
-  match self.fling.get() {
-    Some(f) => Some(self.fling_met(f, self.most_now()))
-    None => None
-  }
-}
-
-///|
-/// Fling `f` as it goes where it can go as far as `most`: a page's list's down toward its foot meets that foot where it
-/// is (worked out again from where it set out, as that comes out otherwise than it went toward it: rows under what shows
-/// measured anew, come or gone; past it already, met as it set out), what it brings past it going back from then; kept
-/// for the same fling and foot (Scroll's `met`). Any other as it was said.
-fn Scroll::fling_met(self : Scroll, f : Fling, most : Double) -> Fling {
-  guard f.way is Some(w) && f.v0 > 0.0 && f.till != most else { return f }
-  match self.met {
-    Some((from, foot, g)) if physical_equal(from, f) && foot == most => return g
-    _ => ()
-  }
-  let density = w.px / dmax(w.h, 1.0)
-  let g = if most <= f.x0 {
-    met_now(f, w, f.t0, most, density)
-  } else {
-    match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
-      Some(g) => g
-      // (going nowhere toward it: at rest where it set out)
-      None => { ..f, end_t: f.t0, end_x: f.x0, till: most, way: Some({ ..w, hit: None }) }
-    }
-  }
-  self.met = Some((f, most, g))
-  g
 }
 
 ///|
@@ -298,10 +268,10 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 fn Scroll::where_at(self : Scroll, t : Double) -> Double {
   let most = self.most_now()
   match self.edge.get() {
-    Some(e) => return dclamp(e.at(t, most), 0.0, most)
+    Some(e) => return dclamp(e.at(t), 0.0, most)
     None => ()
   }
-  match self.flung_now() {
+  match self.fling.get() {
     Some(f) =>
       if t >= f.end_t {
         dclamp(f.end_x, 0.0, most)
@@ -354,10 +324,15 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
       None => 0.0
     }
     self.x.set(self.x.get() + d)
-    // (the hand past its edge: where it has it now as much further, on from there by its own way as far as it can go as
-    // it is laid out: at its foot it is at its foot still; at its top, on to it again)
+    // (the hand past its edge: where it has it now as much further, its foot too where it goes down; on from there by
+    // its own way, its end then: what is laid out after worked out again as that is)
     match (self.edge.get(), self.host) {
-      (Some(e), Some(v)) => self.edge_planned(v, e, e.at(t, self.most_now()) + d, t)
+      (Some(e), Some(v)) => {
+        let x0 = e.at(t) + d
+        let bound = if e.v > 0.0 { e.bound + d } else { 0.0 }
+        // (at its foot it is at its foot still; at its top, on to it again)
+        self.edge_planned(v, e, x0, t, bound)
+      }
       _ => ()
     }
     match self.fling.get() {
@@ -372,9 +347,14 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
     match self.host {
       // (the hand past its edge: said on by its own way, above)
       Some(_) if self.edge.get() is Some(_) => ()
-      // (a fling down toward its foot meets it where it is laid out as this change leaves it, as it is read:
-      // Scroll::fling_met)
-      Some(v) => self.list_settles(v, t)
+      Some(v) => {
+        self.list_settles(v, t)
+        // (a fling down toward its foot: its foot where all of it is laid out as this change leaves it, met where that is
+        // as its layout keeps it within it (Scroll::kept_in), however far it can go came out, the same or not)
+        if self.fling.get() is Some({ v0, way: Some(_), .. }) && v0 > 0.0 {
+          self.grew_laid = true
+        }
+      }
       None => ()
     }
   })
@@ -400,6 +380,53 @@ pub fn Scroll::goes(self : Scroll) -> Bool {
 /// out, as ui's bar_drawn has it; read plainly.
 fn Scroll::has_bar(self : Scroll) -> Bool {
   self.most() > 1.0
+}
+
+///|
+/// Kept within how far it can go as its layout leaves it (Tree::scrolls_kept_in: what holds what it scrolls lays that
+/// out and puts where it is within it, as a long list's is laid out from its anchor, docs/retained.md rule 11), where
+/// that came out otherwise than it was last kept in, or what it holds above where it is grew (Scroll::grew_above), as of
+/// the layout's moment: the hand past its edge on from where it has it now as far as it can go now (parked at its end,
+/// on again where it can go further); a page's list's fling down toward its foot meeting it where it is now; a box kept
+/// to a height's fling past its end stopped there; where it was put past its end at its end (what it holds made shorter:
+/// there as it grows again, not back where it was). What reads where it is reads it after, as the tree is placed.
+fn Scroll::kept_in(self : Scroll, v : View) -> Unit {
+  guard (self.room)() is Some(r) else { return }
+  let most = dmax(r, 0.0)
+  let grew = self.grew_laid
+  self.grew_laid = false
+  if most == self.kept_most && !grew {
+    return
+  }
+  self.kept_most = most
+  @signals.untracked(fn() {
+    let t = v.logic_at()
+    match self.edge.get() {
+      Some(e) if e.bound != (if e.v > 0.0 { most } else { 0.0 }) || e.x0 > most => self.edge_due(v, t)
+      _ => ()
+    }
+    if self.as_list {
+      self.foot_moved(v, t, most, laid=grew)
+    }
+    if !self.as_list && self.fling.get() is Some(_) && self.where_at(t) >= most {
+      self.stopped(t) |> ignore
+    }
+    if self.x.get() > most {
+      self.x.set(most)
+    }
+  })
+}
+
+///|
+/// What scrolls in the tree kept within how far each can go as the layout just done leaves it (Scroll::kept_in), each
+/// that scrolls in a node of it, before anything is placed by where it is.
+fn Tree::scrolls_kept_in(self : Tree) -> Unit {
+  for _, s in self.scrolls_at {
+    match s.host {
+      Some(v) if physical_equal(v.tree, self) && v.alive() => s.kept_in(v)
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -431,7 +458,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
     self.settle_off = fn() {  }
     self.notch.set(None)
   }
-  if @signals.untracked(fn() { self.flung_now() }) is Some(f) {
+  if @signals.untracked(fn() { self.fling.get() }) is Some(f) {
     (self.settle_off)()
     self.settle_off = fn() {  }
     self.fling.set(None)
@@ -536,72 +563,64 @@ pub fn Scroll::edge_toward(self : Scroll, speed : Double) -> Unit {
     if speed == 0.0 {
       return
     }
-    // (from where it is, as far as it can go that way: its end said)
-    self.edge_planned(v, { x0, v: speed, t0: t, parked: false }, x0, t)
+    // (from where it is, as far as it can go that way now: worked out, its end said, by edge_due)
+    let bound = if speed > 0.0 { self.most() } else { 0.0 }
+    self.edge.set(Some({ x0, v: speed, t0: t, bound, end_t: t, parked: false }))
+    self.edge_due(v, t)
   })
 }
 
 ///|
-/// Where the hand past its edge has it at `t`, as far as it can go that way where it can go as far as `most`.
-fn Edge::at(self : Edge, t : Double, most : Double) -> Double {
+/// Where the hand past its edge has it at `t`, as far as its bound (as it was laid out as it was said).
+fn Edge::at(self : Edge, t : Double) -> Double {
   if self.parked {
     return self.x0
   }
   let x = self.x0 + self.v * (dmax(t, self.t0) - self.t0)
   if self.v > 0.0 {
-    dmin(x, most)
+    dmin(x, self.bound)
   } else {
-    dmax(x, 0.0)
+    dmax(x, self.bound)
   }
 }
 
 ///|
-/// When the hand past its edge has it as far as it can go that way where it can go as far as `most` (steady from where
-/// it set out, at a whole ms).
-fn Edge::end_at(self : Edge, most : Double) -> Double {
-  let bound = if self.v > 0.0 { most } else { 0.0 }
-  self.t0 + dmax(0.0, (bound - self.x0) / self.v).ceil()
+/// The hand past its edge said on from where it has it at `t`, as far as it can go as laid out now: its end then, said
+/// on the timeline (parked there); there already, parked now.
+fn Scroll::edge_due(self : Scroll, v : View, t : Double) -> Unit {
+  guard @signals.untracked(fn() { self.edge.get() }) is Some(e) else { return }
+  let most = self.most()
+  let x0 = dclamp(e.at(t), 0.0, most)
+  let bound = if e.v > 0.0 { most } else { 0.0 }
+  self.edge_planned(v, e, x0, t, bound)
 }
 
 ///|
-/// The hand past its edge (`e`, as it was) said on from `x0` at `t` as far as it can go that way: its end said on the
+/// The hand past its edge (`e`, as it was) said on from `x0` at `t` as far as `bound`: its end then said on the
 /// timeline, told what hosts the tree (Tree::on_glides), parked there; there already, parked now.
-fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Double) -> Unit {
+fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Double, bound : Double) -> Unit {
   (self.settle_off)()
   self.settle_off = fn() {  }
-  let g = { x0, v: e.v, t0: t, parked: false }
-  let most = self.most_now()
-  let end_t = g.end_at(most)
+  let end_t = t + dmax(0.0, (bound - x0) / e.v).ceil()
   if end_t <= t {
     // (at its end: nothing moving, nothing reading the time; told so as it is there no more since now)
-    self.edge.set(Some({ ..g, x0: g.at(t, most), parked: true }))
+    self.edge.set(Some({ ..e, x0: bound, t0: t, bound, end_t: t, parked: true }))
     if !e.parked {
       (self.on_scrolled)(t)
     }
     return
   }
-  self.edge.set(Some(g))
+  self.edge.set(Some({ x0, v: e.v, t0: t, bound, end_t, parked: false }))
   (self.on_scrolled)(t)
   // (what hosts the tree told it goes on by itself, till when as it is asked: Tree::on_glides)
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
-  self.edge_settles(v, end_t)
-}
-
-///|
-/// The hand past its edge at its end, said on the timeline at `end_t`: as far as it can go then as it is laid out then,
-/// parked there (told so); laid out further meanwhile, said again at its end then.
-fn Scroll::edge_settles(self : Scroll, v : View, end_t : Double) -> Unit {
   self.settle_off = v.at_moment(end_t, fn() {
     self.settle_off = fn() {  }
-    guard @signals.untracked(fn() { self.edge.get() }) is Some(g) && !g.parked else { return }
-    let most = self.most_now()
-    let end = g.end_at(most)
-    if end > end_t {
-      self.edge_settles(v, end)
-      return
-    }
     (self.on_scrolled)(end_t)
-    self.edge.set(Some({ ..g, x0: g.at(end_t, most), t0: end_t, parked: true }))
+    match @signals.untracked(fn() { self.edge.get() }) {
+      Some(g) => self.edge.set(Some({ ..g, x0: g.bound, t0: end_t, end_t, parked: true }))
+      None => ()
+    }
   })
 }
 
@@ -735,12 +754,12 @@ pub fn View::scrolls(
   // (its bar, over what it holds, told as it scrolls)
   match bar {
     Some(b) => {
-      // (a fling under way: till its end, as it goes now, none once stopped)
+      // (a fling under way: till its end, as it is now, none once stopped)
       let state = BarState::new(fn() {
-        match (s.flung_now(), s.edge.get()) {
+        match (s.fling.get(), s.edge.get()) {
           (Some(f), _) => f.end_t
-          // (the hand past its edge: till its end as it goes now; parked, since it came there)
-          (None, Some(e)) => if e.parked { e.t0 } else { e.end_at(s.most_now()) }
+          // (the hand past its edge: till its end as said now)
+          (None, Some(e)) => e.end_t
           (None, None) => -1.0e9
         }
       })
@@ -770,9 +789,7 @@ pub fn View::scrolls(
     }))
     |> ignore
   }
-  // (how far it can go laid out otherwise: where it is shown within that as it is placed (Scroll::where_at), what it is
-  // on by itself meeting its end where that is now (Scroll::fling_met), at rest within it as it comes to rest; where it
-  // was put kept as it was said, as far as it can go as the hand next moves it: nothing told back of how it is laid out)
+  // (how far it can go laid out otherwise: kept within that by its own layout, Scroll::kept_in)
   // (let go with it: no fling of it settles after)
   self.owns(fn() {
     // (what it was on by itself (the hand past its edge, a fling, a page's list's notches easing in) at rest where it had
@@ -786,7 +803,8 @@ pub fn View::scrolls(
         s.x.set(at)
       }
     })
-    s.met = None
+    s.kept_most = -1.0
+    s.grew_laid = false
     // (what shows past an end of a page's list gone with it, going back or not: nothing of it at rest after)
     s.past.set(None)
     (s.settle_off)()

@@ -543,9 +543,9 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
 
 ///|
 /// The side of what it goes beside (View::beside) it went on as it was last placed (the side it was said to go on, or
-/// the other where it had not the room: place_beside's flip), read plainly, never followed: what is drawn by it reads it
-/// as it is placed or painted (Live's Placed), an old view as it is built (by its key, built again as that changes: the
-/// tree placed before the old views are built); none before it is first placed, or where it goes beside nothing.
+/// the other where it had not the room: place_beside's flip), read plainly, never followed: at an event, and by an old
+/// view as it is built (by its key, built again as that changes: the tree placed before the old views are built); none
+/// before it is first placed, or where it goes beside nothing.
 pub fn View::went(self : View) -> Side? {
   guard self.live() is Some(n) else { return None }
   n.went

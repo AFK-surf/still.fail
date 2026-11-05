@@ -195,3 +195,33 @@ test "scrolls_window: its keys changed while it is laid out nowhere (a page unde
   let tops = [0, 9, 1].map(fn(k) { live.get(k).map(fn(r) { r.rect().1 }) })
   assert_eq((before, shown, tops), ([0, 1, 2], [0, 1, 9], [Some(0.0), Some(40.0), Some(80.0)]))
 }
+
+///|
+test "scrolls_window: what holds its blocks laid out as tall as they reach in the frame that lays them out, as their count changes (whether it scrolls, whether they end above its foot: the corner rule's)" {
+  let keys = @signals.signal(Array::makei(10, fn(i) { i }), same=fn(a, b) { a == b })
+  let column : Ref[@view.NodeId?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      column.val = Some(o.id())
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.scrolls_window(@view.Scroll::list(), fn() { keys.get() }, est=80.0, fn(b, _) {
+        b.height(Is(Some(40.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let id = column.val.unwrap()
+  let seen = []
+  tree.frame(390.0, 844.0) |> ignore
+  seen.push((tree.scrolls_now(id), tree.scroll_short(id)))
+  // (two of 40: 80 of its 100, above its foot)
+  keys.set([0, 1])
+  tree.frame(390.0, 844.0) |> ignore
+  seen.push((tree.scrolls_now(id), tree.scroll_short(id)))
+  keys.set(Array::makei(10, fn(i) { i }))
+  tree.frame(390.0, 844.0) |> ignore
+  seen.push((tree.scrolls_now(id), tree.scroll_short(id)))
+  assert_eq(seen, [(true, false), (false, true), (true, false)])
+  assert_true(!tree.told_since(), msg="nothing owed")
+}

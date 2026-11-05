@@ -177,7 +177,7 @@ fn Scroll::goes_on(self : Scroll) -> Bool {
 /// What shows past an end at `t`, followed: its edge, how far (Android: its heights; iOS: the points shown) and on
 /// which platform's way; none, nothing.
 fn Scroll::past_at(self : Scroll, t : Double) -> (Int, Double, ListFeel)? {
-  match self.flung_now() {
+  match self.fling.get() {
     Some({ way: Some(w), end_t, v0, t0, .. }) =>
       if t >= end_t {
         w.hit.map(fn(p) { (p.edge, p.shows(t), p.feel) })
@@ -415,23 +415,26 @@ fn list_planned(
 
 ///|
 /// What it holds above where it is grew by `d` as of `t`, a fling of `f` under way (Scroll::grew_above): the fling the
-/// same from where it set out moved by as much; toward its top, where it meets it worked out again, at rest then;
-/// toward its foot, met where that foot is laid out as it is read (Scroll::fling_met); met its end already, at rest there
-/// moved as much, what it brought going on back.
+/// same from where it set out moved by as much, toward its top where that is, or its foot where it is laid out (again
+/// as that is laid out anew: Scroll::foot_moved), where it meets it worked out again, at rest then; met its end already, at rest there moved as much, what it brought going on back.
 fn Scroll::fling_grew(self : Scroll, f : Fling, w : ListWay, t : Double, d : Double) -> Unit {
-  let now = self.fling_met(f, self.most_now())
-  if t >= now.end_t {
+  if t >= f.end_t {
     self.fling.set(None)
-    self.x.set(now.end_x + d)
-    self.past.set(now.way.bind(fn(w) { w.hit }))
+    self.x.set(f.end_x + d)
+    self.past.set(w.hit)
     return
   }
-  if f.v0 > 0.0 {
-    self.fling.set(Some({ ..f, x0: f.x0 + d, end_x: f.end_x + d, till: @double.infinity }))
-    return
+  // (its foot where it is as laid out now, that layout not done yet: met by then, not a meeting but where it was
+  // before what grew; then none yet, its foot where the layout puts it worked out then, Scroll::foot_moved)
+  let bound = if f.v0 < 0.0 {
+    0.0
+  } else if w.at({ ..f, x0: f.x0 + d }, t) < self.most() {
+    self.most()
+  } else {
+    @double.infinity
   }
   let density = w.px / dmax(w.h, 1.0)
-  match list_planned(f.t0, f.x0 + d, f.v0, w, w.same, density, 0.0) {
+  match list_planned(f.t0, f.x0 + d, f.v0, w, w.same, density, bound) {
     Some(g) => self.fling.set(Some(g))
     None => {
       self.fling.set(None)
@@ -462,7 +465,7 @@ fn Scroll::past_back(self : Scroll, v : View, p : Past, v0 : Double, t : Double)
 /// of a stretch it had not undone yet going back from there, as nothing holds it), as an old view's list's (ui's
 /// ListState::stop); what shows past an end going back left to go on.
 fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
-  guard @signals.untracked(fn() { self.flung_now() }) is Some(f) else { return }
+  guard @signals.untracked(fn() { self.fling.get() }) is Some(f) else { return }
   match f.way {
     // (met its end by now: at rest there, what it brought going on back, at rest as it said)
     Some({ hit: Some(p), .. }) if t >= f.end_t => {
@@ -513,8 +516,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
 
 ///|
 /// What it does by itself, set out at `t`, told to what hosts the tree (Tree::on_glides) and at rest at its end, said
-/// on the timeline: then where its fling ended, nothing past an end; at rest later as it is laid out then (a fling down
-/// toward its foot meeting that foot further down: Scroll::fling_met), said again at that end.
+/// on the timeline: then where its fling ended, nothing past an end.
 fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   (self.settle_off)()
   self.settle_off = fn() {  }
@@ -523,14 +525,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   ignore(t)
   self.settle_off = v.at_moment(rest, fn() {
     self.settle_off = fn() {  }
-    match @signals.untracked(fn() { self.rest_now() }) {
-      Some(later) if later > rest => {
-        self.list_settles(v, rest)
-        return
-      }
-      _ => ()
-    }
-    let flung = @signals.untracked(fn() { self.flung_now() })
+    let flung = @signals.untracked(fn() { self.fling.get() })
     let notch = @signals.untracked(fn() { self.notch.get() })
     if flung is Some(_) || notch is Some(_) {
       (self.on_scrolled)(rest)
@@ -544,6 +539,32 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
       _ => ()
     }
   })
+}
+
+///|
+/// How far it can go laid out anew as `most` at `t` (`laid`: all of it laid out as a change of what it holds left it,
+/// however far that is: Scroll::grew_above): a fling under way down toward its foot, short of it still (or meeting it
+/// at this very moment), meets it where it is now, worked out again from where it set out (rows below measured anew,
+/// come or gone; what grew above, Scroll::grew_above), at rest then.
+fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
+  guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
+    f.v0 > 0.0 &&
+    t <= f.end_t &&
+    (laid || f.till != most) else {
+    return
+  }
+  let density = w.px / dmax(w.h, 1.0)
+  match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
+    // (past its foot already as it is laid out now (what is under what is in sight less by more than it had left to
+    // go): it meets it now, at its speed now)
+    Some(g) if g.end_t < t => self.fling.set(Some(met_now(f, w, t, most, density)))
+    Some(g) => self.fling.set(Some(g))
+    None => {
+      self.fling.set(None)
+      self.x.set(f.x0)
+    }
+  }
+  self.list_settles(v, t)
 }
 
 ///|

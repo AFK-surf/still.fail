@@ -150,17 +150,17 @@ test "scrolls: a hold on what it holds moved up past the slop its own (across, o
 }
 
 ///|
-test "scrolls: the focus come to what it holds out of its sight: brought into sight once laid out, its foot at the column's; scrolled away after, left so" {
+test "scrolls: the focus come to what it holds out of its sight: brought into sight as the change that asks it is committed (laid out as an event finds it), its foot at the column's; scrolled away after, left so" {
   let k = scroll_case()
   let got = k.tree.focus_to(k.focus.val, visible=true)
-  // (once laid out, before it is drawn)
+  // (as the change is committed, before any frame)
   let before = k.at()
   k.tree.frame(390.0, 844.0) |> ignore
   let after = k.at()
   // (scrolled back by the wheel: kept so, the focus where it is)
   k.tree.wheel_at(150.0, 150.0, 0.0, -120.0, 0, 10.0) |> ignore
   k.tree.frame(390.0, 844.0) |> ignore
-  assert_eq((got, before, after, k.at()), (true, 0.0, 300.0, 180.0))
+  assert_eq((got, before, after, k.at()), (true, 300.0, 300.0, 180.0))
 }
 
 ///|
