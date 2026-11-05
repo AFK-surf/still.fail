@@ -539,10 +539,13 @@ static NSCursor *cursor_of(int kind) {
 - (void)scrollWheel:(NSEvent *)e {
   NSPoint p = [self pt:e];
   // a mouse wheel's notch: 40 points, as a browser scrolls by one, eased in by the app (phase 4); a trackpad's
-  // as it comes (1 the fingers on it, 3 its momentum)
+  // as it comes (1 the fingers on it, 3 its momentum, 5 its momentum's last: what glides under the pointer at rest)
   double dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 40.0;
   double dx = e.hasPreciseScrollingDeltas ? e.scrollingDeltaX : e.scrollingDeltaX * 40.0;
-  int phase = !e.hasPreciseScrollingDeltas ? 4 : e.momentumPhase != NSEventPhaseNone ? 3 : (e.phase != NSEventPhaseNone ? 1 : 0);
+  int phase = !e.hasPreciseScrollingDeltas ? 4
+            : (e.momentumPhase & (NSEventPhaseEnded | NSEventPhaseCancelled)) ? 5
+            : e.momentumPhase != NSEventPhaseNone ? 3
+            : (e.phase != NSEventPhaseNone ? 1 : 0);
   // what is held with it, above the phase (ui's wheel_mod_*)
   NSEventModifierFlags m = e.modifierFlags;
   int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |

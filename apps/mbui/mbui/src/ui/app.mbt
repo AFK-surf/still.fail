@@ -1713,7 +1713,9 @@ fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
   }
   // (a wheel's notch said so to the tree's: a page's list of it eases it in, as an old view's list does)
   let notch = if phase % 16 == 4 { @view.wheel_notch } else { 0 }
-  if view_wheel(x, y, dx, dy, mods | notch, old~) {
+  // (what a trackpad's stroke let go of glides on by, the system's: no event of the pointer's own, Tree::wheel_at)
+  let momentum = phase % 16 == 3
+  if view_wheel(x, y, dx, dy, mods | notch, old~, momentum~) {
     if !old_took.val {
       input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
     }

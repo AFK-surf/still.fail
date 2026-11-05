@@ -139,7 +139,7 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
               let (rx, _, rw, _) = r.rect()
               let (sx, _, _, _) = inner.rect()
               let (_, _, cw, _) = c.rect()
-              let stop = if several() && (hot.val)() { 28.0 } else { 0.0 }
+              let stop = if several() { 28.0 } else { 0.0 }
               dmax(rx + rw - sx - stop - (if cw > 0.0 { cw + 8.0 } else { 0.0 }), 0.0)
             }
             _ => 0.0
@@ -152,10 +152,17 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
     |> ignore
   })
   |> ignore
-  // (one of several agents: stopped alone from its row, under the pointer)
-  row.show(fn() { several() && (hot.val)() }, fn(s) {
+  // (one of several agents: stopped alone from its row, its key at the row's end laid out there whether it shows or not,
+  // shown while the pointer is over the row or it shows the focus, faded in and out from that moment (how opaque it is
+  // as it is drawn, nothing laid out again for it), pressed with a mouse alone: the web's activityStop)
+  row.show(fn() { several() }, fn(s) {
     let label = fn() { @sf.t("web-main.activity.stop", args=[("who", a().who)]) }
+    let shown = @sf.EdgeWay::new(0.0)
+    s.reacts(fn() { (hot.val)() || s.focus_shown() }, fn(on) { shown.go(s, if on { 1.0 } else { 0.0 }, @sf.dur_ms) })
     s
+    .alpha(By(fn() { shown.shown(s) }))
+    .hides(By(fn() { shown.target() == 0.0 }))
+    .presses(By(fn() { @ui.pointing() is Mouse }))
     .width(Is(Some(24.0)))
     .height(Is(Some(24.0)))
     .radius(By(fn() { @ui.tree_theme().corner(Md) }))
@@ -315,6 +322,7 @@ fn steady_node(
   came : Double?,
   room : () -> Double,
 ) -> Unit {
+  // (its ink brighter under the pointer, as it is drawn alone: its words set as ever, nothing laid out again for it)
   let style = fn() { if hot() { now_words_hot } else { now_words } }
   let first = @signals.untracked(said)
   let st = match steady_nodes.get(row) {
@@ -507,7 +515,7 @@ fn steady_node(
           st.told.get() |> ignore
           runs(st.words, st.mono)
         }))
-        .words_look(By(fn() { @ui.style_words(style()) }))
+        .words_look(By(fn() { @ui.style_words(now_words) }))
         .ink(By(fn() { @ui.style_ink(style()) }))
         .cuts(Is(true))
         .allow_ellipsis(Is(true))
@@ -554,7 +562,7 @@ fn steady_node(
         both.box(fn(before) {
           before
           .words_runs(Is(runs(st.was, st.was_mono)))
-          .words_look(By(fn() { @ui.style_words(style()) }))
+          .words_look(By(fn() { @ui.style_words(now_words) }))
           .ink(By(fn() { @ui.style_ink(style()) }))
           |> ignore
           glyphs(before, false)
@@ -564,7 +572,7 @@ fn steady_node(
           next
           .over(Is(true))
           .words_runs(Is(runs(st.words, st.mono)))
-          .words_look(By(fn() { @ui.style_words(style()) }))
+          .words_look(By(fn() { @ui.style_words(now_words) }))
           .ink(By(fn() { @ui.style_ink(style()) }))
           |> ignore
           glyphs(next, true)

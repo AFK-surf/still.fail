@@ -4,8 +4,9 @@
 // frame; one made only lit is none of the frame before's).
 
 ///|
-/// Every node read as pointed at and pressed (View::pointed, View::pointed_in, View::pressed: the cells that read them now, and any
-/// first read while it is so), `on`; or, `on` false, each as the hand has it (Tree's `pointed`, `pressing`).
+/// Every node read as pointed at and pressed (View::pointed, View::pointed_in, View::moved_over, View::moved_in,
+/// View::pressed: the cells that read them now, and any first read while it is so), `on`; or, `on` false, each as the
+/// hand has it (Tree's `pointed`, `pressing`, what the pointer was over as it last moved).
 pub fn Tree::lit_all(self : Tree, on : Bool) -> Unit {
   self.lit_every = on
   for at in 0..<self.nodes.length() {
@@ -24,6 +25,15 @@ pub fn Tree::lit_all(self : Tree, on : Bool) -> Unit {
     }
     match n.pointed_in_cell {
       Some(s) => s.set(on || self.pointed_within_at(at))
+      None => ()
+    }
+    // (and as the pointer last moved by itself: View::moved_over, moved_in)
+    match n.moved_over_cell {
+      Some(s) => s.set(on || self.moved_pointed == id)
+      None => ()
+    }
+    match n.moved_in_cell {
+      Some(s) => s.set(on || self.within_id(self.moved_pointed, at))
       None => ()
     }
   }

@@ -296,6 +296,14 @@ fn touch(node : Node) -> Unit {
 let out_h : Ref[Double] = { val: 0.0 }
 
 ///|
+/// Whether what was just sized held one sized by what it holds (Node's `sized_by_children`) asked without its width:
+/// as tall as nothing then, its children not laid out to say it (layout_children's), so what holds it came out of a
+/// size its content has not given. Such a size is the probe's alone, kept for no other ask: one with the width it came
+/// out at (reusable's) would else take its height, nothing (a box of a least width holding a table laid out by its
+/// room came out as wide as that least and nothing tall, and was taken so when asked at that width, 2026-11-05).
+let vague : Ref[Bool] = { val: false }
+
+///|
 /// The space between items distribute found, beside the lead it returns.
 let out_b : Ref[Double] = { val: 0.0 }
 
@@ -374,7 +382,10 @@ pub fn compute(
   grid? : Double = 0.0,
 ) -> Unit {
   generation.val = generation.val + 1
-  reusing.val = reuse && !round && grid == placing_grid.val
+  // (what this root's compute last kept, kept on its own grid: another tree's on another grid between (an old view's on
+  // whole pixels and the window's tree) changes nothing of it)
+  reusing.val = reuse && !round && grid == root.laid_grid
+  root.laid_grid = grid
   placing_grid.val = grid
   absolute_seen.val = false
   let b = box_of(root.style, width, height)
@@ -422,6 +433,30 @@ pub fn measured_height(node : Node, width : Double) -> Double {
   let w = or_else(b.w, width)
   size_node(node, w, undef, w, undef, w, undef, false) |> ignore
   out_h.val
+}
+
+///|
+/// Measure and lay out a child of a custom container within the current compute, retaining this generation and
+/// its caches. This is not a new root compute. Its caller owns the child's final position.
+pub fn layout_child(node : Node, width : Double, height? : Double, containing_height? : Double) -> (Double, Double) {
+  let h = height.unwrap_or(undef)
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, width, h, width, h, width, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
+}
+
+///|
+/// Lay out a custom container's child at its intrinsic width, with `most` available, within the current compute.
+pub fn layout_child_fitted(node : Node, most : Double, containing_height? : Double) -> (Double, Double) {
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, undef, undef, most, undef, most, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
 }
 
 ///|
@@ -528,7 +563,11 @@ fn size_node(
       same(node.p_kh, kh) &&
       same(node.p_cbw, cb_w) &&
       same(node.p_cbh, cb_h) {
-      node.skip_gen = generation.val
+      // (laid out before this compute and found so: reused; laid out in this one already, its absolute boxes are
+      // still to be placed with the rest)
+      if node.p_gen != generation.val {
+        node.skip_gen = generation.val
+      }
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
       return node.p_w
@@ -570,10 +609,15 @@ fn size_node(
     }
   }
   counters[0] = counters[0] + 1
+  let vague_before = vague.val
+  vague.val = false
   let w = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
   let h = out_h.val
+  let was_vague = vague.val
+  vague.val = vague_before || was_vague
   if perform {
     node.p_ok = true
+    node.p_gen = generation.val
     node.p_kw = kw
     node.p_kh = kh
     node.p_cbw = cb_w
@@ -588,6 +632,11 @@ fn size_node(
       out_h.val = h
       return w
     }
+  }
+  // (a size of a probe that left a child sized by what it holds unasked: kept for none)
+  if was_vague {
+    out_h.val = h
+    return w
   }
   let mut n = node.cache_n
   if n >= 8 * 16 {
@@ -659,6 +708,35 @@ fn size_uncached(
   }
   let pbw = b.pbw()
   let pbh = b.pbh()
+  match node.layout_children {
+    Some(layout) => {
+      // (given its width alone and tall as what it holds says: laid out as it is probed, in the same pass, its height
+      // its own as a leaf's measure is)
+      if node.sized_by_children && known(w) && !known(h) {
+        let said = layout(fmax(w - pbw, 0.0), undef, b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+        out_h.val = clamp_size((if known(said) { said } else { 0.0 }) + pbh, b.min_h, b.max_h)
+        // (what it holds laid out as it was probed, at what the probe gave it: laid out again by its own layout as that
+        // is done, nothing of a compute before kept for it then)
+        if !perform {
+          node.p_ok = false
+        }
+        return w
+      }
+      // (asked without its width, it says nothing of its height: what holds it is sized so for that ask alone)
+      if node.sized_by_children && !known(w) && !known(h) {
+        vague.val = true
+      }
+      // A viewport's intrinsic content is empty; its parent must give it the final bounds (flex share, explicit
+      // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
+      if perform {
+        guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
+        layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t) |> ignore
+      }
+      out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
+      return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }
+    }
+    None => ()
+  }
   // leaves measured from their content
   match node.measure {
     Some(m) =>
@@ -1705,9 +1783,11 @@ fn layout_flex(
       if !reusing.val &&
         n.children.length() == 0 &&
         n.measure is None &&
+        n.layout_children is None &&
         known(iw) &&
         known(ih) {
-        // a box with nothing in it, its size given: what size_node comes
+        // a box with nothing in it (none that lays out its own: what it
+        // holds made as it is laid out), its size given: what size_node comes
         // to (its box the one set up above, its caches already started in
         // this compute, nothing kept for a compute that reuses), without
         // the calls
@@ -1720,6 +1800,7 @@ fn layout_flex(
         let rh = fmax(h - ipbh, 0.0) + ipbh
         counters[0] = counters[0] + 1
         n.p_ok = true
+        n.p_gen = generation.val
         n.p_kw = iw
         n.p_kh = ih
         n.p_cbw = cb_w
@@ -2413,6 +2494,13 @@ fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
 /// position in its parent when it has no insets. (ox, oy): the parent's
 /// border box in cb's.
 fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> Unit {
+  if node.layout_children is Some(_) {
+    // The container has already placed its direct children; absolute descendants still use their own holders.
+    for c in node.children {
+      if c.line >= 0 && !kept(c) && c.children.length() > 0 { layout_static_absolute(c, c, 0.0, 0.0) }
+    }
+    return
+  }
   for c in node.children {
     let cs = c.style
     if cs.display == DisplayNone {

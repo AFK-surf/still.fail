@@ -1,90 +1,61 @@
 // What a node holds made by the room it is laid out in (Compose's BoxWithConstraints, made in its layout as a
-// SubcomposeLayout's is): a layout of its own, as a long list's blocks are (docs/retained.md rule 11), in the frame's
-// one pass; never a size told back and read by a binding to make it otherwise (rule 10).
+// SubcomposeLayout's is): laid out by it in its own layout (flex's layout_children), in the compute that lays it out,
+// what it holds measured there and its height that: never a size told back and read by a binding to make it otherwise,
+// nor a layout done again for it (rule 10).
 
 ///|
 /// What `self` holds made by `make` for what `fit` says of the width `self` is laid out at (its own properties say how
-/// wide, as what holds it lays it out; it holds nothing in its flow): one block of its own (View::block), laid out as
-/// wide as `self`, as tall as what it holds comes to, `self` laid out as tall with all else in the same pass. `fit` is
-/// worked out in layout, what it reads followed: what is made is made again only as `fit` comes out otherwise (the
-/// width, or what it reads, changed), what was made let go then; laid out again as the width changes or anything in it
-/// is marked.
+/// wide, as what holds it lays it out; it holds nothing in its flow): one node, laid out by `self` as wide as it is in
+/// the same layout, as it is asked its height given its width, `self` as tall as that comes to (a list of files, a
+/// table as tall as its rows). `fit` is worked out as it is laid out, what it reads followed: what is made is made
+/// again only as `fit` comes out otherwise (the width, or what it reads, changed), what was made let go then; laid out
+/// again as the width changes or anything in it is marked, as any node is.
 pub fn[K : Eq] View::by_room(self : View, fit : (Double) -> K, make : (View, K) -> Unit) -> View {
-  guard self.live() is Some(_) else { return self }
+  guard self.live() is Some(n) else { return self }
   let tree = self.tree
-  // (what is made now, for what `fit` said; what compute lays it out that it is not placed by yet, -1: none)
+  // (what is made now, for what `fit` said)
   let made : Ref[(K, View)?] = Ref(None)
-  let unplaced = Ref(-1)
-  let laid_w = Ref(-1.0)
-  let laid_h = Ref(-1.0)
-  // (what `fit` read changed since: worked out again with all else as a frame lays it out)
-  let told = Ref(true)
-  let watch = @signals.watch(fn() {
-    told.val = true
-    tree.lists_due = true
-    tree.marked()
-  })
-  let laying = Ref(false)
-  let lay_now = fn(place : Bool, marked : Bool) -> Bool {
-    guard self.live() is Some(n) else { return false }
-    let w = n.flex.width
-    let k = watch.read(fn() { fit(w) })
-    let fresh = match made.val {
-      Some((was, b)) if was == k && b.alive() => false
+  // (what `fit` read changed since: laid out again with all else as a frame lays it out)
+  let watch = @signals.watch(fn() { tree.layout_marked_at(self.at) })
+  n.flex.sized_by_children = true
+  n.flex.layout_children = Some(fn(width, height, x, y) {
+    let was_owner = tree.layout_owner
+    tree.layout_owner = self.at
+    let k = watch.read(fn() { fit(width) })
+    match made.val {
+      Some((was, b)) if was == k && b.alive() => ()
+      _ => {
+        match made.val {
+          Some((_, b)) => self.drop(b)
+          None => ()
+        }
+        made.val = Some((k, @signals.untracked(fn() { self.box(fn(b) { make(b, k) }) })))
+      }
+    }
+    // (as tall as what it holds comes to as wide as it is, given no height; else as tall as it is laid out)
+    let said = match made.val {
       Some((_, b)) => {
-        self.block_gone(b)
-        made.val = None
-        true
+        let c = tree.nodes[b.at].flex
+        let (_, h) = if height == height {
+          @flex.layout_child(c, width, height~)
+        } else {
+          @flex.layout_child(c, width)
+        }
+        c.left = x
+        c.top = y
+        c.line = 0
+        h
       }
-      None => true
+      None => 0.0
     }
-    if fresh {
-      let b = @signals.untracked(fn() { self.block(0, fn(b) { make(b, k) }) })
-      made.val = Some((k, b))
-    }
-    guard made.val is Some((_, b)) else { return false }
-    // (laid out where it is new, marked, or as wide as it is no more; placed by the first compute that lays it out)
-    if fresh || marked || w != laid_w.val {
-      if unplaced.val < 0 {
-        unplaced.val = @flex.computes() + 1
-      }
-      laid_w.val = w
-      let h = b.block_laid(w)
-      if h != laid_h.val {
-        laid_h.val = h
-        n.flex.style.set_height(Pt(h))
-        tree.layout_marked_at(self.at)
-      }
-    }
-    if unplaced.val >= 0 || fresh {
-      b.block_put(0.0, 0.0, unplaced.val, place)
-      if place {
-        unplaced.val = -1
-        return true
-      }
-    }
-    false
-  }
-  let lay = fn(place : Bool, marked : Bool) -> Bool {
-    if laying.val {
-      return false
-    }
-    let same_room = match self.live() {
-      Some(n) => n.flex.width == laid_w.val
-      None => false
-    }
-    if !told.val && !marked && same_room && !(place && unplaced.val >= 0) {
-      return false
-    }
-    told.val = false
-    laying.val = true
-    @signals.start_batch()
-    let placed = lay_now(place, marked)
-    laying.val = false
-    @signals.end_batch()
-    placed
-  }
-  self.owns(fn() { watch.stop() }) |> ignore
-  tree.lays_blocks(self, lay)
+    tree.layout_owner = was_owner
+    said
+  })
+  self.owns(fn() {
+    watch.stop()
+    n.flex.layout_children = None
+    n.flex.sized_by_children = false
+  })
+  |> ignore
   self
 }

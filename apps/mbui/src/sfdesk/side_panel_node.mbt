@@ -148,8 +148,14 @@ fn side_panel_node(
 }
 
 ///|
-fn side_words_node(v : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> Unit {
-  v.words(By(words)).words_look(By(fn() { @ui.style_words(style()) })).ink(By(fn() { @ui.style_ink(style()) }))
+fn side_words_node(
+  v : @view.View,
+  words : () -> String,
+  style : () -> @ui.TextStyle,
+  inked? : () -> @ui.TextStyle = style,
+) -> Unit {
+  // (inked as `inked` says, set as `style` does: one inked as the hand is on it laid out as ever)
+  v.words(By(words)).words_look(By(fn() { @ui.style_words(style()) })).ink(By(fn() { @ui.style_ink(inked()) }))
   .shrink(Is(1.0)).min_width(Is(Some(0.0))).cuts(Is(true)).allow_ellipsis(Is(true)) |> ignore
 }
 
@@ -166,7 +172,7 @@ fn side_tab_node(v : @view.View, src : Source, r : ChatRef, view : () -> ChatVie
   @sf.presses_node(v, fn() { side_change(src, r, "front", Some(tab)) })
   side_tab_mark_node(v, src, r, view, fn() { tab }, fn() { front() || lit() })
   v.box(fn(words) {
-    side_words_node(words, fn() { names().0 }, fn() {
+    side_words_node(words, fn() { names().0 }, fn() { if front() { side_tab_front } else { side_tab_words } }, inked=fn() {
       if front() { side_tab_front } else if lit() { side_tab_words_lit } else { side_tab_words }
     })
   }) |> ignore

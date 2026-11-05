@@ -10,7 +10,11 @@ pub fn text_toggle_node(parent : @view.View, words : () -> String, press : () ->
   parent.box(fn(b) {
     b.padding(Is((text_toggle_x, text_toggle_y, text_toggle_x, text_toggle_y))) |> ignore
     pressed_node(b, press, Is(0.0), Button, words)
-    words_node(b, words, fn() { if lit_node(b) { text_toggle_hot } else { text_toggle_words } }) |> ignore
+    // (its ink the words' under the hand, its words set as ever: nothing laid out again for it)
+    words_node(b, words, fn() { text_toggle_words }, inked=fn() {
+      if lit_node(b) { text_toggle_hot } else { text_toggle_words }
+    })
+    |> ignore
   })
   |> ignore
 }

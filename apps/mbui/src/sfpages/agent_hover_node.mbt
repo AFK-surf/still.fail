@@ -14,7 +14,7 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
   let due : Ref[() -> Unit] = Ref(fn() {  })
   let on_it = fn() {
     // A name's link takes the pointer inside its room; the card belongs to the room that keeps that link.
-    @sf.pointer_rests() && (pic.pointed_in() || card_on.val.map(pointer_over).unwrap_or(false))
+    @sf.pointer_rests() && (pic.moved_in() || card_on.val.map(pointer_over).unwrap_or(false))
   }
   // (rested on, opened; left, both it and the card, closed: each from the moment the pointer came or went)
   pic.reacts(fn() { agent() != "" && on_it() }, fn(on) {
@@ -69,7 +69,8 @@ let agent_card_most : Double = 420.0
 
 ///|
 /// Whether the pointer is over card `v` (where it is placed, what it holds the old view's: its own hover and tips by
-/// it, so not pointed at as a node of the tree's is), followed as it moves (View::pointer_within).
+/// it, so not pointed at as a node of the tree's is), as it last moved (View::moved_within: what opens and closes a card
+/// by it is so at the pointer's own events alone).
 fn pointer_over(v : @view.View) -> Bool {
-  v.pointer_within()
+  v.moved_within()
 }

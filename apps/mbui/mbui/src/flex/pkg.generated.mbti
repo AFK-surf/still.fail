@@ -16,6 +16,10 @@ pub fn computes() -> Int32
 
 pub let counters : FixedArray[Int32]
 
+pub fn layout_child(Node, Double, height? : Double, containing_height? : Double) -> (Double, Double)
+
+pub fn layout_child_fitted(Node, Double, containing_height? : Double) -> (Double, Double)
+
 pub fn measured_height(Node, Double) -> Double
 
 // Errors
@@ -83,6 +87,8 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : ((Double, MeasureMode, Double, MeasureMode) -> (Double, Double))?
+  mut layout_children : ((Double, Double, Double, Double) -> Double)?
+  mut sized_by_children : Bool
   mut left : Double
   mut top : Double
   mut width : Double

@@ -116,6 +116,17 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
 }
 
 ///|
+/// Its words in pieces all drawn underlined while `on` says so, however each piece is set, as it changes: how they look
+/// alone, nothing of how they are laid out (a link's line come as the pointer is over it, as a browser draws a
+/// `text-decoration` it is told on hover: what may follow what the pointer is over, Tree::pointer_read).
+pub fn View::runs_underlined(self : View, on : Live[Bool]) -> View {
+  let tree = self.tree
+  let at = self.at
+  self.bind(RunsUnderlined, on, Paint, fn(v) { tree.nodes[at].look.runs_under = v })
+  self
+}
+
+///|
 /// The link of its words in pieces held (by its first piece, as their runs say it: -1 none), as it changes: its
 /// pressed ground (RunsLook's `pressed`) drawn under that link alone.
 pub fn View::runs_pressed(self : View, k : Live[Int]) -> View {
@@ -233,7 +244,8 @@ fn Tree::pointer_in(self : Tree, at : Int) -> (Double, Double)? {
 /// it, moved, or it laid out another size), with what the frame places, as a pointer's move is told then
 /// (Tree::withins_told: a hit test of the pointer's, nothing told back of how it is laid out). Never what a move of the
 /// pointer's own is told by (View::on_pointer_moved).
-pub fn View::pointer_in(self : View) -> (Double, Double)? {
+#callsite(autofill(loc))
+pub fn View::pointer_in(self : View, loc~ : SourceLoc) -> (Double, Double)? {
   guard self.live() is Some(n) else { return None }
   let cell = match n.here_cell {
     Some(c) => c
@@ -248,7 +260,7 @@ pub fn View::pointer_in(self : View) -> (Double, Double)? {
       c
     }
   }
-  cell.get().map(fn(p) { (p.0, p.1) })
+  self.tree.pointer_cell_read(cell, "where the pointer is in it (View::pointer_in)", loc).map(fn(p) { (p.0, p.1) })
 }
 
 ///|

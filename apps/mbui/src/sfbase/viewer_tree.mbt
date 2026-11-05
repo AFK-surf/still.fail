@@ -553,7 +553,8 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // then, the bar itself as it shows; as the pointer comes in or goes out)
   n.box(fn(top) {
     top.over(Is(true)).height(Is(Some(@sf.viewer_bar_h))) |> ignore
-    top.reacts(fn() { top.pointer_within() && @sf.pointer_rests() }, fn(near) {
+    // (as the pointer last moved: what shows and takes presses by it so at its own events, View::moved_within)
+    top.reacts(fn() { top.moved_within() && @sf.pointer_rests() }, fn(near) {
       if vw.near_bar != near {
         vw.near_bar = near
         vw.awake_said()

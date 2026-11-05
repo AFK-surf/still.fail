@@ -198,7 +198,10 @@ fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) 
     b.says(By(fn() { Some(@view.said(Link, label=label())) })) |> ignore
     let ink = fn() { if lit_node(b) { theme().p.text } else { theme().p.muted } }
     icon_node(b, "chevron-left", desk_back_icon, By(ink)) |> ignore
-    b.box(fn(w) { styled_words(w, label, fn() { if lit_node(b) { desk_back_lit } else { desk_back_words } }) |> ignore })
+    b.box(fn(w) {
+      styled_words(w, label, fn() { desk_back_words }, inked=fn() { if lit_node(b) { desk_back_lit } else { desk_back_words } })
+      |> ignore
+    })
     |> ignore
   })
   |> ignore

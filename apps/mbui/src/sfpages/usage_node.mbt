@@ -117,7 +117,10 @@ fn usage_chats_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
             .says(By(fn() { Some(@view.said(Button, label=words())) }))
             |> ignore
             @sf.presses_node(b, fn() { usage_pick.all.set(!@signals.untracked(fn() { usage_pick.all.get() })) })
-            @sf.words_node(b, words, fn() { if @sf.lit_node(b) { ug_more_lit } else { ug_more_words } }) |> ignore
+            @sf.words_node(b, words, fn() { ug_more_words }, inked=fn() {
+              if @sf.lit_node(b) { ug_more_lit } else { ug_more_words }
+            })
+            |> ignore
           })
           |> ignore
         })
@@ -151,8 +154,9 @@ fn usage_chat_row_node(parent : @view.View, core : Core, it : () -> Json?) -> Un
     r.says(By(fn() { if opens() { Some(@view.said(Link, label=text(it(), "title"))) } else { None } })) |> ignore
     let lit = fn() { opens() && @sf.lit_node(r) }
     ug_line_node(r, fn(l) {
+      // (inked as the hand is on it, its words set as ever: nothing laid out again for it)
       ug_grow_words(l, fn() { text(it(), "title") }, ug_row_title).words_look(By(fn() {
-        @ui.style_words(if lit() { ug_row_title_lit } else { ug_row_title })
+        @ui.style_words(ug_row_title)
       })).ink(By(fn() { @ui.style_ink(if lit() { ug_row_title_lit } else { ug_row_title }) }))
       |> ignore
       @sf.words_node(l, fn() { text(it(), "costText") }, fn() { ug_cost }) |> ignore
@@ -263,7 +267,9 @@ fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
     .says(By(fn() { Some(@view.said(Link, label=@sf.t("web-main.usage.costPrices"))) }))
     |> ignore
     @sf.presses_node(b, fn() { (core.push)(UsagePrices(@signals.untracked(fn() { usage_pick.days.get() }))) })
-    @sf.words_node(b, fn() { @sf.t("web-main.usage.seePrices") }, fn() { if @sf.lit_node(b) { ug_prices_lit } else { ug_prices_words } })
+    @sf.words_node(b, fn() { @sf.t("web-main.usage.seePrices") }, fn() { ug_prices_words }, inked=fn() {
+      if @sf.lit_node(b) { ug_prices_lit } else { ug_prices_words }
+    })
     |> ignore
   })
   |> ignore
@@ -340,7 +346,7 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
               |> ignore
             })
             |> ignore
-            @sf.words_node(it, fn() { text(pv(), "name") }, fn() {
+            @sf.words_node(it, fn() { text(pv(), "name") }, fn() { ug_legend_words }, inked=fn() {
               if selected() || (can_pick() && @sf.lit_node(it)) { ug_legend_lit } else { ug_legend_words }
             })
             |> ignore

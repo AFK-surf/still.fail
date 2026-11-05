@@ -1209,10 +1209,13 @@ fn Ctx::paint_run_lines(
   colors : Array[Int64],
   alpha : Double,
   center_in? : Double = -1.0,
+  under? : Bool = false,
 ) -> Unit {
   let sc = self.scale
   for k, run in r.runs {
-    if !run.strike && !run.underline {
+    // (`under`: each underlined however it is set, as its node is drawn: View::runs_underlined)
+    let underline = run.underline || under
+    if !run.strike && !underline {
       continue
     }
     let size = lay.run_size[k]
@@ -1234,7 +1237,7 @@ fn Ctx::paint_run_lines(
         let y = glyph_y(base - size * 0.27 - t / 2.0, sc)
         self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
       }
-      if run.underline {
+      if underline {
         let y = glyph_y(base + size * 0.12, sc)
         self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
       }

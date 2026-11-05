@@ -25,6 +25,14 @@ pub fn lit_in_node(v : @view.View) -> Bool {
 }
 
 ///|
+/// Whether the hand is on `v` or on what it holds as lit_in_node has it, the pointer as it last moved (View::moved_in):
+/// what lays out or makes something by it (a row's time in the place of who is in it, its 归档), changed at the pointer's
+/// own events alone, as how it looks (lit_in_node) is each frame.
+pub fn moved_in_node(v : @view.View) -> Bool {
+  v.focus_shown() || v.pressed() || (@ui.pointing() is Mouse && v.moved_in())
+}
+
+///|
 /// `v` pressed as an old view's box with an id is (a tap on it, a mouse's let go on it, Enter or Space with the
 /// keyboard's focus on it, a screen reader's Activate), `press` done then; while `on` says so (a box given no id: none
 /// of these). Nothing drawn of it: what it draws as the hand is on it is its own (lit_node). `menu`: held still by a
@@ -141,12 +149,19 @@ pub fn pressed_node(
 }
 
 ///|
-/// Words of `style` in node `w`, `words` as they are said, cut short on their line where `style` says so.
-fn styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> @view.View {
+/// Words of `style` in node `w`, `words` as they are said, cut short on their line where `style` says so; inked as
+/// `inked` says (`style` where it says nothing: one that changes as the hand is on them, how they look alone, their
+/// words set by `style` as ever).
+fn styled_words(
+  w : @view.View,
+  words : () -> String,
+  style : () -> @ui.TextStyle,
+  inked? : () -> @ui.TextStyle = style,
+) -> @view.View {
   w
   .words(By(words))
   .words_look(By(fn() { @ui.style_words(style()) }))
-  .ink(By(fn() { @ui.style_ink(style()) }))
+  .ink(By(fn() { @ui.style_ink(inked()) }))
   |> ignore
   if @ui.style_cut(@signals.untracked(style)) {
     // (cut short where their line has not the room across: given way along a row, never squeezed down, View::cuts)
@@ -1221,16 +1236,22 @@ let page_card_gap : Double = 14.0
 let page_card_foot : Double = 10.0
 
 ///|
-/// Words of `style` in a node of `parent`'s (styled_words': cut short on their line where `style` says so), `words` as
-/// they are said: the node.
-pub fn words_node(parent : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> @view.View {
-  parent.box(fn(w) { styled_words(w, words, style) |> ignore })
+/// Words of `style` in a node of `parent`'s (styled_words': cut short on their line where `style` says so, inked as
+/// `inked` says), `words` as they are said: the node.
+pub fn words_node(
+  parent : @view.View,
+  words : () -> String,
+  style : () -> @ui.TextStyle,
+  inked? : () -> @ui.TextStyle = style,
+) -> @view.View {
+  parent.box(fn(w) { styled_words(w, words, style, inked~) |> ignore })
 }
 
 ///|
 /// A round key in a bar (nav_button's, Parts.kt NavButton) as a node: `side` across, round, its icon `icon_size` in the
 /// ink in its middle, no disc behind it (a ground while pressed: its ripple), read out a button named `label`; `press`
-/// done as it is pressed.
+/// done as it is pressed. `tab`: whether Tab stops on it (false: a key shown only while the pointer rests on what holds
+/// it, shown whenever a pointer can press it, what it opens reached by a right click as well: a message's ⋯).
 pub fn round_key_node(
   parent : @view.View,
   icon : String,
@@ -1239,6 +1260,7 @@ pub fn round_key_node(
   side? : Double = 34.0,
   icon_size? : Double = 22.0,
   ink? : () -> Int64 = fn() { theme().p.text },
+  tab? : Bool = true,
 ) -> Unit {
   parent.box(fn(k) {
     k
@@ -1249,6 +1271,9 @@ pub fn round_key_node(
     .lies_along(Is(Middle))
     |> ignore
     pressed_node(k, press, Is(side / 2.0), Button, label)
+    if !tab {
+      k.tab_stop(Is(false)) |> ignore
+    }
     icon_node(k, icon, icon_size, By(ink)) |> ignore
   })
   |> ignore

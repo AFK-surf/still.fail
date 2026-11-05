@@ -322,7 +322,8 @@ fn toast_lives(
     }))
     |> ignore
     // (held: the pointer on it (on its action too, nothing over it there) or the focus on its action, one of the toasts holding them all)
-    hold_while(b, held, fn() { b.pointed_in() || focus_in.get() })
+    // (the pointer on it as it last moved, View::moved_in: what leaves by its time so at the pointer's own events)
+    hold_while(b, held, fn() { b.moved_in() || focus_in.get() })
     // swiped: followed while held, put away past a third of it (as wide as it is) or quick, else back
     let x0 = Ref(0.0)
     let last = Ref((0.0, 0.0))

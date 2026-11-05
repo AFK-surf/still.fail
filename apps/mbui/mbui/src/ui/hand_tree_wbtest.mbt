@@ -1,6 +1,7 @@
-// What the hand changes, measured of the window's tree's nodes too (hand_moves.mbt): a node that reads the pointer or
-// the press (View::pointed, View::pressed) and is set otherwise for it found, by its own identity, its words set
-// otherwise, it taller or moved; one only drawn otherwise (its ground, its ink) not; the tree's hand as it was after.
+// What the hand changes, measured of the window's tree's nodes too (hand_moves.mbt): a node that reads the pointer as it
+// last moved or the press (View::moved_over, View::pressed: what lays out or makes by it; View::pointed only how it
+// looks) and is set otherwise for it found, by its own identity, its words set otherwise, it taller or moved; one only
+// drawn otherwise (its ground, its ink) not; the tree's hand as it was after.
 
 ///|
 /// Words set bigger, on a taller line.
@@ -21,7 +22,7 @@ fn hand_tree() -> Tester {
       .width(Is(Some(120.0)))
       .on_press(fn() {  })
       .words(Is("grow"))
-      .words_look(By(fn() { if b.pointed() { hand_big } else { @view.words_plain } }))
+      .words_look(By(fn() { if b.moved_over() { hand_big } else { @view.words_plain } }))
       |> ignore
     })
     |> ignore
@@ -48,7 +49,7 @@ fn hand_tree() -> Tester {
       let after : @signals.Signal[@view.View?] = @signals.signal(None, same=fn(_, _) { false })
       col.show(fn() {
         match after.get() {
-          Some(v) => @view.View::pointed(v)
+          Some(v) => @view.View::moved_over(v)
           None => false
         }
       }, fn(v) { v.words(Is("before")) |> ignore })
@@ -65,7 +66,7 @@ fn hand_tree() -> Tester {
         .width(Is(Some(120.0)))
         .height(Is(Some(22.0)))
         .on_press(fn() {  })
-        .words_runs(By(fn() { [@view.words_run("weighed "), @view.words_run("bold", weight=if b.pointed() { 600 } else { 400 })] }))
+        .words_runs(By(fn() { [@view.words_run("weighed "), @view.words_run("bold", weight=if b.moved_over() { 600 } else { 400 })] }))
         |> ignore
       })
       |> ignore
@@ -74,7 +75,7 @@ fn hand_tree() -> Tester {
         .width(Is(Some(120.0)))
         .height(Is(Some(22.0)))
         .on_press(fn() {  })
-        .words_runs(By(fn() { [@view.words_run("inked "), @view.words_run("run", ink=if b.pointed() { 0x2255AAFFL } else { 0L })] }))
+        .words_runs(By(fn() { [@view.words_run("inked "), @view.words_run("run", ink=if b.moved_over() { 0x2255AAFFL } else { 0L })] }))
         |> ignore
       })
       |> ignore
@@ -84,7 +85,7 @@ fn hand_tree() -> Tester {
         .height(Is(Some(22.0)))
         .on_press(fn() {  })
         .words_runs(By(fn() {
-          if b.pointed() {
+          if b.moved_over() {
             [@view.words_run("sp"), @view.words_run("lit ", weight=400), @view.words_run("same")]
           } else {
             [@view.words_run("split "), @view.words_run("same")]
@@ -98,7 +99,7 @@ fn hand_tree() -> Tester {
         .width(Is(Some(120.0)))
         .height(Is(Some(22.0)))
         .on_press(fn() {  })
-        .words(By(fn() { if b.pointed() { "展开详情" } else { "展开" } }))
+        .words(By(fn() { if b.moved_over() { "展开详情" } else { "展开" } }))
         |> ignore
       })
       |> ignore
@@ -110,7 +111,7 @@ fn hand_tree() -> Tester {
         .width(Is(Some(120.0)))
         .on_press(fn() {  })
         .words(Is("nudged"))
-        .offset(By(fn() { if b.pointed() { (0.0, 3.0) } else { (0.0, 0.0) } }))
+        .offset(By(fn() { if b.moved_over() { (0.0, 3.0) } else { (0.0, 0.0) } }))
         |> ignore
       })
       |> ignore

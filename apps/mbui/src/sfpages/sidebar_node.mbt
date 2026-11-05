@@ -137,8 +137,9 @@ fn chats_pane_node(
   let scroll = list_scroll(key)
   // (where it is put, said: the list there as it lays out its lines)
   let put : @signals.Signal[(String, Double)?] = @signals.signal(None)
-  // (while the hand is on the list or it glides, its rows keep their places; a row the viewer moved goes at once)
-  let held = fn() { v.pointed_in() || scroll.glides_till() is Some(_) }
+  // (while the hand is on the list or it glides, its rows keep their places; a row the viewer moved goes at once: the
+  // hand on it as the pointer last moved, View::moved_in, what is laid out so changed at the pointer's own events)
+  let held = fn() { v.moved_in() || scroll.glides_till() is Some(_) }
   // its days in the order shown, and its rows by their names: worked out once as what is read, or the hand on it,
   // changes (held_order), what its lines and rows read
   let ordered : @signals.Signal[Array[ChatDay]] = @signals.signal([])

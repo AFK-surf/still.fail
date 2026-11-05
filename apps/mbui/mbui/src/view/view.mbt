@@ -33,9 +33,9 @@
 /// worked out of where things are laid out (`Placed`: sizes and places as the tree's one layout left them, read plainly,
 /// View::laid_size, View::placed_window_now), as the tree is placed after its layout each time anything of it was laid
 /// out or placed, and as what else it reads changes: what placing and painting read (where it is drawn, how it looks);
-/// what layout reads only in a node laid out alone after all else (a windowed list's block, View::laid_after's, what
-/// View::by_room makes), worked out before that is laid out, of where all else is; never what makes or takes anything
-/// (docs/retained.md rule 10: nothing goes back).
+/// what layout reads only in a node laid out alone after all else (a windowed list's block, View::laid_after's), worked
+/// out before that is laid out, of where all else is; never what makes or takes anything (docs/retained.md rule 10:
+/// nothing goes back).
 pub(all) enum Live[T] {
   Is(T)
   By(() -> T)
@@ -72,6 +72,9 @@ pub(all) struct Look {
   /// a passage of its words on a ground of its own, from until, its colour, how round at its two ends (none where from
   /// and until are the same): its pieces' (View::runs_lit)
   mut runs_lit : (Int, Int, Int64, Double)
+  /// its pieces all drawn underlined, however each is set (View::runs_underlined): how they look alone, nothing of how
+  /// they are laid out
+  mut runs_under : Bool
   /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
   mut shadow : (Double, Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
@@ -162,6 +165,7 @@ pub(all) struct Content {
   runs_pressed : Int
   runs_picked : (Int, Int)
   runs_lit : (Int, Int, Int64, Double)
+  runs_under : Bool
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -236,6 +240,7 @@ pub(all) struct Drawn {
   runs_pressed : Int
   runs_picked : (Int, Int)
   runs_lit : (Int, Int, Int64, Double)
+  runs_under : Bool
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
@@ -362,6 +367,11 @@ struct Node {
   mut on_pointer_moved : (() -> Unit)?
   /// whether what the pointer is over is it or held by it, made as first read (View::pointed_in)
   mut pointed_in_cell : @signals.Signal[Bool]?
+  /// whether what the pointer is over as it last moved by itself is it, is it or held by it, and whether the pointer is
+  /// within it as it last moved by itself, each made as first read (View::moved_over, moved_in, moved_within)
+  mut moved_over_cell : @signals.Signal[Bool]?
+  mut moved_in_cell : @signals.Signal[Bool]?
+  mut moved_within_cell : @signals.Signal[Bool]?
   /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
   mut within_cell : @signals.Signal[Bool]?
   /// where the pointer is in its own terms as it was last placed, and how big it was laid out then (what is under the
@@ -659,6 +669,10 @@ pub struct Tree {
   mut reads_followed : Int
   /// what each of those reads is, as said where it is refused (Tree::layout_read)
   reading : Array[() -> String]
+  /// whether each read followed now, one in another (Tree::read_followed, Tree::read_placed), may follow what the pointer
+  /// is over: how something looks (its ground, its ink, its edge, how opaque), what it says, what reacts reads; never what
+  /// lays out, places or makes (Tree::pointer_read)
+  pointer_ok : Array[Bool]
   /// how many hit tests run now, one in another (Tree::hit_test): where things are placed read in them, inside what is
   /// followed too
   mut hit_testing : Int
@@ -672,9 +686,8 @@ pub struct Tree {
   /// reads changed otherwise since (`laid_due`)
   laid_bounds : Map[Int, Bound]
   laid_due : Array[Bound]
-  /// those again by the root of its own each is in (its windowed list's block, what View::by_room makes, the node laid
-  /// out after: by its index): each root's worked out again as it is about to be laid out, of where what holds it is
-  /// laid out then
+  /// those again by the root of its own each is in (its windowed list's block, the node laid out after: by its index):
+  /// each root's worked out again as it is about to be laid out, of where what holds it is laid out then
   laid_roots : Map[Int, Map[Int, Bound]]
   /// the nodes laid out alone once all else is (View::laid_after), each with its making, in the order said; whether one
   /// is to be laid out again (what it holds marked, or what it says of its room changed)
@@ -786,6 +799,9 @@ pub struct Tree {
   mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId?)]) -> Unit
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
+  /// what the point followed now tells as it finds what is there (Tree::follow_point's `then`): followed again as what
+  /// glided under a still pointer comes to rest, and at each notch or stroke of the wheel (Tree::point_again)
+  mut point_then : ((Target) -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
   mut gone : Bool
   /// the nodes said to go beside another (View::beside), as said (each let go is passed over, and dropped as placed)
@@ -793,6 +809,11 @@ pub struct Tree {
   /// the nodes whose being under the pointer is read (View::pointer_within: their cells), each as it was made (its
   /// index and generation), told again as the pointer moves and as what is placed changes
   withins_at : Array[(Int, Int)]
+  /// the nodes whose being under the pointer as it last moved is read (View::moved_in: their cells), each as it was made
+  /// (its index and generation), told again as the pointer moves alone
+  moved_at : Array[(Int, Int)]
+  /// what the pointer was over as it last moved by itself (View::moved_over: Tree::pointer_moved_told)
+  mut moved_pointed : NodeId?
   /// pointer geometry waiting for the whole signal change to be committed
   mut withins_asked : Bool
   /// whether a frame's laying out is telling what is under the pointer (Tree::laid_out): what it lays out then not again
@@ -844,6 +865,9 @@ pub struct Tree {
   /// lays_blocks); and whether any is to be laid out again (one of its blocks marked, what it read told)
   priv lists : Array[ListLaid]
   mut lists_due : Bool
+  /// the node whose layout of its own (Node's layout_children: View::by_room's) is laying out what it holds now, -1: none;
+  /// what that makes and lays out marked up to it alone, laid out again by it as it goes on (Tree::layout_marked_at)
+  mut layout_owner : Int
   /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
   /// yield_thumbs, Tree::thumb_at)
   thumbs : Map[Int, NodeId]
@@ -875,6 +899,9 @@ struct Bound {
   laid : Bool
   /// what it is, as a refusal or what is left owed names it (Tree::owes_why)
   about : () -> String
+  /// whether what it reads may follow what the pointer is over (Tree::pointer_read): what it works out is how something
+  /// looks or what it says
+  pointer : Bool
 }
 
 ///|
@@ -918,6 +945,7 @@ pub fn Tree::new(
     measuring: false,
     reads_followed: 0,
     reading: [],
+    pointer_ok: [],
     hit_testing: 0,
     placed_bounds: Map([]),
     placed_due: [],
@@ -1001,9 +1029,12 @@ pub fn Tree::new(
     focus_firsts: Set::new(),
     on_layers_focus: fn(_, _) {  },
     point_stop: None,
+    point_then: None,
     gone: false,
     besides_at: [],
     withins_at: [],
+    moved_at: [],
+    moved_pointed: None,
     withins_asked: false,
     withins_passing: false,
     inputs_at: [],
@@ -1028,6 +1059,7 @@ pub fn Tree::new(
     rows_lists: [],
     lists: [],
     lists_due: false,
+    layout_owner: -1,
     thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
@@ -1098,6 +1130,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.runs_pressed = -1
       n.look.runs_picked = (0, 0)
       n.look.runs_lit = (0, 0, 0L, 0.0)
+      n.look.runs_under = false
       n.look.shapes = []
       n.look.tint = 0L
       n.look.radius = 0.0
@@ -1163,6 +1196,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.pointed_cell = None
       n.on_pointer_moved = None
       n.pointed_in_cell = None
+      n.moved_over_cell = None
+      n.moved_in_cell = None
+      n.moved_within_cell = None
       n.within_cell = None
       n.here_cell = None
       n.said_cell = None
@@ -1229,7 +1265,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), runs_under: false, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -1253,6 +1289,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         pointed_cell: None,
         on_pointer_moved: None,
         pointed_in_cell: None,
+        moved_over_cell: None,
+        moved_in_cell: None,
+        moved_within_cell: None,
         within_cell: None,
         here_cell: None,
         said_cell: None,
@@ -1663,6 +1702,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.reads_followed = 0
   self.hit_testing = 0
   self.reading.clear()
+  self.pointer_ok.clear()
   // A child's cleanup may change state read by its parent or siblings. Publish those changes only once
   // every scope in this tree has stopped, as one removal; no observer may rebuild a half-disposed tree.
   @signals.start_batch()
@@ -1825,9 +1865,32 @@ fn Tree::marked(self : Tree) -> Unit {
 
 ///|
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
-/// holder's layout reused, is no sign the rest are).
+/// holder's layout reused, is no sign the rest are). Within a layout of its own as it lays out what it holds (Tree's
+/// layout_owner): up to that one alone, what it holds laid out again by it as it goes on (what it measured before
+/// measured anew), nothing else of the tree to do again for it; anything else so marked then a fault (a layout told
+/// out of another's, rule 10), laid out again by the next frame.
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   self.hits = self.hits + 1
+  if self.layout_owner >= 0 {
+    let mut i = at
+    while i >= 0 && i != self.layout_owner {
+      i = self.nodes[i].parent
+    }
+    if i >= 0 {
+      let mut i = at
+      while i != self.layout_owner {
+        let flex = self.nodes[i].flex
+        flex.dirty = true
+        flex.cache_n = 0
+        flex.p_ok = false
+        i = self.nodes[i].parent
+      }
+      return
+    }
+    read_fault(
+      "node \{at}'s layout told as node \{self.layout_owner} lays out what it holds (its layout_children): another's layout marked out of a layout (docs/retained.md rule 10)",
+    )
+  }
   let mut i = at
   while i >= 0 {
     let n = self.nodes[i]
@@ -1939,11 +2002,22 @@ fn[T] Tree::queued(
   laid? : Bool = false,
   root? : Int = -1,
   about? : () -> String = fn() { "a binding" },
+  pointer? : Bool = false,
 ) -> () -> Unit {
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  }, unmarked: fn() {  }, placed: placed || laid, laid, about }
+  let b : Bound = {
+    queued: false,
+    marked: false,
+    live: true,
+    run: fn() {  },
+    unmarked: fn() {  },
+    placed: placed || laid,
+    laid,
+    about,
+    pointer,
+  }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
   let k = self.pulls_made
@@ -1998,7 +2072,11 @@ fn[T] Tree::queued(
     told_at.val = -1.0
     // (one worked out of where things are laid out reads them, as the tree is placed or laid out; any other reads none:
     // Tree::layout_read)
-    let v = if b.placed { w.read(read) } else { self.read_followed(w, read, about) }
+    let v = if b.placed {
+      self.read_placed(w, read, about, b.pointer)
+    } else {
+      self.read_followed(w, read, about, pointer=b.pointer)
+    }
     let was = self.cause_at
     self.cause_at = at
     @signals.untracked(fn() { then(v) })
@@ -2062,13 +2140,36 @@ fn Tree::named_up(self : Tree, at : Int) -> String {
 
 ///|
 /// `read` read by watch `w` as what it reads is followed to make, lay out or say something (a binding's read, a
-/// structure's, what reacts reads): where things are laid out read in it refused (Tree::layout_read).
-fn[T] Tree::read_followed(self : Tree, w : @signals.Watch, read : () -> T, about : () -> String) -> T {
+/// structure's, what reacts reads): where things are laid out read in it refused (Tree::layout_read); what the pointer
+/// is over read in it refused but where `pointer` says it works out how something looks, what it says or what reacts
+/// reads (Tree::pointer_read).
+fn[T] Tree::read_followed(
+  self : Tree,
+  w : @signals.Watch,
+  read : () -> T,
+  about : () -> String,
+  pointer? : Bool = false,
+) -> T {
   self.reads_followed = self.reads_followed + 1
   self.reading.push(about)
+  self.pointer_ok.push(pointer)
   let v = w.read(read)
+  self.pointer_ok.pop() |> ignore
   self.reading.pop() |> ignore
   self.reads_followed = self.reads_followed - 1
+  v
+}
+
+///|
+/// `read` read by watch `w` as the tree is placed or laid out by it (Live's Placed): where things are laid out read in
+/// it as they are then; what the pointer is over, only where `pointer` says it works out how something looks or what it
+/// says (Tree::pointer_read).
+fn[T] Tree::read_placed(self : Tree, w : @signals.Watch, read : () -> T, about : () -> String, pointer : Bool) -> T {
+  self.reading.push(about)
+  self.pointer_ok.push(pointer)
+  let v = w.read(read)
+  self.pointer_ok.pop() |> ignore
+  self.reading.pop() |> ignore
   v
 }
 
@@ -2098,6 +2199,45 @@ fn Tree::layout_read(self : Tree, what : String, loc : SourceLoc) -> Unit {
     }
     let s = "\{what} read at \{loc} in \{by}\{reader}: where things are laid out is read as the tree is placed, painted, at a cause or once a change is committed, never by what makes, lays out or says something, its change never told it (docs/retained.md rule 10)"
     read_fault(s)
+  }
+}
+
+///|
+/// What the pointer is over read here, by `what` (View::pointer_within, pointer_in, pointed, pointed_in, bar_near): a hit
+/// test's, the pointer's, an input's (rule 6), told once all of the tree is placed (Tree::laid_out) and applied in that
+/// same pass to what it changes there alone: how something looks (its ground, its ink, its edge, how opaque), what it
+/// says, what reacts reads (what that does a cause of its own: a tip's wait begun). Refused in what lays out, places or
+/// makes (a binding of a layout's property, of a place's but how opaque, a structure's, a computed's): that would lay
+/// the frame out again for what it placed (docs/retained.md rule 10). What is laid out, placed or made by the pointer
+/// reads where it was as it last moved (View::moved_over, moved_in, moved_within: told at its own events, a stroke of a
+/// wheel and a glide at rest), or is so by what reacts begins. Whether it is followed here (in an app's run, one refused
+/// told once and read as it is, followed by nothing).
+fn Tree::pointer_read(self : Tree, what : String, loc : SourceLoc) -> Bool {
+  guard self.hit_testing == 0 else { return true }
+  let refused = match self.pointer_ok.last() {
+    Some(ok) => !ok
+    None => @signals.computing()
+  }
+  guard refused else { return true }
+  let by = if self.pointer_ok.is_empty() { "a computed" } else { "what lays out, places or makes" }
+  let reader = match self.reading.last() {
+    Some(f) => " (\{f()})"
+    None => ""
+  }
+  read_fault(
+    "\{what} read at \{loc} in \{by}\{reader}: what the pointer is over changes how something looks or what it says, in the frame that placed it; what is laid out, placed or made by the pointer reads where it was as it last moved (View::moved_over, moved_in, moved_within) or is so by what reacts begins (docs/retained.md rule 10)",
+  )
+  false
+}
+
+///|
+/// A cell of what the pointer is over (`what`) read here: followed where it may be (Tree::pointer_read), else read as it
+/// is.
+fn[T] Tree::pointer_cell_read(self : Tree, cell : @signals.Signal[T], what : String, loc : SourceLoc) -> T {
+  if self.pointer_read(what, loc) {
+    cell.get()
+  } else {
+    @signals.untracked(fn() { cell.get() })
   }
 }
 
@@ -2144,6 +2284,7 @@ fn[T : Eq] Tree::structured(
   read : () -> T,
   then : (T) -> Unit,
   about? : () -> String = fn() { "a structure" },
+  pointer? : Bool = false,
 ) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
@@ -2160,7 +2301,7 @@ fn[T : Eq] Tree::structured(
     self.at_cause_of(at, fn() {
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
-      let v = self.read_followed(w, read, about)
+      let v = self.read_followed(w, read, about, pointer~)
       // (what marked it before this read is read by it, however long after it was told the read is (one waiting for
       // its change to be told whole): no moment of it left for the next change)
       told_at.val = -1.0
@@ -2183,7 +2324,7 @@ fn[T : Eq] Tree::structured(
   // (marked by what changed nothing it read: no change's, its moment none)
   w.on_unchanged(fn() { told_at.val = -1.0 })
   watch.val = Some(w)
-  let v = self.read_followed(w, read, about)
+  let v = self.read_followed(w, read, about, pointer~)
   told_at.val = -1.0
   last.val = Some(v)
   // (one change, as each after it is: Tree::at_cause)
@@ -2291,6 +2432,7 @@ priv enum Prop {
   RunsInk
   RunsPressed
   RunsPicked
+  RunsUnderlined
   RunsLit
   Over
   Shift
@@ -2414,6 +2556,12 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       laid~,
       root~,
       about=fn() { "a property's binding (\{prop}) of " + tree.named_up(at) },
+      // (how it looks, how opaque, what it says: what may follow what the pointer is over, Tree::pointer_read)
+      pointer=(match phase {
+        Paint | Said => true
+        _ => false
+      }) ||
+        prop == Alpha,
     )
     n.props[prop] = stop
   }
@@ -2438,8 +2586,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
 
 ///|
 /// The root of its own node `at` is laid out alone in, after all else of the tree (a windowed list's block, a node laid
-/// out after: View::laid_after, what View::by_room makes), the nearest: what its layout reads may be worked out of
-/// where all else is laid out (Live's Placed), before it is; none where it is laid out with the tree.
+/// out after: View::laid_after), the nearest: what its layout reads may be worked out of where all else is laid out
+/// (Live's Placed), before it is; none where it is laid out with the tree.
 fn Tree::laid_root(self : Tree, at : Int) -> Int? {
   let mut i = at
   while i >= 0 {
@@ -3405,15 +3553,14 @@ fn Tree::lists_laid_out(self : Tree, place : Bool) -> Bool {
 }
 
 ///|
-/// How many rounds a frame lays the windowed lists out in at most (Tree::lists_laid): as deep as lists and nodes made by
-/// their room are held in one another's blocks, and one more.
+/// How many rounds a frame lays the windowed lists out in at most (Tree::lists_laid): as deep as lists are held in one
+/// another's blocks, and one more.
 let lists_rounds : Int = 8
 
 ///|
 /// The windowed lists' blocks laid out by their lists (Tree::lays_blocks), each living, where anything of it is to be:
-/// once, and again while one of their blocks was marked meanwhile (in another's, by what one made or laid out: what a
-/// node made by its room in a list's block holds, laid out after the block, makes the block as tall), each round those
-/// marked or told alone, as deep as they hold one another; whether any placed anything.
+/// once, and again while one of their blocks was marked meanwhile (in another's, by what one made or laid out: a list in a
+/// list's block, laid out after the block, makes the block as tall), each round those marked or told alone, as deep as they hold one another; whether any placed anything.
 fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
   if self.lists.is_empty() {
     self.lists_due = false
@@ -3537,9 +3684,9 @@ fn View::block_laid(self : View, w : Double) -> Double {
   self.tree.laid_root_run(self.at)
   self.tree.work.computes = self.tree.work.computes + 1
   @flex.compute(n.flex, width=w, round=false, reuse=true)
-  // (what is made by its room in it (View::by_room) and the lists in it laid out in it now, at the widths it gives them,
-  // it laid out again as they come to other heights: as tall as all it holds comes to as it is measured, never a round
-  // after it, what follows it in its list counted from a height it does not have)
+  // (the lists in it laid out in it now, at the widths it gives them, it laid out again as they come to other heights:
+  // as tall as all it holds comes to as it is measured, never a round after it, what follows it in its list counted
+  // from a height it does not have)
   let mut rounds = 0
   while rounds < lists_rounds && self.tree.lists_within(self.at) {
     self.tree.work.computes = self.tree.work.computes + 1
@@ -3550,9 +3697,9 @@ fn View::block_laid(self : View, w : Double) -> Double {
 }
 
 ///|
-/// The windowed lists and what is made by its room (Tree::lays_blocks) laid out in root `root` alone (Tree::laid_root's:
-/// the nearest root their node is laid out in), each living: laid out now as their own lay says, to be read (placed by
-/// their own lay once the tree is placed); whether `root` is to be laid out again for what they came to.
+/// The windowed lists (Tree::lays_blocks) laid out in root `root` alone (Tree::laid_root's: the nearest root their node
+/// is laid out in), each living: laid out now as their own lay says, to be read (placed by their own lay once the tree
+/// is placed); whether `root` is to be laid out again for what they came to.
 fn Tree::lists_within(self : Tree, root : Int) -> Bool {
   for l in self.lists.copy() {
     let n = self.nodes[l.holder]
@@ -4679,7 +4826,9 @@ pub fn View::on_wheel_moves(self : View, f : (Wheel) -> Bool) -> View {
 /// it was said then, only while it still is so (one asked before may have let it go, said anew, or its index another's
 /// since). True where it was the tree's: one was asked (took it, or none did: nothing moves by it, nothing under what
 /// is drawn there asked); none where none was (nothing there takes the wheel, nor hosts an old view: what is under it
-/// the old frame's, as ever; or the tree is gone).
+/// the old frame's, as ever; or the tree is gone). One of the pointer's own events, but where it is what a stroke let go
+/// of glides on by (`momentum`, the system's): what is at the pointer found again as of its moment, before what it moves
+/// is laid out, as at a move of it (Tree::point_again).
 pub fn Tree::wheel_at(
   self : Tree,
   x : Double,
@@ -4690,6 +4839,7 @@ pub fn Tree::wheel_at(
   at : Double,
   old? : (NodeId) -> Bool = fn(_) { false },
   there? : (NodeId) -> Bool = fn(_) { true },
+  momentum? : Bool = false,
 ) -> Bool {
   let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
   if self.cause_at < 0.0 {
@@ -4742,6 +4892,11 @@ pub fn Tree::wheel_at(
       }
     }
   })
+  // (its stroke one of the pointer's own events, a stroke's glide let go of none: what is at the pointer found again,
+  // where things were placed as of its moment, before what it moved is laid out)
+  if !momentum && self.nodes[0].live {
+    self.event(t, fn() { self.point_again() })
+  }
   theirs.val
 }
 
@@ -5775,6 +5930,9 @@ fn View::let_go(self : View) -> Unit {
   n.pointed_cell = None
   n.on_pointer_moved = None
   n.pointed_in_cell = None
+  n.moved_over_cell = None
+  n.moved_in_cell = None
+  n.moved_within_cell = None
   // (the focus on it: let go of with it, what has it told so)
   self.tree.focus_lost_in(self.at)
   n.focusable = false
@@ -6875,9 +7033,8 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 /// (View::beside, View::offset_placed), what changed of its look made again; then what rows left out told, and what
 /// that marks of where things are drawn and how they look worked out with it (Tree::told_applied). Nothing is laid out
 /// again for what layout told: what that marks of layout is the next frame's, counted as owed (Work's `owed`). What is
-/// under the pointer is a hit test's (rule 6), the pointer's, an input's: told once all of it is placed, and what that
-/// marks done in this same frame, a pass of what it marked, till nothing is told otherwise (rule 9: the same at any rate
-/// of frames).
+/// under the pointer is a hit test's (rule 6), the pointer's, an input's: told once all of it is placed, what follows
+/// it how things look and what they say alone (Tree::pointer_read), worked out with this pass.
 fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   ignore(upto)
   let w = self.last_w
@@ -6957,22 +7114,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   self.told_applied()
   // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed; which column's
   // bar the pointer is along told anew as what is drawn or found there changes without anything placed: an order, what
-  // bounds input, what takes it. A hit test's, the pointer's (rule 6): of the frame's moment as a move of the pointer
-  // is, what it marks done in this same frame, a pass of what it marked, told again till nothing is told otherwise
-  // (rule 9: what is under a pointer that stays where it is the same at any rate of frames or in one; a finger points at
-  // nothing, nothing told). What is told otherwise still after withins_rounds flips as it is told (a node placed from
-  // under the pointer by its being under it): the next frame's, owed.)
-  if !self.withins_passing {
-    let bars = self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due)
-    if placing || bars {
-      self.withins_passing = true
-      let mut rounds = 0
-      while rounds < withins_rounds && (if placing || rounds > 0 { self.withins_told() } else { self.bars_near_told() }) {
-        rounds = rounds + 1
-        self.laid_out(upto)
-      }
-      self.withins_passing = false
-    }
+  // bounds input, what takes it. A hit test's, the pointer's (rule 6), of the frame's moment as a move of the pointer
+  // is: what follows it is how things look and what they say alone (Tree::pointer_read), worked out with this pass,
+  // nothing laid out, placed or made again for it, so the same at any rate of frames or in one (rule 9); a finger points
+  // at nothing, nothing told)
+  let bars = self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due)
+  if (placing || bars) && (if placing { self.withins_told() } else { self.bars_near_told() }) {
+    self.told_applied()
   }
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
@@ -7011,7 +7159,7 @@ pub fn Tree::owes_why(self : Tree) -> String {
   }
   if self.lists_due {
     let marked = self.lists.filter(fn(l) { l.marked }).map(fn(l) { self.named_up(l.holder) })
-    why.push("a windowed list or what is made by its room" + (if marked.is_empty() { "" } else { " (marked: " + marked.join(", ") + ")" }))
+    why.push("a windowed list" + (if marked.is_empty() { "" } else { " (marked: " + marked.join(", ") + ")" }))
   }
   if self.laid_afters_due {
     why.push("what is laid out after all else")
@@ -7639,6 +7787,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     runs_pressed: n.look.runs_pressed,
     runs_picked: n.look.runs_picked,
     runs_lit: n.look.runs_lit,
+    runs_under: n.look.runs_under,
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
@@ -7949,6 +8098,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     runs_pressed: c.runs_pressed,
     runs_picked: c.runs_picked,
     runs_lit: c.runs_lit,
+    runs_under: c.runs_under,
     shadow: c.shadow,
     hosted: c.hosted,
     clips: c.clips,
@@ -8554,7 +8704,13 @@ pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, loc~ :
   // (made, and done each time, owned by the node's scope: what it makes let go with the node, its watch none of what
   // was running as it was said, whose running again would let it go)
   self.owning(fn() {
-    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) }, about=fn() { "what reacts reads, said at \{loc}" })
+    // (what the pointer is over read by it: what it does a cause of its own, Tree::pointer_read)
+    let stop = self.tree.structured(
+      read,
+      fn(v) { self.owning(fn() { f(v) }) },
+      about=fn() { "what reacts reads, said at \{loc}" },
+      pointer=true,
+    )
     self.owns(stop) |> ignore
   })
 }
@@ -8638,7 +8794,8 @@ pub fn View::pressed(self : View) -> Bool {
 ///|
 /// Whether the pointer is over it now, of what takes a press there the topmost (Tree::point_at): what reads it told only
 /// as the pointer comes over it or leaves it. Its cell made as first read, let go with it.
-pub fn View::pointed(self : View) -> Bool {
+#callsite(autofill(loc))
+pub fn View::pointed(self : View, loc~ : SourceLoc) -> Bool {
   guard self.live() is Some(n) else { return false }
   let s = match n.pointed_cell {
     Some(s) => s
@@ -8648,7 +8805,7 @@ pub fn View::pointed(self : View) -> Bool {
       s
     }
   }
-  s.get()
+  self.tree.pointer_cell_read(s, "whether the pointer is over it (View::pointed)", loc)
 }
 
 ///|
@@ -8656,7 +8813,8 @@ pub fn View::pointed(self : View) -> Bool {
 /// topmost that takes it, it or one in it; not where something else over it takes it, nor where it is only within its
 /// box), as an old view's `hovered` is of what its target holds: what reads it told only as that comes and goes. Its cell
 /// made as first read, let go with it.
-pub fn View::pointed_in(self : View) -> Bool {
+#callsite(autofill(loc))
+pub fn View::pointed_in(self : View, loc~ : SourceLoc) -> Bool {
   guard self.live() is Some(n) else { return false }
   let s = match n.pointed_in_cell {
     Some(s) => s
@@ -8666,13 +8824,19 @@ pub fn View::pointed_in(self : View) -> Bool {
       s
     }
   }
-  s.get()
+  self.tree.pointer_cell_read(s, "whether the pointer is over it or what it holds (View::pointed_in)", loc)
 }
 
 ///|
 /// (Whether what the pointer is over, of what takes a press, is node `at` or held by it.)
 fn Tree::pointed_within_at(self : Tree, at : Int) -> Bool {
-  guard self.pointed is Some(p) && self.alive_id(p) else { return false }
+  self.within_id(self.pointed, at)
+}
+
+///|
+/// (Whether node `id` is node `at` or held by it.)
+fn Tree::within_id(self : Tree, id : NodeId?, at : Int) -> Bool {
+  guard id is Some(p) && self.alive_id(p) else { return false }
   let mut i = p.at
   while i >= 0 {
     if i == at {
@@ -8692,10 +8856,13 @@ pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
   if x < 0.0 || y < 0.0 {
     self.pointer_now(x, y)
     self.point_stopped()
+    self.point_then = None
     self.pointed_to(None)
-    return
+  } else {
+    self.follow_point(x, y, fn(t) { self.pointed_to(self.pointed_of(t)) })
   }
-  self.follow_point(x, y, fn(t) { self.pointed_to(self.pointed_of(t)) })
+  // (a move of the pointer's own: what is laid out, placed or made by what it is over told so, View::moved_in)
+  self.pointer_moved_told()
 }
 
 ///|
@@ -8713,6 +8880,8 @@ pub fn View::on_pointer_moved(self : View, f : () -> Unit) -> View {
 /// none (x or y below 0: nothing told, nothing followed), or the tree is let go. What is where, as the layout or the
 /// order changes, is followed by being said again (Tree::hits_said).
 pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -> Unit) -> Unit {
+  // (followed again as it is, where what glided under it comes to rest or the wheel turns: Tree::point_again)
+  self.point_then = if x < 0.0 || y < 0.0 { None } else { Some(then) }
   // (the pointer moved: what it is over as this is first told told so after `then`, View::on_pointer_moved, whoever
   // follows it (Tree::point_at, what hosts the tree); what comes under it after as the layout or the order changes, or
   // the same point followed again, not)
@@ -8780,7 +8949,8 @@ fn Tree::pointer_now(self : Tree, x : Double, y : Double) -> Unit {
 /// presses (View::pointed: only what takes them, the topmost), followed: what reads it told as the pointer comes in or
 /// goes out, by its moving or by what is placed moving under it (Tree::withins_told: at the pointer's each move and
 /// as the frame places what changed). A bar shown while the pointer is along the top, under the bar as it shows.
-pub fn View::pointer_within(self : View) -> Bool {
+#callsite(autofill(loc))
+pub fn View::pointer_within(self : View, loc~ : SourceLoc) -> Bool {
   guard self.live() is Some(n) else { return false }
   let s = match n.within_cell {
     Some(s) => s
@@ -8794,7 +8964,7 @@ pub fn View::pointer_within(self : View) -> Bool {
       s
     }
   }
-  s.get()
+  self.tree.pointer_cell_read(s, "whether the pointer is within it (View::pointer_within)", loc)
 }
 
 ///|
@@ -8810,10 +8980,132 @@ fn Tree::within(self : Tree, at : Int) -> Bool {
 }
 
 ///|
-/// How many times a frame tells what is under the pointer again at most, each after a pass of what the one before marked
-/// (Tree::laid_out): as long a chain as what is placed under it by what is under it makes, and more; past it, what is
-/// still told otherwise flips as it is told.
-let withins_rounds : Int = 16
+/// Whether the pointer was over it as it last moved by itself (View::pointed as of that moment: of what takes a press
+/// there the topmost, it): told at the pointer's own events alone, its moves, each notch or stroke of the wheel, its
+/// coming into the window or leaving it, and as what glided under it by itself comes to rest, each found in the tree as
+/// of that moment as a press finds it (Tree::bring_to); never as the layout or the order puts another thing under a
+/// pointer that stays still, nor while what was let go of glides on by itself. What lays out, places or makes something
+/// by what the pointer is over reads this (docs/retained.md rule 10); what only looks so reads View::pointed, told each
+/// frame. Its cell made as first read, let go with it.
+pub fn View::moved_over(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.moved_over_cell {
+    Some(s) => s
+    None => {
+      let on = self.tree.lit_every || self.tree.moved_pointed == Some(self.id())
+      let s = @signals.signal(on, same=fn(a, b) { a == b })
+      n.moved_over_cell = Some(s)
+      self.tree.moved_said(self.at, n)
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// Whether the pointer was over it or over what it holds as it last moved by itself (View::pointed_in as of that moment,
+/// told as View::moved_over is). Its cell made as first read, let go with it.
+pub fn View::moved_in(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.moved_in_cell {
+    Some(s) => s
+    None => {
+      let on = self.tree.lit_every || self.tree.within_id(self.tree.moved_pointed, self.at)
+      let s = @signals.signal(on, same=fn(a, b) { a == b })
+      n.moved_in_cell = Some(s)
+      self.tree.moved_said(self.at, n)
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// Whether the pointer was within it as it last moved by itself (View::pointer_within as of that moment, whatever is over
+/// it, told as View::moved_over is). Its cell made as first read, let go with it.
+pub fn View::moved_within(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.moved_within_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.within(self.at), same=fn(a, b) { a == b })
+      n.moved_within_cell = Some(s)
+      self.tree.moved_said(self.at, n)
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// (Node `at`, `n`, read as the pointer last moved: told again at its next event, Tree::pointer_moved_told.)
+fn Tree::moved_said(self : Tree, at : Int, n : Node) -> Unit {
+  if [n.moved_over_cell, n.moved_in_cell, n.moved_within_cell].iter().filter(fn(c) { c is Some(_) }).count() == 1 {
+    self.moved_at.push((at, n.gen))
+  }
+}
+
+///|
+/// What the pointer is over told to what reads it as it last moved by itself (View::moved_over, moved_in,
+/// moved_within): at one of the pointer's own events, or as what glided under it comes to rest (what is pointed at found
+/// as of that moment first: Tree::point_at, Tree::point_again, what hosts the tree), those let go dropped.
+pub fn Tree::pointer_moved_told(self : Tree) -> Unit {
+  self.moved_pointed = self.pointed
+  let keep = []
+  for m in self.moved_at {
+    let (at, gen) = m
+    let n = self.nodes[at]
+    if !n.live || n.gen != gen {
+      continue
+    }
+    let id = { at, gen }
+    match n.moved_over_cell {
+      Some(c) => c.set(self.lit_every || self.pointed == Some(id))
+      None => ()
+    }
+    match n.moved_in_cell {
+      Some(c) => c.set(self.lit_every || self.pointed_within_at(at))
+      None => ()
+    }
+    match n.moved_within_cell {
+      Some(c) => c.set(self.within(at))
+      None => ()
+    }
+    if n.moved_over_cell is Some(_) || n.moved_in_cell is Some(_) || n.moved_within_cell is Some(_) {
+      keep.push(m)
+    }
+  }
+  self.moved_at.clear()
+  self.moved_at.append(keep)
+}
+
+///|
+/// What is at the point followed now found again where it is, as the tree has things now (Tree::follow_point, told as it
+/// was told: what hosts the tree's, Tree::point_at's), and told to what reads what the pointer is over as it moved
+/// (Tree::pointer_moved_told): as what glided under a pointer that stays still comes to rest, and at each notch or stroke
+/// of the wheel (one of the pointer's own events). Nothing where nothing is followed (the pointer gone, a finger, an old
+/// view's layer over all of it).
+fn Tree::point_again(self : Tree) -> Unit {
+  match (self.point_then, self.point_stop) {
+    (Some(then), Some(_)) => {
+      let (x, y) = self.pointer_xy
+      self.follow_point(x, y, then)
+    }
+    _ => ()
+  }
+  self.pointer_moved_told()
+}
+
+///|
+/// What scrolls by itself under the pointer come to rest at the moment it is told so (a fling's end, a wheel's notches
+/// eased in, the hand past an edge parked: Scroll's), as an event of that moment is: once what it did then is committed
+/// whole, the tree laid out as of then and what is at the pointer found there (Tree::point_again), as a press finds it.
+fn Tree::glide_rested(self : Tree) -> Unit {
+  self.after_event(fn() {
+    self.laid_now()
+    self.point_again()
+  })
+}
 
 ///|
 /// Each node whose being under the pointer is read told it again, as it is now (the pointer moved, or what is placed):
@@ -8863,7 +9155,8 @@ fn Tree::withins_told(self : Tree) -> Bool {
 /// over one another; where what holds it lets it be found, taking input: Tree::input_bounds), if the pointer is along its
 /// edge; none where that one's is not (as an old view's bar_near_at takes the innermost box that scrolls there). Told as
 /// the pointer moves, as the frame places what changed, and as what is drawn or found there changes otherwise.
-pub fn View::bar_near(self : View, near : Double, across? : Bool = false) -> Bool {
+#callsite(autofill(loc))
+pub fn View::bar_near(self : View, near : Double, across? : Bool = false, loc~ : SourceLoc) -> Bool {
   guard self.live() is Some(n) else { return false }
   // (said anew, none where it has no bar now (nothing to scroll: 0): which one the pointer is along told anew too)
   if n.bar_near != near || n.bar_across != across {
@@ -8881,7 +9174,7 @@ pub fn View::bar_near(self : View, near : Double, across? : Bool = false) -> Boo
       c
     }
   }
-  cell.get()
+  self.tree.pointer_cell_read(cell, "whether the pointer is along its bar (View::bar_near)", loc)
 }
 
 ///|

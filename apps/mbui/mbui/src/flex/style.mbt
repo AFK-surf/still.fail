@@ -1018,6 +1018,12 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : MeasureFn?
+  // A container that measures and places its own children, with its content width/height and content origin; what it
+  // gives back is how tall what it holds is (NaN: it says nothing). A bounded one is called only for the final layout;
+  // intrinsic size probes never build children. One `sized_by_children`, given its width and not its height, is called
+  // as it is probed too, and is as tall as it says (a list of files, a card as tall as its words).
+  mut layout_children : ((Double, Double, Double, Double) -> Double)?
+  mut sized_by_children : Bool
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1045,9 +1051,15 @@ pub(all) struct Node {
   // when the node's style, measure function or children change, and on
   // every node above it; its sizes are then found again.
   mut dirty : Bool
+  // the grid (device pixels a point) the compute it is the root of was last placed on: what a compute on another
+  // grid finds of what that one kept (compute)
+  mut laid_grid : Double
   // its last layout (perform), while not dirty: what it was asked (known
   // size, containing block) and what it came to
   mut p_ok : Bool
+  // the compute that last laid it out (performed it, not found it laid out before): one laid out again in the same
+  // compute (a custom container measuring a child twice) is no box whose layout was reused (kept)
+  mut p_gen : Int
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -1077,6 +1089,8 @@ pub fn Node::new() -> Node {
     style: Style::new(),
     children: [],
     measure: None,
+    layout_children: None,
+    sized_by_children: false,
     left: 0.0,
     top: 0.0,
     width: 0.0,
@@ -1091,6 +1105,8 @@ pub fn Node::new() -> Node {
     box_ver: -1,
     dirty: true,
     p_ok: false,
+    laid_grid: 0.0,
+    p_gen: -1,
     p_kw: 0.0,
     p_kh: 0.0,
     p_cbw: 0.0,

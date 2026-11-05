@@ -61,7 +61,8 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
     Is(v) => set(v)
     By(f) =>
       self.owning(fn() {
-        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        // (the pointer's look, as it is over what it is over: what may follow that, Tree::pointer_read)
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) }, pointer=true)
         n.props[Cursor] = stop
       })
     Placed(_) => laid_refused("the pointer's shape")

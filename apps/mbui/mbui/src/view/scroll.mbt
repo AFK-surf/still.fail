@@ -545,6 +545,8 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
     self.fling.set(None)
     // (within how far it can go as of then: what holds it may have come to be shorter meanwhile)
     self.x.set(dclamp(end_x, 0.0, self.most()))
+    // (come to rest under the pointer: what is under it found as of then, as at its own event)
+    v.tree.glide_rested()
   })
 }
 
@@ -620,6 +622,7 @@ fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Doub
       Some(g) => self.edge.set(Some({ ..g, x0: g.bound, t0: end_t, end_t, parked: true }))
       None => ()
     }
+    v.tree.glide_rested()
   })
 }
 

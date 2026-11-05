@@ -321,9 +321,11 @@ fn dismiss_node(
     u.padding(Is((0.0, 2.0, 0.0, 0.0))) |> ignore
     u.box(fn(w) {
       let hot = fn() { live() && w.pointed() }
+      // (underlined and inked as the pointer is over it, as they are drawn: nothing of them laid out again for it)
       w
-      .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
-      .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+      .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"))] }))
+      .runs_underlined(By(hot))
+      .words_look(By(fn() { @ui.style_words(dismiss_words) }))
       .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
       .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.chat.asks.dismiss"))) }))
       |> ignore

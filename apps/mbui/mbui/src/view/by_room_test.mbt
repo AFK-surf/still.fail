@@ -56,9 +56,10 @@ test "by_room: what it holds made for the width it is laid out at, in the frame 
 }
 
 ///|
-test "a property layout reads worked out of where what holds its root is laid out, as that root is laid out: in what a block of a windowed list makes by its room, the list laid out wider and narrower" {
+test "a property layout reads worked out of where what holds its root is laid out, as that root is laid out, and what a block makes by its room for the width the block gives it: in a block of a windowed list, the list laid out wider and narrower" {
   let holder : Ref[@view.View?] = Ref(None)
-  let inner : Ref[@view.View?] = Ref(None)
+  let placed : Ref[@view.View?] = Ref(None)
+  let roomed : Ref[@view.View?] = Ref(None)
   let s = @view.Scroll::list()
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(col) {
@@ -66,9 +67,14 @@ test "a property layout reads worked out of where what holds its root is laid ou
       col.scrolls_window(s, fn() { ["a"] }, fn(b, _) {
         holder.val = Some(
           b.box(fn(h) {
-            h.by_room(fn(_) { () }, fn(v, _) {
-              // (half as wide as what holds it is laid out in the list's block: worked out as its own is laid out)
-              inner.val = Some(v.box(fn(i) { i.width(Placed(fn() { Some(h.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            // (half as wide as the column the list is in: worked out as the block is laid out, of where that is)
+            placed.val = Some(h.box(fn(i) { i.width(Placed(fn() { Some(col.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            // (half as wide as it is laid out in the block: made so by its room, in the block's layout)
+            h.box(fn(r) {
+              r.by_room(fn(w) { w / 2.0 }, fn(v, half) {
+                roomed.val = Some(v.box(fn(i) { i.width(Is(Some(half))).height(Is(Some(10.0))) |> ignore }))
+              })
+              |> ignore
             })
             |> ignore
           }),
@@ -78,20 +84,23 @@ test "a property layout reads worked out of where what holds its root is laid ou
     })
     |> ignore
   })
-  let seen = fn() { (holder.val.unwrap().laid_size().0, inner.val.unwrap().laid_size().0) }
+  let seen = fn() {
+    (holder.val.unwrap().laid_size().0, placed.val.unwrap().laid_size().0, roomed.val.unwrap().laid_size().0)
+  }
   tree.frame(400.0, 300.0) |> ignore
   let first = seen()
   tree.frame(300.0, 300.0) |> ignore
   let narrower = seen()
   tree.frame(500.0, 300.0) |> ignore
-  assert_eq((first, narrower, seen()), ((400.0, 200.0), (300.0, 150.0), (500.0, 250.0)))
+  assert_eq((first, narrower, seen()), ((400.0, 200.0, 200.0), (300.0, 150.0, 150.0), (500.0, 250.0, 250.0)))
   assert_true(!tree.told_since(), msg="nothing owed")
 }
 
 ///|
-test "a property layout reads worked out of where what holds its root is laid out, asked at a cause before any frame lays it out: worked out as the read lays things out, never asked of again inside that" {
+test "a property layout reads worked out of where what holds its root is laid out, and what a block makes by its room, asked at a cause before any frame lays it out: worked out as the read lays things out, never asked of again inside that" {
   let holder : Ref[@view.View?] = Ref(None)
-  let inner : Ref[@view.View?] = Ref(None)
+  let placed : Ref[@view.View?] = Ref(None)
+  let roomed : Ref[@view.View?] = Ref(None)
   let wide = @signals.signal(400.0)
   let s = @view.Scroll::list()
   let tree = @view.Tree::new(fn(root) {
@@ -100,8 +109,12 @@ test "a property layout reads worked out of where what holds its root is laid ou
       col.scrolls_window(s, fn() { ["a"] }, fn(b, _) {
         holder.val = Some(
           b.box(fn(h) {
-            h.by_room(fn(_) { () }, fn(v, _) {
-              inner.val = Some(v.box(fn(i) { i.width(Placed(fn() { Some(h.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            placed.val = Some(h.box(fn(i) { i.width(Placed(fn() { Some(col.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            h.box(fn(r) {
+              r.by_room(fn(w) { w / 2.0 }, fn(v, half) {
+                roomed.val = Some(v.box(fn(i) { i.width(Is(Some(half))).height(Is(Some(10.0))) |> ignore }))
+              })
+              |> ignore
             })
             |> ignore
           }),
@@ -111,13 +124,15 @@ test "a property layout reads worked out of where what holds its root is laid ou
     })
     |> ignore
   })
-  let seen = fn() { (holder.val.unwrap().laid_size().0, inner.val.unwrap().laid_size().0) }
+  let seen = fn() {
+    (holder.val.unwrap().laid_size().0, placed.val.unwrap().laid_size().0, roomed.val.unwrap().laid_size().0)
+  }
   tree.frame(500.0, 300.0) |> ignore
   // (a cause: the column made narrower, where things are read then, before a frame lays them out)
   wide.set(300.0)
   let at_cause = seen()
   tree.frame(500.0, 300.0) |> ignore
-  assert_eq((at_cause, seen()), ((300.0, 150.0), (300.0, 150.0)))
+  assert_eq((at_cause, seen()), ((300.0, 150.0, 150.0), (300.0, 150.0, 150.0)))
   assert_true(!tree.told_since(), msg="nothing owed")
 }
 

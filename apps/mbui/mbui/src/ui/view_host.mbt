@@ -2114,7 +2114,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       unplaced=glyphs,
       center_in~,
     )
-    self.paint_run_lines(r, lay, 0.0, 0.0, colors, 1.0, center_in~)
+    // (all of it underlined where it is drawn so: View::runs_underlined)
+    self.paint_run_lines(r, lay, 0.0, 0.0, colors, 1.0, center_in~, under=c.runs_under)
     // (past its box where it says so, View::ellipsis_past: as its plain words, below)
     if over && lay.w > c.w + 0.5 && !c.ellipsis_past {
       cut = (from, self.ninst - start)
@@ -2498,7 +2499,8 @@ fn Ctx::typing_allowed(self : Ctx) -> Int {
 /// scrolls there scrolls, what is under it gets none); else a node's of the tree's that takes the wheel, or what holds it
 /// (Tree::wheel_at), at that moment, `old` asked of the node where an old view is hosted (one with nothing of its own
 /// there passed: old_wheel_there). True where it was the tree's
-/// so (taken or not: none of what is under it, of other old views', asked).
+/// so (taken or not: none of what is under it, of other old views', asked). `momentum`: what a trackpad's stroke let go
+/// of glides on by (the system's), no event of the pointer's own (Tree::wheel_at).
 fn view_wheel(
   x : Double,
   y : Double,
@@ -2506,6 +2508,7 @@ fn view_wheel(
   dy : Double,
   mods : Int,
   old? : (@view.NodeId) -> Bool = fn(_) { false },
+  momentum? : Bool = false,
 ) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
@@ -2517,7 +2520,7 @@ fn view_wheel(
   if old_root_hit(g(), x, y, pressed=false) {
     return false
   }
-  tree.wheel_at(x, y, dx, dy, mods, at, old~, there=fn(id) { old_wheel_there(id, x, y) })
+  tree.wheel_at(x, y, dx, dy, mods, at, old~, there=fn(id) { old_wheel_there(id, x, y) }, momentum~)
 }
 
 ///|
@@ -4337,6 +4340,9 @@ fn view_pointed() -> Unit {
         guard view_app.val is Some(now) && physical_equal(now, tree) else { return }
         tree.bring_to(at)
         view_point_tell(tree)
+        // (one of the pointer's own events: what is laid out, placed or made by what it is over told so, as one change of
+        // its moment, View::moved_in)
+        tree.event(at, fn() { tree.pointer_moved_told() })
       })
     }
     None => ()

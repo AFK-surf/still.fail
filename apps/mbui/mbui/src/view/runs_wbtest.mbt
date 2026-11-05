@@ -104,7 +104,7 @@ test "the pointer within a node: told as it was placed, the pointer there before
 }
 
 ///|
-test "the pointer within a node, read by how it is drawn (its alpha) and by what it holds (one shown while within): in the frame that places it, made under a pointer that stays or moved from under it, drawn so at that frame's end, nothing owed after" {
+test "the pointer within a node, read by how it is drawn (its alpha) and, as the pointer last moved, by what it holds (one shown while within): drawn so in the frame that places it, made under a pointer that stays or moved from under it; what it shows so made or let go at the pointer's own events alone, nothing owed after" {
   let there = @signals.signal(false, same=fn(a, b) { a == b })
   let down = @signals.signal(0.0, same=fn(a, b) { a == b })
   let id : Ref[NodeId?] = Ref(None)
@@ -122,7 +122,7 @@ test "the pointer within a node, read by how it is drawn (its alpha) and by what
           .ground(Is(1L))
           .alpha(By(fn() { if band.pointer_within() { 1.0 } else { 0.5 } }))
           |> ignore
-          band.show(fn() { band.pointer_within() }, fn(m) {
+          band.show(fn() { band.moved_within() }, fn(m) {
             mark.val = Some(m.id())
             m.width(Is(Some(10.0))).height(Is(Some(10.0))).ground(Is(2L)) |> ignore
           })
@@ -137,24 +137,30 @@ test "the pointer within a node, read by how it is drawn (its alpha) and by what
   there.set(true)
   t.frame(400.0, 300.0) |> ignore
   assert_eq(t.drawn_of(id.val.unwrap()).unwrap().alpha, 1.0, msg="made under the pointer: drawn as within, that frame")
-  assert_true(mark.val is Some(m) && t.drawn_of(m) is Some(_), msg="and what it shows while within, that frame")
+  assert_true(mark.val is None, msg="what it shows as the pointer last moved: not yet, no move of it since")
+  assert_true(!t.due, msg="nothing owed")
+  t.point_at(10.0, 10.0)
+  t.frame(400.0, 300.0) |> ignore
+  assert_true(mark.val is Some(m) && t.drawn_of(m) is Some(_), msg="the pointer's own event: what it shows while within, that frame")
   assert_true(!t.due, msg="nothing owed")
   down.set(50.0)
   t.frame(400.0, 300.0) |> ignore
   assert_eq(t.drawn_of(id.val.unwrap()).unwrap().alpha, 0.5, msg="moved from under it: drawn as not, that frame")
-  assert_true(t.drawn_of(mark.val.unwrap()) is None, msg="what it shows while within gone, that frame")
+  assert_true(t.drawn_of(mark.val.unwrap()) is Some(_), msg="what it shows as the pointer last moved still there, no move of it")
+  assert_true(!t.due, msg="nothing owed")
+  t.point_at(10.0, 10.0)
+  t.frame(400.0, 300.0) |> ignore
+  assert_true(t.drawn_of(mark.val.unwrap()) is None, msg="the pointer's own event: what it shows while within gone, that frame")
   assert_true(!t.due, msg="nothing owed")
 }
 
 ///|
-test "the pointer within a node, a chain of six: each placed under the pointer as the one before it is told it is under it, through its own properties; all of them under it and told so in the first frame, nothing owed after" {
-  let ids : Array[NodeId] = []
+test "panic the pointer within a node read by where another is placed (a chain of six, each placed under the pointer as the one before it is told it is under it): refused where it is read, nothing laid out again for it (docs/retained.md rule 10)" {
   let views : Array[View] = []
   let t = Tree::new(
     fn(root) {
       for k in 0..<6 {
         root.box(fn(n) {
-          ids.push(n.id())
           let before = if k > 0 { Some(views[k - 1]) } else { None }
           views.push(n)
           n
@@ -162,7 +168,6 @@ test "the pointer within a node, a chain of six: each placed under the pointer a
           .width(Is(Some(100.0)))
           .height(Is(Some(20.0)))
           .ground(Is(1L))
-          // (the first under the pointer; each after it there once the one before it is told it is, else far below)
           .offset(By(fn() {
             match before {
               None => (0.0, 80.0)
@@ -178,41 +183,30 @@ test "the pointer within a node, a chain of six: each placed under the pointer a
   )
   t.point_at(10.0, 90.0)
   t.frame(400.0, 300.0) |> ignore
-  for k in 0..<6 {
-    assert_eq(t.drawn_of(ids[k]).unwrap().y, 80.0, msg="\{k}: under the pointer, the first frame")
-    assert_true(@signals.untracked(fn() { views[k].pointer_within() }), msg="\{k}: told so")
-  }
-  assert_true(!t.due, msg="nothing owed")
 }
 
 ///|
-test "the pointer within nodes, three counting up: each placed under the pointer as the next count its bits say (000 to 111, a cell told otherwise more than once on the way), as their own properties read it; all under it and told so in the first frame, nothing owed after" {
+test "panic the pointer within nodes read by how big another is laid out (three counting up, each laid out as the next count its bits say): refused where it is read, nothing laid out again for it (docs/retained.md rule 10)" {
   let views : Array[View] = []
-  let ids : Array[NodeId] = []
   let t = Tree::new(
     fn(root) {
       for k in 0..<3 {
         root.box(fn(n) {
-          ids.push(n.id())
           views.push(n)
           n
-          .over(Is(true))
           .width(Is(Some(100.0)))
-          .height(Is(Some(20.0)))
           .ground(Is(1L))
-          // (the count the three say now, one more (at most 7): this one under the pointer where its bit is set)
-          .offset(By(fn() {
+          .height(By(fn() {
             let mut v = 0
             for j in 0..<views.length() {
               if views[j].pointer_within() {
                 v = v + (1 << j)
               }
             }
-            let next = if v + 1 > 7 { 7 } else { v + 1 }
-            if ((next >> k) & 1) == 1 {
-              (0.0, 80.0)
+            if (((v + 1) >> k) & 1) == 1 {
+              Some(40.0)
             } else {
-              (0.0, 250.0)
+              Some(20.0)
             }
           }))
           |> ignore
@@ -222,13 +216,8 @@ test "the pointer within nodes, three counting up: each placed under the pointer
     },
     time=fn() { 0.0 },
   )
-  t.point_at(10.0, 90.0)
+  t.point_at(10.0, 10.0)
   t.frame(400.0, 300.0) |> ignore
-  for k in 0..<3 {
-    assert_eq(t.drawn_of(ids[k]).unwrap().y, 80.0, msg="\{k}: under the pointer, the first frame (111)")
-    assert_true(@signals.untracked(fn() { views[k].pointer_within() }), msg="\{k}: told so")
-  }
-  assert_true(!t.due, msg="nothing owed")
 }
 
 ///|

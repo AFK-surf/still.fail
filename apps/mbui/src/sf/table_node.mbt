@@ -400,7 +400,8 @@ fn table_key_node(
     .padding(Is((table_key_gap, 0.0, table_key_gap, 0.0)))
     .offset(Placed(fn() { (0.0, top()) }))
     |> ignore
-    let shown = fn() { beside.pointed_in() || menu_open.get() || copied.get() || @ui.pointing() is Finger }
+    // (the pointer on it as it last moved, View::moved_in: made and let go at the pointer's own events)
+    let shown = fn() { beside.moved_in() || menu_open.get() || copied.get() || @ui.pointing() is Finger }
     let seen = EdgeWay::new(0.0)
     // (there while it shows or fades: gone, as it fades out to nothing, at that moment)
     let there = @signals.signal(false)

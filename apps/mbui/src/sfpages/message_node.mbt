@@ -31,7 +31,9 @@ fn message_name_node(parent : @view.View, name : () -> String, press : (() -> Un
     room.max_width(Is(Some(240.0))).min_width(Is(Some(0.0))) |> ignore
     room.box(fn(w) {
       w
-      .words_runs(By(fn() { [@ui.span(name(), underline=press is Some(_) && w.pointed())] }))
+      .words_runs(By(fn() { [@ui.span(name())] }))
+      // (underlined under the pointer as it is drawn, nothing of it laid out again: View::runs_underlined)
+      .runs_underlined(By(fn() { press is Some(_) && w.pointed() }))
       .words_look(By(fn() { @ui.style_words(msg_name) }))
       .ink(By(fn() { @ui.style_ink(msg_name) }))
       .cuts(Is(true))
@@ -201,21 +203,28 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
     // rests on it or its menu shows: share_turn_tool's; a finger has them on the bar of what it holds picked)
     if message_shares(here(), m()) {
       head.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
-      let anchor = Ref(head)
       let key = fn() { "m:" + m().ts + "/message-menu" }
       let close = fn() { if @sf.menu_is_open(key()) { @sf.menu_open_here("", 0.0, 0.0) } }
-      head.show(fn() { row.pointed_in() || @sfbase.message_menu_on("m:" + m().ts) }, fn(more) {
-        anchor.val = more
-        more.width(Is(Some(24.0))).height(Is(Some(24.0))).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
+      let lit = fn() { row.pointed_in() || @sfbase.message_menu_on("m:" + m().ts) }
+      // (its room at the head's end whether it shows or not, as share_turn_tool keeps it; the ⋯ in it drawn while it
+      // is lit, nothing laid out or made for that: pressed by a mouse alone, Tab passing it by)
+      let more = head.box(fn(more) {
+        more
+        .width(Is(Some(24.0)))
+        .height(Is(Some(24.0)))
+        .lines_up(Is(Some(Middle)))
+        .lies_along(Is(Middle))
+        .alpha(By(fn() { if lit() { 1.0 } else { 0.0 } }))
+        .hides(By(fn() { !lit() }))
+        .presses(By(fn() { @ui.pointing() is Mouse }))
+        |> ignore
         // (the library's ⋯ menu by its key, as menu_of keeps it: one open at a time, its button pressed again closing it)
         @sf.round_key_node(more, "more", fn() { @sf.t("web-main.menu.more") }, fn() {
           if @sf.menu_is_open(key()) { close() } else { @sf.menu_open_here(key(), 0.0, 0.0) }
-        }, side=24.0, icon_size=16.0)
+        }, side=24.0, icon_size=16.0, tab=false)
       })
-      // (the menu belongs to the message, not the hover button: it finishes leaving where it hung when that
-      // button disappears; beside keeps that last place after its anchor is gone)
       let popup = @sf.popup_root_node(head)
-      @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
+      @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { more }, fn() {
         message_items_of(src, here(), m())
       }, "", End, 6.0, false, false, fn(item) {
         close()
@@ -798,7 +807,8 @@ fn unsent_button_node(
         _ => @sf.icon_node(mark, icon, unsent_icon, By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } })) |> ignore
       }
     })
-    @sf.words_node(b, label, fn() { if hot() { unsent_label_hot } else { unsent_label } }) |> ignore
+    @sf.words_node(b, label, fn() { unsent_label }, inked=fn() { if hot() { unsent_label_hot } else { unsent_label } })
+    |> ignore
     match tips {
       Some(layer) => @sf.tip_node(layer, b, fn() { failed().unwrap_or("") }) |> ignore
       None => ()
@@ -1061,7 +1071,9 @@ fn blocked_line_node(foot : @view.View, src : Source, station : () -> String, b 
     @sf.words_node(a, fn() { "·" }, fn() { blocked_dot }) |> ignore
     a.box(fn(w) {
       w
-      .words_runs(By(fn() { [@ui.span(b().action, underline=acts() && foot.pointed_in())] }))
+      .words_runs(By(fn() { [@ui.span(b().action)] }))
+      // (underlined under the pointer as it is drawn, nothing of it laid out again: View::runs_underlined)
+      .runs_underlined(By(fn() { acts() && foot.pointed_in() }))
       .words_look(By(fn() { @ui.style_words(blocked_act) }))
       .ink(By(fn() { @ui.style_ink(blocked_act) }))
       |> ignore

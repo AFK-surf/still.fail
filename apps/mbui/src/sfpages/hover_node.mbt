@@ -14,7 +14,7 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
   let close = fn() { (due.val)(); held.set(false); open.set(false) }
   trigger.reacts(fn() {
     @sf.pointer_rests() && !@ui.pointer_pressed() &&
-      (trigger.pointed() || card_on.val.map(fn(card) {
+      (trigger.moved_over() || card_on.val.map(fn(card) {
         pointer_over(card) || @ui.old_overlay_in_use(card)
       }).unwrap_or(false) || hover_held(key))
   }, fn(on) {

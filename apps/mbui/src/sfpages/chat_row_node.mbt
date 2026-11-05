@@ -134,7 +134,9 @@ pub fn chat_row_node(
       rows.menu_for = @sfbase.row_name(i)
       rows.menu_serial = @sf.last_presented()
     }
-    let hover = fn() { !finger && (@sf.lit_in_node(row) || menu_on()) }
+    // (what it lays out and makes by the hand on it, its time and its 归档, at the pointer's own events: moved_in_node;
+    // its ground each frame, below)
+    let hover = fn() { !finger && (@sf.moved_in_node(row) || menu_on()) }
     let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
     let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() }
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the

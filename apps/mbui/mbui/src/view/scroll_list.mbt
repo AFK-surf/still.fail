@@ -538,6 +538,8 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
       (_, Some(n)) => self.x.set(dclamp(n.x0 + n.total, 0.0, self.most()))
       _ => ()
     }
+    // (come to rest under the pointer: what is under it found as of then, as at its own event)
+    v.tree.glide_rested()
   })
 }
 
