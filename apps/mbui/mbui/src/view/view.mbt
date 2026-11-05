@@ -4059,8 +4059,10 @@ pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
 /// the focus and what holds it, the innermost first (the DOM's bubbling), then the rest of those said to take keys, the
 /// one drawn last first (Tree::topmost_before: by the window's stack of layers, then after what holds it, after what is
 /// before it among what holds them both), as a window's own listeners are told last. `above`, only what is over that in
-/// the window's stack of layers (View::stacked: the old frame's layer under it taking the keys); `within`, only that node
-/// and what holds it (an old view's field with the focus hosted in it). Nothing of the tree gone through but what holds
+/// the window's stack of layers (View::stacked: the old frame's layer under it taking the keys); `within`, a field with
+/// the focus (the tree's, or an old view's hosted in it): what is in a layer over its in the window's stack first (what was
+/// opened over the page has Escape before the page; not what is drawn after it in its own), then that node and what
+/// holds it, nothing else. Nothing of the tree gone through but what holds
 /// the focus and those said (Work's keys_asked). True where one took it.
 pub fn Tree::key_at(
   self : Tree,
@@ -4104,8 +4106,9 @@ pub fn Tree::key_at(
     // (what else says what a key does to it, never the whole tree gone through (those said, Tree::keys_said_at), the
     // topmost first: what is drawn over what has the focus (a tip, a menu over it: the window's stack of layers, and
     // what is drawn after it) before it, as the topmost layer takes back; what is under it after what holds it, as the
-    // window's own listeners are told after what the focus is in. A field holding the focus (`within`): its alone)
-    if within is None {
+    // window's own listeners are told after what the focus is in. A field holding the focus (`within`): what is in a
+    // layer over its, then its, nothing else)
+    {
       let rest : Array[Int] = []
       let gone : Array[Int] = []
       for i in self.keys_said_at {
@@ -4123,14 +4126,25 @@ pub fn Tree::key_at(
       rest.sort_by(fn(a, b) { if a == b { 0 } else if self.topmost_before(a, b) { -1 } else { 1 } })
       match (if focus_at.val >= 0 { Some(focus_at.val) } else { None }) {
         Some(f) => {
-          let over = rest.filter(fn(i) { self.topmost_before(i, f) })
+          // (a field's (`within`): of what is drawn over it, only what is in a layer over its in the window's stack (what
+          // the shell or a presenter opened over the page), never what is drawn after it in its own (a button or a
+          // bubble over the field), which would take what the field is to have)
+          let over = match within {
+            None => rest.filter(fn(i) { self.topmost_before(i, f) })
+            Some(_) => {
+              let own = self.stack_at(f)
+              rest.filter(fn(i) { self.stack_at(i) > own })
+            }
+          }
           let under = rest.filter(fn(i) { !self.topmost_before(i, f) })
           over.append(chain)
-          over.append(under)
+          if within is None {
+            over.append(under)
+          }
           chain.clear()
           chain.append(over)
         }
-        None => chain.append(rest)
+        None => if within is None { chain.append(rest) }
       }
     }
     // (`above`: of what is over that in the window's stack of layers alone, View::stacked)
