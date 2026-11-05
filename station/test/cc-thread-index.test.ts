@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { Store } from "../src/store/store.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import {
-  CC_SESSION_ROWS, CcIndexPreparation, CcSessionsUnavailable, ccSessionReady, ccSessionRows, dispatchCcOrderStep, indexedCcThreads, installCcIndex,
+  CC_INDEXED_THREADS, CC_SESSION_KEYS, CC_SESSION_ROWS, CcIndexPreparation, CcSessionsUnavailable, ccSessionReady, ccSessionRows, dispatchCcOrderStep, indexedCcThreads, installCcIndex,
   scanCcSessionStep, settleCcSessionStep, trackCcSession,
 } from "../src/store/cc-thread-index.ts";
 
@@ -270,6 +270,14 @@ test("a prepared session seeks its newest destinations independently of older on
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${CC_SESSION_ROWS}`).all("agent", 20).map((r) => String(r.detail));
     assert.ok(plan.some((line) => line.includes("cc_session_order")), plan.join("\n"));
     assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join("\n"));
+    const keys = db.prepare(`EXPLAIN QUERY PLAN ${CC_SESSION_KEYS}`).all("agent").map((r) => String(r.detail));
+    assert.ok(keys.some((line) => line.includes("cc_session_order")), keys.join("\n"));
+    assert.ok(!keys.some((line) => line.includes("TEMP B-TREE")), keys.join("\n"));
+    const merged = db.prepare(`EXPLAIN QUERY PLAN ${CC_INDEXED_THREADS}`)
+      .all(JSON.stringify([[String(newest[0]), "agent"]])).map((r) => String(r.detail));
+    assert.ok(merged.some((line) => line.includes("SEARCH t USING INTEGER PRIMARY KEY")), merged.join("\n"));
+    assert.ok(merged.some((line) => line.includes("SEARCH o USING INDEX") && line.includes("thread=? AND session=?")), merged.join("\n"));
+    assert.ok(!merged.some((line) => /SCAN (t|o)(\s|$)/.test(line)), merged.join("\n"));
   } finally { store.close(); }
 });
 
