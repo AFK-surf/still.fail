@@ -26,6 +26,19 @@ const tokenConflict = (extra: string) => `(SELECT key FROM sessions WHERE token 
 const tokenConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE token = NEW.token ${extra})`;
 const changesHome = `OLD.key IS NOT NEW.key OR (OLD.ws IS NULL AND NEW.ws IS NOT NULL)
   OR (OLD.ws IS NOT NULL AND NEW.ws IS NULL)`;
+const markMember = (thread: string, session: string) => {
+  const ws = `(SELECT ws FROM sessions WHERE key = ${session})`;
+  const relevant = `EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL)`;
+  return `
+    UPDATE recent_scope_member_dirty SET revision = revision + 1
+      WHERE ws = ${ws} AND thread = ${thread} AND session = ${session} AND ${relevant};
+    INSERT INTO recent_scope_member_dirty(ws, thread, session, revision)
+      SELECT ${ws}, ${thread}, ${session}, 1 WHERE ${ws} IS NOT NULL AND ${thread} IS NOT NULL AND ${session} IS NOT NULL
+        AND ${relevant} AND EXISTS (SELECT 1 FROM recent_scope_tracked WHERE kind = 1 AND ws = ${ws})
+        AND NOT EXISTS (SELECT 1 FROM recent_scope_member_dirty WHERE ws = ${ws} AND thread = ${thread} AND session = ${session});`;
+};
+const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
+const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 
 export function installRecentScopeJournal(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_scope_tracked'").get() !== undefined;
@@ -64,6 +77,21 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_session_change AFTER UPDATE OF key, ws, token ON sessions
         WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN ${markSession("NEW.key", "NEW.ws", changesHome)} END;
       CREATE TRIGGER recent_scope_session_drop BEFORE DELETE ON sessions BEGIN ${markSession("OLD.key", "OLD.ws")} END;
+      -- A rowid REPLACE can evict a different membership without firing its DELETE trigger.
+      CREATE TRIGGER recent_scope_member_before_add BEFORE INSERT ON thread_sessions BEGIN
+        ${markMember(memberConflictThread(""), memberConflictSession(""))}
+      END;
+      CREATE TRIGGER recent_scope_member_add AFTER INSERT ON thread_sessions BEGIN ${markMember("NEW.thread", "NEW.session")} END;
+      CREATE TRIGGER recent_scope_member_before_change BEFORE UPDATE OF thread, session, rowid ON thread_sessions
+        WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
+          ${markMember("OLD.thread", "OLD.session")}
+          ${markMember(memberConflictThread("AND rowid IS NOT OLD.rowid"), memberConflictSession("AND rowid IS NOT OLD.rowid"))}
+      END;
+      CREATE TRIGGER recent_scope_member_change AFTER UPDATE OF thread, session, rowid ON thread_sessions
+        WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
+          ${markMember("NEW.thread", "NEW.session")}
+      END;
+      CREATE TRIGGER recent_scope_member_drop BEFORE DELETE ON thread_sessions BEGIN ${markMember("OLD.thread", "OLD.session")} END;
     `);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }

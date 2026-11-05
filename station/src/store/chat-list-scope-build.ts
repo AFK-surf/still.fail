@@ -101,3 +101,31 @@ export function settleRecentWorkspaceSessionStep(db: DatabaseSync, ws: string, l
     return { sessionsDone: done, visited: batch.visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
+
+/// Reconcile only changed memberships, rather than rescanning all of an agent's other chats for each join or leave.
+/// The caller still has to settle thread and ordering changes before it can certify the workspace.
+export function settleRecentWorkspaceMemberStep(db: DatabaseSync, ws: string, limit = 64): { membersDone: boolean; visited: number } {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent workspace membership batch must be positive");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const progress = db.prepare("SELECT scan_done, scan_session FROM recent_scope_tracked WHERE kind = 1 AND ws = ?")
+      .get(ws) as { scan_done: number; scan_session: string | null } | undefined;
+    if (progress === undefined) throw new Error("recent scope is not tracked");
+    if (progress.scan_done !== 1 || progress.scan_session !== null) throw new Error("recent scope source scan is unfinished");
+    const query = db.prepare("SELECT thread, session, revision FROM recent_scope_member_dirty WHERE ws = ? ORDER BY thread, session LIMIT ?");
+    query.setReadBigInts(true);
+    const rows = query.all(ws, limit) as { thread: bigint; session: string; revision: bigint }[];
+    const eligible = db.prepare(`SELECT 1 FROM threads t JOIN sessions s ON s.key = ?2
+      WHERE t.id = ?1 AND s.ws = ?3 AND (t.home = s.key OR (t.home IS NULL AND EXISTS
+        (SELECT 1 FROM thread_sessions m WHERE m.thread = t.id AND m.session = s.key)))`);
+    const clean = db.prepare("DELETE FROM recent_scope_member_dirty WHERE ws = ? AND thread = ? AND session = ? AND revision = ?");
+    for (const row of rows) {
+      if (eligible.get(row.thread, row.session, ws) !== undefined) putRecentScopeSource(db, ws, row.thread, row.session);
+      else removeRecentScopeSource(db, ws, row.thread, row.session);
+      clean.run(ws, row.thread, row.session, row.revision);
+    }
+    const done = db.prepare("SELECT 1 FROM recent_scope_member_dirty WHERE ws = ? LIMIT 1").get(ws) === undefined;
+    db.exec("COMMIT");
+    return { membersDone: done, visited: rows.length };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { RECENT_CHAT_LIST } from "../src/store/chat-list.ts";
+import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep } from "../src/store/chat-list-scope-build.ts";
 import { installRecentScopeJournal, trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
 import { putRecentScopeSource, readPreparedRecentWorkspace, removeRecentScopeSource } from "../src/store/chat-list-scope-rows.ts";
 import { Store } from "../src/store/store.ts";
@@ -72,9 +73,18 @@ for (const recursive of [false, true]) test(`a new membership cannot leave a rea
     const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare before the membership arrives. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
     store.joinThread(id, "one", "ember");
     assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the new chat has not yet been accounted");
+    assert.deepEqual(settleRecentWorkspaceMemberStep(db, "here", 2), { membersDone: true, visited: 1 });
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [id], total: 1 });
+    store.leaveThread(id, "one");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [id], total: 1 }, "leaving does not change membership");
+    db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'one'").run(id);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    assert.deepEqual(settleRecentWorkspaceMemberStep(db, "here", 2), { membersDone: true, visited: 1 });
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
   } finally { store.close(); }
 });
