@@ -1526,7 +1526,7 @@ export interface Message {
 	seq: number;
 	thread: number;
 	ts: string;
-	/** person | agent | ember */
+	/** person | agent | the station (ember, as the station stores it) */
 	authorKind: string;
 	author: string;
 	authorName?: string;
@@ -1558,7 +1558,7 @@ export interface Message {
 /** A thread: a Slack thread or a chat on still.fail's page. */
 export interface ChatThread {
 	id: number;
-	/** "slack:<team id>" or "ember". */
+	/** "slack:<team id>", "feishu:<connect>", or the station's own (titles.ts OWN_SURFACES). */
 	surface: string;
 	channel: string;
 	channelName?: string;
@@ -1623,7 +1623,7 @@ export interface Job {
 	command?: string;
 	/** How often a service was started again after it ended. */
 	restarts?: number;
-	/** What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to. */
+	/** What it said lately (`stillfail-job notify`), newest first: how people see what a long-running job is up to. */
 	notices?: JobNotice[];
 	/** Started to keep watch (`job_start` watch). A station from before watches says none. */
 	watch?: boolean;
@@ -1746,9 +1746,9 @@ export interface RowAgent {
 	watch?: Watching;
 }
 
-/** Who said a row's last thing: an agent (its state riding on its picture), a person, or ember. */
+/** Who said a row's last thing: an agent (its state riding on its picture), a person, or the station. */
 export interface LastBy {
-	/** agent | person | ember */
+	/** agent | person | station */
 	kind: string;
 	name: string;
 	mine: boolean;
@@ -2285,7 +2285,7 @@ export interface MessageDecision {
 export interface Place {
 	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
-	/** ember | slack | feishu */
+	/** chat (the station's own) | slack | feishu */
 	surface: string;
 	session?: string;
 	/** A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu. */
@@ -2333,7 +2333,7 @@ export interface ChatMessage {
 	seq: number;
 	thread: number;
 	ts: string;
-	/** person | agent | ember */
+	/** person | agent | the station (ember, as the station stores it) */
 	authorKind: string;
 	author: string;
 	authorName?: string;
@@ -4448,7 +4448,8 @@ export interface Host {
 	uptimeSec: number;
 	memory: Memory;
 	disk: Disk;
-	emberRssBytes: number;
+	/** The station's own memory (stations before it say emberRssBytes). */
+	stationRssBytes: number;
 	checkedAt: number;
 	summary: string;
 	line: string;
@@ -4462,7 +4463,8 @@ export interface Host {
 	details: HostDetail[];
 	/** Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB. */
 	usage: string;
-	emberText: string;
+	/** The station's own memory in a line: still.fail 38 MB. */
+	stationText: string;
 }
 
 /**

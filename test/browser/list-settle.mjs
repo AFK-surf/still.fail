@@ -21,7 +21,7 @@ let server, browser, madeFixture = false, madeHtml = false;
 /** In the page: what a station would say into the open chat, and the frames sampled as drawn. */
 function helpers() {
   const { core, message } = window.demo;
-  const chat = () => core.chats.find((c) => c.key === 'ember:c-demo-safari');
+  const chat = () => core.chats.find((c) => c.key === 'chat:c-demo-safari');
   const set = (change) => { const c = chat(); change(c); core.publish(); };
   const card = (c, asked = true) => ({
     ...message(c, 'agent', '部署有两种做法：\n\n- 直接替换，几分钟完成，会中断一下\n- 新旧并行再切流量，慢一点但不中断\n\n你选哪个？', Date.now()),

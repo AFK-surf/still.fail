@@ -49,7 +49,7 @@ const STATIONS: readonly number[] = [5, 3, 7, 4];
 /** A machine made up: what it is in a line, what is left of its CPU, memory and disk, a few facts of it. */
 const sampleHost = (): Host => ({
   hostname: "", os: "", arch: "", cpus: 0, cpuModel: "", load: 0, uptimeSec: 0, memory: { totalBytes: 0, usedBytes: 0 },
-  disk: { path: "", totalBytes: 0, freeBytes: 0 }, emberRssBytes: 0, checkedAt: 0, summary: "", line: "", facts: [], usage: "", emberText: "",
+  disk: { path: "", totalBytes: 0, freeBytes: 0 }, stationRssBytes: 0, checkedAt: 0, summary: "", line: "", facts: [], usage: "", stationText: "",
   identity: sampleWords(20),
   meters: [3, 2, 2].map((n) => ({
     label: sampleWords(n), short: sampleWords(n), percent: 50, left: 50, level: "ok", value: sampleWords(3), remaining: sampleWords(5),

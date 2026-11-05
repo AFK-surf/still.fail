@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
 import { STILLFAIL_SURFACE } from "../store/rows.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
@@ -257,7 +258,7 @@ export function formatWidgetModels(models: WidgetModel[]): string {
 export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean }> = new Map()): string {
   return messages
     .map((m) => {
-      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === "ember" ? "station" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
+      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === STATION_AUTHOR ? "station" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
       const bot = m.authorKind !== "person" && from !== "you" ? " bot" : "";
       const found = cards.get(m.n);
       let card = "";

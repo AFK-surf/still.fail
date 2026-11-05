@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { STILLFAIL_SURFACE } from "./rows.ts";
 
 // A projection only for sessions whose copy destinations have been requested. A thread change is distributed in
 // batches; a dirty session cannot be read until every relevant distribution and its own reconciliation have ended.
@@ -35,7 +36,7 @@ export function installCcIndex(db: DatabaseSync): void {
       CREATE TABLE cc_session_rows (session TEXT NOT NULL, thread INTEGER NOT NULL, surface TEXT,
         created_at INTEGER, last_at INTEGER, PRIMARY KEY(session,thread)) WITHOUT ROWID;
       CREATE INDEX cc_session_order ON cc_session_rows(session,last_at DESC,created_at DESC,thread DESC)
-        WHERE surface != 'ember';
+        WHERE surface != '${STILLFAIL_SURFACE}';
       CREATE INDEX cc_rows_thread ON cc_session_rows(thread,session);
       CREATE TABLE cc_session_dirty (session TEXT NOT NULL, thread INTEGER NOT NULL,
         PRIMARY KEY(session,thread)) WITHOUT ROWID;
@@ -247,11 +248,11 @@ export function ccSessionReady(db: DatabaseSync, session: string): boolean {
 }
 
 export const CC_SESSION_ROWS = `SELECT thread,last_at,created_at FROM cc_session_rows INDEXED BY cc_session_order
-  WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT ?2`;
+  WHERE session=?1 AND surface != '${STILLFAIL_SURFACE}' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT ?2`;
 
 // Read the key as text to keep 64-bit values intact, but order by the integer column, not the text alias.
 export const CC_SESSION_KEYS = `SELECT CAST(thread AS TEXT) AS thread FROM cc_session_rows INDEXED BY cc_session_order
-  WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,cc_session_rows.thread DESC LIMIT 20`;
+  WHERE session=?1 AND surface != '${STILLFAIL_SURFACE}' ORDER BY last_at DESC,created_at DESC,cc_session_rows.thread DESC LIMIT 20`;
 
 // The union contains at most twenty rows per source session. A destination in the global top twenty must be in the
 // top twenty of every session it shares with the source; otherwise that session alone has twenty distinct earlier
@@ -259,7 +260,7 @@ export const CC_SESSION_KEYS = `SELECT CAST(thread AS TEXT) AS thread FROM cc_se
 export const CC_INDEXED_THREADS = `SELECT t.*,o.connect FROM json_each(?1) c
   CROSS JOIN threads t ON t.id=CAST(json_extract(c.value,'$[0]') AS INTEGER)
   CROSS JOIN thread_sessions o ON o.thread=t.id AND o.session=json_extract(c.value,'$[1]')
-  WHERE t.surface != 'ember'
+  WHERE t.surface != '${STILLFAIL_SURFACE}'
   ORDER BY (SELECT e.at FROM thread_state st JOIN entries e ON e.thread=st.thread AND e.n=st.last_n
     WHERE st.thread=t.id) DESC, t.created_at DESC, t.id DESC LIMIT 20`;
 

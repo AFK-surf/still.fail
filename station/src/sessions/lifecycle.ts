@@ -25,6 +25,7 @@ import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
 import { FAST_RUNTIMES } from "../agents/profiles.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT, chatKey, chatWorkspace } from "./internal.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 /// A session of its own, talked to in the station's chat.
 export type NewChat = {
@@ -632,7 +633,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   // where it was when it came here (the pages open `?history=<session>&entry=<n>` links there).
   const at = last !== null ? `&entry=${last}` : "";
   const note = tr(lang, "station.session.continued", { runtime: runtimeTitle(runtime), cwd: found.cwd, link: `?history=${key}${at}` });
-  store.insertMessage({ thread: thread.id, ts: hub.nextTs(), authorKind: "ember", author: "ember", text: note });
+  store.insertMessage({ thread: thread.id, ts: hub.nextTs(), authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text: note });
   store.setRead(createdBy, thread.id, store.lastEntry(thread.id));
   return [key, thread];
 }

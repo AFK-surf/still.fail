@@ -49,7 +49,7 @@ test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_w
     "GET /overview": { ...overview, profiles: [profile] },
     "GET /presets": { presets: [preset("app", "App")], candidates: [candidate] },
     "POST /presets": preset("lib", "Lib"),
-    "POST /sessions": { key: "ember:c-new", thread: { id: 9, threadTs: "9.0" } },
+    "POST /sessions": { key: "chat:c-new", thread: { id: 9, threadTs: "9.0" } },
   };
   const { host, core } = await started(said as never);
   const reads = () => host.requests.flatMap(readsOf).filter((u) => u.endsWith("/admin/api/presets")).length;

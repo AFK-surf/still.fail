@@ -19,7 +19,7 @@ if [ "${OSTYPE:-}" = msys ] || [ "${OSTYPE:-}" = cygwin ]; then
   ROOT=$(cygpath -m "$ROOT")
   EMBER=$(cygpath -m "$EMBER")
 fi
-CORE_TS=$EMBER/client/core-ts
+CORE_TS=$CHAT/client/core-ts
 # The shell's intermediate build lives outside the checkout (and outside this repo): only the .a is kept in out/core.
 CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$(cd "$TOOLS/.." && pwd)/core-target}
 export CARGO_TARGET_DIR
@@ -47,7 +47,7 @@ have_deps() {
 shell() {
   local target=${1:-aarch64-apple-darwin}
   local t0=$(now)
-  (cd $EMBER/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
+  (cd $CHAT/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
       -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2))
   # (rustc prints it only when it builds: a fresh build keeps the last one)
   local libs=$(grep -o 'native-static-libs: .*' $OUT/shell-$target.log | tail -1 | sed 's/native-static-libs: //')
@@ -69,7 +69,7 @@ shell_prebuilt() {
     aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
     *) return 1 ;;
   esac
-  dir=$(node "$EMBER/scripts/native.ts" path shell-apple $t) || return 1
+  dir=$(node "$CHAT/scripts/native.ts" path shell-apple $t) || return 1
   mkdir -p $OUT/$1
   cmp -s "$dir/libstillfail_shell.a" $OUT/$1/libstillfail_shell.a || cp "$dir/libstillfail_shell.a" $OUT/$1/ || return 1
   cmp -s "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || return 1
@@ -499,9 +499,9 @@ p = u.urlparse(sys.argv[1]); q = u.parse_qs(p.query); back = u.urlparse(q.get("r
 ok = p.scheme == "https" and p.path == "/v1/auth/google/start" and "state" in q and back.scheme == "http" and back.hostname == "127.0.0.1" and back.path == "/oauth/callback"
 print(back.port if ok else 0)' "$url")
   ok "it is still.fail cloud's login page, coming back to 127.0.0.1:$port/oauth/callback" '[ "$port" -gt 0 ]'
-  if [ -f "$EMBER/station/src/logins/parse.ts" ]; then
+  if [ -f "$CHAT/station/src/logins/parse.ts" ]; then
     local seen=$(node --experimental-strip-types --no-warnings --input-type=module -e "
-const { loopbackOf } = await import('$EMBER/station/src/logins/parse.ts');
+const { loopbackOf } = await import('$CHAT/station/src/logins/parse.ts');
 const b = loopbackOf(process.argv[1]);
 console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&1)
     ok "a station's login takes it as a loopback login with a state ($seen)" '[ "$seen" = "127.0.0.1:$port/oauth/callback" ]'

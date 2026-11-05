@@ -1132,7 +1132,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
       {revoke.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.members.revokeFailed", { error: revoke.error.message })}</p>}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) remove.run(removing.sub); setRemoving(null); }}
         title={t("web-pages.settings.members.removeConfirm", { email: removing?.email ?? "", name: view.name })} action={t("web-mobile.workspace.removeMemberAction")}
-        description={t("web-mobile.workspace.removeMemberText")} />
+        description={t("web-mobile.workspace.removeMstationText")} />
     </Section>
   );
 }

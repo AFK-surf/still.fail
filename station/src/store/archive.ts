@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { type EntryRow, type Json, attachment, authorKind, quote, withLetter } from "./rows.ts";
+import { STATION_AUTHOR } from "./rows.ts";
 
 export const threadFile = (archiveDir: string, thread: number): string => join(archiveDir, "threads", `${thread}.jsonl.zst`);
 
@@ -38,7 +39,7 @@ export function entryJson(e: EntryRow): Record<string, Json> {
 export function archivedEntry(e: Json): EntryRow {
   const kind = e.kind;
   if (kind !== "message" && kind !== "edit") throw new Error(`unknown entry kind ${kind}`);
-  if (!["person", "agent", "ember", "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
+  if (!["person", "agent", STATION_AUTHOR, "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
   const some = (v: Json) => (v === undefined || v === null ? undefined : v);
   return {
     agentIdentity: some(e.agentIdentity), thread: e.thread, n: e.n, kind, target: e.target ?? null, ts: e.ts ?? null,

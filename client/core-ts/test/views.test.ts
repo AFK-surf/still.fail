@@ -170,7 +170,7 @@ const overviewOf = (connects: J[], profiles: J[]): J => ({
 });
 const hostInfo = (hostname: string): J => ({
   hostname, os: "macOS 26", arch: "arm64", cpus: 8, cpuModel: "M4", load: 0.2, uptimeSec: 100,
-  memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, emberRssBytes: 10, checkedAt: 1,
+  memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, stationRssBytes: 10, checkedAt: 1,
 });
 
 for (const name of ["usage", "profiles"]) {
@@ -2074,20 +2074,20 @@ test("a_chat_asked_for_here_shows_at_once_and_becomes_its_stations_under_the_sam
   assert.equal(local.pendingTry(key)?.[0], "ws/st");
   await both();
   assert.equal(screen.value.outbox[0].state, "sending");
-  const sends = local.pendingMade(key, "ember:c-1", 9);
+  const sends = local.pendingMade(key, "chat:c-1", 9);
   assert.deepEqual(sends.map(([id, m]) => [id, m.text]), [[first, "修一下登录\n细节…"]]);
   assert.equal(local.pendingThread("ws/st", key), 9);
   await both();
   v = screen.value;
-  assert.deepEqual([v.pending, v.key, v.outbox[0].id], [false, "ember:c-1", first]);
+  assert.deepEqual([v.pending, v.key, v.outbox[0].id], [false, "chat:c-1", first]);
   await both();
-  assert.equal(list.value.days[0].items[0].id, "ember:c-1");
-  t.set(threads("ws/st"), [thread(9, ["ember:c-1"], t.host.nowMs())]);
+  assert.equal(list.value.days[0].items[0].id, "chat:c-1");
+  t.set(threads("ws/st"), [thread(9, ["chat:c-1"], t.host.nowMs())]);
   t.set(pageOf("ws/st", 9), page(1, ["修一下登录\n细节…"], null));
   await both();
   v = screen.value;
-  assert.deepEqual([v.key, v.thread.id, v.messages.length], ["ember:c-1", 9, 1]);
-  const made = { ...row("ember:c-1", t.host.nowMs()), thread: 9, mine: true };
+  assert.deepEqual([v.key, v.thread.id, v.messages.length], ["chat:c-1", 9, 1]);
+  const made = { ...row("chat:c-1", t.host.nowMs()), thread: 9, mine: true };
   t.set(rows("ws/st"), [made]);
   await both();
   items = list.value.days[0].items;
@@ -2104,7 +2104,7 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   t.subscribe(2, { topic: "chats", scope: "ws", mine: true });
   t.set(workspace(), oneStation());
   await t.host.time.pass(100);
-  const old = { ...row("ember:c-0", t.host.nowMs() - 5000), mine: true, thread: 3 };
+  const old = { ...row("chat:c-0", t.host.nowMs() - 5000), mine: true, thread: 3 };
   t.set(rows("ws/st"), [old]);
   await t.read(list, 2);
   const key = local.pendingNew("ws/st", { runtime: "claude" });
@@ -2113,31 +2113,31 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   const idsOf = (): [string, string][] => list.value.days.flatMap((d: J) => d.items).map((i: J) => [i.id ?? "", i.title ?? ""]);
   await t.read(list, 2);
   assert.ok(idsOf().some(([i, ti]) => i === key && ti === "新对话"));
-  const theirs = { ...row("ember:c-2", t.host.nowMs()), mine: true, thread: 8, title: "新对话" };
+  const theirs = { ...row("chat:c-2", t.host.nowMs()), mine: true, thread: 8, title: "新对话" };
   t.set(rows("ws/st"), [old, theirs]);
   await t.read(list, 2);
   const cmp = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
-  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "新对话"], [key, "新对话"]].sort(cmp as never));
+  assert.deepEqual(idsOf().sort(cmp), [["chat:c-0", "chat:c-0 的标题"], ["chat:c-2", "新对话"], [key, "新对话"]].sort(cmp as never));
   assert.equal(local.pendingTry(key)?.[1].clientKey, key);
-  const made: J = { ...row("ember:c-1", t.host.nowMs()), mine: true, thread: 9, title: "新对话", clientKey: key };
+  const made: J = { ...row("chat:c-1", t.host.nowMs()), mine: true, thread: 9, title: "新对话", clientKey: key };
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "新对话"], ["ember:c-2", "新对话"]];
+  const expected: [string, string][] = [["chat:c-0", "chat:c-0 的标题"], ["chat:c-1", "新对话"], ["chat:c-2", "新对话"]];
   assert.deepEqual(idsOf().sort(cmp), expected);
-  local.pendingMade(key, "ember:c-1", 9);
+  local.pendingMade(key, "chat:c-1", 9);
   await t.read(list, 2);
   assert.deepEqual(idsOf().sort(cmp), expected);
   made.last = { seq: 1, text: "修一下登录", authorKind: "person", author: "Me@x.com", createdAt: Math.trunc(t.host.nowMs()) };
   made.title = "登录按钮";
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "登录按钮"));
+  assert.ok(idsOf().some(([i, ti]) => i === "chat:c-1" && ti === "登录按钮"));
   // its station no longer says the key (it keeps it only a while): the row still does, its page open by it
   const later: J = { ...made, title: "登录按钮 2" };
   delete later.clientKey;
   t.set(rows("ws/st"), [old, theirs, later]);
   await t.read(list, 2);
-  const mine = list.value.days.flatMap((d: J) => d.items).find((i: J) => i.id === "ember:c-1");
+  const mine = list.value.days.flatMap((d: J) => d.items).find((i: J) => i.id === "chat:c-1");
   assert.deepEqual([mine?.title, mine?.clientKey], ["登录按钮 2", key]);
 });
 
@@ -2146,7 +2146,7 @@ test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", as
   const local = t.views.local;
   const key = local.pendingNew("ws/st", { runtime: "claude" });
   const first = local.pendingQueue(key, { text: "修一下登录", attachments: [], quotes: [] })!;
-  local.pendingMade(key, "ember:c-1", 9);
+  local.pendingMade(key, "chat:c-1", 9);
   t.views.outboxSent("ws/st", 9, first, 1);
   const screen = ui();
   t.subscribe(1, agentPage("ws/st", key));
@@ -2155,7 +2155,7 @@ test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", as
   await t.read(screen, 1);
   let v = screen.value;
   assert.deepEqual([v.messages.length, v.outbox[0].id], [0, first]);
-  t.set(threads("ws/st"), [thread(9, ["ember:c-1"], t.host.nowMs())]);
+  t.set(threads("ws/st"), [thread(9, ["chat:c-1"], t.host.nowMs())]);
   t.set(pageOf("ws/st", 9), page(1, ["修一下登录"], null));
   await t.read(screen, 1);
   v = screen.value;
@@ -2223,7 +2223,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     [0, call("mcp__stillfail__chat_post", { to: "C0OPS/1727.0001", text: "*部署* 好了 <https://x.y|看这里>" }, "1970-01-01T00:00:02Z", "c1")],
     [1, { at: "1970-01-01T00:00:02Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     // Its own chat's words are its messages already; what goes to a still.fail chat is not Slack's.
-    [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
+    [2, call("mcp__stillfail__chat_post", { to: "CHAT/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
     [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "<@U9> 新话题" } }, "1970-01-01T00:00:04Z", "c3")],
     // What someone said in Slack, given to it.
     [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1727.0001" from="Mia (U9)" ts="2.5">*收到*，<@U9> 看一下</message>' }],

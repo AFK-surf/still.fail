@@ -8,7 +8,7 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 APP=stillfail bash "$D/web.sh" build >/dev/null
 . "$D/env.sh"
-out=$EMBER/web/public/mbui
+out=$CHAT/web/public/mbui
 mkdir -p "$out"
 # minified (MoonBit's names are long: 25 MB to 9.5, brotli 4.3 MB to 2.1) by esbuild, the version pinned here: the
 # web's own where its packages have it, else fetched (CI's mbui-web, whose install has none: deployed unminified once)

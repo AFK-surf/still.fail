@@ -617,7 +617,7 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   const letter = (ts: string, author: string, text: string, way: "in" | "out") =>
     store.insertMessage({ ...newMessage(thread.id, ts, "agent", author, text), letter: { way, title: "备份", link: "https://x/o/w/s/b" } });
   letter("1.4", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了", "in");
-  letter("1.5", "peer/ember:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone", "in");
+  letter("1.5", "peer/chat:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone", "in");
   letter("1.6", "a", "发给 [备份](https://x/o/w/s/b)：\n\n收到", "out");
   const reader = read.openStore(data);
   const lists = () => [store.listThreads("local", null, null), read.listThreads(reader, "local", null, null)];
@@ -640,7 +640,7 @@ test("letters from before they were marked are marked as the column comes, by th
   const thread = store.openThread("ember", "EMBER", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   say(store, thread.id, "1.2", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了");
-  say(store, thread.id, "1.3", "agent", "peer/ember:c-9", "From <https://x/o/w/t/c|Backups>:\n\nDone");
+  say(store, thread.id, "1.3", "agent", "peer/chat:c-9", "From <https://x/o/w/t/c|Backups>:\n\nDone");
   say(store, thread.id, "1.4", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   say(store, thread.id, "1.5", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
   store.close();

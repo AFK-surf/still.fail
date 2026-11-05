@@ -118,7 +118,7 @@ const SAMPLE_STATIONS = sampleStations(2);
 /** A machine made up, for what its page shows while it is read (in its bones): its figures, its rows. */
 const SAMPLE_HOST: Host = {
   hostname: "", os: "", arch: "", cpus: 0, cpuModel: "", load: 0, uptimeSec: 0, memory: { totalBytes: 0, usedBytes: 0 }, disk: { path: "", totalBytes: 0, freeBytes: 0 },
-  emberRssBytes: 0, checkedAt: 0, summary: "", line: "", facts: [], usage: "", emberText: "", identity: "",
+  stationRssBytes: 0, checkedAt: 0, summary: "", line: "", facts: [], usage: "", stationText: "", identity: "",
   meters: [0, 1, 2].map((i) => ({ label: String(i), short: "", percent: 60, left: 40, level: "ok", value: "", remaining: "", big: sampleWords(2), unit: "%", title: sampleWords(3), total: sampleWords(4) })),
   details: [3, 2, 3, 2].map((n, i) => ({ label: sampleWords(n), value: sampleWords(6 + i) })),
 };

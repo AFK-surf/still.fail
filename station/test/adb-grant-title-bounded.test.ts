@@ -10,7 +10,7 @@ test("a phone grant's known chat name does not read the session's other chats", 
   try {
     const known = store.openThread("ember", "EMBER", "own", "Own title", null);
     store.joinThread(known.id, "s", "ember");
-    const request: PhoneRequest = { id: "p", session: "s", chat: "EMBER/own", owner: "person@example.test", reason: "test", at: 0, status: "pending" };
+    const request: PhoneRequest = { id: "p", session: "s", chat: "CHAT/own", owner: "person@example.test", reason: "test", at: 0, status: "pending" };
     let calls = 0;
     const real = store.sessionChat.bind(store);
     store.sessionChat = (session) => { calls++; return real(session); };

@@ -33,7 +33,7 @@ const reports = (): J => ({
   feedback: [
     {
       id: "F2", number: 2, channel: "beta", station: { id: "s1", name: "studio" }, workspace: { id: "w1", name: "产品" }, account: null,
-      title: "发送后消息消失", body: "## 步骤\n1. 发一条", area: "web", reporter: "Ann (Slack)", context: { version: "0.1.1212", session: "ember:c-1", extra: { a: 1 } },
+      title: "发送后消息消失", body: "## 步骤\n1. 发一条", area: "web", reporter: "Ann (Slack)", context: { version: "0.1.1212", session: "chat:c-1", extra: { a: 1 } },
       logs: "line 1\nline 2", status: "new", created_at: NOW - 60, updated_at: NOW - 60,
     },
     {
@@ -158,7 +158,7 @@ test("a_bug_reports_page_has_all_of_it_in_text_too", () => {
   assert.ok(context.some(([k, v]: J) => k === "version" && v === "0.1.1212") && context.some(([k, v]: J) => k === "extra" && v === '{"a":1}'), JSON.stringify(context));
   const text: string = page.text;
   assert.ok(text.startsWith("FB-2 发送后消息消失\n"), text);
-  for (const part of ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: ember:c-1", "```\nline 1\nline 2\n```"]) assert.ok(text.includes(part), `${part} in ${text}`);
+  for (const part of ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: chat:c-1", "```\nline 1\nline 2\n```"]) assert.ok(text.includes(part), `${part} in ${text}`);
   page = feedback("F1", reports());
   assert.deepEqual([page.logs, page.context.length, page.account.title], [null, 0, "ann@x.io"]);
   assert.ok(!page.text.includes("## 日志"));

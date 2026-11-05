@@ -2817,7 +2817,7 @@ export class Store {
   /// alone, and the sessions the station archived that hear it (every session of the thread) or said it. What was
   /// archived by hand stays archived: it takes no messages (manuallyArchived).
   #bringBack(entry: EntryRow, changes: Changes): void {
-    if (entry.kind !== "message" || entry.authorKind === "ember") return;
+    if (entry.kind !== "message" || entry.authorKind === STATION_AUTHOR) return;
     const thread = this.getThread(entry.thread);
     if (thread === null || this.manuallyArchived(thread.id)) return;
     const archived: string[] = this.#all(

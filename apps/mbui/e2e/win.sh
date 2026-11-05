@@ -60,7 +60,7 @@ relay=$!
 # the cloud: fresh, its own ports
 # (its READY line read from its output as it comes, cloud.ready made then: Windows tells nothing of a log file growing
 # while the cloud holds it open, so not the log's change events; scripts/waitfor.mjs --tee)
-(cd "$EMBER/cloud" && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT \
+(cd "$CHAT/cloud" && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT \
   exec node "$(w "$ROOT/scripts/waitfor.mjs")" --tee "$(w "$OUT/cloud.log")" --mark "$(w "$OUT/cloud.ready")" \
     --line 'READY still.fail cloud' -- pnpm exec tsx test/dev.ts) &
 cloud=$!

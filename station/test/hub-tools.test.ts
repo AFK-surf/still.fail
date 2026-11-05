@@ -1002,10 +1002,10 @@ test("a message to another station's session goes through the station transport,
   const asked: [string, Json][] = [];
   r.hub.onPeer(async (station, request) => {
     asked.push([station, request]);
-    return { thread: "EMBER/2.000001" };
+    return { thread: "CHAT/2.000001" };
   });
   const sent = await r.call(keyA, "session_send", { to: "https://ember.test/o/ws/far/s%3A1", text: "ready?" });
-  assert.ok(sent.includes("station far") && sent.includes("EMBER/2.000001"), sent);
+  assert.ok(sent.includes("station far") && sent.includes("CHAT/2.000001"), sent);
   const [station, request] = asked.pop()!;
   assert.equal(station, "far");
   assert.deepEqual([request.method, request.to, request.session, request.text], ["session.message", "s:1", keyA, "ready?"]);
@@ -1034,7 +1034,7 @@ test("a chat on another station of the workspace is read there, by its link", as
   const asked: [string, Json][] = [];
   r.hub.onPeer(async (station, request) => {
     asked.push([station, request]);
-    return { text: "Conversation EMBER/2.000001; its agents: s:1.\nit works" };
+    return { text: "Conversation CHAT/2.000001; its agents: s:1.\nit works" };
   });
   // A still.fail link and a chat's page (as a reference is written) both name the station.
   for (const chat of ["https://ember.test/o/ws/far/s%3A1", "/w/ws/s/far/chats/s%3A1?history=s%3A1&entry=3"]) {
@@ -1558,8 +1558,8 @@ test("station_* reach the transport, pretty-printed; adb_devices and feedback_se
   const [key] = newSession(r.hub, web("local"));
   const sent: Json[] = [];
   const feedback = feedbackTools(r.store, () => "https://x/o/1", () => async (report) => (sent.push(report), { number: 7 }))[0]!;
-  assert.equal(await feedback.run(key, { to: "EMBER/1.1", title: "chat_post fails", body: "it said 500", area: "station", reporter: "Ada" }), "Sent to the still.fail team as FB-7.");
-  assert.deepEqual([sent[0].area, sent[0].context.session, sent[0].context.thread, sent[0].context.link], ["station", key, "EMBER/1.1", "https://x/o/1"]);
+  assert.equal(await feedback.run(key, { to: "CHAT/1.1", title: "chat_post fails", body: "it said 500", area: "station", reporter: "Ada" }), "Sent to the still.fail team as FB-7.");
+  assert.deepEqual([sent[0].area, sent[0].context.session, sent[0].context.thread, sent[0].context.link], ["station", key, "CHAT/1.1", "https://x/o/1"]);
   await assert.rejects(feedbackTools(r.store, () => null, () => null)[0]!.run(key, { title: "a", body: "b" }), /not connected to still.fail cloud/);
   await r.close();
 });
