@@ -167,8 +167,10 @@ fn lists_band_node(
         full.row(Is(true)).grow(Is(1.0)) |> ignore
         // (新建对话 the system's tab bar's own action where it has the places: rail_native.mbt)
         full.pick(@sf.native_on, fn(k, native) {
+          // (either way all of the line's room the filter and the keys leave: 新建对话's row, as the web's, is pressed
+          // across it)
+          k.grow(Is(1.0)) |> ignore
           if native {
-            k.grow(Is(1.0)) |> ignore
             native_glass_node(k, "side/workspaces", fn() { @ui.style(w=Full, h=Fixed(@sf.band_row_h())) }, fn() {
               workspace().map(fn(w) { native_workspace_item(src, w) })
             })
