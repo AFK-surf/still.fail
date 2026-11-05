@@ -154,6 +154,8 @@ pub fn keys(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn keys_dialog(@ui.Ctx, @sfbase.Source) -> Unit
 
+pub fn keys_node(@view.View, @view.View, @sfbase.Source, () -> @sfbase.Workspace?) -> Unit
+
 pub fn laid_beside(@sfbase.Page) -> Bool
 
 pub fn landing(@sfbase.Workspace) -> Bool
@@ -423,6 +425,8 @@ pub fn tip_keys(@sfbase.Source) -> (String) -> String
 pub fn toggle_jobs_pop() -> Unit
 
 pub fn transfers_key(@ui.Ctx, @sfbase.Source, String, Double, Double) -> Unit
+
+pub fn transfers_key_node(@view.View, @sfbase.Source, () -> String?, Double, Double) -> Unit
 
 pub fn transfers_key_shown(@sfbase.Source, String) -> Bool
 

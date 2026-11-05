@@ -555,6 +555,15 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         // what the signed-in shells do with a workspace in view as what they follow changes, held while one of them is
         // laid out, whichever (signed_in_node: none of it done again as another is picked)
         v.show(fn() { shell_is(src, v.window().0) is (Stacked | Taped | Paned) }, fn(n) { signed_in_node(n, src) })
+        // the app's keys and the Mac's menu bar's, in a signed-in shell (sfdesk's keys.mbt): held by what holds every
+        // shell's nodes and the state's, so what has the focus in any of them asks them on its way out (Tree::key_at)
+        @sfdesk.keys_node(v, root, src, fn() {
+          if shell_is(src, v.window().0) is (Stacked | Taped | Paned) {
+            workspace_in_view(src).0
+          } else {
+            None
+          }
+        })
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
           match shell {
