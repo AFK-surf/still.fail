@@ -708,7 +708,7 @@ pub struct Tree {
   /// what is told as that comes to be so or not
   drawn_marks : Array[(NodeId, Double, @signals.Signal[Bool])]
   /// what follows whether the logic is at or past a moment (View::logic_past): its node, the moment, and what is told
-  /// at that moment, on the timeline
+  /// at that moment, on the timeline; each while anything reads it
   logic_marks : Array[(NodeId, Double, @signals.Signal[Bool])]
   /// a column's bar said anew to come out or not (View::bar_near): which the pointer is along to be told anew
   mut bars_due : Bool
@@ -1536,23 +1536,37 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
 /// is due then (a moment's change of its own: Tree::advance), whatever frames are drawn and whatever moment they are
 /// drawn at. What is laid out or made as of a moment says so by this (a box kept as tall as it was till then), never by
 /// View::drawn_past, a look's: what that lays out comes at its moment, from where things stood then, not at the first
-/// frame drawn past it, after whatever was due between. The node's: one for each moment, let go with it.
+/// frame drawn past it, after whatever was due between. The node's: one for each moment, while anything reads it (one
+/// read no more, as what read it reads another moment or is let go, waited for no more: nothing due for it, Tree::wake);
+/// read by nothing that follows it, only what is so now.
 pub fn View::logic_past(self : View, t : Double) -> Bool {
   guard self.live() is Some(_) else { return false }
-  let id = self.id()
   let tree = self.tree
+  let past = tree.logic_at() >= t
+  if @signals.active_sub() is None {
+    return past
+  }
+  let id = self.id()
   let cell = match tree.logic_marks.iter().find_first(fn(m) { m.0 == id && m.1 == t }) {
     Some(m) => m.2
     None => {
-      // (those of nodes let go forgotten as another is said)
-      let keep = tree.logic_marks.filter(fn(m) { tree.alive_id(m.0) })
-      tree.logic_marks.clear()
-      tree.logic_marks.append(keep)
-      let c = @signals.signal(tree.logic >= t, same=fn(a, b) { a == b })
+      // (what is due for it called off, and it forgotten, as the last of what reads it stops: signal_held)
+      let stop : Ref[() -> Unit] = Ref(fn() {  })
+      let c = @signals.signal_held(
+        past,
+        fn() {
+          (stop.val)()
+          match tree.logic_marks.search_by(fn(m) { m.0 == id && m.1 == t }) {
+            Some(i) => tree.logic_marks.remove(i) |> ignore
+            None => ()
+          }
+        },
+        same=fn(a, b) { a == b },
+      )
       tree.logic_marks.push((id, t, c))
-      if tree.logic < t {
+      if !past {
         // (told at its moment as what is due then is: View::at_moment's, the node's)
-        @signals.untracked(fn() { self.at_moment(t, fn() { c.set(true) }) |> ignore })
+        stop.val = @signals.untracked(fn() { self.at_moment(t, fn() { c.set(true) }) })
       }
       c
     }
@@ -2002,15 +2016,26 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
 
 ///|
 /// `f` done as of `at`, the moment of the change being committed (Tree::at_cause). What was due by then is done first,
-/// each its own change; where any was and a flush is under way (this told by it, as an effect is), what that set going
-/// waits in its queue: `f` is done once all of it is told (signals' after_flush), finding things as it left them (a
-/// node let go by what was due: what its own structure follows done nothing). No flush is run inside another for it.
+/// each its own change, told whole (what it sets going run, its structures committed with it) and settled before the
+/// next is chosen (Tree::advance_loop). Told inside a flush (as an effect is) with anything due by then, none of that is
+/// done in it, where what it set going would wait in the flush's queue while it is laid out and placed: all of it, and
+/// `f` after it, once the flush is over (signals' after_flush), `f` finding things as what was due left them (a node let
+/// go by it: what its own structure follows done nothing). No flush is run inside another for it.
 fn Tree::at_cause_of(self : Tree, at : Double, f : () -> Bool) -> Unit {
-  if self.advance_logic(at) && @signals.flush_depth() > 0 {
+  if !self.advancing && @signals.flush_depth() > 0 && self.due_by(at) {
     @signals.after_flush(fn() { self.at_cause_now(at, f) })
     return
   }
   self.at_cause_now(at, f)
+}
+
+///|
+/// Whether anything on its timeline is due by `at` (what Tree::advance to it would do).
+fn Tree::due_by(self : Tree, at : Double) -> Bool {
+  self.timeline.iter().any(fn(d) {
+    let due = self.due_at(d)
+    due >= 0.0 && due <= at
+  })
 }
 
 ///|

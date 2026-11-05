@@ -15,8 +15,9 @@ pub struct ReactiveNode {
   priv mut subs_tail : Link?
   priv mut flags : Int
   priv kind : NodeKind
-  /// an effect's fn, a watch's own (NoOwn for a signal's, a computed's, a scope's and a trigger's: a signal's and a
-  /// computed's state is its Signal's and Computed's, and its update's)
+  /// an effect's fn, a watch's own, what a signal held only while read does as it is let go (NoOwn for any other
+  /// signal's, a computed's, a scope's and a trigger's: a signal's and a computed's state is its Signal's and Computed's,
+  /// and its update's)
   priv own : Own
   /// a signal's or a computed's update of its own (updateSignal, updateComputed), over its state
   priv update : ((ReactiveNode) -> Bool)?
@@ -45,6 +46,8 @@ priv enum Own {
   NoOwn
   EffectOwn(() -> (() -> Unit)?)
   WatchOwned(WatchOwn)
+  /// a signal's: done as the last of what reads it stops reading it (signal_held)
+  LetGo(() -> Unit)
 }
 
 ///|

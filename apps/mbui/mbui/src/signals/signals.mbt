@@ -172,8 +172,13 @@ fn unwatched(node : ReactiveNode) -> Unit {
         node.flags = MUTABLE | DIRTY
         dispose_all_deps_in_reverse(node)
       }
-    // (nothing for signals: always mutable, never dirty until their pending value changes)
-    SignalNode => ()
+    // (nothing for signals: always mutable, never dirty until their pending value changes; one held only while read let
+    // go: signal_held)
+    SignalNode =>
+      match node.own {
+        LetGo(f) => f()
+        _ => ()
+      }
     EffectNode => effect_oper(node)
     ScopeNode | TriggerNode | WatchNode => effect_scope_oper(node)
   }
@@ -280,6 +285,23 @@ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
     ReactiveNode::new(
       MUTABLE,
       SignalNode,
+      update=signal_update(state),
+    ),
+    state,
+  )
+}
+
+///|
+/// A signal holding `initial`, kept only while something reads it: `let_go` done each time the last of what reads it
+/// stops reading it (a watch reading it no more as it reads anew, or stopped; what alien-signals tells its unwatched of):
+/// for one that holds something of its own while it is read (a moment waited for, View::logic_past).
+pub fn[T] signal_held(initial : T, let_go : () -> Unit, same? : (T, T) -> Bool) -> Signal[T] {
+  let state : SignalState[T] = { current: initial, pending: initial, same }
+  Signal(
+    ReactiveNode::new(
+      MUTABLE,
+      SignalNode,
+      own=LetGo(let_go),
       update=signal_update(state),
     ),
     state,

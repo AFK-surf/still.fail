@@ -135,3 +135,54 @@ test "what is made as of a moment on the timeline (View::logic_past) is of that 
     assert_eq(told_at, [100.0], msg="frames between: \{frames}")
   }
 }
+
+///|
+test "a moment on the timeline read no more (View::logic_past) is waited for no more: the tree wakes for the one read now, none for one read before" {
+  let till = @signals.signal(1000.0, same=fn(a, b) { a == b })
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(300.0))).height(By(fn() { Some(if col.logic_past(till.get()) { 100.0 } else { 200.0 }) }))
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  let first = tree.wake_waited()
+  // (held till 500 instead: what was due at 1000 for it called off with it)
+  till.set(500.0)
+  tree.frame(390.0, 844.0, now=10.0) |> ignore
+  let then = tree.wake_waited()
+  tree.frame(390.0, 844.0, now=600.0) |> ignore
+  assert_eq((first, then, tree.wake_waited()), (Some(1000.0), Some(500.0), None))
+}
+
+///|
+test "what was due before a structure told inside a flush is done once the flush is over, each told whole: what it sets going finds things where they stood before it, not laid out with it already" {
+  let tall = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let seen : Array[Double] = []
+  let box : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(300.0))).height(Is(Some(600.0))) |> ignore
+      // (a structure told in the flush that moving the drawn clock sets going, as a frame's host moves it first)
+      col.reacts(fn() { col.drawn_past(150.0) }, fn(_) {  })
+      // (due before that frame: a change of its own, at its moment)
+      col.at_moment(100.0, fn() { tall.set(200.0) }) |> ignore
+      col.box(fn(b) {
+        box.val = Some(b)
+        b.height(By(fn() { Some(tall.get()) })) |> ignore
+        // (where it stands as a change comes laid out and placed then: what moves for a cause moves from there)
+        b.laid_before_causes()
+        b.reacts(fn() { tall.get() }, fn(_) { seen.push(b.rect().3) })
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  let laid = seen.copy()
+  tree.at(200.0)
+  tree.frame(390.0, 844.0, now=200.0) |> ignore
+  // (told of the change at 100 as tall as it stood before it, then laid out as it is)
+  assert_eq((seen.length(), seen.last(), box.val.map(fn(b) { b.rect().3 })), (laid.length() + 1, Some(100.0), Some(200.0)))
+}

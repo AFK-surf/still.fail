@@ -162,3 +162,36 @@ test "page list queries and scroll_to address the shown page while an earlier pa
   assert_eq(tree.list_rows(), Some((2, 4)))
   assert_eq(tree.list_at_end(), Some(false))
 }
+
+///|
+test "scrolls_window: its keys changed while it is laid out nowhere (a page under another): as it shows again, laid out as they are then" {
+  let away = @signals.signal(false, same=fn(a, b) { a == b })
+  let keys = @signals.signal(Array::makei(5, fn(i) { i }), same=fn(a, b) { a == b })
+  let live : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page.width(Is(Some(300.0))).height(Is(Some(100.0))).laid_nowhere(By(fn() { away.get() })) |> ignore
+      page.scrolls_window(@view.Scroll::list(), fn() { keys.get() }, est=40.0, fn(row, k) {
+        live[k] = row
+        row.owns(fn() { live.remove(k) }) |> ignore
+        row.height(Is(Some(40.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(300.0, 100.0) |> ignore
+  let before = live.keys().collect()
+  before.sort()
+  away.set(true)
+  tree.frame(300.0, 100.0) |> ignore
+  // (one more after the first, while another page covers it)
+  keys.set([0, 9, 1, 2, 3, 4])
+  tree.frame(300.0, 100.0) |> ignore
+  away.set(false)
+  tree.frame(300.0, 100.0) |> ignore
+  let shown = live.keys().collect()
+  shown.sort()
+  let tops = [0, 9, 1].map(fn(k) { live.get(k).map(fn(r) { r.rect().1 }) })
+  assert_eq((before, shown, tops), ([0, 1, 2], [0, 1, 9], [Some(0.0), Some(40.0), Some(80.0)]))
+}

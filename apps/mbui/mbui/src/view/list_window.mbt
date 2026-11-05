@@ -512,16 +512,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (where the column was as it was last laid out, and whether it was moved from there since by anything but its list)
   let left_at = Ref(@double.neg_infinity)
   let moved = Ref(true)
+  // (what it read changed since it was last laid out, or it was never laid out: laid out again with all else as a frame
+  // lays it out)
+  let told = Ref(true)
   // the blocks laid out, once all else is: what shows made and laid out, as many as fill it, those no more in sight let
   // go, each put where those over it end
   let lay_now = fn(place : Bool) -> Bool {
-    guard holder.val is Some(h) && h.live() is Some(hn) && self.live() is Some(sn) && sn.placed else { return false }
-    let w = hn.flex.width
-    let vh = sn.flex.height
-    // (laid out as wide as nothing: nothing of it can be laid out, its blocks as they were)
-    if w <= 0.0 {
+    // (laid out nowhere, or as wide as nothing: nothing of it can be laid out, its blocks as they were, and it is laid
+    // out as it next can be, whatever changed meanwhile, its keys read then)
+    guard holder.val is Some(h) && h.live() is Some(hn) && self.live() is Some(sn) && sn.placed && hn.flex.width > 0.0 else {
+      told.val = true
       return false
     }
+    let w = hn.flex.width
+    let vh = sn.flex.height
     let all = keys()
     let grid = tree.rows_grid_said.get()
     let words = tree.words_redone.get()
@@ -788,7 +792,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     placed
   }
   // (what it read followed: as any of it changes, laid out again with all else as a frame lays it out)
-  let told = Ref(true)
   let watch = @signals.watch(fn() {
     told.val = true
     tree.lists_due = true
