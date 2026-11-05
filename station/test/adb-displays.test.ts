@@ -162,7 +162,9 @@ esac
     const said = readFileSync(calls, "utf8");
     const scrcpy = said.split("\n").find((l) => l.includes("app_process"))!;
     assert.match(scrcpy, /^-P 41000 -s 127\.0\.0\.1:37001 shell STILLFAIL_ADB_KEEP=1 STILLFAIL_ADB_DISPLAY=1 CLASSPATH=\/data\/local\/tmp\/stillfail-display-5\.0\.1\.jar /);
-    assert.match(scrcpy, / new_display=1080x2400\/420 display_ime_policy=local/);
+    // (its keyboard hidden, not taken over from the person's screen: display_ime_policy=local held it there)
+    assert.match(scrcpy, / new_display=1080x2400\/420 display_ime_policy=hide/);
+    assert.doesNotMatch(scrcpy, /display_ime_policy=(local|fallback)/);
     assert.match(scrcpy, / control=false .* max_size=320 max_fps=1 /);
     // Used a while ago: kept; past the idle time: closed, and the phone told.
     displays.idle();
