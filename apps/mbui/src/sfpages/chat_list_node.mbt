@@ -303,7 +303,42 @@ pub fn chat_list_node(
     rows_now.get().lead() |> ignore
     (sized.item_of)(k)
   }
-  // (the rows made now, by their keys: where each is)
+  // The chat, rather than a row made by layout, owns its image requests and their answers. Keep one data watch per
+  // sighted row; a row only passed on the way is asked too, then its watch is let go.
+  let pictures = ChatPictures::new(v, src)
+  v.lends(chat_pictures_lent, pictures) |> ignore
+  let picture_rows : Map[String, @signals.Watch] = {}
+  let picture_changes : Map[String, Bool] = {}
+  let picture_changed = @signals.signal(0)
+  let picture_width = Ref(0.0)
+  let request_picture_row = fn(k : String) {
+    guard picture_rows.get(k) is Some(watch) else { return }
+    let entry = watch.read(fn() { row_of(k).map(fn(row) { row.0 }) })
+    guard @signals.untracked(view) is Some(cv) else { return }
+    let width = picture_width.val
+    let here = here_of(r, cv, rk, @sfbase.turns_of(rk), em, None, core,
+      inline=width <= chat_narrow_w, gutter=row_side_in(width))
+    match entry {
+      Some(Said(s)) => {
+        let m = s.message()
+        pictures.want_files(here, m.attachments, m.quotes, m.mine, width)
+      }
+      Some(Out(o)) => pictures.want_files(here, o.attachments, o.quotes, true, width)
+      _ => ()
+    }
+  }
+  v.owns(fn() {
+    for watch in picture_rows.values() { watch.stop() }
+    picture_rows.clear()
+  }) |> ignore
+  // A visible message can gain a file without its row moving. Respond to that data change after the frame is drawn,
+  // without following the layout result in a binding.
+  @ui.read_drawn(v, fn() { picture_changed.get() }, fn(_) {
+    let changed = picture_changes.keys().to_array()
+    picture_changes.clear()
+    for k in changed { request_picture_row(k) }
+  })
+  // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
   // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
   // become an input to another layout. Non-layout changes can still report the last drawn place.
@@ -383,6 +418,23 @@ pub fn chat_list_node(
       sighted=fn(s) {
         last_sighted.val = Some(s)
         read_sighted(s)
+        picture_width.val = s.width
+        for k in s.came {
+          if !picture_rows.contains(k) {
+            picture_rows[k] = @signals.watch(fn() {
+              picture_changes[k] = true
+              picture_changed.set(@signals.untracked(fn() { picture_changed.get() }) + 1)
+            })
+          }
+          request_picture_row(k)
+        }
+        for k in s.left {
+          match picture_rows.get(k) {
+            Some(watch) => { watch.stop(); picture_rows.remove(k) }
+            None => ()
+          }
+          picture_changes.remove(k)
+        }
       },
       rooms=sized.room_now,
       // The flying copy needs its real landing before the glide brings the row into sight.

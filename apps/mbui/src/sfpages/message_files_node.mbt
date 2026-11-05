@@ -98,7 +98,14 @@ fn media_file_node(
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }
   let owner = fn() { owner_of(here(), a()) }
-  let picture = fn() { message_media(@ui.current(), src, here().station, owner(), a()) }
+  // In a chat list the row only reads the picture held by the chat. The list's sighted keys, not row construction,
+  // ask for it; a row made just to measure its height must not start a download.
+  let picture = fn() {
+    match item.lent(chat_pictures_lent) {
+      Some(pictures) => pictures.read(here(), a())
+      None => message_media(@ui.current(), src, here().station, owner(), a())
+    }
+  }
   let fit = fn() -> @ui.Fit {
     if kind == "video" {
       if letterbox() { FitContain } else { FitCover }
