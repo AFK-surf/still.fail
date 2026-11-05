@@ -19,6 +19,13 @@ pub fn pointed_or_finger(c : @ui.Ctx, pointed : Bool) -> Bool {
 }
 
 ///|
+/// Whether what shows only under the hand shows on node `v` (pointed_or_finger's, made once): while it is pointed at
+/// (lit_in_node), and always to a finger, which hovers over nothing.
+pub fn pointed_or_finger_node(v : @view.View) -> Bool {
+  lit_in_node(v) || @ui.pointing() is Finger
+}
+
+///|
 /// Whether what a row's ⋯ would offer is had by holding the row, its ⋯ not drawn (touch's: the native input,
 /// docs/architecture.md, what only a pointer's hover would show), else by its ⋯ under the pointer or a right click.
 /// The same for either hand on one screen: the boxes never follow the hand (hand_layout_wbtest).

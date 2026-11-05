@@ -547,7 +547,7 @@ pub fn open_mode(mode : String) -> Unit {
   } else if mode == "place" {
     app.nav.replace(Files)
   } else if mode == "archived" {
-    // 已归档: on the wide frame the sidebar's list of them, the newest beside it (lists.mbt archive_pane); laid out
+    // 已归档: on the wide frame the sidebar's list of them, the newest beside it (archive_side_node.mbt archive_pane_node); laid out
     // Small its page
     app.nav.push(Archived)
   } else if mode.has_prefix("place-") {

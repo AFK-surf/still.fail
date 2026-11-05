@@ -230,37 +230,6 @@ pub fn new_chat() -> Unit {
 }
 
 ///|
-/// Room in a list, `h` high (for the band over it, at its foot).
-fn side_space(c : @ui.Ctx, h : Double) -> Unit {
-  c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
-}
-
-///|
-/// What a list says in place of its rows (Sidebar.css.ts navEmpty): muted, or in red what went wrong; with
-/// `stations`, where to add a station, its link going there.
-fn side_said(c : @ui.Ctx, words : String, bad : Bool, stations? : (() -> Unit)? = None) -> Unit {
-  let t = @sf.theme()
-  c.box(style=side_said_box, fn() {
-    match stations {
-      Some(go) =>
-        c.rich(
-          [
-            @ui.span(@sf.t("web-main.sidebar.noStation.before")),
-            @ui.span(@sf.t("web-main.sidebar.noStation.link"), link="stations"),
-            @ui.span(@sf.t("web-main.sidebar.noStation.after")),
-          ],
-          style=side_words,
-          link_color=t.p.blue,
-          on_link=fn(_) { go() },
-        )
-        |> ignore
-      None => c.text(words, style=if bad { side_words_bad } else { side_words }) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// What a list says in place of its rows (Sidebar.css.ts navEmpty: 16 by 10 in, 13 on 20, muted; navError red).
 // kept across runs: a value (no field of it changes)
 let side_said_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S4")
