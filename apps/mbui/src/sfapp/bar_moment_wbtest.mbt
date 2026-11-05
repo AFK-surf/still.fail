@@ -173,7 +173,7 @@ fn ride_then_sent(ahead : Bool) -> (Double, Double, Double) {
   s.ride_on(300.0, fn(_t) { 100.0 }, at0, from, at=at0)
   let end = s.end()
   if ahead {
-    s.sample(end + 5.0)
+    s.at(end + 5.0) |> ignore
   }
   let then = s.value_at(end - 5.0)
   s.go(50.0, 300.0, ball_damping(300.0), at=end - 5.0)
