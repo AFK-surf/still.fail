@@ -1,7 +1,6 @@
 // The core in a browser's worker (web/src/core/worker.ts): the Host over the worker's own fetch, WebSocket, IndexedDB,
 // SQLite, crypto and clocks. The device's small values (logins, the device key, preferences) stay where the Rust core's
-// wasm host kept them — IndexedDB `stillfail-core`, its `values` by key (what `ember-core` had copied over on the first
-// open) — so a browser moving from the Rust core keeps its logins. Each signed-in account's database is SQLite's
+// wasm host kept them — IndexedDB `stillfail-core`, its `values` by key — so a browser moving from the Rust core keeps its logins. Each signed-in account's database is SQLite's
 // official WASM build on OPFS (its `opfs-sahpool` VFS: synchronous access handles, which only one worker holds at a
 // time — the tab whose worker holds them runs the core, worker.ts); what the former IndexedDB `records` kept is read
 // once into them (db/import.ts) and left there. Its iroh is client/iroh-wasm (relay only), loaded while the core
@@ -23,8 +22,6 @@ import { pictureRelay, relayedPicture } from "../picture-relay.ts";
 export { checkShared } from "../util.ts";
 
 const DATABASE = "stillfail-core";
-/// Its name before the rename: what a browser that ran the core then has, copied over on the first open.
-const FORMER_DATABASE = "ember-core";
 const VERSION = 2;
 const STORE = "values";
 const RECORDS = "records";
@@ -176,28 +173,10 @@ function openAt(name: string, version: number | undefined, rows: Rows, create: b
   });
 }
 
-/// What the database had under its name from before the rename, if this browser has it (left as it was).
-async function formerRows(): Promise<Rows> {
-  const db = await openAt(FORMER_DATABASE, undefined, [], false);
-  if (!db) return [];
-  const rows: Rows = [];
-  for (const store of [STORE, RECORDS]) {
-    if (!db.objectStoreNames.contains(store)) continue;
-    const os = db.transaction(store).objectStore(store);
-    const keys = await done(os.getAllKeys());
-    const values = await done(os.getAll());
-    rows.push([store, keys.map((k, i) => [k, values[i]] as [IDBValidKey, unknown])]);
-  }
-  db.close();
-  return rows;
-}
-
 async function openDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === "undefined") throw HostError.said(t("core-misc.host.idb.missing"));
-  // The first open under the new name fills it with what the former one has (read first: the upgrade that makes the
-  // stores puts the rows in the same transaction, so no other tab sees it made and empty).
   let db = await openAt(DATABASE, VERSION, [], false);
-  if (!db) db = await openAt(DATABASE, VERSION, await formerRows(), true);
+  if (!db) db = await openAt(DATABASE, VERSION, [], true);
   if (!db) throw HostError.said(t("core-misc.host.idb.unopened"));
   // Another tab upgrading the schema later must not be blocked by us.
   const opened = db;

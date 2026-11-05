@@ -1,5 +1,5 @@
 // Members' connections over the mesh (the Rust station's main.rs `serve`, `relay_request`). Wire format, on ALPN
-// `stillfail/admin/1` (and `ember/admin/1`, as clients from before the rename ask): the first bidirectional stream
+// `stillfail/admin/1`: the first bidirectional stream
 // carries credentials, one JSON line each, answered with one JSON line (a later line renews); every other stream is
 // one request: a JSON head line `{method, path, headers}`, then the body until the stream finishes, answered by a
 // JSON head line `{status, headers}` and the response body.
@@ -24,7 +24,6 @@ import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } fro
 import { isModulePath } from "../modules/modules.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
-export const FORMER_ALPN = Buffer.from("ember/admin/1");
 // Keep old clients admitted until protocol-2 clients have reached the stable channel.
 const MIN_CLIENT_PROTOCOL = 1;
 const MAX_HEAD = 16 * 1024;
@@ -486,7 +485,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(head.headers ?? {})) {
     const lower = name.toLowerCase();
-    if (HOP.includes(lower) || lower.startsWith("x-stillfail-") || lower.startsWith("x-ember-") || lower === "traceparent" || lower === "tracestate") continue;
+    if (HOP.includes(lower) || lower.startsWith("x-stillfail-") || lower === "traceparent" || lower === "tracestate") continue;
     if (typeof value === "string") headers[name] = value;
   }
   if (!m.up()) return answer(502, { error: "station unreachable: not started" });

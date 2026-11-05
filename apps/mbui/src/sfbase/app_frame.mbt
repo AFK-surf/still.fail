@@ -225,11 +225,11 @@ fn init {
 
 ///|
 /// A link the system opened the app with, as the core reads it (`link.parse`): one of still.fail's desktop app's own
-/// (stillfail://, ember://, stillfail-beta://: …//o/<workspace>/<station>/<chat>, as the web's /o/ page hands an item
+/// (stillfail://, stillfail-beta://: …//o/<workspace>/<station>/<chat>, as the web's /o/ page hands an item
 /// to that app, which this one takes as it is built in its place: scripts/mac-app.sh) as the same page's on the
 /// cloud; any other as it is.
 pub fn app_link(url : String) -> String {
-  for scheme in ["stillfail://", "ember://", "stillfail-beta://"] {
+  for scheme in ["stillfail://", "stillfail-beta://"] {
     if url.has_prefix(scheme) {
       return "\{cloud_origin()}/\{url.view(start_offset=scheme.length())}"
     }

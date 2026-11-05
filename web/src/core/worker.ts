@@ -126,7 +126,7 @@ function guard(run: () => void): void {
  * they are; an older one retires, and its pages reload onto this build.
  */
 // The channel keeps its name from before the rename: a worker of a build from before it must hear of this one and retire.
-const builds = new BroadcastChannel("ember-core-builds");
+const builds = new BroadcastChannel("stillfail-core-builds");
 builds.onmessage = (event: MessageEvent) => {
   const other = (event.data as { built?: unknown } | null)?.built;
   if (typeof other !== "number" || other === BUILT_AT) return;

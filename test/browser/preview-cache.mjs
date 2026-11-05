@@ -50,7 +50,7 @@ const parent = await listen(async (req, res) => {
       }});
       e.source.postMessage({type:'ember-preview-port',streams:true}, e.origin, [c.port2]);
     });
-  </script><iframe src="${origin(previewHost)}/_ember/frame?n=cache-test&path=%2F"></iframe>`);
+  </script><iframe src="${origin(previewHost)}/_stillfail/frame?n=cache-test&path=%2F"></iframe>`);
 });
 let browser;
 try {

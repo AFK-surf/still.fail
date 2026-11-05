@@ -77,15 +77,14 @@ const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerC
  * The access token of an events socket, and the subprotocol the answer
  * selects. Browsers cannot set headers on a WebSocket, so it comes as a second
  * subprotocol, `stillfail-token.<token>`, next to `stillfail-events` (the one
- * the answer selects); clients from before the rename say `ember-token.` and
- * `ember-events`. A header, unlike a query string, stays out of URLs and so
+ * the answer selects). A header, unlike a query string, stays out of URLs and so
  * out of request logs.
  */
 export function socketToken(request: Request): { token: string; protocol: string } | null {
   const offered = (request.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim());
   const protocol = EVENTS_PROTOCOLS.find((p) => offered.includes(p));
   if (!protocol) return null;
-  const match = offered.map((p) => /^(?:stillfail|ember)-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
+  const match = offered.map((p) => /^stillfail-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
   return match?.[1] ? { token: match[1], protocol } : null;
 }
 
@@ -101,7 +100,7 @@ const MARK_BODY = ICON_URL_CHARS + 8192;
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
   const path = url.pathname;
   const method = request.method;
-  if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
+  if (path === "/.well-known/stillfail-grant-keys" && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
 
   // ── the relays on machines of their own: their counters, a minute apart (relay-load.ts) ──
   if (path === "/v1/relays/load" && method === "POST") return receiveLoad(request, env);
@@ -129,8 +128,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // headers: x-stillfail-station (its key), x-stillfail-ts (unix seconds,
   // within 5 minutes), x-stillfail-signature over
   // "stillfail-station-connect-v1:<origin>:<station>:<ts>", and
-  // x-stillfail-version. (Stations from before the rename: x-ember-* and
-  // "ember-station-connect-v1:…"; the origin is any of the cloud's.)
+  // x-stillfail-version. (The origin is any of the cloud's.)
   if (path === "/v1/stations/connect" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
     const station = header(request, "station");

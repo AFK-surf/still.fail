@@ -25,10 +25,9 @@ export type ProviderSpec = {
   readonly connectPath: string;
   /// The connect proof's prefixes: each signs under its own tag in its own x-<prefix>-* headers.
   readonly connectPrefixes: readonly string[];
-  /// Notices posted signed, under this tag; also in the former headers when `notifyFormer`.
+  /// Notices posted signed, under this tag.
   readonly notifyPath: string;
   readonly notifyTag: string;
-  readonly notifyFormer: boolean;
   /// Traces (OTLP JSON, `path`) and the station's log (OTLP JSON, `logs`), signed under each prefix's tag; none: the
   /// provider takes none.
   readonly telemetry: { readonly path: string; readonly logs: string | null; readonly prefixes: readonly string[] } | null;
@@ -50,16 +49,15 @@ export const STILLFAIL: ProviderSpec = {
   provider: "stillfail",
   name: "still.fail cloud",
   enrollPath: "/v1/stations/enroll",
-  enrollPrefixes: ["stillfail", "ember"],
+  enrollPrefixes: ["stillfail"],
   joinPath: "/v1/stations/join",
   connectPath: "/v1/stations/connect",
-  connectPrefixes: ["stillfail", "ember"],
+  connectPrefixes: ["stillfail"],
   notifyPath: "/v1/stations/notify",
-  notifyTag: "ember-station-notify-v1",
-  notifyFormer: true,
-  telemetry: { path: "/v1/telemetry/traces", logs: "/v1/telemetry/logs", prefixes: ["stillfail", "ember"] },
+  notifyTag: "stillfail-station-notify-v1",
+  telemetry: { path: "/v1/telemetry/traces", logs: "/v1/telemetry/logs", prefixes: ["stillfail"] },
   releaseBase: (origin) => origin,
-  credential: { issuers: ["stillfail-cloud", "ember-cloud"], types: ["stillfail-member+jwt", "ember-member+jwt"] },
+  credential: { issuers: ["stillfail-cloud"], types: ["stillfail-member+jwt"] },
   feedback: true,
   pages: true,
   tools: false,
@@ -76,7 +74,6 @@ export const COMMA: ProviderSpec = {
   connectPrefixes: ["comma"],
   notifyPath: "/v1/comma/stations/notify",
   notifyTag: "comma-station-notify-v1",
-  notifyFormer: false,
   // Comma takes no station traces yet (its tag, comma-station-telemetry-v1, is reserved).
   telemetry: null,
   releaseBase: (origin) => `${origin}/stations`,

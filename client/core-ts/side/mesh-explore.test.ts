@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, cost, EXPLORE_MS, FORMER_ALPN, Mesh, MeshWire, MOVE_GAIN, type CredentialSource } from "../src/mesh.ts";
+import { ALPN, cost, EXPLORE_MS, Mesh, MeshWire, MOVE_GAIN, type CredentialSource } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -55,7 +55,7 @@ async function explore(seed: number): Promise<void> {
     // The relays, the station at home on one and held on the others, the device on some.
     const relays = Array.from({ length: rng.int(1, 3) }, (_, i) => net.relay(`https://r${i}.relay.test/`, { device: leg(rng, false), station: leg(rng, true) }));
     const home = relays[rng.int(0, relays.length - 1)]!;
-    const station = await time.settle(Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world));
+    const station = await time.settle(Station.bound({ alpns: [Buffer.from(ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world));
     await time.settle(station.endpoint.online());
     station.endpoint.keep(relays.filter((r) => r !== home));
     station.idempotent = rng.next() < 0.5;

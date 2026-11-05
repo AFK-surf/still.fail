@@ -24,7 +24,6 @@ import { OTHER, SHA_A, SHA_B, feedOf, trusted } from "./release-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
-delete process.env.EMBER_CONFIG;
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "stillfail-updates-")));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -88,7 +87,7 @@ set -eu
 run="$STILLFAIL_DATA/run"
 printf 'download\\n' > "$run/update.step"
 echo "### 50.0%"
-printf '%s %s %s\\n' "$STILLFAIL_CHANNEL" "$EMBER_DATA" "$STILLFAIL_DATA" > "$STILLFAIL_DATA/installer-saw"
+printf '%s %s\\n' "$STILLFAIL_CHANNEL" "$STILLFAIL_DATA" > "$STILLFAIL_DATA/installer-saw"
 printf '%s %s %s %s\\n' "$STILLFAIL_ORIGIN" "$STILLFAIL_RELEASE_SHA256" "$STILLFAIL_NODE_SHA256" "$STILLFAIL_INSTALL_LANG" >> "$STILLFAIL_DATA/installer-saw"
 echo ran >> "$STILLFAIL_DATA/installer-ran"
 curl -fsS "${origin}/download" > /dev/null
@@ -444,7 +443,7 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(station(updates).done, "已更新到 0.1.1310，agent 未中断");
     // Never the cloud's installer.
     assert.ok(!asked.some((a) => a.startsWith("/install")), asked.join());
-    assert.equal(readFileSync(join(dir, "installer-saw"), "utf8").trim(), `stable ${dir} ${dir}\n${origin} ${SHA_A} ${SHA_B} zh`);
+    assert.equal(readFileSync(join(dir, "installer-saw"), "utf8").trim(), `stable ${dir}\n${origin} ${SHA_A} ${SHA_B} zh`);
     assert.ok(!existsSync(join(dir, "run", "update.started")));
     assert.equal(readFileSync(join(dir, "run", "update.exit"), "utf8").trim(), "0");
   });

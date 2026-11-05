@@ -11,6 +11,7 @@ import { dims, useTouch, ViewportSheet, type Zoom } from "./ViewportSize.tsx";
 import * as css from "./PreviewStage.css.ts";
 import { t } from "./i18n.ts";
 import { play } from "@stillfail/ui/motion.ts";
+import { fromPreview } from "./previewBridge.ts";
 
 /** The page's box in the stage: its top-left, how much it is drawn at, and the size it is laid out at. */
 export interface Placed { x: number; y: number; scale: number; width: number; height: number }
@@ -204,9 +205,9 @@ export function PreviewStage({ stage, link, over, children, after }:
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== origin || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
       // A page just loaded (or moved): it is told again.
-      if (event.data?.type === "ember-preview-at") { heard.current = true; tell(); return; }
+      if (fromPreview(event.data, "at")) { heard.current = true; tell(); return; }
       const p = now.current;
-      if (event.data?.type !== "ember-preview-gesture" || !canvas || !p) return;
+      if (!fromPreview(event.data, "gesture") || !canvas || !p) return;
       if (event.data.kind === "space") { setSpace(event.data.down === true); return; }
       const onStage = (at: { x: number; y: number }) => ({ x: p.x + at.x * p.scale, y: p.y + at.y * p.scale });
       if (event.data.kind === "wheel") {

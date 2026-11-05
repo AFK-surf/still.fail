@@ -87,6 +87,25 @@ export function readLock(data: string, ws: string | null = null): { entries: Ent
   }
 }
 
+/// still.fail cloud's host before the rename, and its host now: a station enrolled then has the old one in cloud.json
+/// (its origin, its relays), moved to the new one when the station starts. The cloud answers both until the old goes.
+const FORMER_HOST = "https://ember.3720.org";
+const HOST = "https://app.still.fail";
+
+/// cloud.json with the old host (FORMER_HOST) in it, written with the new one; anything else left as it is.
+export function moveFormerHost(data: string) {
+  if (!existsSync(statePath(data))) return;
+  const text = readFileSync(statePath(data), "utf8");
+  if (!text.includes(FORMER_HOST)) return;
+  const raw = JSON.parse(text);
+  const moved = (url: unknown) => (typeof url === "string" && (url === FORMER_HOST || url.startsWith(`${FORMER_HOST}/`)) ? HOST + url.slice(FORMER_HOST.length) : url);
+  raw.origin = moved(raw.origin);
+  if (raw.relay_url !== undefined) raw.relay_url = moved(raw.relay_url);
+  if (Array.isArray(raw.relay_urls)) raw.relay_urls = raw.relay_urls.map(moved);
+  writePrivate(statePath(data), JSON.stringify(raw, null, 2));
+  log.info("cloud", "moved to still.fail cloud's host", { from: FORMER_HOST, to: HOST });
+}
+
 /// The state as the file has it, its optional parts filled as the Rust station's serde defaults fill them.
 export function readState(data: string): CloudState | null {
   if (!existsSync(statePath(data))) return null;
@@ -168,6 +187,11 @@ export class Cloud {
   /// macOS takes a good while to end each watch).
   constructor(data: string, watchFiles = true) {
     this.data = data;
+    try {
+      moveFormerHost(data);
+    } catch (error) {
+      log.warn("cloud", "could not move cloud.json to still.fail cloud's host", { error: String(error) });
+    }
     this.state = readState(data);
     setStationCloud(this.state?.origin);
     this.peersCurrent = this.state !== null && !this.removed();

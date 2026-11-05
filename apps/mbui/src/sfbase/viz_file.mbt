@@ -167,7 +167,7 @@ pub fn viz_csp(sheets? : Array[String] = []) -> String {
 ///|
 /// What the bridge says to its page (it posts to its parent, which in a view of its own is itself), handed to the
 /// app: its height, what it keeps, a failure, words to send (Viz.kt RELAY, to mbuiHost in StillFailViz's place).
-pub let viz_relay : String = "addEventListener(\"message\",function(e){if(e.source===window&&e.data&&e.data.emberViz&&e.data.type!==\"theme\"){try{mbuiHost.post(JSON.stringify(e.data))}catch(_){}}});"
+pub let viz_relay : String = "addEventListener(\"message\",function(e){if(e.source===window&&e.data&&e.data.vizMessage&&e.data.type!==\"theme\"){try{mbuiHost.post(JSON.stringify(e.data))}catch(_){}}});"
 
 ///|
 /// What shows under a page that draws nothing there (the message's ground, as the Android app's WebView, which is
@@ -244,7 +244,7 @@ pub fn viz_document(
   "</style>" +
   (if scroll { "<style>html{overflow:auto}</style>" } else { "" }) +
   viz_ground_style(ground) +
-  "<script type=\"application/json\" id=\"ember-viz-state\">" +
+  "<script type=\"application/json\" id=\"viz-state\">" +
   kept +
   "</script>" +
   "<script type=\"application/json\" id=\"viz-icons\">" +
