@@ -35,6 +35,22 @@ export const UP_JOBS_OF_SESSION = `SELECT id FROM (
 ) ORDER BY started_at DESC`;
 export const OTHER_JOBS_AT_INSTALL = "SELECT session_key, id FROM jobs INDEXED BY jobs_state WHERE state = 'running' AND watch = 0";
 
+/// The remote queue's running and waiting jobs. Both lookups seek the remote id prefix, including watched tasks;
+/// rowid preserves the former running-jobs query's order when several jobs have the same start time.
+export const REMOTE_QUEUE_JOBS = `SELECT * FROM (
+  SELECT j.*, j.rowid AS queue_rowid FROM active_watch_jobs w
+    CROSS JOIN jobs j ON j.id = w.job WHERE w.job >= 'remote_' AND w.job < 'remote\`'
+  UNION ALL
+  SELECT j.*, j.rowid AS queue_rowid FROM active_other_jobs a INDEXED BY active_other_remote_jobs
+    CROSS JOIN jobs j ON j.id = a.job WHERE a.job >= 'remote_' AND a.job < 'remote\`'
+) ORDER BY started_at DESC, queue_rowid`;
+
+/// Only the active ordinary jobs are scanned once on upgrade; subsequent writes to local jobs do not touch the index.
+export function installRemoteQueueIndex(db: DatabaseSync): void {
+  db.exec(`CREATE INDEX IF NOT EXISTS active_other_remote_jobs ON active_other_jobs (job)
+    WHERE job >= 'remote_' AND job < 'remote\`'`);
+}
+
 /// Install the lookup and its writers atomically. Only currently running jobs are read on upgrade.
 export function installOtherActiveJobs(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'active_other_jobs'").get() !== undefined;
