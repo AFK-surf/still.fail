@@ -106,6 +106,41 @@ test("a failed batch rolls its entries and cursor back together", () => {
   } finally { db.close(); }
 });
 
+test("the lookup agrees with the original latest-turn rule across changing sessions and turns", () => {
+  for (const seed of [1, 9, 73]) {
+    const { db, session, query } = fixture();
+    try {
+      installRecoverWaits(db);
+      for (let i = 0; i < 12; i++) session(`s${i}`, i);
+      let state = seed;
+      const random = (n: number) => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return Math.floor(state / 0x100000000 * n); };
+      const put = db.prepare("INSERT OR REPLACE INTO turns VALUES (?,?,?,?,?,?,?,NULL)");
+      const change = db.prepare("UPDATE turns SET session_key=?,started_at=?,ended_at=?,outcome=?,detail=?,declared=? WHERE id=?");
+      const latest = db.prepare("SELECT ended_at,outcome,detail,declared FROM turns WHERE session_key=? ORDER BY started_at DESC,rowid DESC LIMIT 1");
+      const expected = () => (db.prepare("SELECT key,running,archived_at FROM sessions ORDER BY last_active_at DESC,rowid DESC").all() as {key:string;running:number;archived_at:number|null}[])
+        .filter((s) => {
+          if (s.running || s.archived_at !== null) return false;
+          const last = latest.get(s.key) as {ended_at:number|null;outcome:string|null;detail:string|null;declared:string|null} | undefined;
+          return last !== undefined && last.ended_at !== null && (last.declared === "waiting" || (last.outcome === "failed" && last.detail?.startsWith("rate_limit:")));
+        }).map((s) => s.key);
+      for (let i = 0; i < 250; i++) {
+        const id = `t${random(28)}`, key = `s${random(12)}`;
+        const values = [key, random(5), random(4) === 0 ? null : 1, random(2) === 0 ? "failed" : "completed",
+          [null, "rate_limit:tomorrow", "RATE_LIMIT:tomorrow", "other"][random(4)], [null, "waiting", "all_done"][random(3)]] as const;
+        switch (random(6)) {
+          case 0: put.run(id, ...values); break;
+          case 1: change.run(...values, id); break;
+          case 2: db.prepare("DELETE FROM turns WHERE id=?").run(id); break;
+          case 3: db.prepare("UPDATE sessions SET archived_at=? WHERE key=?").run(random(2) ? 1 : null, key); break;
+          case 4: db.prepare("UPDATE sessions SET running=? WHERE key=?").run(random(2), key); break;
+          case 5: db.prepare("UPDATE sessions SET last_active_at=? WHERE key=?").run(random(8), key); break;
+        }
+        assert.deepEqual(query(), expected(), `seed ${seed}, mutation ${i}`);
+      }
+    } finally { db.close(); }
+  }
+});
+
 test("recovery and backfill use the waiting lookup and bounded session seeks", () => {
   const { db } = fixture();
   try {

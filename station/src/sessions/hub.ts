@@ -715,9 +715,22 @@ export class Hub {
       const row = this.store.getSession(key);
       if (row && this.online(row)) void this.actor(row).kick();
     }
-    // Waits on record that were not handed over (the station before stopped without a handover): taken up, so each asks
-    // again when it would have (or put right, SessionActor.takeWait). Over the sessions shown: an archived one waits on
-    // nothing.
+    this.recoverWaits();
+  }
+
+  /// Waits on record that were not handed over: taken up so each asks again when it would have, or put right by the
+  /// actor. An old store retains its original recovery path until its lookup has been prepared.
+  private recoverWaits() {
+    const indexed = this.store.recoveryWaits?.();
+    if (indexed != null) {
+      for (const { row, refill } of indexed) {
+        if (!this.online(row)) continue;
+        if (refill) void this.actor(row).takeRefill();
+        else void this.actor(row).takeWait();
+      }
+      return;
+    }
+    // Preserve the first recovery's timing while an older store's lookup is still being prepared.
     const live = this.store.liveSessions();
     const turns = this.store.lastTurnsOf(live.map((s) => s.key));
     for (const row of live) {

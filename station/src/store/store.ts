@@ -42,6 +42,7 @@ import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts"
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
+import { installRecoverWaits, recoverWaitsReady, RECOVER_WAITS } from "./recover-waits.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
@@ -402,6 +403,7 @@ export class Store {
       addLetters(db);
       installPostBlocks(db);
       installWorkspaceActivity(db);
+      installRecoverWaits(db);
       installSessionCounts(db);
       installSessionListIndex(db);
       installSessionBindingsIndex(db);
@@ -592,6 +594,14 @@ export class Store {
   /// archived only grow with time; each is looked at again as it is shown.
   liveSessions(): SessionRow[] {
     return this.#all(LIVE_SESSIONS).map(toSession);
+  }
+
+  /// Waits needing recovery, or null while an older store is still being prepared in the background.
+  recoveryWaits(): { row: SessionRow; refill: boolean }[] | null {
+    if (!recoverWaitsReady(this.db)) return null;
+    return this.#all(RECOVER_WAITS).map((r) => ({
+      row: toSession(r), refill: r.recovery_outcome === "failed" && typeof r.recovery_detail === "string" && r.recovery_detail.startsWith("rate_limit:"),
+    }));
   }
 
   /// The sessions running a turn now (archived ones too).
