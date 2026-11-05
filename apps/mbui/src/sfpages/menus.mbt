@@ -2,15 +2,11 @@
 // text's held link): one menu for both, the presenters' (@sf.menu: a sheet with a finger short of Large, else a small
 // panel at the pointer). A link: open it, copy it; a file: quote or download it, a picture also copied (read whole, onto the
 // clipboard as a PNG).
-// What a choice does is done in the frame after it, by the list that offered it (menus_frame).
+// A choice acts at its event; an image's copy finishes when its decode is told.
 
 ///|
-/// What a menu's choice left to do: a link to open, words to copy, a picture to copy.
+/// What a menu has offered, and which file was held for it.
 priv struct MenuDoing {
-  /// (told: the list that offered it built again to do it)
-  open : @signals.Signal[String]
-  copy : @signals.Signal[String]
-  image : @signals.Signal[String]
   mut offered : String
   /// the file whose menu a finger held opened (its box's id, 0 none), and that menu (the presenters' serial)
   mut held_for : Int
@@ -19,9 +15,6 @@ priv struct MenuDoing {
 
 ///|
 let menu_doing : MenuDoing = {
-  open: @signals.signal("", same=fn(a, b) { a == b }),
-  copy: @signals.signal("", same=fn(a, b) { a == b }),
-  image: @signals.signal("", same=fn(a, b) { a == b }),
   offered: "",
   held_for: 0,
   held_serial: -1,
@@ -35,9 +28,8 @@ pub fn offered_image() -> String {
 
 ///|
 fn menus_reset() -> Unit {
-  menu_doing.open.set("")
-  menu_doing.copy.set("")
-  menu_doing.image.set("")
+  match copying_image.val { Some(stop) => stop(); None => () }
+  copying_image.val = None
   menu_doing.offered = ""
   menu_doing.held_for = 0
   menu_doing.held_serial = -1
@@ -60,8 +52,8 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
   @sf.link_menu(
     href,
     from=@sf.at_point(x, y),
-    fn() { menu_doing.open.set(href) },
-    fn() { menu_doing.copy.set(href) },
+    fn() { @ui.open_url(href) |> ignore },
+    fn() { copy_menu_link(href) },
   )
 }
 
@@ -73,12 +65,7 @@ fn link_held_node(href : String, at : (Double, Double, Double, Double)) -> Unit 
     @ui.haptic(LongPress)
   }
   let (x, y, w, h) = at
-  // (chosen: done as it is, outside any build: menus_frame's open and copy)
-  @sf.link_menu(href, from=@sf.Beside::At(x, y, w, h), fn() { @ui.open_url(href) |> ignore }, fn() {
-    let c = @ui.current()
-    c.copy_text(href)
-    say(c, @sf.t("common.link.copied"))
-  })
+  @sf.link_menu(href, from=@sf.Beside::At(x, y, w, h), fn() { @ui.open_url(href) |> ignore }, fn() { copy_menu_link(href) })
 }
 
 ///|
@@ -108,7 +95,7 @@ fn file_menu(
       }
       items.append(more)
       if src != "" && src != "!" {
-        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image.set(src) }, icon="copy")))
+        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { copy_menu_image(src) }, icon="copy")))
       }
       if items.length() > 0 {
         @sf.menu(items, from=@sf.at_point(x, y))
@@ -121,41 +108,65 @@ fn file_menu(
 }
 
 ///|
-/// What a menu's choice in a chat drawn by nodes left, done (menus_frame), as an old view over it is built: a picture
-/// copied once it is read.
-pub fn chat_menus_frame(c : @ui.Ctx) -> Unit {
-  menus_frame(c)
+/// The link copied as the menu choice is pressed, with the same notice as the old frame's.
+fn copy_menu_link(href : String) -> Unit {
+  let c = @ui.current()
+  c.copy_text(href)
+  say(c, @sf.t("common.link.copied"))
 }
 
 ///|
-/// What a menu's choice left, done: a link opened by the system once the frame is built, words copied, a picture read
-/// whole and put on the clipboard (as Electron's copyImage: decoded, as PNG) once it is read.
-fn menus_frame(c : @ui.Ctx) -> Unit {
-  // (taken when it is opened, not while the frame is built: a frame built again lets go of what its earlier builds
-  // said, Ctx::after_build)
-  if menu_doing.open.get() != "" {
-    let href = menu_doing.open.get()
-    c.after_build("menu-open", fn() {
-      menu_doing.open.set("")
-      @ui.open_url(href) |> ignore
-    })
-  }
-  if menu_doing.copy.get() != "" {
-    c.copy_text(menu_doing.copy.get())
-    menu_doing.copy.set("")
-    say(c, @sf.t("common.link.copied"))
-  }
-  if menu_doing.image.get() != "" {
-    match c.image_pixels(menu_doing.image.get(), image_copy_px) {
-      @ui.PixelsRead(w, h, rgba) =>
-        c.after_build("menu-copy-image", fn() {
-          menu_doing.image.set("")
-          @ui.clipboard_set_png(@pixels.png(w, h, unpremultiplied(rgba)))
-        })
-      @ui.PixelsFailed => menu_doing.image.set("")
-      @ui.PixelsComing => ()
+/// The wide page still calls this while it is migrated; menu choices now do their work at their events.
+pub fn chat_menus_frame(c : @ui.Ctx) -> Unit {
+  ignore(c)
+}
+
+///|
+// kept across runs: only the most recent menu copy is pending; reset stops it
+let copying_image : Ref[(() -> Unit)?] = Ref(None)
+
+///|
+/// Ask for a picture at copy size at the choice's event. The watch follows that source's decode, so the host's answer
+/// finishes the copy even if no frame is drawn; a later copy or a new run cancels it.
+fn copy_menu_image(src : String) -> Unit {
+  match copying_image.val { Some(stop) => stop(); None => () }
+  copying_image.val = None
+  let live = Ref(true)
+  let reading = Ref(false)
+  let again = Ref(false)
+  let refresh : Ref[() -> Unit] = Ref(fn() {  })
+  // The choice's menu may go away before the decode. This operation belongs to the copy, not to that menu's nodes.
+  let owner = @signals.set_owner(None)
+  let watch = @signals.watch(fn() { (refresh.val)() })
+  @signals.set_owner(owner) |> ignore
+  let stop = fn() {
+    if live.val {
+      live.val = false
+      watch.stop()
+      refresh.val = fn() {  }
     }
   }
+  copying_image.val = Some(stop)
+  refresh.val = fn() {
+    if !live.val { return }
+    if reading.val { again.val = true; return }
+    reading.val = true
+    while live.val {
+      again.val = false
+      match watch.read(fn() { @ui.current().image_pixels(src, image_copy_px) }) {
+        @ui.PixelsRead(w, h, rgba) => {
+          stop()
+          copying_image.val = None
+          @ui.clipboard_set_png(@pixels.png(w, h, unpremultiplied(rgba)))
+        }
+        @ui.PixelsFailed => { stop(); copying_image.val = None }
+        @ui.PixelsComing => ()
+      }
+      if !again.val { break }
+    }
+    reading.val = false
+  }
+  (refresh.val)()
 }
 
 ///|

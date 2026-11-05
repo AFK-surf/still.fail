@@ -157,7 +157,7 @@ fn media_file_node(
       items.push(download_option(src, now, a(), owner()))
       if kind == "video" { items.append(video_load_options(src, now, a(), owner())) }
       if key != "" && key != "!" {
-        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image.set(key) }, icon="copy")))
+        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { copy_menu_image(key) }, icon="copy")))
       }
       @sf.menu(items, from=@sf.at_point(x, y))
     })
