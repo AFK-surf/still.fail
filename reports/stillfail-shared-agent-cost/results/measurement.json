@@ -1,0 +1,58 @@
+{
+  "revision": "c789e5c30f48998eac66b7c9654aff0e068178b1",
+  "repository": "AFK-surf/still.fail",
+  "tokenizer": "tiktoken",
+  "version": "0.12.0",
+  "encoding": "cl100k_base",
+  "tokenizer_status": "proxy for Claude; official for this encoding only; no calibrated Claude error bound",
+  "prefix_tokens": 34040,
+  "prefix_bytes": 134652,
+  "prefix_sha256": "5e21b197af82bd403c883482b96e57b62a7857a3c5ac8cdbd6742f0c4f316905",
+  "query": "Explain how this repository shares agent sessions and accounts, and distinguish prompt cache reuse from sharing source files. Cite the relevant functions.",
+  "query_tokens": 27,
+  "output_tokens_assumed": 1000,
+  "manifest": [
+    {
+      "path": "station/src/agents/instructions.ts",
+      "bytes": 33996,
+      "sha256": "1b00894556dfc5493415d16a8b4bf47757031985c3972615fa2dcdf64f12db74",
+      "proxy_tokens": 8131
+    },
+    {
+      "path": "station/src/agents/claude.ts",
+      "bytes": 30758,
+      "sha256": "68b16437488902581b84b2e84f3c8b049c424769bc9def144f666636aaafe857",
+      "proxy_tokens": 7727
+    },
+    {
+      "path": "station/src/sessions/presets.ts",
+      "bytes": 27080,
+      "sha256": "8c4a80a1538f5a87419c7bb43518659aad79431bab50506dbe7ba3e573c339a0",
+      "proxy_tokens": 7254
+    },
+    {
+      "path": "station/src/usage/counter.ts",
+      "bytes": 42505,
+      "sha256": "f574411aef32506ec7b9545baa6a8c445c5d1d8e325a6063f3bbf04f0cea16f5",
+      "proxy_tokens": 10851
+    }
+  ],
+  "pricing": {
+    "model": "claude-sonnet-4-5-20250929",
+    "input": 3,
+    "write_5m": 3.75,
+    "write_1h": 6,
+    "read": 0.3,
+    "output": 15,
+    "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "checked": "2026-11-05"
+  },
+  "api_calls": 0,
+  "exclusions": [
+    "CLI system/tool overhead",
+    "message framing",
+    "tool turns",
+    "reasoning/output measurement",
+    "hosting and subscription fees"
+  ]
+}

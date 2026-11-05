@@ -1,0 +1,22 @@
+n,scenario,prefix_proxy_tokens,query_proxy_tokens,assumed_output_tokens,input_usd_total,usd_total,usd_per_task,measurement
+1,independent_no_cache,34040,27,1000,0.102201,0.117201,0.117201,tokenizer measured; API costs estimated; no API calls
+1,independent_cold_5m_domains,34040,27,1000,0.127731,0.142731,0.142731,tokenizer measured; API costs estimated; no API calls
+1,shared_ideal_5m,34040,27,1000,0.127731,0.142731,0.142731,tokenizer measured; API costs estimated; no API calls
+1,independent_same_domain_ideal_5m,34040,27,1000,0.127731,0.142731,0.142731,tokenizer measured; API costs estimated; no API calls
+1,both_already_warm_5m,34040,27,1000,0.010293,0.025293,0.025293,tokenizer measured; API costs estimated; no API calls
+1,independent_cold_1h_domains,34040,27,1000,0.204321,0.219321,0.219321,tokenizer measured; API costs estimated; no API calls
+1,shared_ideal_1h,34040,27,1000,0.204321,0.219321,0.219321,tokenizer measured; API costs estimated; no API calls
+5,independent_no_cache,34040,27,1000,0.511005,0.586005,0.117201,tokenizer measured; API costs estimated; no API calls
+5,independent_cold_5m_domains,34040,27,1000,0.638655,0.713655,0.142731,tokenizer measured; API costs estimated; no API calls
+5,shared_ideal_5m,34040,27,1000,0.168903,0.243903,0.0487806,tokenizer measured; API costs estimated; no API calls
+5,independent_same_domain_ideal_5m,34040,27,1000,0.168903,0.243903,0.0487806,tokenizer measured; API costs estimated; no API calls
+5,both_already_warm_5m,34040,27,1000,0.051465,0.126465,0.025293,tokenizer measured; API costs estimated; no API calls
+5,independent_cold_1h_domains,34040,27,1000,1.021605,1.096605,0.219321,tokenizer measured; API costs estimated; no API calls
+5,shared_ideal_1h,34040,27,1000,0.245493,0.320493,0.0640986,tokenizer measured; API costs estimated; no API calls
+20,independent_no_cache,34040,27,1000,2.04402,2.34402,0.117201,tokenizer measured; API costs estimated; no API calls
+20,independent_cold_5m_domains,34040,27,1000,2.55462,2.85462,0.142731,tokenizer measured; API costs estimated; no API calls
+20,shared_ideal_5m,34040,27,1000,0.323298,0.623298,0.0311649,tokenizer measured; API costs estimated; no API calls
+20,independent_same_domain_ideal_5m,34040,27,1000,0.323298,0.623298,0.0311649,tokenizer measured; API costs estimated; no API calls
+20,both_already_warm_5m,34040,27,1000,0.20586,0.50586,0.025293,tokenizer measured; API costs estimated; no API calls
+20,independent_cold_1h_domains,34040,27,1000,4.08642,4.38642,0.219321,tokenizer measured; API costs estimated; no API calls
+20,shared_ideal_1h,34040,27,1000,0.399888,0.699888,0.0349944,tokenizer measured; API costs estimated; no API calls

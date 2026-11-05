@@ -1,0 +1,19 @@
+scope,files,regex,matching_lines
+tracked_source_all,2438,embedding,10
+tracked_source_all,2438,vector,78
+tracked_source_all,2438,\bindex\b,1432
+tracked_source_all,2438,cache,1423
+tracked_source_all,2438,cache_control,0
+tracked_source_all,2438,prompt_cache_key,0
+tracked_source_all,2438,code[_ -]?index|codeIndex,0
+tracked_source_all,2438,RepoIndex,13
+tracked_source_all,2438,\bFAISS\b|\bHNSW\b|\bLanceDB\b|\bChromaDB\b|\bPinecone\b,0
+station/src,467,embedding,1
+station/src,467,vector,1
+station/src,467,\bindex\b,488
+station/src,467,cache,319
+station/src,467,cache_control,0
+station/src,467,prompt_cache_key,0
+station/src,467,code[_ -]?index|codeIndex,0
+station/src,467,RepoIndex,7
+station/src,467,\bFAISS\b|\bHNSW\b|\bLanceDB\b|\bChromaDB\b|\bPinecone\b,0

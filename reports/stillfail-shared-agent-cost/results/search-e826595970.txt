@@ -1,0 +1,7 @@
+station/src/api/admin.ts:378:    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, changed: () => deps.events?.presetsChanged() }) : []),
+station/src/api/routes/presets.ts:8:import { NoPreset, type Presets, type RepoIndex, candidates } from "../../sessions/presets.ts";
+station/src/api/routes/presets.ts:10:export type PresetDeps = { presets: Presets; reposDir: () => string; index?: RepoIndex; changed?: () => void };
+station/src/sessions/hub.ts:49:import { Presets, RepoIndex } from "./presets.ts";
+station/src/sessions/hub.ts:202:  readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
+station/src/sessions/presets.ts:354:/// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
+station/src/sessions/presets.ts:462:export class RepoIndex {

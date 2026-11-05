@@ -1,0 +1,319 @@
+station/src/accounts/catalog.ts:8:export type Cost = { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+station/src/accounts/catalog.ts:54:      const [cacheRead, cacheWrite] = [number(raw.cost.cacheRead), number(raw.cost.cacheWrite)];
+station/src/accounts/catalog.ts:55:      if (cacheRead !== undefined) f.cost.cacheRead = cacheRead;
+station/src/accounts/catalog.ts:56:      if (cacheWrite !== undefined) f.cost.cacheWrite = cacheWrite;
+station/src/accounts/index.ts:1204:  /// retire app-servers that cached it after their current turns. A reset also wakes sessions once its allowance is read.
+station/src/agents/agy.ts:83:/// apart from the cache's. None when it says none.
+station/src/agents/agy.ts:84:export function turnUsage(answer: Json): { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number } | null {
+station/src/agents/agy.ts:88:  const read = n(u.cachedReadTokens);
+station/src/agents/agy.ts:89:  const written = n(u.cachedWriteTokens);
+station/src/agents/agy.ts:90:  return { inputTokens: Math.max(0, n(u.inputTokens) - read - written), cacheReadTokens: read, cacheWriteTokens: written, outputTokens: n(u.outputTokens) + n(u.thoughtTokens) };
+station/src/agents/claude.ts:312:    // None for a session continued from a terminal: its system prompt and tools stay as they began, so its cache holds.
+station/src/agents/codex.ts:942:    // None for a thread continued from a terminal: it keeps its own, so its cache holds.
+station/src/agents/devin.ts:116:/// from the cache's read (Devin says no cache written).
+station/src/agents/devin.ts:117:export function callOf(update: Json): { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number } {
+station/src/agents/devin.ts:120:  const read = n(meta["cognition.ai/cachedReadTokens"]);
+station/src/agents/devin.ts:121:  return { inputTokens: Math.max(0, n(meta["cognition.ai/inputTokens"]) - read), cacheReadTokens: read, cacheWriteTokens: 0, outputTokens: n(meta["cognition.ai/outputTokens"]) };
+station/src/agents/devin.ts:230:    const u = (this.usage ??= { calls: 0, counts: { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 }, context: 0, window: 0 });
+station/src/agents/devin.ts:233:    u.counts.cacheReadTokens += counts.cacheReadTokens;
+station/src/agents/grok.ts:63:/// read from the cache or written to it, as the others count.
+station/src/agents/grok.ts:69:  const read = n(u.cachedReadTokens);
+station/src/agents/grok.ts:70:  const written = n(u.cacheCreationTokens);
+station/src/agents/grok.ts:71:  const usage = { input: Math.max(0, n(u.inputTokens) - read - written), cacheRead: read, cacheWrite: written, output: n(u.outputTokens), calls: n(u.modelCalls) };
+station/src/agents/instructions.ts:82:- Shared repository cache: ${repos_dir}. Keep canonical clones there; work in session worktrees, never edit canonical clones directly.
+station/src/agents/sandbox-bridge.mjs:614:      env.CODEX_SQLITE_HOME = join(process.env.HOME || "/tmp", ".cache", "stillfail", "codex-sqlite", createHash("sha256").update(env.CODEX_HOME).digest("hex").slice(0, 16));
+station/src/agents/sandbox.ts:121:const CLAUDE_OWN = ["projects", "todos", "shell-snapshots", "statsig", "debug", "logs", "file-history", "ide", "session-env", "plugins", "cache", "telemetry", "paste-cache", "history.jsonl", "backups", ".credentials.json"];
+station/src/agents/sandbox.ts:122:const CODEX_OWN = ["sessions", "archived_sessions", "log", "tmp", ".tmp", "shell_snapshots", "cache", "history.jsonl", "models_cache.json", "auth.json"];
+station/src/api/events.ts:660:      headers: { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no", ...(resumes ? { [RESUMED]: "1" } : {}), ...(follows ? { [FOLLOWS]: "running" } : {}) },
+station/src/api/host.ts:48:  private cached: { at: number; info: any } | null = null;
+station/src/api/host.ts:87:    if (this.cached !== null && wall.now() - this.cached.at < 10_000) return Promise.resolve(this.cached.info);
+station/src/api/host.ts:117:        this.cached = { at: info.checkedAt, info };
+station/src/api/overview.ts:176:    // How a session whose prompt cache is over goes on (routes/context.ts): afresh, by itself, when set.
+station/src/api/request.ts:68:const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-store" };
+station/src/api/routes/context.ts:1:// How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold` and `afreshAbove`),
+station/src/api/routes/context.ts:4:// zero instead means every expired cache, even when its price is unknown.
+station/src/api/routes/context.ts:7:import { afreshThreshold, DEFAULT_AFRESH_ABOVE } from "../../../../client/core-ts/src/cache-policy.ts";
+station/src/api/routes/context.ts:50:      log.info("context", "going on afresh once a cache is over set", { on, above, by: r.viewer.email });
+station/src/api/routes/drive.ts:140:            headers: { "content-type": read.type, "cache-control": "no-store", "stillfail-total": String(read.total), "stillfail-mtime": String(read.mtime) },
+station/src/api/routes/hub.ts:538:            // cache over); refused while it runs.
+station/src/api/routes/hub.ts:568:              // Whether it goes on afresh once its cache is over: null gives it back to the station's setting.
+station/src/api/routes/sessions.ts:49:  headers: { "content-type": contentType, "cache-control": "private, max-age=3600", ...extra },
+station/src/api/routes/usage.ts:160:      // Older clients request the whole history without its chart range. Their summary cache also needs the new
+station/src/api/routes/usage.ts:231:  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
+station/src/api/routes/usage.ts:313:  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
+station/src/api/runtime-compat.ts:48:    // Keep the event's id for resumable streams and remove an obsolete cached session.
+station/src/jobs/admit.ts:3:// start at once. Nothing is estimated beforehand (a build takes more or less by its caches): what is measured decides.
+station/src/jobs/dirsync.ts:37:export const IGNORED = new Set([".git", ".hg", ".svn", ".jj", "node_modules", "target", "dist", "build", ".gradle", ".next", ".turbo", ".cache", "__pycache__", ".venv"]);
+station/src/jobs/load.ts:3:// pages measure it (api/host.ts: GET /host and the events' host samples, the ten-second cache shared), plus what only
+station/src/modules/local.ts:65:        return { status: 200, headers: { "content-type": shown.type, "cache-control": "no-store", ...hash }, body: shown.bytes };
+station/src/modules/local.ts:70:        return { status: 200, headers: { "content-type": "image/jpeg", "cache-control": "no-store" }, body: await readFile(made) };
+station/src/ops/loopback.ts:35:    return { status: 302, headers: { location: to, "cache-control": "no-store" }, body: "" };
+station/src/ops/waits.ts:4:/// A wait this long is put down with who made it (from the cache, a call takes microseconds; a statement of an index,
+station/src/platform/unix.ts:85:  /// On macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache).
+station/src/read/host.ts:43:/// host_info (without its ten-second cache, which the caller keeps): the machine's state now, and the ticks seen.
+station/src/read/outflow.ts:35:    calls: r.calls, input: r.input, cacheRead: r.cacheRead, cacheWrite: r.cacheWrite, output: r.output, cost: r.cost,
+station/src/read/slack-known.ts:10:type Cached<T> = { stamp: string; value: T };
+station/src/read/slack-known.ts:11:const cache = new Map<string, Cached<unknown>>();
+station/src/read/slack-known.ts:20:  const had = cache.get(path) as Cached<T> | undefined;
+station/src/read/slack-known.ts:28:  cache.set(path, { stamp, value });
+station/src/read/store.ts:1089:  input, cache_read, cache_write, cache_write_long, output, calls, context, context_window FROM usage INDEXED BY usage_session`;
+station/src/read/store.ts:1103:    input: Number(r.input), cacheRead: Number(r.cache_read), cacheWrite: Number(r.cache_write), cacheWriteLong: Number(r.cache_write_long),
+station/src/read/store.ts:1135:export { batchedUsageQueries, usageGroupsBatched, UsageSummaryCache } from "./usage-batched.ts";
+station/src/read/transcript.ts:222:    // station's main thread on disk when its file cache is cold; only links and unknown types need a metadata read.
+station/src/read/transcript.ts:360:    // If a history read found the file elsewhere, later live reads may use that cached location too.
+station/src/read/usage-batched.ts:23:      "session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output " +
+station/src/read/usage-batched.ts:42:      u.runtime, COALESCE(u.model, '') AS model, u.fast, u.calls, u.input, u.cache_read, u.cache_write,
+station/src/read/usage-batched.ts:43:      u.cache_write_long, u.output
+station/src/read/usage-batched.ts:50:  runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
+station/src/read/usage-batched.ts:51:  cache_write: bigint; cache_write_long: bigint; output: bigint };
+station/src/read/usage-batched.ts:55:type Cached = { seq: bigint; blocks: Map<string, Block>; totals: Map<string, Total>; width: bigint; cells: number; bytes: number };
+station/src/read/usage-batched.ts:56:type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized" | "indexed";
+station/src/read/usage-batched.ts:59:const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/read/usage-batched.ts:65:/// Kept by one reader, never shared across connections. Bound both the number and size of cached answers.
+station/src/read/usage-batched.ts:66:export class UsageSummaryCache {
+station/src/read/usage-batched.ts:68:  private readonly entries = new Map<string, Cached>();
+station/src/read/usage-batched.ts:92:  get(db: DatabaseSync, key: string): Cached | undefined {
+station/src/read/usage-batched.ts:98:  put(db: DatabaseSync, key: string, value: Cached): void {
+station/src/read/usage-batched.ts:137:    cache_read: safe(r.cache_read), cache_write: safe(r.cache_write), cache_write_long: safe(r.cache_write_long), output: safe(r.output) }));
+station/src/read/usage-batched.ts:140:/// A compact summary, read in bounded steps on the caller's snapshot. Cached blocks are only reused when
+station/src/read/usage-batched.ts:144:  cache?: UsageSummaryCache, prepared?: boolean): Promise<{
+station/src/read/usage-batched.ts:146:      selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus; sql: UsageSqlTimings }; ms: number;
+station/src/read/usage-batched.ts:201:  const result = (groups: Part[], selectedMs: number, cache: CacheStatus) => ({ groups: answer(groups),
+station/src/read/usage-batched.ts:203:      restMs: Math.round(restMs), cache, sql: { journal: Math.round(sql.journal), changes: Math.round(sql.changes),
+station/src/read/usage-batched.ts:209:  const canReuse = prepared === false && cache?.hasPrepared(s.db, preparedKey) === true;
+station/src/read/usage-batched.ts:233:    if (prepared === true) cache?.putPrepared(s.db, preparedKey);
+station/src/read/usage-batched.ts:253:  const journal = cache !== undefined && timeSql("journal", () => s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get()) !== undefined;
+station/src/read/usage-batched.ts:263:  const prior = journal ? cache!.get(s.db, key) : undefined;
+station/src/read/usage-batched.ts:265:  const cacheStatus: CacheStatus = !journal ? "disabled" : prior === undefined ? "miss" : usable ? "reused" : "expired";
+station/src/read/usage-batched.ts:267:  // A cache is updated only after the complete read succeeds. Unchanged block maps remain immutable and can be shared
+station/src/read/usage-batched.ts:276:  // The totals for a snapshot share rows with the previous cache until a changed block actually touches them.
+station/src/read/usage-batched.ts:452:      if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
+station/src/read/usage-batched.ts:466:        cache!.drop(s.db, key);
+station/src/read/usage-batched.ts:474:      cache!.put(s.db, key, { seq: last, blocks, totals, width, cells, bytes });
+station/src/read/usage-batched.ts:477:    cache!.drop(s.db, key);
+station/src/read/usage-batched.ts:478:    // The changed block made this answer too large to cache. Reread it using the bounded path below, retaining the
+station/src/read/usage-batched.ts:504:    if (!(await readSession(session, start, end, ofSession))) { cache!.drop(s.db, key); return null; }
+station/src/read/usage-batched.ts:507:  const done = result(groups, selectedMs, journal && blocks === null ? "oversized" : cacheStatus);
+station/src/read/usage-batched.ts:508:  if (blocks !== null) cache!.put(s.db, key, { seq: last, blocks, totals, width, cells, bytes });
+station/src/read/usage-batched.ts:509:  else cache?.drop(s.db, key);
+station/src/read/usage-summary-blocks.ts:7:  runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
+station/src/read/usage-summary-blocks.ts:8:  cache_write: bigint; cache_write_long: bigint; output: bigint };
+station/src/read/usage-summary-blocks.ts:15:const values = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/read/usage.ts:27:/// A model's API prices, in dollars per million tokens. Writing to the cache costs 1.25× input for five minutes, 2× for
+station/src/read/usage.ts:29:type Price = { input: number; output: number; cacheRead: number };
+station/src/read/usage.ts:34:  ["gpt-6-astra", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
+station/src/read/usage.ts:35:  ["gpt-6.1-sol", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
+station/src/read/usage.ts:37:  ["gpt-6.1-terra", { input: 1.0, output: 5.0, cacheRead: 0.05 }],
+station/src/read/usage.ts:38:  ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
+station/src/read/usage.ts:39:  ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
+station/src/read/usage.ts:40:  ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],
+station/src/read/usage.ts:41:  ["claude-fable-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
+station/src/read/usage.ts:42:  ["claude-mythos-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
+station/src/read/usage.ts:43:  ["claude-fable-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
+station/src/read/usage.ts:44:  ["claude-mythos-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
+station/src/read/usage.ts:45:  ["claude-opus-5-5", { input: 4.0, output: 20.0, cacheRead: 0.2 }],
+station/src/read/usage.ts:46:  ["claude-opus-5", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:47:  ["claude-opus-4-8", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:48:  ["claude-opus-4-7", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:49:  ["claude-opus-4-6", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:50:  ["claude-opus-4-5", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:51:  ["claude-sonnet-5-5", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
+station/src/read/usage.ts:52:  ["claude-sonnet-5", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
+station/src/read/usage.ts:53:  ["claude-sonnet-4-6", { input: 3.0, output: 15.0, cacheRead: 0.3 }],
+station/src/read/usage.ts:54:  ["claude-sonnet-4-5", { input: 3.0, output: 15.0, cacheRead: 0.3 }],
+station/src/read/usage.ts:55:  ["claude-haiku-4-5", { input: 1.0, output: 5.0, cacheRead: 0.1 }],
+station/src/read/usage.ts:68:        model, input: p.input, cacheRead: p.cacheRead,
+station/src/read/usage.ts:69:        cacheWrite: model.startsWith("claude-") ? p.input * 1.25 : null,
+station/src/read/usage.ts:70:        cacheWriteLong: model.startsWith("claude-") ? p.input * 2.0 : null, output: p.output,
+station/src/read/usage.ts:84:  if (told !== undefined) return { input: told.input, output: told.output, cacheRead: told.cacheRead ?? told.input };
+station/src/read/usage.ts:94:  const tokens = g.input * p.input + g.cacheWrite * p.input * 1.25 + g.cacheWriteLong * p.input * 2.0 + g.cacheRead * p.cacheRead + g.output * p.output;
+station/src/read/usage.ts:99:/// the tokens as a chat shows them (input with what was read from and written to the cache) and what they would cost,
+station/src/read/usage.ts:102:  const out = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0 };
+station/src/read/usage.ts:105:    out.inputTokens += g.input + g.cacheRead + g.cacheWrite + g.cacheWriteLong;
+station/src/read/usage.ts:106:    out.cachedTokens += g.cacheRead;
+station/src/read/usage.ts:116:export type Counted = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; cost: number; unpricedCalls: number };
+station/src/read/usage.ts:121:/// when it was made and how long what it left in the cache is kept there (`cacheMs`, where its runtime tells what it
+station/src/read/usage.ts:123:/// written to the cache again, where its model has a price).
+station/src/read/usage.ts:125:  model: string | null; contextTokens?: number; contextWindow: number | null; lastCallAt?: number; cacheMs?: number; rereadCost?: number;
+station/src/read/usage.ts:129:export const noUsage = (): SessionUsage => ({ modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0, model: null, contextWindow: null });
+station/src/read/usage.ts:137:    contextTokens?: number; cacheMs?: number; rereadCost?: number } | null;
+station/src/read/usage.ts:140:/// How long a prompt cache keeps what was written to it: five minutes, or an hour where it was asked to.
+station/src/read/usage.ts:141:const CACHE_SHORT_MS = 5 * 60_000;
+station/src/read/usage.ts:142:const CACHE_LONG_MS = 60 * 60_000;
+station/src/read/usage.ts:144:/// The calls looked back on for what was last written to the cache (one may write nothing: all of it read).
+station/src/read/usage.ts:145:const CACHE_CALLS = 5;
+station/src/read/usage.ts:148:/// stands (what it holds, when its cache is over, what reading it again costs) is of the conversation it goes on with
+station/src/read/usage.ts:153:  const all = s.lastContexts(key, CACHE_CALLS);
+station/src/read/usage.ts:162:    const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
+station/src/read/usage.ts:164:      const long = wrote.cacheWriteLong > 0;
+station/src/read/usage.ts:165:      out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
+station/src/read/usage.ts:176:    for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
+station/src/read/usage.ts:195:    calls: g.calls, input: g.input, cacheRead: g.cacheRead, cacheWrite: g.cacheWrite + g.cacheWriteLong, output: g.output, cost: cost(g),
+station/src/read/usage.ts:238:// A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
+station/src/read/usage.ts:239:// log, so the absence of that warning alone cannot show whether the cache is used.
+station/src/read/usage.ts:336:  if (options.batched?.diagnostics.cache === "reused" && (!reportedSummaryReuse || (cleanSummaryReuse && !reportedCleanSummaryReuse))) {
+station/src/read/usage.ts:345:      ...(options.batched === undefined ? {} : { summaryCache: options.batched.diagnostics.cache }),
+station/src/read/worker.ts:8:import { openStore, usageGroupsBatched, UsageSummaryCache } from "./store.ts";
+station/src/read/worker.ts:18:const usageCache = new UsageSummaryCache();
+station/src/read/worker.ts:58:        ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null, undefined, usageCache,
+station/src/screens/linux-tools.ts:75:      // the database says one is already installed; the private cache and no-locking let it run as the station user.
+station/src/screens/linux-tools.ts:77:        "-o", "Debug::NoLocking=1", "-o", `Dir::Cache::archives=${archives}`,
+station/src/screens/linux-tools.ts:78:        "-o", "Dir::Cache::pkgcache=", "-o", "Dir::Cache::srcpkgcache=", "install", "ffmpeg", "xdotool"],
+station/src/screens/sim-chrome.ts:21:const CACHE = join(tmpdir(), "stillfail-device-chrome");
+station/src/screens/sim-chrome.ts:23:const CACHE_WAY = 1;
+station/src/screens/sim-chrome.ts:218:  const stem = createHash("sha1").update(`${CACHE_WAY}\0${c.key}\0${stamp.mtimeMs}\0${turn}`).digest("hex");
+station/src/screens/sim-chrome.ts:219:  mkdirSync(CACHE, { recursive: true });
+station/src/screens/sim-chrome.ts:220:  const kept = join(CACHE, `${stem}.json`);
+station/src/screens/sim-chrome.ts:395:  mkdirSync(CACHE, { recursive: true });
+station/src/screens/sim-chrome.ts:397:  const png = join(CACHE, `${stem}.png`);
+station/src/search/files.ts:85:const NOISE = new Set(["node_modules", ".git", "venv", ".venv", "site-packages", "dist-packages", "__pycache__", "target", "Pods", "DerivedData", ".cache", ".Trash", ".npm", ".pnpm-store", ".cargo", ".rustup", ".gradle", ".m2"]);
+station/src/search/files.ts:89:  // The home's Library: the apps' own (their caches and data), not the person's files.
+station/src/search/files.ts:126:/// Folders not gone into: what tools make and keep (dependencies, builds, caches, version control), the apps' own; and
+station/src/search/files.ts:128:const SKIPPED = new Set(["node_modules", "target", "dist", "build", ".git", "__pycache__", ".venv", "venv", "Pods", "DerivedData", ".cache", "Library", "AppData"]);
+station/src/sessions/actor.ts:154:  /// station set to, and its large context's prompt cache over.
+station/src/sessions/actor.ts:734:  /// history. Said in its chat. `readBack`: to go on afresh, as it would on another account (its cache over, its
+station/src/sessions/actor.ts:1094:      // Started by a message or a notice, its large context's cache over, where its chat or else its station is set to
+station/src/sessions/actor.ts:1099:        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over");
+station/src/sessions/actor.ts:1247:    // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
+station/src/sessions/actor.ts:1757:    // A session continued from a terminal keeps the system prompt it began with (its cache holds).
+station/src/sessions/afresh.ts:2:// than the one its conversation last ran on. A prompt cache is an account's own, so taking the conversation up there
+station/src/sessions/afresh.ts:8:import { coldAfresh, coldWorth } from "../../../client/core-ts/src/cache-policy.ts";
+station/src/sessions/afresh.ts:36:/// station (`afreshWhenCold`), its runtime session's prompt cache over (read/usage.ts `usageNow`: as its runtime told
+station/src/sessions/afresh.ts:42:  if (u?.lastCallAt === undefined || u.cacheMs === undefined || u.lastCallAt + u.cacheMs > now) return false;
+station/src/sessions/archive.ts:323:/// `rm -r` that also takes directories their owner cannot write to (a Go module cache makes all of its own read-only):
+station/src/sessions/config.ts:6:import { afreshThreshold } from "../../../client/core-ts/src/cache-policy.ts";
+station/src/sessions/config.ts:77:  /// A message or notice to an agent whose prompt cache is over starts it afresh when its estimated reread cost reaches
+station/src/sessions/config.ts:80:  /// Estimated USD to reread a cold cache at which the station defaults to starting afresh.
+station/src/sessions/footprint.ts:48:/// cache, Next's and Turbo's caches, Python's bytecode.
+station/src/sessions/footprint.ts:57:    case "__pycache__":
+station/src/sessions/lifecycle.ts:205:/// (`repick`), its account is picked now as a new session's would be. Whether it goes on afresh once its prompt cache is
+station/src/sessions/lifecycle.ts:212:    log.info("hub", "going on afresh once its cache is over set", { session: key, afresh: afresh ?? "station's" });
+station/src/sessions/presets.ts:319:        ? `  - ${d.repo}: this station's clone of it (in the repository cache; clone it there if it is not yet), a worktree of your own to change it (on ${d.elsewhere} it is ${d.path})`
+station/src/sessions/presets.ts:348:/// `where`: where it is as people read it (`~/code/app`); `cached`: only the station's cache has it (no checkout of the
+station/src/sessions/presets.ts:351:export type Candidate = { path: string; name: string; repo: string | null; chats: number; lastAt: number; where?: string; cached?: boolean; icon?: string };
+station/src/sessions/presets.ts:354:/// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
+station/src/sessions/presets.ts:356:/// thread's way (a cache can hold many clones, each many worktrees).
+station/src/sessions/presets.ts:359:  const cached = await Promise.all(
+station/src/sessions/presets.ts:375:      const icon = await cachedIcon(path, lastAt);
+station/src/sessions/presets.ts:380:  // machine has one, the cache's clone (said as its repository, not its path) where it has not; the chats that worked
+station/src/sessions/presets.ts:381:  // in the cache's clone counted on it either way.
+station/src/sessions/presets.ts:385:  for (const c of cached) {
+station/src/sessions/presets.ts:389:    else out.set(keyOf(c), { ...c, cached: true, where: c.repo ?? shortPath(c.path) });
+station/src/sessions/presets.ts:430:/// The cache's clones' pictures as last looked for, by path and when the clone last changed (looked for again then).
+station/src/sessions/presets.ts:432:async function cachedIcon(path: string, at: number): Promise<string | null> {
+station/src/sessions/presets.ts:466:  /// Directories it never looks into (the station's own data: its sessions' worktrees are its cache's clones).
+station/src/store/rows.ts:38:  /// Whether it goes on afresh once its prompt cache is over, as chosen in its chat (null: as its station is set,
+station/src/store/schema.ts:304:  cache_read INTEGER NOT NULL,
+station/src/store/schema.ts:305:  cache_write INTEGER NOT NULL,
+station/src/store/schema.ts:306:  cache_write_long INTEGER NOT NULL,
+station/src/store/schema.ts:604:  INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+station/src/store/schema.ts:605:  VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/src/store/schema.ts:606:  ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+station/src/store/schema.ts:607:    cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
+station/src/store/schema.ts:610:  UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+station/src/store/schema.ts:611:    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+station/src/store/schema.ts:623:  cache_read INTEGER NOT NULL,
+station/src/store/schema.ts:624:  cache_write INTEGER NOT NULL,
+station/src/store/schema.ts:625:  cache_write_long INTEGER NOT NULL,
+station/src/store/schema.ts:689:  UPDATE usage_quarters SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+station/src/store/schema.ts:690:    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+station/src/store/schema.ts:700:    COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/src/store/schema.ts:702:    cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long,
+station/src/store/schema.ts:724:  cache_read INTEGER NOT NULL,
+station/src/store/schema.ts:725:  cache_write INTEGER NOT NULL,
+station/src/store/schema.ts:726:  cache_write_long INTEGER NOT NULL,
+station/src/store/store.ts:263:const CACHE_KIB = 32 * 1024;
+station/src/store/store.ts:330:      // What this connection reads stays in its own memory (CACHE_KIB), not SQLite's 2 MB: on a machine short of memory
+station/src/store/store.ts:331:      // the system's file cache is the first to go, and each page read again from the disk there took some 50 ms (a station,
+station/src/store/store.ts:337:      db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
+station/src/store/store.ts:673:  /// Whether it goes on afresh once its prompt cache is over (null: as the station is set).
+station/src/store/usage-compact.ts:8:const cols = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/store/usage-compact.ts:36:const tokens = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_write + ${r}.cache_write_long + ${r}.output)`;
+station/src/store/usage-compact.ts:57:const contextColumns = ["id", "at", "session", "turn", "profile", "runtime", "model", "subagent", "fast", "context", "context_window", "cache_write", "cache_write_long", "compact_counted"];
+station/src/store/usage-compact.ts:137:        "INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output) VALUES (");
+station/src/store/usage-compact.ts:173:        calls INTEGER NOT NULL, input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL,
+station/src/store/usage-compact.ts:174:        cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL, scope TEXT NOT NULL,
+station/src/store/usage-compact.ts:187:      CREATE TRIGGER usage_compact_total_dirty AFTER UPDATE OF scope, records, calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact
+station/src/store/usage-compact.ts:242:        INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read,
+station/src/store/usage-compact.ts:243:          cache_write, cache_write_long, output, calls, context, context_window, compact_counted)
+station/src/store/usage-compact.ts:245:            NEW.subagent, NEW.fast, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output,
+station/src/store/usage-compact.ts:275:      CREATE TRIGGER usage_compact_old_change BEFORE UPDATE OF at, session, runtime, model, calls, input, cache_read,
+station/src/store/usage-compact.ts:276:        cache_write, cache_write_long, output, compact_counted ON usage WHEN OLD.compact_counted = 0 BEGIN ${oldRemoveAll("OLD")} END;
+station/src/store/usage-compact.ts:277:      CREATE TRIGGER usage_compact_old_changed AFTER UPDATE OF at, session, runtime, model, calls, input, cache_read,
+station/src/store/usage-compact.ts:278:        cache_write, cache_write_long, output, compact_counted ON usage WHEN OLD.compact_counted = 0 BEGIN ${oldAddAll("NEW")} END;
+station/src/store/usage-compact.ts:280:        calls, input, cache_read, cache_write, cache_write_long, output, compact_counted ON usage
+station/src/store/usage-compact.ts:284:      CREATE TRIGGER usage_compact_adjust AFTER UPDATE OF calls, input, cache_read, cache_write, cache_write_long, output ON usage
+station/src/store/usage-compact.ts:315:/// the pending buckets (compactTotalsStep) keeps, which the summary cache relies on (usage-batched.ts).
+station/src/store/usage-compact.ts:531:    SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
+station/src/store/usage-compact.ts:564:    c.calls, c.input, c.cache_read, c.cache_write, c.cache_write_long, c.output
+station/src/store/usage-compact.ts:573:      u.runtime, COALESCE(u.model, ''), u.fast, u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output
+station/src/store/usage-compact.ts:589:      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
+station/src/store/usage-compact.ts:596:  contextTokens?: number; cacheMs?: number; rereadCost?: number };
+station/src/store/usage-compact.ts:635:  db.prepare(`INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output, compact_context)
+station/src/store/usage-compact.ts:664:  for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
+station/src/store/usage-compact.ts:690:      // A late call cannot be the saved latest call. It can change which cache write was in the last five, though.
+station/src/store/usage-compact.ts:691:      if (state.saved.cacheMs !== undefined || state.saved.rereadCost !== undefined) {
+station/src/store/usage-compact.ts:692:        delete state.saved.cacheMs;
+station/src/store/usage-compact.ts:710:      window: call.window, at: call.at, fast: call.fast, cacheWrite: call.cacheWrite, cacheWriteLong: call.cacheWriteLong };
+station/src/store/usage-detail.ts:9:const COLUMNS = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/store/usage-detail.ts:82:  records INTEGER NOT NULL, calls INTEGER NOT NULL, input INTEGER NOT NULL, cache_read INTEGER NOT NULL,
+station/src/store/usage-detail.ts:83:  cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL,
+station/src/store/usage-detail.ts:102:  input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL,
+station/src/store/usage-detail.ts:163:    u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output, ${indexed("u", live)}${live ? ", 0" : ""}
+station/src/store/usage-detail.ts:267:          INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+station/src/store/usage-detail.ts:269:            NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/src/store/usage-detail.ts:271:            calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+station/src/store/usage-detail.ts:272:            cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long,
+station/src/store/usage-detail.ts:277:            cache_read = cache_read + NEW.cache_read - OLD.cache_read, cache_write = cache_write + NEW.cache_write - OLD.cache_write,
+station/src/store/usage-detail.ts:278:            cache_write_long = cache_write_long + NEW.cache_write_long - OLD.cache_write_long, output = output + NEW.output - OLD.output
+station/src/store/usage-detail.ts:281:            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
+station/src/store/usage-detail.ts:284:          UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read,
+station/src/store/usage-detail.ts:285:            cache_write = cache_write - OLD.cache_write, cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+station/src/store/usage-detail.ts:288:            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
+station/src/store/usage-detail.ts:486:      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+station/src/store/usage-history.ts:13:const tokensOf = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_write + ${r}.cache_write_long + ${r}.output)`;
+station/src/store/usage-history.ts:48:CREATE TRIGGER usage_history_grow AFTER UPDATE OF at, session, calls, input, cache_read, cache_write, cache_write_long, output ON usage
+station/src/store/usage-minutes.ts:7:const TOKENS = (name: string) => `(${name}.input + ${name}.cache_read + ${name}.cache_write + ${name}.cache_write_long + ${name}.output)`;
+station/src/store/usage-summary-blocks.ts:7:const values = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/store/usage-summary-blocks.ts:70:type Snapshot = Key & { scope: string; calls: bigint; input: bigint; cache_read: bigint; cache_write: bigint; cache_write_long: bigint; output: bigint };
+station/src/store/usage-summary-blocks.ts:184:            calls: 0n, input: 0n, cache_read: 0n, cache_write: 0n, cache_write_long: 0n, output: 0n };
+station/src/store/usage-unified.ts:22:            NEW.input + NEW.cache_read + NEW.cache_write + NEW.cache_write_long + NEW.output)
+station/src/store/usage-unified.ts:27:            tokens = tokens - OLD.input - OLD.cache_read - OLD.cache_write - OLD.cache_write_long - OLD.output
+station/src/store/usage-unified.ts:32:        CREATE TRIGGER usage_daily_detail_change AFTER UPDATE OF calls, input, cache_read, cache_write, cache_write_long, output ON usage_detail
+station/src/store/usage-unified.ts:35:            tokens = tokens + NEW.input - OLD.input + NEW.cache_read - OLD.cache_read + NEW.cache_write - OLD.cache_write
+station/src/store/usage-unified.ts:36:              + NEW.cache_write_long - OLD.cache_write_long + NEW.output - OLD.output
+station/src/store/usage.ts:14:  id: string; at: number; model: string | null; subagent: boolean; fast: boolean; input: number; cacheRead: number;
+station/src/store/usage.ts:15:  cacheWrite: number; cacheWriteLong: number; output: number; calls: number; context: number | null; window: number | null;
+station/src/store/usage.ts:30:  model: string | null; fast: boolean; calls: number; input: number; cacheRead: number; cacheWrite: number;
+station/src/store/usage.ts:31:  cacheWriteLong: number; output: number;
+station/src/store/usage.ts:99:      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
+station/src/store/usage.ts:120:        c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
+station/src/store/usage.ts:201:/// when it was made (ms), at which speed, and what it wrote to the cache for five minutes and for an hour.
+station/src/store/usage.ts:204:  at: number; fast: boolean; cacheWrite: number; cacheWriteLong: number;
+station/src/store/usage.ts:208:export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
+station/src/store/usage.ts:218:    at: r.at, fast: r.fast !== 0 && r.fast !== null, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long,
+station/src/store/usage.ts:235:    model: r.model, fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
+station/src/store/usage.ts:236:    cacheWriteLong: r.cache_write_long, output: r.output,
+station/src/store/usage.ts:263:        `SELECT runtime, NULLIF(model, '') AS model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+station/src/updates/runtimes.ts:86:/// index revalidated (the prefetched tarball does not refresh it, and a cached index from before this release could
+station/src/updates/updates.ts:824:      // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
+station/src/updates/updates.ts:904:  /// and put in npm's cache for the install to take: the version fetched; null when it was not (npm then downloads it
+station/src/updates/updates.ts:923:      const [ok, said] = await run(npm, ["cache", "add", file], env, 120_000);
+station/src/updates/updates.ts:925:      log.warn("updates", "Codex's build not put in npm's cache; npm downloads it", { said: tail(said, "en") });
+station/src/usage/counter.ts:103:        input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
+station/src/usage/counter.ts:108:      // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
+station/src/usage/counter.ts:116:        input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
+station/src/usage/counter.ts:120:      // dsh's counts are apart: input is what was not cached. The model's window comes before a request's calls.
+station/src/usage/counter.ts:131:      const [input, cacheRead, cacheWrite] = [n(get(usage, "inputTokens")), n(get(usage, "cacheReadTokens")), n(get(usage, "cacheWriteTokens"))];
+station/src/usage/counter.ts:134:        input, cacheRead, cacheWrite, cacheWriteLong: 0, output: n(get(usage, "outputTokens")), calls: 1,
+station/src/usage/counter.ts:135:        context: subagent ? null : input + cacheRead + cacheWrite, window: state.window ?? null,
+station/src/usage/counter.ts:146:      const written = n(get(usage, "cache_creation_input_tokens"));
+station/src/usage/counter.ts:147:      const split = get(usage, "cache_creation");
+station/src/usage/counter.ts:153:      const cacheRead = n(get(usage, "cache_read_input_tokens"));
+station/src/usage/counter.ts:156:        id, at, model: name, subagent: side, fast: get(usage, "speed") === "fast", input, cacheRead, cacheWrite: short,
+station/src/usage/counter.ts:157:        cacheWriteLong: long, output: n(get(usage, "output_tokens")), calls: 1, context: side ? null : input + cacheRead + written, window: null,
+station/src/usage/counter.ts:176:        // has what was cached in it.
+station/src/usage/counter.ts:180:        const cached = Math.min(n(get(last, "cached_input_tokens")), sent);
+station/src/usage/counter.ts:183:          input: sent - cached, cacheRead: cached, cacheWrite: 0, cacheWriteLong: 0, output: n(get(last, "output_tokens")), calls: 1,
+station/src/usage/counter.ts:705:        const cached = known.get(name);
+station/src/usage/counter.ts:706:        if (cached !== undefined) return cached;

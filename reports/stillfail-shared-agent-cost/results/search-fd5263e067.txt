@@ -1,0 +1,1423 @@
+apps/mbui/mbui/scripts/gen_unicode.py:26:CACHE = os.path.join(ROOT, "out", "ucd", VERSION)
+apps/mbui/mbui/scripts/gen_unicode.py:41:    path = os.path.join(CACHE, name)
+apps/mbui/mbui/scripts/gen_unicode.py:43:        os.makedirs(CACHE, exist_ok=True)
+apps/mbui/mbui/src/host/apple_webm.h:14:@interface MBWebCache : NSObject
+apps/mbui/mbui/src/host/apple_webm.h:18:@implementation MBWebCache
+apps/mbui/mbui/src/host/apple_webm.h:25:@property(nonatomic, strong) MBWebCache *cache;
+apps/mbui/mbui/src/host/apple_webm.h:46:@property(nonatomic, strong) NSMutableArray<MBWebCache *> *cache;
+apps/mbui/mbui/src/host/apple_webm.h:189:    MBWebCache *cached = [MBWebCache new];
+apps/mbui/mbui/src/host/apple_webm.h:190:    cached.off = off; cached.bytes = [NSMutableData new]; r.cache = cached;
+apps/mbui/mbui/src/host/apple_webm.h:191:    [self.cache addObject:cached];
+apps/mbui/mbui/src/host/apple_webm.h:192:    if (self.cache.count > 4) [self.cache removeObjectAtIndex:0];
+apps/mbui/mbui/src/host/apple_webm.h:246:  for (MBWebCache *cached in [self.cache reverseObjectEnumerator]) {
+apps/mbui/mbui/src/host/apple_webm.h:247:    long long end = cached.off + (long long)cached.bytes.length;
+apps/mbui/mbui/src/host/apple_webm.h:248:    if (l.next < cached.off || l.next >= end) continue;
+apps/mbui/mbui/src/host/apple_webm.h:250:    NSData *data = [cached.bytes subdataWithRange:NSMakeRange((NSUInteger)(l.next - cached.off), (NSUInteger)n)];
+apps/mbui/mbui/src/host/apple_webm.h:339:  if (r.cache && n) [r.cache.bytes appendBytes:bytes length:(NSUInteger)n];
+apps/mbui/mbui/src/host/apple_webm.h:547:  video.cache = [NSMutableArray new];
+apps/mbui/mbui/src/host/linux_browser_login.c:126:    const char *headers[] = {"Location", done, "Cache-Control", "no-store"};
+apps/mbui/mbui/src/host/linux_browser_login.c:129:    const char *headers[] = {"Content-Type", "text/html; charset=utf-8", "Cache-Control", "no-store"};
+apps/mbui/mbui/src/host/linux_update.h:5:// the app's cache ($XDG_CACHE_HOME/<id>/updates), picking up where a cut connection left off (the bytes so far kept in
+apps/mbui/mbui/src/host/linux_update.h:46:// where its updates and what they did are kept: $XDG_CACHE_HOME/<id>/
+apps/mbui/mbui/src/host/linux_update.h:47:static char *update_dir(const char *name) { return g_build_filename(g_get_user_cache_dir(), app_id(), name, NULL); }
+apps/mbui/mbui/src/host/linux_update.h:49:// What an update did, on the log and in the app's cache (update.log: a program the desktop starts writes to nowhere
+apps/mbui/mbui/src/host/linux_update.h:123:  soup_message_headers_append(h, "Cache-Control", "no-cache");
+apps/mbui/mbui/src/host/win_browser_login.c:138:    const char *headers[] = {"Location", done, "Cache-Control", "no-store"};
+apps/mbui/mbui/src/host/win_browser_login.c:141:    const char *headers[] = {"Content-Type", "text/html; charset=utf-8", "Cache-Control", "no-store"};
+apps/mbui/mbui/web/host.js:1814:  const advCache = new Map();
+apps/mbui/mbui/web/host.js:1843:    advCache.clear();
+apps/mbui/mbui/web/host.js:1910:    let w = advCache.get(ak);
+apps/mbui/mbui/web/host.js:1913:      advCache.set(ak, w);
+client/core-ts/bench/log-sync.ts:36:    return [n, { kind: "letter", thread: 7, n, text: "cached Markdown ".repeat(1000) }] as [number, unknown];
+client/core-ts/harness/station.ts:100:      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+client/core-ts/scripts/math-font.ts:42:  `export const variantCacheIds: Record<string, string> = ${JSON.stringify(FONT.variantCacheIds)};\n` +
+client/core-ts/scripts/writes.ts:11://            fields): written freely. What is kept shared outside parameters (the store, the data, caches) is frozen
+client/core-ts/src/asks.ts:109:      const response = yield* Effect.result(this.#host.fetch({ method: "GET", url, headers: [["cache-control", "no-cache"]], body: null }));
+client/core-ts/src/cache-policy.ts:1:// A cold prompt cache: the same decision in the station that starts the agent and the core that shows its choice.
+client/core-ts/src/cache-policy.ts:2:// Costs are estimates in USD at the model's API list price; zero means every expired cache, priced or not.
+client/core-ts/src/composer.ts:89:  /// Cached only for the account database it was read from.
+client/core-ts/src/composer.ts:204:    const before = this.#cached(key);
+client/core-ts/src/composer.ts:212:    const other = this.#cached(alias);
+client/core-ts/src/composer.ts:240:  #cached(key: string): State | undefined {
+client/core-ts/src/core/calls.ts:95:  | { kind: "cacheUsage" }
+client/core-ts/src/core/calls.ts:107:  | { kind: "cacheClear"; station: string; thread: number }
+client/core-ts/src/core/calls.ts:111:  | { kind: "cacheFileClear"; station: string; key: string; name: string }
+client/core-ts/src/core/calls.ts:1028:    case "cache.usage":
+client/core-ts/src/core/calls.ts:1029:      return { kind: "cacheUsage" };
+client/core-ts/src/core/calls.ts:1061:    case "cache.file.clear": {
+client/core-ts/src/core/calls.ts:1067:      return { kind: "cacheFileClear", station: p.station as string, key: p.key as string, name: p.name as string };
+client/core-ts/src/core/calls.ts:1069:    case "cache.clear": {
+client/core-ts/src/core/calls.ts:1074:      return { kind: "cacheClear", station: p.station as string, thread: p.thread as number };
+client/core-ts/src/data.ts:1369:  /// What every account's database keeps of each chat (AccountDb.cacheUsage).
+client/core-ts/src/data.ts:1370:  cacheUsage(): ReturnType<AccountDb["cacheUsage"]> {
+client/core-ts/src/data.ts:1371:    return this.dbs().flatMap((db) => db.cacheUsage());
+client/core-ts/src/db/account.ts:180:class Cache {
+client/core-ts/src/db/account.ts:268:  readonly #cache = new Cache(4096);
+client/core-ts/src/db/account.ts:269:  readonly #logCache = new Cache(8192);
+client/core-ts/src/db/account.ts:387:      this.#cache.clear();
+client/core-ts/src/db/account.ts:388:      this.#logCache.clear();
+client/core-ts/src/db/account.ts:575:    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+client/core-ts/src/db/account.ts:578:    this.#cache.set(key, value ?? null);
+client/core-ts/src/db/account.ts:593:      this.#cache.set(key, frozen(JSON.parse(json)));
+client/core-ts/src/db/account.ts:601:      this.#cache.set(key, null);
+client/core-ts/src/db/account.ts:610:    if (this.#cache.has(key)) return this.#cache.get(key) === true;
+client/core-ts/src/db/account.ts:612:    this.#cache.set(key, known);
+client/core-ts/src/db/account.ts:625:    this.#cache.set(K("listed", station, list), true);
+client/core-ts/src/db/account.ts:666:        for (const r of this.sql.all("SELECT key, ord, summary FROM session WHERE station = ? AND listed = 1", [station])) c.set(String(r[0]), this.#cached(K("sum", station, String(r[0])), r[2]), [r[1] as number]);
+client/core-ts/src/db/account.ts:686:  #cached(key: string, json: SqlValue, make?: (parsed: J) => J): J {
+client/core-ts/src/db/account.ts:687:    const hit = this.#cache.get(key);
+client/core-ts/src/db/account.ts:690:    this.#cache.set(key, v);
+client/core-ts/src/db/account.ts:697:    return this.#cached(K("chat", station, archived, id), json, (row) => {
+client/core-ts/src/db/account.ts:731:    this.#cache.set(K("chat", station, archived, id), kept);
+client/core-ts/src/db/account.ts:772:    this.#cache.delete(K("chat", station, archived, id));
+client/core-ts/src/db/account.ts:898:    return r && r[0] !== null ? this.#cached(K("sum", station, key), r[0]) : undefined;
+client/core-ts/src/db/account.ts:904:    return r && r[0] !== null ? this.#cached(K("sum", station, key), r[0]) : undefined;
+client/core-ts/src/db/account.ts:955:    this.#cache.set(K("sum", station, key), kept);
+client/core-ts/src/db/account.ts:964:    this.#cache.delete(K("detail", station, key));
+client/core-ts/src/db/account.ts:1005:        this.#cache.delete(K("sum", station, key));
+client/core-ts/src/db/account.ts:1028:    const hit = this.#cache.get(ck);
+client/core-ts/src/db/account.ts:1032:      this.#cache.set(ck, null);
+client/core-ts/src/db/account.ts:1040:    this.#cache.set(ck, v);
+client/core-ts/src/db/account.ts:1125:    return this.#cached(K("thread", station, id), json, (t) => {
+client/core-ts/src/db/account.ts:1135:    const hit = this.#cache.get(K("thread", station, id));
+client/core-ts/src/db/account.ts:1199:    this.#cache.delete(K("thread", station, id));
+client/core-ts/src/db/account.ts:1227:    this.#cache.delete(K("thread", station, id));
+client/core-ts/src/db/account.ts:1289:    this.#cache.delete(K("thread", station, id));
+client/core-ts/src/db/account.ts:1330:    return this.#cached(K("jobitem", station, id), json, (job) => {
+client/core-ts/src/db/account.ts:1339:    return r ? this.#cached(K("job", station, id), r[0]) : undefined;
+client/core-ts/src/db/account.ts:1381:    this.#cache.delete(K("job", station, id));
+client/core-ts/src/db/account.ts:1382:    this.#cache.delete(K("jobitem", station, id));
+client/core-ts/src/db/account.ts:1490:      this.#logCache.clear();
+client/core-ts/src/db/account.ts:1500:    const cacheKey = K(table, station, id);
+client/core-ts/src/db/account.ts:1501:    const hit = this.#logIndices.get(cacheKey);
+client/core-ts/src/db/account.ts:1505:    this.#logIndices.set(cacheKey, new LogIndex(numbers));
+client/core-ts/src/db/account.ts:1520:        const item = this.#logCache.get(K(table, station, id, n));
+client/core-ts/src/db/account.ts:1538:    const hit = this.#logCache.get(key);
+client/core-ts/src/db/account.ts:1541:    this.#logCache.set(key, v);
+client/core-ts/src/db/account.ts:1567:      const cacheKey = K(table, station, id);
+client/core-ts/src/db/account.ts:1568:      const index = this.#logIndices.get(cacheKey);
+client/core-ts/src/db/account.ts:1569:      // A failed SQL write must never leave a cached index of a different transaction state.
+client/core-ts/src/db/account.ts:1570:      this.#logIndices.delete(cacheKey);
+client/core-ts/src/db/account.ts:1589:          this.#logCache.delete(K(table, station, id, n));
+client/core-ts/src/db/account.ts:1595:        for (const r of this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} > ?`, [station, k, cutAfter])) this.#logCache.delete(K(table, station, id, r[0] as number));
+client/core-ts/src/db/account.ts:1607:        this.#logIndices.set(cacheKey, index);
+client/core-ts/src/db/account.ts:1781:  /// Owners with cached trees from an older reading, in bounded pages, so updating them does not hold up the app.
+client/core-ts/src/db/account.ts:1799:  /// A bounded page of a cached tree owner's source entries, newest first. Sequence numbers need not be contiguous.
+client/core-ts/src/db/account.ts:1863:  /// is); what a session has counted with its first thread. For the device's page of what it keeps (`cache.usage`).
+client/core-ts/src/db/account.ts:1864:  cacheUsage(): { station: string; thread: number; view: J | null; sessions: string[]; bytes: number }[] {
+client/core-ts/src/db/account.ts:1908:      this.#logCache.clear();
+client/core-ts/src/db/account.ts:1950:      this.#cache.clear();
+client/core-ts/src/db/account.ts:1951:      this.#logCache.clear();
+client/core-ts/src/drive-kept.ts:2:// Android's DriveCache.kt keeps them on the phone): read again, what is kept is answered, not asked of the station
+client/core-ts/src/drive-kept.ts:9:// (`cache.usage`'s `drive`) and let go all at once (`drive.kept.clear`).
+client/core-ts/src/drive-kept.ts:13:// file at a time (`cache.file.clear`), a chat's with it (`cache.clear`), and listed with its chat (`cache.usage`).
+client/core-ts/src/drive-kept.ts:37:/// Files read whole or from their start: the least lately read go past this (DriveCache.kt FILES_MAX).
+client/core-ts/src/drive-kept.ts:39:/// Videos and songs, by the ranges played (DriveCache.kt PLAYED_MAX).
+client/core-ts/src/history.ts:553:        const cached = n("cachedTokens");
+client/core-ts/src/history.ts:554:        const rate = input > 0 ? `${format.round((cached / input) * 100)}%` : t("core-logic.history.usage.unreported");
+client/core-ts/src/history.ts:558:          { label: t("core-logic.history.usage.cached"), value: format.compactNumber(cached) },
+client/core-ts/src/history.ts:569:        const cached = n("cachedTokens");
+client/core-ts/src/history.ts:570:        const rate = input > 0 ? t("core-logic.history.usage.line.rate", { rate: format.round((cached / input) * 100) }) : "";
+client/core-ts/src/host.ts:136:  /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
+client/core-ts/src/markdown.ts:3:// cache by the text). GitHub's flavour as the web read it before (micromark, as react-markdown did), read by
+client/core-ts/src/markdown.ts:59:/// The latest drawable older reading, if one is still kept. Each lookup is by the cache's primary key.
+client/core-ts/src/markdown.ts:118:/// Read and keep a current tree in the background, replacing the older one without temporarily doubling cache usage.
+client/core-ts/src/math-font.ts:6:export const variantCacheIds: Record<string, string> = {"normal":"N","bold":"B","italic":"I","bold-italic":"BI","fraktur":"F","bold-fraktur":"FB","sans-serif":"SS","bold-sans-serif":"SSB","sans-serif-italic":"SSI","monospace":"M","-smallop":"SO","-largeop":"LO","-tex-calligraphic":"C","-tex-bold-calligraphic":"CB","-tex-oldstyle":"OS","-tex-bold-oldstyle":"OB","-tex-mathit":"MI","-tex-variant":"V","-size3":"S3","-size4":"S4"};
+client/core-ts/src/math.ts:30:  static variantCacheIds = font.variantCacheIds;
+client/core-ts/src/math.ts:33:    for (const variant of Object.keys(this.variant)) this.variant[variant].cacheID = "TEX-" + (font.variantCacheIds[variant] ?? "N");
+client/core-ts/src/math.ts:74:  output ??= new SVG({ fontData: TexFont, fontCache: "local", linebreaks: { inline: false }, displayOverflow: "overflow" });
+client/core-ts/src/md-ahead.ts:23:/// Sources used by the chat and history readers in a kept entry. Only a source whose old key is actually in the cache
+client/core-ts/src/md-ahead.ts:67:  /// chats. The old cache did not keep its source, so read it from each owner's kept entries in bounded pages.
+client/core-ts/src/ops.ts:347:    // The station's default for a cold cache and its estimated USD threshold, unless the chat chose (`session.settings`
+client/core-ts/src/runtime.ts:10:/// measurement's next sample, a shown clock's next second) or does nothing to what is shown (traces sent, a cache let
+client/core-ts/src/shapes/schema.ts:94:    ["afresh", opt("bool"), { doc: "Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);\nabsent: as its station is set (`StationContext::afreshWhenCold`)." }],
+client/core-ts/src/shapes/schema.ts:861:    ["context", opt("StationContext"), { doc: "How it goes on with a session whose prompt cache is over. None from a station older than it, which then\ndoes not offer it." }],
+client/core-ts/src/shapes/schema.ts:1129:    ["cachedTokens", "i64", { client: "I54" }],
+client/core-ts/src/shapes/schema.ts:1137:    ["cacheMs", opt("i64"), { client: opt("I54"), doc: "How long what that call left in the prompt cache is kept after it (5 minutes, or an hour), where its\nruntime tells what it wrote (Claude's). Absent otherwise." }],
+client/core-ts/src/shapes/schema.ts:1138:    ["rereadCost", opt("f64"), { doc: "What sending its context again once its cache is over would cost at API list prices, in dollars (all of it\nwritten to the cache again). Absent for an unpriced model." }],
+client/core-ts/src/shapes/schema.ts:1352:    ["where", opt("String"), { said: true, doc: "Where it is as people read it: ~/code/app; a repository only the station's cache has, its address." }],
+client/core-ts/src/shapes/schema.ts:1353:    ["cached", opt("bool"), { doc: "Only the station's cache has it (no checkout of the person's on the machine)." }],
+client/core-ts/src/shapes/schema.ts:1355:  ], { doc: "A directory offered for a new preset: a clone of the station's repository cache, or one a preset names." }),
+client/core-ts/src/shapes/schema.ts:2413:    ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],
+client/core-ts/src/shapes/schema.ts:2415:  ], { doc: "How a station goes on with a session whose prompt cache is over (`Overview.context`)." }),
+client/core-ts/src/shapes/schema.ts:2743:    ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],
+client/core-ts/src/shapes/schema.ts:3029:    ["tokens", "i64", { client: "I54", doc: "The tokens its calls read and wrote, the cache's too (what ranks the kinds; never said: one model's tokens are not another's)." }],
+client/core-ts/src/shapes/schema.ts:3036:    ["tokens", "i64", { client: "I54", doc: "Its tokens, read and written, the cache's too." }],
+client/core-ts/src/shapes/schema.ts:3412:    ["cacheCold", opt("ChatCacheCold"), { doc: "Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what\ngoing on would cost and offers a fresh context instead. Absent otherwise, and from a core before it." }],
+client/core-ts/src/shapes/schema.ts:3421:  ChatCacheCold: struct([
+client/core-ts/src/shapes/schema.ts:3423:    ["status", "String", { said: true, doc: "The cache's state, separately from its reread cost, for a compact notice." }],
+client/core-ts/src/shapes/schema.ts:3426:  ], { doc: "A chat's agent whose prompt cache is over (ChatView::cacheCold)." }),
+client/core-ts/src/station/calls.ts:465:  handlers.cacheFileClear = (inner, call) => {
+client/core-ts/src/station/calls.ts:466:    const c = call as Extract<Call, { kind: "cacheFileClear" }>;
+client/core-ts/src/station/calls.ts:510:  handlers.cacheUsage = (inner) =>
+client/core-ts/src/station/calls.ts:514:      const chats = inner.data.cacheUsage().map(({ view, ...chat }) => ({ ...chat, title: view === null ? null : format.chatTitle(view), files: [] as { bytes: number }[] }));
+client/core-ts/src/station/calls.ts:527:  handlers.cacheClear = (inner, call) => {
+client/core-ts/src/station/calls.ts:528:    const c = call as Extract<Call, { kind: "cacheClear" }>;
+client/core-ts/src/station/calls.ts:530:      const sessions = inner.data.cacheUsage().find((x) => x.station === c.station && x.thread === c.thread)?.sessions ?? [];
+client/core-ts/src/station/machine-logins.ts:268:const HTML: [string, string][] = [["content-type", "text/html; charset=utf-8"], ["cache-control", "no-store"]];
+client/core-ts/src/station/usage-part.ts:46:/// cache's too, and the calls). The rest of the history (cards, chats by place, those archived, tasks run here) stays
+client/core-ts/src/station/usage-part.ts:59:    at.tokens += sign * (n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")));
+client/core-ts/src/station/usage-part.ts:93:      .reduce((sum, r) => sum + n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")), 0);
+client/core-ts/src/store.ts:4:// its last one leaves; its value stays cached until then. `set` stores a value and schedules its emission; emissions
+client/core-ts/src/store.ts:199:  /// Adds a subscriber; sends the cached value at once if there is one, and starts the topic if it was not live.
+client/core-ts/src/store.ts:216:    const cached = entry.sent;
+client/core-ts/src/store.ts:217:    if (cached === undefined && this.#updatesPending.get(key) === entry) {
+client/core-ts/src/store.ts:222:    if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
+client/core-ts/src/store.ts:237:      if (cached === undefined && this.#held !== null && holds(topic)) this.invalidate(topic);
+client/core-ts/src/views/brief.ts:3:// and used (its tokens, the cache's hit rate, how full its context is), the latest of what it did and what it does now,
+client/core-ts/src/views/brief.ts:6:import { coldAfresh, coldWorth } from "../cache-policy.ts";
+client/core-ts/src/views/brief.ts:133:/// Of a chat's agents (ViewsInner `agent`), the one at rest whose prompt cache is over, with a context worth going on
+client/core-ts/src/views/brief.ts:135:/// (ChatCacheCold); and in how long, at `now`, another's is over (Infinity: none's to come). None at work, with no
+client/core-ts/src/views/brief.ts:136:/// runtime session to go on in, or of a station that does not tell how long its cache lasts. One waiting on work of its
+client/core-ts/src/views/brief.ts:139:export function cacheCold(agents: unknown, now: number, station = false, threshold?: number): [J, number] {
+client/core-ts/src/views/brief.ts:149:    const [at, ms, context] = [get(u, "lastCallAt"), get(u, "cacheMs"), get(u, "contextTokens")];
+client/core-ts/src/views/brief.ts:165:  const status = t("core-views.agent.cacheColdStatus");
+client/core-ts/src/views/brief.ts:166:  const detail = cold.cost !== null ? t("core-views.agent.cacheColdCostDetail", { cost: money(cold.cost) })
+client/core-ts/src/views/brief.ts:167:    : cold.context !== null ? t("core-views.agent.cacheColdTokensDetail", { tokens: format.compactNumber(cold.context) })
+client/core-ts/src/views/brief.ts:168:    : t("core-views.agent.cacheColdUnknownDetail");
+client/core-ts/src/views/brief.ts:239:      const percent = format.round((n("cachedTokens") / n("inputTokens")) * 100);
+client/core-ts/src/views/brief.ts:240:      out.cache = { percent, text: `${percent}%`, level: "ok" } satisfies Meter;
+client/core-ts/src/views/fleet.ts:38:/// model, their tokens (read and written, the cache's too) and what they would cost at API prices (as the usage page
+client/core-ts/src/views/fleet.ts:55:      const tokens = n(row, "input") + n(row, "cacheRead") + n(row, "cacheWrite") + n(row, "output");
+client/core-ts/src/views/usage.ts:96:  cacheRead = 0;
+client/core-ts/src/views/usage.ts:97:  cacheWrite = 0;
+client/core-ts/src/views/usage.ts:109:    this.cacheRead += n("cacheRead");
+client/core-ts/src/views/usage.ts:110:    this.cacheWrite += n("cacheWrite");
+client/core-ts/src/views/usage.ts:121:    return this.input + this.cacheRead + this.cacheWrite + this.output;
+client/core-ts/src/views/usage.ts:178:        ["cacheRead", t("core-views.usage.prices.cache_read")],
+client/core-ts/src/views/usage.ts:179:        ["cacheWrite", t("core-views.usage.prices.cache_write")],
+client/core-ts/src/views/usage.ts:180:        ["cacheWriteLong", t("core-views.usage.prices.cache_write_long")],
+client/core-ts/src/views/usage.ts:183:    ).filter(([key]) => !key.startsWith("cacheWrite") || matched.some(([, p]) => typeof get(p, key) === "number"));
+client/core-ts/src/views/usage.ts:441:  const input = total.input + total.cacheRead + total.cacheWrite;
+client/core-ts/src/views/usage.ts:447:    { label: t("core-views.usage.tile.input"), value: count(input), sub: t("core-views.usage.tile.input_sub", { percent: percent(total.cacheRead, input) }), ...vs(input, earlier.input + earlier.cacheRead + earlier.cacheWrite) },
+client/core-ts/src/views/usage.ts:469:        if (spent !== undefined) for (const k of ["cost", "calls", "input", "cacheRead", "cacheWrite", "output", "unpriced"] as const) (sum as J)[k] += spent[k];
+client/core-ts/src/views/views.ts:1129:    // Its agent's prompt cache over: said over the composer, computed again as the next one's is over.
+client/core-ts/src/views/views.ts:1132:    const [cold, coldIn] = v.archived === true ? [null, Infinity] : brief.cacheCold(v.agents, this.#core.host.nowMs(), get(context, "afreshWhenCold") === true, typeof above === "number" ? above : undefined);
+client/core-ts/src/views/views.ts:1133:    if (cold !== null) v.cacheCold = cold;
+client/core-ts/test/adb-grants.test.ts:33:    // An older cached grant may know its session but not the chat address yet.
+client/core-ts/test/asks.test.ts:190:test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cached_one", async () => {
+client/core-ts/test/brief.test.ts:5:import { cacheCold, card, jobsText, latestOf, recentOf, usageNow, workText } from "../src/views/brief.ts";
+client/core-ts/test/brief.test.ts:44:  const live = { usage: { modelCalls: 40, inputTokens: 1_200_000, cachedTokens: 1_080_000, outputTokens: 34_000, contextTokens: 190_000, contextWindow: 200_000, cost: 4.2, unpricedCalls: 0 } };
+client/core-ts/test/brief.test.ts:49:  assert.deepEqual(c.cache, { percent: 90, text: "90%", level: "ok" });
+client/core-ts/test/brief.test.ts:59:  assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);
+client/core-ts/test/brief.test.ts:63:  const told = { modelCalls: 3, inputTokens: 100, cachedTokens: 50, outputTokens: 5, contextTokens: 40, contextWindow: null, cost: 0.1, unpricedCalls: 0 };
+client/core-ts/test/brief.test.ts:75:  assert.deepEqual(c.cache, { percent: 50, text: "50%", level: "ok" });
+client/core-ts/test/brief.test.ts:79:test("an_agent_at_rest_whose_cache_is_over_is_offered_a_fresh_context", () => {
+client/core-ts/test/brief.test.ts:82:    ({ modelCalls: 3, inputTokens: 1, cachedTokens: 0, outputTokens: 1, contextTokens, lastCallAt, cacheMs: HOUR, rereadCost: 1.6, ...extra });
+client/core-ts/test/brief.test.ts:85:  // Its cache over: said with what going on reads again and what it costs.
+client/core-ts/test/brief.test.ts:86:  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", status: "缓存已过期", detail: "重读约 $1.60", afresh: false }, Infinity]);
+client/core-ts/test/brief.test.ts:88:  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR, true), [{ session: "a", status: "缓存已过期", detail: "重读约 $1.60", afresh: true }, Infinity]);
+client/core-ts/test/brief.test.ts:91:  assert.equal(cacheCold([chose(true)], HOUR)[0].afresh, true);
+client/core-ts/test/brief.test.ts:92:  assert.equal(cacheCold([chose(false)], HOUR, true)[0].afresh, false);
+client/core-ts/test/brief.test.ts:94:  assert.equal(cacheCold([agent("a", usage(0, 200_000), { wait: { since: 0, seconds: 600 } })], HOUR)[0].session, "a");
+client/core-ts/test/brief.test.ts:96:  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR - 5 * MIN), [null, 5 * MIN]);
+client/core-ts/test/brief.test.ts:98:  assert.equal(cacheCold([agent("a", usage(0, 200_000, { rereadCost: undefined }))], HOUR)[0].detail, "重读要 200K token");
+client/core-ts/test/brief.test.ts:100:  assert.equal(cacheCold([agent("a", usage(0, 80_000)), agent("b", usage(0, 300_000))], 2 * HOUR)[0].session, "b");
+client/core-ts/test/brief.test.ts:101:  // None at work, cleared already, with a small context, or not told how long its cache lasts.
+client/core-ts/test/brief.test.ts:107:    agent("a", usage(0, 200_000, { cacheMs: undefined })),
+client/core-ts/test/brief.test.ts:108:  ]) assert.deepEqual(cacheCold([a], 2 * HOUR), [null, Infinity]);
+client/core-ts/test/brief.test.ts:111:test("the cache choice follows the station's cost threshold unless the chat chose", () => {
+client/core-ts/test/brief.test.ts:117:      usage: { modelCalls: 1, contextTokens, lastCallAt: 0, cacheMs: hour, ...(cost === undefined ? {} : { rereadCost: cost }) },
+client/core-ts/test/brief.test.ts:120:  assert.equal(cacheCold([agent(0.99)], hour, true, 1)[0].afresh, false);
+client/core-ts/test/brief.test.ts:121:  assert.equal(cacheCold([agent(1)], hour, true, 1)[0].afresh, true);
+client/core-ts/test/brief.test.ts:122:  assert.equal(cacheCold([agent(undefined)], hour, true, 1)[0].afresh, false);
+client/core-ts/test/brief.test.ts:123:  assert.equal(cacheCold([agent(0.2, true)], hour, true, 1)[0].afresh, true);
+client/core-ts/test/brief.test.ts:124:  assert.equal(cacheCold([agent(2, false)], hour, true, 1)[0].afresh, false);
+client/core-ts/test/brief.test.ts:126:  assert.equal(cacheCold([agent(2, undefined, 40_000)], hour, true, 1)[0].afresh, true);
+client/core-ts/test/brief.test.ts:127:  assert.equal(cacheCold([agent(2, undefined, 40_000)], hour, false, 1)[0].afresh, false);
+client/core-ts/test/brief.test.ts:133:    usage: { modelCalls: 1, contextTokens: 40_000, lastCallAt: 0, cacheMs: hour, rereadCost: 0.3 } } };
+client/core-ts/test/brief.test.ts:134:  assert.equal(cacheCold([agent], hour, true, 10)[0]?.afresh, true);
+client/core-ts/test/brief.test.ts:137:test("a zero threshold shows a fresh choice whenever the cache expires", () => {
+client/core-ts/test/brief.test.ts:142:      usage: { modelCalls: 1, lastCallAt: 0, cacheMs: hour, ...(contextTokens === undefined ? {} : { contextTokens }) } },
+client/core-ts/test/brief.test.ts:146:    assert.equal(cacheCold([agent(context)], hour, true, 0)[0]?.afresh, true);
+client/core-ts/test/brief.test.ts:148:  assert.equal(cacheCold([agent()], hour, true, 0)[0]?.detail, "重读费用未知");
+client/core-ts/test/brief.test.ts:149:  assert.deepEqual(cacheCold([agent()], hour - 1, true, 0), [null, 1]);
+client/core-ts/test/brief.test.ts:150:  assert.deepEqual(cacheCold([agent()], hour, false, 0), [null, Infinity]);
+client/core-ts/test/brief.test.ts:151:  assert.equal(cacheCold([agent(undefined, false)], hour, true, 0)[0]?.afresh, false);
+client/core-ts/test/channels.test.ts:635:test("an_incomplete_page_fails_without_losing_the_cache_and_can_be_retried", async () => {
+client/core-ts/test/composer-alias.test.ts:104:test("pending_aliases_and_cached_composers_do_not_cross_account_databases", async () => {
+client/core-ts/test/composer.test.ts:91:  call(t.core, t.ui, 205, "cache.usage", {});
+client/core-ts/test/data.test.ts:623:  const usage = data.cacheUsage().sort((a, b) => a.thread - b.thread);
+client/core-ts/test/data.test.ts:631:  assert.deepEqual(data.cacheUsage().map((u) => u.thread), [8]);
+client/core-ts/test/data.test.ts:687:  assert.deepEqual(data.cacheUsage().map((u) => [u.thread, u.bytes]).sort((a, b) => a[0]! - b[0]!), [[7, tree.length + 2], [8, '{"text":"other"}'.length + 2]]);
+client/core-ts/test/data.test.ts:1295:test("a_rolled_back_transcript_does_not_leave_a_slack_name_in_the_cache", async () => {
+client/core-ts/test/data.test.ts:1313:    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]], "the cache reflects the rolled-back database");
+client/core-ts/test/data.test.ts:1372:test("a_cached_window_reuses_payloads_without_reading_their_json_again_and_tracks_edits", async () => {
+client/core-ts/test/data.test.ts:1383:    assert.equal(db().reads.length, 0, "no payload or metadata query for the cached window");
+client/core-ts/test/drive-kept.test.ts:2:// DriveCache.kt keeps them: read again, answered from what is kept without asking the station; read anew once it
+client/core-ts/test/drive-kept.test.ts:123:  call(t.core, ui, 6, "cache.usage", {});
+client/core-ts/test/drive-kept.test.ts:129:  call(t.core, ui, 8, "cache.usage", {});
+client/core-ts/test/drive-kept.test.ts:358:  call(t.core, ui, 5, "cache.usage", {});
+client/core-ts/test/drive-kept.test.ts:365:  call(t.core, ui, 6, "cache.file.clear", { station: ST, key: "k1", name: "plan.pdf" });
+client/core-ts/test/drive-kept.test.ts:370:  call(t.core, ui, 8, "cache.clear", { station: ST, thread: 7 });
+client/core-ts/test/drive-kept.test.ts:449:  call(t.core, ui, 1, "cache.usage", {});
+client/core-ts/test/fleet.test.ts:16:const call = (day: string, profile: string, input: number, output: number, cost: number | null, more: J = {}): J => ({ day, profile, calls: 1, input, cacheRead: 0, cacheWrite: 0, output, cost, ...more });
+client/core-ts/test/fleet.test.ts:31:      call("2026-10-26", "p1", 1000, 100, 2, { cacheRead: 500_000, ...opus }),
+client/core-ts/test/history.test.ts:224:    usage: { modelCalls: 3, inputTokens: 2000, cachedTokens: 1000, outputTokens: 50 },
+client/core-ts/test/jobs.test.ts:147:    elsewhere: [{ id: "playwright", path: "~/Library/Caches/ms-playwright", bytes: 8e8 }],
+client/core-ts/test/log-index.test.ts:7:  const cache = new LogIndices(6, 2);
+client/core-ts/test/log-index.test.ts:9:  cache.set("a", a); cache.set("b", b);
+client/core-ts/test/log-index.test.ts:10:  assert.equal(cache.get("a"), a);
+client/core-ts/test/log-index.test.ts:11:  cache.set("c", c);
+client/core-ts/test/log-index.test.ts:12:  assert.equal(cache.get("b"), undefined);
+client/core-ts/test/log-index.test.ts:14:  cache.set("a", a);
+client/core-ts/test/log-index.test.ts:15:  assert.equal(cache.get("c"), undefined, "growing one log also respects the total numbers budget");
+client/core-ts/test/log-index.test.ts:16:  cache.set("oversized", new LogIndex([0, 1, 2, 3, 4, 5, 6]));
+client/core-ts/test/log-index.test.ts:17:  assert.equal(cache.get("oversized"), undefined);
+client/core-ts/test/log-index.test.ts:18:  assert.equal(cache.get("a"), a);
+client/core-ts/test/log-index.test.ts:19:  cache.clear();
+client/core-ts/test/log-index.test.ts:20:  assert.equal(cache.get("a"), undefined);
+client/core-ts/test/markdown-upgrade.test.ts:45:    const cached = [...host.sqls.values()].flatMap((sql) => {
+client/core-ts/test/markdown-upgrade.test.ts:49:    assert.deepEqual(JSON.parse(String(cached[0]?.[0])), parse(text), "the current reading is kept in the background");
+client/core-ts/test/markdown-upgrade.test.ts:60:test("older_cached_trees_are_read_ahead_even_for_old_entries_and_transcripts", async () => {
+client/core-ts/test/markdown-upgrade.test.ts:92:      assert.deepEqual(JSON.parse(String(rows[0]?.[0])), parse(text), "a cached tree is updated without opening its chat or history");
+client/core-ts/test/md-ahead-work.test.ts:10:  const stable = "An already cached long reply: " + "same words. ".repeat(100);
+client/core-ts/test/md-ahead-work.test.ts:33:    assert.ok(stableChars > 0, "the first time, the old reply is identified for the cache");
+client/core-ts/test/md-ahead-work.test.ts:38:    assert.deepEqual(checks, [stableKey], "still check the cache, since it can have evicted a reading");
+client/core-ts/test/md-ahead-work.test.ts:59:test("a_reply_is_prepared_again_when_its_cached_reading_has_been_evicted", async () => {
+client/core-ts/test/md-ahead-work.test.ts:63:  const cached = new Map([[key, "old cached tree"]]);
+client/core-ts/test/md-ahead-work.test.ts:67:    has: (k: string) => cached.has(k),
+client/core-ts/test/md-ahead-work.test.ts:68:    get: (k: string) => cached.get(k) ?? null,
+client/core-ts/test/md-ahead-work.test.ts:69:    put: (k: string, value: string) => { cached.set(k, value); ready(); },
+client/core-ts/test/md-ahead-work.test.ts:80:    cached.delete(key);
+client/core-ts/test/md-ahead-work.test.ts:83:    assert.deepEqual(JSON.parse(cached.get(key)!), parse(text));
+client/core-ts/test/presets-topic.test.ts:34:  assert.ok(answer?.value, `the picker must receive the cached folders, got ${JSON.stringify(answer)}`);
+client/core-ts/test/station-flows.test.ts:553:test("a_cached_chat_opens_while_a_background_history_batch_is_being_kept", async () => {
+client/core-ts/test/station-flows.test.ts:579:    assert.ok(savedAtDisplay !== null, "the cached chat is shown");
+client/core-ts/test/station-flows.test.ts:614:test("a_cached_chat_opens_while_the_station_prepares_its_history_sweep", async () => {
+client/core-ts/test/station-flows.test.ts:634:    // A fresh sweep starts after the station's lists are read again. Opening this cached chat must not wait for the
+client/core-ts/test/station-flows.test.ts:638:    assert.ok(inspectedAtDisplay !== null, "the cached chat is shown");
+client/core-ts/test/station-flows.test.ts:645:test("a_cached_chat_opens_while_changed_channels_are_checked", async () => {
+client/core-ts/test/station-flows.test.ts:671:    assert.ok(inspectedAtDisplay !== null, "the cached chat is shown");
+client/core-ts/test/station-flows.test.ts:678:test("a_cached_chat_opens_while_an_older_station_schedules_history", async () => {
+client/core-ts/test/station-flows.test.ts:707:    assert.ok(scheduledAtDisplay !== null, "the cached chat is shown");
+client/core-ts/test/station-flows.test.ts:1949:  const row = (day: string, person: string, model: string, cost: number) => ({ day, session: "k", thread: 1, person, profile: "cc", runtime: "claude", model, calls: 1, input: 1, cacheRead: 0, cacheWrite: 0, output: 1, cost });
+client/core-ts/test/station-flows.test.ts:1976:    const row = (calls: number) => ({ day: today.day, session: "k", thread: 1, person: "a@x", profile: "cc", runtime: "claude", model: "m", calls, input: calls, cacheRead: 0, cacheWrite: 0, output: calls, cost: null });
+client/core-ts/test/station-flows.test.ts:2021:    const row = (calls: number) => ({ day: today.day, session: "k", thread: 1, person: "a@x", profile: "cc", runtime: "claude", model: "m", calls, input: calls, cacheRead: 0, cacheWrite: 0, output: calls, cost: null });
+client/core-ts/test/station-flows.test.ts:2155:  const row = (day: string, calls: number) => ({ day, session: "k", thread: 1, person: "a@x", profile: "cc", runtime: "claude", model: "m", calls, input: calls, cacheRead: 0, cacheWrite: 0, output: calls, cost: null });
+client/core-ts/test/station-flows.test.ts:2882:  const used = { modelCalls: 4, inputTokens: 1000, cachedTokens: 900, outputTokens: 20, model: "claude-opus-5-5", contextTokens: 300, contextWindow: null, cost: 1.5, unpricedCalls: 0 };
+client/core-ts/test/station-flows.test.ts:2896:  assert.deepEqual([card.cost, card.cache.text, card.context.text], ["$1.50", "90%", "300"]);
+client/core-ts/test/station-flows.test.ts:3543:    assert.equal(s.core.inner.data.logCount("entry", ST, "7", 151, 175), 25, "valid records from the failed page remain cached");
+client/core-ts/test/station.test.ts:225:  push("live", { key: "k1", type: "timeline", start: 0, entries: [{ kind: "text", text: "hi" }], usage: { modelCalls: 1, inputTokens: 1, cachedTokens: 0, outputTokens: 1 } });
+client/core-ts/test/station.test.ts:242:    const usage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
+client/core-ts/test/store.test.ts:77:test("sends_the_cached_value_or_error_at_once", async () => {
+client/core-ts/test/store.test.ts:80:  store.set(overview(), { ok: { cached: true } });
+client/core-ts/test/store.test.ts:84:  assert.deepEqual(host.takeEmitted(), [[2, value(5, { cached: true })]]);
+client/core-ts/test/store.test.ts:105:  assert.equal(store.get(overview()), 1, "cached through the grace period");
+client/core-ts/test/store.test.ts:234:  assert.equal(store.get(overview()), 2, "cached through the grace period");
+client/core-ts/test/store.test.ts:268:    assert.equal(formatted, 1, "a closed page is not formatted while its cache is kept");
+client/core-ts/test/store.test.ts:663:test("a_reopened_page_shows_its_cache_then_the_pending_dependency_update", async () => {
+client/core-ts/test/usage-part.test.ts:13:  day, session, thread: 7, person: "a@x", profile: "cc", runtime: "claude", model, calls, input: 10 * calls, cacheRead: 90 * calls, cacheWrite: 5 * calls, output: calls, cost: null, ...extra,
+client/core-ts/test/usage-part.test.ts:23:    d.tokens += r.input + r.cacheRead + r.cacheWrite + r.output;
+client/core-ts/test/usage.test.ts:14:  day, session: "ember:c-1", thread, person, profile, runtime: "claude", model, calls, input: 10 * calls, cacheRead: 90 * calls, cacheWrite: 0, output: calls, cost,
+client/core-ts/test/usage.test.ts:107:    value: ok({ rows: [{ day: "2026-10-02", model: "gpt-6-astra", calls: 1 }], prices: { note: "standard", rows: [{ model: "gpt-6-astra", input: rate, cacheRead: 0.01, output: 50.0 }] } }),
+client/core-ts/test/usage.test.ts:128:      prices: { rows: [{ model: "gpt-6-astra", input: 10.0, cacheRead: 1.0, output: 50.0 }, { model: "claude-opus-5-5", input: 4.0, cacheWrite: 5.0 }, { model: "gpt-6-sol", input: 2.0 }] },
+client/shell/src/lib.rs:746:                    let mut query = conn.prepare_cached("SELECT key, value FROM records WHERE tbl = ?1 AND key >= ?2 AND key < ?3 ORDER BY key").map_err(err)?;
+client/shell/src/lib.rs:1168:                conn.set_prepared_statement_cache_capacity(256);
+client/shell/src/lib.rs:1203:                        let mut statement = conn.prepare_cached(sql).map_err(err)?;
+client/shell/src/lib.rs:1208:                        let mut statement = conn.prepare_cached(sql).map_err(err)?;
+cloud/src/api.ts:104:  if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
+cloud/src/api.ts:173:  if (path === "/v1/relays" && method === "GET") return reply({ relay_urls: relayUrls(env) }, 200, { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
+cloud/src/apns.ts:18:let cached: { keyId: string; token: Promise<string>; until: number } | null = null;
+cloud/src/apns.ts:35:  if (cached && cached.keyId === key.keyId && cached.until > now) return cached.token;
+cloud/src/apns.ts:39:  cached = { keyId: key.keyId, token, until: now + KEEP_S };
+cloud/src/apns.ts:41:    if (cached?.token === token) cached = null;
+cloud/src/apns.ts:78:  if (text.includes("ExpiredProviderToken") || text.includes("InvalidProviderToken")) cached = null;
+cloud/src/auth.ts:84:    headers: { "cache-control": "no-store", "referrer-policy": "no-referrer", ...headers },
+cloud/src/changelog.ts:113:  return reply({ entries: list, released: have }, 200, { "cache-control": "public, max-age=300" });
+cloud/src/fcm.ts:17:let cached: { account: string; token: Promise<string | null>; until: number } | null = null;
+cloud/src/fcm.ts:34:  if (cached && cached.account === account.client_email && cached.until > now) return cached.token;
+cloud/src/fcm.ts:39:  cached = { account: account.client_email, token, until: now + 60 };
+cloud/src/fcm.ts:41:    if (cached?.token === token && !value) cached = null;
+cloud/src/fcm.ts:65:  if (cached?.account === account.client_email) cached.until = now + Math.max(60, (body.expires_in ?? 3600) - 300);
+cloud/src/fcm.ts:86:  if (response.status === 401) cached = null;
+cloud/src/icons.ts:8:  put(key: string, value: Uint8Array, options: { httpMetadata: { contentType: string; cacheControl: string } }): Promise<unknown>;
+cloud/src/icons.ts:18:const CACHE = "public, max-age=31536000, immutable";
+cloud/src/icons.ts:38:  await bucket.put(`icons/${name}`, bytes, { httpMetadata: { contentType: TYPES[kind]!, cacheControl: CACHE } });
+cloud/src/icons.ts:49:  return new Response(file.body, { headers: { "content-type": TYPES[m[1]!]!, "cache-control": CACHE, etag: file.httpEtag, "access-control-allow-origin": "*", "x-content-type-options": "nosniff" } });
+cloud/src/index.ts:53:const toPublic = (env: Env, url: URL) => new Response(null, { status: 302, headers: { location: `${env.PUBLIC_ORIGIN}${url.pathname}${url.search}`, "cache-control": "no-store" } });
+cloud/src/index.ts:88:    if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
+cloud/src/index.ts:89:    if (path === "/install.ps1") return new Response(windowsInstallScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+cloud/src/index.ts:106:      return new Response(null, { status: 302, headers: { location: `/releases/${file}`, "cache-control": "no-store" } });
+cloud/src/index.ts:211:    return new Response(JSON.stringify(assetLinks()), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
+cloud/src/login.ts:98:      "cache-control": "no-store",
+cloud/src/models.ts:7:// (the Cache API), and answered 304 to a station that has it already (its ETag).
+cloud/src/models.ts:12:/// Where the made catalog is kept in a location's cache: no address anyone asks.
+cloud/src/models.ts:13:const KEPT = "https://models.cache.still.fail/v1/models";
+cloud/src/models.ts:17:export type Cost = { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+cloud/src/models.ts:50:  const [cacheRead, cacheWrite] = [number(raw.cache_read), number(raw.cache_write)];
+cloud/src/models.ts:51:  if (cacheRead !== undefined) cost.cacheRead = cacheRead;
+cloud/src/models.ts:52:  if (cacheWrite !== undefined) cost.cacheWrite = cacheWrite;
+cloud/src/models.ts:141:  return new Response(body, { headers: { "content-type": "application/json", etag, "cache-control": `public, max-age=${KEPT_SECONDS}` } });
+cloud/src/models.ts:145:  const cache = (caches as unknown as { default: Cache }).default;
+cloud/src/models.ts:146:  let answer = await cache.match(KEPT);
+cloud/src/models.ts:153:    await cache.put(KEPT, answer.clone());
+cloud/src/models.ts:156:  // Stations ask again on their own (every few hours, an app starting): no cache of theirs keeps it.
+cloud/src/models.ts:157:  const headers = { etag: etag ?? "", "cache-control": "no-cache" };
+cloud/src/page.ts:49:        "cache-control": "no-store",
+cloud/src/pictures.ts:19:    r = await get(url, { redirect: "manual", headers: { "user-agent": "stillfail-cloud" }, cf: { cacheEverything: true, cacheTtl: KEPT_SECONDS } } as RequestInit);
+cloud/src/pictures.ts:37:      "cache-control": `public, max-age=${KEPT_SECONDS}`,
+cloud/src/preview.ts:100:    const { method, path, headers, body, cache } = event.data;
+cloud/src/preview.ts:101:    port.postMessage({ id, method, path, headers, body, cache }, body ? [body.buffer] : []);
+cloud/src/preview.ts:251:  frame.postMessage({ type: "ember-preview-fetch", streams: true, cache: request.cache, method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
+cloud/src/preview.ts:296:    "_headers": PREVIEW_PREFIXES.map((prefix) => `/${prefix}/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/${prefix}/frame\n  Cache-Control: no-cache\n/${prefix}/annotate.js\n  Cache-Control: no-cache\n/${prefix}/socket.js\n  Cache-Control: no-cache\n`).join(""),
+cloud/src/previewSocket.ts:257:  fetch(at + "?path=" + encodeURIComponent(path) + "&protocols=" + encodeURIComponent(protocols.join(",")), { signal: stop.signal, cache: "no-store" })
+cloud/src/releases.ts:22:const PASSED = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "cache-control"];
+cloud/src/releases.ts:42:    "cache-control": VERSIONED.test(file) ? "public, max-age=31536000, immutable" : "no-store",
+cloud/src/releases.ts:120:const notFound = () => Response.json({ error: "release_not_found" }, { status: 404, headers: { "cache-control": "no-store" } });
+cloud/src/share.ts:82:      "  Cache-Control: no-cache",
+cloud/src/share.ts:85:      "  Cache-Control: no-cache",
+cloud/src/web.ts:47: * The app's pages (index.html, at whichever of its routes, and web.html) are not kept: not by the browser's cache, and not in its
+cloud/src/web.ts:48: * back/forward cache, where a page keeps its core worker too, frozen holding the lock the core runs under
+cloud/src/web.ts:55:  answer.headers.set("cache-control", "no-store");
+cloud/src/webpush.ts:103:  const cacheKey = `${vapid.publicKey}|${aud}`;
+cloud/src/webpush.ts:104:  let token = tokens.get(cacheKey);
+cloud/src/webpush.ts:117:    tokens.set(cacheKey, token);
+cloud/test/beta.test.ts:144:      assert.equal(page.headers.get("cache-control"), "no-store");
+cloud/test/bucket-migration.test.ts:11:    const object = await source.put("private/report.bin", new Uint8Array([0, 255, 3]), { httpMetadata: { contentType: "application/octet-stream", cacheControl: "private" }, customMetadata: { owner: "test" } });
+cloud/test/events.test.ts:192:    assert.match(served.headers.get("cache-control") ?? "", /immutable/);
+cloud/test/harness.ts:200:          return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });
+cloud/test/hosts.test.ts:20:    for (const page of ["/", "/w/some-workspace/chats", "/auth/callback?code=x&state=y"]) assert.equal((await h.fetch(page)).headers.get("cache-control"), "no-store", page);
+cloud/test/hosts.test.ts:21:    assert.notEqual((await h.fetch("/assets/app.js")).headers.get("cache-control"), "no-store");
+cloud/test/models.test.ts:16:  anthropic: { name: "Anthropic", models: { "claude-opus-5-5": { reasoning_options: [{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] }], cost: { input: 4, output: 20, cache_read: 0.2, cache_write: 5 } } } },
+cloud/test/models.test.ts:24:      efforts: ["low", "medium", "high", "xhigh", "max"], cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+cloud/test/models.test.ts:63:  const flash = { input: 0.15, output: 0.6, cache_read: 0.003 };
+cloud/test/models.test.ts:74:  const cost = { input: 0.15, output: 0.6, cacheRead: 0.003 };
+cloud/test/pictures.test.ts:24:  assert.equal(r.headers.get("cache-control"), "public, max-age=86400");
+cloud/test/releases.test.ts:30:test("a release is served whole or by ranges, the versioned builds cached for good", async () => {
+cloud/test/releases.test.ts:43:    assert.equal(whole.headers.get("cache-control"), "public, max-age=31536000, immutable");
+cloud/test/releases.test.ts:46:    assert.equal(feed.headers.get("cache-control"), "no-store");
+cloud/test/releases.test.ts:87:test("a module's package: its feeds as they change, its archive (named by its version) cached for good", async () => {
+cloud/test/releases.test.ts:99:    assert.equal(whole.headers.get("cache-control"), "public, max-age=31536000, immutable");
+cloud/test/releases.test.ts:104:      assert.equal(got.headers.get("cache-control"), "no-store");
+cloud/test/releases.test.ts:119:test("a face's files: a page's stylesheet and slices, the Android app's file, cached for good and fetched from any origin", async () => {
+cloud/test/releases.test.ts:131:      assert.equal(got.headers.get("cache-control"), "public, max-age=31536000, immutable");
+media/service/src/hls.ts:88:  /// The cache's files: size and when last used (the files' mtimes, as found at first).
+media/service/src/hls.ts:89:  #cache: Map<string, { size: number; used: number }> | null = null;
+media/service/src/hls.ts:404:  // The cache's cap.
+media/service/src/hls.ts:407:    if (this.#cache) return this.#cache;
+media/service/src/hls.ts:408:    const cache = new Map<string, { size: number; used: number }>();
+media/service/src/hls.ts:415:          if (s) cache.set(p, { size: s.size, used: s.mtimeMs });
+media/service/src/hls.ts:420:    this.#cache = cache;
+media/service/src/hls.ts:421:    this.#total = [...cache.values()].reduce((n, x) => n + x.size, 0);
+media/service/src/hls.ts:422:    return cache;
+media/service/src/hls.ts:426:    const cache = await this.#index();
+media/service/src/hls.ts:427:    const e = cache.get(file);
+media/service/src/hls.ts:433:  /// A segment kept: the least lately used ones removed while the cache is above its cap.
+media/service/src/hls.ts:435:    const cache = await this.#index();
+media/service/src/hls.ts:436:    const was = cache.get(file);
+media/service/src/hls.ts:438:    cache.set(file, { size, used: Date.now() });
+media/service/src/hls.ts:440:    const oldest = [...cache.entries()].sort((a, b) => a[1].used - b[1].used);
+media/service/src/hls.ts:445:      cache.delete(p);
+media/service/src/hls.ts:450:  /// How many bytes the cache holds (its segments).
+media/service/src/photos.ts:494:  #cacheOf(item: PhotoRow) {
+media/service/src/photos.ts:508:    const at = this.#cacheOf(item);
+media/service/src/server.ts:43:/// Bytes kept for good (by default: a book's images are named by their content), or as `cache` says, with `headers`.
+media/service/src/server.ts:45:type Reply = { status?: number; json: unknown } | { bytes: Uint8Array; type: string; cache?: string; headers?: Record<string, string> } | { file: string; type: string; cache?: string } | { json: string; raw: true } | null;
+media/service/src/server.ts:403:        return { bytes: t.bytes, type: t.type, cache: "private, no-cache", headers: { "stillfail-width": String(t.w), "stillfail-height": String(t.h), ...(t.hash ? { "stillfail-thumbhash": t.hash } : {}) } };
+media/service/src/server.ts:437:        return { bytes: Buffer.concat(parts), type: "application/octet-stream", cache: "private, no-cache", headers: { "stillfail-index": JSON.stringify(index) } };
+media/service/src/server.ts:489:        return { bytes: p.bytes, type: p.type, cache: "private, no-cache", headers: { "stillfail-width": String(p.w), "stillfail-height": String(p.h), ...(p.hash ? { "stillfail-thumbhash": p.hash } : {}) } };
+media/service/src/server.ts:524:        return { bytes: Buffer.from(text), type: "application/vnd.apple.mpegurl", cache: "private, no-cache" };
+media/service/src/server.ts:533:        return { bytes: Buffer.from(text), type: "application/vnd.apple.mpegurl", cache: "private, no-cache" };
+media/service/src/server.ts:540:      handle: async ({ params }) => ({ file: await streamer.init(await sourceOf(params[0]!), params[1]!), type: "video/mp4", cache: "private, no-cache" }),
+media/service/src/server.ts:546:      handle: async ({ params }) => ({ file: await streamer.segment(await sourceOf(params[0]!), params[1]!, Number(params[2])), type: "video/iso.segment", cache: "private, no-cache" }),
+media/service/src/server.ts:552:      handle: async ({ params }) => ({ bytes: Buffer.from(await videos.subtitle(params[0]!, params[1]!)), type: "text/vtt; charset=utf-8", cache: "private, no-cache" }),
+media/service/src/server.ts:575:        res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" });
+media/service/src/server.ts:588:    res.writeHead(status, { "content-type": type, "content-length": Buffer.byteLength(body), "cache-control": "no-store", ...(stopping ? { connection: "close" } : {}) });
+media/service/src/server.ts:627:        "cache-control": reply.cache ?? "private, max-age=31536000, immutable",
+media/service/src/server.ts:635:      res.writeHead(200, { "content-type": reply.type, "content-length": s.size, "cache-control": reply.cache ?? "private, no-cache", ...(stopping ? { connection: "close" } : {}) });
+media/service/test/helpers.ts:614:/// folder is `<dir>/backup`; `sips` none unless given; ffmpeg and ffprobe none unless given (`tools`), the HLS cache's
+media/service/test/videos.test.ts:6:// embedded subtitles, the cache's cap.
+media/service/test/videos.test.ts:414:test("with ffmpeg: the HLS cache keeps under its cap, the least lately used segment removed first", { skip: noFfmpeg }, async (t) => {
+media/service/test/videos.test.ts:421:  const streamer = new Streamer({ dir: join(s.dir, "cache"), tools, cap: 1 });
+scripts/ci-time.ts:12:  /** A branch: the check, and what main would deploy built beside it (2026-10-04: ~100 s with caches warm). */
+scripts/fonts.py:32:CACHE = WORK / "sources"
+scripts/fonts.py:65:    path = CACHE / name
+scripts/fonts.py:67:        CACHE.mkdir(parents=True, exist_ok=True)
+scripts/module-bundle.ts:127:/// Where a native part is for a platform: a directory of its files. By default scripts/native.ts fetch: the cache, or
+scripts/native.ts:4://   1. the cache on this machine, which every worktree shares: ~/Library/Caches/stillfail-native (macOS),
+scripts/native.ts:5://      $XDG_CACHE_HOME/stillfail-native or ~/.cache/stillfail-native (Linux), %LOCALAPPDATA%\stillfail-native (Windows),
+scripts/native.ts:6://      or $STILLFAIL_NATIVE_CACHE;
+scripts/native.ts:17://   node scripts/native.ts fetch <part> [target]       into the cache, never building (fails when not prebuilt)
+scripts/native.ts:18://   node scripts/native.ts build <part> [target]       built here, into the cache, whatever is there
+scripts/native.ts:21://   node scripts/native.ts status                      every part and target: key, and whether cached / published
+scripts/native.ts:26://        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
+scripts/native.ts:41:// STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
+scripts/native.ts:344:  // build, it was 160-240 s of the macOS job's 440-580 s (its cache by the shell's sources never kept, 2026-10-23).
+scripts/native.ts:554:/// checkout and builds): beside the cache, shared by every worktree, so a change builds only what it changed.
+scripts/native.ts:555:const BUILD = () => process.env.STILLFAIL_NATIVE_BUILD ?? join(CACHE, ".build");
+scripts/native.ts:558:function xwinEnv(): { XWIN_CACHE_DIR: string; PATH: string } {
+scripts/native.ts:560:  const env = { XWIN_CACHE_DIR: join(BUILD(), "xwin"), PATH: [join(tools, "bin"), join(homedir(), ".cargo/bin"), LLVM, "/opt/homebrew/bin", process.env.PATH].join(delimiter) };
+scripts/native.ts:655:/// Android's engine: hermes-android's AAR (HERMES.rn: Gradle's cache, else Maven Central) for libhermes.so and its
+scripts/native.ts:683:/// hermes-android's AAR at HERMES.rn: Gradle's cache where it has it, else downloaded once into `work`.
+scripts/native.ts:686:  const cache = join(homedir(), ".gradle/caches/modules-2/files-2.1/com.facebook.react/hermes-android", HERMES.rn);
+scripts/native.ts:687:  if (existsSync(cache)) {
+scripts/native.ts:688:    const found = findFile(cache, (p) => p.endsWith(`/${name}`));
+scripts/native.ts:704:  const sdk = join(env.XWIN_CACHE_DIR, "xwin");
+scripts/native.ts:783:// ── the cache ──
+scripts/native.ts:785:const CACHE = process.env.STILLFAIL_NATIVE_CACHE ??
+scripts/native.ts:786:  (osPlatform() === "darwin" ? join(homedir(), "Library/Caches/stillfail-native")
+scripts/native.ts:788:    : join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "stillfail-native"));
+scripts/native.ts:789:const cached = (part: string, target: Target, k: string) => join(CACHE, part, `${target}-${k}`);
+scripts/native.ts:794:// renderer versions fill the disk. Older caches without a usage record are first marked now, so jobs started before
+scripts/native.ts:797:const accessRecord = (dir: string) => join(CACHE, ".access", basename(dirname(dir)), basename(dir));
+scripts/native.ts:803:  } catch { /* A read-only cache can still be used. */ }
+scripts/native.ts:805:const cacheBudget = () => {
+scripts/native.ts:806:  const bytes = Number(process.env.STILLFAIL_NATIVE_CACHE_MAX_BYTES);
+scripts/native.ts:858:function trimCache(limit: number) {
+scripts/native.ts:860:  const release = acquire(join(CACHE, ".prune"));
+scripts/native.ts:865:      const parent = join(CACHE, part);
+scripts/native.ts:895:        log(`removed cold cache ${basename(dirname(e.dir))}/${basename(e.dir)}`);
+scripts/native.ts:908:  const parent = join(CACHE, part);
+scripts/native.ts:934:    const final = cached(part, target, k);
+scripts/native.ts:995:  const final = cached(part, target, k);
+scripts/native.ts:1001:/// The part's directory in the cache: there already, downloaded, or built ("prebuild": the prebuild command's, the one
+scripts/native.ts:1004:  const dir = cached(part, target, k);
+scripts/native.ts:1005:  const budget = cacheBudget();
+scripts/native.ts:1024:  if (budget) try { trimCache(budget); } catch (e) { log(`could not trim the cache: ${(e as Error).message}`); }
+scripts/native.ts:1035:/// For the builds of other parts (the engine needs the shell): synchronously, from the cache or built.
+scripts/native.ts:1038:  const dir = cached(part, target, k);
+scripts/native.ts:1040:    if (!cacheBudget()) { noteUse(dir); return dir; }
+scripts/native.ts:1201:        throw new Error(`${p} ${t} ${k}: cached manifest does not match the requested version`);
+scripts/native.ts:1242:        const local = complete(cached(p, t, k), p, t) ? "cached" : "-";
+scripts/native.ts:1299:        const before = complete(cached(p, t, k), p, t);
+scripts/native.ts:1303:        const how = before ? "cached" : JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")).from === "built" ? "built" : "downloaded";
+station/integration/usage-client-stream.test.ts:88:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/integration/usage-client-stream.test.ts:89:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'Wws', 0)`)
+station/native/screen/src/image.rs:31:            encoder.Initialize(&stream, WICBitmapEncoderNoCache)?;
+station/native/screen/src/image.rs:69:            let decoder = self.factory.CreateDecoderFromStream(&stream, std::ptr::null(), WICDecodeMetadataCacheOnDemand)?;
+station/src/accounts/catalog.ts:8:export type Cost = { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+station/src/accounts/catalog.ts:54:      const [cacheRead, cacheWrite] = [number(raw.cost.cacheRead), number(raw.cost.cacheWrite)];
+station/src/accounts/catalog.ts:55:      if (cacheRead !== undefined) f.cost.cacheRead = cacheRead;
+station/src/accounts/catalog.ts:56:      if (cacheWrite !== undefined) f.cost.cacheWrite = cacheWrite;
+station/src/accounts/index.ts:1204:  /// retire app-servers that cached it after their current turns. A reset also wakes sessions once its allowance is read.
+station/src/agents/agy.ts:83:/// apart from the cache's. None when it says none.
+station/src/agents/agy.ts:84:export function turnUsage(answer: Json): { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number } | null {
+station/src/agents/agy.ts:88:  const read = n(u.cachedReadTokens);
+station/src/agents/agy.ts:89:  const written = n(u.cachedWriteTokens);
+station/src/agents/agy.ts:90:  return { inputTokens: Math.max(0, n(u.inputTokens) - read - written), cacheReadTokens: read, cacheWriteTokens: written, outputTokens: n(u.outputTokens) + n(u.thoughtTokens) };
+station/src/agents/claude.ts:312:    // None for a session continued from a terminal: its system prompt and tools stay as they began, so its cache holds.
+station/src/agents/codex.ts:942:    // None for a thread continued from a terminal: it keeps its own, so its cache holds.
+station/src/agents/devin.ts:116:/// from the cache's read (Devin says no cache written).
+station/src/agents/devin.ts:117:export function callOf(update: Json): { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number } {
+station/src/agents/devin.ts:120:  const read = n(meta["cognition.ai/cachedReadTokens"]);
+station/src/agents/devin.ts:121:  return { inputTokens: Math.max(0, n(meta["cognition.ai/inputTokens"]) - read), cacheReadTokens: read, cacheWriteTokens: 0, outputTokens: n(meta["cognition.ai/outputTokens"]) };
+station/src/agents/devin.ts:230:    const u = (this.usage ??= { calls: 0, counts: { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 }, context: 0, window: 0 });
+station/src/agents/devin.ts:233:    u.counts.cacheReadTokens += counts.cacheReadTokens;
+station/src/agents/grok.ts:63:/// read from the cache or written to it, as the others count.
+station/src/agents/grok.ts:69:  const read = n(u.cachedReadTokens);
+station/src/agents/grok.ts:70:  const written = n(u.cacheCreationTokens);
+station/src/agents/grok.ts:71:  const usage = { input: Math.max(0, n(u.inputTokens) - read - written), cacheRead: read, cacheWrite: written, output: n(u.outputTokens), calls: n(u.modelCalls) };
+station/src/agents/instructions.ts:82:- Shared repository cache: ${repos_dir}. Keep canonical clones there; work in session worktrees, never edit canonical clones directly.
+station/src/agents/sandbox-bridge.mjs:614:      env.CODEX_SQLITE_HOME = join(process.env.HOME || "/tmp", ".cache", "stillfail", "codex-sqlite", createHash("sha256").update(env.CODEX_HOME).digest("hex").slice(0, 16));
+station/src/agents/sandbox.ts:121:const CLAUDE_OWN = ["projects", "todos", "shell-snapshots", "statsig", "debug", "logs", "file-history", "ide", "session-env", "plugins", "cache", "telemetry", "paste-cache", "history.jsonl", "backups", ".credentials.json"];
+station/src/agents/sandbox.ts:122:const CODEX_OWN = ["sessions", "archived_sessions", "log", "tmp", ".tmp", "shell_snapshots", "cache", "history.jsonl", "models_cache.json", "auth.json"];
+station/src/api/events.ts:660:      headers: { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no", ...(resumes ? { [RESUMED]: "1" } : {}), ...(follows ? { [FOLLOWS]: "running" } : {}) },
+station/src/api/host.ts:48:  private cached: { at: number; info: any } | null = null;
+station/src/api/host.ts:87:    if (this.cached !== null && wall.now() - this.cached.at < 10_000) return Promise.resolve(this.cached.info);
+station/src/api/host.ts:117:        this.cached = { at: info.checkedAt, info };
+station/src/api/overview.ts:176:    // How a session whose prompt cache is over goes on (routes/context.ts): afresh, by itself, when set.
+station/src/api/request.ts:68:const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-store" };
+station/src/api/routes/context.ts:1:// How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold` and `afreshAbove`),
+station/src/api/routes/context.ts:4:// zero instead means every expired cache, even when its price is unknown.
+station/src/api/routes/context.ts:7:import { afreshThreshold, DEFAULT_AFRESH_ABOVE } from "../../../../client/core-ts/src/cache-policy.ts";
+station/src/api/routes/context.ts:50:      log.info("context", "going on afresh once a cache is over set", { on, above, by: r.viewer.email });
+station/src/api/routes/drive.ts:140:            headers: { "content-type": read.type, "cache-control": "no-store", "stillfail-total": String(read.total), "stillfail-mtime": String(read.mtime) },
+station/src/api/routes/hub.ts:538:            // cache over); refused while it runs.
+station/src/api/routes/hub.ts:568:              // Whether it goes on afresh once its cache is over: null gives it back to the station's setting.
+station/src/api/routes/sessions.ts:49:  headers: { "content-type": contentType, "cache-control": "private, max-age=3600", ...extra },
+station/src/api/routes/usage.ts:160:      // Older clients request the whole history without its chart range. Their summary cache also needs the new
+station/src/api/routes/usage.ts:231:  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
+station/src/api/routes/usage.ts:313:  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
+station/src/api/runtime-compat.ts:48:    // Keep the event's id for resumable streams and remove an obsolete cached session.
+station/src/jobs/admit.ts:3:// start at once. Nothing is estimated beforehand (a build takes more or less by its caches): what is measured decides.
+station/src/jobs/dirsync.ts:37:export const IGNORED = new Set([".git", ".hg", ".svn", ".jj", "node_modules", "target", "dist", "build", ".gradle", ".next", ".turbo", ".cache", "__pycache__", ".venv"]);
+station/src/jobs/load.ts:3:// pages measure it (api/host.ts: GET /host and the events' host samples, the ten-second cache shared), plus what only
+station/src/modules/local.ts:65:        return { status: 200, headers: { "content-type": shown.type, "cache-control": "no-store", ...hash }, body: shown.bytes };
+station/src/modules/local.ts:70:        return { status: 200, headers: { "content-type": "image/jpeg", "cache-control": "no-store" }, body: await readFile(made) };
+station/src/ops/loopback.ts:35:    return { status: 302, headers: { location: to, "cache-control": "no-store" }, body: "" };
+station/src/ops/waits.ts:4:/// A wait this long is put down with who made it (from the cache, a call takes microseconds; a statement of an index,
+station/src/platform/unix.ts:85:  /// On macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache).
+station/src/read/host.ts:43:/// host_info (without its ten-second cache, which the caller keeps): the machine's state now, and the ticks seen.
+station/src/read/outflow.ts:35:    calls: r.calls, input: r.input, cacheRead: r.cacheRead, cacheWrite: r.cacheWrite, output: r.output, cost: r.cost,
+station/src/read/slack-known.ts:10:type Cached<T> = { stamp: string; value: T };
+station/src/read/slack-known.ts:11:const cache = new Map<string, Cached<unknown>>();
+station/src/read/slack-known.ts:20:  const had = cache.get(path) as Cached<T> | undefined;
+station/src/read/slack-known.ts:28:  cache.set(path, { stamp, value });
+station/src/read/store.ts:1089:  input, cache_read, cache_write, cache_write_long, output, calls, context, context_window FROM usage INDEXED BY usage_session`;
+station/src/read/store.ts:1103:    input: Number(r.input), cacheRead: Number(r.cache_read), cacheWrite: Number(r.cache_write), cacheWriteLong: Number(r.cache_write_long),
+station/src/read/store.ts:1135:export { batchedUsageQueries, usageGroupsBatched, UsageSummaryCache } from "./usage-batched.ts";
+station/src/read/transcript.ts:222:    // station's main thread on disk when its file cache is cold; only links and unknown types need a metadata read.
+station/src/read/transcript.ts:360:    // If a history read found the file elsewhere, later live reads may use that cached location too.
+station/src/read/usage-batched.ts:23:      "session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output " +
+station/src/read/usage-batched.ts:42:      u.runtime, COALESCE(u.model, '') AS model, u.fast, u.calls, u.input, u.cache_read, u.cache_write,
+station/src/read/usage-batched.ts:43:      u.cache_write_long, u.output
+station/src/read/usage-batched.ts:50:  runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
+station/src/read/usage-batched.ts:51:  cache_write: bigint; cache_write_long: bigint; output: bigint };
+station/src/read/usage-batched.ts:55:type Cached = { seq: bigint; blocks: Map<string, Block>; totals: Map<string, Total>; width: bigint; cells: number; bytes: number };
+station/src/read/usage-batched.ts:56:type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized" | "indexed";
+station/src/read/usage-batched.ts:59:const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/read/usage-batched.ts:65:/// Kept by one reader, never shared across connections. Bound both the number and size of cached answers.
+station/src/read/usage-batched.ts:66:export class UsageSummaryCache {
+station/src/read/usage-batched.ts:68:  private readonly entries = new Map<string, Cached>();
+station/src/read/usage-batched.ts:92:  get(db: DatabaseSync, key: string): Cached | undefined {
+station/src/read/usage-batched.ts:98:  put(db: DatabaseSync, key: string, value: Cached): void {
+station/src/read/usage-batched.ts:137:    cache_read: safe(r.cache_read), cache_write: safe(r.cache_write), cache_write_long: safe(r.cache_write_long), output: safe(r.output) }));
+station/src/read/usage-batched.ts:140:/// A compact summary, read in bounded steps on the caller's snapshot. Cached blocks are only reused when
+station/src/read/usage-batched.ts:144:  cache?: UsageSummaryCache, prepared?: boolean): Promise<{
+station/src/read/usage-batched.ts:146:      selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus; sql: UsageSqlTimings }; ms: number;
+station/src/read/usage-batched.ts:201:  const result = (groups: Part[], selectedMs: number, cache: CacheStatus) => ({ groups: answer(groups),
+station/src/read/usage-batched.ts:203:      restMs: Math.round(restMs), cache, sql: { journal: Math.round(sql.journal), changes: Math.round(sql.changes),
+station/src/read/usage-batched.ts:209:  const canReuse = prepared === false && cache?.hasPrepared(s.db, preparedKey) === true;
+station/src/read/usage-batched.ts:233:    if (prepared === true) cache?.putPrepared(s.db, preparedKey);
+station/src/read/usage-batched.ts:253:  const journal = cache !== undefined && timeSql("journal", () => s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get()) !== undefined;
+station/src/read/usage-batched.ts:263:  const prior = journal ? cache!.get(s.db, key) : undefined;
+station/src/read/usage-batched.ts:265:  const cacheStatus: CacheStatus = !journal ? "disabled" : prior === undefined ? "miss" : usable ? "reused" : "expired";
+station/src/read/usage-batched.ts:267:  // A cache is updated only after the complete read succeeds. Unchanged block maps remain immutable and can be shared
+station/src/read/usage-batched.ts:276:  // The totals for a snapshot share rows with the previous cache until a changed block actually touches them.
+station/src/read/usage-batched.ts:452:      if (!(await readSession(session, start, end))) { cache!.drop(s.db, key); return null; }
+station/src/read/usage-batched.ts:466:        cache!.drop(s.db, key);
+station/src/read/usage-batched.ts:474:      cache!.put(s.db, key, { seq: last, blocks, totals, width, cells, bytes });
+station/src/read/usage-batched.ts:477:    cache!.drop(s.db, key);
+station/src/read/usage-batched.ts:478:    // The changed block made this answer too large to cache. Reread it using the bounded path below, retaining the
+station/src/read/usage-batched.ts:504:    if (!(await readSession(session, start, end, ofSession))) { cache!.drop(s.db, key); return null; }
+station/src/read/usage-batched.ts:507:  const done = result(groups, selectedMs, journal && blocks === null ? "oversized" : cacheStatus);
+station/src/read/usage-batched.ts:508:  if (blocks !== null) cache!.put(s.db, key, { seq: last, blocks, totals, width, cells, bytes });
+station/src/read/usage-batched.ts:509:  else cache?.drop(s.db, key);
+station/src/read/usage-summary-blocks.ts:7:  runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
+station/src/read/usage-summary-blocks.ts:8:  cache_write: bigint; cache_write_long: bigint; output: bigint };
+station/src/read/usage-summary-blocks.ts:15:const values = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/read/usage.ts:27:/// A model's API prices, in dollars per million tokens. Writing to the cache costs 1.25× input for five minutes, 2× for
+station/src/read/usage.ts:29:type Price = { input: number; output: number; cacheRead: number };
+station/src/read/usage.ts:34:  ["gpt-6-astra", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
+station/src/read/usage.ts:35:  ["gpt-6.1-sol", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
+station/src/read/usage.ts:37:  ["gpt-6.1-terra", { input: 1.0, output: 5.0, cacheRead: 0.05 }],
+station/src/read/usage.ts:38:  ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
+station/src/read/usage.ts:39:  ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
+station/src/read/usage.ts:40:  ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],
+station/src/read/usage.ts:41:  ["claude-fable-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
+station/src/read/usage.ts:42:  ["claude-mythos-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
+station/src/read/usage.ts:43:  ["claude-fable-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
+station/src/read/usage.ts:44:  ["claude-mythos-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
+station/src/read/usage.ts:45:  ["claude-opus-5-5", { input: 4.0, output: 20.0, cacheRead: 0.2 }],
+station/src/read/usage.ts:46:  ["claude-opus-5", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:47:  ["claude-opus-4-8", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:48:  ["claude-opus-4-7", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:49:  ["claude-opus-4-6", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:50:  ["claude-opus-4-5", { input: 5.0, output: 25.0, cacheRead: 0.5 }],
+station/src/read/usage.ts:51:  ["claude-sonnet-5-5", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
+station/src/read/usage.ts:52:  ["claude-sonnet-5", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
+station/src/read/usage.ts:53:  ["claude-sonnet-4-6", { input: 3.0, output: 15.0, cacheRead: 0.3 }],
+station/src/read/usage.ts:54:  ["claude-sonnet-4-5", { input: 3.0, output: 15.0, cacheRead: 0.3 }],
+station/src/read/usage.ts:55:  ["claude-haiku-4-5", { input: 1.0, output: 5.0, cacheRead: 0.1 }],
+station/src/read/usage.ts:68:        model, input: p.input, cacheRead: p.cacheRead,
+station/src/read/usage.ts:69:        cacheWrite: model.startsWith("claude-") ? p.input * 1.25 : null,
+station/src/read/usage.ts:70:        cacheWriteLong: model.startsWith("claude-") ? p.input * 2.0 : null, output: p.output,
+station/src/read/usage.ts:84:  if (told !== undefined) return { input: told.input, output: told.output, cacheRead: told.cacheRead ?? told.input };
+station/src/read/usage.ts:94:  const tokens = g.input * p.input + g.cacheWrite * p.input * 1.25 + g.cacheWriteLong * p.input * 2.0 + g.cacheRead * p.cacheRead + g.output * p.output;
+station/src/read/usage.ts:99:/// the tokens as a chat shows them (input with what was read from and written to the cache) and what they would cost,
+station/src/read/usage.ts:102:  const out = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0 };
+station/src/read/usage.ts:105:    out.inputTokens += g.input + g.cacheRead + g.cacheWrite + g.cacheWriteLong;
+station/src/read/usage.ts:106:    out.cachedTokens += g.cacheRead;
+station/src/read/usage.ts:116:export type Counted = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; cost: number; unpricedCalls: number };
+station/src/read/usage.ts:121:/// when it was made and how long what it left in the cache is kept there (`cacheMs`, where its runtime tells what it
+station/src/read/usage.ts:123:/// written to the cache again, where its model has a price).
+station/src/read/usage.ts:125:  model: string | null; contextTokens?: number; contextWindow: number | null; lastCallAt?: number; cacheMs?: number; rereadCost?: number;
+station/src/read/usage.ts:129:export const noUsage = (): SessionUsage => ({ modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0, model: null, contextWindow: null });
+station/src/read/usage.ts:137:    contextTokens?: number; cacheMs?: number; rereadCost?: number } | null;
+station/src/read/usage.ts:140:/// How long a prompt cache keeps what was written to it: five minutes, or an hour where it was asked to.
+station/src/read/usage.ts:141:const CACHE_SHORT_MS = 5 * 60_000;
+station/src/read/usage.ts:142:const CACHE_LONG_MS = 60 * 60_000;
+station/src/read/usage.ts:144:/// The calls looked back on for what was last written to the cache (one may write nothing: all of it read).
+station/src/read/usage.ts:145:const CACHE_CALLS = 5;
+station/src/read/usage.ts:148:/// stands (what it holds, when its cache is over, what reading it again costs) is of the conversation it goes on with
+station/src/read/usage.ts:153:  const all = s.lastContexts(key, CACHE_CALLS);
+station/src/read/usage.ts:162:    const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
+station/src/read/usage.ts:164:      const long = wrote.cacheWriteLong > 0;
+station/src/read/usage.ts:165:      out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
+station/src/read/usage.ts:176:    for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
+station/src/read/usage.ts:195:    calls: g.calls, input: g.input, cacheRead: g.cacheRead, cacheWrite: g.cacheWrite + g.cacheWriteLong, output: g.output, cost: cost(g),
+station/src/read/usage.ts:238:// A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
+station/src/read/usage.ts:239:// log, so the absence of that warning alone cannot show whether the cache is used.
+station/src/read/usage.ts:336:  if (options.batched?.diagnostics.cache === "reused" && (!reportedSummaryReuse || (cleanSummaryReuse && !reportedCleanSummaryReuse))) {
+station/src/read/usage.ts:345:      ...(options.batched === undefined ? {} : { summaryCache: options.batched.diagnostics.cache }),
+station/src/read/worker.ts:8:import { openStore, usageGroupsBatched, UsageSummaryCache } from "./store.ts";
+station/src/read/worker.ts:18:const usageCache = new UsageSummaryCache();
+station/src/read/worker.ts:58:        ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null, undefined, usageCache,
+station/src/screens/linux-tools.ts:75:      // the database says one is already installed; the private cache and no-locking let it run as the station user.
+station/src/screens/linux-tools.ts:77:        "-o", "Debug::NoLocking=1", "-o", `Dir::Cache::archives=${archives}`,
+station/src/screens/linux-tools.ts:78:        "-o", "Dir::Cache::pkgcache=", "-o", "Dir::Cache::srcpkgcache=", "install", "ffmpeg", "xdotool"],
+station/src/screens/sim-chrome.ts:21:const CACHE = join(tmpdir(), "stillfail-device-chrome");
+station/src/screens/sim-chrome.ts:23:const CACHE_WAY = 1;
+station/src/screens/sim-chrome.ts:218:  const stem = createHash("sha1").update(`${CACHE_WAY}\0${c.key}\0${stamp.mtimeMs}\0${turn}`).digest("hex");
+station/src/screens/sim-chrome.ts:219:  mkdirSync(CACHE, { recursive: true });
+station/src/screens/sim-chrome.ts:220:  const kept = join(CACHE, `${stem}.json`);
+station/src/screens/sim-chrome.ts:395:  mkdirSync(CACHE, { recursive: true });
+station/src/screens/sim-chrome.ts:397:  const png = join(CACHE, `${stem}.png`);
+station/src/search/files.ts:85:const NOISE = new Set(["node_modules", ".git", "venv", ".venv", "site-packages", "dist-packages", "__pycache__", "target", "Pods", "DerivedData", ".cache", ".Trash", ".npm", ".pnpm-store", ".cargo", ".rustup", ".gradle", ".m2"]);
+station/src/search/files.ts:89:  // The home's Library: the apps' own (their caches and data), not the person's files.
+station/src/search/files.ts:126:/// Folders not gone into: what tools make and keep (dependencies, builds, caches, version control), the apps' own; and
+station/src/search/files.ts:128:const SKIPPED = new Set(["node_modules", "target", "dist", "build", ".git", "__pycache__", ".venv", "venv", "Pods", "DerivedData", ".cache", "Library", "AppData"]);
+station/src/sessions/actor.ts:154:  /// station set to, and its large context's prompt cache over.
+station/src/sessions/actor.ts:734:  /// history. Said in its chat. `readBack`: to go on afresh, as it would on another account (its cache over, its
+station/src/sessions/actor.ts:1094:      // Started by a message or a notice, its large context's cache over, where its chat or else its station is set to
+station/src/sessions/actor.ts:1099:        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over");
+station/src/sessions/actor.ts:1247:    // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
+station/src/sessions/actor.ts:1757:    // A session continued from a terminal keeps the system prompt it began with (its cache holds).
+station/src/sessions/afresh.ts:2:// than the one its conversation last ran on. A prompt cache is an account's own, so taking the conversation up there
+station/src/sessions/afresh.ts:8:import { coldAfresh, coldWorth } from "../../../client/core-ts/src/cache-policy.ts";
+station/src/sessions/afresh.ts:36:/// station (`afreshWhenCold`), its runtime session's prompt cache over (read/usage.ts `usageNow`: as its runtime told
+station/src/sessions/afresh.ts:42:  if (u?.lastCallAt === undefined || u.cacheMs === undefined || u.lastCallAt + u.cacheMs > now) return false;
+station/src/sessions/archive.ts:323:/// `rm -r` that also takes directories their owner cannot write to (a Go module cache makes all of its own read-only):
+station/src/sessions/config.ts:6:import { afreshThreshold } from "../../../client/core-ts/src/cache-policy.ts";
+station/src/sessions/config.ts:77:  /// A message or notice to an agent whose prompt cache is over starts it afresh when its estimated reread cost reaches
+station/src/sessions/config.ts:80:  /// Estimated USD to reread a cold cache at which the station defaults to starting afresh.
+station/src/sessions/footprint.ts:48:/// cache, Next's and Turbo's caches, Python's bytecode.
+station/src/sessions/footprint.ts:57:    case "__pycache__":
+station/src/sessions/lifecycle.ts:205:/// (`repick`), its account is picked now as a new session's would be. Whether it goes on afresh once its prompt cache is
+station/src/sessions/lifecycle.ts:212:    log.info("hub", "going on afresh once its cache is over set", { session: key, afresh: afresh ?? "station's" });
+station/src/sessions/presets.ts:319:        ? `  - ${d.repo}: this station's clone of it (in the repository cache; clone it there if it is not yet), a worktree of your own to change it (on ${d.elsewhere} it is ${d.path})`
+station/src/sessions/presets.ts:348:/// `where`: where it is as people read it (`~/code/app`); `cached`: only the station's cache has it (no checkout of the
+station/src/sessions/presets.ts:351:export type Candidate = { path: string; name: string; repo: string | null; chats: number; lastAt: number; where?: string; cached?: boolean; icon?: string };
+station/src/sessions/presets.ts:354:/// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
+station/src/sessions/presets.ts:356:/// thread's way (a cache can hold many clones, each many worktrees).
+station/src/sessions/presets.ts:359:  const cached = await Promise.all(
+station/src/sessions/presets.ts:375:      const icon = await cachedIcon(path, lastAt);
+station/src/sessions/presets.ts:380:  // machine has one, the cache's clone (said as its repository, not its path) where it has not; the chats that worked
+station/src/sessions/presets.ts:381:  // in the cache's clone counted on it either way.
+station/src/sessions/presets.ts:385:  for (const c of cached) {
+station/src/sessions/presets.ts:389:    else out.set(keyOf(c), { ...c, cached: true, where: c.repo ?? shortPath(c.path) });
+station/src/sessions/presets.ts:430:/// The cache's clones' pictures as last looked for, by path and when the clone last changed (looked for again then).
+station/src/sessions/presets.ts:432:async function cachedIcon(path: string, at: number): Promise<string | null> {
+station/src/sessions/presets.ts:466:  /// Directories it never looks into (the station's own data: its sessions' worktrees are its cache's clones).
+station/src/store/rows.ts:38:  /// Whether it goes on afresh once its prompt cache is over, as chosen in its chat (null: as its station is set,
+station/src/store/schema.ts:304:  cache_read INTEGER NOT NULL,
+station/src/store/schema.ts:305:  cache_write INTEGER NOT NULL,
+station/src/store/schema.ts:306:  cache_write_long INTEGER NOT NULL,
+station/src/store/schema.ts:604:  INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+station/src/store/schema.ts:605:  VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/src/store/schema.ts:606:  ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+station/src/store/schema.ts:607:    cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
+station/src/store/schema.ts:610:  UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+station/src/store/schema.ts:611:    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+station/src/store/schema.ts:623:  cache_read INTEGER NOT NULL,
+station/src/store/schema.ts:624:  cache_write INTEGER NOT NULL,
+station/src/store/schema.ts:625:  cache_write_long INTEGER NOT NULL,
+station/src/store/schema.ts:689:  UPDATE usage_quarters SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+station/src/store/schema.ts:690:    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+station/src/store/schema.ts:700:    COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/src/store/schema.ts:702:    cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long,
+station/src/store/schema.ts:724:  cache_read INTEGER NOT NULL,
+station/src/store/schema.ts:725:  cache_write INTEGER NOT NULL,
+station/src/store/schema.ts:726:  cache_write_long INTEGER NOT NULL,
+station/src/store/store.ts:263:const CACHE_KIB = 32 * 1024;
+station/src/store/store.ts:330:      // What this connection reads stays in its own memory (CACHE_KIB), not SQLite's 2 MB: on a machine short of memory
+station/src/store/store.ts:331:      // the system's file cache is the first to go, and each page read again from the disk there took some 50 ms (a station,
+station/src/store/store.ts:337:      db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
+station/src/store/store.ts:673:  /// Whether it goes on afresh once its prompt cache is over (null: as the station is set).
+station/src/store/usage-compact.ts:8:const cols = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/store/usage-compact.ts:36:const tokens = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_write + ${r}.cache_write_long + ${r}.output)`;
+station/src/store/usage-compact.ts:57:const contextColumns = ["id", "at", "session", "turn", "profile", "runtime", "model", "subagent", "fast", "context", "context_window", "cache_write", "cache_write_long", "compact_counted"];
+station/src/store/usage-compact.ts:137:        "INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output) VALUES (");
+station/src/store/usage-compact.ts:173:        calls INTEGER NOT NULL, input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL,
+station/src/store/usage-compact.ts:174:        cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL, scope TEXT NOT NULL,
+station/src/store/usage-compact.ts:187:      CREATE TRIGGER usage_compact_total_dirty AFTER UPDATE OF scope, records, calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact
+station/src/store/usage-compact.ts:242:        INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read,
+station/src/store/usage-compact.ts:243:          cache_write, cache_write_long, output, calls, context, context_window, compact_counted)
+station/src/store/usage-compact.ts:245:            NEW.subagent, NEW.fast, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output,
+station/src/store/usage-compact.ts:275:      CREATE TRIGGER usage_compact_old_change BEFORE UPDATE OF at, session, runtime, model, calls, input, cache_read,
+station/src/store/usage-compact.ts:276:        cache_write, cache_write_long, output, compact_counted ON usage WHEN OLD.compact_counted = 0 BEGIN ${oldRemoveAll("OLD")} END;
+station/src/store/usage-compact.ts:277:      CREATE TRIGGER usage_compact_old_changed AFTER UPDATE OF at, session, runtime, model, calls, input, cache_read,
+station/src/store/usage-compact.ts:278:        cache_write, cache_write_long, output, compact_counted ON usage WHEN OLD.compact_counted = 0 BEGIN ${oldAddAll("NEW")} END;
+station/src/store/usage-compact.ts:280:        calls, input, cache_read, cache_write, cache_write_long, output, compact_counted ON usage
+station/src/store/usage-compact.ts:284:      CREATE TRIGGER usage_compact_adjust AFTER UPDATE OF calls, input, cache_read, cache_write, cache_write_long, output ON usage
+station/src/store/usage-compact.ts:315:/// the pending buckets (compactTotalsStep) keeps, which the summary cache relies on (usage-batched.ts).
+station/src/store/usage-compact.ts:531:    SUM(c.cache_read) AS cache_read, SUM(c.cache_write) AS cache_write, SUM(c.cache_write_long) AS cache_write_long, SUM(c.output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
+station/src/store/usage-compact.ts:564:    c.calls, c.input, c.cache_read, c.cache_write, c.cache_write_long, c.output
+station/src/store/usage-compact.ts:573:      u.runtime, COALESCE(u.model, ''), u.fast, u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output
+station/src/store/usage-compact.ts:589:      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
+station/src/store/usage-compact.ts:596:  contextTokens?: number; cacheMs?: number; rereadCost?: number };
+station/src/store/usage-compact.ts:635:  db.prepare(`INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output, compact_context)
+station/src/store/usage-compact.ts:664:  for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
+station/src/store/usage-compact.ts:690:      // A late call cannot be the saved latest call. It can change which cache write was in the last five, though.
+station/src/store/usage-compact.ts:691:      if (state.saved.cacheMs !== undefined || state.saved.rereadCost !== undefined) {
+station/src/store/usage-compact.ts:692:        delete state.saved.cacheMs;
+station/src/store/usage-compact.ts:710:      window: call.window, at: call.at, fast: call.fast, cacheWrite: call.cacheWrite, cacheWriteLong: call.cacheWriteLong };
+station/src/store/usage-detail.ts:9:const COLUMNS = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/store/usage-detail.ts:82:  records INTEGER NOT NULL, calls INTEGER NOT NULL, input INTEGER NOT NULL, cache_read INTEGER NOT NULL,
+station/src/store/usage-detail.ts:83:  cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL,
+station/src/store/usage-detail.ts:102:  input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL,
+station/src/store/usage-detail.ts:163:    u.calls, u.input, u.cache_read, u.cache_write, u.cache_write_long, u.output, ${indexed("u", live)}${live ? ", 0" : ""}
+station/src/store/usage-detail.ts:267:          INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+station/src/store/usage-detail.ts:269:            NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/src/store/usage-detail.ts:271:            calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+station/src/store/usage-detail.ts:272:            cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long,
+station/src/store/usage-detail.ts:277:            cache_read = cache_read + NEW.cache_read - OLD.cache_read, cache_write = cache_write + NEW.cache_write - OLD.cache_write,
+station/src/store/usage-detail.ts:278:            cache_write_long = cache_write_long + NEW.cache_write_long - OLD.cache_write_long, output = output + NEW.output - OLD.output
+station/src/store/usage-detail.ts:281:            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
+station/src/store/usage-detail.ts:284:          UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read,
+station/src/store/usage-detail.ts:285:            cache_write = cache_write - OLD.cache_write, cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+station/src/store/usage-detail.ts:288:            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
+station/src/store/usage-detail.ts:486:      SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+station/src/store/usage-history.ts:13:const tokensOf = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_write + ${r}.cache_write_long + ${r}.output)`;
+station/src/store/usage-history.ts:48:CREATE TRIGGER usage_history_grow AFTER UPDATE OF at, session, calls, input, cache_read, cache_write, cache_write_long, output ON usage
+station/src/store/usage-minutes.ts:7:const TOKENS = (name: string) => `(${name}.input + ${name}.cache_read + ${name}.cache_write + ${name}.cache_write_long + ${name}.output)`;
+station/src/store/usage-summary-blocks.ts:7:const values = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
+station/src/store/usage-summary-blocks.ts:70:type Snapshot = Key & { scope: string; calls: bigint; input: bigint; cache_read: bigint; cache_write: bigint; cache_write_long: bigint; output: bigint };
+station/src/store/usage-summary-blocks.ts:184:            calls: 0n, input: 0n, cache_read: 0n, cache_write: 0n, cache_write_long: 0n, output: 0n };
+station/src/store/usage-unified.ts:22:            NEW.input + NEW.cache_read + NEW.cache_write + NEW.cache_write_long + NEW.output)
+station/src/store/usage-unified.ts:27:            tokens = tokens - OLD.input - OLD.cache_read - OLD.cache_write - OLD.cache_write_long - OLD.output
+station/src/store/usage-unified.ts:32:        CREATE TRIGGER usage_daily_detail_change AFTER UPDATE OF calls, input, cache_read, cache_write, cache_write_long, output ON usage_detail
+station/src/store/usage-unified.ts:35:            tokens = tokens + NEW.input - OLD.input + NEW.cache_read - OLD.cache_read + NEW.cache_write - OLD.cache_write
+station/src/store/usage-unified.ts:36:              + NEW.cache_write_long - OLD.cache_write_long + NEW.output - OLD.output
+station/src/store/usage.ts:14:  id: string; at: number; model: string | null; subagent: boolean; fast: boolean; input: number; cacheRead: number;
+station/src/store/usage.ts:15:  cacheWrite: number; cacheWriteLong: number; output: number; calls: number; context: number | null; window: number | null;
+station/src/store/usage.ts:30:  model: string | null; fast: boolean; calls: number; input: number; cacheRead: number; cacheWrite: number;
+station/src/store/usage.ts:31:  cacheWriteLong: number; output: number;
+station/src/store/usage.ts:99:      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
+station/src/store/usage.ts:120:        c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
+station/src/store/usage.ts:201:/// when it was made (ms), at which speed, and what it wrote to the cache for five minutes and for an hour.
+station/src/store/usage.ts:204:  at: number; fast: boolean; cacheWrite: number; cacheWriteLong: number;
+station/src/store/usage.ts:208:export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
+station/src/store/usage.ts:218:    at: r.at, fast: r.fast !== 0 && r.fast !== null, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long,
+station/src/store/usage.ts:235:    model: r.model, fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
+station/src/store/usage.ts:236:    cacheWriteLong: r.cache_write_long, output: r.output,
+station/src/store/usage.ts:263:        `SELECT runtime, NULLIF(model, '') AS model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+station/src/updates/runtimes.ts:86:/// index revalidated (the prefetched tarball does not refresh it, and a cached index from before this release could
+station/src/updates/updates.ts:824:      // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
+station/src/updates/updates.ts:904:  /// and put in npm's cache for the install to take: the version fetched; null when it was not (npm then downloads it
+station/src/updates/updates.ts:923:      const [ok, said] = await run(npm, ["cache", "add", file], env, 120_000);
+station/src/updates/updates.ts:925:      log.warn("updates", "Codex's build not put in npm's cache; npm downloads it", { said: tail(said, "en") });
+station/src/usage/counter.ts:103:        input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
+station/src/usage/counter.ts:108:      // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
+station/src/usage/counter.ts:116:        input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
+station/src/usage/counter.ts:120:      // dsh's counts are apart: input is what was not cached. The model's window comes before a request's calls.
+station/src/usage/counter.ts:131:      const [input, cacheRead, cacheWrite] = [n(get(usage, "inputTokens")), n(get(usage, "cacheReadTokens")), n(get(usage, "cacheWriteTokens"))];
+station/src/usage/counter.ts:134:        input, cacheRead, cacheWrite, cacheWriteLong: 0, output: n(get(usage, "outputTokens")), calls: 1,
+station/src/usage/counter.ts:135:        context: subagent ? null : input + cacheRead + cacheWrite, window: state.window ?? null,
+station/src/usage/counter.ts:146:      const written = n(get(usage, "cache_creation_input_tokens"));
+station/src/usage/counter.ts:147:      const split = get(usage, "cache_creation");
+station/src/usage/counter.ts:153:      const cacheRead = n(get(usage, "cache_read_input_tokens"));
+station/src/usage/counter.ts:156:        id, at, model: name, subagent: side, fast: get(usage, "speed") === "fast", input, cacheRead, cacheWrite: short,
+station/src/usage/counter.ts:157:        cacheWriteLong: long, output: n(get(usage, "output_tokens")), calls: 1, context: side ? null : input + cacheRead + written, window: null,
+station/src/usage/counter.ts:176:        // has what was cached in it.
+station/src/usage/counter.ts:180:        const cached = Math.min(n(get(last, "cached_input_tokens")), sent);
+station/src/usage/counter.ts:183:          input: sent - cached, cacheRead: cached, cacheWrite: 0, cacheWriteLong: 0, output: n(get(last, "output_tokens")), calls: 1,
+station/src/usage/counter.ts:705:        const cached = known.get(name);
+station/src/usage/counter.ts:706:        if (cached !== undefined) return cached;
+station/test/agy.test.ts:75:  // The turn's counts, input apart from the cache's, thoughts with the output; the context it ended with.
+station/test/agy.test.ts:78:  assert.deepEqual([calls[0]!.input, calls[0]!.cacheRead, calls[0]!.output, calls[0]!.model, calls[0]!.context, calls[0]!.window], [1000, 200, 400, "gemini-3.1-pro", 5000, 1048576]);
+station/test/cold-archive.test.ts:173:test("read-only directories (a Go module cache) are packed, restored over leftovers and emptied", { skip: process.platform === "win32" && "Windows keeps no Unix modes" }, async () => {
+station/test/cold-archive.test.ts:175:  const cache = join(room, "workspace/gopath/mod/example.com/m@v1.0.0");
+station/test/cold-archive.test.ts:176:  write(join(cache, ".github/workflows/build.yml"), "on: push");
+station/test/cold-archive.test.ts:177:  write(join(cache, "go.mod"), "module example.com/m");
+station/test/cold-archive.test.ts:178:  const readOnly = () => [join(cache, ".github/workflows"), join(cache, ".github"), cache].forEach((d) => chmodSync(d, 0o555));
+station/test/cold-archive.test.ts:190:  assert.equal(readFileSync(join(cache, ".github/workflows/build.yml"), "utf8"), "on: push");
+station/test/cold-archive.test.ts:191:  assert.equal(readFileSync(join(cache, "go.mod"), "utf8"), "module example.com/m // edited");
+station/test/cold-archive.test.ts:192:  assert.equal(statSync(cache).mode & 0o777, 0o555);
+station/test/cold-archive.test.ts:193:  assert.equal(statSync(join(cache, ".github/workflows")).mode & 0o777, 0o555);
+station/test/context-settings.test.ts:10:test("the cold-cache threshold is editable by managers, validated, and saved independently of the switch", async () => {
+station/test/context.test.ts:146:test("cleared to go on afresh, its usage no longer says the context before nor its cache over: not offered again as its process warms", async () => {
+station/test/context.test.ts:151:    { id: "c1", at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+station/test/context.test.ts:156:    return [u.contextTokens, u.lastCallAt === undefined, u.cacheMs];
+station/test/context.test.ts:170:test("set to, a message to an agent whose large context's cache is over starts it afresh by itself; one still cached goes on", async () => {
+station/test/context.test.ts:173:  // Its last call wrote an hour's cache of 200K: `at` ago.
+station/test/context.test.ts:177:      { id: `c${n}`, at, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+station/test/context.test.ts:191:  // Set, its cache over: a new runtime session, told to read back what it needs, and said in its chat.
+station/test/context.test.ts:204:  // Its cache kept (its last call just now): it goes on.
+station/test/context.test.ts:216:  // Its last call wrote an hour's cache of 200K, three hours ago.
+station/test/context.test.ts:219:      { id: `c${n}`, at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+station/test/context.test.ts:253:test("the default cold-cache choice uses the configured cost; a chat's choice overrides it", async () => {
+station/test/context.test.ts:259:    { id: `cost-${n}`, at: at + n, model, subagent: false, fast: false, input: 10, cacheRead: context - 10, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context, window: null },
+station/test/context.test.ts:285:      { id: "small-cold", at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 39_990, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: 40_000, window: null },
+station/test/context.test.ts:295:test("a zero threshold starts afresh when the cache expires even without a price", async () => {
+station/test/context.test.ts:302:      { id: "zero-cold", at, model: "an-unpriced-model", subagent: false, fast: false, input: 10, cacheRead: 39_990, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: 40_000, window: null },
+station/test/context.test.ts:306:    assert.equal(goesAfresh(r.hub, key, at + 1), false, "the cache has not expired");
+station/test/context.test.ts:309:      { id: "zero-unknown-context", at: at + 1, model: "an-unpriced-model", subagent: false, fast: false, input: 10, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: null, window: null },
+station/test/cursor.test.ts:164:    assert.deepEqual(calls.map(({ input, cacheRead, cacheWrite, output }) => ({ input, cacheRead, cacheWrite, output })), [{ input: 10, cacheRead: 3, cacheWrite: 0, output: 5 }]);
+station/test/devin.test.ts:195:    // Each turn's counts: its calls' (each said twice, counted once), input less what the cache read; the context its
+station/test/devin.test.ts:200:      { model: "swe-2", usage: { inputTokens: 2100, cacheReadTokens: 1200, cacheWriteTokens: 0, outputTokens: 153 }, calls: 3, context: 1252, window: 262000 },
+station/test/devin.test.ts:201:      { model: "swe-2", usage: { inputTokens: 600, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 50 }, calls: 1, context: 1050, window: 262000 },
+station/test/devin.test.ts:208:    assert.deepEqual(calls.map(({ id, model, input, cacheRead, cacheWrite, output }) => ({ id, model, input, cacheRead, cacheWrite, output })), [
+station/test/devin.test.ts:209:      { id: `devin:${usage[0].run}`, model: "swe-2", input: 2100, cacheRead: 1200, cacheWrite: 0, output: 153 },
+station/test/devin.test.ts:210:      { id: `devin:${usage[1].run}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
+station/test/devin.test.ts:479:  test("the account's models are the families at their levels, not the faster ones; a call's counts its input less the cache's", () => {
+station/test/devin.test.ts:482:    assert.deepEqual(callOf({ sessionUpdate: "usage_update", used: 11193, size: 262000, _meta: { "cognition.ai/inputTokens": 11125, "cognition.ai/outputTokens": 68, "cognition.ai/cachedReadTokens": 128 } }), {
+station/test/devin.test.ts:483:      inputTokens: 10997, cacheReadTokens: 128, cacheWriteTokens: 0, outputTokens: 68,
+station/test/fake/agy.mjs:87:    reply(m.id, { stopReason: 'end_turn', usage: { totalTokens: 1600, inputTokens: 1200, outputTokens: 300, thoughtTokens: 100, cachedReadTokens: 200 } });
+station/test/fake/cursor-sdk/index.js:26:const USAGE = { inputTokens: 10, outputTokens: 5, cacheReadTokens: 3, cacheWriteTokens: 0, totalTokens: 18 };
+station/test/fake/devin.mjs:141:  /// A model call's counts, said once and again as its agent's: its input with what the cache read.
+station/test/fake/devin.mjs:145:    const meta = { "cognition.ai/inputTokens": input, "cognition.ai/outputTokens": output, "cognition.ai/cachedReadTokens": 400 };
+station/test/fake/devin.mjs:251:      answer = { result: { stopReason, usage: { totalTokens: 1450, inputTokens: 1000, outputTokens: 50, cachedReadTokens: 400 }, _meta: { "cognition.ai/userMessageId": `um-${++n}` } } };
+station/test/fake/dsh.mjs:67:  record("assistant/message", { message: { role: "assistant", content, source: { kind: "model", model: "m1" }, id: `m${n}` }, usage: { inputTokens: 10, outputTokens: 2, cacheReadTokens: 5 } });
+station/test/fake/grok.mjs:72:  const usage = (promptId) => ({ sessionId: "", promptId, requestId: promptId, modelId: "grok-4.7", totalTokens: 1234, usage: { inputTokens: 100, outputTokens: 7, cachedReadTokens: 60, cacheCreationTokens: 10, totalTokens: 107, modelCalls: 2 } });
+station/test/fake/module.mjs:48:    res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store" });
+station/test/grok.test.ts:129:    // Each turn's usage kept beside it, its input less what the cache read and wrote.
+station/test/grok.test.ts:132:    assert.deepEqual([usage[0].usage, usage[0].context, usage[0].window], [{ input: 30, cacheRead: 60, cacheWrite: 10, output: 7, calls: 2 }, 1234, 256000]);
+station/test/grok.test.ts:138:    assert.deepEqual(calls.map((c) => [c.model, c.input, c.cacheRead, c.cacheWrite, c.output]), [["grok-4.7", 30, 60, 10, 7], ["grok-4.7", 30, 60, 10, 7]]);
+station/test/grok.test.ts:367:    const line = usageLine({ result: { stopReason: "end_turn", _meta: { promptId: "p1", modelId: "grok-4.7", totalTokens: 22751, usage: { inputTokens: 22533, outputTokens: 211, cachedReadTokens: 22400, cacheCreationTokens: 0, modelCalls: 1 } } } }, 5, 256000);
+station/test/grok.test.ts:368:    assert.deepEqual(JSON.parse(line!), { type: "stillfail/usage", time: 5, id: "p1", model: "grok-4.7", usage: { input: 133, cacheRead: 22400, cacheWrite: 0, output: 211, calls: 1 }, context: 22751, window: 256000 });
+station/test/hub-parts.test.ts:40:  assert.equal(threadCommand("-clear the cache"), null);
+station/test/hub-parts.test.ts:214:  counted = { modelCalls: 4, inputTokens: 900, cachedTokens: 800, outputTokens: 40, cost: 1.5, unpricedCalls: 0, model: "m", contextTokens: 10, contextWindow: null };
+station/test/hub-routes.test.ts:711:      `${JSON.stringify({ type: "assistant", timestamp: new Date(r.store.now() + 1000).toISOString(), message: { id, model: "claude-opus-5-5", content: [{ type: "text", text: id }], usage: { input_tokens: input, cache_read_input_tokens: 100, output_tokens: 7 } } })}\n`;
+station/test/hub-routes.test.ts:721:    assert.deepEqual([usage.modelCalls, usage.inputTokens, usage.cachedTokens, usage.outputTokens, usage.contextTokens, usage.model], [2, 203, 200, 14, 102, "claude-opus-5-5"]);
+station/test/hub-routes.test.ts:748:    const usage = { input_tokens: 1, cache_read_input_tokens: 100, cache_creation_input_tokens: 80_000, cache_creation: { ephemeral_1h_input_tokens: 80_000 }, output_tokens: 7 };
+station/test/hub-routes.test.ts:756:    assert.equal(now.cacheMs, 3_600_000);
+station/test/hub-routes.test.ts:757:    // As a station from before kept it: without when its cache is over.
+station/test/hub-routes.test.ts:758:    const { cacheMs: _, lastCallAt: __, rereadCost: ___, ...before } = now;
+station/test/hub.test.ts:2109:      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context, window: null },
+station/test/hub.test.ts:2198:      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context, window: null },
+station/test/hub.test.ts:2793:    const usage = { input_tokens: 3, cache_read_input_tokens: context - 1003, cache_creation_input_tokens: 1000 };
+station/test/linux-screen-tools.test.ts:22:for arg in "$@"; do case "$arg" in Dir::Cache::archives=*) archives="\${arg#*=}";; esac; done
+station/test/linux-screen-tools.test.ts:79:  assert.match(args, /Dir::Cache::archives=/);
+station/test/load.test.ts:95:test("host samples include fresh GPU readings even while the rest of the host sample is cached", async () => {
+station/test/model-catalog.test.ts:15:  "claude-haiku-5-5": { name: "Claude Haiku 5.5", input: ["text", "image"], cost: { input: 0.1, output: 0.5, cacheRead: 0.005 } },
+station/test/model-catalog.test.ts:18:  "gpt-6-astra": { cost: { input: 12, output: 60, cacheRead: 1.2 } },
+station/test/model-catalog.test.ts:27:    assert.deepEqual(price("anthropic/claude-haiku-5-5-20261001[1m]"), { input: 0.1, output: 0.5, cacheRead: 0.005 });
+station/test/model-catalog.test.ts:30:    // Not named: the table's. Named without a cache price: cached input at the input's.
+station/test/model-catalog.test.ts:32:    assert.deepEqual(price("deepseek-v4-pro"), { input: 0.5, output: 2, cacheRead: 0.5 });
+station/test/model-catalog.test.ts:41:    assert.ok(rows.some((r: any) => r.model === "claude-haiku-5-5" && r.input === 0.1 && r.cacheWrite === 0.125));
+station/test/outflow.test.ts:377:  const call = (id: string, at: number) => ({ id, at, model: "claude-opus-5-5", subagent: false, fast: false, input: 100, cacheRead: 40, cacheWrite: 10, cacheWriteLong: 0, output: 5, calls: 1, context: null, window: null });
+station/test/outflow.test.ts:383:  assert.deepEqual(Object.keys(usage.rows[0]).sort(), ["account", "cacheRead", "cacheWrite", "calls", "cost", "day", "input", "model", "output", "person", "runtime", "session", "thread"].sort());
+station/test/outflow.test.ts:384:  assert.deepEqual(usage.rows.map((x: any) => [x.thread, x.person, x.calls, x.input, x.cacheWrite]), [[home.id, "ann@x", 1, 100, 10]], "another workspace's chats are not the station's to give");
+station/test/presets.test.ts:116:test("the repositories on the machine are found under its home, a few levels down, kept and offered after the cache's", async () => {
+station/test/presets.test.ts:126:  clone(join(data, "repos"), "cached", "https://github.com/acme/cached.git", ["c-1"]);
+station/test/presets.test.ts:137:  assert.equal(offered[0]!.name, "cached", "the cache's clone its chats worked in first");
+station/test/presets.test.ts:168:  // answered with the cache's clones, the home's walk not waited on
+station/test/presets.test.ts:209:  assert.deepEqual(offered.map((c) => [c.name, c.path, c.chats, c.cached ?? false]), [["app", mine, 2, false], ["lib", join(repos, "lib"), 1, true]]);
+station/test/presets.test.ts:210:  assert.equal(offered[1]!.where, "github.com/acme/lib", "a clone of the cache's said as its repository");
+station/test/sandbox.test.ts:472:    assert.ok(typeof sqlite === "string" && sqlite.includes("/.cache/stillfail/codex-sqlite/") && !sqlite.startsWith(profile.home), sqlite);
+station/test/store.test.ts:1752:    [{ id, at, model, subagent, fast: false, input: sent, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: subagent ? null : sent, window: null }, { turn: null, person: null, thread: null, profile: "cc" }] as const;
+station/test/store.test.ts:1775:  const call = { id: "c1", at: 1000, model: "m", subagent: false, fast: true, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output: 5, calls: 1, context: 10, window: null };
+station/test/store.test.ts:1795:  const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output, calls: 1, context: 10, window: null });
+station/test/store.test.ts:1808:  older.exec("INSERT INTO usage (id, at, session, runtime, model, input, cache_read, cache_write, cache_write_long, output) VALUES ('c4', 1000, 'a', 'claude', 'm', 1, 2, 3, 4, 7)");
+station/test/store.test.ts:1811:  assert.deepEqual(store.db.prepare("SELECT runtime, model, calls, input, cache_read, cache_write, cache_write_long, output FROM usage_totals WHERE session = 'a'")
+station/test/store.test.ts:1812:    .all().map((r) => [r.runtime, r.model, r.calls, r.input, r.cache_read, r.cache_write, r.cache_write_long, r.output]),
+station/test/store.test.ts:1828:    const c = { id: `c${i}`, at: day + next(3 * day), model: [null, "m", "n"][next(3)]!, subagent: false, fast: next(2) === 0, input: next(100), cacheRead: next(100), cacheWrite: next(100), cacheWriteLong: next(100), output: next(100), calls: 1 + next(3), context: null, window: null };
+station/test/store.test.ts:1846:      SUM(calls) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+station/test/store.test.ts:1871:    [{ id, at, model: "m", subagent: false, fast: false, input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: input, window: null, ...more }, of] as const;
+station/test/store.test.ts:1891:      INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/test/store.test.ts:1917:  const usage = { modelCalls: 2, inputTokens: 30, cachedTokens: 20, outputTokens: 4, model: "m", contextTokens: 15, contextWindow: null };
+station/test/thumbs.test.ts:223:      assert.equal(a.headers["cache-control"], "private, max-age=3600", name);
+station/test/updates.test.ts:581:      assert.ok(asked[0]!.startsWith("cache add "), asked.join("|"));
+station/test/usage-batched-read.test.ts:28:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+station/test/usage-compact-source.test.ts:44:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:70:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:91:      input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
+station/test/usage-compact-source.test.ts:109:    store.db.exec(`INSERT INTO usage (id, at, session, person, profile, runtime, model, input, cache_read, cache_write, cache_write_long, output, context)
+station/test/usage-compact-source.test.ts:113:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 20, window: null };
+station/test/usage-compact-source.test.ts:115:    assert.deepEqual(store.lastContexts("a", 5), [], "one later call cannot reconstruct the missing legacy cache write");
+station/test/usage-compact-source.test.ts:128:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:133:      input, cache_read, cache_write, cache_write_long, output) VALUES (?, ?, 'a', 'p', 'cc', 'claude', 'm', 1, 10, 0, 0, 0, ?)
+station/test/usage-compact-source.test.ts:153:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:168:    const old = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, -1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WA')");
+station/test/usage-compact-source.test.ts:170:    const other = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WB')");
+station/test/usage-compact-source.test.ts:187:      input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null });
+station/test/usage-compact-source.test.ts:223:          cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null }, owner] as const;
+station/test/usage-compact-source.test.ts:261:        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:282:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:285:    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, 'WA')");
+station/test/usage-compact-source.test.ts:309:        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:347:    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, ?)");
+station/test/usage-compact-source.test.ts:381:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-source.test.ts:387:      records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+station/test/usage-compact-source.test.ts:425:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null });
+station/test/usage-compact-source.test.ts:444:    const bucket = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 0, ?)");
+station/test/usage-compact-source.test.ts:468:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-source.test.ts:510:    const call = { id: "home", at: 1_000, model: "m", subagent: true, fast: false, input: 1, cacheRead: 0,
+station/test/usage-compact-source.test.ts:511:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:532:      fast: false, input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null }, owner] as const);
+station/test/usage-compact-source.test.ts:577:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:608:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:625:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:646:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:664:        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:685:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: 200_000 };
+station/test/usage-compact-source.test.ts:703:      input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: null }, owner] as const;
+station/test/usage-compact-source.test.ts:734:    const old = { id: "old", at: -60_000, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-compact-source.test.ts:735:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: null };
+station/test/usage-compact-source.test.ts:753:    const call = { id: "first", at: 120_123, model: "m", subagent: false, fast: false, input: 1, cacheRead: 0,
+station/test/usage-compact-source.test.ts:754:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-source.test.ts:777:    const call = { id: "old", at: 11_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-compact-source.test.ts:778:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: 200_000 };
+station/test/usage-compact-source.test.ts:802:    const call = { id: "old", at: 11_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-compact-source.test.ts:803:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: 200_000 };
+station/test/usage-compact-source.test.ts:831:    const call = { id: "old", at: now + 1, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-compact-source.test.ts:832:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: 200_000 };
+station/test/usage-compact-source.test.ts:856:    const call = { id: "new", at: 60_000, model: "m", subagent: false, fast: false, input: 4, cacheRead: 0,
+station/test/usage-compact-source.test.ts:857:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: null };
+station/test/usage-compact-source.test.ts:883:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-source.test.ts:913:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100_000, window: null });
+station/test/usage-compact-source.test.ts:999:    const call = { id: "a", at: 1_000, model: "m", subagent: false, fast: false, input: 1, cacheRead: 0,
+station/test/usage-compact-source.test.ts:1000:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-total-deferred.test.ts:22:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-total-deferred.test.ts:52:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-total-deferred.test.ts:84:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-total-deferred.test.ts:122:      model: "m", subagent: true, fast: false, input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1,
+station/test/usage-compact-total-deferred.test.ts:158:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-total.test.ts:39:        input: row.input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-total.test.ts:50:    const denied = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+station/test/usage-compact-total.test.ts:80:        model: "m", subagent: true, fast: false, input: i + 1, cacheRead: 2, cacheWrite: 0, cacheWriteLong: 0,
+station/test/usage-compact-total.test.ts:98:        COALESCE(SUM(u.input + u.cache_read + u.cache_write + u.cache_write_long + u.output), 0) AS tokens
+station/test/usage-compact-total.test.ts:124:      input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-compact-total.test.ts:162:      input, cache_read, cache_write, cache_write_long, output) VALUES ('legacy', 120000, 'b', 'p', 'cc', 'claude', 'm', 1, 2, 0, 0, 0, ?)
+station/test/usage-compact-total.test.ts:179:    const call = { id: "call", at: 0, model: "m", subagent: true, fast: false, input: 1, cacheRead: 0,
+station/test/usage-compact-total.test.ts:180:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-total.test.ts:198:    const call = { id: "old", at: 0, model: "m", subagent: true, fast: false, input: 100, cacheRead: 0,
+station/test/usage-compact-total.test.ts:199:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-compact-write.test.ts:23:        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 10, window: null,
+station/test/usage-compact-write.test.ts:42:    id, at, model, fast, subagent, input: 10, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1,
+station/test/usage-compact-write.test.ts:52:          NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+station/test/usage-compact-write.test.ts:82:    cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: at, window: null });
+station/test/usage-compact-write.test.ts:113:    cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: at, window: null });
+station/test/usage-compact-write.test.ts:134:    input: 10, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context, window: null });
+station/test/usage-compact-write.test.ts:139:    store.recordUsage("/s", { session: "s", offset: 1, model: "m" }, "claude", [[{ ...call("saved", now + 1_000, 150_000), cacheWrite: 5 }, owner("saved")]]);
+station/test/usage-compact-write.test.ts:149:    assert.equal(store.savedCompactContext("s")?.cacheMs, undefined, "an earlier late call can change the last five cache writes");
+station/test/usage-compact-write.test.ts:162:    cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: at, window: null });
+station/test/usage-compactions-late.test.ts:10:    const c = { id, at, model: "m", subagent: false, fast: false, input: context, cacheRead: 0, cacheWrite: 0,
+station/test/usage-compactions-late.test.ts:11:      cacheWriteLong: 0, output: 0, calls: 1, context, window: null };
+station/test/usage-compactions-late.test.ts:53:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null },
+station/test/usage-counter.test.ts:50:  cache_read_input_tokens: read,
+station/test/usage-counter.test.ts:51:  cache_creation_input_tokens: short + long,
+station/test/usage-counter.test.ts:52:  cache_creation: { ephemeral_5m_input_tokens: short, ephemeral_1h_input_tokens: long },
+station/test/usage-counter.test.ts:58:test("a Claude response written as several lines counts once, with its cache split by how long and the context it sent", () => {
+station/test/usage-counter.test.ts:64:    claudeLine("m3", 3000, "claude-sonnet-5-5", { input_tokens: 5, cache_creation_input_tokens: 7, output_tokens: 1, speed: "fast" }),
+station/test/usage-counter.test.ts:71:    id: "m1", at: 1000, model: "claude-opus-5-5", subagent: false, fast: false, input: 2, cacheRead: 100, cacheWrite: 0, cacheWriteLong: 50, output: 30,
+station/test/usage-counter.test.ts:74:  // Without the split, what was written to the cache is taken as written for five minutes.
+station/test/usage-counter.test.ts:75:  assert.deepEqual([calls[1]!.cacheWrite, calls[1]!.cacheWriteLong, calls[1]!.fast, calls[1]!.context], [7, 0, true, 12]);
+station/test/usage-counter.test.ts:80:  const count = (total: number, input: number, cached: number, output: number) =>
+station/test/usage-counter.test.ts:83:      payload: { type: "token_count", info: { total_token_usage: { total_tokens: total }, last_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output }, model_context_window: 258000 } },
+station/test/usage-counter.test.ts:97:  assert.deepEqual([calls[0]!.input, calls[0]!.cacheRead, calls[0]!.output, calls[0]!.model], [40, 60, 20, "gpt-6"]);
+station/test/usage-counter.test.ts:98:  // What it sent (its input has what was cached in it) is the context, of the window it says.
+station/test/usage-counter.test.ts:105:    JSON.stringify({ type: "usage", run, time: 1000, model: "swe-2", calls, context, window: 262000, usage: { inputTokens: 10, cacheReadTokens: 5, cacheWriteTokens: 0, outputTokens: 2 } });
+station/test/usage-counter.test.ts:113:    JSON.stringify({ type: "assistant/message", time: 1000, data: { message: { id: "a1", source: { model: "deepseek-v4" } }, usage: { inputTokens: 10, cacheReadTokens: 90, cacheWriteTokens: 5, outputTokens: 3 } } }),
+station/test/usage-counter.test.ts:119:  day: "", session: "", thread: null, person: null, profile: null, runtime: "", model: null, fast: false, calls: 0, input: 0, cacheRead: 0,
+station/test/usage-counter.test.ts:120:  cacheWrite: 0, cacheWriteLong: 0, output: 0, ...g,
+station/test/usage-counter.test.ts:125:  assert.equal(price("anthropic/claude-opus-5-5[1m]")?.cacheRead, 0.2);
+station/test/usage-counter.test.ts:127:  assert.equal(price("claude-fable-5-1")?.cacheRead, 0.25);
+station/test/usage-counter.test.ts:129:  const g = group({ model: "claude-opus-5-5", input: 1_000_000, cacheRead: 1_000_000, cacheWrite: 1_000_000, cacheWriteLong: 1_000_000, output: 1_000_000 });
+station/test/usage-counter.test.ts:137:  for (const [model, input, cached, output] of [
+station/test/usage-counter.test.ts:145:    const g = group({ model, input: 1_000_000, cacheRead: 1_000_000, output: 1_000_000 });
+station/test/usage-counter.test.ts:146:    assert.ok(Math.abs(cost(g)! - (input + cached + output)) < 1e-9, model);
+station/test/usage-counter.test.ts:149:  assert.deepEqual(price("gpt-6.1-terra"), { input: 1, cacheRead: 0.05, output: 5 });
+station/test/usage-counter.test.ts:153:  assert.deepEqual([astra.input, astra.cacheRead, astra.output], [10.0, 1.0, 50.0]);
+station/test/usage-counter.test.ts:155:  assert.deepEqual([terra.input, terra.cacheRead, terra.cacheWrite, terra.cacheWriteLong, terra.output], [1, 0.05, null, null, 5]);
+station/test/usage-counter.test.ts:156:  // Actual recorded GPT token totals: cached input is already separate from uncached input.
+station/test/usage-counter.test.ts:157:  const g = group({ model: "gpt-6-astra", input: 1_916_566, cacheRead: 71_041_792, output: 245_251 });
+station/test/usage-counter.test.ts:470:        total_token_usage: { total_tokens: 3 }, last_token_usage: { input_tokens: 2, cached_input_tokens: 0, output_tokens: 1 },
+station/test/usage-counter.test.ts:866:    modelCalls: 1, inputTokens: 1010, cachedTokens: 1000, outputTokens: 100, cost: (10 * 4 + 1000 * 0.2 + 100 * 20) / 1e6, unpricedCalls: 0,
+station/test/usage-counter.test.ts:873:test("a session's usage says how long its cache lasts after its last call, by what it last wrote, and what reading it all again costs", () => {
+station/test/usage-counter.test.ts:874:  const call = (at: number, cacheWrite: number, cacheWriteLong: number, fast = false) =>
+station/test/usage-counter.test.ts:875:    ({ turn: "t", profile: null, model: "claude-opus-5-5", context: 200_000, window: null, at, fast, cacheWrite, cacheWriteLong });
+station/test/usage-counter.test.ts:876:  const groups: UsageGroup[] = [{ day: "", session: "k", thread: null, person: null, profile: null, runtime: "claude", model: "claude-opus-5-5", fast: false, calls: 3, input: 0, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0 }];
+station/test/usage-counter.test.ts:880:  assert.deepEqual([long.lastCallAt, long.cacheMs, long.rereadCost], [2000, 3_600_000, (200_000 * 4 * 2) / 1e6]);
+station/test/usage-counter.test.ts:883:  assert.deepEqual([short.cacheMs, short.rereadCost], [300_000, ((200_000 * 4 * 1.25) / 1e6) * 2]);
+station/test/usage-counter.test.ts:886:  assert.deepEqual([none.lastCallAt, none.cacheMs, none.rereadCost], [1000, undefined, undefined]);
+station/test/usage-counter.test.ts:894:type DayTotal = { day: string; calls: number; input: number; cacheRead: number; cacheWrite: number; cacheWriteLong: number; output: number };
+station/test/usage-counter.test.ts:895:const DAYS = `SELECT strftime('%Y-%m-%d', at / 1000, 'unixepoch') AS day, COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cacheRead,
+station/test/usage-counter.test.ts:896:  SUM(cache_write) AS cacheWrite, SUM(cache_write_long) AS cacheWriteLong, SUM(output) AS output FROM usage GROUP BY day ORDER BY day`;
+station/test/usage-counter.test.ts:897:const ROWS = "SELECT id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output FROM usage";
+station/test/usage-counter.test.ts:939:  const fields = ["at", "session", "turn", "thread", "person", "profile", "runtime", "model", "subagent", "fast", "input", "cache_read", "cache_write", "cache_write_long", "output"];
+station/test/usage-counter.test.ts:961:    { id, at, model: subagent ? "claude-haiku-4-5" : "claude-opus-5-5", subagent, fast: false, input, cacheRead: 100, cacheWrite: 10, cacheWriteLong: 0, output: 5,
+station/test/usage-counter.test.ts:969:  assert.deepEqual([kept.modelCalls, kept.inputTokens, kept.cachedTokens, kept.outputTokens, kept.model, kept.contextTokens, kept.contextWindow], [3, 383, 300, 15, "claude-opus-5-5", 112, 1000]);
+station/test/usage-counter.test.ts:976:  // Its context cleared (换新上下文): none said, nor when its cache is over, until its next conversation's first call.
+station/test/usage-detail-index.test.ts:14:      input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL);
+station/test/usage-detail-statistics.test.ts:29:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null });
+station/test/usage-detail-statistics.test.ts:61:    id: "one", at: 10, model: "m", subagent: false, fast: false, input: 3, cacheRead: 0,
+station/test/usage-detail-statistics.test.ts:62:    cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null,
+station/test/usage-detail-statistics.test.ts:94:    id: "one", at: 10, model: "m", subagent: false, fast: false, input: 3, cacheRead: 0,
+station/test/usage-detail-statistics.test.ts:95:    cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null,
+station/test/usage-detail-statistics.test.ts:124:    id: "one", at: 10, model: "m", subagent: false, fast: false, input: 3, cacheRead: 0,
+station/test/usage-detail-statistics.test.ts:125:    cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null,
+station/test/usage-detail-statistics.test.ts:151:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null }, of] as const);
+station/test/usage-history-quarters.test.ts:14:  input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+station/test/usage-history-quarters.test.ts:27:  const rows = store.db.prepare("SELECT session, at, calls, input + cache_read + cache_write + cache_write_long + output AS tokens FROM usage").all() as
+station/test/usage-history.test.ts:19:      id: "call", at: 60_000, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-history.test.ts:20:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null,
+station/test/usage-minute-index.test.ts:14:      input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, cache_write_long INTEGER NOT NULL,
+station/test/usage-minute-index.test.ts:31:    runtime, COALESCE(model, '') AS model, SUM(calls) AS calls, SUM(input + cache_read + cache_write + cache_write_long + output) AS tokens
+station/test/usage-minute-index.test.ts:41:    runtime, COALESCE(model, '') AS model, SUM(calls) AS calls, SUM(input + cache_read + cache_write + cache_write_long + output) AS tokens
+station/test/usage-minute-reader.test.ts:43:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null });
+station/test/usage-new-only.test.ts:23:    fast: false, input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null }, owner] as const;
+station/test/usage-new-only.test.ts:74:      fast: false, input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null }, owner] as const;
+station/test/usage-new-only.test.ts:109:      fast: false, input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null }, owner] as const;
+station/test/usage-no-historical-fill.test.ts:21:      id: "old-call", at: 1, model: "m", subagent: false, fast: false, input: 1, cacheRead: 0, cacheWrite: 0,
+station/test/usage-no-historical-fill.test.ts:22:      cacheWriteLong: 0, output: 1, calls: 1, context: 1, window: 100,
+station/test/usage-no-historical-fill.test.ts:58:      id: "call", at: 1, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-no-historical-fill.test.ts:59:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 2, window: 100,
+station/test/usage-old-schema-no-fill.test.ts:16:    fast INTEGER NOT NULL DEFAULT 0, input INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL,
+station/test/usage-old-schema-no-fill.test.ts:17:    cache_write_long INTEGER NOT NULL, output INTEGER NOT NULL${withColumns ? ", calls INTEGER NOT NULL DEFAULT 1, context INTEGER, context_window INTEGER" : ""});
+station/test/usage-old-schema-no-fill.test.ts:19:    INSERT INTO usage (id, at, session, runtime, model, input, cache_read, cache_write, cache_write_long, output)
+station/test/usage-old-schema-no-fill.test.ts:64:      fast: false, input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null }, owner] as const;
+station/test/usage-replay-writes.test.ts:12:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-retire.test.ts:26:  input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: 100, window: 1000 },
+station/test/usage-since-statistics.test.ts:14:      (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output)
+station/test/usage-since-statistics.test.ts:56:    store.db.exec(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output)
+station/test/usage-since-statistics.test.ts:68:      older.exec(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output)
+station/test/usage-summary-bounded.test.ts:23:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:24:       cache_write_long, output, scope, pending)
+station/test/usage-summary-bounded.test.ts:50:      model: "m", subagent: false, fast: false, input: 2, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0,
+station/test/usage-summary-bounded.test.ts:59:        cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 11, calls: 1, context: null, window: null,
+station/test/usage-summary-bounded.test.ts:95:      input: 2, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+station/test/usage-summary-bounded.test.ts:127:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:128:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:150:    assert.equal(actual.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:166:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:167:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:195:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:196:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:241:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:242:       cache_write_long, output, scope, pending) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, ?, 0)`);
+station/test/usage-summary-bounded.test.ts:269:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:270:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:294:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:295:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', ?, 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, ?, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:342:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:343:       cache_write_long, output, scope, pending) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, ?, ?, 0)`);
+station/test/usage-summary-bounded.test.ts:382:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:383:       cache_write_long, output, scope, pending) VALUES ('a', 0, 0, 'p', ?, 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:401:      assert.equal(answer.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:423:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:424:       cache_write_long, output, scope, pending) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, ?, ?, 0)`);
+station/test/usage-summary-bounded.test.ts:458:        assert.equal(actual.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:467:    assert.equal(dirty.diagnostics.cache, "indexed", "a small number of changing minutes can be overlaid on the blocks");
+station/test/usage-summary-bounded.test.ts:472:    assert.equal(clean.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:479:    assert.equal(grown.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:486:      assert.equal(changed.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:504:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:505:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-bounded.test.ts:521:    assert.equal(result.diagnostics.cache, "indexed");
+station/test/usage-summary-bounded.test.ts:539:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:540:       cache_write_long, output, scope, pending) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, ?, 0)`);
+station/test/usage-summary-bounded.test.ts:584:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-bounded.test.ts:585:       cache_write_long, output, scope, pending) VALUES (?, ?, 0, 'p', 'cc', 'claude', ?, 0, 1, ?, ?, 0, 0, 0, ?, ?, 0)`);
+station/test/usage-summary-bounded.test.ts:609:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-summary-bounded.test.ts:615:    assert.equal(answer.diagnostics.cache, "indexed");
+station/test/usage-summary-cache.test.ts:18:  const dir = mkdtempSync(join(tmpdir(), "usage-summary-cache-"));
+station/test/usage-summary-cache.test.ts:30:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+station/test/usage-summary-cache.test.ts:42:    const cache = new reads.UsageSummaryCache();
+station/test/usage-summary-cache.test.ts:46:      try { return await reads.usageGroupsBatched(store, 0n, 120n * 60_000n, 0n, viewer, async () => {}, cache); }
+station/test/usage-summary-cache.test.ts:51:    assert.equal(first.diagnostics.cache, "miss");
+station/test/usage-summary-cache.test.ts:69:    const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+station/test/usage-summary-cache.test.ts:74:      assert.equal(again?.diagnostics.cache, "reused");
+station/test/usage-summary-cache.test.ts:99:      }, cache);
+station/test/usage-summary-cache.test.ts:123:      { id: "call", at: 0, model: "m", subagent: false, fast: false, input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null },
+station/test/usage-summary-cache.test.ts:139:      { workspace: "A", home: false }, async () => {}, new reads.UsageSummaryCache());
+station/test/usage-summary-cache.test.ts:151:test("cached groups survive removed blocks until their last minute is removed", async () => {
+station/test/usage-summary-cache.test.ts:159:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope, pending)
+station/test/usage-summary-cache.test.ts:166:    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+station/test/usage-summary-cache.test.ts:168:      const actual = await reads.usageGroupsBatched(reader, 0n, 180_000n, 0n, viewer, async () => {}, cache);
+station/test/usage-summary-cache.test.ts:186:test("an unbounded history settles its workspace's new statistics so its cache can reuse them", async (t) => {
+station/test/usage-summary-cache.test.ts:199:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-summary-cache.test.ts:207:    const reader = reads.makeStore(db, dir), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+station/test/usage-summary-cache.test.ts:210:      try { return await reads.usageGroupsBatched(reader, 0n, 128n * 60_000n, 0n, viewer, async () => {}, cache); }
+station/test/usage-summary-cache.test.ts:248:    assert.equal(reused.diagnostics.cache, "reused");
+station/test/usage-summary-cache.test.ts:265:  ["workspace and home", { workspace: "A", home: true }]] as const) test(`a cached summary does not enumerate pending minutes outside its range (${scope})`, async () => {
+station/test/usage-summary-cache.test.ts:276:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+station/test/usage-summary-cache.test.ts:280:    const store = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache();
+station/test/usage-summary-cache.test.ts:282:    const read = () => reads.usageGroupsBatched(store, from, to, 0n, viewer, async () => {}, cache);
+station/test/usage-summary-cache.test.ts:296:test("a wide cached range checks the smaller pending set on one snapshot", async () => {
+station/test/usage-summary-cache.test.ts:307:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output, calls: 1, context: null, window: null });
+station/test/usage-summary-cache.test.ts:310:    const store = reads.makeStore(db, dir), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+station/test/usage-summary-cache.test.ts:314:      try { return await reads.usageGroupsBatched(store, from, to, 0n, viewer, pause, cache); }
+station/test/usage-summary-cache.test.ts:333:for (const recursive of [false, true]) test(`cached usage follows older writers, edits, removals, ownership and journal overflow (recursive triggers ${recursive})`, async () => {
+station/test/usage-summary-cache.test.ts:334:  const dir = mkdtempSync(join(tmpdir(), "usage-cache-changes-"));
+station/test/usage-summary-cache.test.ts:349:      input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+station/test/usage-summary-cache.test.ts:355:    const caches = viewers.map(() => new reads.UsageSummaryCache());
+station/test/usage-summary-cache.test.ts:358:      try { return await reads.usageGroupsBatched(store, from, to, tz, viewers[i]!, async () => {}, caches[i]); }
+station/test/usage-summary-cache.test.ts:370:      input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
+station/test/usage-summary-cache.test.ts:387:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+station/test/usage-summary-cache.test.ts:388:      SELECT session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, ?
+station/test/usage-summary-cache.test.ts:402:    // An unrelated workspace does not cause a bucket lookup in A while the journal still covers the cache.
+station/test/usage-summary-cache.test.ts:404:    const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+station/test/usage-summary-cache.test.ts:416:    assert.equal(fallback.diagnostics.cache, "expired");
+station/test/usage-summary-cache.test.ts:417:    assert.ok(fallback.diagnostics.candidates > 0, "a cache older than the journal is rebuilt");
+station/test/usage-summary-cache.test.ts:422:for (const recursive of [false, true]) test(`a pending bucket coalesces writes without losing a cached update (recursive triggers ${recursive})`, async () => {
+station/test/usage-summary-cache.test.ts:432:      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-summary-cache.test.ts:435:    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache();
+station/test/usage-summary-cache.test.ts:437:    const read = () => reads.usageGroupsBatched(reader, 0n, 120_000n, 0n, viewer, async () => {}, cache);
+station/test/usage-summary-cache.test.ts:468:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
+station/test/usage-summary-cache.test.ts:469:      SELECT session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, 'WB'
+station/test/usage-summary-cache.test.ts:475:test("a cached summary with the year's history says the same as a fresh read, in a reader too", async () => {
+station/test/usage-summary-cache.test.ts:476:  const dir = mkdtempSync(join(tmpdir(), "usage-cache-history-"));
+station/test/usage-summary-cache.test.ts:484:    const call = { id: "old", at: -60_000, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
+station/test/usage-summary-cache.test.ts:485:      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+station/test/usage-summary-cache.test.ts:500:    const cache = new reads.UsageSummaryCache();
+station/test/usage-summary-cache.test.ts:502:      const summary = await reads.usageGroupsBatched(store, 0n, 120n * 60_000n, 0n, viewer, async () => {}, cache);
+station/test/usage-summary-cache.test.ts:510:    const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+station/test/usage-summary-cache.test.ts:535:        const summary = await reads.usageGroupsBatched(store, 0n, 120n * 60_000n, offset, viewer, async () => {}, cache);
+station/test/usage-summary-cache.test.ts:544:test("a large summary coarsens its cache without exceeding its limit or losing exact totals", async () => {
+station/test/usage-summary-cache.test.ts:552:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope, pending)
+station/test/usage-summary-cache.test.ts:558:    const reader = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache(), viewer = { workspace: "A", home: false };
+station/test/usage-summary-cache.test.ts:560:    const read = () => reads.usageGroupsBatched(reader, 0n, to, offset, viewer, async () => {}, cache);
+station/test/usage-summary-cache.test.ts:568:      "a change that crosses the cache limit is still included when rebuilding at a coarser width");
+station/test/usage-summary-cache.test.ts:572:    assert.equal(changed.diagnostics.cache, "reused");
+station/test/usage-summary-preparing.test.ts:27:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:28:       cache_write_long, output, scope, pending) VALUES ('a', 0, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-preparing.test.ts:53:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:54:       cache_write_long, output, scope, pending) VALUES ('a', 0, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-preparing.test.ts:197:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:198:       cache_write_long, output, scope, pending) VALUES ('a', 0, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-preparing.test.ts:255:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:256:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-preparing.test.ts:326:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:327:       cache_write_long, output, scope, pending) VALUES ('a', 0, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-preparing.test.ts:423:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:424:       cache_write_long, output, scope, pending) VALUES (?, ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, ?, 0)`);
+station/test/usage-summary-preparing.test.ts:475:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:476:       cache_write_long, output, scope, pending) VALUES ('a', ?, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-summary-preparing.test.ts:518:      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write,
+station/test/usage-summary-preparing.test.ts:519:       cache_write_long, output, scope, pending) VALUES ('a', 2, 0, 'p', ?, 'claude', 'm', 0, 1, 1, 2, 0, 0, 0, 3, 'WA', 0)`);
+station/test/usage-unbounded-history.test.ts:14:test("an unbounded read with a cached summary says the same as one without", async () => {
+station/test/usage-unbounded-history.test.ts:22:      input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output: 5, calls: 1, context: null, window: null });
+station/test/usage-unbounded-history.test.ts:37:      const values = new Set(["records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
+station/test/usage-unbounded-history.test.ts:64:      input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output: 5, calls: 1, context: null, window: null });
+station/test/usage-unbounded-history.test.ts:93:      input: 2, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+test/browser/chat-pagination.mjs:97:  server = await createServer({ configFile: false, cacheDir: fileURLToPath(new URL("../../node_modules/.vite-chat-pagination", import.meta.url)), optimizeDeps: { entries: [fileURLToPath(html)] }, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
+test/browser/preview-cache.mjs:2:// PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node test/browser/preview-cache.mjs
+test/browser/preview-cache.mjs:21:  res.setHeader('cache-control', req.url === '/dep.js' ? 'max-age=3600, immutable' : 'no-cache');
+test/browser/preview-cache.mjs:53:  </script><iframe src="${origin(previewHost)}/_ember/frame?n=cache-test&path=%2F"></iframe>`);
+test/browser/preview-cache.mjs:65:  const get = (path, cache = 'default') => frame.evaluate(async ({path, cache}) => { const r = await fetch(path, {cache}); return {status:r.status, body:await r.text()}; }, {path, cache});
+test/browser/sheet-scroll.mjs:36:  server = await createServer({ cacheDir: fileURLToPath(new URL('../../node_modules/.vite-sheet-scroll', import.meta.url)), configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)), server: { host: '127.0.0.1', port: 0, hmr: false } });
+test/browser/stories.mjs:163:    // emulation, motion reduced): only what the context's cache holds stays. Opened in the page the one before was in
+test/browser/video-preview.mjs:87:    console.log(`PASS ${engine}: decoded still, broken-video fallback, lazy loading, the one player's playback, seek positions, cache reuse, desktop and phone widths`);
+test/core-client.test.ts:121:test("back from the back/forward cache: bye, then everything subscribed again", async () => {
+test/core-client.test.ts:142:  // Back from the cache: what the old one was asked is lost; a new one hears the subscriptions and where the page is.
+test/native-cache-retention.test.ts:9:test("the native cache removes cold versions while retaining recently used and locked versions", (t) => {
+test/native-cache-retention.test.ts:11:  const tmp = mkdtempSync(join(tmpdir(), "native-cache-test-"));
+test/native-cache-retention.test.ts:13:  const bin = join(tmp, "bin"), cache = join(tmp, "cache"), part = join(cache, "shell-apple");
+test/native-cache-retention.test.ts:31:  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, STILLFAIL_NATIVE_CACHE: cache,
+test/native-cache-retention.test.ts:32:    STILLFAIL_NATIVE: "offline", STILLFAIL_NATIVE_CACHE_MAX_BYTES: "1" };
+test/native-cache-retention.test.ts:52:      const marker = join(cache, ".access", "shell-apple", basename(dir));
+test/native-cache-retention.test.ts:53:      mkdirSync(join(cache, ".access", "shell-apple"), { recursive: true });
+test/native-cache-retention.test.ts:65:  const marker = (dir: string) => join(cache, ".access", "shell-apple", basename(dir));
+test/perf/rig.mjs:19:  const cache = join(homedir(), "Library/Caches/ms-playwright");
+test/perf/rig.mjs:20:  const found = existsSync(cache) && readdirSync(cache).filter((d) => /^chromium-\d+$/.test(d)).sort().at(-1);
+test/perf/rig.mjs:21:  const app = found && join(cache, found, "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
+test/preview-cache.test.ts:3:import { PreviewCache } from "../web/src/previewCache.ts";
+test/preview-cache.test.ts:7:const answer = (extra: Partial<Answer> = {}): Answer => ({ status: 200, headers: [["content-type", "text/javascript"], ["cache-control", "max-age=3600"], ["etag", '"v1"']], body: new TextEncoder().encode("export default 1"), ...extra });
+test/preview-cache.test.ts:9:test("fresh static resources are reused without detaching cached bytes; keys include path and request headers", () => {
+test/preview-cache.test.ts:10:  const cache = new PreviewCache();
+test/preview-cache.test.ts:11:  cache.prepare(asked()).save(answer());
+test/preview-cache.test.ts:12:  const first = cache.prepare(asked()).fresh!;
+test/preview-cache.test.ts:15:  assert.equal(new TextDecoder().decode(cache.prepare(asked()).fresh!.body), "export default 1");
+test/preview-cache.test.ts:16:  assert.equal(cache.prepare(asked({ path: "/module.js?v=2" })).fresh, undefined);
+test/preview-cache.test.ts:17:  assert.equal(cache.prepare(asked({ headers: [["accept", "text/css"]] })).fresh, undefined);
+test/preview-cache.test.ts:18:  assert.equal(new PreviewCache().prepare(asked()).fresh, undefined);
+test/preview-cache.test.ts:21:test("no-cache resources revalidate with ETag, and 304 restores the body and updates response policy", () => {
+test/preview-cache.test.ts:22:  const cache = new PreviewCache();
+test/preview-cache.test.ts:23:  cache.prepare(asked()).save(answer({ headers: [["content-type", "text/javascript"], ["cache-control", "no-cache"], ["etag", '"v1"']] }));
+test/preview-cache.test.ts:24:  const pending = cache.prepare(asked());
+test/preview-cache.test.ts:27:  const restored = pending.revalidated({ status: 304, headers: [["cache-control", "max-age=600"]] })!;
+test/preview-cache.test.ts:31:  assert.ok(cache.prepare(asked()).fresh);
+test/preview-cache.test.ts:35:  const cache = new PreviewCache();
+test/preview-cache.test.ts:36:  cache.prepare(asked()).save(answer());
+test/preview-cache.test.ts:37:  for (const request of [asked({ cache: "reload" }), asked({ cache: "no-store" }), asked({ headers: [["range", "bytes=0-3"]] }), asked({ headers: [["cookie", "session=a"]] })]) {
+test/preview-cache.test.ts:38:    const pending = cache.prepare(request);
+test/preview-cache.test.ts:42:  const explicit = cache.prepare(asked({ headers: [["if-none-match", '"custom"']] }));
+test/preview-cache.test.ts:44:  cache.prepare(asked()).save(answer({ headers: [...answer().headers, ["age", "3601"]] }));
+test/preview-cache.test.ts:45:  assert.equal(cache.prepare(asked()).fresh, undefined);
+test/preview-cache.test.ts:48:test("dynamic, no-store, wildcard Vary, cookies, and oversized answers are not cached", () => {
+test/preview-cache.test.ts:50:    answer({ headers: [["content-type", "application/json"], ["cache-control", "max-age=600"]] }),
+test/preview-cache.test.ts:51:    answer({ headers: [...answer().headers.filter(([k]) => k !== "cache-control"), ["cache-control", "no-store"]] }),
+test/preview-cache.test.ts:56:    const cache = new PreviewCache(); cache.prepare(asked()).save(response);
+test/preview-cache.test.ts:57:    assert.equal(cache.prepare(asked()).fresh, undefined);
+test/preview-cache.test.ts:58:    assert.equal(new Headers(cache.prepare(asked()).headers).has("if-none-match"), false);
+test/preview-cache.test.ts:62:test("mutations clear cached resources and prevent older in-flight requests from repopulating them", () => {
+test/preview-cache.test.ts:63:  const cache = new PreviewCache();
+test/preview-cache.test.ts:64:  const pending = cache.prepare(asked()); pending.save(answer());
+test/preview-cache.test.ts:65:  cache.prepare(asked({ method: "POST", path: "/update" }));
+test/preview-cache.test.ts:67:  assert.equal(cache.prepare(asked()).fresh, undefined);
+test/preview-cache.test.ts:71:  const cache = new PreviewCache();
+test/preview-cache.test.ts:72:  for (let i = 0; i < 257; i++) cache.prepare(asked({ path: `/${i}.js` })).save(answer());
+test/preview-cache.test.ts:73:  assert.equal(cache.prepare(asked({ path: "/0.js" })).fresh, undefined);
+test/preview-cache.test.ts:74:  cache.clear();
+test/preview-cache.test.ts:75:  for (let i = 0; i < 9; i++) cache.prepare(asked({ path: `/${i}.js` })).save(answer({ body: new Uint8Array(4 * 1024 * 1024) }));
+test/preview-cache.test.ts:76:  assert.equal(cache.prepare(asked({ path: "/0.js" })).fresh, undefined);
+test/preview-cache.test.ts:77:  assert.ok(cache.prepare(asked({ path: "/8.js" })).fresh);
+test/preview-cache.test.ts:88:    progress!({ head: { status: unchanged ? 304 : 200, headers: [["content-type", "text/javascript"], ["cache-control", p.path === "/dep.js" ? "max-age=3600, immutable" : "no-cache"], ["etag", etag]] } });
+test/release-cache-cleanup.test.ts:13:  const tmp = mkdtempSync(join(tmpdir(), "release-cache-test-"));
+test/release-cache-cleanup.test.ts:44:      STILLFAIL_RELEASE_CACHE_KEY: key, STILLFAIL_RELEASE_CACHE_SOURCE: source, ...options },
+vendor/libadb/src/keys/tests.rs:296:fn from_pkcs8_pem_caches_a_nul_terminated_wire_key() {
+vendor/libadb/tests/tls.rs:171:/// session cache would let the second resume the first. Reports how
+vendor/n0-mainline/src/actor.rs:175:    /// the cached closest_nodes aren't fresh enough.
+vendor/n0-mainline/src/actor.rs:186:        if let Some(closest_nodes) = self.core.get_cached_closest_nodes(target) {
+vendor/n0-mainline/src/common/routing_table.rs:279:/// Kbuckets are similar to LRU caches that checks and evicts unresponsive nodes,
+vendor/n0-mainline/src/core.rs:6:use lru::LruCache;
+vendor/n0-mainline/src/core.rs:34:pub const MAX_CACHED_ITERATIVE_QUERIES: usize = 1000;
+vendor/n0-mainline/src/core.rs:60:    pub cached_iterative_queries: LruCache<Id, CachedIterativeQuery>,
+vendor/n0-mainline/src/core.rs:92:            cached_iterative_queries: LruCache::new(
+vendor/n0-mainline/src/core.rs:93:                NonZeroUsize::new(MAX_CACHED_ITERATIVE_QUERIES)
+vendor/n0-mainline/src/core.rs:94:                    .expect("MAX_CACHED_BUCKETS is NonZeroUsize"),
+vendor/n0-mainline/src/core.rs:125:    pub fn get_cached_closest_nodes(&mut self, target: &Id) -> Option<Box<[Node]>> {
+vendor/n0-mainline/src/core.rs:126:        self.cached_iterative_queries
+vendor/n0-mainline/src/core.rs:128:            .map(|cached| cached.closest_responding_nodes.clone())
+vendor/n0-mainline/src/core.rs:190:                self.cache_iterative_query(&query, closest_nodes);
+vendor/n0-mainline/src/core.rs:336:        // If we have cached iterative query with the same hash, use its nodes as well..
+vendor/n0-mainline/src/core.rs:337:        if let Some(closest_responding_nodes) = self.get_cached_closest_nodes(&target) {
+vendor/n0-mainline/src/core.rs:410:    fn cache_iterative_query(&mut self, query: &IterativeQuery, closest_responding_nodes: &[Node]) {
+vendor/n0-mainline/src/core.rs:411:        if self.cached_iterative_queries.len() >= MAX_CACHED_ITERATIVE_QUERIES {
+vendor/n0-mainline/src/core.rs:412:            let q = self.cached_iterative_queries.pop_lru();
+vendor/n0-mainline/src/core.rs:413:            self.decrement_cached_iterative_query_stats(q.map(|q| q.1));
+vendor/n0-mainline/src/core.rs:428:        let previous = self.cached_iterative_queries.put(
+vendor/n0-mainline/src/core.rs:430:            CachedIterativeQuery {
+vendor/n0-mainline/src/core.rs:440:        self.decrement_cached_iterative_query_stats(previous);
+vendor/n0-mainline/src/core.rs:466:    fn decrement_cached_iterative_query_stats(&mut self, query: Option<CachedIterativeQuery>) {
+vendor/n0-mainline/src/core.rs:467:        if let Some(CachedIterativeQuery {
+vendor/n0-mainline/src/core.rs:530:pub(crate) struct CachedIterativeQuery {
+vendor/n0-mainline/src/core/put_query.rs:13:/// Once an [super::IterativeQuery] is done, or if a previous cached one was a available,
+vendor/n0-mainline/src/core/server.rs:10:use lru::LruCache;
+vendor/n0-mainline/src/core/server.rs:69:    immutable_values: LruCache<Id, Box<[u8]>>,
+vendor/n0-mainline/src/core/server.rs:71:    mutable_values: LruCache<Id, MutableItem>,
+vendor/n0-mainline/src/core/server.rs:134:            immutable_values: LruCache::new(
+vendor/n0-mainline/src/core/server.rs:138:            mutable_values: LruCache::new(
+vendor/n0-mainline/src/core/server/peers.rs:7:use lru::LruCache;
+vendor/n0-mainline/src/core/server/peers.rs:13:/// An LRU cache of "Peers" per info hashes.
+vendor/n0-mainline/src/core/server/peers.rs:17:    info_hashes: LruCache<Id, LruCache<Id, SocketAddrV4>>,
+vendor/n0-mainline/src/core/server/peers.rs:25:            info_hashes: LruCache::new(max_info_hashes),
+vendor/n0-mainline/src/core/server/peers.rs:35:            let mut info_hash_lru = LruCache::new(self.max_peers);
+vendor/n0-mainline/src/core/server/signed_peers.rs:7:use lru::LruCache;
+vendor/n0-mainline/src/core/server/signed_peers.rs:13:/// An LRU cache of signed peers announced per info hashes.
+vendor/n0-mainline/src/core/server/signed_peers.rs:17:    info_hashes: LruCache<Id, LruCache<[u8; 32], SignedAnnounce>>,
+vendor/n0-mainline/src/core/server/signed_peers.rs:25:            info_hashes: LruCache::new(max_info_hashes),
+vendor/n0-mainline/src/core/server/signed_peers.rs:35:            let mut info_hash_lru = LruCache::new(self.max_peers);
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:43:    /// 2. Any upstream MJPEG→WebSocket relay only caches a frame when at least
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:45:    ///    idle sim never gets a cached frame to show.
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:61:    private var sourceCache = FramebufferSourceCache<FramebufferSource>(maxAge: 1.0)
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:101:    /// and cache them. Safe to re-call if the cached descriptors become stale.
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:127:        sourceCache.invalidate()
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:281:        var fromCached = false
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:282:        if let desc, let current = sourceCache.current?.descriptor {
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:283:            fromCached = current === desc
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:285:        onFrameCallback(trigger: fromCached ? .frame : .otherDescriptorFrame)
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:303:        // Self-heal: if we've never captured a frame, the cached descriptor
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:322:    /// through `sourceCache` instead of calling this directly.
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:333:    private func captureFrame(force: Bool = false, trigger: FramebufferSourceCache<FramebufferSource>.Trigger = .frame) -> Bool {
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:335:        guard let source = sourceCache.source(for: trigger, now: now, resolve: resolveSource) else { return true }
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:395:    private func onFrameCallback(trigger: FramebufferSourceCache<FramebufferSource>.Trigger) {
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:432:        sourceCache.invalidate()
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:457:    /// call time from the cached surface rather than retaining a wrapper of
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:462:              let source = sourceCache.source(for: .frame, now: now, resolve: resolveSource) else { return nil }
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:1:/// Caches the framebuffer source (descriptor + IOSurface) that capture reads.
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:8:/// callbacks reuse the cached source; everything else (surface changes, idle
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:10:/// other than the cached one re-resolve at most every 100 ms (another display
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:13:public struct FramebufferSourceCache<Source> {
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:15:        /// Frame callback from the cached source's descriptor.
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:26:    private var cached: Source?
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:33:    public var current: Source? { cached }
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:37:        if let cached {
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:41:                return cached
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:49:        cached = resolve()
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:51:        return cached
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSourceCache.swift:55:        cached = nil
+vendor/swarm-discovery/src/receiver.rs:186:/// ember: class IN, with or without mDNS's cache-flush bit (0x8000, RFC 6762 §10.2), which other responders set.
+web/public/sw.js:110:  const headers = { "content-type": type, "accept-ranges": "bytes", "content-length": String(end - start + 1), "cache-control": "no-store" };
+web/site-prerender.mjs:102:// (from the cache) and saying so (document.fonts' loadingdone), on which the scene reads its rows again (OneComputer.tsx).
+web/src/AgentCard.tsx:115: * figures that say most (cost, the cache's hit rate, how full its context is) large, side by side; its account with
+web/src/AgentCard.tsx:315: * The figures that say most of what an agent used (cost, the cache's hit rate, how full its context is), large, side
+web/src/AgentCard.tsx:320:  if (!card.cost && !card.cache && !context) return null;
+web/src/AgentCard.tsx:337:        {card.cache && <span className={css.tile}><b>{card.cache.text}</b><small>{t("web-main.chat.agentCard.cache")}</small></span>}
+web/src/AgentCard.tsx:345:      {card.cache && <span className={css.tile}><b>{card.cache.text}</b><small>{t("web-main.chat.agentCard.cache")}</small></span>}
+web/src/CacheColdNotice.tsx:4:import type { ChatCacheCold } from "./core/shapes.ts";
+web/src/CacheColdNotice.tsx:7:/** Its agent's prompt cache over (ChatView `cacheCold`, the core's words): what going on would read again, and the
+web/src/CacheColdNotice.tsx:11:export function CacheColdNotice({ cold, setAfresh, offline }: { cold: ChatCacheCold; setAfresh: (session: string, afresh: boolean) => Promise<unknown>; offline: boolean }) {
+web/src/Chat.tsx:11:import { CacheColdNotice } from "./CacheColdNotice.tsx";
+web/src/Chat.tsx:169:      {(chat.archived || chat.cacheCold || chat.offline) && <ComposerNotices className={css.offlineNotice}>
+web/src/Chat.tsx:171:        {chat.cacheCold && !chat.archived && <CacheColdNotice cold={chat.cacheCold} offline={chat.offline} setAfresh={api.setAfresh} />}
+web/src/ComposerNotice.tsx:6: * A notice over a chat's composer (the cache over, archived, its station down): a capsule of its own over it, as wide and
+web/src/Preview.tsx:105:    return { status: 200, headers: [["content-type", "text/html; charset=utf-8"], ["cache-control", "no-store"]], body: new TextEncoder().encode(doc) };
+web/src/StationContext.tsx:1:// How a station goes on with a session whose prompt cache is over, on its page: whether a message or notice to an agent
+web/src/StationContext.tsx:2:// whose large context's cache is over starts it afresh by itself, the default of 换新上下文's switch in each chat
+web/src/StationContext.tsx:3:// (CacheColdNotice.tsx), said by the workspace's owners and admins (others read it). The phone's page has the same row
+web/src/StationContext.tsx:14:/** Sets whether a session whose cache is over goes on afresh by itself, saying so if it could not. */
+web/src/api.ts:477:    /** Whether it goes on afresh as it is next started once its cache is over (a new conversation that reads back what it needs), for its chat. */
+web/src/cloud/StationPage.tsx:346:      {/* Whether a session whose prompt cache is over goes on afresh by itself; none from a station from before it. */}
+web/src/cloud/api.ts:4:// write the core refetches them, so nothing here keeps a cache.
+web/src/core/client.ts:246:   * page comes back. Kept in the back/forward cache with the page, it would be frozen there with the lock the core runs
+web/src/core/client.ts:364:  /** The page is going away (or into the back/forward cache): the worker drops this client, or ends (`endWithPage`). */
+web/src/core/client.ts:375:   * The page is back from the back/forward cache: the worker forgot us (or ended as the page left: a new one), so
+web/src/core/client.ts:402:    // Shown again after leaving without the cache bringing it back (no pageshow said so): its worker is started anew.
+web/src/core/client.ts:470:  /** A core that forgot this page (a worker started anew, a page back from the cache) hears where it is again. */
+web/src/core/shapes.ts:192:	/** How much of what it sent was read from the cache. */
+web/src/core/shapes.ts:193:	cache?: AgentCardMeter;
+web/src/core/shapes.ts:1125:	 * Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);
+web/src/core/shapes.ts:1696:/** A chat's agent whose prompt cache is over (ChatView::cacheCold). */
+web/src/core/shapes.ts:1697:export interface ChatCacheCold {
+web/src/core/shapes.ts:1700:	/** The cache's state, separately from its reread cost, for a compact notice. */
+web/src/core/shapes.ts:3035:	 * Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what
+web/src/core/shapes.ts:3038:	cacheCold?: ChatCacheCold;
+web/src/core/shapes.ts:3888:	/** Its tokens, read and written, the cache's too. */
+web/src/core/shapes.ts:3909:	/** The tokens its calls read and wrote, the cache's too (what ranks the kinds; never said: one model's tokens are not another's). */
+web/src/core/shapes.ts:4696:	cachedTokens: number;
+web/src/core/shapes.ts:4709:	 * How long what that call left in the prompt cache is kept after it (5 minutes, or an hour), where its
+web/src/core/shapes.ts:4712:	cacheMs?: number;
+web/src/core/shapes.ts:4714:	 * What sending its context again once its cache is over would cost at API list prices, in dollars (all of it
+web/src/core/shapes.ts:4715:	 * written to the cache again). Absent for an unpriced model.
+web/src/core/shapes.ts:5469:/** How a station goes on with a session whose prompt cache is over (`Overview.context`). */
+web/src/core/shapes.ts:5472:	 * A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its
+web/src/core/shapes.ts:5615:	 * How it goes on with a session whose prompt cache is over. None from a station older than it, which then
+web/src/core/shapes.ts:6206:/** A directory offered for a new preset: a clone of the station's repository cache, or one a preset names. */
+web/src/core/shapes.ts:6214:	/** Where it is as people read it: ~/code/app; a repository only the station's cache has, its address. */
+web/src/core/shapes.ts:6216:	/** Only the station's cache has it (no checkout of the person's on the machine). */
+web/src/core/shapes.ts:6217:	cached?: boolean;
+web/src/core/webUpdates.ts:66:  const response = await fetch(`/build.json?t=${Date.now()}`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+web/src/core/worker.ts:7:// frozen (its page kept in the back/forward cache) and would hold the lock for good, so the lock is taken from it.
+web/src/core/worker.ts:298: * cache, worker and lock with it, as the app comes back from Google's sign-in) and would keep every page waiting.
+web/src/demo/fixtures.ts:255:    cache: { percent: 91, text: "91%", level: "ok" },
+web/src/mbui/core.ts:145:// (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
+web/src/mobile/AgentSheet.tsx:208:/** The figures that say most: what it cost, the cache's hit rate, how full its context is. */
+web/src/mobile/AgentSheet.tsx:218:  if (!card?.cost && !card?.cache && !context) return null;
+web/src/mobile/AgentSheet.tsx:239:      {card?.cache && tile(card.cache.text, t("web-main.chat.agentCard.cache"))}
+web/src/mobile/Chat.tsx:509:export function composerShown(view: ChatView, station: string): Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "offlineNote" | "archived" | "cacheCold"> {
+web/src/mobile/Chat.tsx:514:    ...(view.cacheCold ? { cacheCold: view.cacheCold } : {}),
+web/src/mobile/ChatHost.tsx:7:import { CacheColdNotice } from "../CacheColdNotice.tsx";
+web/src/mobile/ChatHost.tsx:28:import type { ChatCacheCold, ChatCcTo, ChatView } from "../core/shapes.ts";
+web/src/mobile/ChatHost.tsx:53:  /** Its agent's prompt cache over (ChatView `cacheCold`), and whether it goes on afresh as it is next started. */
+web/src/mobile/ChatHost.tsx:54:  cacheCold?: ChatCacheCold;
+web/src/mobile/ChatHost.tsx:83:type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "offlineNote" | "archived" | "cacheCold">;
+web/src/mobile/ChatHost.tsx:92:    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived && was.cacheCold?.session === spec.cacheCold?.session && was.cacheCold?.status === spec.cacheCold?.status && was.cacheCold?.detail === spec.cacheCold?.detail && was.cacheCold?.afresh === spec.cacheCold?.afresh ? was
+web/src/mobile/ChatHost.tsx:93:      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.offlineNote !== undefined ? { offlineNote: spec.offlineNote } : {}), ...(spec.archived !== undefined ? { archived: spec.archived } : {}), ...(spec.cacheCold !== undefined ? { cacheCold: spec.cacheCold } : {}) }));
+web/src/mobile/ChatHost.tsx:190:      {(shown.archived || shown.cacheCold || shown.offline) && <ComposerNotices>
+web/src/mobile/ChatHost.tsx:192:        {shown.cacheCold && !shown.archived && <CacheColdNotice cold={shown.cacheCold} offline={shown.offline} setAfresh={(session, afresh) => latest.current?.setAfresh?.(session, afresh) ?? Promise.resolve()} />}
+web/src/mobile/Stations.tsx:590:/** Whether a session whose prompt cache is over goes on afresh by itself (the wide page's StationContext.tsx): its
+web/src/pages/ChatPage.tsx:957:  const tiles = card && (card.cost || card.cache || card.context);
+web/src/previewBridge.ts:12:import { PreviewCache } from "./previewCache.ts";
+web/src/previewBridge.ts:19:export interface Asked { cache?: RequestCache; id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
+web/src/previewBridge.ts:39:  const cache = new PreviewCache();
+web/src/previewBridge.ts:63:    const cached = cache.prepare(asked);
+web/src/previewBridge.ts:69:    if (cached.fresh) { complete(cached.fresh); return; }
+web/src/previewBridge.ts:83:        collect = cached.collect(head);
+web/src/previewBridge.ts:84:        revalidated = cached.revalidated(head);
+web/src/previewBridge.ts:85:        if (!revalidated) { cached.discard(); post({ id: asked.id, head }); }
+web/src/previewBridge.ts:89:        if (collect && length <= cached.maxBody) chunks.push(chunk.slice());
+web/src/previewBridge.ts:94:    call("station.preview", { station, port: service, method: asked.method, path: asked.path, headers: cached.headers, stream: true }, asked.body ?? undefined, onProgress, stop.signal).then(
+web/src/previewBridge.ts:97:        if (revalidated) { cached.save(revalidated); complete(revalidated); return; }
+web/src/previewBridge.ts:98:        if (collect && head && length <= cached.maxBody) {
+web/src/previewBridge.ts:102:          cached.save({ ...head, body });
+web/src/previewBridge.ts:165:    cache.clear();
+web/src/previewCache.ts:2:// the browser's HTTP cache, so retain bounded static resources here, following the service's freshness/validators.
+web/src/previewCache.ts:16:    !has(directives(h.get("cache-control")), "no-store") && !h.has("set-cookie") && !h.get("vary")?.split(",").some((v) => v.trim() === "*");
+web/src/previewCache.ts:19:export class PreviewCache {
+web/src/previewCache.ts:29:    const policy = directives(headers.get("cache-control"));
+web/src/previewCache.ts:30:    // Do not combine range/explicit conditional requests, authenticated requests, or the caller's own cache policy.
+web/src/previewCache.ts:31:    const eligible = asked.method === "GET" && asked.cache !== "no-store" && !has(policy, "no-store") &&
+web/src/previewCache.ts:33:    // All request headers are part of the key, a conservative superset of Vary. No cache is shared across frames.
+web/src/previewCache.ts:36:    const force = asked.cache === "reload" || asked.cache === "no-cache" || has(policy, "no-cache") ||
+web/src/previewCache.ts:37:      has(policy, "max-age") || headers.get("pragma")?.toLowerCase().includes("no-cache");
+web/src/previewCache.ts:39:    const previous = entry && asked.cache !== "reload" ? entry : undefined;
+web/src/previewCache.ts:50:      // Only a conditional request made by this cache can turn 304 into a complete response.
+web/src/previewCache.ts:61:        const cc = directives(h.get("cache-control"));
+web/src/previewCache.ts:70:        this.entries.set(key, { ...answer, body: answer.body.slice(), stored: Date.now(), lifetime, validate: has(cc, "no-cache") });
+web/src/viewport.ts:21:const cache = new Map<string, Viewport | null>();
+web/src/viewport.ts:35:  if (!cache.has(key)) {
+web/src/viewport.ts:43:    cache.set(key, read);
+web/src/viewport.ts:45:  return cache.get(key)!;
+web/src/viewport.ts:50:  cache.set(key, next);
+web/stories/stories.tsx:471:/** Its agent at rest, its prompt cache over (the core's `cacheCold`): said over the composer, with 换新上下文 to switch it. */
+web/stories/stories.tsx:472:const cacheCold: DemoExtension = {
+web/stories/stories.tsx:477:    return session ? { ...chat, cacheCold: { session, status: "缓存已过期", detail: "重读约 $1.49", afresh: false } } : undefined;
+web/stories/stories.tsx:480:/** Its agent's prompt cache over and its station down: two notices over the composer, one over the other. */
+web/stories/stories.tsx:483:    const cold = cacheCold.then?.(t, value);
+web/stories/stories.tsx:840:  { id: "app-chat-cache-cold", group: "应用", title: "对话 · 缓存已过期", app: true, demo: cacheCold },
+web/stories/stories.tsx:841:  { id: "phone-chat-cache-cold", group: "手机", title: "对话 · 缓存已过期", app: true, phone: true, demo: cacheCold },
+web/vite.demo.config.ts:33:    this.emitFile({ type: "asset", fileName: "_headers", source: "/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n" });

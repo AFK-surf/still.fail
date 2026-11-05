@@ -1,0 +1,13 @@
+station/src/api/admin.ts:378:    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, changed: () => deps.events?.presetsChanged() }) : []),
+station/src/api/routes/presets.ts:8:import { NoPreset, type Presets, type RepoIndex, candidates } from "../../sessions/presets.ts";
+station/src/api/routes/presets.ts:10:export type PresetDeps = { presets: Presets; reposDir: () => string; index?: RepoIndex; changed?: () => void };
+station/src/sessions/hub.ts:49:import { Presets, RepoIndex } from "./presets.ts";
+station/src/sessions/hub.ts:202:  readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
+station/src/sessions/presets.ts:354:/// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
+station/src/sessions/presets.ts:462:export class RepoIndex {
+station/test/presets.test.ts:8:import { Presets, RepoIndex, candidates, presetCopyInput, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
+station/test/presets.test.ts:128:  const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+station/test/presets.test.ts:141:  const again = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+station/test/presets.test.ts:158:  const index = new RepoIndex({
+station/test/presets.test.ts:182:  const index = new RepoIndex({
+station/test/presets.test.ts:205:  const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => 0, besides: () => [join(home, "station")] });

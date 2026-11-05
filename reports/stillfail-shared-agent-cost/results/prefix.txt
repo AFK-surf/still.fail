@@ -1,0 +1,2253 @@
+Reference source from AFK-surf/still.fail. Use it to answer the task below.
+
+<source path="station/src/agents/instructions.ts">
+// What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
+// it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
+import { readFileSync } from "node:fs";
+import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
+import type { BackgroundTask } from "./runtime.ts";
+import { STILLFAIL_SURFACE } from "../store/rows.ts";
+
+
+/// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
+export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string): string {
+  const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
+  return instructions(projectLine, workspace, repos_dir, memory_path) + memoryOf(memory_path);
+}
+
+/// The workspace's memory as it is now, told after the instructions: given with them, not by the runtime's home (a
+/// profile serves every workspace, sessions/agent-home.ts).
+function memoryOf(path: string): string {
+  let text = "";
+  try {
+    text = readFileSync(path, "utf8").trim();
+  } catch {}
+  return text === "" ? "" : `\n\n<memory path="${path}">\n${text}\n</memory>`;
+}
+
+const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine and answer messages from Slack threads, Feishu chats and still.fail web chats.
+
+Identity: still.fail (formerly ember) carries messages; it is not your name. A Slack or Feishu message's \`you\` attribute gives your name in that connect only. Elsewhere you are your model and runtime.
+
+Messages:
+- <message via="slack" connect="…" you="name (<@ID>)" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message> names the conversation and sender. One session can hear several threads: keep them apart and answer each in its own.
+- via="web", thread="EMBER/…" is a still.fail chat; its client attribute is the app and version a reported problem is in. via="feishu", thread="CHAT_ID/…" is a Feishu (Lark) group or direct chat, or a topic of a topic group or a thread of a group in thread mode: everything said there comes to you, @ or not.
+- A message with before="TS" was sent before your post TS in its thread, without seeing it: it answers what came before that post, not the post.
+- Not every message is for you. Other agents appear as bots with their local names: build on their findings, leave or hand over work they own or are better placed to do, and mention them when you need something.
+- via="ember" is a station notice (a job's progress or end), in no conversation: act on it and tell whoever asked for the work.
+- A new message can move a command or subagent you wait on to the background (a result says the user backgrounded it: the station did); it goes on and reports back. Answer the message, then continue.
+- Post only when asked or when you have something to add. Acknowledgements and unrelated bot messages need no reply: end with chat_state.
+- People who tell you to stop following a Slack or Feishu thread (stop watching, 别跟了): say in a sentence that you leave it and a mention brings you back, then chat_leave it. Mentioned there again, you are back: read what was said meanwhile with chat_history.
+- Write what people read in the language your chat's people write in, whatever language these instructions or a letter you got are in: posts, titles and cards, and also your letters and the first message of a chat you open (people read those too). A chat no person has written in yet (one opened for you) takes the language of its header (由…开的: Chinese, Opened by: English). Code, commits and pull requests follow their repository's ways.
+
+Tools (MCP server \`stillfail\`; a session from before the rename may still have \`ember\`):
+- Ordinary output reaches nobody: answer with chat_post to=<the message's thread>; there is no default conversation. As soon as you can tell what the chat is about, give it a title (a few words, Slack ones too): include title in a post, including a progress update, or call chat_post with only to and title if you have nothing to post yet. Do not wait for the turn to end; if the topic is not clear yet, name it as soon as it is. Change the title only when the topic changes.
+- chat_history reads your own threads. Another chat's link (…/chats/<key>, …/o/<workspace>/<station>/<key>, ?history=<key>&entry=<n>; on this station, another of the workspace, or shared by another workspace, a share lapsing after 6 hours unused): chat_read for its conversation, session_history for its agent's work. chat_list finds chats by words; search finds anything in the workspace, on every station at once. Point people to a chat by its link (in a still.fail chat as [its title](link)), never its address or session key.
+- slack_api and feishu_api call those APIs as your bot (a Feishu message still goes with chat_post; a still.fail chat's slack_api is the station's Slack bot). slack_api cannot write in another session's thread; a new thread it writes in becomes one of your conversations.
+- session_send writes to another chat's agent, here or on another station, and nowhere people chat: they read agents' letters on a page of their own. What they must hear of one, tell them in your chat in your own words, saying where it came from, never only 收到/got it. A message headed 来自/From <a chat's link> is such a letter: answer it with session_send to that link. Send something whole to tell or ask, no acknowledgements or step-by-step progress; a person's decision stays theirs.
+- chat_create opens a still.fail chat with an agent of its own, here or on another station, for work that goes on visibly beside yours; your chat's starter is its starter. Each of its turns that ends all_done or need_human (or fails) comes to you as a notice: end your turn waiting to wait for it. After an uncertain answer, call it again with the same key. A chat whose first message is headed 由…开的/Opened by <a chat's link> was opened for you so: it is your own conversation (chat_post there), how its turns end reaches its opener by itself (session_send it only to ask something), and it opens no chats itself.
+
+Files and showing:
+- chat_post files=[absolute local paths] attaches files, shown as Formatting below says; in still.fail chats, local paths in Markdown links and images (absolute, or relative to your workspace) attach too, and a link naming no file is refused. Fix missing paths and duplicate names before posting; write example paths as code.
+- Show visible results (UI, animation, pictures) with images, video, an inline page or a service: skills stillfail-show (evidence), stillfail-viz (inline HTML diagrams and widgets), stillfail-jobs (services, background work).
+
+Decisions:
+- Ask only when a real unresolved choice blocks the work, then end need_human. Advice or a factual answer needs no follow-up question; do not invent a decision to end a reply or reopen one already made: carry out authorized work.
+- The question stands alone, with the facts it turns on. When people answer by choosing among answers you can name or by confirming one (a yes, 合并, 按仓库规则继续), post it with an options card, so they answer with a tap and it reaches their 待处理; when they must write something you need (a value, a name), a text card. Options only for concrete alternatives, each a complete answer by itself; what they would have to word themselves (what to change, a name, a value, another approach) they type, never an option; no filler (Other, Type my own answer). One option is fine, e.g. 合并.
+- card.assignee is the email of the person who must decide, taken from the conversation, never guessed from a display name: only their 待处理 gets it (others may still answer in the chat). Without one it goes to whoever started the chat, as does a still.fail chat ending need_human without a card.
+- A person's next message closes the current card, even if it is a clarification rather than an answer. The station names the card with the message. Read what they actually said; if a decision is still needed, ask it again with a new card. A newer card replaces the earlier one.
+- Withdraw your card when its question is resolved or obsolete: chat_post with to and withdraw=<its ts> alone (the chat's state stays yours to record). Slack and Feishu show options and text cards too, but no login cards.
+
+Logins: when a command fails because this machine is not logged in (not logged in, 401, an expired token) or a person asks you to log in, use the login tool (it says how; skill stillfail-login gives each common CLI's command), with station for another station's. Never ask a person to run a command. In Slack or Feishu, post the login's link alone, unless login says to post its card there. Never post a link that a command in a station_task printed: people get a login only through login's card. Never copy credentials between machines.
+
+Credentials: a password, token, API key, SSH key or credential file you will need again (read with op or bw, given by a person, made by you): offer to keep it in the person's still.fail vault with secret_save (prefer its command, which reads it without you seeing it) and use it later through secret_use and secret_run. One you need and do not have (an API key only they can get): secret_save with neither value nor command, and its card asks them to type it in. Never ask for a secret's value in the chat. Skill stillfail-vault says when and how.
+
+End every turn with exactly one state:
+- all_done: nothing in the chat is left unfinished: no unmerged branch, undeployed or unconfirmed change, open question or result awaiting approval. done names the evidence and where the result landed (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以; a bare 做完了 / done is refused. It marks the chat finished in people's lists.
+- need_human: a person has to give, do, decide, confirm or verify something. Ask it first in a visible message: need only sums it up in a sentence and asks nobody (to verify: where, how and what to check). After answering a clarification, say again what is still needed. Work also running goes after the ask, e.g. 选统计口径；CI 还在跑. Waiting on a person is never waiting.
+- waiting: only work you started that goes on after the turn and brings you back (a job, a background command or agent, a loop watching CI or a build), nothing asked of anyone, and nothing else left to do meanwhile: carry on with what does not need its result first. Something must watch it and bring you back when it ends or fails: a background command or agent the harness reports on, or a job (with watch for a long run); a remote run such as CI needs a loop polling it that exits on its first failure. chat_state waiting takes for (a few words naming the work) and seconds, a fallback, not the way back: when the work truly cannot be watched, the shortest it could take. Waiting on nothing but a watch of yours (a schedule, a monitor), add watch: true, so people see the chat watching.
+A chat_post with kind records the state (no chat_state after it); chat_state records one without a post. about is the ts people jump to: the result, the question (a pending card by default), the progress message. A turn without a state is sent back to you. Nothing holds back all_done: the station may later recommend the chat for the archive by its archive policy, so end the turn truthfully. When someone says a recommendation is wrong, read archive_policy: change it if the policy caused it (an option counted the wrong way, a situation missing), or say the model misjudged.
+
+Progress: post when people need news before the end (a changed plan, a useful partial result, a decision, a blocker), not routine steps. For long work, one post saying so and roughly how long.
+
+Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *italic*, ~~strike~~, [label](url) (a bare URL is a link too), lists (- or 1., one item per line, nested by indenting; • or lines without a marker run into one paragraph), #/##/### headings, tables (for comparisons and data, not a code block lined up by hand), \`code\` and \`\`\`lang blocks, > quotes, a backslash before a Markdown character for a literal one. Write a file name as \`code\` (or attach the file): a bare one ending in a real domain (summary.md, notes.ai) becomes a web link. Only these differ by destination (EMBER/… a still.fail chat, via="feishu" a Feishu chat, any other a Slack thread):
+
+| | still.fail chat | Slack thread | Feishu chat |
+|---|---|---|---|
+| mention | none: write the name | <@USER_ID>, <#CHANNEL_ID> | <at id=OPEN_ID></at> (their id is in from=) |
+| attached files | ![](shot.png) places an image; [report](report.pdf) on its own line places a file, within a sentence opens it; HTML placed so renders inline (stillfail-viz) | uploaded below the text: no image syntax or link to them, say in words what they show | sent below the text as messages of their own: no image syntax or link to them |
+| math | use \\(…\\) inline, \\[…\\] on separate lines or $$ fences for display, never inside \`code\` or a code block (shown as its source there); single $ is plain text (amounts need no escaping) | plain text: write it readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not TeX source | plain text: write it readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not TeX source |
+| mermaid block | draws a diagram | shows as code | shows as code |
+| a chat's link | shows as a chip with its title | a link | a link |
+
+Where you work:
+${project}- Session workspace: ${workspace}. Scratch files, clones and git worktrees belong here. A week after its chat is archived (the station's setting; sooner when its disk runs low), only the files sent in the chat stay in it: push or move elsewhere what must outlive the chat.
+- Shared repository cache: ${repos_dir}. Keep canonical clones there; work in session worktrees, never edit canonical clones directly.
+
+Memory and skills:
+- Both runtimes share memory. Keep it short; no credentials or one-off task details.
+- Global memory ${memory_path} is told below as it was when this session started: lasting cross-project lessons only (teamwork, answering).
+- Project lessons belong in skills/<project>/SKILL.md beside it; create one if absent. Start its description with "项目记忆：" and say when it applies. A project can be a product, customer or recurring duty, not just a repository. Those skills are linked into your workspace (.claude/skills, .agents/skills) and load as your own; one made since you started is read there.
+- Use other shared skills there when their descriptions match the task. If a project-specific build, screenshot, rendering or other workflow is missing from your local skill catalog, first search the workspace with search kinds=["skill"] (leave station unset), using the project name and task words; read relevant results with skill_read before rediscovering the procedure from source. For visual changes to an existing product, do this before choosing an image generator.
+- A skill can be shared with the workspace's other stations (people turn that on). One shared from another station shows there like the others; what you write to it reaches that station. A SKILL.conflict-<station>.md beside a SKILL.md is an edit made on an older copy: merge it into SKILL.md and remove it.`;
+
+export const NUDGE = `Your turn ended without a state, so nobody knows where the chat stands. Only a real unresolved need requires need_human. A factual answer alone does not need a follow-up question; do not invent one. If you still need something after answering a clarification, visibly ask for it; need alone is only a status summary. If you ask a person to choose or confirm, post the question with a card. Do not reopen a decision the user already made. Decide whether anything in it is still unfinished, then end the turn with exactly one:
+- all_done: nothing in the chat is left unfinished at all. Post the result with chat_post kind "all_done" (or chat_state "all_done" if you already posted it), with done: why nothing is left, naming the evidence (a commit, a release, a person's confirmation, the answer given).
+- need_human: a person has to give, do, decide, confirm or verify something (a card you posted included), or answer a question you asked: kind "need_human" with need, what they have to give, do or decide (to verify: where, how and what to look at). If work you started is pending too, mention it after the ask in need.
+- waiting: only work you started that will bring you back on its own (a background command or agent, a job, a loop watching CI), with nothing asked of anyone, and nothing else you can do meanwhile: chat_state "waiting" with seconds, your estimate of how long until it does, and for, what you wait for. Waiting on a person is need_human.
+- Otherwise: continue the work.`;
+
+/// Its turn ended in a state and the chat `to` it was in still has no title.
+export const nameUntitled = (to: string) => `The chat ${to} still has no title, and nobody is at work in it now. Give it one: chat_post with only to "${to}" and title, a few words on what it is about in the language its people use. Post nothing else, then record again the state you just ended with (chat_state, with the same done or need).`;
+
+export const RESUME_AFTER_RESTART = `The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know.`;
+
+export const GO_ON_AFTER_LOST = `Your last turn stopped because the station lost its connection to the sandbox your commands run in, and the station started you again there. Commands that were running then were ended. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
+export const GO_ON_AFTER_AUTH = `Your last turn stopped on an authentication error. The station reopened the runtime to reload its credentials. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
+
+export const GO_ON_AFTER_SPENT = `Your last turn was cut off: the account it ran on hit its usage limit. You now run on another account (or model). Check where you were, then continue the work. Post only if people need to know.`;
+
+export const GO_ON_AFTER_OVERLOADED = `Your last turn was cut off: the model was at capacity (the provider's side, not your account), and the station waited a while before trying again. Check where you were, then continue the work. Post only if people need to know.`;
+
+export const GO_ON_AFTER_REFILL = `Your last turn was cut off: the account it ran on hit its usage limit, and no other account could take over. Its allowance should have refilled by now. Check where you were, then continue the work. Post only if people need to know.`;
+
+export const TOOLS_LOST = `Your last turn could not reach the station's tools (chat_post, chat_state and the rest failed or were not connected), so nothing you said reached anyone. The station restarted your process; the tools work again. Check where you were, then post what people still need to see (your answer, results, questions) and end the turn with a state as usual.`;
+
+/// Its runtime session could not be taken up, so a new one started: where its earlier conversation is, for it to read
+/// (its execution history reads the runtime sessions it ran in as one); `terminal`: the machine's own transcript of the
+/// terminal session it was continued from.
+export const resumeLost = (key: string, threads: string[], terminal: string | null = null) => `Your earlier conversation could not be restored: this is a new one. Before you answer, read back what you need from where it is: ${terminal === null ? "" : `this session began in a terminal, and what was said there is in ${terminal} (its runtime's own transcript: read it from its end); `}session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
+
+/// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
+export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
+
+/// Its context was cleared by hand (session.clear, `-clear`): a new conversation that reads its chats back, and what it did
+/// before (its execution history) only when it needs it.
+export const cleared = (key: string, threads: string[]) => `People cleared your context: this is a new conversation in the same chat, and your earlier one in this session is no longer loaded. Read the chat back before you act on what comes below${threads.length === 0 ? "" : `: chat_history for ${threads.join(", ")}`}. Your earlier work (session_history with chat ${key}) is not to be read back by default: only when you need something from it.`;
+
+/// Its process was ended with work going in the background (agents/runtime.ts `background`), which ended with it:
+/// `resumable` are the subagents SendMessage takes up where they stopped.
+export const backgroundStopped = (tasks: BackgroundTask[], resumable: string[]) => `The station ended your earlier process (people stopped you, or it moved this session to another account, took a change to it or started it again), and the work it had going in the background was stopped with it. None of it will report back:
+${tasks.map((t) => `- ${t.kind === "agent" ? "subagent" : "background command"} ${t.id}${t.description === "" ? "" : ` (${t.description})`}${resumable.includes(t.id) ? ": SendMessage to it goes on from where it stopped" : ""}`).join("\n")}
+Before you wait on any of it, check where each got to and start again what is still needed.`;
+
+/// Its turn ended waiting, and the station ended its process at that turn's end: the background work it waits on is
+/// gone (told above it, `backgroundStopped`).
+export const BACKGROUND_STOPPED_WAITING = `You ended your last turn waiting, but what you waited on was stopped with your process (see above), so it will never bring you back. Check where it got to (a run it watched may already be done), act on that, and watch again what is still going before you wait.`;
+
+/// The agent said it would wait this long, and nothing has brought it back.
+export const waitOver = (seconds: number) => `You said you were waiting on work you started (${seconds} seconds), and nothing has brought you back yet. Check on it now.
+- If it is done: pick up its results and carry on. If nothing was watching it (you would have been told when it ended), start a watch the next time instead of waiting on a guessed duration.
+- If it is still running: make sure something will tell you when it ends or fails (a background command or agent, a job with watch, a loop polling CI that exits on the first failure), do whatever else you can meanwhile, and only then chat_state "waiting" again. If it truly cannot be watched, wait the shortest it could still take.
+- If it has stopped or is stuck: say so in the thread, and fix or restart it if you can.`;
+
+/// The first turn in still.fail of a session begun in a terminal: from now on it works as still.fail's sessions do.
+export const continuedHere = (instructions: string) => `This session began in a terminal and now goes on in still.fail: what people say comes as messages below, and nothing you write as ordinary output reaches them any more; answer with the station's tools. How still.fail works, from now on:
+
+<stillfail-instructions>
+${instructions}
+</stillfail-instructions>`;
+
+/// A conversation address as the agent sees and names it.
+/// What an agent is told of a card it asked a person to decide in its chat (secret_use, secret_save, phone_use): the tool
+/// call does not wait for the decision, which comes later as a notice; a call held would hold the agent's turn, and
+/// with it everything else said in the chat meanwhile.
+export const UNDECIDED = "You are told in this session when it is decided: meanwhile go on with what does not need it (answer the chat, other work); with nothing else left, end your turn need_human (about the card).";
+
+export const threadAddress = (channel: string, threadTs: string) => `${channel}/${threadTs}`;
+
+export function parseThreadAddress(value: string): [string, string] | null {
+  const v = value.trim();
+  const at = v.indexOf("/");
+  if (at < 0) return null;
+  const [channel, ts] = [v.slice(0, at), v.slice(at + 1)];
+  // A Feishu chat's: its chat id and the message or topic it began with (docs/feishu.md).
+  if (/^oc_[A-Za-z0-9]+$/.test(channel) && /^om(t)?_[A-Za-z0-9]+$/.test(ts)) return [channel, ts];
+  const dot = ts.indexOf(".");
+  if (dot < 0) return null;
+  const [secs, micros] = [ts.slice(0, dot), ts.slice(dot + 1)];
+  const ok = /^[A-Z0-9]+$/.test(channel) && /^[0-9]+$/.test(secs) && /^[0-9]+$/.test(micros);
+  return ok ? [channel, ts] : null;
+}
+
+const escapeAttr = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+
+/// A message's words as the agent reads them: quotes (which message, whose, the file of it quoted, the passage as a
+/// blockquote, then the comment), then the words, then the files as paths (not a quoted message's file: the agent had
+/// it with that message, and is only pointed back at it).
+export function messageForAgent(m: MessageRow): string {
+  const again = new Set<string>();
+  const parts = m.quotes.map((q) => {
+    let whose: string;
+    if (q.role === "agent") whose = "your own earlier message";
+    else if (q.role === "page") {
+      // A mark on a web service's page in a preview: its own screenshot (`file`), or the whole page's from clients before.
+      const shot = q.file ? m.attachments.find((a) => a.name === q.file) : undefined;
+      whose = shot
+        ? `a web page shown in the chat's preview (${q.author}), marked with its number in its own screenshot ${shot.path}`
+        : `a web page shown in the chat's preview (${q.author}), marked with its number in the attached screenshot`;
+    } else if (q.role === "image") whose = `an image marked in the chat (${q.author}), its number pinned on the marked image attached`;
+    else whose = `a message from ${q.author}`;
+    let which = q.ts !== null && q.ts !== undefined ? `${whose} ${q.ts} in this conversation` : whose;
+    // A file of that message quoted (an image or a video held in the chat): the message carries it again for the chat to
+    // show, the agent only where it is.
+    const quoted = q.file && q.role !== "page" && q.role !== "image" ? m.attachments.find((a) => a.name === q.file) : undefined;
+    if (quoted) {
+      which += `, its file ${quoted.path} (sent with that message, not again)`;
+      again.add(quoted.path);
+    }
+    const passage = q.text.split("\n").map((l) => `> ${l}`);
+    const comment = q.comment === "" ? "" : `\nTheir comment on it: ${q.comment}`;
+    return `[Quote] From ${which}:\n${passage.join("\n")}${comment}`;
+  });
+  parts.push(m.text);
+  const pasted = m.attachments.filter(a => /^pasted-text-[0-9a-f-]{36}\.txt$/.test(a.name));
+  if (pasted.length) parts.push(`The user pasted text into the composer; its full contents are in these text attachments. Read them as part of the user's message:\n${pasted.map(a => `- ${a.path}`).join("\n")}`);
+  const attached = m.attachments.filter((a) => !again.has(a.path));
+  if (attached.length > 0) parts.push(`Attached files:\n${attached.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n")}`);
+  return parts.filter((p) => p !== "").join("\n\n");
+}
+
+const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : "slack");
+
+/// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
+const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefined ? ` client="${escapeAttr(m.client)}"` : "");
+
+/// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
+/// `posts`: the agent's first post in a message's thread made after it (by ts), said as its `before`.
+export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }> = new Map(), selfKey = ""): string {
+  const lines: string[] = [];
+  const hinted = new Set<number>();
+  for (const p of messages) {
+    const m = p.message;
+    const address = threadAddress(p.channel, p.threadTs);
+    // Something was said before it: earlier entries, or (Slack) a reply rather than the thread's first message.
+    const before = m.n > 1 || (p.surface !== STILLFAIL_SURFACE && m.ts !== p.threadTs);
+    if (newThreads.has(m.thread) && before && !hinted.has(m.thread)) {
+      hinted.add(m.thread);
+      lines.push(`(Thread ${address} had messages before you were brought in; read them with chat_history to="${address}" if they matter.)`);
+    }
+    const self = selves.get(p.connect);
+    const you = self !== undefined ? ` you="${escapeAttr(self)}"` : "";
+    const agent = m.authorKind === "agent";
+    const name = names.get(m.author);
+    const from = agent ? (name ?? "another agent") : name !== undefined ? `${name} (${m.author})` : m.author;
+    const post = posts.get(p);
+    const sentBefore = post !== undefined ? ` before="${escapeAttr(post)}"` : "";
+    lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}" from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
+    const change = cards.get(p);
+    if (change !== undefined) {
+      const whose = change.ended.author === selfKey ? "Your card" : "A card";
+      const now = change.current === null ? "No newer card is pending." : `A newer card (message ts ${change.current.ts}) is pending; the person may not have seen it.`;
+      const next = change.ended.author !== selfKey ? "The agent that posted it can decide whether to ask again."
+        : change.special !== null ? `The underlying login or authorization may still be pending. ${change.special}`
+        : "If the decision is still needed and no newer card asks it, ask again with a new card.";
+      lines.push(`<card-state thread="${escapeAttr(address)}" ts="${escapeAttr(change.ended.ts)}">${whose} is no longer pending after this message. The message is not necessarily a decision; read what it says. ${now} ${next}</card-state>`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/// What people chose in widgets the agent posted, riding along with messages it is handed anyway; empty when none.
+export function formatWidgetModels(models: WidgetModel[]): string {
+  if (models.length === 0) return "";
+  const lines = models.map((w) => (w.thread ? `- ${w.name} in ${threadAddress(w.thread[0], w.thread[1])}: ${w.model}` : `- ${w.name}: ${w.model}`));
+  return `A widget you posted has state for you (the person's choices in it; not a message to answer by itself):\n${lines.join("\n")}`;
+}
+
+/// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the
+/// station marked as bots.
+export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean }> = new Map()): string {
+  return messages
+    .map((m) => {
+      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === "ember" ? "ember" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
+      const bot = m.authorKind !== "person" && from !== "you" ? " bot" : "";
+      const found = cards.get(m.n);
+      let card = "";
+      if (found !== undefined) {
+        const options = Array.isArray(found.card?.options) ? found.card.options : undefined;
+        const facts = { type: found.card?.type, ...(options === undefined ? {} : { options }), ...(typeof found.card?.placeholder === "string" ? { placeholder: found.card.placeholder } : {}),
+          ...(typeof found.card?.vault?.request === "string" ? { request: found.card.vault.request } : {}),
+          ...(typeof found.card?.adb?.request === "string" ? { phoneRequest: found.card.adb.request } : {}),
+          ...(typeof found.card?.signin?.site === "string" ? { site: found.card.signin.site } : {}),
+          ...(typeof found.card?.login === "string" ? { login: found.card.login } : {}),
+          ...(typeof found.card?.station === "string" ? { station: found.card.station } : {}) };
+        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}; ${JSON.stringify(facts)}]`;
+      }
+      return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
+    })
+    .join("\n");
+}
+
+</source>
+
+<source path="station/src/agents/claude.ts">
+// Claude Code driver (the Rust station's runtime/claude.rs): one `claude -p` stream-json process per session, under a
+// runner whose id comes from the session key.
+//
+// Behaviour pinned by spikes (spike/README.md):
+// - a turn is framed by system/init … result; `result.is_error` decides success, not `subtype` (an auth failure ends
+//   as subtype "success");
+// - 401/403 is retried silently for minutes, visible only as system/api_retry frames, so the first one fails the turn
+//   (but see RENEWED);
+// - input written while a turn is finishing may start a turn of its own (a system/init with no prompt of ours);
+// - interrupt is a control_request; the turn still ends with a result frame.
+// - background_tasks (a control_request) moves the Bash commands and subagents a turn waits on to the background: each
+//   call returns at once and the turn goes on; a task_notification tells when one ends. Input written after it is
+//   read in the turn then, not when they end.
+// - each background command and subagent is told as it starts (system/task_started, is_backgrounded; or task_updated
+//   with it later) and as it ends (task_notification, or task_updated with a final status); a subagent's own commands
+//   say owned_by_subagent. They all end with the process.
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { log } from "../ops/log.ts";
+import { claudeProject } from "../read/transcript.ts";
+import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
+import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
+import { fileCredentials, takeBack } from "./no-keychain.ts";
+import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
+import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
+import type { RunnerInfo } from "./runner.ts";
+import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { wall } from "../ops/fibers.ts";
+import { peerHttpBase } from "../tools/http.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
+
+type Json = any;
+
+const MCP_TOKEN_VAR = "STILLFAIL_MCP_TOKEN";
+/// Inherited variables that would let a session authenticate as something other than its profile.
+const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"];
+
+/// The value given a flag in a process's arguments.
+const flagOf = (args: string[], flag: string) => {
+  const at = args.indexOf(flag);
+  return at >= 0 ? args[at + 1] : undefined;
+};
+
+/// Whether a process runs Fast (Claude Code's `fastMode` setting), for an account that takes it (an Anthropic key):
+/// as the session is set, else as its profile is. Fixed for the process, as its effort is.
+const fastFor = (options: OpenOptions): boolean | undefined => (takesFast(options.profile) ? (options.fast ?? profileFast(options.profile)) : undefined);
+
+/// The Fast a process was started with (its --settings' `fastMode`).
+function fastOf(args: string[]): boolean | undefined {
+  try {
+    const fast = JSON.parse(flagOf(args, "--settings") ?? "")?.fastMode;
+    return typeof fast === "boolean" ? fast : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/// The address of the station's tools a process was started with (its --mcp-config); null when it does not say.
+export function mcpUrlOf(args: string[]): string | null {
+  try {
+    const servers = JSON.parse(flagOf(args, "--mcp-config") ?? "")?.mcpServers ?? {};
+    const url = TOOL_SERVERS.map((name) => servers[name]?.url).find((u) => typeof u === "string");
+    return url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/// What a frame says of the station's tools being out of reach (null: nothing): their server failed to connect as a
+/// turn started, or a call to one of them (`calls`: the ids of those made, noted here as they are) failed as
+/// unreachable. Seen in the field as `ECONNREFUSED: Unable to connect…`, then `MCP server "stillfail" is not connected`.
+export function toolsLostIn(frame: Json, calls: Set<string>): string | null {
+  const kind = frame?.type;
+  const content: Json[] = Array.isArray(frame?.message?.content) ? frame.message.content : [];
+  if (kind === "system" && frame.subtype === "init" && Array.isArray(frame.mcp_servers)) {
+    const server = frame.mcp_servers.find((s: Json) => TOOL_SERVERS.includes(s?.name));
+    if (server?.status === "failed") return `the ${server.name} MCP server failed to connect`;
+  } else if (kind === "assistant") {
+    for (const c of content) {
+      if (c?.type === "tool_use" && typeof c.id === "string" && TOOL_SERVERS.some((s) => String(c.name ?? "").startsWith(`mcp__${s}__`))) calls.add(c.id);
+    }
+  } else if (kind === "user") {
+    for (const c of content) {
+      if (c?.type !== "tool_result" || !calls.delete(c.tool_use_id) || c.is_error !== true) continue;
+      const text = typeof c.content === "string" ? c.content : Array.isArray(c.content) ? c.content.map((x: Json) => (typeof x?.text === "string" ? x.text : "")).join("\n") : "";
+      if (unreachable(text)) return chars(text, 300);
+    }
+  }
+  return null;
+}
+
+export const userMessage = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
+
+/// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
+/// (where it runs on), then in every project's (it ran elsewhere before: many directories on a station, each looked at).
+export function transcriptExists(home: string, sessionId: string, cwd: string): boolean {
+  const project = claudeProject(cwd);
+  if (project !== null && existsSync(join(home, "projects", project, `${sessionId}.jsonl`))) return true;
+  let dirs: string[];
+  try {
+    dirs = readdirSync(join(home, "projects"));
+  } catch {
+    return false;
+  }
+  return dirs.some((d) => {
+    try {
+      return statSync(join(home, "projects", d)).isDirectory() && existsSync(join(home, "projects", d, `${sessionId}.jsonl`));
+    } catch {
+      return false;
+    }
+  });
+}
+
+/// Anthropic turning the request away before any account is looked at (a region it does not serve, a proxy's address
+/// it refuses): a 403 "Request not allowed", "forbidden". Signing in again changes nothing; the network does.
+export function refused(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes("request not allowed") || /\bforbidden\b/.test(lower);
+}
+
+export function classifyResult(text: string): FailureReason {
+  const lower = text.toLowerCase();
+  const words = lower.split(/[^\p{L}\p{N}]+/u);
+  const word = (w: string) => words.includes(w);
+  if (refused(text)) return "refused";
+  if (word("401") || word("403") || lower.includes("authenticat") || lower.includes("api key")) return "auth";
+  if (
+    word("429") ||
+    ["rate limit", "rate-limit", "rate_limit", "ratelimit", "usage limit"].some((s) => lower.includes(s)) ||
+    ["session", "weekly", "daily"].some((window) => lower.includes(`hit your ${window} limit`)) ||
+    /\bhit your \d+[- ]hour limit\b/.test(lower) ||
+    // A model's own allowance: "You've reached your Fable limit. Switch to another model, or manage usage credits…"
+    /\breached your [\w.\- ]+ limit\b/.test(lower) ||
+    lower.includes("you've hit your limit")
+  ) {
+    return "rate_limit";
+  }
+  if (word("529") || OVERLOADED.some((s) => lower.includes(s))) return "overloaded";
+  return failureRest(text);
+}
+
+/// `renews`: its token is handed over and renewed while it runs (RENEWED): a first 401 is left to that.
+/// `renewed`: a new token was given it in this turn, so another 401 is not the old token's.
+/// `tasks`: the commands and subagents it runs that have not ended, by id (`background` once moved there).
+/// `compacting`: the turn is a `/compact` asked for by hand, and `compactError` why it compacted nothing.
+export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean; renews?: boolean; renewed?: boolean; tasks?: Record<string, Task>; compacting?: boolean; compactError?: string | null };
+export type Task = BackgroundTask & { background: boolean };
+
+/// A task's statuses once it has ended.
+const ENDED = new Set(["completed", "failed", "killed", "stopped"]);
+
+/// What its tasks as the turn leaves them run in the background.
+export const backgroundOf = (turn: Turn): BackgroundTask[] =>
+  Object.values(turn.tasks ?? {})
+    .filter((t) => t.background)
+    .map(({ id, kind, description, startedAt }) => (startedAt === undefined ? { id, kind, description } : { id, kind, description, startedAt }));
+
+/// A token handed to the process (a machine login's, a lent one) is renewed while it runs: started with these, Claude
+/// Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and retries with it, so the
+/// process, its background tasks and subagents go on. It honours them only for a few entrypoints; claude-desktop
+/// changes neither its prompt nor its tools (only the entrypoint named in its requests), as checked on 2.1.299.
+const RENEWED = { CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: "1", CLAUDE_CODE_ENTRYPOINT: "claude-desktop" };
+/// A CLI that does not ask (one too old) retries a 401 on its own: past this attempt it is stopped as before.
+const RENEW_ATTEMPTS = 2;
+
+/// What Claude Code brings of its own that a station's chat agent cannot or must not use, kept out of its context (a
+/// fresh session began at 30k tokens, a third of them these; checked on 2.1.289):
+/// - its own scheduling: still.fail's jobs are the station's (stillfail-cron); a wakeup or cron of the process's own
+///   dies with it;
+/// - claude.ai connectors: they come with the Claude account the session runs on, which changes as accounts run out,
+///   so none is there to count on; and Claude Docs has the agent open a doc on claude.ai, out of the chat, first;
+/// - skills, each listed with its whole description in every session: "off" for those needing what a station's process
+///   never has (the desktop app's browser and computer use, connectors, a terminal, permission prompts, a scheduler of
+///   its own, settings in a profile's home it leaves when it changes account); "name-only" for those seldom needed.
+const DISALLOWED = ["ScheduleWakeup", "CronCreate", "CronDelete", "CronList", "RemoteTrigger"];
+const SETTINGS = {
+  disableClaudeAiConnectors: true,
+  skillOverrides: {
+    ...Object.fromEntries(["loop", "schedule", "keybindings-help", "fewer-permission-prompts", "plugin-authoring", "update-config"].map((name) => [name, "off"])),
+    ...Object.fromEntries(["dataviz", "claude-api", "code-review", "run"].map((name) => [name, "name-only"])),
+    ...Object.fromEntries(["computer-use", "chrome-browser", "built-in-browser", "docs", "google-workspace", "morning", "import-memory"].map((name) => [`anthropic-skills:${name}`, "off"])),
+    ...Object.fromEntries(["docx", "pptx", "xlsx", "pdf", "deep-research", "skill-creator"].map((name) => [`anthropic-skills:${name}`, "name-only"])),
+  },
+};
+
+/// A session as a next station takes it up (claude.rs Handed: the turn as its last handled line left it).
+export type ClaudeSnapshot = {
+  runtime: "claude";
+  id: string;
+  runner: string;
+  turn: { busy: boolean; aborting: boolean; authFailure: string | null; renews?: boolean; tasks?: Record<string, Task>; compacting?: boolean; compactError?: string | null };
+  machineExpires: number | null;
+  live: ClaudeLiveState;
+};
+
+export type ClaudeDriverOptions = {
+  /// The station's data directory: runners live in <data>/run/runners.
+  data: string;
+  /// The CLI, by name on the agent's PATH or a path (server.rs gives "claude").
+  command?: string;
+  /// The station's own environment (machine logins are read in it); process.env by default.
+  env?: Env;
+  /// The machine login's current token, renewed when about to run out or when it is `rejected` (claude_oauth.rs; the
+  /// accounts module's).
+  machineToken?: (env: Env, rejected?: string) => Promise<MachineToken>;
+  /// Another station's subscription, borrowed (share/index.ts): a token lent by the station signed in on it, handed
+  /// to the process as the machine's is.
+  lent?: { borrowed(profile: Profile): boolean; token(profile: Profile, rejected?: string): Promise<MachineToken> };
+};
+
+const interruptRequest = () => JSON.stringify({ type: "control_request", request_id: `interrupt-${uuid()}`, request: { subtype: "interrupt" } });
+
+/// What a frame does to the turn (claude.rs on_frame). `interrupt` is how an auth failure stops the turn; `now` when a
+/// task it tells of starts. What it has going in the background, said again (a `tasks` live event) as it changes.
+export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void, now: () => number = wall.now) {
+  const before = JSON.stringify(backgroundOf(turn));
+  frameDoes(frame, turn, emit, interrupt, now);
+  const tasks = backgroundOf(turn);
+  if (JSON.stringify(tasks) !== before) emit({ type: "live", event: { kind: "tasks", tasks } });
+}
+
+function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void, now: () => number) {
+  const kind = typeof frame?.type === "string" ? frame.type : "";
+  const subtype = typeof frame?.subtype === "string" ? frame.subtype : "";
+  // A control request it refused (a model it cannot switch to, say): the turns go on as they were.
+  if (kind === "control_response" && frame.response?.subtype === "error") log.warn("agents::claude", "claude refused a control request", { request: String(frame.response.request_id ?? ""), error: String(frame.response.error ?? "") });
+  if (kind === "system" && subtype === "init") {
+    const was = turn.busy;
+    turn.busy = true;
+    if (!was) emit({ type: "turnStarted" });
+  } else if (kind === "system" && subtype === "api_retry") {
+    const status = Number.isInteger(frame.error_status) ? (frame.error_status as number) : 0;
+    const attempt = Number.isInteger(frame.attempt) ? (frame.attempt as number) : 1;
+    // A token renewed while it runs asks for a new one (RENEWED); stopped only when that one fails too.
+    const renewing = status === 401 && turn.renews === true && turn.renewed !== true && attempt <= RENEW_ATTEMPTS;
+    if ((status === 401 || status === 403) && turn.authFailure === null && !renewing) {
+      const error = frame.error === undefined ? "authentication failed" : typeof frame.error === "string" ? frame.error : JSON.stringify(frame.error);
+      turn.authFailure = `${status} ${error}`;
+      interrupt();
+      turn.aborting = true;
+    }
+  } else if (kind === "system" && subtype === "task_started" && typeof frame.task_id === "string" && frame.owned_by_subagent !== true) {
+    const description = typeof frame.description === "string" ? frame.description : "";
+    turn.tasks = { ...turn.tasks, [frame.task_id]: { id: frame.task_id, kind: frame.task_type === "local_agent" ? "agent" : "command", description, background: frame.is_backgrounded === true, startedAt: now() } };
+  } else if (kind === "system" && (subtype === "task_notification" || subtype === "task_updated") && typeof frame.task_id === "string" && turn.tasks?.[frame.task_id]) {
+    const status = subtype === "task_notification" ? frame.status : frame.patch?.status;
+    const { [frame.task_id]: task, ...rest } = turn.tasks;
+    if (subtype === "task_notification" || ENDED.has(status)) turn.tasks = rest;
+    else if (frame.patch?.is_backgrounded === true) turn.tasks = { ...rest, [frame.task_id]: { ...task!, background: true } };
+  } else if (kind === "system" && subtype === "status" && turn.compacting === true && frame.compact_result === "failed") {
+    // `/compact` that compacted nothing still ends in a result of success: only this says so (2.1.289).
+    turn.compactError = typeof frame.compact_error === "string" && frame.compact_error !== "" ? frame.compact_error : "compaction failed";
+  } else if (kind === "result") {
+    const text = typeof frame.result === "string" ? frame.result : subtype;
+    let outcome: TurnOutcome;
+    if (turn.authFailure !== null) outcome = { kind: "failed", reason: refused(turn.authFailure) ? "refused" : "auth", message: turn.authFailure };
+    else if (turn.aborting) outcome = { kind: "aborted" };
+    else if (frame.is_error === true) outcome = { kind: "failed", reason: classifyResult(text), message: chars(text, 1000) };
+    else if (turn.compactError) outcome = { kind: "failed", reason: "other", message: chars(turn.compactError, 1000) };
+    else outcome = { kind: "completed" };
+    turn.busy = false;
+    turn.aborting = false;
+    turn.authFailure = null;
+    turn.renewed = false;
+    turn.compacting = false;
+    turn.compactError = null;
+    // What it waited on in the turn has ended with it; what goes on is in the background.
+    if (turn.tasks) turn.tasks = Object.fromEntries(Object.entries(turn.tasks).filter(([, t]) => t.background));
+    emit({ type: "turnEnded", outcome });
+  }
+}
+
+export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
+  private readonly command: string;
+  private readonly env: Env;
+  private readonly machineToken: (env: Env, rejected?: string) => Promise<MachineToken>;
+  private readonly lent: ClaudeDriverOptions["lent"];
+
+  constructor(options: ClaudeDriverOptions) {
+    super(options.data);
+    this.command = options.command ?? "claude";
+    this.env = options.env ?? process.env;
+    this.machineToken = options.machineToken ?? machineClaudeToken;
+    this.lent = options.lent;
+  }
+
+  runtime(): "claude" {
+    return "claude";
+  }
+
+  /// Its process is named by its session id in the log.
+  protected label(_options: OpenOptions, session: ClaudeSession) {
+    return `claude ${session.id()}`;
+  }
+
+  async open(options: OpenOptions, events: Events): Promise<ClaudeSession> {
+    const home = options.profile.home;
+    mkdirSync(home, { recursive: true });
+    if (options.resume !== undefined && !transcriptExists(home, options.resume, options.cwd)) {
+      // claude would start and exit at once; failing here lets the caller start fresh.
+      throw new Error(`no claude transcript for session ${options.resume}`);
+    }
+    const sessionId = options.resume ?? uuid();
+    const mcpConfig = options.textOnly ? { mcpServers: {} } : { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
+    const model = options.model ?? profileModel(options.profile);
+    const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
+    if (!options.textOnly) args.push("--dangerously-skip-permissions");
+    if (options.resume !== undefined) args.push("--resume", sessionId);
+    else args.push("--session-id", sessionId);
+    if (model !== undefined) args.push("--model", model);
+    if (options.effort !== undefined) args.push("--effort", options.effort);
+    // None for a session continued from a terminal: its system prompt and tools stay as they began, so its cache holds.
+    const ours = options.instructions !== "";
+    if (ours) args.push("--append-system-prompt", options.instructions);
+    args.push("--mcp-config", JSON.stringify(mcpConfig));
+    if (options.textOnly) args.push("--strict-mcp-config", "--tools", "", "--setting-sources", "", "--no-session-persistence", "--disable-slash-commands", "--no-chrome");
+    if (ours) args.push("--disallowedTools", DISALLOWED.join(","));
+    // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
+    // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
+    const file = keyFile(options.profile);
+    const fast = fastFor(options);
+    const settings = {
+      ...(ours ? SETTINGS : {}),
+      ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }),
+      // The most context it runs with: it compacts on its own at it (its window for the model, clamped to the model's).
+      ...(options.context === undefined ? {} : { autoCompactWindow: options.context }),
+      // Said either way: one turned on by hand in its home (/fast) would otherwise stay on.
+      ...(fast === undefined ? {} : { fastMode: fast }),
+    };
+    if (Object.keys(settings).length > 0) args.push("--settings", JSON.stringify(settings));
+
+    const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };
+    if (file !== undefined) env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "60000";
+    env.CLAUDE_CONFIG_DIR = home;
+    env[MCP_TOKEN_VAR] = options.mcpToken;
+    // Web services of the workspace's other stations: <this>/<station>/<port>/<path> (mesh/peer-http.ts).
+    env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
+    // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
+    for (const name of bothNames("RUNTIME_SESSION_ID")) env[name] = sessionId;
+    // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
+    // Another station's subscription the same way, with the token that station lends.
+    const renew = this.renewer(options.profile);
+    const machine = renew ? await renew() : undefined;
+    if (machine) {
+      env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
+      Object.assign(env, RENEWED);
+    } else {
+      // Its own login stays in its home's file when it refreshes it (no_keychain.rs).
+      await takeBack(home);
+      fileCredentials(env);
+    }
+    // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
+    // session, they took up to 36 s before a new session could start. One the user chose wins.
+    env.CLAUDE_CODE_CERT_STORE ??= "bundled";
+    // Claude Code nudges a model that has gone a few turns without writing to the user to say what it is doing. Here
+    // ordinary output reaches nobody, so the nudge turned into status posts in the chat; the instructions say when to post.
+    env.CLAUDE_CODE_SILENT_TURN_REMINDER ??= "0";
+
+    // Renewed while it runs, it is never started again for its token; one read from a file again after a 401 is not
+    // stopped at the first.
+    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
+    session.toolsUrl = options.mcpUrl;
+    session.fast = fast;
+    await this.start(session, options, this.command, args, env);
+    return session;
+  }
+
+  /// Where a profile whose token is handed to the process gets a current one (null for a profile with its own login):
+  /// the machine login's, or the one lent by the station a borrowed subscription is signed in on.
+  private renewer(profile: Profile): Renew | null {
+    if (isMachine(profile)) return (rejected) => this.machineToken(this.env, rejected);
+    const lent = this.lent;
+    if (lent?.borrowed(profile)) return (rejected) => lent.token(profile, rejected);
+    return null;
+  }
+
+  protected handedOver(options: OpenOptions, handed: ClaudeSnapshot, info: RunnerInfo, events: Events) {
+    const session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"), this.renewer(options.profile), null);
+    // The address it was told is in its arguments: the station's may have moved since (hub.ts `toolsAt`).
+    session.toolsUrl = mcpUrlOf(info.args);
+    session.fast = fastOf(info.args);
+    return session;
+  }
+
+  /// What the station before had handled (stdout up to where it acknowledged) says where the turn stands.
+  protected crashed(options: OpenOptions, lines: Iterable<string>, info: RunnerInfo, events: Events) {
+    const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
+    const live = new LiveFromClaude();
+    for (const line of lines) {
+      const frame = parseLine("claude", line);
+      if (frame === undefined) continue;
+      live.feed(frame);
+      onFrame(frame, turn, () => {}, () => {});
+    }
+    const flag = info.args.findIndex((a) => a === "--session-id" || a === "--resume");
+    const sessionId = flag >= 0 ? info.args[flag + 1]! : (options.resume ?? "");
+    // Its token is not known, nor whether it asks for a new one: as if about to run out, so its next turn starts it
+    // again with a current one (a machine login's or a lent one).
+    const renew = this.renewer(options.profile);
+    const session = new ClaudeSession(this, sessionId, turn, renew ? wall.now() : null, live, events, flagOf(info.args, "--effort"), renew, null);
+    session.toolsUrl = mcpUrlOf(info.args);
+    session.fast = fastOf(info.args);
+    return session;
+  }
+}
+
+/// A current token for a process, renewed first when `rejected` is the one given.
+type Renew = (rejected?: string) => Promise<MachineToken>;
+
+export class ClaudeSession extends OwnProcessSession<Turn> {
+  /// The machine login's token this process runs on (machine profiles): when it runs out.
+  private machineExpires: number | null;
+  private live: LiveFromClaude;
+  /// The effort it was started with: fixed for the process (`--effort` has no switch while it runs).
+  private effort: string | undefined;
+  /// The Fast it was started with (fastFor; none: an account that does not take it), fixed for the process too.
+  fast: boolean | undefined;
+  /// Its calls to the station's tools not answered yet (toolsLostIn).
+  private calls = new Set<string>();
+  /// Where it gets a new token when it asks (RENEWED), and the one it was given last (null when not known here).
+  private renew: Renew | null;
+  private token: string | null;
+
+  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: Events, effort: string | undefined, renew: Renew | null, token: string | null) {
+    super(driver, sessionId, turn, events);
+    this.renew = renew;
+    this.token = token;
+    this.effort = effort;
+    this.machineExpires = machineExpires;
+    this.live = live;
+  }
+
+  protected heard(line: string) {
+    const frame = parseLine("claude", line);
+    if (frame === undefined) return;
+    for (const event of this.live.feed(frame)) this.events({ type: "live", event });
+    const lost = toolsLostIn(frame, this.calls);
+    if (lost !== null) this.events({ type: "toolsLost", why: lost });
+    if (frame?.type === "control_request" && frame.request?.subtype === "oauth_token_refresh") void this.renewToken(String(frame.request_id ?? ""));
+    onFrame(frame, this.turn, this.events, () => this.proc.write(interruptRequest()));
+  }
+
+  /// It was refused with its token and asks for a new one (RENEWED): given one other than the token refused, or told
+  /// why not, when its turn ends failed on authentication as before.
+  private async renewToken(requestId: string) {
+    let response: Json;
+    try {
+      if (!this.renew) throw new Error("its token is its own login's");
+      const got = await this.renew(this.token ?? undefined);
+      if (got.token === this.token) throw new Error("no newer token");
+      this.token = got.token;
+      this.turn.renewed = true;
+      response = { accessToken: got.token };
+      log.info("agents::claude", "gave claude a new token", { session: this.sessionId });
+    } catch (error) {
+      log.warn("agents::claude", "no new token for claude", { session: this.sessionId, error: (error as Error).message });
+      response = { accessToken: null, reason: "refresh_failed" };
+    }
+    if (this.turn.closed) return;
+    this.proc.write(JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: requestId, response } }));
+  }
+
+  background() {
+    return backgroundOf(this.turn);
+  }
+
+  async prompt(text: string) {
+    this.begin();
+    this.proc.write(userMessage(text));
+  }
+
+  /// Its `/compact`, as in a terminal: the CLI says `status: compacting`, then how it went, then the turn's result.
+  async compact() {
+    this.begin();
+    this.turn.compacting = true;
+    this.turn.compactError = null;
+    this.proc.write(userMessage("/compact"));
+  }
+
+  private begin() {
+    this.startable();
+    // Taken up without knowing whether it renews its token (RENEWED): about to run out, it is started again (resuming)
+    // with a current one.
+    if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Said(tr(stationLang(), "station.claudeAuth.machineRunsOut"));
+    this.turn.renewed = false;
+    this.turn.busy = true;
+  }
+
+  async steer(text: string) {
+    if (this.turn.closed || !this.turn.busy) return false;
+    this.proc.write(userMessage(text));
+    return true;
+  }
+
+  async backgroundTools() {
+    if (this.turn.closed || !this.turn.busy) return;
+    // Ctrl+B: every foreground Bash command and subagent. A CLI without it answers an error, and the message waits
+    // as before.
+    this.proc.write(JSON.stringify({ type: "control_request", request_id: `background-${uuid()}`, request: { subtype: "background_tasks" } }));
+  }
+
+  async abort() {
+    if (this.turn.closed || !this.turn.busy || this.turn.aborting) return;
+    this.turn.aborting = true;
+    this.proc.write(interruptRequest());
+  }
+
+  /// Another model is set in the process (set_model, read before the next prompt written after it); another effort or
+  /// Fast needs a new one.
+  retune(options: OpenOptions) {
+    const model = options.model ?? profileModel(options.profile);
+    if (this.turn.closed || this.turn.busy || model === undefined || options.effort !== this.effort || fastFor(options) !== this.fast) return false;
+    this.proc.write(JSON.stringify({ type: "control_request", request_id: `model-${uuid()}`, request: { subtype: "set_model", model } }));
+    return true;
+  }
+
+  snapshot(): ClaudeSnapshot {
+    this.handOver();
+    return {
+      runtime: "claude",
+      id: this.sessionId,
+      runner: this.proc.info.id,
+      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure, renews: this.turn.renews, tasks: this.turn.tasks, compacting: this.turn.compacting, compactError: this.turn.compactError },
+      machineExpires: this.machineExpires,
+      live: this.live.state(),
+    };
+  }
+}
+
+</source>
+
+<source path="station/src/sessions/presets.ts">
+// Presets: what a chat starts knowing, chosen as it is opened (docs/presets.md). A preset names the directories its
+// chats work with and what people want of them there; it does not bind the agent to them (it runs in its own session
+// workspace as every chat does). A workspace's presets are its agent home's presets.json; a chat opened with one keeps a
+// copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats
+// already opened with it.
+import { type Dirent, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
+import { homedir } from "node:os";
+import { randomBytes } from "node:crypto";
+import { protectedPlace } from "../drive/fs.ts";
+import { SKILL_HOMES } from "./agent-home.ts";
+
+/// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
+/// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
+/// In a chat's copy, `elsewhere`: the station it is on by name, where that is not the chat's.
+export type PresetDir = { path: string; repo: string | null; station?: string; stationName?: string; elsewhere?: string; guides?: Guide[]; skills?: string[] };
+
+/// A folder's instructions for agents as the chat was opened with them (its AGENTS.md, its CLAUDE.md): the file, what
+/// it said (its start, where it is long), whether that is all of it.
+export type Guide = { file: string; text: string; whole: boolean };
+
+export type Preset = {
+  id: string;
+  name: string;
+  dirs: PresetDir[];
+  /// What people want of its chats, as they wrote it.
+  instructions: string;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+/// What a chat was opened with: the preset as it was then, each folder's `elsewhere` said where it is not the chat's
+/// station's.
+export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string };
+
+const FILE = "presets.json";
+const COPY = ".stillfail-preset.json";
+const NAME_MAX = 60;
+const INSTRUCTIONS_MAX = 20_000;
+const DIRS_MAX = 20;
+
+const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+
+function dirsOf(v: unknown): PresetDir[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((d) => {
+    if (typeof d?.path !== "string") return [];
+    const dir: PresetDir = { path: d.path, repo: str(d.repo) };
+    for (const k of ["station", "stationName", "elsewhere"] as const) if (typeof d[k] === "string" && d[k] !== "") dir[k] = d[k];
+    if (Array.isArray(d.guides)) dir.guides = d.guides.filter((g: any) => typeof g?.file === "string" && typeof g?.text === "string").map((g: any) => ({ file: g.file, text: g.text, whole: g.whole !== false }));
+    if (Array.isArray(d.skills)) dir.skills = d.skills.filter((n: unknown) => typeof n === "string");
+    return [dir];
+  });
+}
+
+function presetOf(v: any): Preset | null {
+  if (typeof v?.id !== "string" || typeof v?.name !== "string") return null;
+  return {
+    id: v.id,
+    name: v.name,
+    dirs: dirsOf(v.dirs),
+    instructions: str(v.instructions) ?? "",
+    createdBy: str(v.createdBy) ?? "",
+    createdAt: typeof v.createdAt === "number" ? v.createdAt : 0,
+    updatedAt: typeof v.updatedAt === "number" ? v.updatedAt : 0,
+  };
+}
+
+/// The presets of the workspace whose agent home is `home`, as written; none when there is no file yet.
+export function readPresets(home: string): Preset[] {
+  try {
+    const raw = JSON.parse(readFileSync(join(home, FILE), "utf8"));
+    return (Array.isArray(raw?.presets) ? raw.presets : []).flatMap((p: unknown) => presetOf(p) ?? []);
+  } catch {
+    return [];
+  }
+}
+
+function writePresets(home: string, presets: Preset[]): void {
+  mkdirSync(home, { recursive: true });
+  const path = join(home, FILE);
+  const temp = `${path}.${randomBytes(4).toString("hex")}`;
+  writeFileSync(temp, `${JSON.stringify({ presets }, null, 2)}\n`);
+  renameSync(temp, path);
+}
+
+/// What a preset is said to be (POST, PUT /presets): its name and instructions trimmed, its directories each a
+/// directory on this machine (`~` its home), named once each.
+export function presetInput(v: unknown): { name: string; dirs: PresetDir[]; instructions: string } {
+  const o = (v ?? {}) as Record<string, unknown>;
+  const name = (str(o.name) ?? "").trim();
+  if (name === "") throw new Error("a preset needs a name");
+  if (Array.from(name).length > NAME_MAX) throw new Error(`a preset's name is ${NAME_MAX} characters at most`);
+  const instructions = (str(o.instructions) ?? "").trim();
+  if (instructions.length > INSTRUCTIONS_MAX) throw new Error("its instructions are too long");
+  if (!Array.isArray(o.dirs)) throw new Error("dirs: a list of directories");
+  const dirs: PresetDir[] = [];
+  for (const d of o.dirs) {
+    const given = typeof d === "string" ? d : str((d as { path?: unknown })?.path);
+    if (given === null || given.trim() === "") throw new Error("a directory needs a path");
+    // (another station's, as the app read it there: taken as said, not looked for here)
+    const at = typeof d === "object" && d !== null ? str((d as { station?: unknown }).station) : null;
+    if (at !== null && at !== "") {
+      const stationName = str((d as { stationName?: unknown }).stationName) ?? "";
+      if (!dirs.some((x) => x.path === given && x.station === at)) dirs.push({ path: given, repo: str((d as { repo?: unknown }).repo), station: at, ...(stationName ? { stationName } : {}) });
+      continue;
+    }
+    const path = expand(given.trim());
+    if (!isDirectory(path)) throw new Error(`${given} is no directory on this station`);
+    if (dirs.some((x) => x.path === path && x.station === undefined)) continue;
+    dirs.push({ path, repo: originOf(path) });
+  }
+  if (dirs.length > DIRS_MAX) throw new Error(`a preset has ${DIRS_MAX} directories at most`);
+  return { name, dirs, instructions };
+}
+
+function expand(path: string): string {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
+  return isAbsolute(path) ? resolve(path) : resolve(homedir(), path);
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch (e) {
+    // (one macOS guards, picked through still.fail Helper: the station is not let look, but it is there)
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === "EPERM" || code === "EACCES";
+  }
+}
+
+/// The repository a clone at `path` is of (its origin's URL, as `host/owner/name`), if it is one.
+export function originOf(path: string): string | null {
+  let config: string;
+  try {
+    config = readFileSync(join(gitDir(path) ?? join(path, ".git"), "config"), "utf8");
+  } catch {
+    return null;
+  }
+  return originIn(config);
+}
+
+/// The origin a git config names, as `host/owner/name`.
+function originIn(config: string): string | null {
+  const at = config.search(/\[remote "origin"\]/);
+  if (at < 0) return null;
+  const url = /^\s*url\s*=\s*(.+)$/m.exec(config.slice(at))?.[1]?.trim();
+  return url ? repoName(url) : null;
+}
+
+/// A worktree's `.git` is a file naming its directory in the clone it was made from: the clone's own then.
+function gitDir(path: string): string | null {
+  try {
+    const dotGit = join(path, ".git");
+    if (statSync(dotGit).isDirectory()) return dotGit;
+    const named = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, "utf8"))?.[1]?.trim();
+    if (!named) return null;
+    const dir = resolve(path, named);
+    // <clone>/.git/worktrees/<name>: its config is the clone's.
+    const parts = dir.split(sep);
+    const i = parts.lastIndexOf("worktrees");
+    return i > 0 ? parts.slice(0, i).join(sep) : dir;
+  } catch {
+    return null;
+  }
+}
+
+/// `git@github.com:o/r.git`, `https://github.com/o/r.git` → `github.com/o/r`.
+export function repoName(url: string): string {
+  let u = url.trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  const scp = /^[^@/]+@([^:/]+):(.+)$/.exec(u);
+  if (scp) return `${scp[1]}/${scp[2]}`;
+  u = u.replace(/^[a-z+]+:\/\//i, "").replace(/^[^@/]+@/, "");
+  return u;
+}
+
+export class Presets {
+  /// `home`: the agent home of each workspace (its presets.json is there); `now`: the station's clock.
+  readonly home: (ws: string | null) => string;
+  readonly now: () => number;
+
+  constructor(home: (ws: string | null) => string, now: () => number) {
+    this.home = home;
+    this.now = now;
+  }
+
+  list(ws: string | null): Preset[] {
+    return readPresets(this.home(ws));
+  }
+
+  get(ws: string | null, id: string): Preset | null {
+    return this.list(ws).find((p) => p.id === id) ?? null;
+  }
+
+  add(ws: string | null, input: unknown, by: string): Preset {
+    const given = presetInput(input);
+    const all = this.list(ws);
+    const now = this.now();
+    const preset: Preset = { id: `p-${randomBytes(5).toString("hex")}`, ...given, createdBy: by, createdAt: now, updatedAt: now };
+    writePresets(this.home(ws), [...all, preset]);
+    return preset;
+  }
+
+  put(ws: string | null, id: string, input: unknown): Preset {
+    const all = this.list(ws);
+    const at = all.findIndex((p) => p.id === id);
+    if (at < 0) throw new NoPreset(id);
+    const preset = { ...all[at]!, ...presetInput(input), updatedAt: this.now() };
+    all[at] = preset;
+    writePresets(this.home(ws), all);
+    return preset;
+  }
+
+  delete(ws: string | null, id: string): void {
+    const all = this.list(ws);
+    if (!all.some((p) => p.id === id)) throw new NoPreset(id);
+    writePresets(this.home(ws), all.filter((p) => p.id !== id));
+  }
+
+  /// Keeps what a chat in `workspace` is opened with: preset `id` as it is now.
+  keepFor(workspace: string, ws: string | null, id: string): PresetCopy {
+    const p = this.get(ws, id);
+    if (p === null) throw new NoPreset(id);
+    // (its other stations' folders said to be there)
+    const dirs = p.dirs.map(({ station, stationName, ...d }) => (station === undefined ? d : { ...d, elsewhere: stationName || station }));
+    return keepCopy(workspace, { id: p.id, name: p.name, dirs, instructions: p.instructions });
+  }
+}
+
+export class NoPreset extends Error {
+  constructor(id: string) {
+    super(`no preset ${id}`);
+  }
+}
+
+/// Keeps `copy` as what a chat in `workspace` is opened with.
+/// The files a folder's instructions for agents are in, as Claude Code and Codex read them in their own directory.
+const GUIDES = ["AGENTS.md", "CLAUDE.md", join(".claude", "CLAUDE.md")];
+/// What of a folder's instruction file the chat is told at most (the rest is read there).
+const GUIDE_MOST = 16 * 1024;
+
+/// Keeps `copy` as what a chat in `workspace` is opened with. Its folders on this machine are made the chat's as a
+/// runtime opened in them would have them (neither reads them where it does not run): their instruction files kept
+/// with the copy (told with the station's instructions), their skills linked into the chat's workspace under both
+/// runtimes' skill directories, so each finds them as its own.
+export function keepCopy(workspace: string, copy: PresetCopy): PresetCopy {
+  const linked = new Set<string>();
+  const dirs = copy.dirs.map((d) => {
+    if (d.elsewhere !== undefined) return d;
+    const guides = GUIDES.flatMap((file): Guide[] => {
+      try {
+        const bytes = readFileSync(join(d.path, file));
+        const whole = bytes.length <= GUIDE_MOST;
+        return [{ file, text: bytes.subarray(0, GUIDE_MOST).toString("utf8").trim(), whole }];
+      } catch {
+        return [];
+      }
+    });
+    const skills: string[] = [];
+    for (const home of SKILL_HOMES) {
+      let names: string[] = [];
+      try {
+        names = readdirSync(join(d.path, home));
+      } catch {}
+      for (const n of names) {
+        const from = join(d.path, home, n);
+        if (!existsSync(join(from, "SKILL.md"))) continue;
+        // (one of the same name already linked: this folder's under its folder's name before it)
+        const name = linked.has(n) ? `${basename(d.path)}-${n}` : n;
+        if (linked.has(name)) continue;
+        linked.add(name);
+        skills.push(name);
+        for (const to of SKILL_HOMES) {
+          mkdirSync(join(workspace, to), { recursive: true });
+          try {
+            symlinkSync(from, join(workspace, to, name), "dir");
+          } catch {}
+        }
+      }
+    }
+    return { ...d, ...(guides.length > 0 ? { guides } : {}), ...(skills.length > 0 ? { skills } : {}) };
+  });
+  const kept = { ...copy, dirs };
+  writeFileSync(join(workspace, COPY), `${JSON.stringify(kept, null, 2)}\n`);
+  return kept;
+}
+
+/// A preset of another station's as the asking app gives it (POST /sessions `presetCopy`: what it read there, each
+/// folder's `elsewhere` where it is not this station's), taken as said.
+export function presetCopyInput(v: unknown): PresetCopy {
+  const o = (v ?? {}) as Record<string, unknown>;
+  const name = (str(o.name) ?? "").trim();
+  if (name === "" || Array.from(name).length > NAME_MAX) throw new Error("presetCopy: a preset needs a name");
+  const dirs = dirsOf(o.dirs).slice(0, DIRS_MAX);
+  const instructions = (str(o.instructions) ?? "").slice(0, INSTRUCTIONS_MAX);
+  return { id: str(o.id) ?? "", name, dirs: dirs.map(({ station: _s, stationName: _n, guides: _g, skills: _k, ...d }) => d), instructions };
+}
+
+/// What a chat whose session workspace is `workspace` was opened with, if anything.
+export function presetCopyOf(workspace: string): PresetCopy | null {
+  try {
+    const v = JSON.parse(readFileSync(join(workspace, COPY), "utf8"));
+    if (typeof v?.id !== "string" || typeof v?.name !== "string") return null;
+    return { id: v.id, name: v.name, dirs: dirsOf(v.dirs), instructions: str(v.instructions) ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+/// What the agent of a chat opened with `copy` is told of it, after the station's own instructions.
+export function presetInstructions(copy: PresetCopy): string {
+  const dirs = copy.dirs.map((d) =>
+    d.elsewhere === undefined
+      ? `  - ${d.path}${d.repo ? ` (a clone of ${d.repo}: change it in a worktree of your own, as with any repository)` : ""}`
+      : d.repo
+        ? `  - ${d.repo}: this station's clone of it (in the repository cache; clone it there if it is not yet), a worktree of your own to change it (on ${d.elsewhere} it is ${d.path})`
+        : `  - ${d.path} on station ${d.elsewhere}: read it there with the station tools (station_task, station_file), not copied here`,
+  );
+  const lines = [
+    "",
+    "",
+    `This chat was opened with the preset "${copy.name}": what people set up for this kind of work. It does not change for this chat.`,
+    ...(dirs.length > 0
+      ? [
+          "- The directories it works with (no need to ask which; you still run in your session workspace and may go anywhere):",
+          ...dirs,
+          ...(copy.dirs.some((d) => (d.skills ?? []).length > 0) ? [`  Their skills are linked into your workspace (.claude/skills, .agents/skills): ${copy.dirs.flatMap((d) => d.skills ?? []).join(", ")}; use them as your own.`] : []),
+          ...copy.dirs.flatMap((d) =>
+            (d.guides ?? []).flatMap((g) => [
+              `<folder-instructions path="${join(d.path, g.file)}">`,
+              g.text,
+              ...(g.whole ? [] : [`(only its start: read the rest there)`]),
+              "</folder-instructions>",
+            ]),
+          ),
+          ...(copy.dirs.some((d) => d.elsewhere !== undefined) ? ["  For those on other stations, read their AGENTS.md, CLAUDE.md and skills there before the first task."] : []),
+        ]
+      : []),
+    ...(copy.instructions !== "" ? ["- What people want of chats with this preset (theirs to change, not yours):", "<preset-instructions>", copy.instructions, "</preset-instructions>"] : []),
+  ];
+  return lines.join("\n");
+}
+
+/// A directory to offer for a new preset: one this station has, by how many chats worked in it.
+/// `where`: where it is as people read it (`~/code/app`); `cached`: only the station's cache has it (no checkout of the
+/// person's on the machine).
+/// `icon`: its own picture, found where projects keep one (repoIcon), as a data URL.
+export type Candidate = { path: string; name: string; repo: string | null; chats: number; lastAt: number; where?: string; cached?: boolean; icon?: string };
+
+/// The directories offered as a preset is made (GET /presets `candidates`): the clones in the station's repository
+/// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
+/// (most, then the latest), the rest by when they last changed; and those other presets name. Read off the main
+/// thread's way (a cache can hold many clones, each many worktrees).
+export async function candidates(reposDir: string, presets: Preset[], found: Candidate[] = []): Promise<Candidate[]> {
+  const list = async (dir: string) => readdir(dir).catch(() => [] as string[]);
+  const cached = await Promise.all(
+    (await list(reposDir)).map(async (name): Promise<Candidate | null> => {
+      const path = join(reposDir, name);
+      const git = join(path, ".git");
+      const at = await stat(git).catch(() => null);
+      if (at === null || !at.isDirectory()) return null;
+      let lastAt = at.mtimeMs;
+      const sessions = new Set<string>();
+      for (const t of await list(join(git, "worktrees"))) {
+        const file = join(git, "worktrees", t, "gitdir");
+        const [where, when] = await Promise.all([readFile(file, "utf8").catch(() => ""), stat(file).catch(() => null)]);
+        const session = /[/\\]sessions[/\\][^/\\]+[/\\]([^/\\]+)[/\\]workspace[/\\]/.exec(where)?.[1];
+        if (session) sessions.add(session);
+        if (when) lastAt = Math.max(lastAt, when.mtimeMs);
+      }
+      const config = await readFile(join(git, "config"), "utf8").catch(() => "");
+      const icon = await cachedIcon(path, lastAt);
+      return { path, name, repo: originIn(config), chats: sessions.size, lastAt: Math.floor(lastAt), ...(icon ? { icon } : {}) };
+    }),
+  );
+  // One a repository (by its origin), a folder of no repository by its path: the person's own checkout where the
+  // machine has one, the cache's clone (said as its repository, not its path) where it has not; the chats that worked
+  // in the cache's clone counted on it either way.
+  const out = new Map<string, Candidate>();
+  const keyOf = (c: Candidate) => c.repo ?? c.path;
+  for (const c of found) if (!out.has(keyOf(c))) out.set(keyOf(c), { ...c, where: shortPath(c.path) });
+  for (const c of cached) {
+    if (c === null) continue;
+    const mine = out.get(keyOf(c));
+    if (mine) out.set(keyOf(c), { ...mine, chats: mine.chats + c.chats, lastAt: Math.max(mine.lastAt, c.lastAt), ...(mine.icon || !c.icon ? {} : { icon: c.icon }) });
+    else out.set(keyOf(c), { ...c, cached: true, where: c.repo ?? shortPath(c.path) });
+  }
+  // A preset may also name another station's folders. Those are not candidates on this machine: treating them as
+  // local both puts them in the wrong group and can make a later save try to validate a remote path here.
+  for (const p of presets) for (const d of p.dirs) if (!d.station && !out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
+  return [...out.values()].sort((a, b) => b.chats - a.chats || b.lastAt - a.lastAt || a.name.localeCompare(b.name));
+}
+
+/// What a project's picture is called where it keeps one (its site's icons, its app's icon, its logo).
+const ICON_NAMES = /^(favicon|apple-touch-icon|app-icon|appicon|icon|logo)([-_.@][\w@.-]*)?\.(png|jpe?g)$/i;
+/// Where projects keep their picture: the root, a site's public and static folders, assets, docs, .github, an app's.
+const ICON_PLACES = ["", "public", "static", "assets", "images", "img", "icons", "docs", ".github", "resources", "web/public", "app/public", "site/public", "src/assets", "public/icons", "assets/icons", "static/img", "docs/assets"];
+/// A picture larger than this is no icon (a screenshot, a banner): the repository goes without.
+const ICON_MOST_BYTES = 24 * 1024;
+
+/// A repository's own picture, where projects keep one (ICON_PLACES: a listing each, not a walk of its tree), as a data
+/// URL: the best named (a touch icon first), then the nearest the root, then the smallest; null for none.
+export async function repoIcon(root: string): Promise<string | null> {
+  const found: { path: string; rank: number; depth: number; size: number; type: string }[] = [];
+  await Promise.all(
+    ICON_PLACES.map(async (place, depth) => {
+      const dir = join(root, place);
+      for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        const m = e.isFile() ? ICON_NAMES.exec(e.name) : null;
+        if (!m) continue;
+        const at = join(dir, e.name);
+        const size = (await stat(at).catch(() => null))?.size ?? 0;
+        if (size === 0 || size > ICON_MOST_BYTES) continue;
+        // (the touch icon first: square and large; a favicon is often 16 or 32 across, blurred where it is drawn)
+        const rank = ["apple-touch-icon", "app-icon", "appicon", "icon", "favicon", "logo"].indexOf(m[1]!.toLowerCase());
+        found.push({ path: at, rank, depth, size, type: /png$/i.test(e.name) ? "png" : "jpeg" });
+      }
+    }),
+  );
+  found.sort((a, b) => a.rank - b.rank || a.depth - b.depth || a.size - b.size);
+  const best = found[0];
+  if (!best) return null;
+  const bytes = await readFile(best.path).catch(() => null);
+  return bytes ? `data:image/${best.type};base64,${bytes.toString("base64")}` : null;
+}
+
+/// The cache's clones' pictures as last looked for, by path and when the clone last changed (looked for again then).
+const icons = new Map<string, { at: number; icon: string | null }>();
+async function cachedIcon(path: string, at: number): Promise<string | null> {
+  const held = icons.get(path);
+  if (held && held.at === at) return held.icon;
+  const icon = await repoIcon(path);
+  icons.set(path, { at, icon });
+  return icon;
+}
+
+/// A path as people read it: under the home, `~/…`.
+export function shortPath(path: string): string {
+  const home = homedir();
+  return path === home ? "~" : path.startsWith(home + sep) ? `~${path.slice(home.length)}` : path;
+}
+
+/// Where on the machine repositories are looked for: under its home, so many levels down.
+const INDEX_DEPTH = 4;
+/// At most so many directories looked into in one pass (a home with a huge tree is not walked all of it).
+const INDEX_DIRS_MOST = 20_000;
+/// A pass is this old before the next one (it runs while what is held is answered).
+const INDEX_FRESH_MS = 10 * 60 * 1000;
+/// Not looked into: what holds no repositories of a person's, what is huge, and what macOS asks the person before an
+/// app reads (a dialog on that machine's screen): the desktop, documents and downloads, and the libraries.
+const INDEX_SKIPPED = new Set(["node_modules", "Library", "Applications", "Pictures", "Movies", "Music", "Public", "Desktop", "Documents", "Downloads", "Pods", "target", "dist", "build", "vendor", "venv"]);
+
+/// The repositories on the machine (directories with a `.git`), found by walking its home a few levels down, so a
+/// preset's folders are picked rather than typed. Kept in `file` (the station's data directory) and walked again when
+/// there is none or the last is old, in the background: what is held is answered meanwhile (none before the first pass
+/// ends: a home can take long to walk). What macOS protects is not looked into (drive/fs.ts protectedPlace: Documents,
+/// a disk mounted anywhere, OrbStack's NFS in the home among them): opening one waits on a dialog on that machine's
+/// screen for as long as nobody answers.
+export class RepoIndex {
+  readonly roots: () => string[];
+  readonly file: () => string;
+  readonly now: () => number;
+  /// Directories it never looks into (the station's own data: its sessions' worktrees are its cache's clones).
+  readonly besides: () => string[];
+  /// What a directory holds; whether it is one the station does not open itself (protectedPlace).
+  readonly list: (dir: string) => Promise<Dirent[]>;
+  readonly guarded: (dir: string) => boolean;
+  #held: { at: number; repos: Candidate[] } | null = null;
+  #read = false;
+  #walking: Promise<void> | null = null;
+
+  constructor(o: {
+    roots: () => string[];
+    file: () => string;
+    now: () => number;
+    besides?: () => string[];
+    list?: (dir: string) => Promise<Dirent[]>;
+    guarded?: (dir: string) => boolean;
+  }) {
+    this.roots = o.roots;
+    this.file = o.file;
+    this.now = o.now;
+    this.besides = o.besides ?? (() => []);
+    this.list = o.list ?? ((dir) => readdir(dir, { withFileTypes: true }));
+    this.guarded = o.guarded ?? ((dir) => protectedPlace(dir) !== null);
+  }
+
+  /// The repositories found, as the last pass found them (none before the first ends); a pass begun when there is none
+  /// or that is old, `walked` told as it ends.
+  async repos(walked: () => void = () => {}): Promise<Candidate[]> {
+    if (!this.#read) {
+      this.#read = true;
+      try {
+        const kept = JSON.parse(await readFile(this.file(), "utf8"));
+        if (typeof kept?.at === "number" && Array.isArray(kept?.repos)) this.#held ??= { at: kept.at, repos: kept.repos };
+      } catch {}
+    }
+    if (this.#walking === null && (this.#held === null || this.now() - this.#held.at > INDEX_FRESH_MS)) void this.walk().then(walked);
+    return this.#held?.repos ?? [];
+  }
+
+  /// One pass, the one under way if there is.
+  walk(): Promise<void> {
+    this.#walking ??= this.#walk().finally(() => (this.#walking = null));
+    return this.#walking;
+  }
+
+  async #walk(): Promise<void> {
+    const found: Candidate[] = [];
+    const skip = new Set(this.besides().map((p) => resolve(p)));
+    let looked = 0;
+    const into = async (dir: string, depth: number): Promise<void> => {
+      if (looked++ >= INDEX_DIRS_MOST || skip.has(dir)) return;
+      if (this.guarded(dir)) return;
+      const entries = await this.list(dir).catch(() => []);
+      if (entries.some((e) => e.name === ".git")) {
+        const git = join(dir, ".git");
+        const [config, head] = await Promise.all([readFile(join(git, "config"), "utf8").catch(() => ""), stat(join(git, "index")).catch(() => stat(git).catch(() => null))]);
+        const icon = await repoIcon(dir);
+        found.push({ path: dir, name: basename(dir), repo: originIn(config), chats: 0, lastAt: Math.floor(head?.mtimeMs ?? 0), ...(icon ? { icon } : {}) });
+        return;
+      }
+      if (depth >= INDEX_DEPTH) return;
+      for (const e of entries) {
+        if (!e.isDirectory() || e.name.startsWith(".") || INDEX_SKIPPED.has(e.name)) continue;
+        await into(join(dir, e.name), depth + 1);
+      }
+    };
+    for (const root of this.roots()) await into(resolve(root), 0);
+    this.#held = { at: this.now(), repos: found };
+    try {
+      await writeFile(this.file(), `${JSON.stringify(this.#held)}\n`);
+    } catch {}
+  }
+}
+
+</source>
+
+<source path="station/src/usage/counter.ts">
+// What the agents spent, counted (the Rust station's usage.rs `Usage`): every model call their runtimes write to a transcript
+// (Claude Code's message usage, Codex's token counts) is recorded once in the store (store/usage.ts), with the turn it
+// was in and whom that turn worked for. The transcripts are read as they grow, from where the last read stopped: all of
+// them as sessions run, from the counter's installation onward; older transcripts are not backfilled.
+//
+// Pushed rather than polled (the Rust reads every minute): a read when the counter starts, one shortly after a turn
+// ends (the store's session changes say so), one of a session alone shortly after its transcript grew while it works
+// (the live view says so: what a chat shows it spent goes on with each call), and a slow safety read for anything
+// missed. Reads never overlap. The reading itself must not hold the main thread: files are read asynchronously in
+// chunks cut at whole lines, each chunk parsed and recorded on its own, with the event loop let through between chunks.
+// What is recorded is the one count of what was spent: a chat's usage and the usage page are both added up from it.
+// The prices (what a call costs) are the usage page's: src/read/usage.ts.
+import { Clock, Effect, Fiber, Queue } from "effect";
+import { liveClock } from "../ops/fibers.ts";
+import { createReadStream, existsSync } from "node:fs";
+import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises";
+import { basename, dirname, join, sep } from "node:path";
+import { createZstdDecompress } from "node:zlib";
+import { log } from "../ops/log.ts";
+import { segmentsFrom, writtenLength } from "../read/packed.ts";
+import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
+import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
+import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
+
+/// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
+export const SKEW_MS = 5_000;
+/// A later read takes the sessions with a turn running or ended this long before the last read began (the Rust's
+/// EVERY, the margin it reads them again with).
+const MARGIN_MS = 60_000;
+/// How long after a turn ends, or a session at work wrote more, its transcript is read (its last lines written, other
+/// turns ending with it, a burst of writes gathered).
+export const SETTLE_MS = 2_000;
+/// How often everything that ran is read anyway, for what no turn's end told.
+export const SAFETY_MS = 10 * 60_000;
+/// How much of a transcript is read and parsed at a time.
+const CHUNK = 1 << 20;
+/// Bytes before a saved position: a file can be replaced and grow past that position between reads.
+const ANCHOR = 256;
+/// How many calls are recorded in one transaction before the event loop is let through.
+const WRITE_BATCH = 64;
+
+type Runtime = RuntimeKind;
+
+/// What the counter reads of the station's config: where its data is, and each profile's home (absolute).
+export type UsageConfig = { dataDir: string; profiles: readonly { home: string }[] };
+
+export type UsageCounterOptions = {
+  store: Store;
+  /// Read at every read, so profiles added since are read too.
+  config: () => UsageConfig;
+  settleMs?: number;
+  safetyMs?: number;
+  /// Its time (a TestClock in tests).
+  clock?: Clock.Clock;
+};
+
+// ── reading transcripts ──
+
+/// What reading a transcript carries from line to line and from read to read: the model it last named (Codex), its
+/// session's id (Codex's first line), and the model's window as last told (dsh's request/context, before its calls).
+export type CallState = { model: string | null; codexId: string | null; window?: number | null };
+
+const get = (v: unknown, k: string): unknown =>
+  v !== null && typeof v === "object" && !Array.isArray(v) && Object.hasOwn(v, k) ? (v as Record<string, unknown>)[k] : undefined;
+const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+/// serde_json's as_i64, or 0.
+const n = (v: unknown): number => (typeof v === "number" && Number.isInteger(v) ? v : 0);
+
+/// A count a turn's line tells apart (its context, the model's window): none when it says none.
+const told = (v: unknown): number | null => (n(v) > 0 ? n(v) : null);
+
+/// calls_of: a transcript's lines read into calls; `state` carries the model, Codex id and window on. The only place what
+/// the agents spent is read from their transcripts: a chat's usage and the usage page are both what it records.
+export function callsOf(runtime: Runtime, text: string, subagent: boolean, state: CallState): UsageCall[] {
+  const out: UsageCall[] = [];
+  const atIndex = new Map<string, number>();
+  for (let line of text.split("\n")) {
+    if (line.endsWith("\r")) line = line.slice(0, -1);
+    // Most lines are something else: only those that may hold usage are parsed.
+    const wanted =
+      runtime === "claude" ? line.includes('"usage"')
+      : runtime === "dsh" ? (line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')) || line.startsWith('{"type":"request/context"')
+      : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
+      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy" ? line.includes('"type":"usage"')
+      : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
+    if (!wanted) continue;
+    let r: unknown;
+    try {
+      r = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const stamp = str(get(r, "timestamp"));
+    const at = (stamp === null ? null : parseIso(stamp)) ?? 0;
+    if (runtime === "grok") {
+      // What the station kept of each Grok Build turn (agents/grok.ts usageLine): its counts already apart.
+      const usage = get(r, "usage");
+      const id = str(get(r, "id"));
+      if (usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      out.push({
+        id: `grok:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
+        input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
+        output: n(get(usage, "output")), calls: Math.max(1, n(get(usage, "calls"))), context: told(get(r, "context")), window: told(get(r, "window")),
+      });
+    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy") {
+      // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
+      // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
+      // calls it made, the context it ended with and the model's window where Devin said them.
+      const usage = get(r, "usage");
+      const id = str(get(r, "run"));
+      if (str(get(r, "type")) !== "usage" || usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      out.push({
+        id: `${runtime}:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
+        input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
+        output: n(get(usage, "outputTokens")), calls: Math.max(1, n(get(r, "calls"))), context: told(get(r, "context")), window: told(get(r, "window")),
+      });
+    } else if (runtime === "dsh") {
+      // dsh's counts are apart: input is what was not cached. The model's window comes before a request's calls.
+      const data = get(r, "data");
+      if (str(get(r, "type")) === "request/context") {
+        state.window = told(get(data, "contextWindow")) ?? state.window ?? null;
+        continue;
+      }
+      const usage = get(data, "usage");
+      const message = get(data, "message");
+      const id = str(get(message, "id"));
+      if (usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      const [input, cacheRead, cacheWrite] = [n(get(usage, "inputTokens")), n(get(usage, "cacheReadTokens")), n(get(usage, "cacheWriteTokens"))];
+      out.push({
+        id: `dsh:${id}`, at: typeof time === "number" ? time : 0, model: str(get(get(message, "source"), "model")), subagent, fast: false,
+        input, cacheRead, cacheWrite, cacheWriteLong: 0, output: n(get(usage, "outputTokens")), calls: 1,
+        context: subagent ? null : input + cacheRead + cacheWrite, window: state.window ?? null,
+      });
+    } else if (runtime === "claude") {
+      if (str(get(r, "type")) !== "assistant") continue;
+      const m = get(r, "message");
+      if (m === undefined) continue;
+      const usage = get(m, "usage");
+      const id = str(get(m, "id"));
+      if (usage === undefined || id === null) continue;
+      const name = str(get(m, "model"));
+      if (name === null || name === "<synthetic>") continue;
+      const written = n(get(usage, "cache_creation_input_tokens"));
+      const split = get(usage, "cache_creation");
+      const long = split === undefined ? 0 : n(get(split, "ephemeral_1h_input_tokens"));
+      const five = split === undefined ? null : n(get(split, "ephemeral_5m_input_tokens"));
+      const short = five !== null && five + long === written ? five : written - long;
+      const side = subagent || get(r, "isSidechain") === true;
+      const input = n(get(usage, "input_tokens"));
+      const cacheRead = n(get(usage, "cache_read_input_tokens"));
+      // The main thread's prompt is its context; a subagent's is its own.
+      const call: UsageCall = {
+        id, at, model: name, subagent: side, fast: get(usage, "speed") === "fast", input, cacheRead, cacheWrite: short,
+        cacheWriteLong: long, output: n(get(usage, "output_tokens")), calls: 1, context: side ? null : input + cacheRead + written, window: null,
+      };
+      // One response is written as several lines (a block each), each with its usage: counted once, at its fullest.
+      const i = atIndex.get(id);
+      if (i !== undefined) out[i]!.output = Math.max(out[i]!.output, call.output);
+      else {
+        atIndex.set(id, out.length);
+        out.push(call);
+      }
+    } else {
+      const p = get(r, "payload") ?? null;
+      const type = str(get(r, "type"));
+      if (type === "session_meta") state.codexId = str(get(p, "id")) ?? state.codexId;
+      else if (type === "turn_context") state.model = str(get(p, "model")) ?? state.model;
+      else if (type === "event_msg" && str(get(p, "type")) === "token_count") {
+        const info = get(p, "info");
+        const last = info === undefined || info === null ? undefined : get(info, "last_token_usage");
+        if (last === undefined || last === null) continue;
+        // Token counts are told again with rate limits; the running total tells a call from its repeat. Codex's input
+        // has what was cached in it.
+        const totals = get(info, "total_token_usage");
+        const total = totals === undefined ? at : n(get(totals, "total_tokens"));
+        const sent = n(get(last, "input_tokens"));
+        const cached = Math.min(n(get(last, "cached_input_tokens")), sent);
+        out.push({
+          id: `codex:${state.codexId ?? ""}:${total}`, at, model: state.model, subagent, fast: false,
+          input: sent - cached, cacheRead: cached, cacheWrite: 0, cacheWriteLong: 0, output: n(get(last, "output_tokens")), calls: 1,
+          context: subagent ? null : sent, window: told(get(info, "model_context_window")),
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/// archive.rs `packed`: where a file is once put away.
+const packed = (path: string) => `${path}.zst`;
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function isDir(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const canonical = async (path: string) => {
+  try {
+    return await realpath(path);
+  } catch {
+    return path;
+  }
+};
+
+/// Rust's Path::extension: after the name's last dot, none for a name that only begins with one.
+function extension(path: string): string | null {
+  const name = basename(path);
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? null : name.slice(dot + 1);
+}
+
+/// A part of a transcript: its whole lines and their bounds in the file.
+export type Part = { text: string; from: number; offset: number; bytes: Buffer };
+
+/// Whole lines of `bytes` (what follows `from` in the file), a part at most CHUNK long each where lines allow.
+function* partsOf(bytes: Buffer, from: number): Generator<Part> {
+  let at = 0;
+  while (at < bytes.length) {
+    const window = Math.min(bytes.length, at + CHUNK);
+    let cut = bytes.lastIndexOf(0x0a, window - 1);
+    if (cut < at) cut = bytes.indexOf(0x0a, window);
+    if (cut < 0) return;
+    const part = bytes.subarray(at, cut + 1);
+    yield { text: part.toString("utf8"), from: from + at, offset: from + cut + 1, bytes: part };
+    at = cut + 1;
+  }
+}
+
+/// A line already begun at the cutoff belongs to the old part; complete later lines belong to the followed suffix.
+function sectionsOf(part: Part, cutoff: number): (Part & { followed: boolean })[] {
+  if (part.offset <= cutoff) return [{ ...part, followed: false }];
+  if (part.from >= cutoff) return [{ ...part, followed: true }];
+  const at = cutoff - part.from;
+  const end = part.bytes[at - 1] === 0x0a ? at : part.bytes.indexOf(0x0a, at) + 1;
+  const old = part.bytes.subarray(0, end);
+  const next = part.bytes.subarray(end);
+  return [
+    { text: old.toString("utf8"), bytes: old, from: part.from, offset: part.from + end, followed: false },
+    ...(end < part.bytes.length ? [{ text: next.toString("utf8"), bytes: next, from: part.from + end, offset: part.offset, followed: true }] : []),
+  ];
+}
+
+/// Keep unfinished lines as pieces and copy them only when a newline arrives, even if one line spans many chunks.
+class Lines {
+  #held: Buffer[] = [];
+  #size = 0;
+  #start: number;
+
+  constructor(start: number) { this.#start = start; }
+
+  *add(piece: Buffer): Generator<Part> {
+    const cut = piece.lastIndexOf(0x0a);
+    if (cut < 0) {
+      if (piece.length) { this.#held.push(piece); this.#size += piece.length; }
+      return;
+    }
+    const complete = piece.subarray(0, cut + 1);
+    const bytes = this.#size === 0 ? complete : Buffer.concat([...this.#held, complete], this.#size + complete.length);
+    yield* partsOf(bytes, this.#start);
+    this.#start += bytes.length;
+    const rest = piece.subarray(cut + 1);
+    this.#held = rest.length ? [rest] : [];
+    this.#size = rest.length;
+  }
+}
+
+/// A file put away, past `offset`, as `readFrom` says it: decompressed as it is read, never whole (one is hundreds of MB,
+/// and every one is read again as the station starts). Shorter than `offset`: read again from its start.
+async function* packedFrom(path: string, offset: number, keep: () => boolean): AsyncGenerator<Part> {
+  if (!keep()) return;
+  // In segments (read/packed.ts): those from `offset` on alone.
+  const length = await writtenLength(packed(path)).catch(() => null);
+  if (!keep()) return;
+  if (length !== null) {
+    if (offset > length) {
+      yield* packedFrom(path, 0, keep);
+      return;
+    }
+    const segments = await segmentsFrom(packed(path), offset).catch(() => null);
+    if (segments === null) return;
+    const lines = new Lines(offset);
+    try {
+      for await (const piece of segments) {
+        if (!keep()) return;
+        yield* lines.add(piece);
+      }
+    } catch {
+      return;
+    }
+    return;
+  }
+  const raw = createReadStream(packed(path), { highWaterMark: CHUNK });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+  raw.on("error", (error) => stream.destroy(error));
+  // What is past `offset` and not given yet.
+  const lines = new Lines(offset);
+  let total = 0;
+  try {
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+      if (!keep()) return;
+      const from = Math.max(0, offset - total);
+      total += chunk.length;
+      if (from >= chunk.length) continue;
+      yield* lines.add(from === 0 ? chunk : chunk.subarray(from));
+    }
+  } catch {
+    return;
+  } finally {
+    raw.destroy();
+    stream.destroy();
+  }
+  if (total < offset) {
+    yield* packedFrom(path, 0, keep);
+    return;
+  }
+}
+
+/// read_from: what a file holds past `offset`, up to its last whole line, in parts with where each ends. A file now
+/// shorter than `offset` was written anew: it is read from its start (calls already recorded stay once). A file put
+/// away (only its `.zst` there) is read decompressed.
+/// Whether a transcript is put away: only its `.zst` there.
+const putAway = async (path: string): Promise<boolean> => !(await exists(path)) && (await exists(packed(path)));
+
+export async function* readFrom(path: string, offset: number, keep: () => boolean = () => true): AsyncGenerator<Part> {
+  if (!keep()) return;
+  if (await putAway(path)) {
+    yield* packedFrom(path, offset, keep);
+    return;
+  }
+  if (!keep()) return;
+  let size: number;
+  try {
+    size = (await stat(path)).size;
+  } catch {
+    return;
+  }
+  let pos = size < offset ? 0 : offset;
+  if (pos === size) return;
+  let file: FileHandle;
+  try {
+    file = await open(path, "r");
+  } catch {
+    return;
+  }
+  try {
+    // Up to the size it had: what is written meanwhile is the next read's.
+    const lines = new Lines(pos);
+    while (pos < size) {
+      if (!keep()) return;
+      const buf = Buffer.allocUnsafe(Math.min(CHUNK, size - pos));
+      const { bytesRead } = await file.read(buf, 0, buf.length, pos);
+      if (!keep()) return;
+      if (bytesRead === 0) break;
+      pos += bytesRead;
+      yield* lines.add(buf.subarray(0, bytesRead));
+    }
+  } finally {
+    await file.close();
+  }
+}
+
+async function jsonlIn(dir: string): Promise<string[]> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const paths = new Set<string>();
+  for (const name of names) {
+    const p = join(dir, name);
+    if (!(await isFile(p))) continue;
+    const q = extension(p) === "zst" ? p.slice(0, -".zst".length) : p;
+    if (extension(q) === "jsonl") paths.add(q);
+  }
+  return [...paths].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+}
+
+/// claude_files: a Claude Code session's transcripts in a project directory: its own, and its sub-agents' beside it
+/// (`<id>/subagents/*.jsonl`); `subagent` says which. `only`: that runtime session's alone (a session continued from a
+/// terminal shares its directory with the terminal's own).
+export async function claudeFiles(dir: string, only: string | null): Promise<[string, boolean][]> {
+  let own: string[];
+  if (only !== null) {
+    const p = join(dir, `${only}.jsonl`);
+    own = (await isFile(p)) || (!(await exists(p)) && (await isFile(packed(p)))) ? [p] : [];
+  } else own = await jsonlIn(dir);
+  const out: [string, boolean][] = own.map((p) => [p, false]);
+  for (const p of own) {
+    const id = basename(p).slice(0, -".jsonl".length);
+    for (const s of await jsonlIn(join(dir, id, "subagents"))) out.push([s, true]);
+  }
+  return out;
+}
+
+/// The first line of a file (or of its `.zst`), up to its end when it has no newline; null when it does not read.
+async function firstLine(path: string): Promise<string | null> {
+  const source = (await exists(path)) ? path : packed(path);
+  if (!(await exists(source))) return null;
+  return new Promise((resolve) => {
+    const raw = createReadStream(source);
+    const stream = source === path ? raw : raw.pipe(createZstdDecompress());
+    const parts: Buffer[] = [];
+    let done = false;
+    const finish = (line: string | null) => {
+      if (done) return;
+      done = true;
+      raw.destroy();
+      if (stream !== raw) stream.destroy();
+      resolve(line);
+    };
+    stream.on("data", (chunk: Buffer) => {
+      const nl = chunk.indexOf(0x0a);
+      if (nl < 0) parts.push(chunk);
+      else {
+        parts.push(chunk.subarray(0, nl + 1));
+        finish(Buffer.concat(parts).toString("utf8"));
+      }
+    });
+    stream.on("end", () => finish(Buffer.concat(parts).toString("utf8")));
+    stream.on("error", () => finish(null));
+    raw.on("error", () => finish(null));
+  });
+}
+
+/// codex_meta: a Codex transcript's session id and the directory it ran in, from its first line.
+export async function codexMeta(path: string): Promise<[string, string] | null> {
+  const line = await firstLine(path);
+  if (line === null) return null;
+  let r: unknown;
+  try {
+    r = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const p = get(r, "payload");
+  const [id, cwd] = [str(get(p, "id")), str(get(p, "cwd"))];
+  return id !== null && cwd !== null ? [id, cwd] : null;
+}
+
+/// former.rs `claude_project`: Claude Code's directory name for where a session runs.
+export const claudeProject = (path: string): string => Array.from(path, (c) => (/^[A-Za-z0-9]$/.test(c) ? c : "-")).join("");
+
+/// Lets the event loop through (timers, I/O, requests) before going on.
+const breathe = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+class Stopped extends Error {}
+
+/// Old single-frame archives have no seek table. Count their uncompressed bytes as a stream when a recent session
+/// needs one, so the following byte boundary is saved before any part is recorded.
+async function unpackedLength(path: string, keep: () => boolean): Promise<number | null> {
+  const raw = createReadStream(path, { highWaterMark: CHUNK });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+  raw.on("error", (error) => stream.destroy(error));
+  let size = 0;
+  try {
+    for await (const bytes of stream as AsyncIterable<Buffer>) {
+      if (!keep()) throw new Stopped();
+      size += bytes.length;
+    }
+    return size;
+  } catch (error) {
+    if (error instanceof Stopped) throw error;
+    return null;
+  } finally { raw.destroy(); stream.destroy(); }
+}
+
+/// Bytes immediately before a saved offset, from the raw transcript or the segment containing it.
+async function anchorAt(path: string, offset: number, archived: boolean, keep: () => boolean): Promise<string | null> {
+  const length = Math.min(ANCHOR, offset);
+  if (length === 0) return "";
+  const start = offset - length;
+  if (!archived) {
+    let file: FileHandle | undefined;
+    try {
+      file = await open(path, "r");
+      const out = Buffer.alloc(length);
+      const { bytesRead } = await file.read(out, 0, length, start);
+      return bytesRead === length ? out.toString("hex") : null;
+    } catch { return null; } finally { await file?.close(); }
+  }
+  let source: AsyncIterable<Buffer> | null;
+  try { source = await segmentsFrom(packed(path), start); } catch { return null; }
+  let raw: ReturnType<typeof createReadStream> | null = null;
+  let stream: ReturnType<typeof createZstdDecompress> | null = null;
+  let skip = 0;
+  if (source === null) {
+    raw = createReadStream(packed(path), { highWaterMark: CHUNK });
+    stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+    raw.on("error", (error) => stream!.destroy(error));
+    source = stream as AsyncIterable<Buffer>;
+    skip = start;
+  }
+  const pieces: Buffer[] = [];
+  let got = 0;
+  try {
+    for await (const piece of source) {
+      if (!keep()) throw new Stopped();
+      if (skip >= piece.length) { skip -= piece.length; continue; }
+      const bytes = piece.subarray(skip, skip + length - got);
+      skip = 0;
+      pieces.push(bytes);
+      got += bytes.length;
+      if (got === length) break;
+    }
+    return got === length ? Buffer.concat(pieces, length).toString("hex") : null;
+  } catch (error) {
+    if (error instanceof Stopped) throw error;
+    return null;
+  } finally { raw?.destroy(); stream?.destroy(); }
+}
+
+type CountedFile = UsageFile & { cutoff: number | null; anchor: string | null; path: string };
+
+// ── the counter ──
+
+export class UsageCounter {
+  readonly #store: Store;
+  readonly #config: () => UsageConfig;
+  readonly #settleMs: number;
+  readonly #safetyMs: number;
+  /// When the last read started; 0 before the first.
+  #last = 0;
+  /// The first sweep is under way.
+  #first = false;
+  /// The read under way (reads queue behind it).
+  #reading: Promise<unknown> = Promise.resolve();
+  /// Sessions that changed since the loop last looked, and when each one's latest turn had ended when it last did.
+  #changed = new Set<string>();
+  #ended = new Map<string, number>();
+  #startedAt = 0;
+  #wake = Effect.runSync(Queue.dropping<void>(1));
+  /// Sessions at work whose transcripts grew, to be read alone though no turn ended (`soon`).
+  #asked = new Set<string>();
+  #fiber: Fiber.Fiber<void> | null = null;
+  #unsubscribe: (() => void) | null = null;
+  #abort = new AbortController();
+  #clock: Clock.Clock;
+  /// The sessions the read under way recorded new calls of, and when the earliest of the calls it recorded was made.
+  #counted = new Set<string>();
+  #from = Infinity;
+  /// Positions of transcripts this counter has needed, read from the store by path and kept as it writes them.
+  #files: Map<string, CountedFile> | null = null;
+  /// Codex's path for a runtime session, remembered by session rather than searched through all known files.
+  #codexPaths = new Map<string, Map<string, string>>();
+
+  constructor(options: UsageCounterOptions) {
+    this.#store = options.store;
+    this.#config = options.config;
+    this.#settleMs = options.settleMs ?? SETTLE_MS;
+    this.#safetyMs = options.safetyMs ?? SAFETY_MS;
+    this.#clock = options.clock ?? liveClock;
+  }
+
+  /// Reads sessions that ran since the previous sweep, then those whose turn ended (shortly after), and all that ran
+  /// every SAFETY_MS. Stopped by `stop`.
+  start(): void {
+    if (this.#fiber !== null) return;
+    this.#startedAt = this.#clock.currentTimeMillisUnsafe();
+    this.#unsubscribe = this.#store.subscribe((change) => {
+      if (change.type !== "session") return;
+      this.#changed.add(change.key);
+      Queue.offerUnsafe(this.#wake, undefined);
+    });
+    const me = this;
+    const readNow = Effect.promise(() => me.#readLogged());
+    // Whether a turn ended since the loop last looked, of the sessions that changed.
+    const turnEnded = Effect.sync(() => {
+      let ended = false;
+      for (const key of me.#changed) {
+        const at = me.#store.lastTurn(key)?.endedAt ?? null;
+        if (at !== null && at > (me.#ended.get(key) ?? me.#startedAt)) {
+          me.#ended.set(key, at);
+          ended = true;
+        }
+      }
+      me.#changed.clear();
+      return ended;
+    });
+    // The sessions asked of alone.
+    const readAsked = Effect.promise(() => {
+      const only = new Set(me.#asked);
+      me.#asked.clear();
+      return me.#readLogged(only);
+    });
+    const loop = Effect.gen(function* () {
+      yield* readNow;
+      let due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
+      while (true) {
+        const woken = yield* Effect.raceFirst(
+          Queue.take(me.#wake).pipe(Effect.as(true)),
+          Clock.currentTimeMillis.pipe(Effect.flatMap((now) => Effect.sleep(Math.max(1, due - now))), Effect.as(false)),
+        );
+        if (woken) {
+          yield* Effect.sleep(me.#settleMs);
+          yield* Queue.clear(me.#wake);
+          if (!(yield* turnEnded) && (yield* Clock.currentTimeMillis) < due) {
+            if (me.#asked.size > 0) yield* readAsked;
+            continue;
+          }
+        }
+        // Those at work are among those read.
+        me.#asked.clear();
+        yield* readNow;
+        due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
+      }
+    });
+    this.#fiber = Effect.runFork(loop.pipe(Effect.provideService(Clock.Clock, this.#clock)));
+  }
+
+  /// Reads `key`'s transcripts shortly, though no turn ended: a session at work wrote more (live.ts).
+  soon(key: string): void {
+    this.#asked.add(key);
+    Queue.offerUnsafe(this.#wake, undefined);
+  }
+
+  /// Stops reading: the read under way stops at its next batch (what it recorded stays).
+  async stop(): Promise<void> {
+    this.#unsubscribe?.();
+    this.#unsubscribe = null;
+    this.#abort.abort();
+    if (this.#fiber !== null) await Effect.runPromise(Fiber.interrupt(this.#fiber));
+    this.#fiber = null;
+    await this.#reading.catch(() => {});
+  }
+
+  /// reading_all: whether everything is still being read for the first time.
+  readingAll(): boolean {
+    return this.#first || this.#last === 0;
+  }
+
+  async #readLogged(only?: ReadonlySet<string>): Promise<void> {
+    try {
+      await this.read(only);
+    } catch (e) {
+      if (!(e instanceof Stopped)) log.warn("usage", "usage not read", { error: (e as Error).message });
+    }
+  }
+
+  /// One read: the transcripts of sessions that ran since the last sweep; `only`: of those sessions alone (it says
+  /// nothing of when the last sweep was). How many calls were new. Reads queue behind one another.
+  read(only?: ReadonlySet<string>): Promise<number> {
+    const next = this.#reading.catch(() => {}).then(() => this.#read(only ?? null));
+    this.#reading = next;
+    return next;
+  }
+
+  async #read(only: ReadonlySet<string> | null): Promise<number> {
+    const started = this.#clock.currentTimeMillisUnsafe();
+    const last = this.#last;
+    if (only === null) this.#first = last === 0;
+    const store = this.#store;
+    const cursor = store.usageCounter();
+    const wanted = only !== null ? new Set(only) : new Set(store.usageActiveSessions(Math.max(cursor.since, (last || cursor.through) - MARGIN_MS)));
+    const sessions: SessionRow[] = [...wanted].flatMap((key) => store.getSession(key) ?? []);
+    const known = (this.#files ??= new Map<string, CountedFile>());
+    const config = this.#config();
+    const homes = config.profiles.map((p) => p.home);
+    let added = 0;
+    this.#counted.clear();
+    this.#from = Infinity;
+    // Claude Code: each session's project directory (named after where it runs), in the shared transcripts and in any
+    // profile's own.
+    const distinct = async (roots: string[]) => {
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const r of roots) {
+        if (!(await isDir(r))) continue;
+        const real = await canonical(r);
+        if (seen.has(real)) continue;
+        seen.add(real);
+        out.push(r);
+      }
+      return out;
+    };
+    // Where each runtime's transcripts are: the shared place, then each profile's home's.
+    const ways = (runtime: Runtime) => [sharedTranscripts(config.dataDir, runtime), ...config.profiles.map((p) => join(p.home, transcriptDir(runtime)))];
+    // How far a transcript was read, however it was reached then: one read through a home's own directory before is
+    // reached through the shared place once that directory is a link there (sessions/agent-home.ts `linkTranscripts`).
+    const readBefore = (path: string, runtime: Runtime): CountedFile | undefined => {
+      const position = (name: string) => {
+        const cached = known.get(name);
+        if (cached !== undefined) return cached;
+        const file = store.usageFile(name);
+        const counter = store.usageCounterFile(name);
+        if (file === undefined && counter === null) return undefined;
+        const saved = { ...(file ?? { session: null, offset: 0, model: null }), cutoff: counter?.cutoff ?? null, anchor: counter?.anchor ?? null, path: name };
+        known.set(name, saved);
+        return saved;
+      };
+      const had = position(path);
+      if (had !== undefined) return had;
+      const roots = ways(runtime);
+      const root = roots.find((r) => path.startsWith(r + sep));
+      if (root === undefined) return undefined;
+      for (const r of roots) {
+        const was = position(r + path.slice(root.length));
+        if (was !== undefined) return was;
+      }
+      return undefined;
+    };
+    const claudeRoots = await distinct(ways("claude"));
+    const seenFiles = new Set<string>();
+    // A chat may have left a runtime while its final turn was still writing. Count each earlier segment with the
+    // runtime that wrote it, even when the session now runs on another one.
+    for (const s of sessions) {
+      if (wanted !== null && !wanted.has(s.key)) continue;
+      for (const source of store.runtimeSessionSources(s.key)) {
+        const runtime = runtimeKind(source.runtime);
+        if (!runtime || runtime === s.runtime) continue;
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [source.id]).paths[0];
+        if (!transcript) continue;
+        const files: [string, boolean][] = runtime === "claude" ? await claudeFiles(dirname(transcript), source.id) : [[runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript, false]];
+        for (const [path, subagent] of files) {
+          if (runtime === "grok" && !existsSync(path)) continue;
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, runtime, subagent, s, readBefore(path, runtime), cursor.since);
+        }
+      }
+    }
+    for (const s of sessions) {
+      if (s.runtime !== "claude") continue;
+      const project = claudeProject(s.cwd ?? s.workspace);
+      const only = s.cwd !== null ? s.runtimeSessionId : null;
+      if (s.cwd !== null && only === null) continue;
+      for (const root of claudeRoots) {
+        for (const [path, subagent] of await claudeFiles(join(root, project), only)) {
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"), cursor.since);
+        }
+      }
+    }
+    // Codex: its transcripts are kept by date, so each new one is matched to a session by its id, or by where it ran.
+    // Read of a few sessions alone (every few seconds while they work), not every one is walked: those of their
+    // runtime sessions, as read before or found by their ids.
+    const codex = sessions.filter((s) => s.runtime === "codex");
+    const found = new Map<string, SessionRow>();
+    for (const s of codex) for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === "codex")) {
+      const paths = this.#codexPaths.get(s.key) ?? new Map<string, string>();
+      this.#codexPaths.set(s.key, paths);
+      let had = paths.get(id);
+      if (had !== undefined && !(await isFile(had)) && !(await isFile(packed(had)))) { paths.delete(id); had = undefined; }
+      // A running thread can report its path before it creates the file; earlier threads can still search history.
+      const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id], [], { anywhere: !(s.running && s.runtimeSessionId === id) }).paths[0];
+      if (path !== undefined) { paths.set(id, path); found.set(path, s); }
+    }
+    for (const [path, s] of found) {
+      const file = readBefore(path, "codex");
+      if (file !== undefined && file.session !== null && file.session !== s.key) continue;
+      added += await this.#readFile(path, "codex", false, s, file, cursor.since);
+    }
+    // DeepSeek Harness: each runtime session's own file, found as its history finds it (dsh.ts); Grok Build: what the
+    // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
+    // station's own (cursor.ts, devin.ts).
+    for (const s of sessions) {
+      if (s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes" && s.runtime !== "agy") continue;
+      const runtime = s.runtime;
+      for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === runtime)) {
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
+        const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
+        if (path === undefined || (runtime === "grok" && !existsSync(path))) continue;
+        const real = await canonical(path);
+        if (seenFiles.has(real)) continue;
+        seenFiles.add(real);
+        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime), cursor.since);
+      }
+    }
+    if (only === null) {
+      if (wanted.size > 0) store.advanceUsageCounter(started);
+      this.#last = started;
+      this.#first = false;
+    }
+    if (this.#counted.size > 0) {
+      if (last === 0 && only === null) log.info("usage", "usage read from recent transcripts", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
+      store.usageChanged([...this.#counted], Number.isFinite(this.#from) ? this.#from : undefined);
+    }
+    return added;
+  }
+
+  /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
+  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: CountedFile | undefined, since: number): Promise<number> {
+    // A transcript may have been put away after its turn ended but before its last new calls were read. A seekable
+    // archive tells its original size without decompression; an older archive is measured only for a wanted session.
+    const archived = await putAway(path);
+    let size: number | null;
+    if (archived) {
+      size = await writtenLength(packed(path)).catch(() => null)
+        ?? await unpackedLength(packed(path), () => !this.#abort.signal.aborted);
+      if (size === null) return 0;
+    } else {
+      try { size = (await stat(path)).size; } catch { return 0; }
+    }
+    let anchor = "";
+    const shortened = was !== undefined && size < was.offset;
+    if (!shortened && was !== undefined) {
+      const found = await anchorAt(path, was.offset, archived, () => !this.#abort.signal.aborted);
+      if (found === null) return 0;
+      anchor = found;
+    }
+    const replaced = was !== undefined && (shortened || (was.anchor !== null && anchor !== was.anchor));
+    const before = replaced ? { session: was.session, offset: 0, model: null } : (was ?? { session: null, offset: 0, model: null });
+    if (replaced) anchor = "";
+    let cutoff = was?.cutoff ?? null;
+    if (replaced || cutoff === null || was?.anchor === null || was?.path !== path) {
+      cutoff = this.#store.beginUsageCounterFile(path, before, { cutoff: replaced ? size : (cutoff ?? size), anchor }, replaced).cutoff;
+    }
+    this.#files?.set(path, { ...before, cutoff, anchor, path });
+    if (archived && !replaced && size === before.offset) return 0;
+    const state: CallState = { model: before.model, codexId: null };
+    // A session created after the counter began can have its first call timestamped just before that boundary when
+    // the runtime's clock is behind. Use the same clock-skew allowance already used to attribute calls to a session.
+    const firstNewAt = session.createdAt >= since ? Math.min(since, session.createdAt - SKEW_MS) : since;
+    let added = 0;
+    let first = true;
+    for await (const part of readFrom(path, before.offset)) {
+      if (this.#abort.signal.aborted) throw new Stopped();
+      if (first) {
+        // A Codex transcript's id is in its first line: read again for a file read on from the middle.
+        if (runtime === "codex") state.codexId = (await codexMeta(path))?.[0] ?? null;
+        first = false;
+      }
+      for (const section of sectionsOf(part, cutoff)) {
+        const nextAnchor = (section.bytes.length >= ANCHOR ? section.bytes.subarray(-ANCHOR)
+          : Buffer.concat([Buffer.from(anchor, "hex"), section.bytes]).subarray(-ANCHOR)).toString("hex");
+        // What ran before the station had the session (a terminal's, continued here) is not the station's.
+        const modelBefore = state.model;
+        const fromKnownSuffix = was !== undefined && !replaced && section.from >= before.offset;
+        const calls = callsOf(runtime, section.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS && (section.followed || c.at >= firstNewAt || fromKnownSuffix));
+        // The turns they were made in, those alone (store/usage.ts usageTurns).
+        const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
+        const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
+          // The turn it was made in: the last to start before it (the first, for one before them all).
+          let lo = 0;
+          let hi = of.length;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (of[mid]!.startedAt <= c.at) lo = mid + 1;
+            else hi = mid;
+          }
+          return [c, of[Math.max(lo - 1, 0)]!.of];
+        });
+        // A dense part can contain thousands of calls. Save its starting position until all its calls are recorded: if
+        // stopped between transactions, replaying the part is safe (the store keeps each call by id). `section.from` also
+        // handles a transcript that was shortened and is being read again from zero.
+        for (let i = 0; i < Math.max(1, withFor.length); i += WRITE_BATCH) {
+          if (this.#abort.signal.aborted) throw new Stopped();
+          const complete = i + WRITE_BATCH >= withFor.length;
+          const file = { session: session.key, offset: complete ? section.offset : section.from, model: complete ? state.model : modelBefore };
+          const batch = withFor.slice(i, i + WRITE_BATCH);
+          const changed = { from: Infinity };
+          const savedAnchor = complete ? nextAnchor : anchor;
+          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: firstNewAt }) });
+          this.#files?.set(path, { ...file, cutoff, anchor: savedAnchor, path });
+          if (Number.isFinite(changed.from)) {
+            this.#counted.add(session.key);
+            this.#from = Math.min(this.#from, changed.from);
+          }
+          added += recorded;
+          await breathe();
+        }
+        anchor = nextAnchor;
+      }
+    }
+    return added;
+  }
+}
+
+</source>

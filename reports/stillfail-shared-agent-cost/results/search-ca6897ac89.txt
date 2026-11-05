@@ -1,0 +1,1432 @@
+.github/stable-plan.py:24:        # The notes' commit count is a version, not an index into a possibly merged DAG.
+.github/test_stable_plan.py:53:            self.assertEqual(args[args.index('--commit') + 1], self.release)
+apps/mbui/core/delta-vectors.ts:84:given("set: an index past the end", obj, [{ path: ["a", "b", 3], set: 9 }]);
+apps/mbui/core/delta-vectors.ts:85:given("set: an index into an object", obj, [{ path: ["a", 0], set: 9 }]);
+apps/mbui/core/delta-vectors.ts:94:given("remove: an index", obj, [{ path: ["a", "b", 0], remove: true }]);
+apps/mbui/e2e/fake/claude.mjs:63:  event({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
+apps/mbui/e2e/fake/claude.mjs:64:  event({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } });
+apps/mbui/e2e/fake/claude.mjs:65:  event({ type: "content_block_stop", index: 0 });
+apps/mbui/e2e/fake/claude.mjs:165:    fs.writeFileSync(path.join(dir, "index.html"), PAGE_A);
+apps/mbui/engine/jsi/jsi/instrumentation.h:65:  /// A HeapStatsUpdate is a tuple of the fragment index, the number of objects
+apps/mbui/engine/jsi/jsi/jsi.h:1177:  /// \return the property of the array at index \c i.  If there is no
+apps/mbui/engine/jsi/jsi/jsi.h:1182:  /// Sets the property of the array at index \c i.  The argument
+apps/mbui/mbui/scripts/bench_compare.py:92:                 key=lambda f: (ORDER.index(f) if f in ORDER else len(ORDER), f))
+apps/mbui/mbui/scripts/gen_bidi.py:36:    vals = [CLASSES.index(long.get(c, c)) for c in cls]
+apps/mbui/mbui/scripts/gen_unicode.py:212:        gvals[c] = GCB.index(gcb[c]) | (xp[c] << 4) | (INCB.index(incb[c]) << 5)
+apps/mbui/mbui/scripts/gen_unicode.py:224:        v = LB.index(k)
+apps/mbui/mbui/scripts/host-web.mjs:19:  const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');
+apps/mbui/mbui/scripts/textdiff-web.mjs:15:  const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');
+apps/mbui/mbui/scripts/web-shot.mjs:12:  const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');
+apps/mbui/mbui/scripts/web-test.mjs:15:  const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');
+apps/mbui/mbui/src/awly/awly_stub.c:13:// AWLY_ONLY: the index of the one workload to run (-1: all)
+apps/mbui/mbui/src/host/linux_text.c:43:static int *table;  // open addressing: entry index + 1, 0 is empty
+apps/mbui/mbui/src/host/linux_text.c:98:  int *at;      // at[byte]: the UTF-16 index the byte's character starts at; at[n]: the UTF-16 length
+apps/mbui/mbui/src/host/log_files.h:343:// The oldest of a stream's files beyond the `kept` newest: its index in `files`, -1 where none is beyond them.
+apps/mbui/mbui/web/host.js:1333:  let nextZ = 0;  // the z-index the next view raised takes (view_tell 5); one opened goes over those before it
+apps/mbui/mbui/web/host.js:1339:      viewLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:0';
+apps/mbui/mbui/web/host.js:1371:    // raised over all the others (the app paints it after them): by z-index, as moving an iframe in the page loads it
+apps/mbui/mbui/web/host.js:1936:      : (w, i) => text.slice(segs[w].index, segs[i].index + segs[i].segment.length);
+apps/mbui/mbui/web/host.js:1965:      out[k * 4] = s.index;
+apps/mbui/mbui/web/host.js:2290:      menuEl.style.cssText = 'position:fixed;z-index:10;display:flex;gap:2px;padding:4px;border-radius:999px;' +
+apps/mbui/mbui/web/host.js:2330:    return seg ? seg.index * 4294967296 + seg.index + seg.segment.length : -1;
+apps/mbui/scripts/media-compose.mjs:147:      const index = scenes.length + overlays.length + i;
+apps/mbui/scripts/media-compose.mjs:149:      filters.push(`[${index}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,` +
+apps/mbui/scripts/web-layout.mjs:52:  const index = new Map();
+apps/mbui/scripts/web-layout.mjs:97:    index.set(el, me);
+apps/mbui/scripts/web-layout.mjs:99:      index: me,
+apps/mbui/scripts/web-layout.mjs:138:        index: out.length, parent: me, depth: depth + 1, tag: which, names: names.map((n) => n + which), label: '', role: '', text: '',
+apps/mbui/scripts/web-layout.mjs:175:  const index = await browser.newPage();
+apps/mbui/scripts/web-layout.mjs:176:  await index.goto(base);
+apps/mbui/scripts/web-layout.mjs:177:  await index.waitForFunction(() => Array.isArray(window.stories));
+apps/mbui/scripts/web-layout.mjs:178:  const stories = (await index.evaluate(() => window.stories)).filter((s) => ids.includes(s.id));
+apps/mbui/scripts/web-layout.mjs:179:  await index.close();
+apps/mbui/scripts/web-ref.mjs:40:  const index = await browser.newPage();
+apps/mbui/scripts/web-ref.mjs:41:  await index.goto(base);
+apps/mbui/scripts/web-ref.mjs:42:  await index.waitForFunction(() => Array.isArray(window.stories));
+apps/mbui/scripts/web-ref.mjs:43:  const stories = (await index.evaluate(() => window.stories)).filter((s) => ids.includes(s.id));
+apps/mbui/scripts/web-ref.mjs:44:  await index.close();
+apps/mbui/scripts/web-shots.mjs:16:  const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');
+apps/mbui/tools/wasm-film/compact.mjs:122:      if (id >= uses.length) throw new Error('invalid Wasm local index');
+client/core-ts/bench/keyed.ts:2:// diffed by index) and keyed (collections.ts). Bytes on the wire; the core's time from the change to the message
+client/core-ts/bench/web-first-view.mjs:81:  if (!existsSync(file) || statSync(file).isDirectory()) file = join(dist, "index.html");
+client/core-ts/src/asks.ts:4:import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
+client/core-ts/src/asks.ts:188:    return Effect.flatMap(this.#index(), (kept) => {
+client/core-ts/src/asks.ts:201:    return Effect.flatMap(Effect.andThen(this.#takeChanged(), this.#index()), (kept) => {
+client/core-ts/src/asks.ts:210:    return Effect.flatMap(this.#index(), (kept) => {
+client/core-ts/src/asks.ts:225:    return Effect.flatMap(this.#index(), (kept) =>
+client/core-ts/src/asks.ts:249:  #index(): Effect.Effect<Kept> {
+client/core-ts/src/bareLinks.ts:16:    const end = m.index + url.length;
+client/core-ts/src/bareLinks.ts:18:    if (!/^https?:\/\/[A-Za-z0-9]/i.test(url) || text[m.index + m[0].length] === "…") continue;
+client/core-ts/src/bareLinks.ts:19:    if (m.index > at) parts.push(text.slice(at, m.index));
+client/core-ts/src/collections.ts:182:  const tails: number[] = []; // index into positions of the smallest tail of each run length
+client/core-ts/src/data.ts:1360:  /// Items into a log, by number (an entry's `n`, a transcript item's index). `cutAfter`: nothing past it is kept.
+client/core-ts/src/db/account.ts:15:import { LogIndex, LogIndices } from "./log-index.ts";
+client/core-ts/src/db/account.ts:1513:    const index = this.#logIndices.get(K(table, station, id));
+client/core-ts/src/db/account.ts:1514:    if (index) {
+client/core-ts/src/db/account.ts:1515:      const numbers = index.numbers;
+client/core-ts/src/db/account.ts:1547:    const index = this.#logIndices.get(K(table, station, id));
+client/core-ts/src/db/account.ts:1548:    if (index) return index.span;
+client/core-ts/src/db/account.ts:1556:    const index = this.#logIndices.get(K(table, station, id));
+client/core-ts/src/db/account.ts:1557:    if (index) return index.count(from, to);
+client/core-ts/src/db/account.ts:1568:      const index = this.#logIndices.get(cacheKey);
+client/core-ts/src/db/account.ts:1569:      // A failed SQL write must never leave a cached index of a different transaction state.
+client/core-ts/src/db/account.ts:1605:      if (index) {
+client/core-ts/src/db/account.ts:1606:        index.put(written.map(([n]) => n), cutAfter);
+client/core-ts/src/db/account.ts:1607:        this.#logIndices.set(cacheKey, index);
+client/core-ts/src/db/import.ts:193:/// `transcript/<station>/<session>/<chunk>` (items from 0), `<log>/meta` the run `{first, last}` held, `kept` the index.
+client/core-ts/src/db/import.ts:196:    const index = (yield* getJson(host, "kept")) as J;
+client/core-ts/src/db/import.ts:197:    if (!index || typeof index !== "object") return;
+client/core-ts/src/db/import.ts:198:    for (const [name, item] of Object.entries(index as Record<string, J>)) {
+client/core-ts/src/db/log-index.ts:1:// Only which records are held, never their payloads. Hot logs keep this small index across reads and update it as
+client/core-ts/src/db/log-index.ts:38:  readonly #logs = new Map<string, { index: LogIndex; size: number }>();
+client/core-ts/src/db/log-index.ts:49:    return entry?.index;
+client/core-ts/src/db/log-index.ts:55:  set(key: string, index: LogIndex): void {
+client/core-ts/src/db/log-index.ts:57:    if (index.numbers.length > this.maxNumbers) return;
+client/core-ts/src/db/log-index.ts:58:    this.#logs.set(key, { index, size: index.numbers.length });
+client/core-ts/src/db/log-index.ts:59:    this.#numbers += index.numbers.length;
+client/core-ts/src/db/schema.ts:12:/// Each migration takes a database from the version before it to its own (index + 1).
+client/core-ts/src/db/schema.ts:42:  CREATE INDEX IF NOT EXISTS chat_recent ON chat (archived, pinned_at DESC, last_active DESC);
+client/core-ts/src/db/schema.ts:43:  CREATE INDEX IF NOT EXISTS chat_ord ON chat (station, archived, ord);
+client/core-ts/src/db/schema.ts:44:  CREATE INDEX IF NOT EXISTS chat_thread ON chat (station, thread) WHERE thread IS NOT NULL;
+client/core-ts/src/db/schema.ts:45:  CREATE INDEX IF NOT EXISTS chat_session ON chat (station, session);
+client/core-ts/src/db/schema.ts:46:  CREATE INDEX IF NOT EXISTS chat_running ON chat (station) WHERE running = 1;
+client/core-ts/src/db/schema.ts:47:  CREATE INDEX IF NOT EXISTS chat_marked ON chat (station) WHERE archived = 0 AND (tone IS NOT NULL OR asks = 1);
+client/core-ts/src/db/schema.ts:48:  CREATE INDEX IF NOT EXISTS chat_desk ON chat (station) WHERE archived = 0 AND desk = 1;
+client/core-ts/src/db/schema.ts:58:  CREATE INDEX IF NOT EXISTS session_listed ON session (station, listed, ord);
+client/core-ts/src/db/schema.ts:69:  CREATE INDEX IF NOT EXISTS thread_listed ON thread (station, listed, sort_at DESC, created_at DESC, id DESC);
+client/core-ts/src/db/schema.ts:70:  CREATE INDEX IF NOT EXISTS thread_first ON thread (station, first_member);
+client/core-ts/src/db/schema.ts:72:  CREATE INDEX IF NOT EXISTS thread_member_thread ON thread_member (station, thread);
+client/core-ts/src/db/schema.ts:84:  CREATE INDEX IF NOT EXISTS job_open ON job (station, open, ord);
+client/core-ts/src/db/schema.ts:113:/// Searched by scanning it (a few MB of words: no index, as a workspace's search builds none). Not a migration (a
+client/core-ts/src/db/schema.ts:127:      CREATE INDEX IF NOT EXISTS entry_edit ON entry (station, thread, json_extract(json, '$.target')) WHERE json_extract(json, '$.kind') = 'edit';
+client/core-ts/src/db/schema.ts:194:  ); CREATE INDEX IF NOT EXISTS file_kept_used ON file_kept (used);`);
+client/core-ts/src/db/schema.ts:207:  ) WITHOUT ROWID; CREATE INDEX IF NOT EXISTS md_kept_used ON md_kept (used); CREATE INDEX IF NOT EXISTS md_kept_of ON md_kept (station, of);`);
+client/core-ts/src/db/schema.ts:223:/// The full-text index an earlier core kept of `said` (`said_index`, FTS5) taken away: a row's words went from it only
+client/core-ts/src/db/schema.ts:237:/// earlier core's search index, transcripts past KEPT) left its pages free in the file, which stayed as large as it
+client/core-ts/src/db/schema.ts:238:/// ever was (a phone's at 150 MB once the index was gone). A database made before is rewritten once (VACUUM) to keep
+client/core-ts/src/font-files.ts:27:const INDEX = "fonts/kept";
+client/core-ts/src/font-files.ts:62:    if (this.#kept === null) Effect.runFork(Effect.map(this.#index(), () => this.#changed()));
+client/core-ts/src/font-files.ts:99:  #index(): Effect.Effect<Kept> {
+client/core-ts/src/font-files.ts:102:        const raw = parseJson(yield* Effect.orElseSucceed(this.#host.storageGet(INDEX), () => null));
+client/core-ts/src/font-files.ts:112:    return Effect.mapError(this.#host.storageSet(INDEX, toJsonBytes(this.#kept ?? {})), (e) => CoreError.plainly("fonts", e));
+client/core-ts/src/font-files.ts:122:      const kept = yield* this.#index();
+client/core-ts/src/font-files.ts:183:      const how = (yield* this.#index())[sha256];
+client/core-ts/src/font-files.ts:193:      const kept = yield* this.#index();
+client/core-ts/src/highlight.ts:137:  "select from where and or not insert into values update set delete create table drop alter add join left right inner outer on group by order having limit offset as distinct union all in is like between exists case when then else end primary key index unique default references foreign asc desc with returning view if begin commit rollback",
+client/core-ts/src/history.ts:290:/// A group's thinking and calls, in the order they came: a thought by its timeline index, a call by its step.
+client/core-ts/src/notice.ts:13:  const words = (block ? all.slice(0, block.index) : all).replace(/。\s*$/u, "");
+client/core-ts/src/placed.ts:41:export function near(chat: J, path: string, at?: string): { before?: J; after?: J; beforeAt?: string; afterAt?: string; index?: number; count: number } {
+client/core-ts/src/placed.ts:68:  const index = images.findIndex((item) => item.file.path === path && (at === undefined || item.at === at));
+client/core-ts/src/placed.ts:69:  if (index < 0) return { count: images.length };
+client/core-ts/src/placed.ts:70:  const before = images[index - 1];
+client/core-ts/src/placed.ts:71:  const after = images[index + 1];
+client/core-ts/src/placed.ts:75:    index, count: images.length,
+client/core-ts/src/qr.ts:18:// By version (index 0 unused), level M.
+client/core-ts/src/refLinks.ts:19:    if (m.index > at) parts.push(text.slice(at, m.index));
+client/core-ts/src/refLinks.ts:21:    at = m.index + m[0].length;
+client/core-ts/src/refLinks.ts:182:  return m ? m.index : null;
+client/core-ts/src/refLinks.ts:187:  return [...text.matchAll(new RegExp(REF_MARK.source, "g"))].map((m) => ({ start: m.index, end: m.index + m[0].length, title: m[1]! }));
+client/core-ts/src/refLinks.ts:199:    return chat && scope(chat.station) === scope(here) ? [{ start: m.index, end: m.index + m[0].length, title: m[1]!, station: chat.station, id: chat.id, history: chat.history || chat.message }] : [];
+client/core-ts/src/shapes/schema.ts:1413:    ["why", "String", { doc: "name | same-name | refused (share/index.ts Missing)." }],
+client/core-ts/src/shapes/schema.ts:2183:    ["current", "i64", { client: "I54", doc: "The bar in view: an index into `sets`." }],
+client/core-ts/src/shapes/schema.ts:2835:    ["index", opt("u32"), { doc: "Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them." }],
+client/core-ts/src/share-in.ts:81:  const rest = (source.slice(0, m.index) + source.slice(m.index + m[0].length)).replace(/[ \t]+\n/g, "\n").trim();
+client/core-ts/src/station/sync.ts:595:        // Refused (a station from before search), or busy (its index starting: asked again as it is shown again).
+client/core-ts/src/station/sync.ts:1243:        // Finding the next page can read a chat's index from the database. Do not make a page being opened wait for
+client/core-ts/src/station/sync.ts:1244:        // every other chat's index to be read first.
+client/core-ts/src/tool-step.ts:41:  try { return JSON.parse(closeCut(t.slice(0, cut.index))); } catch { return undefined; }
+client/core-ts/src/tool-step.ts:202:  return m ? { facts: [say("web-main.tool.exitCode", { code: m[1] ?? "" })], output: text.slice(0, m.index) } : null;
+client/core-ts/src/views/admin-relays.ts:28:function ticks(start: number, step: number, count: number, range: Range, offsetMin: number): { index: number; label: string }[] {
+client/core-ts/src/views/admin-relays.ts:29:  const out: { index: number; label: string }[] = [];
+client/core-ts/src/views/admin-relays.ts:34:    if (range === "day" && hour % 6 === 0) out.push({ index: i, label: format.clock(ms, offsetMin) });
+client/core-ts/src/views/admin-relays.ts:35:    if (range === "week" && hour === 0) out.push({ index: i, label: `${month}/${day}` });
+client/core-ts/test/data.test.ts:756:  // Case aside, every word, through the index (three or more) and without it (shorter).
+client/core-ts/test/data.test.ts:964:  // The full-text index of what was said an earlier core kept.
+client/core-ts/test/data.test.ts:974:  // As that core did: a chat's messages let go for room and read again as it was opened, over and over; what the index
+client/core-ts/test/data.test.ts:985:  // Opened again: none is let go, so the sync brings them all; the room the index took is the database's again, and
+client/core-ts/test/data.test.ts:1011:  // As a phone's was: an earlier core's full-text index of what was said, taken away by the next (#2777), its pages left
+client/core-ts/test/data.test.ts:1025:  // Opened again: the room the index took is the device's again; the messages stay.
+client/core-ts/test/data.test.ts:1333:    assert.equal(db().reads.filter(q => q.startsWith("SELECT i FROM transcript") || q.includes("SELECT min(i)") || q.includes("SELECT count(*) FROM transcript")).length, 0, "metadata reads use the index, even after each append");
+client/core-ts/test/log-index.test.ts:3:import { LogIndex, LogIndices } from "../src/db/log-index.ts";
+client/core-ts/test/log-index.test.ts:27:  const index = new LogIndex([]);
+client/core-ts/test/log-index.test.ts:33:    index.put(added, cut);
+client/core-ts/test/log-index.test.ts:35:    assert.deepEqual(index.numbers, expected);
+client/core-ts/test/log-index.test.ts:39:    assert.equal(missing(index.numbers, last), hole >= 1 ? hole : null);
+client/core-ts/test/log-index.test.ts:41:    assert.equal(index.count(from, to), expected.filter(n => n >= from && n <= to).length);
+client/core-ts/test/mesh-station.ts:73:        const index = s.conns.length;
+client/core-ts/test/mesh-station.ts:75:        void s.#serve(conn, () => index < s.deadBelow).catch(() => {});
+client/core-ts/test/placed.test.ts:15:    after: photo, afterAt: "m:2/q:0", index: 0, count: 4,
+client/core-ts/test/placed.test.ts:18:    before: photo, beforeAt: "m:1/f", after: photo, afterAt: "m:2/q:1", index: 1, count: 4,
+client/core-ts/test/placed.test.ts:21:    before: photo, beforeAt: "m:2/q:0", after: next, afterAt: "m:3/f", index: 2, count: 4,
+client/core-ts/test/placed.test.ts:34:      after: first, afterAt: "o:sent-1/f", index: 0, count: 3,
+client/core-ts/test/placed.test.ts:37:      before: photo, beforeAt: "o:sent-1/q:0", after: last, afterAt: "o:sent-1/f", index: 1, count: 3,
+client/core-ts/test/placed.test.ts:42:  assert.deepEqual(near(delivered, photo.path), { after: first, index: 0, count: 3 });
+client/core-ts/test/station-flows.test.ts:2118:    const send = (index: number, name: string, data: unknown) => Queue.offerUnsafe(feeds[index]!.queue,
+client/core-ts/test/store-auto-dependencies.test.ts:236:      const i = Number(topic.index);
+client/core-ts/test/store-auto-dependencies.test.ts:241:  const topics = records.map((_, index): Topic => ({ topic: "page", index }));
+client/core-ts/test/store.test.ts:757:  const open = (index: number) => {
+client/core-ts/test/store.test.ts:758:    store.subscribe(1, index + 3, pages[index]!);
+client/core-ts/test/store.test.ts:759:    store.invalidate(pages[index]!);
+client/core-ts/test/store.test.ts:767:      const index = pages.findIndex((page) => page.topic === topic.topic);
+client/core-ts/test/store.test.ts:768:      if (index >= 0 && index < pages.length - 1) open(index + 1);
+client/core-ts/test/views.test.ts:2476:    return [n.value.before ? [n.value.before.name, n.value.before.owner] : null, n.value.after ? [n.value.after.name, n.value.after.owner] : null, n.value.index ?? null];
+client/core-ts/test/views.test.ts:2500:  for (const [id, at, index, other] of [[2, "m:1.0/f", 0, "o:sent-1/q:0"], [3, "o:sent-1/q:0", 1, "m:1.0/f"]] as const) {
+client/core-ts/test/views.test.ts:2505:    assert.equal(shown.value.index, index);
+client/core-ts/test/views.test.ts:2506:    assert.equal(index === 0 ? shown.value.afterAt : shown.value.beforeAt, other);
+cloud/build-static.ts:33:if (!existsSync(join(share, "index.html"))) throw new Error(`${share} has no page: build it first (vp build --config web/vite.share.config.ts)`);
+cloud/deploy.py:307:        Path(directory, "config.json").write_text(json.dumps({"auths": {"https://index.docker.io/v1/": {}}, "credsStore": "", "cliPluginsExtraDirs": plugins}))
+cloud/deploy.py:386:        return (given / "cloud-web" if (given / "cloud-web" / "index.html").exists() else given).resolve()
+cloud/deploy.py:396:    if not (build / "index.html").exists():
+cloud/deploy.py:397:        sys.exit(f"{build} has no index.html: not a build of the web app")
+cloud/deploy.py:476:            parts.insert(parts.index("admin"), "web")
+cloud/src/admin.ts:5:// /v1/admin/accounts and /v1/admin/relay routes use ADMIN_TOKEN instead; see index.ts.)
+cloud/src/api.ts:6:// routes to (index.ts).
+cloud/src/api.ts:41: * On the test channel the installer is the test channel's, which gets its release (index.ts): from its host, or, with
+cloud/src/compat.ts:22:/** The test channel's origin (BETA_ORIGIN), or null when there is none. Not an alias: what it serves is gated (index.ts). */
+cloud/src/directory.ts:102:      CREATE INDEX IF NOT EXISTS members_by_user ON members (sub);
+cloud/src/directory.ts:106:      CREATE INDEX IF NOT EXISTS station_members_by_station ON station_members (station, enrolled_at);
+cloud/src/directory.ts:110:      CREATE INDEX IF NOT EXISTS added_by_email ON added (email);
+cloud/src/directory.ts:114:      CREATE UNIQUE INDEX IF NOT EXISTS push_by_endpoint ON push (sub, endpoint);
+cloud/src/directory.ts:115:      CREATE UNIQUE INDEX IF NOT EXISTS push_by_token ON push (sub, token);
+cloud/src/directory.ts:116:      CREATE INDEX IF NOT EXISTS push_by_user ON push (sub, sid);
+cloud/src/directory.ts:118:      CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
+cloud/src/directory.ts:119:      CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
+cloud/src/env.ts:24:  /** The admin's console's host (its /v1/ calls come here: see index.ts). */
+cloud/src/env.ts:30:   * in (`beta` in the console); unset, there is none (index.ts).
+cloud/src/install.ts:344:agent_path=$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin" | tr ':' '\n' | awk -v wsl="$wsl" 'NF && !(wsl && index($0, "/mnt/") == 1) && !seen[$0]++' | paste -sd: -)
+cloud/src/probes.ts:1:// still.fail's relays measured from inside the networks devices are on, every half hour (index.ts scheduled): a TCP
+cloud/src/relay-load.ts:4:// relay process (index.ts). What is shown is worked out from the counters when asked (relay-load-view.ts). What each did
+cloud/src/tracing.ts:33: * the answer in this header, which the Worker takes off before the answer leaves (index.ts).
+cloud/src/web.ts:8:// answer says not to index it, /robots.txt disallows everything, and each page gets
+cloud/src/web.ts:47: * The app's pages (index.html, at whichever of its routes, and web.html) are not kept: not by the browser's cache, and not in its
+cloud/src/web.ts:60: * The pages the app (index.html: mbui's, web/vite.config.ts) has none of yet, which the web's own React pages (web.html)
+cloud/src/web.ts:116: * names no script source: the page's first scripts are inline (index.html), and the agent-written HTML a chat draws in
+cloud/test/beta.test.ts:128:  const INDEX = '<!doctype html><html><head><title>still.fail</title><meta property="og:title" content="still.fail — 编码 agent"><meta property="og:image" content="https://app.still.fail/og-image.png"></head><body></body></html>';
+cloud/test/beta.test.ts:132:    if (path === "/web/index.html") return new MFResponse(INDEX, { headers: { "content-type": "text/html; charset=utf-8" } });
+cloud/test/beta.test.ts:146:      const named = INDEX.replace("<title>still.fail", "<title>youdid.wtf").replace('content="still.fail —', 'content="youdid.wtf —');
+cloud/test/beta.test.ts:165:    assert.equal(await stable.text(), INDEX);
+cloud/test/harness.ts:376:  "/web/index.html": "<title>still.fail</title>",
+cloud/test/harness.ts:380:  "/admin/index.html": "<title>still.fail 管理后台</title>",
+cloud/test/harness.ts:387:  "/share/index.html": "<title>still.fail 分享</title>",
+cloud/test/static-worker.ts:4:// site's index.html for any other path (the web app and the console), or its 404.html (the preview host). Only GET and
+cloud/test/static-worker.ts:30:  const file = path === "/_headers" ? null : await get(path === "/" ? "/index.html" : path === "/frame" ? "/frame.html" : path);
+cloud/test/static-worker.ts:48:  const asked = await get(path.endsWith("/") ? `${path}index.html` : path);
+cloud/test/static-worker.ts:55:  return get("/index.html");
+cloud/test/worker.ts:2:import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, RelayLoad, TelemetryLimiter } from "../src/index";
+media/core/media.ts:214:            return { station: str(p, "station"), book: str(p, "book"), index: count(p, "index") };
+media/core/media.ts:216:          run: (p: { station: string; book: string; index: number }) => {
+media/core/media.ts:217:            const key = `chapter/${p.book}/${p.index}`;
+media/core/media.ts:220:            return Effect.tap(env.request(p.station, "GET", `/books/${enc(p.book)}/chapters/${p.index}`, null), (got) =>
+media/core/media.ts:221:              Effect.sync(() => env.keep(p.station, key, got, { topic: "media.chapter", station: p.station, book: p.book, index: p.index })),
+media/core/media.ts:273:        // each is in them (`index`: id, offset, length, w, h).
+media/core/media.ts:284:              const said = r.headers.find(([k]) => k.toLowerCase() === "stillfail-index")?.[1] ?? "[]";
+media/core/media.ts:285:              let index: unknown;
+media/core/media.ts:287:                index = JSON.parse(said);
+media/core/media.ts:289:                index = [];
+media/core/media.ts:291:              return Effect.succeed(new Beside({ index }, r.body));
+media/core/test/media.test.ts:77:  call(core, ui, 1, "media.chapter", { station: ST, book: "b1", index: 0 });
+media/core/test/media.test.ts:79:  call(core, ui, 2, "media.chapter", { station: ST, book: "b1", index: 0 });
+media/core/test/media.test.ts:102:      return new Raw({ status: 200, headers: [["content-type", "application/octet-stream"], ["stillfail-index", JSON.stringify([{ id: "a1", offset: 0, length: 6, w: 4, h: 3 }, { id: "b2", offset: 6, length: 5, w: 3, h: 4 }])]], body: jpeg });
+media/core/test/media.test.ts:122:  const thumbs = answers(emitted, 2) as { ok: { index: { id: string; offset: number; length: number }[] }; bytes: Uint8Array };
+media/core/test/media.test.ts:123:  assert.deepEqual(thumbs.ok.index.map((i) => [i.id, i.offset, i.length]), [["a1", 0, 6], ["b2", 6, 5]]);
+media/service/src/blocks.ts:28:export type TocEntry = { index: number; title: string; level: number; chars: number };
+media/service/src/ffmpeg.ts:90:export type VideoTrack = { index: number; codec: string; profile: string | null; width: number; height: number; hdr: "hdr10" | "hlg" | "dolby-vision" | null; fps: number | null; bitDepth: number | null; mime: string | null };
+media/service/src/ffmpeg.ts:91:export type AudioTrack = { index: number; codec: string; lang: string | null; title: string | null; channels: number; default: boolean };
+media/service/src/ffmpeg.ts:92:export type SubtitleTrack = { index: number; codec: string; lang: string | null; title: string | null; default: boolean; forced: boolean; text: boolean };
+media/service/src/ffmpeg.ts:126:      index: num(v.index) ?? 0,
+media/service/src/ffmpeg.ts:139:    .map((s) => ({ index: num(s.index) ?? 0, codec: String(s.codec_name ?? "unknown"), lang: tag(s, "language"), title: tag(s, "title"), channels: num(s.channels) ?? 2, default: s.disposition?.default === 1 }));
+media/service/src/ffmpeg.ts:144:      return { index: num(s.index) ?? 0, codec, lang: tag(s, "language"), title: tag(s, "title"), default: s.disposition?.default === 1, forced: s.disposition?.forced === 1, text: TEXT_SUBS.has(codec) };
+media/service/src/hls.ts:124:    if (audio !== null && !src.probe.audio.some((a) => a.index === audio)) throw new MediaError("not_found", "没有这条音轨");
+media/service/src/hls.ts:149:      audio = p.audio.find((t) => String(t.index) === a) ?? null;
+media/service/src/hls.ts:155:    const name = `${mode}-a${audio ? audio.index : "n"}`;
+media/service/src/hls.ts:156:    return ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-INDEPENDENT-SEGMENTS", `#EXT-X-STREAM-INF:BANDWIDTH=${Math.round(bandwidth)}${width && height ? `,RESOLUTION=${width}x${height}` : ""}`, `${name}/index.m3u8`, ""].join("\n");
+media/service/src/hls.ts:341:      args.push("-map", `0:${p.video!.index}`, "-c:v", "copy", "-frames:v", String(plan.frames![n]!));
+media/service/src/hls.ts:356:      args.push("-t", (end - start).toFixed(4), "-map", `0:${p.video!.index}`);
+media/service/src/hls.ts:367:      const track = p.audio.find((x) => x.index === v.audio);
+media/service/src/hls.ts:406:  async #index() {
+media/service/src/hls.ts:426:    const cache = await this.#index();
+media/service/src/hls.ts:435:    const cache = await this.#index();
+media/service/src/hls.ts:452:    await this.#index();
+media/service/src/photos.ts:100:  /// What changes the index, one at a time: passes and folders' scans.
+media/service/src/photos.ts:205:  /// `f` after what changes the index now (one at a time).
+media/service/src/photos.ts:294:      return await this.#index(actor, album, root, path, e, seen);
+media/service/src/photos.ts:296:      console.error(`media: cannot index ${root} ${path}: ${(err as Error).message}`);
+media/service/src/photos.ts:304:  async #index(actor: string, album: string, root: string, path: string, e: { size: number; mtime: number }, seen: number): Promise<boolean> {
+media/service/src/server.ts:415:        // Four made at a time; one that cannot be made (or is gone) is left out of the index.
+media/service/src/server.ts:428:        const index: { id: string; offset: number; length: number; w: number; h: number }[] = [];
+media/service/src/server.ts:433:          index.push({ id: ids[i]!, offset, length: t.bytes.length, w: t.w, h: t.h });
+media/service/src/server.ts:437:        return { bytes: Buffer.concat(parts), type: "application/octet-stream", cache: "private, no-cache", headers: { "stillfail-index": JSON.stringify(index) } };
+media/service/src/server.ts:512:            audio: (p?.audio ?? []).map((a) => ({ index: a.index, lang: a.lang, title: a.title, codec: a.codec, channels: a.channels, ...(a.default ? { default: true } : {}) })),
+media/service/src/server.ts:529:      pattern: /^\/videos\/([^/]+)\/hls\/([^/]+)\/index\.m3u8$/,
+media/service/src/store.ts:49:CREATE INDEX places_sub ON places (sub);
+media/service/src/store.ts:87:CREATE INDEX photo_items_day ON photo_items (day, taken);
+media/service/src/store.ts:88:CREATE INDEX photo_items_album ON photo_items (album, taken);
+media/service/src/store.ts:89:CREATE INDEX photo_items_dir ON photo_items (root, dir);
+media/service/src/store.ts:90:CREATE INDEX photo_items_sha256 ON photo_items (sha256) WHERE sha256 IS NOT NULL;
+media/service/src/store.ts:91:CREATE INDEX photo_items_unhashed ON photo_items (taken) WHERE thumbhash IS NULL;
+media/service/src/store.ts:126:CREATE INDEX video_items_folder ON video_items (folder);
+media/service/src/store.ts:127:CREATE INDEX video_items_dir ON video_items (folder, dir);
+media/service/src/store.ts:128:CREATE INDEX video_items_show ON video_items (show, season, episode);
+media/service/src/store.ts:129:CREATE INDEX video_items_unprobed ON video_items (added) WHERE probe_state = 'pending';
+media/service/src/store.ts:130:CREATE INDEX video_items_unposted ON video_items (added) WHERE thumbhash IS NULL;
+media/service/src/store.ts:155:CREATE INDEX video_progress_sub ON video_progress (sub, at);
+media/service/src/store.ts:369:      const chapters = p.chapters.map((c, index) => ({ ...c, index, chars: chapterChars(c.blocks) }));
+media/service/src/store.ts:370:      const toc: TocEntry[] = chapters.map((c) => ({ index: c.index, title: c.title, level: c.level, chars: c.chars }));
+media/service/src/store.ts:379:        for (const c of chapters) q.insertChapter.run(b.id, c.index, c.title, c.chars, JSON.stringify(c.blocks));
+media/service/src/store.ts:395:    chapter(book: string, index: number): { chars: number; blocks: string } | undefined {
+media/service/src/store.ts:396:      return q.chapter.get(book, index) as { chars: number; blocks: string } | undefined;
+media/service/src/subtitles.ts:75:/// SubRip: blocks of an index, `00:00:01,000 --> 00:00:02,500`, lines of text; <font> and {\an8} taken off.
+media/service/src/videoname.ts:184:  const at = (m: RegExpExecArray, lead = 0) => ({ at: m.index + lead, length: m[0].length - lead });
+media/service/src/videoname.ts:197:      const start = season && season.index < m.index ? season.index : m.index;
+media/service/src/videoname.ts:198:      return { at: start, length: m.index + m[0].length - start, episode, ...(sn !== null ? { season: sn } : {}), ...(end !== null ? { end } : {}) };
+media/service/src/videoname.ts:237:  const close = text.indexOf(`</${root[1]}>`, root.index);
+media/service/src/videoname.ts:238:  const body = text.slice(root.index, close < 0 ? undefined : close);
+media/service/src/videos.ts:43:const GENERIC = /^(?:movie|video|film|main|feature|title|disc\s*\d*|cd\s*\d+|part\s*\d+|\d{1,3}|vts_\d+_\d+|index)$/i;
+media/service/src/videos.ts:294:        changed = (await this.#index(actor, f, dir, e, files, lower, videos.length, ctx, seen, shows)) || changed;
+media/service/src/videos.ts:296:        console.error(`media: cannot index ${f.root} ${path}: ${(err as Error).message}`);
+media/service/src/videos.ts:306:  async #index(actor: string, f: LibFolder, dir: string, e: DriveEntry, files: DriveEntry[], lower: Map<string, DriveEntry>, count: number, ctx: ShowCtx | null, seen: number, shows: Map<string, ShowSeen>): Promise<boolean> {
+media/service/src/videos.ts:755:    const own = (p?.subtitles ?? []).map((s) => ({ id: `s${s.index}`, lang: s.lang, title: s.title, format: s.codec, external: false, forced: s.forced, default: s.default, text: s.text }));
+media/service/src/videos.ts:823:        audio: (p?.audio ?? []).map((a) => ({ index: a.index, codec: a.codec, lang: a.lang, title: a.title, channels: a.channels, default: a.default })),
+media/service/src/videos.ts:906:    const track = m ? this.probeOf(v)?.subtitles.find((t) => t.index === Number(m[1])) : undefined;
+media/service/src/videos.ts:912:    const out = join(this.#o.dir, "videos", "subs", `${v.id}-${v.mtime}-${v.size}-${track.index}.vtt`);
+media/service/src/videos.ts:921:        await runFfmpeg(this.tools.ffmpeg!, ["-i", file, "-map", `0:${track.index}`, "-c:s", "webvtt", "-f", "webvtt", tmp], 300_000);
+media/service/test/photos.test.ts:3:// batch and its index, kept by time and size, HEIC and posters through a sips of the test's own), drive/watch's
+media/service/test/photos.test.ts:132:test("thumbnails: one with its size, the batch with its index, kept until the file changes; HEIC and posters by sips", async (t) => {
+media/service/test/photos.test.ts:164:  const index = JSON.parse(String(batch.headers["stillfail-index"]));
+media/service/test/photos.test.ts:165:  assert.deepEqual(index.map((x: any) => x.id), [ids.a, ids.c, ids.b], "what is not there left out");
+media/service/test/photos.test.ts:166:  const slice = (i: number) => batch.bytes.subarray(index[i].offset, index[i].offset + index[i].length);
+media/service/test/photos.test.ts:169:  assert.deepEqual([index[1].w, index[1].h], [640, 360]);
+media/service/test/photos.test.ts:171:  assert.equal(index[2].offset + index[2].length, batch.bytes.length);
+media/service/test/service.test.ts:41:      { index: 0, title: "封面", level: 1, chars: 1 },
+media/service/test/service.test.ts:42:      { index: 1, title: "第一章 开始", level: 1, chars: 54 },
+media/service/test/service.test.ts:43:      { index: 2, title: "第二部", level: 1, chars: 8 },
+media/service/test/videoname.test.ts:131:        { index: 0, codec_type: "video", codec_name: "mjpeg", disposition: { attached_pic: 1 } },
+media/service/test/videoname.test.ts:132:        { index: 1, codec_type: "video", codec_name: "hevc", profile: "Main 10", width: 3840, height: 2160, pix_fmt: "yuv420p10le", color_transfer: "smpte2084", avg_frame_rate: "24000/1001" },
+media/service/test/videoname.test.ts:133:        { index: 2, codec_type: "audio", codec_name: "eac3", channels: 6, tags: { language: "eng", title: "Atmos" }, disposition: { default: 1 } },
+media/service/test/videoname.test.ts:134:        { index: 3, codec_type: "audio", codec_name: "aac", channels: 2, tags: { LANGUAGE: "chi" } },
+media/service/test/videoname.test.ts:135:        { index: 4, codec_type: "subtitle", codec_name: "subrip", tags: { language: "chi", title: "简体" }, disposition: { forced: 0 } },
+media/service/test/videoname.test.ts:136:        { index: 5, codec_type: "subtitle", codec_name: "hdmv_pgs_subtitle", tags: { language: "und" } },
+media/service/test/videoname.test.ts:141:  assert.deepEqual(p.video, { index: 1, codec: "hevc", profile: "Main 10", width: 3840, height: 2160, hdr: "hdr10", fps: 23.976, bitDepth: 10, mime: null });
+media/service/test/videoname.test.ts:143:    { index: 2, codec: "eac3", lang: "eng", title: "Atmos", channels: 6, default: true },
+media/service/test/videoname.test.ts:144:    { index: 3, codec: "aac", lang: "chi", title: null, channels: 2, default: false },
+media/service/test/videoname.test.ts:147:    p.subtitles.map((s) => [s.index, s.lang, s.text]),
+media/service/test/videoname.test.ts:158:  const probe = (codec: string, audio: string | null) => parseProbe(JSON.stringify({ streams: [{ index: 0, codec_type: "video", codec_name: codec, width: 1920, height: 1080 }, ...(audio ? [{ index: 1, codec_type: "audio", codec_name: audio, channels: 2 }] : [])], format: { duration: "60" } }));
+media/service/test/videos.test.ts:344:  assert.deepEqual(title.tracks.audio.map((a: any) => [a.index, a.codec]), [[1, "aac"]]);
+media/service/test/videos.test.ts:355:  assert.deepEqual(remux.audio.map((a: any) => [a.index, a.codec, a.channels]), [[1, "aac", 1]]);
+media/service/test/videos.test.ts:369:    assert.equal(variant, `${mode}-a1/index.m3u8`);
+media/service/test/videos.test.ts:393:    assert.equal((await s.call("GET", `/videos/${item}/hls/copy-a7/index.m3u8`, MEMBER)).status, 404);
+media/test/e2e.test.ts:128:  const chapter = await answered(a, 3, "media.chapter", { station: ST, book, index: 1 });
+media/test/e2e.test.ts:142:  const same = await answered(b, 3, "media.chapter", { station: ST, book, index: 1 });
+rules/js/rules.js:44:  throw new Error("Index out of bounds");
+rules/js/rules.js:715:  const index = new _M0TPB8MutLocalGiE(start);
+rules/js/rules.js:717:    if (index.val < end) {
+rules/js/rules.js:718:      const c1 = self.str.charCodeAt(index.val);
+rules/js/rules.js:719:      if (c1 >= 55296 && c1 <= 56319 && (index.val + 1 | 0) < self.end) {
+rules/js/rules.js:720:        const c2 = self.str.charCodeAt(index.val + 1 | 0);
+rules/js/rules.js:722:          index.val = index.val + 2 | 0;
+rules/js/rules.js:726:      index.val = index.val + 1 | 0;
+rules/js/rules.js:2887:    console.error("Invalid index for View");
+rules/js/rules.js:2891:function _M0MPC15array5Array2atGRPC14json4JsonE(self, index) {
+rules/js/rules.js:2893:  return index >= 0 && index < len ? self[index] : $panic();
+rules/js/rules.js:3003:function _M0FPB21fixed__sift__down__byGsE(arr, index, cmp) {
+rules/js/rules.js:3005:  let _tmp = index;
+rules/js/rules.js:3006:  let _tmp$2 = (Math.imul(index, 2) | 0) + 1 | 0;
+rules/js/rules.js:3008:    const index$2 = _tmp;
+rules/js/rules.js:3012:      if (cmp(arr.buf[arr.start + index$2 | 0], arr.buf[arr.start + child$2 | 0]) >= 0) {
+rules/js/rules.js:3015:      _M0MPC15array12MutArrayView4swapGsE(arr, index$2, child$2);
+scripts/plan-covers.ts:26:  { name: "cloud's api", entries: ["cloud/src/index.ts"], keys: ["api"] },
+station/native/helper/Sources/StillfailHelper/Outflow.swift:55:      let next = hex.index(at, offsetBy: 2)
+station/native/helper/Sources/StillfailHelper/SystemAudio.swift:101:      let (buffer, index) = planar ? (channel < buffers.count ? buffers[channel] : nil, frame) : (buffers.first, frame * channels + channel)
+station/native/helper/Sources/StillfailHelper/SystemAudio.swift:102:      guard let buffer, let base = buffer.baseAddress, (index + 1) * width <= buffer.count else { return 0 }
+station/native/helper/Sources/StillfailHelper/SystemAudio.swift:103:      if !float { return base.loadUnaligned(fromByteOffset: index * 2, as: Int16.self) }
+station/native/helper/Sources/StillfailHelper/SystemAudio.swift:104:      let v = base.loadUnaligned(fromByteOffset: index * 4, as: Float32.self)
+station/native/screen/src/hdr.rs:167:        for index in 0.. {
+station/native/screen/src/hdr.rs:170:            if unsafe { RegEnumKeyExW(open, index, Some(PWSTR(name.as_mut_ptr())), &mut length, None, None, None, None) } != ERROR_SUCCESS {
+station/native/screen/src/scale.rs:81:/// The steps from Windows' answer: the recommended one's index, the current one's, the lowest and highest index taken.
+station/native/screen/src/scale.rs:111:    let Some(index) = SCALES.iter().position(|s| *s == percent).filter(|i| (low..=high).contains(i)) else {
+station/native/screen/src/scale.rs:114:    let set = SetScale { header: DISPLAYCONFIG_DEVICE_INFO_HEADER { r#type: SET_DPI_SCALE, size: std::mem::size_of::<SetScale>() as u32, adapterId: adapter, id }, rel: index as i32 - recommended as i32 };
+station/side/browser.test.ts:22:import { platform } from "../src/platform/index.ts";
+station/side/login-peer-e2e.ts:184:  // Its page opened through B's own stand-in browser (logins/index.ts: <data>/run/logins/<id>.opened), none on A.
+station/side/peer-forward-e2e.ts:5:// and throughput are printed. With PLAYWRIGHT_MODULE (playwright-core's index.mjs), Chromium opens the page too.
+station/src/accounts/console.ts:8://   (`CONSOLE_FILE`), never sent to another station but with the profile when it moves (share/index.ts);
+station/src/accounts/console.ts:9:// - only the station the profile is on renews it, days before it runs out (accounts/index.ts); copies of a shared one
+station/src/accounts/index.ts:135:  /// Profiles other stations share with this one (share/index.ts): how they are doing is their host's to say, and
+station/src/accounts/index.ts:161:/// A copy of a profile another station shares (share/index.ts): edited, checked and signed in only there.
+station/src/accounts/index.ts:530:      // Shared with other stations: still (share/index.ts keeps this).
+station/src/accounts/kimi.ts:6:// - the station renews it while it has less than half its life left, looked at every minute (accounts/index.ts);
+station/src/accounts/kimi.ts:9:// It stays on the station it was signed in on (share/index.ts does not lend it).
+station/src/accounts/login.ts:42:import { platform } from "../platform/index.ts";
+station/src/accounts/machine.ts:18:import { platform } from "../platform/index.ts";
+station/src/accounts/oauth.ts:14:import { platform } from "../platform/index.ts";
+station/src/accounts/profiles.ts:20:import { platform } from "../platform/index.ts";
+station/src/accounts/profiles.ts:331:    // and its models, a session opened only to ask says (index.ts).
+station/src/accounts/quota.ts:12:import { platform } from "../platform/index.ts";
+station/src/adb/displays.ts:15:import { platform } from "../platform/index.ts";
+station/src/adb/grants.ts:46:CREATE INDEX IF NOT EXISTS adb_requests_by_owner ON adb_requests (owner, status);
+station/src/adb/grants.ts:47:CREATE INDEX IF NOT EXISTS adb_requests_by_session ON adb_requests (session, status);
+station/src/adb/link.ts:22:import { platform } from "../platform/index.ts";
+station/src/adb/servers.ts:10:import { platform } from "../platform/index.ts";
+station/src/agents/claude.ts:206:  /// Another station's subscription, borrowed (share/index.ts): a token lent by the station signed in on it, handed
+station/src/agents/codex.ts:469:  /// Another station's subscription, borrowed (share/index.ts): its home's auth.json written with tokens lent by the
+station/src/agents/cursor-bridge.mjs:54:  // The package's ES module, as its exports say (dist/esm/index.js).
+station/src/agents/cursor-bridge.mjs:57:  const sdk = await import(pathToFileURL(join(dir, exported?.import ?? exported?.default ?? 'dist/esm/index.js')).href)
+station/src/agents/live.ts:66:      const index = Number.isInteger(e?.index) ? (e.index as number) : -1;
+station/src/agents/live.ts:76:        const id = step === "tool" && typeof b?.id === "string" ? (b.id as string) : `${this.message}:${index}`;
+station/src/agents/live.ts:80:        this.blocks.set(index, { id, step, tool, input: tool !== undefined ? "" : undefined, subagent: parent });
+station/src/agents/live.ts:82:        const block = this.blocks.get(index);
+station/src/agents/live.ts:102:        const block = this.blocks.get(index);
+station/src/agents/live.ts:215:  /// A stream block's call: attempt#index → the call's id (its deltas after the first name only the index).
+station/src/agents/live.ts:266:    const block = `${attempt}#${typeof chunk.index === "number" ? chunk.index : ""}`;
+station/src/agents/machine-logins.ts:11:import { platform } from "../platform/index.ts";
+station/src/agents/no-keychain.ts:12:import { platform } from "../platform/index.ts";
+station/src/agents/runner.ts:15:import { platform } from "../platform/index.ts";
+station/src/api/admin.ts:41:import { platform } from "../platform/index.ts";
+station/src/api/admin.ts:378:    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, changed: () => deps.events?.presetsChanged() }) : []),
+station/src/api/host.ts:8:import { platform } from "../platform/index.ts";
+station/src/api/overview.ts:6:import type { Accounts } from "../accounts/index.ts";
+station/src/api/overview.ts:10:import { platform } from "../platform/index.ts";
+station/src/api/overview.ts:99:  // (Counted by connect from the viewer's workspace in the index; the processes not cold are the hub's few.)
+station/src/api/overview.ts:168:    // It shares profiles and skills with its workspaces' other stations (share/index.ts).
+station/src/api/routes/accounts.ts:6:import { type Accounts, Refusal } from "../../accounts/index.ts";
+station/src/api/routes/accounts.ts:7:import type { Sharing } from "../../share/index.ts";
+station/src/api/routes/accounts.ts:28:  /// What the station shares with the workspace's other stations (share/index.ts).
+station/src/api/routes/drive.ts:18:import { platform } from "../../platform/index.ts";
+station/src/api/routes/feishu.ts:9:import type { FeishuParts } from "../../feishu/index.ts";
+station/src/api/routes/logins.ts:7:import { Logins, Refused, type Login } from "../../logins/index.ts";
+station/src/api/routes/logins.ts:8:import type { Accounts } from "../../accounts/index.ts";
+station/src/api/routes/presets.ts:10:export type PresetDeps = { presets: Presets; reposDir: () => string; index?: RepoIndex; changed?: () => void };
+station/src/api/routes/presets.ts:24:export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route[] => [
+station/src/api/routes/presets.ts:30:      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list, (await index?.repos(changed)) ?? []) }));
+station/src/api/routes/publish.ts:7:import { NotPublished, publish } from "../../publish/index.ts";
+station/src/api/routes/slack.ts:40:} from "../../slack/index.ts";
+station/src/api/routes/slack.ts:80:  /// The connects' connections and Slack's app API (src/slack/index.ts `makeConnections`).
+station/src/api/routes/xshare.ts:6:import type { ChatShares, Target } from "../../xshare/index.ts";
+station/src/browser/chrome.ts:21:import { platform } from "../platform/index.ts";
+station/src/connects/connects.ts:1:// The connects of one chat platform on the station (Slack's: slack/index.ts; Feishu's: feishu/index.ts): their
+station/src/device/tools.ts:21:import { platform } from "../platform/index.ts";
+station/src/drive/drive.ts:22:import { platform } from "../platform/index.ts";
+station/src/drive/fs.ts:8:import { platform } from "../platform/index.ts";
+station/src/drive/posters.ts:11:import { platform } from "../platform/index.ts";
+station/src/drive/transfers.ts:16:import { platform } from "../platform/index.ts";
+station/src/elevation/module.ts:10:import { platform } from "../platform/index.ts";
+station/src/feedback/notice.ts:11:import { platform } from "../platform/index.ts";
+station/src/feishu/module.ts:9:import { makeFeishu } from "./index.ts";
+station/src/helper/grants.ts:20:import { platform } from "../platform/index.ts";
+station/src/jobs/dirsync.ts:8:// - Compared by content: a file's id is its Git blob id (sha1 of "blob <size>\0" and its bytes), free from the index
+station/src/jobs/dirsync.ts:10://   filter or eol conversion its bytes are not what the index names). The target keeps a manifest of what it wrote into the mirror (path →
+station/src/jobs/dirsync.ts:95:/// `indexed`: its id is the Git index's (a clean tracked file), not yet the hash of its bytes.
+station/src/jobs/dirsync.ts:172:      // A clean tracked file is what the index says; a changed one (or one in a conflict) is hashed.
+station/src/jobs/dirsync.ts:291:  // What would go with the index's id is hashed first: with a Git filter or eol conversion (a .bat checked out with
+station/src/jobs/dirsync.ts:292:  // CRLF, LFS) the bytes on disk are not what the index names, and what the mirror has may be them already.
+station/src/jobs/dirsync.ts:465:/// Pieces sent (`index`: id, size, offset, length) unpacked into `blobs`: each content in its own file, complete when
+station/src/jobs/dirsync.ts:467:export async function putBlobs(blobs: string, index: Json, packed: Buffer): Promise<number> {
+station/src/jobs/dirsync.ts:468:  if (!Array.isArray(index) || index.length > PIECES) throw new Error("bad pieces");
+station/src/jobs/dirsync.ts:470:  for (const p of index) {
+station/src/jobs/dirsync.ts:482:  for (const [hash, size, offset, length] of index as [string, number, number, number][]) {
+station/src/jobs/dirsync.ts:508:  return index.length;
+station/src/jobs/gpu.ts:9:import { platform } from "../platform/index.ts";
+station/src/jobs/jobs.ts:23:import { platform } from "../platform/index.ts";
+station/src/jobs/memory.ts:24:import { type ProcessInfo, platform, treeOf } from "../platform/index.ts";
+station/src/jobs/remote.ts:25:import { platform } from "../platform/index.ts";
+station/src/jobs/remote.ts:636:  /// Refresh the owner index off the station's thread. Only new or previously unreadable records need reading:
+station/src/jobs/remote.ts:676:      // Something arrived or went while reading. Reconcile it before using the index for a cleanup decision.
+station/src/jobs/remote.ts:682:  /// read afresh so a removed or changed record is never taken solely from the index.
+station/src/jobs/remote.ts:888:        // A task notification can update this record while the index is being read; keep that newer state.
+station/src/jobs/remote.ts:1142:  /// Where requests about what stations share go (share.*, share/index.ts): any station of the workspace may ask;
+station/src/jobs/remote.ts:1148:  /// Where requests about chats shared across workspaces go (xshare.*, xshare/index.ts): `inside` those of this
+station/src/logins/index.ts:17:import { platform } from "../platform/index.ts";
+station/src/logins/module.ts:17:import { Logins, type Starter } from "./index.ts";
+station/src/logins/relay.ts:7:import { platform } from "../platform/index.ts";
+station/src/logins/run.ts:17:import { platform } from "../platform/index.ts";
+station/src/logins/tool.ts:8:import type { Logins, Login, Starter } from "./index.ts";
+station/src/main.ts:58:import { platform } from "./platform/index.ts";
+station/src/mesh/bus.ts:97:  /// Who answers stations of other workspaces (chats shared across workspaces, xshare/index.ts).
+station/src/mesh/mesh.ts:78:      // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
+station/src/mesh/peer.ts:112:/// Stations of other workspaces this one shares chats with (xshare/index.ts): whether it may ask one.
+station/src/mesh/peer.ts:245:/// of its requests must name this workspace, and only what is shared with its own is answered (xshare/index.ts). One
+station/src/modules/live.ts:21:import { platform } from "../platform/index.ts";
+station/src/ops/awake.ts:12:import { platform } from "../platform/index.ts";
+station/src/ops/command-output.ts:218:  uvx: ["--from", "--with", "-p", "--python", "--index", "--index-url"],
+station/src/ops/files.ts:8:import { platform } from "../platform/index.ts";
+station/src/ops/group.ts:9:import { platform } from "../platform/index.ts";
+station/src/ops/links.ts:9:import { platform } from "../platform/index.ts";
+station/src/ops/nice.ts:7:import { platform } from "../platform/index.ts";
+station/src/ops/paths.ts:5:import { platform } from "../platform/index.ts";
+station/src/ops/places.ts:26:import { platform } from "../platform/index.ts";
+station/src/ops/processes.ts:9:import { platform } from "../platform/index.ts";
+station/src/ops/restart.ts:7:import { platform } from "../platform/index.ts";
+station/src/ops/shell-path.ts:7:import { platform, type Env } from "../platform/index.ts";
+station/src/ops/waits.ts:4:/// A wait this long is put down with who made it (from the cache, a call takes microseconds; a statement of an index,
+station/src/outflow/chat-index-builder.ts:5:import { outflowChatScopes } from "../store/outflow-index.ts";
+station/src/outflow/chat-index-builder.ts:22:  readonly #timers = new Fibers("outflow chat index");
+station/src/outflow/chat-index-builder.ts:85:      const file = this.#workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./chat-index-worker.ts" : "./outflow/chat-index-worker.js", import.meta.url);
+station/src/outflow/chat-index-worker.ts:6:import { installOutflowChatIndex, outflowChatIndexStep } from "../store/outflow-index.ts";
+station/src/outflow/module.ts:15:import { platform } from "../platform/index.ts";
+station/src/outflow/tailcat.ts:14:import { platform } from "../platform/index.ts";
+station/src/platform/index.ts:236:  /// Spotlight's index of the machine's files, asked with `mdfind` (macOS's): the search finds files through it.
+station/src/platform/processes.ts:2:// imports nothing of the station's (so platform/windows.ts can use it without importing platform/index.ts back).
+station/src/platform/unix.ts:10:import type { Env, Found, Host, Platform } from "./index.ts";
+station/src/platform/windows.ts:12:import type { Env, Found, Host, Platform } from "./index.ts";
+station/src/publish/guest.ts:14:import { attachmentFile, snapshotFile } from "./index.ts";
+station/src/read/archive-mark-worker.ts:4:import { archiveMarksStep } from "../store/archive-mark-index.ts";
+station/src/read/cc-index-builder.ts:6:    const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./cc-index-worker.ts" : "./read/cc-index-worker.js", import.meta.url);
+station/src/read/cc-index-worker.ts:5:import { CcIndexPreparation } from "../store/cc-thread-index.ts";
+station/src/read/host.ts:10:import { platform } from "../platform/index.ts";
+station/src/read/jobs.ts:94:/// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
+station/src/read/machine.ts:506:  // The session going on with each, by the index of runtime sessions (the latest active of two): every session the
+station/src/read/memory.ts:45:/// What a skill's sharing is (share/index.ts): shared from here (config.json `sharedSkills`), a copy of another
+station/src/read/memory.ts:72:    // Which stations have it, which may and do not and why, and why it is not being shared now (share/index.ts Hosted).
+station/src/read/ops-usage.ts:7:import { platform } from "../platform/index.ts";
+station/src/read/outflow.ts:8:import { outflowChatIndexReady, outflowChatScopes } from "../store/outflow-index.ts";
+station/src/read/pool.ts:15:import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+station/src/read/pool.ts:21:import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
+station/src/read/pool.ts:26:import { CcIndexBuilder } from "./cc-index-builder.ts";
+station/src/read/pool.ts:27:import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
+station/src/read/pool.ts:28:import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
+station/src/read/recent-chat.ts:3:import { readGlobalRecentChatIndex, type RecentChatPage } from "../store/chat-list-index.ts";
+station/src/read/session-bindings-builder.ts:3:/// An old binding index is shared by readers while they need it, and stops when none do.
+station/src/read/session-bindings-worker.ts:5:import { sessionBindingsStep } from "../store/session-bindings-index.ts";
+station/src/read/session-list-builder.ts:3:/// A requested old index is shared by the readers waiting for it; abandoned requests stop scheduling more batches.
+station/src/read/session-list-worker.ts:5:import { sessionListStep } from "../store/session-list-index.ts";
+station/src/read/sessions.ts:34:import { platform } from "../platform/index.ts";
+station/src/read/sessions.ts:267:/// before entry `before` (0), and the index of the first (live.rs `before`); in brief (transcript.ts `brief`) with
+station/src/read/sessions.ts:460:      const path = join(repo, f.slice(0, m.index + m[0].length));
+station/src/read/sessions.ts:477:  for (const f of ["FETCH_HEAD", "HEAD", "index"]) {
+station/src/read/store.ts:16:import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
+station/src/read/store.ts:17:import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
+station/src/read/store.ts:18:import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
+station/src/read/store.ts:104:/// Each session's workspace, by the index of them (store/schema.ts sessions_ws, named: by key, SQLite took the sessions'
+station/src/read/store.ts:143:/// Histories visible in a search. The existing index is ordered by connect, then workspace, so first seek the distinct
+station/src/read/store.ts:159:/// The old whole-table order put equal timestamps in rowid order; retain that when using either partial index.
+station/src/read/store.ts:173:/// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts
+station/src/read/store.ts:182:/// (when, and its key or chat id as text), `?3` of them; each by the index of those archived.
+station/src/read/store.ts:457:/// that one is what is unread for its author), by the index of its messages (store/schema.ts entries_said): what a
+station/src/read/store.ts:496:/// index of its messages alone (store/schema.ts entries_said): from the messages themselves, each was a page read.
+station/src/read/store.ts:684:  // The latest of each kind (cards, and options from before cards), each read by its own index.
+station/src/read/store.ts:743:/// An agent's latest message in a chat during a turn (`?2` to `?3`, ms), by the index of agents' messages by time (store/
+station/src/read/store.ts:762:/// need_help and need_decision, and block from before: store/rows.ts `saidBefore`), by the index of its turns by their
+station/src/read/store.ts:818:    // the time index, so old answered cards do not have to be visited. Times need not follow entry order.
+station/src/read/store.ts:834:        // If timestamps are far out of sequence, finish by the time index instead of walking old answers.
+station/src/read/store.ts:942:/// database keeps them counted (store/schema.ts SESSION_TURNS), its messages not delivered yet by the index of those
+station/src/read/store.ts:972:/// A session's latest turn, as `sessionStats` has it, by the index of its turns alone.
+station/src/read/store.ts:1015:/// The jobs up (running, or a service stopped on its own that holds its port), newest first: by the index of their
+station/src/read/store.ts:1023:/// A session's latest jobs by when they were made (the index on their session, from its end), and those of it still up
+station/src/read/store.ts:1024:/// (running, or a service being started again: by the index of those up): what a device's list of them shows, those
+station/src/read/store.ts:1045:/// The jobs running of some sessions (`?`: a JSON list of their keys), the latest first, by an index (of the jobs running).
+station/src/read/store.ts:1058:  // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
+station/src/read/store.ts:1295:/// A session's turns, the first first; `last`: only that many of the latest (by the index of its turns, read from its
+station/src/read/tail.ts:16:/// written), the index of the entry the next line's first is, and what reading keeps between lines there (`inner`).
+station/src/read/tail.ts:17:export type Mark = { offset: number; index: number; inner: [string, number][] };
+station/src/read/tail.ts:89:  /// New entries since the last read, with the index of the first (marking: none, only counted).
+station/src/read/tail.ts:154:        const index = had + read;
+station/src/read/tail.ts:155:        const last = this.marks.at(-1) ?? { offset: 0, index: 0 };
+station/src/read/tail.ts:156:        if (index - last.index >= MARK_EVERY || (index > last.index && base + end - last.offset >= MARK_BYTES)) this.marks.push({ offset: base + end, index, inner: [...this.state.inner] });
+station/src/read/tail.ts:259:  /// New entries since the last read, with the index of the first (all from the first that changed when an earlier
+station/src/read/transcript.ts:89: * it is read again by its index when it is): a call by what says what it does, a result without what it gave (Slack's
+station/src/read/transcripts.ts:143:  let mark: Mark = { offset: 0, index: 0, inner: [] };
+station/src/read/transcripts.ts:145:    if (each.index > from) break;
+station/src/read/transcripts.ts:153:  let index = mark.index;
+station/src/read/transcripts.ts:163:      if (index >= from && index < to) out.push(e);
+station/src/read/transcripts.ts:164:      index++;
+station/src/read/transcripts.ts:166:    return index < to;
+station/src/read/usage-batched.ts:11:/// The requested time index, ownership lookup, and the selected session's minute index.
+station/src/read/usage-batched.ts:13:  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
+station/src/read/usage-batched.ts:20:    selected: "SELECT session FROM usage_compact INDEXED BY " + index + " WHERE " + scope + "minute >= ?1 AND minute < ?2",
+station/src/read/usage-batched.ts:26:    pendingRange: "SELECT session, minute, pending FROM usage_compact INDEXED BY " + index + " WHERE " + scope + "minute >= ?1 AND minute < ?2",
+station/src/read/usage-batched.ts:32:/// workspace cannot duplicate a session from the named workspace, and the minute index orders sessions for DISTINCT.
+station/src/read/usage-batched.ts:34:  const index = scope === "all" ? "usage_compact_time" : "usage_compact_scope_time";
+station/src/read/usage-batched.ts:39:      SELECT DISTINCT session FROM usage_compact INDEXED BY ${index} WHERE ${restriction}minute = ?1 AND records > 0
+station/src/read/usage-batched.ts:399:      // Usually only a few buckets are pending. If there are many, compare that index with the requested time
+station/src/read/usage-summary-blocks.ts:28:  const index = !scoped ? `${source}_time` : size === 1 ? `${source}_scope_time` : undefined;
+station/src/read/usage-summary-blocks.ts:34:      FROM ${source}${index === undefined ? "" : ` INDEXED BY ${index}`} WHERE ${scope}${level}${period} >= ?1 AND ${period} < ?2`,
+station/src/read/usage.ts:282:  // up again here needlessly rereads the sessions index for every usage page, including on a cold database.
+station/src/read/views.ts:532:      // The sidebar's by the index of those not archived, not every session the station ever had.
+station/src/resources/module.ts:12:import { platform } from "../platform/index.ts";
+station/src/resources/watch.ts:18:import { type ProcessInfo, treeOf } from "../platform/index.ts";
+station/src/screens/android.ts:11:import { platform } from "../platform/index.ts";
+station/src/screens/linux-portal.py:98:                queue.extend(element.get_child_at_index(index) for index in range(count))
+station/src/screens/linux-portal.py:434:    def type_keymap_events(self, events, index):
+station/src/screens/linux-portal.py:437:        if index == len(events):
+station/src/screens/linux-portal.py:440:        code, down = events[index]
+station/src/screens/linux-portal.py:442:                    lambda: GLib.timeout_add(15, self.type_keymap_events, events, index + 1))
+station/src/screens/linux-portal.py:446:    def type_character(self, text, index, pressed=False, done=None):
+station/src/screens/linux-portal.py:450:        if index >= len(text):
+station/src/screens/linux-portal.py:457:        char = text[index]
+station/src/screens/linux-portal.py:461:        next_index = index + 1 if pressed else index
+station/src/screens/linux-x11.py:99:                current = [mapping[(code - first.value) * per.value + index] for index in range(per.value)]
+station/src/screens/linux-x11.py:167:    def type_character(self, text, index, pressed=False):
+station/src/screens/linux-x11.py:173:            GLib.timeout_add(20, self.finish_character, text, index)
+station/src/screens/linux-x11.py:175:        if index >= len(text):
+station/src/screens/linux-x11.py:179:        char = text[index]
+station/src/screens/linux-x11.py:183:        GLib.timeout_add(20, self.type_character, text, index, True)
+station/src/screens/linux-x11.py:186:    def finish_character(self, text, index):
+station/src/screens/linux-x11.py:188:        self.type_character(text, index + 1)
+station/src/screens/sim-mask.ts:20:    if (text.startsWith("end", stream.index - 3)) continue;
+station/src/screens/sim-mask.ts:21:    const start = stream.index + stream[0].length;
+station/src/search/files.ts:13:import { platform } from "../platform/index.ts";
+station/src/search/module.ts:1:// What a search finds on this station (docs/search.md) as a part of the station (parts.ts): its index of the station's
+station/src/search/search.ts:16:/// `building`: always false (said to the clients that showed an index still being built).
+station/src/search/search.ts:34:    // The index an earlier station kept: there is none now.
+station/src/search/sources.ts:46:/// entries_letters index or old letter metadata on non-messages can make the legacy lookup walk more entries.
+station/src/search/sources.ts:390:        session: session.key, index: i, entry, ...(tool ? { tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}),
+station/src/search/sources.ts:510:    // Seek to the next session in the jobs index, rather than visiting every session without a job or counting a
+station/src/search/tool.ts:59:  if (typeof h.index === "number") where.push(`history #${h.index}`);
+station/src/services.ts:23:import { platform } from "./platform/index.ts";
+station/src/services.ts:142:/// Start the store before the usage-index worker, and keep the same store available to the station's other parts.
+station/src/sessions/accounts.ts:64:  /// Lets the pool have a profile checked again (accounts/index.ts `check`).
+station/src/sessions/agent-home.ts:22:/// workspace's; the station shares the home workspace's skills only (share/index.ts).
+station/src/sessions/agents.ts:40:import { platform } from "../platform/index.ts";
+station/src/sessions/agents.ts:52:import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
+station/src/sessions/agents.ts:53:import { Sharing } from "../share/index.ts";
+station/src/sessions/agents.ts:54:import { ChatShares } from "../xshare/index.ts";
+station/src/sessions/archive.ts:45:import { platform } from "../platform/index.ts";
+station/src/sessions/cc.ts:8:import { CcSessionsUnavailable } from "../store/cc-thread-index.ts";
+station/src/sessions/cold.ts:12:import { platform } from "../platform/index.ts";
+station/src/sessions/cold.ts:73:      // Those active (running, or a service waiting to start again), by their index: not every job ever run.
+station/src/sessions/config.ts:94:/// found (accounts/index.ts), which it runs besides those config.json names; none for one that runs no runtime (a
+station/src/sessions/config.ts:175:/// every profile not withheld from it. A copy of another station's profile (share/index.ts) only in the workspaces that
+station/src/sessions/conversations.ts:157:          copy = await take(path.slice(0, line.index));
+station/src/sessions/hub.ts:78:/// A chat of another workspace shared with this one, as chat_list lists it (xshare/index.ts `Borrowed`).
+station/src/sessions/hub.ts:202:  readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
+station/src/sessions/hub.ts:969:  /// Hooks chat_list up to the chats other workspaces share with this one (xshare/index.ts).
+station/src/sessions/lifecycle.ts:19:import { sessionBindingsReady } from "../store/session-bindings-index.ts";
+station/src/sessions/lifecycle.ts:20:import { archiveMarksReady } from "../store/archive-mark-index.ts";
+station/src/sessions/live.ts:97:/// found), to go on from; and up to `limit` entries just before `before`, in brief or whole, with the index of the
+station/src/sessions/live.ts:443:  /// Follows a session: first the transcript entries from index `from` on (only the `last` of them, when given: a long
+station/src/sessions/live.ts:496:  /// Up to `limit` transcript entries just before index `before`, and the index of the first: from what is watched and
+station/src/sessions/local-links.ts:10:import { platform } from "../platform/index.ts";
+station/src/sessions/local-links.ts:224:    if (inCode(m.index!)) continue;
+station/src/sessions/local-links.ts:228:    defined.push([m.index!, m.index! + m[0].length]);
+station/src/sessions/local-links.ts:259:    if (!inCode(m.index!) && !found.some((f) => m.index! >= f.start && m.index! < f.end)) found.push({ inline: false, destination: m[1]!, start: m.index!, end: m.index! + m[0].length });
+station/src/sessions/messages.ts:135:/// sent in, whose chats (and those shared with it to write in) it reaches (null: any, as xshare/index.ts checked).
+station/src/sessions/others.ts:82:/// The key a thread goes by where it is shared (xshare/index.ts): its own session's, else its first agent's.
+station/src/sessions/others.ts:170:/// `ws`: the workspace it was asked in, whose chats it reads (absent: any, as xshare/index.ts checked).
+station/src/sessions/others.ts:187:/// must be shared with its workspace when it is not this one's (xshare/index.ts).
+station/src/sessions/peer-files.ts:60:/// time). `ws`: the workspace it was asked in, whose chats it reads (null: any, as xshare/index.ts checked).
+station/src/sessions/peer-files.ts:262:/// `ws` (null: any, as xshare/index.ts checked): whole after the request, or (from a station from before) a chunk of it.
+station/src/sessions/post-block-builder.ts:13:/// Index only the old thread suffixes a delivery needs. Concurrent deliveries share the work; each step gives other
+station/src/sessions/post-block-builder.ts:19:  readonly #timers = new Fibers("post block index");
+station/src/sessions/presets.ts:521:        const [config, head] = await Promise.all([readFile(join(git, "config"), "utf8").catch(() => ""), stat(join(git, "index")).catch(() => stat(git).catch(() => null))]);
+station/src/slack/apps.ts:246:/// An existing app brought up to date as the station maintains it (index.ts): the native stop event and agent view
+station/src/slack/module.ts:10:import { makeConnections, slackShown } from "./index.ts";
+station/src/store/archive-mark-index.ts:67:  if (rows.length !== 2 || rows[0]?.kind !== "kept" || rows[1]?.kind !== "pins") throw new Error("archive mark index version marker is missing");
+station/src/store/archive-mark-index.ts:68:  for (const row of rows) if (row.version !== VERSION) throw new Error(`archive mark index version ${row.version} is incompatible with ${VERSION}`);
+station/src/store/cc-thread-index.ts:37:      CREATE INDEX cc_session_order ON cc_session_rows(session,last_at DESC,created_at DESC,thread DESC)
+station/src/store/cc-thread-index.ts:39:      CREATE INDEX cc_rows_thread ON cc_session_rows(thread,session);
+station/src/store/cc-thread-index.ts:114:  if (row?.version !== VERSION) throw new Error(`copy destination index version ${row?.version ?? "missing"} is incompatible with ${VERSION}`);
+station/src/store/chat-list-home-index.ts:1:// An incremental index for the default part of home. A complete home page also needs the explicit workspace and
+station/src/store/chat-list-home-index.ts:5:import type { RecentChatPage } from "./chat-list-index.ts";
+station/src/store/chat-list-home-index.ts:48:        CREATE INDEX recent_home_order ON recent_home_rows(at DESC, said_at DESC, created_at DESC, thread DESC);
+station/src/store/chat-list-home-overlap.ts:4:import { installRecentHomeIndex, preparedDefaultHomeTotal } from "./chat-list-home-index.ts";
+station/src/store/chat-list-home-overlap.ts:5:import type { RecentChatPage } from "./chat-list-index.ts";
+station/src/store/chat-list-home-overlap.ts:29:      CREATE INDEX recent_home_overlap_by_thread ON recent_home_overlap_rows(thread, ws);
+station/src/store/chat-list-index.ts:29:CREATE INDEX recent_chat_order ON recent_chat_rows (at DESC, said_at DESC, created_at DESC, thread DESC);
+station/src/store/chat-list-prepare.ts:4:  settleRecentHomeOrderStep, settleRecentHomeSessionStep } from "./chat-list-home-index.ts";
+station/src/store/chat-list-prepare.ts:6:import { installRecentChatIndex, readGlobalRecentChatIndex, stepRecentChatIndex } from "./chat-list-index.ts";
+station/src/store/chat-list-schema.ts:14:/// cannot use this version must migrate or rebuild it after handover; they must not silently read a partial index.
+station/src/store/chat-list-schema.ts:26:      throw new Error(`recent chat ${part} index has an incompatible or missing version`);
+station/src/store/chat-list-schema.ts:32:  if (!marker.component || marker.current !== 1) throw new Error(`recent chat ${part} index has an incompatible or missing version`);
+station/src/store/chat-list-scope-build.ts:13:// Most stations have few connections, so seek each workspace in the existing covering index. If connections keep
+station/src/store/chat-list-scope-journal.ts:131:      CREATE INDEX recent_scope_candidates_session ON recent_scope_candidates(ws, session, thread);
+station/src/store/chat-list-scope-journal.ts:140:      CREATE INDEX recent_scope_visibility_home ON recent_scope_visibility_dirty(home_ws) WHERE home_ws IS NOT NULL;
+station/src/store/chat-list-scope-journal.ts:147:      CREATE INDEX recent_scope_sources_session ON recent_scope_sources(ws, session, thread);
+station/src/store/chat-list-scope-journal.ts:148:      CREATE INDEX recent_scope_sources_thread ON recent_scope_sources(thread, ws, session);
+station/src/store/chat-list-scope-journal.ts:151:      CREATE INDEX recent_scope_order ON recent_scope_rows(ws, at DESC, said_at DESC, created_at DESC, thread DESC);
+station/src/store/chat-list-scope-journal.ts:152:      CREATE INDEX recent_scope_rows_thread ON recent_scope_rows(thread, ws);
+station/src/store/chat-list-scope-rows.ts:4:import type { RecentChatPage } from "./chat-list-index.ts";
+station/src/store/chat-list-scope-source.ts:1:// Bounded sources for preparing a workspace's recent-chat index. The caller must journal changes while building:
+station/src/store/outflow-index.ts:1:// A program's chat page is ordered by the last message in each workspace. Build its index only when it is first
+station/src/store/outflow-index.ts:28:      -- One ordered index locates both dirty rows and clean pages, so settling changes need not maintain two extra indexes.
+station/src/store/outflow-index.ts:29:      CREATE INDEX outflow_chat_scope_order ON outflow_chat_order (scope, dirty, at DESC, thread DESC);
+station/src/store/outflow-index.ts:53:      -- an ignored insert only leaves a harmless pending check, never a premature change to the index.
+station/src/store/outflow-index.ts:103:  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("outflow index batch must be positive");
+station/src/store/post-blocks.ts:100:/// Index one requested suffix, newest first. The potentially cold history is read outside the write transaction. Once
+station/src/store/rows.ts:574:/// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
+station/src/store/rows.ts:579:/// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
+station/src/store/rows.ts:590:/// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
+station/src/store/schema.ts:37:CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
+station/src/store/schema.ts:38:CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
+station/src/store/schema.ts:39:-- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
+station/src/store/schema.ts:41:CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
+station/src/store/schema.ts:69:CREATE INDEX IF NOT EXISTS sessions_live ON sessions (last_active_at) WHERE archived_at IS NULL;
+station/src/store/schema.ts:71:CREATE INDEX IF NOT EXISTS sessions_running ON sessions (key) WHERE running = 1;
+station/src/store/schema.ts:73:CREATE INDEX IF NOT EXISTS sessions_by_creator ON sessions (created_by, created_at);
+station/src/store/schema.ts:100:CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
+station/src/store/schema.ts:112:CREATE INDEX IF NOT EXISTS threads_at ON threads (channel, thread_ts);
+station/src/store/schema.ts:133:CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
+station/src/store/schema.ts:138:CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
+station/src/store/schema.ts:141:CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
+station/src/store/schema.ts:143:CREATE INDEX IF NOT EXISTS entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
+station/src/store/schema.ts:145:CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%';
+station/src/store/schema.ts:153:CREATE INDEX IF NOT EXISTS deliveries_pending ON deliveries (session) WHERE delivered_at IS NULL;
+station/src/store/schema.ts:154:CREATE INDEX IF NOT EXISTS deliveries_session ON deliveries (session, thread);
+station/src/store/schema.ts:157:CREATE INDEX IF NOT EXISTS deliveries_taken ON deliveries (session, delivered_at) WHERE delivered_at IS NOT NULL;
+station/src/store/schema.ts:193:CREATE INDEX IF NOT EXISTS turns_by_session ON turns (session_key, started_at);
+station/src/store/schema.ts:196:CREATE INDEX IF NOT EXISTS turns_ended ON turns (ended_at);
+station/src/store/schema.ts:224:CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
+station/src/store/schema.ts:228:CREATE INDEX IF NOT EXISTS jobs_state ON jobs (state);
+station/src/store/schema.ts:229:CREATE INDEX IF NOT EXISTS jobs_up ON jobs (state, port);
+station/src/store/schema.ts:235:CREATE INDEX IF NOT EXISTS job_notices_by_job ON job_notices (job_id, at);
+station/src/store/schema.ts:283:CREATE INDEX IF NOT EXISTS closed_cards_at ON closed_cards (at);
+station/src/store/schema.ts:284:CREATE INDEX IF NOT EXISTS closed_cards_thread_at ON closed_cards (thread, at);
+station/src/store/schema.ts:312:CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
+station/src/store/schema.ts:314:CREATE INDEX IF NOT EXISTS usage_session ON usage (session, at);
+station/src/store/schema.ts:328:CREATE INDEX IF NOT EXISTS runtime_sessions_by_id ON runtime_sessions (id);
+station/src/store/schema.ts:329:CREATE INDEX IF NOT EXISTS sessions_by_runtime_id ON sessions (runtime_session_id) WHERE runtime_session_id IS NOT NULL;
+station/src/store/schema.ts:353:CREATE INDEX IF NOT EXISTS opened_chats_by_key ON opened_chats (parent_station, parent, key, child_station);
+station/src/store/schema.ts:377:CREATE INDEX IF NOT EXISTS published_by_thread ON published (thread);
+station/src/store/schema.ts:430:  // The index exists only where a previous version could already have switched a session before this field was added.
+station/src/store/schema.ts:439:/// Some stations already built this index while adding per-transcript runtimes. It lets us recover a session's first
+station/src/store/schema.ts:440:/// runtime if it changed before original_runtime was introduced, without building an index over history at startup.
+station/src/store/schema.ts:442:  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'runtime_sessions_ordered'").get() !== undefined;
+station/src/store/schema.ts:489:  db.exec(`CREATE INDEX IF NOT EXISTS threads_home ON threads (home) WHERE home IS NOT NULL;
+station/src/store/schema.ts:490:    CREATE INDEX IF NOT EXISTS threads_own ON threads (surface) WHERE home IS NULL AND hidden_at IS NULL;`);
+station/src/store/schema.ts:507:  db.exec("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL");
+station/src/store/schema.ts:508:  db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");
+station/src/store/schema.ts:510:  db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
+station/src/store/schema.ts:522:  db.exec("CREATE INDEX IF NOT EXISTS entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
+station/src/store/schema.ts:732:/// Keep an existing quarter index for older station processes. A fresh database can start one empty; current readers
+station/src/store/schema.ts:741:      // Current readers use usage_detail. An obsolete quarter index cannot be made complete without reading old calls.
+station/src/store/schema.ts:766:/// before it, looked up by its index.
+station/src/store/schema.ts:777:/// The old append-only compaction table, retained for older station processes; current reads use the newer index.
+station/src/store/schema.ts:784:CREATE INDEX usage_compactions_at ON usage_compactions (at);
+station/src/store/schema.ts:854:const ENTRIES_SAID_INDEX = "CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL";
+station/src/store/schema.ts:945:CREATE INDEX letter_deliveries_pending ON letter_deliveries (session) WHERE delivered_at IS NULL;
+station/src/store/schema.ts:1055:/// index), 65 pages for a session of 1,900 turns, each from the disk on a station short of memory (2026-11-02).
+station/src/store/schema.ts:1209:/// - entries_said: a chat's messages after where a viewer read, counted from the index alone (read/store.ts `unreadOf`;
+station/src/store/schema.ts:1220:  db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+station/src/store/schema.ts:1221:  db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
+station/src/store/schema.ts:1224:  db.exec("CREATE INDEX IF NOT EXISTS sessions_put_away ON sessions (archived_at, key) WHERE archived_at IS NOT NULL");
+station/src/store/schema.ts:1225:  db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
+station/src/store/schema.ts:1226:  db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
+station/src/store/schema.ts:1235:  // Store.open would build this index later in addTellIndexes. Make it first for this upgrade, after old letters are marked.
+station/src/store/schema.ts:1237:  const hasIndex = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(name) !== undefined;
+station/src/store/schema.ts:1258:  // The sessions counted by connect and workspace (store.ts SESSION_COUNTS, in every overview): from the index alone.
+station/src/store/schema.ts:1259:  db.exec("CREATE INDEX IF NOT EXISTS sessions_by_connect ON sessions (connect, ws)");
+station/src/store/schema.ts:1260:  // Which workspace each session is in, by its key (read/store.ts SEEN_OF, in each usage read): from the index alone,
+station/src/store/schema.ts:1262:  db.exec("CREATE INDEX IF NOT EXISTS sessions_ws ON sessions (key, ws)");
+station/src/store/session-bindings-index.ts:6:export const SESSION_BINDINGS_PENDING = "session binding index is still being prepared";
+station/src/store/session-bindings-index.ts:69:  if (version !== VERSION) throw new Error(`session binding index version ${version} is incompatible with ${VERSION}`);
+station/src/store/session-bindings-index.ts:74:  if (meta === undefined) throw new Error("session binding index version marker is missing");
+station/src/store/session-bindings-index.ts:85:    if (meta === undefined) throw new Error("session binding index version marker is missing");
+station/src/store/session-counts.ts:7:  if (version !== VERSION) throw new Error(`session count index version ${version} is incompatible with ${VERSION}`);
+station/src/store/session-counts.ts:107:  if (meta === undefined) throw new Error("session count index version marker is missing");
+station/src/store/session-counts.ts:120:    if (meta === undefined) throw new Error("session count index version marker is missing");
+station/src/store/session-list-index.ts:2:// keep the index current even while an older station writes to the same database.
+station/src/store/session-list-index.ts:6:export const SESSION_LIST_PENDING = "session list index is still being prepared";
+station/src/store/session-list-index.ts:12:// The scope contains one workspace, and at most one more for the home workspace's pre-workspace sessions. The index
+station/src/store/session-list-index.ts:36:const matches = (index: string, row: string) => `${index}.kind = ${kind(row)} AND ${index}.ws = ${scope(row)}
+station/src/store/session-list-index.ts:37:  AND ${index}.archived = ${archive(row)} AND ${index}.connect = ${row}.connect AND ${index}.session = ${row}.key`;
+station/src/store/session-list-index.ts:64:      CREATE INDEX session_list_connect ON session_list_rows (archived, connect, kind, ws, session);
+station/src/store/session-list-index.ts:87:  if (version !== VERSION) throw new Error(`session list index version ${version} is incompatible with ${VERSION}`);
+station/src/store/session-list-index.ts:92:  if (meta === undefined) throw new Error("session list index version marker is missing");
+station/src/store/session-list-index.ts:103:    if (meta === undefined) throw new Error("session list index version marker is missing");
+station/src/store/session-up-jobs.ts:79:  if (meta === undefined || meta.version !== VERSION) throw new Error(`session up jobs index version ${meta?.version ?? "missing"} is incompatible with ${VERSION}`);
+station/src/store/store.ts:45:import { installSessionListIndex } from "./session-list-index.ts";
+station/src/store/store.ts:46:import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
+station/src/store/store.ts:47:import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
+station/src/store/store.ts:54:import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
+station/src/store/store.ts:58:// What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
+station/src/store/store.ts:85:/// A session's messages not delivered yet and its latest turn (`statsOf`): what is not delivered by the index of those
+station/src/store/store.ts:175:// an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
+station/src/store/store.ts:177:// The login cards are read by their own index, named: with no statistics to go by, SQLite took the index of every
+station/src/store/store.ts:182:// Keep the grouping on the recent covering index, but fetch result text only after the session's workspace is known.
+station/src/store/store.ts:192:/// index of all it was given by when, from the first).
+station/src/store/store.ts:194:// The three ways a closed card's wait can have ended after it: each found in its own existing index, without reading
+station/src/store/store.ts:227:/// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
+station/src/store/store.ts:237:// +e.n keeps the after-position as a filter: otherwise SQLite picks it as the lower index bound and reads the entire
+station/src/store/store.ts:652:    // Before this field existed a station with the ordered index could already have changed runtime. Its first
+station/src/store/store.ts:653:    // transcript recovers the original. Without the index no older station could have made such a change.
+station/src/store/store.ts:1058:    const ordered = messages.map((m, index) => ({ ...m, index })).sort((a, b) => a.thread - b.thread || a.n - b.n);
+station/src/store/store.ts:1078:        if (next !== null) out[m.index] = next.ts;
+station/src/store/store.ts:1313:    // The delivery index groups by session and thread. Seek the last row within each joined thread rather than sort
+station/src/store/store.ts:1520:  /// counts (accounts/index.ts, sessions/archive-policy.ts).
+station/src/store/store.ts:1754:  /// Of `threads`, those the session has already read something from: each by the index of its deliveries by session
+station/src/store/store.ts:1899:    // The latest of each kind (cards, and options from before cards), each read by its own index.
+station/src/store/store.ts:2161:      // The latest turn's alone (by the index on them): each says it, so one with none had none before it to say. Asked
+station/src/store/store.ts:2242:  /// The session's latest turn with its id (as `listTurns` lists them), by the index of its turns: none before it read.
+station/src/store/store.ts:2301:  /// for the station's own periodic work over the sessions at hand, not every session ever: a few index lookups each.
+station/src/store/store.ts:2453:  /// A session's jobs (all sessions' with null), newest first. A session's by its index: asked as one statement for
+station/src/store/store.ts:2460:  /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and
+station/src/store/store.ts:2857:    this.db.exec("DROP INDEX IF EXISTS threads_archived; DROP TABLE IF EXISTS items;");
+station/src/store/usage-chat-stats.ts:94:CREATE INDEX usage_chat_members_session ON usage_chat_members (session, thread);
+station/src/store/usage-chat-stats.ts:95:CREATE INDEX usage_chat_members_session_present ON usage_chat_members (session, present, thread);
+station/src/store/usage-chat-stats.ts:96:CREATE INDEX usage_chat_members_workspace ON usage_chat_members (thread, present, ws);
+station/src/store/usage-chat-stats.ts:102:CREATE INDEX usage_chat_dirty_scope_workspace ON usage_chat_dirty_scope (kind, ws, session);
+station/src/store/usage-compact.ts:93:      -- Inserts and value changes make the bucket pending. Readers check that index on each reuse; accounting the
+station/src/store/usage-compact.ts:94:      -- bucket records its final state before it leaves the index, in the total worker's already-batched transaction.
+station/src/store/usage-compact.ts:178:      CREATE INDEX usage_compact_time ON usage_compact (minute, session);
+station/src/store/usage-compact.ts:179:      CREATE INDEX usage_compact_scope_time ON usage_compact (scope, minute, session);
+station/src/store/usage-compact.ts:180:      CREATE INDEX usage_compact_pending_scope ON usage_compact (scope, session) WHERE pending = 1;
+station/src/store/usage-compact.ts:181:      CREATE INDEX usage_compact_pending_session ON usage_compact (session) WHERE pending = 1;
+station/src/store/usage-compact.ts:196:      CREATE INDEX usage_compact_moving_by_session ON usage_compact_moving_scope (session, scope);
+station/src/store/usage-compact.ts:512:  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
+station/src/store/usage-compact.ts:522:  // Find sessions through the covering time index, then read each session's buckets together in primary-key order.
+station/src/store/usage-compact.ts:525:    SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
+station/src/store/usage-compact.ts:558:  const index = viewer === null ? "usage_compact_time" : "usage_compact_scope_time";
+station/src/store/usage-compact.ts:574:      FROM (SELECT DISTINCT c.session, c.minute FROM usage_compact c INDEXED BY ${index}
+station/src/store/usage-compact.ts:583:      SELECT DISTINCT session FROM usage_compact INDEXED BY ${index}
+station/src/store/usage-compact.ts:620:// After an edit, there may be a later main call among the old rows. The session/time index gives an upper bound on
+station/src/store/usage-compactions.ts:9:// subagent calls; its replacement takes the result already maintained in the main-call index.
+station/src/store/usage-compactions.ts:24:CREATE INDEX usage_compaction_events_at ON usage_compaction_events (at);
+station/src/store/usage-detail.ts:87:CREATE INDEX usage_detail_scope_ws ON usage_detail_scope (ws, done, session);
+station/src/store/usage-detail.ts:90:CREATE INDEX usage_detail_lookup_scope ON usage_detail_lookup (scope, level, bucket, session);
+station/src/store/usage-detail.ts:91:CREATE INDEX usage_detail_lookup_time ON usage_detail_lookup (level, bucket, session);
+station/src/store/usage-detail.ts:94:CREATE INDEX usage_detail_dirty_by_scope ON usage_detail_dirty_scope (scope, session);
+station/src/store/usage-detail.ts:212:/// Once the old index was found incomplete, its partial contents are never mistaken for a complete history, even if
+station/src/store/usage-detail.ts:227:/// untouched and no old calls are enumerated; an already complete index continues to be used as before.
+station/src/store/usage-detail.ts:436:  const visit = (a: bigint, b: bigint, index: number): void => {
+station/src/store/usage-detail.ts:438:    const level = levels[index]!;
+station/src/store/usage-detail.ts:443:      if (index + 1 < levels.length) visit(a, b, index + 1);
+station/src/store/usage-detail.ts:446:    if (index + 1 < levels.length) visit(a, first * size, index + 1);
+station/src/store/usage-detail.ts:448:    if (index + 1 < levels.length) visit(last * size, b, index + 1);
+station/src/store/usage-history.ts:21:/// The calls from `?1` (ms) on, by workspace and quarter: those the old statistics did not hold, by the index on their
+station/src/store/usage-history.ts:80:/// - the calls since then, read by the index on their time: the hours or days since those quarters stopped, not the
+station/src/store/usage-minutes.ts:31:CREATE INDEX IF NOT EXISTS usage_minute_scope_ws ON usage_minute_scope (ws, done, session);
+station/src/store/usage-retire.ts:25:/// Seek the first batch by primary key. Every row deletion also releases its index entries; dropping a populated
+station/src/store/usage-retire.ts:26:/// index or table directly would visit its entire B-tree under one write lock.
+station/src/store/usage-summary-blocks.ts:45:      CREATE INDEX usage_summary_blocks_shadow_time ON usage_summary_blocks_shadow (minute, ${dimensions.join(", ")});
+station/src/store/usage-summary-blocks.ts:46:      CREATE INDEX usage_summary_blocks_shadow_scope_time ON usage_summary_blocks_shadow (scope, minute, ${dimensions.join(", ")});
+station/src/store/usage-summary-blocks.ts:49:      CREATE INDEX usage_summary_blocks_dirty_time ON usage_summary_blocks_dirty (minute, ${dimensions.join(", ")});
+station/src/store/usage-summary-blocks.ts:50:      CREATE INDEX usage_summary_blocks_dirty_old ON usage_summary_blocks_dirty (old_scope, minute, ${dimensions.join(", ")});
+station/src/store/usage-summary-blocks.ts:51:      CREATE INDEX usage_summary_blocks_dirty_new ON usage_summary_blocks_dirty (new_scope, minute, ${dimensions.join(", ")});
+station/src/store/usage-summary-blocks.ts:55:      CREATE INDEX usage_summary_blocks_time ON usage_summary_blocks (level, bucket, scope, ${dimensions.join(", ")});
+station/src/store/usage-summary-blocks.ts:80:/// The global cursor follows the primary key; a requested workspace seeks its own time index.
+station/src/store/usage-summary-blocks.ts:89:/// Only the requested minutes, in the same order as their scope/time index.
+station/src/store/usage-unified.ts:13:  // Neither a partially built detail index nor partial old quarters can represent a complete history.
+station/src/store/usage.ts:143:  // Each half by the index on when turns ended, the sessions made distinct here: asked as one OR, or as a UNION or a
+station/src/store/usage.ts:154:/// A session's turns that began from `?2` until `?3`, oldest first, by the index on them (schema.ts turns_by_session).
+station/src/store/usage.ts:164:/// until `until`. A few rows, by the index on them: the usage counter asks at each part of a transcript it reads (every
+station/src/store/usage.ts:212:  // A partially built index cannot prove which call was last. Do not scan the raw history or present an older call as
+station/src/store/usage.ts:213:  // current; the context is unavailable until it can be maintained independently of the old index.
+station/src/store/usage.ts:224:/// keeps them (schema.ts USAGE_COMPACTIONS): a few rows, by their time's index.
+station/src/store/watch-jobs.ts:11:/// Install the lookup with the writers, and bring over only watches running now through the jobs' state index.
+station/src/store/watch-jobs.ts:21:      CREATE INDEX active_watch_jobs_session ON active_watch_jobs (session);
+station/src/store/widget-sources.ts:108:      CREATE INDEX widget_source_by_path ON widget_source_rows (thread,path,at DESC,n,slot);
+station/src/store/widget-sources.ts:137:  if (!meta || meta.version !== VERSION) throw new Error(`widget source index version ${meta?.version ?? "missing"} is incompatible with ${VERSION}`);
+station/src/store/widget-sources.ts:151:// The letter index also contains rare non-message entries; take those as candidates so each batch stays bounded.
+station/src/store/widget-sources.ts:184:  const indexes = db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE type='index'
+station/src/tools/feedback.ts:8:import { platform } from "../platform/index.ts";
+station/src/updates/archive.ts:8:/** A file of the archive: its path ("assets/index-….js", "/" between directories) and bytes. */
+station/src/updates/channel.ts:17:import { platform } from "../platform/index.ts";
+station/src/updates/codex-repair.ts:7:import { platform as machine } from "../platform/index.ts";
+station/src/updates/release.ts:8:import { platform as machine } from "../platform/index.ts";
+station/src/updates/runtimes.ts:11:import { type Found as PlatformFound, type NodeBuild, platform } from "../platform/index.ts";
+station/src/updates/runtimes.ts:86:/// index revalidated (the prefetched tarball does not refresh it, and a cached index from before this release could
+station/src/updates/updates.ts:51:import { platform as machine } from "../platform/index.ts";
+station/src/updates/versions.ts:7:import { platform as machine } from "../platform/index.ts";
+station/src/usage/module.ts:116:    log.warn("usage", stopped ? "usage indexes could not be removed" : "usage index writers could not be stopped", { error: (error as Error).message });
+station/src/vault/secrets.ts:33:import { UseIndex } from "./use-index.ts";
+station/src/vault/secrets.ts:154:  /// Background use-index work waits for the previous process and gives foreground database writes priority.
+station/src/vault/secrets.ts:395:    // A large old database may still have been filling its index: access can change while that read waits.
+station/src/vault/signin-save-builder.ts:6:import { forgetSigninSave, installSigninSaveIndex, nextPendingSigninSave, queueSigninSave, signinForSave, signinSaveComplete, stepSigninSaveIndex, type PendingSigninSave } from "./signin-save-index.ts";
+station/src/vault/signin-save-builder.ts:15:  readonly #timers = new Fibers("signin save index");
+station/src/vault/signin-save-builder.ts:85:        log.warn("signin", "an older sign-in index batch stopped", { error: (error as Error).message });
+station/src/vault/signin-save-builder.ts:96:        log.warn("signin", "the sign-in index worker could not start", { error: (error as Error).message });
+station/src/vault/signin-save-builder.ts:106:          log.warn("signin", "an older sign-in index batch stopped", { error: result.error });
+station/src/vault/signin-save-builder.ts:110:      worker.once("error", (error) => log.warn("signin", "the sign-in index worker failed", { error: error.message }));
+station/src/vault/signin-save-index.ts:13:CREATE INDEX IF NOT EXISTS signin_save_by_request ON signin_save_lookup (session, save, ask);
+station/src/vault/signin-save-index.ts:65:  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("sign-in index batch must be positive");
+station/src/vault/signin-save-worker.ts:5:import { stepSigninSaveIndex } from "./signin-save-index.ts";
+station/src/vault/signin.ts:28:CREATE INDEX IF NOT EXISTS signin_asks_by_session ON signin_asks (session, status);`;
+station/src/vault/signin.ts:143:    // Both callers need only sign-ins still under way; use the session/status index before reading their bodies.
+station/src/vault/use-index-worker.ts:7:import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type UseAnswer, type UseRead } from "./use-index.ts";
+station/src/vault/use-index.ts:2:// Building an index directly over vault_requests would make the first station start read and sort its whole history.
+station/src/vault/use-index.ts:13:CREATE INDEX IF NOT EXISTS vault_use_lookup_vault ON vault_use_lookup (ws, vault, at DESC, id DESC);
+station/src/vault/use-index.ts:14:CREATE INDEX IF NOT EXISTS vault_use_lookup_owner ON vault_use_lookup (ws, vault, owner, at DESC, id DESC);
+station/src/vault/use-index.ts:145:    const file = new URL(import.meta.url.endsWith(".ts") ? "./use-index-worker.ts" : "./vault/use-index-worker.js", import.meta.url);
+station/src/xshare/index.ts:1:// Chats shared with other workspaces (docs/chat-share.md). As stations share profiles and skills (share/index.ts), it
+station/test/accounts-console.test.ts:7:import { Accounts } from "../src/accounts/index.ts";
+station/test/accounts-fakes.ts:10:import { WINDOWS, platform } from "../src/platform/index.ts";
+station/test/accounts-kimi.test.ts:7:import { Accounts, type CheckRequest } from "../src/accounts/index.ts";
+station/test/accounts-login.test.ts:11:import { WINDOWS } from "../src/platform/index.ts";
+station/test/accounts-routes.test.ts:9:import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
+station/test/active-jobs.test.ts:12:      CREATE INDEX jobs_state ON jobs (state);
+station/test/active-jobs.test.ts:100:      CREATE INDEX jobs_state ON jobs (state);`);
+station/test/active-jobs.test.ts:113:    assert.match(plan, /SEARCH j USING INDEX \S+ \(id=\?\)/);
+station/test/active-jobs.test.ts:132:      CREATE INDEX jobs_state ON jobs (state);
+station/test/active-jobs.test.ts:133:      CREATE INDEX jobs_up ON jobs (state, port);`);
+station/test/adb-grants.test.ts:11:import { platform } from "../src/platform/index.ts";
+station/test/adb-servers-reap.test.ts:10:import { platform } from "../src/platform/index.ts";
+station/test/admit.test.ts:16:import { WINDOWS } from "../src/platform/index.ts";
+station/test/agy.test.ts:15:import { platform } from "../src/platform/index.ts";
+station/test/archive-mark-index.test.ts:7:import { archiveMarksReady, archiveMarksStep, installArchiveMarkIndex } from "../src/store/archive-mark-index.ts";
+station/test/archive-mark-index.test.ts:177:    assert.throws(() => archiveMarksReady(db), /archive mark index version/i);
+station/test/archive-mark-index.test.ts:178:    assert.throws(() => archiveMarksStep(db), /archive mark index version/i);
+station/test/archive-mark-reader.test.ts:9:import { archiveMarksReady, installArchiveMarkIndex } from "../src/store/archive-mark-index.ts";
+station/test/autoarchive-mark-viewers.test.ts:4:import { archiveMarksReady, archiveMarksStep, installArchiveMarkIndex } from "../src/store/archive-mark-index.ts";
+station/test/awake.test.ts:8:import { WINDOWS, platform } from "../src/platform/index.ts";
+station/test/backfill-priority.test.ts:23:    store.db.exec("CREATE UNIQUE INDEX foreground_once ON foreground_probe (value) WHERE value = 2");
+station/test/cc-index-builder.test.ts:7:import { CcIndexBuilder } from "../src/read/cc-index-builder.ts";
+station/test/cc-index-builder.test.ts:8:import { ccSessionReady, installCcIndex } from "../src/store/cc-thread-index.ts";
+station/test/cc-index-builder.test.ts:26:  const dir = mkdtempSync(join(tmpdir(), "cc-index-builder-"));
+station/test/cc-index-builder.test.ts:47:  const dir = mkdtempSync(join(tmpdir(), "cc-index-cancel-"));
+station/test/cc-index-builder.test.ts:61:  const dir = mkdtempSync(join(tmpdir(), "cc-index-worker-"));
+station/test/cc-index-builder.test.ts:64:  const real = new URL("../src/read/cc-index-worker.ts", import.meta.url).href;
+station/test/cc-thread-index.test.ts:12:} from "../src/store/cc-thread-index.ts";
+station/test/cc-thread-index.test.ts:279:    assert.ok(merged.some((line) => line.includes("SEARCH o USING INDEX") && line.includes("thread=? AND session=?")), merged.join("\n"));
+station/test/cc-thread-index.test.ts:323:test("an incompatible copy destination index is neither read nor prepared", () => {
+station/test/cc-thread-index.test.ts:335:  const dir = mkdtempSync(join(tmpdir(), "cc-index-")), store = Store.open(join(dir, "station.db")), db = store.db;
+station/test/cc-threads-bounded.test.ts:3:import { CC_SESSION_KEYS, CcIndexPreparation, CcSessionsUnavailable } from "../src/store/cc-thread-index.ts";
+station/test/cc.test.ts:20:import { CcIndexPreparation, CcSessionsUnavailable } from "../src/store/cc-thread-index.ts";
+station/test/chat-list-home-batching.test.ts:4:import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep } from "../src/store/chat-list-home-index.ts";
+station/test/chat-list-home-index.test.ts:5:import { installRecentHomeIndex, readPreparedDefaultHome, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeOrderStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
+station/test/chat-list-home-interleaved.test.ts:4:import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeOrderStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
+station/test/chat-list-home-overlap.test.ts:8:import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep } from "../src/store/chat-list-home-index.ts";
+station/test/chat-list-home-source.test.ts:39:test("home membership sources are read in bounded steps using the chat index", () => {
+station/test/chat-list-home-source.test.ts:64:      assert.ok(plan.some((row) => row.detail.includes("SEARCH thread_sessions USING COVERING INDEX sqlite_autoindex_thread_sessions_1")), JSON.stringify(plan));
+station/test/chat-list-index-page-size.test.ts:3:import { readPreparedDefaultHome } from "../src/store/chat-list-home-index.ts";
+station/test/chat-list-index-page-size.test.ts:5:import { installRecentChatIndex, readGlobalRecentChatIndex } from "../src/store/chat-list-index.ts";
+station/test/chat-list-index-page-size.test.ts:9:test("recent index pages reject sizes that could make a bounded read unbounded", () => {
+station/test/chat-list-index-reader.test.ts:12:import { installRecentChatIndex } from "../src/store/chat-list-index.ts";
+station/test/chat-list-index-reader.test.ts:29:test("a recent reader reports an incompatible index instead of retrying preparation", async () => {
+station/test/chat-list-index-schema.test.ts:8:import { installRecentHomeIndex } from "../src/store/chat-list-home-index.ts";
+station/test/chat-list-index-schema.test.ts:10:import { installRecentChatIndex } from "../src/store/chat-list-index.ts";
+station/test/chat-list-index-schema.test.ts:15:for (const part of ["global", "scope", "home", "overlap"] as const) test(`a recent ${part} index with another version is not read or built`, () => {
+station/test/chat-list-index-schema.test.ts:29:    assert.throws(page, /recent chat.*version/i, "a ready-looking incompatible index must not return a stale page");
+station/test/chat-list-index-schema.test.ts:32:    assert.throws(() => install(db), /recent chat.*version/i, "the builder must not write an incompatible index");
+station/test/chat-list-index-schema.test.ts:38:    assert.throws(page, /recent chat.*version/i, "an existing index without its marker is not assumed compatible");
+station/test/chat-list-index-schema.test.ts:44:  const dir = mkdtempSync(join(tmpdir(), "recent-index-version-")), path = join(dir, "station.db");
+station/test/chat-list-index.test.ts:8:import { installRecentChatIndex, readGlobalRecentChatIndex, stepRecentChatIndex } from "../src/store/chat-list-index.ts";
+station/test/chat-list-index.test.ts:91:    assert.equal(readGlobalRecentChatIndex(db, 5), null, "an unprepared old index is not a complete page");
+station/test/chat-list-index.test.ts:115:    // A change invalidates the index until it is accounted, rather than returning an old count or ordering.
+station/test/chat-list-index.test.ts:223:  test(`replacing a chat ${what} keeps the recent index exact (recursive triggers ${recursive})`, () => {
+station/test/chat-list-prepare.test.ts:8:import { readGlobalRecentChatIndex } from "../src/store/chat-list-index.ts";
+station/test/chat-list-scope-journal.test.ts:51:    assert.deepEqual(rest, ["last"], "the index cursor cannot revisit the earlier row by itself");
+station/test/chat-list-scope-journal.test.ts:73:    assert.ok(again.every((row, index) => row.revision > first[index]!.revision), "a builder can notice changes during a pass");
+station/test/chat-list-scope-source.test.ts:94:    for (const [sql, args, index] of [[FIRST_SCOPE_HOME_THREADS, ["ours", 3], "threads_home"],
+station/test/chat-list-scope-source.test.ts:98:      assert.ok(plan.includes(index) && plan.includes("SEARCH"), plan);
+station/test/chat-list-search-bounded.test.ts:59:      assert.ok(plan.some((p) => /SEARCH e USING INDEX .*entries.*thread=\? AND n=\?/.test(p)), plan.join("\n"));
+station/test/chat-list-search-bounded.test.ts:61:      if (sql === SEARCH_CHAT_LIST) assert.ok(plan.some((p) => /SEARCH x USING COVERING INDEX entries_edits \(thread=\? AND target=\?\)/.test(p)), plan.join("\n"));
+station/test/chat-row-scope-read.test.ts:11:import { CcIndexPreparation } from "../src/store/cc-thread-index.ts";
+station/test/chat-row-scope-read.test.ts:20:    CREATE INDEX entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
+station/test/chat-row-scope-read.test.ts:21:    CREATE INDEX entries_cards ON entries (thread, n) WHERE card IS NOT NULL;
+station/test/chat-row-scope-read.test.ts:22:    CREATE INDEX entries_options ON entries (thread, n) WHERE options IS NOT NULL;`);
+station/test/chat-row-scope-read.test.ts:123:      assert.match(plan(`${SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, '["k"]'), /SEARCH sessions USING COVERING INDEX sessions_ws \(key=\?\)/);
+station/test/chat-row-scope-read.test.ts:124:      assert.match(plan(SHARES_OF, '["k"]'), /SEARCH chat_shares USING INDEX .*\(session=\?\)/);
+station/test/chat-row-scope-read.test.ts:125:      assert.match(plan(PUBLISHED_OF, `[${chat.id}]`), /SEARCH published USING INDEX published_by_thread \(thread=\?\)/);
+station/test/closed-card-bounded.test.ts:36:      for (const index of ["entries_people_by_n", "entries_cards", "entries_options"]) assert.ok(plan.includes(index), plan);
+station/test/codex-repair.test.ts:7:import { platform as machine } from "../src/platform/index.ts";
+station/test/cold-archive-batches.test.ts:53:      assert.match(plan, /SEARCH sessions USING (?:COVERING )?INDEX sessions_put_away/, plan);
+station/test/cold-hub.test.ts:93:  writeFileSync(join(workspace, "app/node_modules/x/index.js"), Buffer.alloc(50_000, 1));
+station/test/cold-shared-transcripts.test.ts:38:    assert.ok(plan.some((step) => step.includes("SEARCH r USING INDEX runtime_sessions_by_id")), plan.join(" | "));
+station/test/cold-shared-transcripts.test.ts:39:    assert.ok(plan.some((step) => step.includes("SEARCH s USING INDEX sessions_by_runtime_id")), plan.join(" | "));
+station/test/compress.test.ts:25:  assert.equal(await compressed(page, asks, "/preview/5173/index.html"), page);
+station/test/connect-known-bounded.test.ts:89:    assert.ok(plan.some((d) => d.includes("SEARCH e USING INDEX") && d.includes("thread=? AND n=?")), plan.join("; "));
+station/test/device-tools.test.ts:11:import { WINDOWS } from "../src/platform/index.ts";
+station/test/devin.test.ts:22:import { platform } from "../src/platform/index.ts";
+station/test/dirsync.test.ts:197:    // Checked out with CRLF, LF in the index: its bytes are not what the index names.
+station/test/dirsync.test.ts:207:    writeFileSync(join(repo, "node_modules", "dep", "index.js"), "ignored\n");
+station/test/drive-helper.test.ts:20:import { WINDOWS } from "../src/platform/index.ts";
+station/test/drive.test.ts:13:import { platform } from "../src/platform/index.ts";
+station/test/fake/claude.mjs:67:  stream({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
+station/test/fake/claude.mjs:71:      stream({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: `steer:${s}` } });
+station/test/fake/claude.mjs:78:    stream({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: t } });
+station/test/fake/claude.mjs:87:  stream({ type: "content_block_stop", index: 0 });
+station/test/fake/claude.mjs:161:    stream({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "call_1", name: "Bash", input: {} } });
+station/test/fake/claude.mjs:162:    stream({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '{"command":' } });
+station/test/fake/claude.mjs:163:    stream({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '"sleep 60"}' } });
+station/test/fake/claude.mjs:164:    stream({ type: "content_block_stop", index: 0 });
+station/test/fake/dsh.mjs:54:  let index = 0;
+station/test/fake/dsh.mjs:58:    const i = index++;
+station/test/fake/dsh.mjs:59:    frame({ type: "chunk", index: i, chunk: { type: "block-start", index: i, blockType } });
+station/test/fake/dsh.mjs:60:    frame({ type: "chunk", index: i, chunk: { type: blockType === "text" ? "text-delta" : "reasoning-delta", index: i, text } });
+station/test/fake/dsh.mjs:61:    frame({ type: "chunk", index: i, chunk: { type: "block-end", index: i, block: { type: blockType, text } } });
+station/test/fake/dsh.mjs:74:  say({ ev: "stream", frame: { attemptId, type: "chunk", chunk: { type: "block-start", index: 0, blockType: "tool-call" } } });
+station/test/fake/dsh.mjs:75:  say({ ev: "stream", frame: { attemptId, type: "chunk", chunk: { type: "tool-call-delta", index: 0, id: callId, name, argumentsDelta: args } } });
+station/test/fake/dsh.mjs:76:  say({ ev: "stream", frame: { attemptId, type: "chunk", chunk: { type: "block-end", index: 0 } } });
+station/test/feishu.test.ts:474:  const { feishuConnects } = await import("../src/feishu/index.ts");
+station/test/feishu.test.ts:502:  const { makeFeishu } = await import("../src/feishu/index.ts");
+station/test/hermes-smoke.ts:71:  const response = { id: "smoke", object: "chat.completion", created: 1, model: "smoke-model", choices: [{ index: 0, message, finish_reason: call ? "tool_calls" : "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } };
+station/test/hermes-smoke.ts:75:    if (delta.tool_calls) delta.tool_calls = delta.tool_calls.map((t: any, index: number) => ({ ...t, index }));
+station/test/hermes-smoke.ts:76:    res.write(`data: ${JSON.stringify({ ...response, object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+station/test/hermes-smoke.ts:77:    res.write(`data: ${JSON.stringify({ ...response, object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: call ? "tool_calls" : "stop" }] })}\n\n`);
+station/test/host-reader.test.ts:8:import { platform } from "../src/platform/index.ts";
+station/test/hub-fakes.ts:19:import { CcIndexPreparation } from "../src/store/cc-thread-index.ts";
+station/test/hub-routes.test.ts:524:    // Listed with it, by the index of runtime sessions alone.
+station/test/hub-routes.test.ts:586:      for (const f of ["FETCH_HEAD", "HEAD", "index"]) utimesSync(join(clone, ".git", f), new Date(Date.now() - age * 1000), new Date(Date.now() - age * 1000));
+station/test/jobs.test.ts:25:import { WINDOWS, platform } from "../src/platform/index.ts";
+station/test/kept-viewer-bounded.test.ts:6:test("a viewer's kept chats use its index instead of reading everyone else's", () => {
+station/test/kept-viewer-bounded.test.ts:37:      /SEARCH kept_chats USING COVERING INDEX .* \(viewer=\?\)/);
+station/test/latest-message-bounded.test.ts:68:    db.exec("DROP INDEX entries_letters");
+station/test/latest-message-bounded.test.ts:80:    assert.match(plan, /SEARCH m USING INDEX sqlite_autoindex_entries_1 \(thread=\? AND n=\?\)/);
+station/test/latest-message-bounded.test.ts:81:    assert.match(plan, /SEARCH entries USING COVERING INDEX entries_said \(thread=\?\)/);
+station/test/latest-message-bounded.test.ts:82:    assert.match(plan, /SEARCH entries USING INDEX entries_letters \(thread=\?\)/);
+station/test/latest-thread-bounded.test.ts:63:      assert.ok(visited > 0 && visited <= 2, `the existing session and thread index seeks past old deliveries (visited ${visited})`);
+station/test/linux-portal-text.py:92:                index = int(path.rsplit("u", 1)[1])
+station/test/linux-portal-text.py:93:                return portal.GLib.Variant("(v)", (portal.GLib.Variant("b", self.states[index]),))
+station/test/logins.test.ts:13:import { Logins, type Login, Refused } from "../src/logins/index.ts";
+station/test/logins.test.ts:19:import { WINDOWS, platform } from "../src/platform/index.ts";
+station/test/loopback.test.ts:32:  assert.equal(answer("/assets/index.js", null, true, place, "zh").status, 404);
+station/test/machine-sessions.test.ts:74:        CREATE INDEX sessions_by_runtime_id ON sessions (runtime_session_id) WHERE runtime_session_id IS NOT NULL;`);
+station/test/machine-sessions.test.ts:78:          CREATE INDEX runtime_sessions_by_id ON runtime_sessions (id);`);
+station/test/memory-watch.test.ts:10:import type { ProcessInfo } from "../src/platform/index.ts";
+station/test/message-pages-bounded.test.ts:65:    db.exec("DROP INDEX entries_letters");
+station/test/message-pages-bounded.test.ts:77:    assert.match(plan, /SEARCH entries USING COVERING INDEX entries_said \(thread=\? AND n<\?\)/);
+station/test/message-pages-bounded.test.ts:78:    assert.match(plan, /SEARCH entries USING INDEX entries_letters \(thread=\? AND n<\?\)/);
+station/test/message-pages-bounded.test.ts:79:    assert.match(plan, /SEARCH m USING INDEX sqlite_autoindex_entries_1 \(thread=\? AND n=\?\)/);
+station/test/multi-workspace-agents.test.ts:24:import { ChatShares } from "../src/xshare/index.ts";
+station/test/old-first-delivery-startup.test.ts:12:      CREATE INDEX deliveries_session ON deliveries (session, thread)`);
+station/test/old-first-delivery-startup.test.ts:20:    // Its earliest rowid is beyond the first 65 rows of the (session, thread) index.
+station/test/old-first-delivery-startup.test.ts:43:    assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);
+station/test/old-thread-state-startup.test.ts:11:      CREATE INDEX entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL;
+station/test/old-thread-state-startup.test.ts:12:      CREATE INDEX entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
+station/test/old-thread-state-startup.test.ts:13:      CREATE INDEX entries_letters ON entries (thread, n) WHERE letter IS NOT NULL;
+station/test/old-thread-state-startup.test.ts:16:      CREATE INDEX deliveries_session ON deliveries (session, thread);`);
+station/test/old-thread-state-startup.test.ts:54:    for (const index of ["entries_said", "entries_people_by_n", "entries_letters"]) assert.match(plan, new RegExp(`SEARCH e USING (?:COVERING )?INDEX ${index} \\(thread=\\?\\)`));
+station/test/old-thread-state-startup.test.ts:73:        CREATE INDEX deliveries_session ON deliveries (session, thread);
+station/test/old-thread-state-startup.test.ts:75:      if (missing !== "entries_letters") db.exec("CREATE INDEX entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
+station/test/old-thread-state-startup.test.ts:76:      if (missing !== "entries_people_by_n") db.exec("CREATE INDEX entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message'");
+station/test/old-thread-state-startup.test.ts:79:      const index = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(missing);
+station/test/old-thread-state-startup.test.ts:80:      if (missing === "entries_said") assert.notEqual(index, undefined);
+station/test/old-thread-state-startup.test.ts:81:      else assert.equal(index, undefined);
+station/test/outflow-index-reader.test.ts:9:import { OutflowChatIndex } from "../src/outflow/chat-index-builder.ts";
+station/test/outflow-index-reader.test.ts:10:import { installOutflowChatIndex, outflowChatIndexStep } from "../src/store/outflow-index.ts";
+station/test/outflow-index-reader.test.ts:34:    // An unrelated read can use the reader while the requested index waits for the previous station.
+station/test/outflow-index-reader.test.ts:66:  const real = new URL("../src/outflow/chat-index-worker.ts", import.meta.url).href;
+station/test/outflow-index-reader.test.ts:76:test("nearby chat exports reuse their index worker", async () => {
+station/test/outflow-index-reader.test.ts:79:  const real = new URL("../src/outflow/chat-index-worker.ts", import.meta.url).href;
+station/test/outflow-index.test.ts:5:import { installOutflowChatIndex, outflowChatIndexReady, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
+station/test/outflow-index.test.ts:28:  // Read the fixture's membership and activity directly, independently of the maintained index.
+station/test/outflow-index.test.ts:143:    assert.match(plan, /SEARCH outflow_chat_order USING COVERING INDEX outflow_chat_scope_order/);
+station/test/outflow.test.ts:16:import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
+station/test/pending-existence.test.ts:106:    assert.match(plan, /SEARCH deliveries USING INDEX deliveries_pending \(session>\?\)/);
+station/test/pending-existence.test.ts:107:    assert.match(plan, /SEARCH letter_deliveries USING INDEX letter_deliveries_pending \(session>\?\)/);
+station/test/pending-existence.test.ts:124:for (const stillJoined of [false, true]) test(`a workspace rejoining during index setup resumes only if still joined (${stillJoined})`, async () => {
+station/test/permissions.test.ts:18:import { WINDOWS } from "../src/platform/index.ts";
+station/test/places.test.ts:18:import { WINDOWS } from "../src/platform/index.ts";
+station/test/platform.test.ts:1:// What differs between machines is said in src/platform/ only (src/platform/index.ts), so the station's logic is one
+station/test/platform.test.ts:34:  assert.deepEqual(found, [], "ask platform (src/platform/index.ts) instead:\n" + found.join("\n"));
+station/test/policy-decisions-scope.test.ts:60:    assert.ok(plan.some(p => p.includes("COVERING INDEX decision_checks_lately")), plan.join(" | "));
+station/test/policy-decisions-scope.test.ts:61:    const sessionLookup = plan.findIndex(p => p.includes("SEARCH s USING INDEX"));
+station/test/pool-shared-account.test.ts:6:import { Accounts } from "../src/accounts/index.ts";
+station/test/post-after-bounded.test.ts:15:    assert.ok(plan.some(({ detail }) => /SEARCH e USING INDEX .*thread=\? AND n>\? AND n<\?/.test(detail)), JSON.stringify(plan));
+station/test/post-block-builder.test.ts:27:test("deliveries wait for the previous station and only index their requested suffix", async () => {
+station/test/post-blocks.test.ts:11:  CREATE UNIQUE INDEX entries_ts ON entries(thread,ts) WHERE ts IS NOT NULL;`;
+station/test/presets.test.ts:128:  const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+station/test/presets.test.ts:130:  assert.deepEqual(await index.repos(), []);
+station/test/presets.test.ts:131:  await index.walk();
+station/test/presets.test.ts:132:  const found = await index.repos();
+station/test/presets.test.ts:139:  // kept: another index reads what the first found without walking again
+station/test/presets.test.ts:141:  const again = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+station/test/presets.test.ts:158:  const index = new RepoIndex({
+station/test/presets.test.ts:160:    file: () => join(home, "index.json"),
+station/test/presets.test.ts:166:  const get = routes({ presets: new Presets(() => join(home, "agent"), () => 0), reposDir: () => repos, index, changed: () => told++ }).find((r) => r.method === "GET")!;
+station/test/presets.test.ts:172:  await index.walk();
+station/test/presets.test.ts:182:  const index = new RepoIndex({
+station/test/presets.test.ts:184:    file: () => join(home, "index.json"),
+station/test/presets.test.ts:190:  await index.walk();
+station/test/presets.test.ts:191:  assert.deepEqual((await index.repos()).map((c) => c.name), ["app"]);
+station/test/presets.test.ts:205:  const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => 0, besides: () => [join(home, "station")] });
+station/test/presets.test.ts:206:  await index.walk();
+station/test/presets.test.ts:207:  const found = await index.repos();
+station/test/remote-run-index.test.ts:90:test("a partial remote task index converges after old rows change and new rows arrive", () => {
+station/test/remote.test.ts:219:  test("the task index follows additions and removals, including a record written after its directory", async () => {
+station/test/resources-watch.test.ts:9:import type { ProcessInfo } from "../src/platform/index.ts";
+station/test/runtime-migration-bounded.test.ts:37:    old.exec("DROP TRIGGER sessions_original_runtime; DROP INDEX IF EXISTS runtime_sessions_ordered; ALTER TABLE runtime_sessions DROP COLUMN runtime; ALTER TABLE sessions DROP COLUMN original_runtime");
+station/test/runtime-migration-bounded.test.ts:40:    assert.equal(store.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'runtime_sessions_ordered'").get(), undefined,
+station/test/runtime-migration-bounded.test.ts:41:      "startup does not build an index over the old runtime history");
+station/test/runtime-migration-bounded.test.ts:97:    // The preceding version remembered a runtime on each transcript and built this index, but had no session field.
+station/test/runtime-migration-bounded.test.ts:99:    old.exec("DROP TRIGGER sessions_original_runtime; ALTER TABLE sessions DROP COLUMN original_runtime; CREATE INDEX runtime_sessions_ordered ON runtime_sessions (session_key, at)");
+station/test/runtime-migration-bounded.test.ts:110:    assert.ok(plan.some((step) => step.includes("SEARCH r USING INDEX runtime_sessions_ordered")), plan.join(" | "));
+station/test/screens.test.ts:31:import { WINDOWS } from "../src/platform/index.ts";
+station/test/search-bounded.test.ts:93:    assert.match(plan, /SEARCH entries USING COVERING INDEX entries_said \(thread=\? AND n>\? AND n<\?\)/, "later batches seek ordinary messages");
+station/test/search-bounded.test.ts:94:    assert.match(plan, /SEARCH entries USING INDEX entries_letters \(thread=\? AND n>\? AND n<\?\)/, "later batches seek legacy letters");
+station/test/search-bounded.test.ts:95:    assert.match(plan, /SEARCH m USING INDEX \S+ \(thread=\? AND n=\?\)/, "only those messages are fetched");
+station/test/search-history-bounded.test.ts:101:    assert.deepEqual(found.hits.map((h) => [h.index, h.text]), [[8, "needle 8"], [7, "needle 7"]]);
+station/test/search-history-scope.test.ts:45:    assert.match(plan, /SEARCH s USING INDEX sessions_by_connect \(connect=\? AND ws=\?\)/);
+station/test/search-history-visibility.test.ts:16:  for (const [index, key] of keys.entries()) {
+station/test/search-history-visibility.test.ts:18:      token: `token-${key}`, createdAt: 100 - index, lastActiveAt: 100 - index, ws: "mine" });
+station/test/search-job-bounded.test.ts:81:    assert.ok(candidates.length <= 3, "a session's many jobs are skipped in one index seek");
+station/test/search-job-bounded.test.ts:85:    for (const [query, index] of [[jobSeek, /jobs_by_session/], [sessionSeek, /jobs_by_session/]] as const) {
+station/test/search-job-bounded.test.ts:89:      assert.match(plan, index);
+station/test/search-message-edits-bounded.test.ts:102:    db.exec("DROP INDEX entries_letters");
+station/test/search.test.ts:165:test("the station's search thread finds what the store has as it is asked; the index of before is let go", async () => {
+station/test/search.test.ts:168:  writeFileSync(join(s.data, "search.db"), "an index of before");
+station/test/session-bindings-index.test.ts:4:import { installSessionBindingsIndex, sessionBindingsReady, sessionBindingsStep } from "../src/store/session-bindings-index.ts";
+station/test/session-bindings-index.test.ts:127:test("an incompatible binding index is neither read nor built", () => {
+station/test/session-bindings-reader.test.ts:9:import { installSessionBindingsIndex, sessionBindingsReady } from "../src/store/session-bindings-index.ts";
+station/test/session-bindings-reader.test.ts:79:test("a session reader reports an incompatible binding index", async () => {
+station/test/session-bindings-reader.test.ts:87:test("a stopped binding worker retries its pending index", async () => {
+station/test/session-bindings-use-bounded.test.ts:4:import { installSessionBindingsIndex, sessionBindingsReady, sessionBindingsStep } from "../src/store/session-bindings-index.ts";
+station/test/session-counts.test.ts:151:test("an incompatible session count index is neither read nor built", () => {
+station/test/session-list-index.test.ts:4:import { installSessionListIndex, sessionListReady, sessionListStep } from "../src/store/session-list-index.ts";
+station/test/session-list-index.test.ts:180:test("incompatible session list index versions cannot be read or built", () => {
+station/test/session-list-reader.test.ts:7:import { installSessionListIndex } from "../src/store/session-list-index.ts";
+station/test/session-list-reader.test.ts:61:test("a reader reports an incompatible session list index instead of retrying", async () => {
+station/test/session-list-rows.test.ts:8:test("the session list reads active or archived rows by the matching index", () => {
+station/test/session-list-rows.test.ts:44:    assert.match(db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params as any[]).map((r: any) => r.detail).join("\n"), /USING INDEX sessions_live/);
+station/test/session-list-rows.test.ts:49:    assert.match(db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params as any[]).map((r: any) => r.detail).join("\n"), /USING INDEX sessions_put_away/);
+station/test/session-list-scope-work.test.ts:28:            // Count candidates before the workspace predicate when the existing global partial index is used.
+station/test/session-list-scope-work.test.ts:96:    assert.ok(plan.some((line) => /SEARCH i USING (?:COVERING )?INDEX session_list_connect \(archived=\? AND connect=\?\)/.test(line)), plan.join("\n"));
+station/test/session-list-scope.test.ts:66:    assert.match(plan(queries.people!), /SEARCH ts USING INDEX thread_sessions_session \(session=\?\)/);
+station/test/session-list-scope.test.ts:67:    assert.match(plan(queries.lengths!), /SEARCH transcript_lengths USING INDEX .* \(session=\?\)/);
+station/test/session-list-scope.test.ts:68:    assert.match(plan(queries.usage!), /SEARCH u USING INDEX .* \(session=\?\)/);
+station/test/session-list-scope.test.ts:69:    assert.match(plan(queries.watches!), /SEARCH w USING (?:COVERING )?INDEX active_watch_jobs_session \(session=\?\)/);
+station/test/session-list-scope.test.ts:77:    assert.match(plan(queries.usage!), /SEARCH u USING INDEX .* \(session=\?\)/);
+station/test/session-list-scope.test.ts:78:    assert.match(plan(queries.usage!), /SEARCH c USING INDEX .* \(session=\?\)/);
+station/test/session-list-worker.test.ts:8:import { installSessionListIndex, sessionListReady } from "../src/store/session-list-index.ts";
+station/test/session-list-worker.test.ts:11:test("a stopped session list worker retries and resumes its pending index", async () => {
+station/test/session-up-jobs-index.test.ts:196:test("an incompatible up-job index is neither read nor built", () => {
+station/test/share.test.ts:1:// Stations sharing profiles and skills (src/share/index.ts, docs/station-share.md): two stations, a cloud that only
+station/test/share.test.ts:10:import { Sharing } from "../src/share/index.ts";
+station/test/shell-path.test.ts:15:import { WINDOWS } from "../src/platform/index.ts";
+station/test/sidebar-said-state.test.ts:13:      CREATE INDEX entries_said ON entries(thread,n,author_kind,author,letter) WHERE kind='message' AND letter IS NULL;
+station/test/signin-save-builder.test.ts:9:import { installSigninSaveIndex, queueSigninSave, signinSaveComplete, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+station/test/signin-save-builder.test.ts:17:    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+station/test/signin-save-builder.test.ts:23:test("a saved decision waits for the previous station even when its index is complete", async () => {
+station/test/signin-save-builder.test.ts:41:test("a stopped sign-in index worker retries a persisted decision", async () => {
+station/test/signin-save-index.test.ts:4:import { installSigninSaveIndex, SIGNIN_SAVE, signinForSave, signinSaveComplete, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+station/test/signin-save-index.test.ts:9:    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+station/test/signin-save-index.test.ts:42:    assert.match(plan, /SEARCH l USING COVERING INDEX signin_save_by_request \(session=\? AND save=\?\)/);
+station/test/signin-save-index.test.ts:43:    assert.match(plan, /SEARCH a USING INDEX .* \(id=\?\)/);
+station/test/slack-e2e.test.ts:18:import { makeConnections } from "../src/slack/index.ts";
+station/test/slack-routes.test.ts:19:import { connectName, makeConnections, slackManifest } from "../src/slack/index.ts";
+station/test/slack-subscription.test.ts:7:import { makeConnections } from "../src/slack/index.ts";
+station/test/station-bundle-workers.test.ts:9:import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+station/test/station-bundle-workers.test.ts:28:      CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+station/test/station-bundle-workers.test.ts:66:      ["read/cc-index-worker.js", { session: "old-cc" }],
+station/test/station-bundle-workers.test.ts:68:      ["outflow/chat-index-worker.js", "H"],
+station/test/station-bundle.test.ts:39:for name in main.js read/worker.js read/said-worker.js read/recent-chat-worker.js search/worker.js vault/use-index-worker.js vault/signin-save-worker.js \\
+station/test/station-bundle.test.ts:40:  usage/minute-worker.js sessions/workspace-activity-worker.js sessions/post-block-worker.js outflow/chat-index-worker.js future/another-worker.js \\
+station/test/station-bundle.test.ts:53:      for (const worker of ["read/worker.js", "read/said-worker.js", "read/recent-chat-worker.js", "search/worker.js", "vault/use-index-worker.js", "vault/signin-save-worker.js",
+station/test/station-bundle.test.ts:54:        "usage/minute-worker.js", "sessions/workspace-activity-worker.js", "sessions/post-block-worker.js", "outflow/chat-index-worker.js", "future/another-worker.js"]) {
+station/test/store-compat.test.ts:26:/// Every table's columns, and every index's and view's SQL: what the schema is.
+station/test/store.test.ts:18:  SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
+station/test/store.test.ts:19:import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_EXISTS, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
+station/test/store.test.ts:20:import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS } from "../src/store/archive-mark-index.ts";
+station/test/store.test.ts:36:import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
+station/test/store.test.ts:37:import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
+station/test/store.test.ts:92:  for (const [sql, args, index, seek] of [
+station/test/store.test.ts:101:    assert.ok(steps.some((s) => s.includes(index) && (seek ? s.startsWith("SEARCH ") && s.includes("ws=?") : s.startsWith("SCAN "))), detail);
+station/test/store.test.ts:141:  for (const [sql, args, index, seek] of [
+station/test/store.test.ts:155:    assert.ok(steps.some((s) => s.includes(index) && (seek ? s.startsWith("SEARCH ") : s.startsWith("SCAN "))), detail);
+station/test/store.test.ts:221:test("a database from before the index on turns gets it as it is opened", () => {
+station/test/store.test.ts:225:  before.exec("DROP INDEX turns_by_session");
+station/test/store.test.ts:229:  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'turns_by_session'").get() !== undefined);
+station/test/store.test.ts:250:  assert.match(plan.map((p) => p.detail).join(" | "), /SEARCH entries USING (?:COVERING )?INDEX entries_people_by_n \(thread=\? AND n>\?\)/);
+station/test/store.test.ts:317:  // Each message's latest edit is found at once by the index of edits, as the station's SQLite (node's) plans it, not by
+station/test/store.test.ts:419:  assert.ok(!has("table", "items") && !has("index", "threads_archived"));
+station/test/store.test.ts:552:    assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);
+station/test/store.test.ts:655:  db.exec("DROP VIEW merged; DROP INDEX entries_letters; DROP INDEX entries_said; ALTER TABLE entries DROP COLUMN letter");
+station/test/store.test.ts:1288:test("the archive a page at a time, the latest archived first, each by the index of those archived; the sidebar by those shown", async () => {
+station/test/store.test.ts:1311:    assert.ok(!plan.some((d) => /^SCAN (sessions|threads)\b/.test(d) && !d.includes("INDEX sessions_live")), plan.join(" | "));
+station/test/store.test.ts:1315:test("the archived sessions by the index of those archived, the longest archived first; the log's file kept small", async () => {
+station/test/store.test.ts:1399:test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
+station/test/store.test.ts:1437:      const index = size === 1 ? (scoped ? "usage_summary_blocks_shadow_scope_time" : "usage_summary_blocks_shadow_time")
+station/test/store.test.ts:1439:      groups.push([q.selected, scoped ? [0, 100, "Wws"] : [0, 100], index]);
+station/test/store.test.ts:1442:    const index = scoped ? "PRIMARY KEY" : "usage_summary_blocks_time";
+station/test/store.test.ts:1443:    groups.push([q.next, scoped ? [0, 100, "Wws"] : [0, 100], index], [q.last, scoped ? ["Wws"] : [], index]);
+station/test/store.test.ts:1457:  for (const [sql, args, index] of groups) {
+station/test/store.test.ts:1459:    assert.ok(plan.some((d) => d.startsWith("SEARCH ") && d.includes(index)), `${sql}\n  ${plan.join(" | ")}`);
+station/test/store.test.ts:1466:    const index = scope === "all" ? "usage_compact_time" : "usage_compact_scope_time";
+station/test/store.test.ts:1467:    assert.ok(plan.some((d) => d.startsWith("SEARCH ") && d.includes(index)), `${sql}\n  ${plan.join(" | ")}`);
+station/test/store.test.ts:1471:  // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
+station/test/store.test.ts:1472:  // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
+station/test/store.test.ts:1497:  const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
+station/test/store.test.ts:1533:  // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
+station/test/store.test.ts:1536:  assert.ok(!plans.get(STATS_OF)!.some((d) => d.includes("COVERING INDEX turns_by_session")), plans.get(STATS_OF)!.join(" | "));
+station/test/store.test.ts:1538:  // the main thread on a station); the models someone's chats ran on from the index alone.
+station/test/store.test.ts:1543:  assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
+station/test/store.test.ts:1550:  assert.ok(plans.get(HISTORY_SEED_CALLS)!.some((d) => d.includes("INDEX usage_at (at>?)")), plans.get(HISTORY_SEED_CALLS)!.join(" | "));
+station/test/store.test.ts:1551:  // The latest card before a message: by the index of cards, not by going back over the thread to it.
+station/test/store.test.ts:1556:  // Each session's latest check of the last days: from the index of their times alone.
+station/test/store.test.ts:1557:  assert.ok(plans.get(LATEST_DECISIONS)!.some((d) => d.includes("COVERING INDEX decision_checks_lately")), plans.get(LATEST_DECISIONS)!.join(" | "));
+station/test/store.test.ts:1592:  // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
+station/test/store.test.ts:1593:  // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its
+station/test/store.test.ts:1594:  // undelivered messages by the index of those alone, its latest turn by its index; the Slack threads a chat copies to,
+station/test/store.test.ts:1628:    "job inserts check each conflicting identity by an index");
+station/test/store.test.ts:1631:  has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
+station/test/store.test.ts:1636:  // Whether a turn of it ended before its work was kept: its first by its end, from the index alone.
+station/test/store.test.ts:1637:  has(stats, "o USING COVERING INDEX turns_by_end (session_key=?");
+station/test/store.test.ts:1640:  has(stats, "old USING COVERING INDEX turns_by_session (session_key=?)");
+station/test/store.test.ts:1644:  // A session's latest turns by the index of its turns, from its end: not every turn read and sorted.
+station/test/store.test.ts:1647:  has(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=? AND n=?)");
+station/test/store.test.ts:1648:  lacks(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=?)");
+station/test/store.test.ts:1655:  has(read.SHARES_OF, "chat_shares USING INDEX sqlite_autoindex_chat_shares_1 (session=?)");
+station/test/store.test.ts:1656:  has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
+station/test/store.test.ts:1657:  has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
+station/test/store.test.ts:1658:  has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
+station/test/store.test.ts:1659:  has(read.PINS_OF, "pins USING INDEX sqlite_autoindex_pins_1 (viewer=? AND session=?)");
+station/test/store.test.ts:1661:  // The jobs running of some sessions: by an index (of those running, or of their sessions' jobs), never every job.
+station/test/store.test.ts:1662:  has(read.RUNNING_OF, "SEARCH jobs USING INDEX");
+station/test/store.test.ts:1664:  // from the index of them alone, not the sessions themselves.
+station/test/store.test.ts:1665:  has(`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, "SEARCH sessions USING COVERING INDEX sessions_ws (key=?)");
+station/test/store.test.ts:1666:  assert.deepEqual((store.db.prepare(`EXPLAIN QUERY PLAN ${read.SEEN_OF}`).all() as { detail: string }[]).map((r) => r.detail), ["SCAN sessions USING COVERING INDEX sessions_ws"]);
+station/test/store.test.ts:1836:  // The current detail index remains usable if the obsolete quarter table is absent on an older database.
+station/test/store.test.ts:1898:  // The old call remains intact; an unfinished context index does not claim it is complete.
+station/test/updates.test.ts:16:import { WINDOWS, platform as machine } from "../src/platform/index.ts";
+station/test/usage-chat-backfill.test.ts:34:  const dir = mkdtempSync(join(tmpdir(), "usage-chat-index-"));
+station/test/usage-chat-backfill.test.ts:131:test("an incomplete chat summary does not attempt to fill a missing index", async () => {
+station/test/usage-compact-source.test.ts:385:    // A pending empty bucket can be visited by the time index without contributing to the answer.
+station/test/usage-compact-source.test.ts:399:        assert.equal(diagnostics.candidates, 3, "the index includes an empty bucket, but not another workspace");
+station/test/usage-compact-source.test.ts:409:    assert.match(plan, /SEARCH usage_compact USING COVERING INDEX usage_compact_scope_time/);
+station/test/usage-compact-source.test.ts:455:    assert.match(plan, /SEARCH usage_compact USING COVERING INDEX usage_compact_scope_time/);
+station/test/usage-compact-source.test.ts:938:    assert.match(same.map((row) => row.detail).join(" | "), /SEARCH usage USING INDEX usage_session \(session=\? AND at=\? AND rowid<\?\)/);
+station/test/usage-compact-source.test.ts:939:    assert.match(earlier.map((row) => row.detail).join(" | "), /SEARCH usage USING INDEX usage_session \(session=\? AND at>\? AND at<\?\)/);
+station/test/usage-compactions-index.test.ts:72:test("new main calls are kept without rebuilding an incomplete old index", () => {
+station/test/usage-compactions-index.test.ts:113:test("reopening repairs an older compaction trigger without rebuilding the index", () => {
+station/test/usage-detail-index.test.ts:15:    CREATE INDEX usage_session ON usage (session, at);
+station/test/usage-detail-index.test.ts:150:test("a partially filled detail index resumes after reopening", () => {
+station/test/usage-detail-statistics.test.ts:87:test("an incomplete old detail summary does not use a missing legacy index", async () => {
+station/test/usage-history-quarters.test.ts:168:      // The calls are read again only from where the old quarters stop, by the index on their time.
+station/test/usage-history-quarters.test.ts:170:      assert.match(plan, /SEARCH u USING INDEX usage_at \(at>\?\)/);
+station/test/usage-minute-index.test.ts:16:    CREATE INDEX usage_session ON usage (session, at);
+station/test/usage-minute-index.test.ts:101:    assert.deepEqual(totals(db), expected(db), "old and new stations' writes keep the finished index current");
+station/test/usage-minute-index.test.ts:108:test("a partial minute index resumes after the database is reopened", () => {
+station/test/usage-minute-index.test.ts:188:    db.exec("PRAGMA journal_mode = WAL; CREATE INDEX sessions_ws ON sessions (key, ws)");
+station/test/usage-new-only.test.ts:17:test("an old partial detail index is left aside and only later calls enter new statistics", () => {
+station/test/usage-new-only.test.ts:29:    store = Store.open(path); // An old station had begun building an index but stopped halfway.
+station/test/usage-new-only.test.ts:58:    // A previous station may finish its obsolete index after the new station starts. It must not switch the reader
+station/test/usage-new-only.test.ts:59:    // back to that incomplete index or lose the data recorded since cutover, including after a restart.
+station/test/usage-no-historical-fill.test.ts:79:test("a partially built old context index is unavailable without scanning its calls", () => {
+station/test/usage-old-schema-no-fill.test.ts:18:    CREATE INDEX usage_session ON usage (session, at);
+station/test/usage-remote-summary-ready.test.ts:98:  Atomics.store(new Int32Array(priority), 0, 1); // The other index cannot take a write permit.
+station/test/usage-replay-writes.test.ts:6:for (const retired of [false, true]) test(`replaying unchanged usage writes nothing ${retired ? "after" : "before"} index retirement`, () => {
+station/test/usage-retire.test.ts:55:test("retirement also removes the separate live index of an incomplete old database", async () => {
+station/test/usage-retire.test.ts:97:test("stopping index writers yields to another database writer and retries", async () => {
+station/test/usage-retire.test.ts:125:test("a failed compact installation still stops the old index writers", async () => {
+station/test/usage-retire.test.ts:136:    assert.equal(table(store, "usage_detail"), undefined, "in-memory cleanup still removes the old index");
+station/test/usage-since-statistics.test.ts:64:    assert.match(plan, /SEARCH usage USING COVERING INDEX usage_at/);
+station/test/usage-summary-bounded.test.ts:225:    try { await assert.rejects(ask(), pending, "compact minutes are not scanned while their grouped index is missing"); }
+station/test/usage-summary-cache.test.ts:327:    assert.deepEqual(result.groups, before, "the pending index and range index share the earlier snapshot");
+station/test/usage-summary-cache.test.ts:448:    assert.equal(seq(), settledSeq, "a value change uses the pending index until it is accounted");
+station/test/usage-summary-cache.test.ts:453:    assert.equal((await same()).groups[0]?.output, 7, "the pending index invalidates the hour even without a new journal entry");
+station/test/usage-unified-stats.test.ts:9:test("an incomplete detail index keeps the existing summary writers", () => {
+station/test/usage-visibility-read.test.ts:38:    assert.ok(plan.some((line) => /SEARCH sessions USING INDEX/i.test(line)), plan.join("; "));
+station/test/vault-signin.test.ts:12:import { installSigninSaveIndex, queueSigninSave, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+station/test/vault-signin.test.ts:139:    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+station/test/vault-signin.test.ts:157:    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+station/test/vault-uses-index.test.ts:11:import { backfillNextWorkspace, backfillUseIndex, initializeUseIndex, PLAIN_USES, USE_BACKFILL_AFTER, UseIndex, VAULT_USES } from "../src/vault/use-index.ts";
+station/test/vault-uses-index.test.ts:75:    // The actual statements must seek to the permitted vault/owner and read in page order; a covering index that
+station/test/vault-uses-index.test.ts:79:    assert.match(plainPlan, /SEARCH u USING COVERING INDEX vault_use_lookup_owner \(ws=\? AND vault=\? AND owner=\?\)/);
+station/test/vault-uses-index.test.ts:80:    assert.match(sharedPlan, /SEARCH u USING COVERING INDEX vault_use_lookup_vault \(ws=\? AND vault=\?\)/);
+station/test/vault-uses-index.test.ts:81:    assert.match(plainPlan, /SEARCH r USING INDEX sqlite_autoindex_vault_requests_1 \(ws=\? AND id=\?\)/);
+station/test/vault-uses-index.test.ts:106:test("old requests are indexed in bounded resumable batches while new writes keep the index current", async () => {
+station/test/vault-uses-index.test.ts:122:    assert.match(plan, /SEARCH vault_requests USING COVERING INDEX sqlite_autoindex_vault_requests_1/);
+station/test/vault-uses-index.test.ts:142:  const dir = mkdtempSync(join(tmpdir(), "vault-use-index-"));
+station/test/vault-uses-index.test.ts:158:  const index = new UseIndex(db);
+station/test/vault-uses-index.test.ts:160:    const bodies = await index.read("w", PLAIN, "alice@x.com", 2);
+station/test/vault-uses-index.test.ts:164:    await index.close();
+station/test/vault-uses-index.test.ts:185:    worker = new Worker(new URL("../src/vault/use-index-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+station/test/vault-uses-index.test.ts:218:    worker = new Worker(new URL("../src/vault/use-index-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
+station/test/vault-uses-index.test.ts:258:    const index = new UseIndex(db, { previousGone });
+station/test/vault-uses-index.test.ts:259:    const pending = index.read("w", PLAIN, "alice@x.com", 2);
+station/test/vault-uses-index.test.ts:261:    await index.close();
+station/test/vault-uses-index.test.ts:330:  const index = new UseIndex(db);
+station/test/vault-uses-index.test.ts:332:    await assert.rejects(index.read("bad", PLAIN, "alice@x.com", 1), /malformed JSON/);
+station/test/vault-uses-index.test.ts:333:    const bodies = await index.read("w", PLAIN, "alice@x.com", 1);
+station/test/vault-uses-index.test.ts:336:    await index.close();
+station/test/vault-uses-index.test.ts:342:test("membership is checked again if it changes while the old index is being filled", async () => {
+station/test/watch-jobs.test.ts:11:      CREATE INDEX jobs_state ON jobs (state);
+station/test/watch-jobs.test.ts:26:    assert.match(lookupPlan, /SEARCH t USING COVERING INDEX .* \(thread=\?\)/);
+station/test/watch-jobs.test.ts:27:    assert.match(lookupPlan, /SEARCH w USING COVERING INDEX active_watch_jobs_session \(session=\?\)/);
+station/test/watch-jobs.test.ts:29:    assert.match(sessionPlan, /SEARCH active_watch_jobs USING COVERING INDEX active_watch_jobs_session \(session=\?\)/);
+station/test/widget-models-bounded.test.ts:71:    assert.ok(plan.some(({ detail }) => detail.includes("widget_source_by_path")), "the path lookup uses its index");
+station/test/widget-source-index.test.ts:194:    if (missing) db.exec(`DROP INDEX ${missing}`);
+station/test/widget-source-index.test.ts:217:      if (missing) db.exec(`DROP INDEX ${missing}`);
+station/test/widget-source-index.test.ts:440:test("a failed widget index installation leaves no partial tables or triggers", () => {
+station/test/widget-source-index.test.ts:491:test("an incompatible widget index is neither read nor prepared", () => {
+station/test/workspace-activity.test.ts:75:    // Leave the deliveries and sessions as an older station had them, before the new index was installed.
+station/test/workspace-activity.test.ts:118:    assert.match(plan, /SEARCH s USING INDEX .* \(key=\?(?: AND ws=\?)?\)/);
+station/test/workspace-activity.test.ts:122:test("the workspace activity builder waits for the previous station and resumes a partial index", async () => {
+station/test/workspace-activity.test.ts:173:test("rejoining reads the active index and pending deliveries from one snapshot", async () => {
+station/test/xshare-hub.test.ts:12:import { ChatShares } from "../src/xshare/index.ts";
+station/test/xshare.test.ts:1:// Chats shared with other workspaces (src/xshare/index.ts, docs/chat-share.md): two workspaces' stations, each told only
+station/test/xshare.test.ts:10:import { ChatShares } from "../src/xshare/index.ts";
+test/back-page.test.ts:11:      currentEntry: { index: at },
+test/browser/activity-fold.mjs:14:import './styles/index.ts';
+test/browser/agent-sheet.mjs:19:import './src/styles/index.ts';
+test/browser/bottom-bar-fuzz.mjs:18:import './src/styles/index.ts';
+test/browser/bottom-bar.mjs:19:import './src/styles/index.ts';
+test/browser/composer-space.mjs:17:import './src/styles/index.ts';
+test/browser/composer-station.mjs:27:Object.assign(window, { uploads, sent, takes, finish(index: number) {
+test/browser/composer-station.mjs:28:  const upload = uploads[index];
+test/browser/edge-back.mjs:16:import './src/styles/index.ts';
+test/browser/gesture-motion.mjs:13:import './src/styles/index.ts';
+test/browser/list-motion.mjs:18:import './styles/index.ts';
+test/browser/list-settle.mjs:229:import './src/styles/index.ts';
+test/browser/lock-prompt.mjs:40:import './src/styles/index.ts';
+test/browser/long-code.mjs:13:import './src/styles/index.ts';
+test/browser/mobile-resume.mjs:16:import './src/styles/index.ts';
+test/browser/mobile-resume.mjs:20:import {MobileWorkspace} from './src/mobile/index.tsx';
+test/browser/mobile-work.mjs:16:import './src/styles/index.ts';
+test/browser/new-chat-foot.mjs:13:import './styles/index.ts';
+test/browser/new-chat-station-files.mjs:16:import './src/styles/index.ts';
+test/browser/pick-quote.mjs:19:import './src/styles/index.ts';
+test/browser/preview-back.mjs:3:// PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node test/browser/preview-back.mjs
+test/browser/preview-cache.mjs:2:// PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node test/browser/preview-cache.mjs
+test/browser/scroll-edges.mjs:13:import './src/styles/index.ts';
+test/browser/scrollbars.mjs:12:import './styles/index.ts';
+test/browser/send-flight-images.mjs:13:import './styles/index.ts';
+test/browser/send-flight.mjs:11:import './styles/index.ts';
+test/browser/share-page.mjs:18:import { snapshotDir } from '../../station/src/publish/index.ts';
+test/browser/sheet-scroll.mjs:15:import './src/styles/index.ts';
+test/browser/site-first-frame.mjs:17:// Served as Cloudflare serves the site: a directory's index.html, a page's .html at its address without it.
+test/browser/site-first-frame.mjs:21:  try { if (statSync(path).isDirectory()) path = join(path, 'index.html'); } catch { res.writeHead(404).end(); return; }
+test/browser/site-first-frame.mjs:29:const ownScripts = own('index.html');
+test/browser/site-scroll.mjs:16:    if (statSync(path).isDirectory()) path = join(path, 'index.html');
+test/browser/stories.mjs:31:  const index = await browser.newPage();
+test/browser/stories.mjs:32:  await index.goto(base);
+test/browser/stories.mjs:33:  await index.waitForFunction(() => Array.isArray(window.stories));
+test/browser/stories.mjs:35:  const stories = (await index.evaluate(() => window.stories)).filter((s, i) => (!only || only.includes(s.id)) && i % shards === shard - 1);
+test/browser/stories.mjs:36:  await index.close();
+test/browser/swipe-continue.mjs:16:import './src/styles/index.ts';
+test/browser/upload-chat.mjs:37:import './src/styles/index.ts';
+test/browser/upload-send.mjs:14:import './src/styles/index.ts';
+test/browser/video-preview.mjs:17:  import './styles/index.ts';
+test/deploy-admin.test.ts:36:        config = json.loads(Path(args[args.index("--config") + 1]).read_text())
+test/virtual-model.test.ts:21:    assert.ok(row.index > before, "rows in order");
+test/virtual-model.test.ts:22:    before = row.index;
+test/virtual-model.test.ts:23:    assert.equal(row.key, items[row.index]!.key);
+test/virtual-model.test.ts:35:  const rows = new Set(l.rows.map((r) => r.index));
+test/virtual-model.test.ts:54:  assert.equal(l.rows.at(-1)!.index, 199);
+test/virtual-model.test.ts:267:  assert.equal(l.rows.at(-1)!.index, 99);
+test/virtual-model.test.ts:321:  assert.equal(l.rows[0]!.index, 3);
+test/virtual-model.test.ts:335:  assert.ok(19400 - (moving[0]!.index * (100 + GAP)) > 1500, "made well above the pane while it goes up");
+test/virtual-model.test.ts:555:      const start = layout.rows[0]!.index * 100;
+test/virtual-model.test.ts:556:      const end = (layout.rows.at(-1)!.index + 1) * 100;
+vendor/PermissionFlow/Sources/PermissionFlow/UI/PermissionFlowPanelView.swift:40:                    ForEach(controller.guidanceSteps.indices, id: \.self) { index in
+vendor/PermissionFlow/Sources/PermissionFlow/UI/PermissionFlowPanelView.swift:41:                        let step = controller.guidanceSteps[index]
+vendor/PermissionFlow/Sources/PermissionFlow/UI/PermissionFlowPanelView.swift:54:                            Text(stepTitle(index + 1))
+vendor/libadb/src/base/channel.rs:272:    /// Slot index in the connection's channel table.
+vendor/libadb/src/base/connection/tests.rs:18:    // Index 1: the header lands, the payload write is the one that hangs.
+vendor/libadb/src/base/connection/tests.rs:62:    // Index 0: the write was polled but never returned, so we cannot
+vendor/libadb/src/base/device_banner.rs:137:        core::str::from_utf8(&self.raw[range.clone()]).expect("banner ranges index validated UTF-8")
+vendor/libadb/src/base/mock.rs:87:    /// Stall the write with this index, counting from the first one the
+vendor/libadb/src/base/mock.rs:89:    pub(crate) fn stall_write(&mut self, index: usize) -> &mut Self {
+vendor/libadb/src/base/mock.rs:90:        self.stall_write = Some(index);
+vendor/libadb/src/base/mock.rs:391:/// stalls on the write with the given index (counted after the two
+vendor/libadb/src/base/mock.rs:401:    if let Some(index) = stall {
+vendor/libadb/src/base/mock.rs:402:        mock.stall_write(4 + index);
+vendor/libadb/src/base/mock.rs:410:/// the write with the given index (counted from the first write after
+vendor/libadb/src/base/mock.rs:423:    if let Some(index) = stall {
+vendor/libadb/src/base/mock.rs:424:        mock.stall_write(4 + index);
+vendor/libadb/src/split.rs:2056:        // Index 1: the header is out, the payload write hangs.
+vendor/libadb/src/split.rs:2277:        // Index 1: the header is out, the payload write hangs.
+vendor/n0-mainline/src/actor/socket.rs:577:        if let Ok(index) = self.find_by_tid(key)
+vendor/n0-mainline/src/actor/socket.rs:578:            && let Some(request) = self.requests.get(index)
+vendor/n0-mainline/src/actor/socket.rs:601:            Ok(index) => {
+vendor/n0-mainline/src/actor/socket.rs:602:                let request = self.requests.remove(index);
+vendor/n0-mainline/src/actor/socket.rs:649:        let index = match self
+vendor/n0-mainline/src/actor/socket.rs:653:            Ok(index) => index,
+vendor/n0-mainline/src/actor/socket.rs:654:            Err(index) => index,
+vendor/n0-mainline/src/actor/socket.rs:657:        self.requests.drain(0..index);
+vendor/n0-mainline/src/common/routing_table.rs:299:        if let Some(index) = self.iter().position(|n| n.id() == incoming.id()) {
+vendor/n0-mainline/src/common/routing_table.rs:300:            let existing = self.nodes[index].clone();
+vendor/n0-mainline/src/common/routing_table.rs:313:                self.nodes.remove(index);
+vendor/n0-mainline/src/core/server/peers.rs:64:            for (index, (_, addr)) in info_hash_lru.iter().enumerate() {
+vendor/n0-mainline/src/core/server/peers.rs:67:                let remaining_items = info_hash_lru.len() - index;
+vendor/n0-mainline/src/core/server/peers.rs:73:                    u32::from_le_bytes(chunk[index..index + 4].try_into().expect("infallible"));
+vendor/n0-mainline/src/core/server/signed_peers.rs:64:            for (index, (_, signed_announce)) in info_hash_lru.iter().enumerate() {
+vendor/n0-mainline/src/core/server/signed_peers.rs:67:                let remaining_items = info_hash_lru.len() - index;
+vendor/n0-mainline/src/core/server/signed_peers.rs:73:                    u32::from_le_bytes(chunk[index..index + 4].try_into().expect("infallible"));
+vendor/noq-udp/src/lib.rs:123:    /// The interface index of the interface on which the datagram was received
+vendor/serve-sim/Sources/SimNative/DeviceHubKeyboardBridge.swift:214:        for (index, window) in orderedWindows.enumerated() {
+vendor/serve-sim/Sources/SimNative/DeviceHubKeyboardBridge.swift:225:                windowNumber: UInt32(index + 1),
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:203:        lastSelectedIndex = selection.index
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:205:            selection, selected: sizes[selection.index], preferred: preferredScreenSize
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:209:            let selected = sizes[selection.index]
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:234:            let selected = sizes[selection.index]
+vendor/serve-sim/Sources/SimNative/FrameCapture.swift:242:        return descriptors[selection.index]
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:19:    public let index: Int
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:22:    public init(index: Int, matchedExpectedSize: Bool) {
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:23:        self.index = index
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:58:            return FramebufferSurfaceSelection(index: preferred, matchedExpectedSize: true)
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:61:        let expectedLive = live.filter { index in
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:62:            expectedSizes.contains { $0.isLive && candidates[index].matches($0) }
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:65:            return FramebufferSurfaceSelection(index: bestExpected, matchedExpectedSize: true)
+vendor/serve-sim/Sources/SimNativeSupport/FramebufferSurfaceSelector.swift:71:        return FramebufferSurfaceSelection(index: largest, matchedExpectedSize: false)
+vendor/swarm-discovery/src/socket.rs:225:    // Join multicast on the default interface (interface index 0)
+web/site-prerender.mjs:2:// (web/src/site/prerender.tsx, dist/site-ssr), the page's HTML goes into dist/site/index.html, where the scripts take
+web/site-prerender.mjs:75:  ["zh", "index.html", "<!--site-->", render], ["en", "en/index.html", "<!--site-->", render],
+web/src/FilePreview.tsx:397:    ? { before: shown(told?.before), after: shown(told?.after), at: told?.index ?? -1, count: told?.count ?? 0 }
+web/src/Prose.tsx:167:  return <span ref={root}>{chunks.map((chunk, i) => <CodePart key={i} chunk={chunk} index={i} painted={painted.has(i)} />)}</span>;
+web/src/Prose.tsx:169:const CodePart = memo(function CodePart({ chunk, index, painted }: { chunk: ReturnType<typeof codeChunks>[number]; index: number; painted: boolean }) {
+web/src/Prose.tsx:170:  return <span data-code-chunk={index}>{painted
+web/src/Viz.tsx:143:  return at ? html.slice(0, at.index + at[0].length) + head + html.slice(at.index + at[0].length) : head + html;
+web/src/admin/console.tsx:99:  /** Where times are marked along the charts: `index` a bucket's. */
+web/src/admin/console.tsx:100:  ticks: { index: number; label: string }[];
+web/src/admin/console.tsx:146:          <Route index element={narrow() ? null : <Navigate to="/overview" replace />} />
+web/src/admin/console.tsx:339:          const at = x(tk.index);
+web/src/admin/console.tsx:340:          return <span key={tk.index} style={{ left: `${at}%` }} data-edge={at < 3 ? "start" : at > 97 ? "end" : undefined}>{tk.label}</span>;
+web/src/admin/main.tsx:6:import "../styles/index.ts";
+web/src/annotate/frame.ts:69:  layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647;overflow:hidden;font:500 11px/1 system-ui,-apple-system,sans-serif";
+web/src/backPage.ts:5:  currentEntry: { index: number } | null;
+web/src/backPage.ts:25:  const at = nav?.currentEntry?.index ?? -1;
+web/src/cloud/CloudApp.tsx:1:// The web's own React pages that the app (mbui's, index.html) has none of yet (cloud/src/web.ts WEB_PAGES): a sign-in
+web/src/cloud/beta.tsx:15:/** The title the page was served with (index.html's still.fail) in the page's own name, where that is another. */
+web/src/cloud/workspace.tsx:163:            <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
+web/src/core/shapes.ts:925:	/** The bar in view: an index into `sets`. */
+web/src/core/shapes.ts:4482:	index?: number;
+web/src/core/shapes.ts:7135:	/** name | same-name | refused (share/index.ts Missing). */
+web/src/demo/fixtures.ts:1:// The official site's demo (site/index.html): a made-up team's still.fail workspace, as the core would give it to the page. Each
+web/src/demo/mount.tsx:16:import { MobileWorkspace } from "../mobile/index.tsx";
+web/src/demo/mount.tsx:306:  const rest = m ? (source.slice(0, m.index) + source.slice(m.index + m[0].length)).trim() : source;
+web/src/demo/station.ts:74:  "/Users/lin/code/acme/web": [["src", "folder", 0, 30], ["public", "folder", 0, 900], ["index.html", "html", 1_536, 900], ["vite.config.ts", "code", 812, 1_400], ["package.json", "code", 2_048, 600]],
+web/src/gifEncode.ts:86:/** The palette's index nearest a colour, worked out once for each colour at 5 bits a channel. */
+web/src/keymap.ts:95:export function workspaceKeyLabel(index: number): string {
+web/src/keymap.ts:96:  return keymap()[0].workspace[index] ?? "";
+web/src/main.tsx:2:import "./styles/index.ts";
+web/src/mobile/Home.tsx:100: * What a device waiting to be confirmed in the workspace's security mode sees in place of the workspace (index.tsx
+web/src/mobile/index.tsx:48:      <Route index element={<Home />} />
+web/src/mobile/pick.tsx:366:    if (s?.isWordLike) return { start: s.index, end: s.index + s.segment.length };
+web/src/mobile/pick.tsx:371:  return s ? { start: s.index, end: s.index + s.segment.length } : { start: 0, end: text.length };
+web/src/pages/SlackApp.tsx:157: * (`buddies`, from web/public/avatars/index.json), each drawn from <id>.webp (1024 px, for the icon) with a small
+web/src/prefs.ts:5:// left (the sidebar filtered, the theme set; index.html reads the appearance's own copy before the page's code runs). The
+web/src/prefs.ts:14:/** The appearance's own copy, read by index.html before the first paint (and by pages from before prefs). */
+web/src/prefs.ts:16:/** The motion's own copy, read by index.html before the first paint, as the appearance's. */
+web/src/reloads.ts:11:/** The reason, as the reload leaves it; the inline one in index.html writes the same. */
+web/src/renamed.ts:4:// the new name already has is not overwritten. index.html does the same inline before its first paint.
+web/src/scrollbars.css.ts:4:/** No z-index: layered by where it is (beside its pane), over the pane, under what comes after it (menus, dialogs). */
+web/src/share/main.tsx:3:import "../styles/index.ts";
+web/src/site/Site.tsx:5:// the first paint by site/index.html): your devices joined into one computer (OneComputer.tsx), and the distance it
+web/src/site/Site.tsx:103: *  site/index.html): its button shown, the others' not (site.css.ts downloadMain). A device none is made for (an
+web/src/site/Site.tsx:217:/** The other language's page, chosen: kept, so that the page at / does not send this visitor on again (site/index.html). */
+web/src/site/ThemeSwitch.tsx:2:// page's root says which (data-theme, set before the first paint by site/index.html), and the demo's app follows it.
+web/src/site/main.tsx:4:import "../styles/index.ts";
+web/src/site/main.tsx:10:// The page's language, as it was built (site/index.html, site/en/index.html).
+web/src/site/phone.tsx:3:import "../styles/index.ts";
+web/src/site/prerender.tsx:1:// The official site's page as HTML, for the built index.html (web/site-prerender.mjs): what search engines and link
+web/src/site/words.ts:1:// What the site says, in Chinese (its page at /) and in English (its page at /en/: site/en/index.html). The page is
+web/src/styles/later.css.ts:1:// Rules that must come late in the cascade (styles/index.ts), each after what it wins over, as it says.
+web/src/styles/pageControls.css.ts:2:// fields, the steps of signing in or of connecting. Right after the package's controls in the cascade (styles/index.ts).
+web/src/theme.ts:3:// brand pictures follow. index.html sets it before the first paint from the copy of the core's last value
+web/src/virtual/model.ts:36:export type Row = { key: string; index: number; space: number };
+web/src/virtual/model.ts:121:    // A scroll redraw hands in the same descriptions again. Keep the index and prefix heights until data changes.
+web/src/virtual/model.ts:312:      rows.push({ key: this.items[i]!.key, index: i, space: this.tops[i]! - end });
+web/src/virtual/model.ts:329:      rows.push({ key: this.items[i]!.key, index: i, space: this.tops[i]! - end });
+web/src/virtual/model.ts:362:  keyAt(index: number): string | undefined { return this.items[index]?.key; }
+web/stories/main.tsx:5:import "../src/styles/index.ts";
+web/stories/relays.ts:26:function ticks(range: Range): { index: number; label: string }[] {
+web/stories/relays.ts:28:  const out: { index: number; label: string }[] = [];
+web/stories/relays.ts:31:    if (range === "day" && Number.isInteger(h) && h % 6 === 0) out.push({ index: i, label: `${String(h).padStart(2, "0")}:00` });
+web/stories/relays.ts:32:    if (range === "week" && h === 0) out.push({ index: i, label: `10/${20 - Math.floor((n - 1 - i) / 24)}` });
+web/ui/src/own.css.ts:2:// place beside its words, a column's edge its strip. In the cascade after the app's columns (web/src/styles/index.ts:
+web/ui/src/parts.tsx:129:  const index = Math.max(0, options.findIndex((o) => o.value === value));
+web/ui/src/parts.tsx:132:      style={{ "--n": options.length, "--i": index } as CSSProperties}
+web/ui/src/styles/page.css.ts:2:// before them (web/src/styles/index.ts).
+web/ui/src/styles/tokens.css.ts:3:// What several components share is in styles/ (the phone's in mobile/styles/); styles/index.ts loads them all, in
+web/ui/src/viewer/Player.tsx:194:  const index = list.findIndex((e) => e.name === entry.name);
+web/ui/src/viewer/Player.tsx:195:  const prev = index > 0 ? list[index - 1] : undefined;
+web/ui/src/viewer/Player.tsx:196:  const next = index >= 0 ? list[index + 1] : undefined;
+web/ui/src/viewer/Player.tsx:639:    many && index >= 0 ? `${index + 1} / ${list.length}` : null,
+web/ui/src/viewer/Player.tsx:651:      trailing: () => <>{index + 1} / {list.length}</>,
+web/ui/src/viewer/Player.tsx:652:      body: (done) => <ListRows list={list} index={index} playing={playing} onPick={(n) => { done(); if (n !== entry.name) pick(n); }} />,
+web/ui/src/viewer/Player.tsx:700:          <span className={css.name}><b>{entry.name}</b>{many && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
+web/ui/src/viewer/Player.tsx:708:            <b>{t("web-pages.drive.player.list")}</b><small>{index + 1} / {list.length}</small>
+web/ui/src/viewer/Player.tsx:711:          <ListRows list={list} index={index} playing={playing} onPick={(n) => { if (n !== entry.name) pick(n); }} />
+web/ui/src/viewer/Player.tsx:774:function ListRows({ list, index, playing, onPick }: { list: readonly ViewerEntry[]; index: number; playing: boolean; onPick: (name: string) => void }) {
+web/ui/src/viewer/Player.tsx:778:        <button key={e.name} type="button" className={css.listRow} data-current={i === index || undefined} onClick={() => onPick(e.name)}>
+web/ui/src/viewer/Player.tsx:779:          <small>{i + 1}</small><span>{e.name}</span>{i === index && (playing ? <Play size={14} /> : <Check size={14} />)}
+web/vite.config.ts:40:// console (admin/index.html), at / on its own host, into dist/cloud-admin (ember-admin's). A station serves no page.
+web/vite.config.ts:67:      // The app's page is the built index.html, what every page of the app's answers with (the Worker's
+web/vite.config.ts:69:      // React pages (index.html) become web.html, which src/web.ts serves at the few pages the app has none of yet.
+web/vite.config.ts:75:          renameSync(join(options.dir, "index.html"), join(options.dir, "web.html"));
+web/vite.config.ts:76:          renameSync(join(options.dir, "mbui.html"), join(options.dir, "index.html"));
+web/vite.config.ts:108:        ...(consoleBuild ? {} : { input: { main: here("index.html"), mbui: here("mbui.html") } }),
+web/vite.demo.config.ts:69:// The official site (site/index.html → src/site), with the web app itself in it on made-up data (src/demo), into
+web/vite.demo.config.ts:105:    rollupOptions: { input: { index: here("../site/index.html"), en: here("../site/en/index.html"), phone: here("../site/phone.html"), phoneEn: here("../site/en/phone.html") } },
+web/vite.share.config.ts:10:// The share host's page (share/index.html → src/share; cloud/src/share.ts says what the host is), into dist/cloud-share,
+web/vite.stories.config.ts:15:// Its one page, web/stories/index.html: not the site's pages the demo's build takes in (site/, outside this root).
+web/vite.stories.config.ts:16:export default mergeConfig({ ...demo, plugins: [...plugins, vanillaExtractPlugin({ identifiers: "debug" })] }, { root: here("stories"), server: { port: 5199 }, build: { rollupOptions: { input: here("stories/index.html"), output: { codeSplitting: false } } } });

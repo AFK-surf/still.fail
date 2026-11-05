@@ -1,0 +1,10 @@
+client/core-ts/src/account-provider.ts:3:// and embedding"). still.fail cloud's is the default and what the core always did (Google PKCE, rotating refresh
+client/core-ts/src/account-provider.ts:66:/// How a core gets its provider (Options.account): still.fail cloud's unless the embedding app gives another.
+client/core-ts/src/comma.ts:1:// The Comma account provider (contract v1 §4–5; account-provider.ts): the core's account is whoever the embedding
+client/core-ts/src/core.ts:97:  /// Who the accounts are with (account-provider.ts): still.fail cloud unless the embedding app gives another
+client/core-ts/src/hosts/node.ts:19:// What an app embedding this bundle gives `start` (one bundle: one copy of the core's classes).
+client/core-ts/src/hosts/node.ts:48:/// What seals values for the core where Node cannot itself (an Electron app embedding it, as Comma's desktop app does:
+client/core-ts/src/hosts/node.ts:344:/// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
+client/core-ts/src/hosts/node.ts:345:/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding"). `sealer`: what seals
+media/service/src/epub.ts:110:      if (t.name === "cipherreference" && t.attrs["uri"] && !/idpf\.org\/2008\/embedding|ns\.adobe\.com\/pdf\/enc#RC/.test(method)) locked.add(resolve("", t.attrs["uri"]));
+station/src/browser/chrome.ts:12:// browsers.ts), Google's sign-in goes on to its next step (Chrome 156, 2026-10-31; a browser embedding Chromium, CEF
