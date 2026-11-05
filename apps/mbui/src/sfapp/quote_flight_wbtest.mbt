@@ -268,6 +268,35 @@ test "a quote sent alone is in the list at once, its card flying there from the 
 }
 
 ///|
+/// Which field has the keyboard's focus now: its hint ("" none).
+fn focused_field(t : @ui.Tester) -> String {
+  match t.focused() {
+    Some(s) if s.role is TextField => s.label
+    _ => ""
+  }
+}
+
+///|
+test "sent with the focus in its comment line, a quote leaves the focus in the words' field" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  assert_eq(focused_field(t), "添加说明（可选）")
+  tap_send(t)
+  t.run_for(flight_ms + 50.0)
+  assert_eq(focused_field(t), "发消息")
+}
+
+///|
+test "taken out with the focus in its comment line, a quote leaves the focus in the words' field" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  assert_eq(focused_field(t), "添加说明（可选）")
+  t.click(Button, label=@sf.t("web-main.quote.remove"))
+  t.run_for(@sf.leave_ms + 50.0)
+  assert_eq(focused_field(t), "发消息")
+}
+
+///|
 test "words sent with a quote land under its card, which is in their row from the frame they are sent" {
   let calls : Array[Made] = []
   let t = quoting(calls)

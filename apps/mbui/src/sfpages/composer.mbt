@@ -256,6 +256,9 @@ pub fn composer(
   @sfbase.sharing_go(w.key)
   let submit = fn() {
     if ready {
+      // (the line of a quote it takes had the focus: the words' field has it from here, as Enter in that line gives
+      // it, not lost with the line as its card sets out)
+      quote_focus_to_words(c, w)
       @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_string(), fn() { send(w) })
       // (sent in this build, after its field was built: their field's hint and caret gone with them from now, not
       // shown once over them as they set out)
@@ -862,6 +865,15 @@ fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = 
 }
 
 ///|
+/// A quote's comment line having the focus: the words' field has it instead (its quote sent or taken out, the line
+/// goes, and with it the focus and the screen's keyboard).
+fn quote_focus_to_words(c : @ui.Ctx, w : Writing) -> Unit {
+  if w.quotes.iter().any(fn(q) { c.editor_focused("composer/quote/" + text(Some(q), "id")) }) {
+    c.focus_editor(composer_field_key)
+  }
+}
+
+///|
 /// What waits to go with the message (ComposerExtras): the quotes, each with a line for what is said about it (the one
 /// just added takes the focus; Enter in it goes back to the text), then the files: a picture as its picture, pasted
 /// words as their card, a station's file as its card, a link as its card, any other file as its card.
@@ -937,6 +949,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
           @motion.measure_drawn(c, done.card, quote_card_key(id))
           composing.grounds[id] = c.node_bg(done.card)
           if done.removed {
+            quote_focus_to_words(c, w)
             writing_unquote(src, w, id)
           }
         })
