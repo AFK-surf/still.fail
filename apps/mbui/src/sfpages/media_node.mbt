@@ -7,7 +7,7 @@
 /// What a picture shows (`p`), as media_content picks it: a video's still (1) or its black ground till it has one (2);
 /// no preview (3); an image the core sends coming in (4); one sent from here, there at once (5); waited on in the
 /// colours its ThumbHash makes (6) or on the neutral ground (7).
-fn media_state(p : MediaPicture, w : Double, h : Double) -> Int {
+fn media_state(p : MediaPicture) -> Int {
   if p.kind == "video" {
     if p.key != "" && p.key != "!" { 1 } else { 2 }
   } else if p.key == "!" {
@@ -16,7 +16,7 @@ fn media_state(p : MediaPicture, w : Double, h : Double) -> Int {
     4
   } else if p.key != "" {
     5
-  } else if image_wait_colours(p.hash, w, h) is Some(_) {
+  } else if p.hash != "" {
     6
   } else {
     7
@@ -53,44 +53,70 @@ fn media_fitted_node(
     m
     .width(By(fn() { Some(width()) }))
     .height(By(fn() { Some(height()) }))
-    .radius(By(radius))
     |> ignore
-    // (by its state, and one coming in by its picture too: another's way in its own, from its own decode)
-    m.pick(fn() {
-      let p = picture()
-      let state = media_state(p, width(), height())
-      (state, if state == 4 { p.key } else { "" })
-    }, fn(s, which) {
-      let state = which.0
-      s.width(By(fn() { Some(width()) })).height(By(fn() { Some(height()) })).radius(By(radius)) |> ignore
-      match state {
-        1 => {
-          s.ground(Is(0x000000FFL)) |> ignore
-          media_image(s, fn() { picture().key }, width, height, fit, matte=Some(0x000000FFL))
-        }
-        2 => s.ground(Is(0x000000FFL)) |> ignore
-        3 => {
-          s.lies_along(Is(Middle)).lines_up(Is(Some(Middle))).gap(Is(6.0)) |> ignore
-          @sf.icon_node(s, "read", no_preview_icon, By(fn() { @sf.theme().p.muted })) |> ignore
-          @sf.words_node(
-            s,
-            fn() { @sf.t(if picture().unreached { "web-main.file.loadAgain" } else { "web-main.file.noPreview" }) },
-            fn() { no_preview_words },
-          )
-          |> ignore
-        }
-        4 => media_reveal_node(s, picture, width, height, fit)
-        5 => media_image(s, fn() { picture().key }, width, height, fit)
-        6 =>
-          s.image(By(fn() {
-            image_wait_colours(picture().hash, width(), height()).map(fn(k) { (k, "", 64) })
-          }))
-          |> ignore
-        _ => s.ground(By(fn() { @ui.tree_theme().color(Neutral) })) |> ignore
-      }
-    })
+    media_box_node(m, picture, fit, radius)
   })
   |> ignore
+}
+
+///|
+/// The same picture filling a box that layout sized, without feeding that size back into layout.
+fn media_fitted_fill_node(
+  box : @view.View,
+  picture : () -> MediaPicture,
+  fit : () -> @ui.Fit,
+  radius : () -> Double,
+) -> Unit {
+  media_box_node(box, picture, fit, radius)
+}
+
+///|
+fn media_box_node(
+  m : @view.View,
+  picture : () -> MediaPicture,
+  fit : () -> @ui.Fit,
+  radius : () -> Double,
+) -> Unit {
+  m.radius(By(radius)) |> ignore
+  // A different picture has its own reveal. All its children fill the box as layout gave it.
+  m.pick(fn() {
+    let p = picture()
+    let state = media_state(p)
+    (state, if state == 4 { p.key } else { "" })
+  }, fn(s, which) {
+    let state = which.0
+    s.over(Is(true)).radius(By(radius)) |> ignore
+    match state {
+      1 => {
+        s.ground(Is(0x000000FFL)) |> ignore
+        media_image(s, fn() { picture().key }, fit, matte=Some(0x000000FFL))
+      }
+      2 => s.ground(Is(0x000000FFL)) |> ignore
+      3 => {
+        s.lies_along(Is(Middle)).lines_up(Is(Some(Middle))).gap(Is(6.0)) |> ignore
+        @sf.icon_node(s, "read", no_preview_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+        @sf.words_node(
+          s,
+          fn() { @sf.t(if picture().unreached { "web-main.file.loadAgain" } else { "web-main.file.noPreview" }) },
+          fn() { no_preview_words },
+        )
+        |> ignore
+      }
+      4 => media_reveal_node(s, picture, fit)
+      5 => media_image(s, fn() { picture().key }, fit)
+      6 => {
+        s.image(Painted(fn(laid) {
+          let (w, h) = laid.size(s).unwrap_or((0.0, 0.0))
+          image_wait_colours(picture().hash, w, h).map(fn(k) { (k, "", 64) })
+        }))
+        .ground(Painted(fn(laid) {
+          let (w, h) = laid.size(s).unwrap_or((0.0, 0.0))
+          if image_wait_colours(picture().hash, w, h) is Some(_) { 0L } else { @ui.tree_theme().color(Neutral) }
+        })) |> ignore
+      }
+      _ => s.ground(By(fn() { @ui.tree_theme().color(Neutral) })) |> ignore
+    }
+  })
 }
 
 ///|
@@ -99,23 +125,30 @@ fn media_fitted_node(
 fn media_image(
   s : @view.View,
   key : () -> String,
-  width : () -> Double,
-  height : () -> Double,
   fit : () -> @ui.Fit,
   matte? : Int64? = None,
+  visible? : Bool = false,
 ) -> Unit {
   s
-  .image(By(fn() { Some((key(), "", image_px_most.to_int())) }))
+  .image(Painted(fn(laid) {
+    if visible {
+      match laid.rect(s) {
+        Some((_, y, _, h)) if y + h > 0.0 && y < s.window().1 => ()
+        _ => return None
+      }
+    }
+    Some((key(), "", image_px_most.to_int()))
+  }))
   .image_fades(Is(false))
   |> ignore
   s.image_covers(By(fn() { fit() is FitCover })) |> ignore
-  s.image_in(By(fn() {
+  s.image_in(Painted(fn(laid) {
     let mode = fit()
     match mode {
       FitContain | FitCoverAt(_) => {
         match @ui.image_natural(key()) {
           Some((iw, ih)) if iw > 0.0 && ih > 0.0 => {
-            let (w, h) = (width(), height())
+            let (w, h) = laid.size(s).unwrap_or((0.0, 0.0))
             let (k, at) = match mode {
               FitCoverAt(y) => (dmax(w / iw, h / ih), dclamp(y, 0.0, 1.0))
               _ => (dmin(w / iw, h / ih), 0.5)
@@ -140,38 +173,28 @@ fn media_image(
 fn media_reveal_node(
   s : @view.View,
   picture : () -> MediaPicture,
-  width : () -> Double,
-  height : () -> Double,
   fit : () -> @ui.Fit,
 ) -> Unit {
-  let px = fn() { dmin(dmax(width(), height()) * @ui.current().scale, image_px_most) }
-  // (in the window once: from then on its picture asked for, decoded, drawn. Laid out ahead of what shows (a list's
-  // row made before it comes in), it is only measured: its size is its message's, nothing of it decoded till it shows)
-  let in_sight = @signals.computed(fn(_) {
-    match s.laid_window_told() {
-      Some((_, y, _, h)) => y + h > 0.0 && y < s.window().1
-      None => false
-    }
-  }, same=fn(a, b) { a == b })
-  let seen = @signals.signal(false, same=fn(a, b) { a == b })
-  let ready = fn() { seen.get() && @ui.current().image_ready(picture().key, px()) }
+  // The image node asks for its actual painted size when it is in the window. Its decode's own notification starts
+  // the reveal; no place or size is fed back into layout.
+  let ready = fn() { @ui.image_state(picture().key) == 1 }
+  // A chat's list tells what row is in sight. It is the owner of the picture, not a frame's drawing of the row,
+  // that says whether a decode arrived while it could be seen.
+  let in_sight = fn() { s.lent(chat_picture_in_sight).map(fn(sight) { sight() }).unwrap_or(true) }
   // (when it came in: none, there at once; its way in's end the moment it is all in)
-  let came : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-  // (decoded already, or held while it waits, as it first shows: there at once)
-  s.reacts(fn() { in_sight.get() }, fn(now) {
-    if now && !@signals.untracked(fn() { seen.get() }) {
-      if @signals.untracked(fn() { @ui.current().image_ready(picture().key, px()) || picture().held }) {
-        came.set(Some(-1.0e18))
-      }
-      seen.set(true)
-    }
-  })
+  let initial = if @signals.untracked(fn() { ready() || picture().held }) { Some(-1.0e18) } else { None }
+  let first_shown = s.cause_at()
+  let came : @signals.Signal[Double?] = @signals.signal(initial, same=fn(a, b) { a == b })
   let moving = @signals.signal(false, same=fn(a, b) { a == b })
   s.reacts(fn() { (ready(), picture().held) }, fn(now) {
     let (decoded, held) = now
     if @signals.untracked(fn() { came.get() }) is None {
       // (held while it waits: there at once as it comes)
       if held {
+        came.set(Some(-1.0e18))
+      } else if decoded &&
+        ((s.lent(chat_picture_in_sight) is Some(_) && s.cause_at() <= first_shown) || !@signals.untracked(in_sight)) {
+        // A decode at the first sight is already there, as one decoded before the row entered is.
         came.set(Some(-1.0e18))
       } else if decoded {
         let at = s.cause_at()
@@ -206,22 +229,19 @@ fn media_reveal_node(
   }
   let e = fn() { @ui.Out.at(way()) }
   s.clips(Is(true)) |> ignore
-  s.show(fn() { seen.get() }, fn(i) {
+  s.box(fn(i) {
     i
     .over(Is(true))
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
     .alpha(By(fn() { if ready() { 1.0 } else { 0.0 } }))
     .scale(By(fn() { 1.0 + reveal_grow * (1.0 - e()) }))
     |> ignore
-    media_image(i, fn() { picture().key }, width, height, fit)
+    media_image(i, fn() { picture().key }, fit, visible=true)
   })
+  |> ignore
   // (the frost over it as it comes, none under a quarter deep)
   s.show(fn() { ready() && reveal_blur * (1.0 - e()) > reveal_blur_least }, fn(f) {
     f
     .over(Is(true))
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
     .glass(By(fn() { Some(@ui.Glass::frosted(blur=reveal_blur * (1.0 - e()), tint=0L, solid=0L, contained=true)) }))
     |> ignore
   })
@@ -229,50 +249,49 @@ fn media_reveal_node(
   // foot, in steps on the screen's pixels, and all under it)
   s.show(fn() { waited() > 0.0 }, fn(w) {
     w.over(Is(true)) |> ignore
-    let likeness = fn() { image_wait_colours(picture().hash, width(), height()) }
-    let px_of = fn(y : Double) { (y * @ui.current().scale).round() / @ui.current().scale }
-    // (step k's top and foot and how much of it shows; k == reveal_steps: all under the band)
-    let step = fn(k : Int) -> (Double, Double, Double) {
-      let h = height()
-      if !ready() {
-        if k == reveal_steps { (0.0, h, 1.0) } else { (0.0, 0.0, 0.0) }
-      } else {
-        let band = h * 0.5
-        let top = -band + (h + band) * e()
-        let one = band / reveal_steps.to_double()
-        let (y0, y1, a) = if k == reveal_steps {
-          (top + band, h, 1.0)
-        } else {
-          (top + k.to_double() * one, top + (k + 1).to_double() * one, (k.to_double() + 0.5) / reveal_steps.to_double())
-        }
-        (px_of(dmax(0.0, y0)), px_of(dmin(h, y1)), a)
-      }
-    }
-    for k in 0..=reveal_steps {
-      w.box(fn(strip) {
-        strip
-        .over(Is(true))
-        .clips(Is(true))
-        .width(By(fn() { Some(width()) }))
-        .offset(By(fn() { (0.0, step(k).0) }))
-        .height(By(fn() {
-          let (y0, y1, _) = step(k)
-          Some(dmax(0.0, y1 - y0))
-        }))
-        .alpha(By(fn() { step(k).2 * waited() }))
-        |> ignore
-        strip.box(fn(inner) {
-          inner
-          .width(By(fn() { Some(width()) }))
-          .height(By(fn() { Some(height()) }))
-          .offset(By(fn() { (0.0, -step(k).0) }))
-          .image(By(fn() { likeness().map(fn(l) { (l, "", 64) }) }))
-          .ground(By(fn() { if likeness() is Some(_) { 0L } else { @ui.tree_theme().color(Neutral) } }))
-          |> ignore
+    w.layout_box(By(fn() { (ready(), e(), @ui.current().scale) }), fn(l, state) {
+      let (decoded, progress, scale) = state
+      for k in 0..=reveal_steps {
+        let strip = l.child(k.to_string(), fn(strip) {
+          let likeness = fn(laid : @view.Laid) {
+            let (wide, high) = laid.size(w).unwrap_or((0.0, 0.0))
+            image_wait_colours(picture().hash, wide, high)
+          }
+          strip.clips(Is(true))
+          .alpha(By(fn() {
+            let a = if k == reveal_steps { 1.0 } else { (k.to_double() + 0.5) / reveal_steps.to_double() }
+            a * waited()
+          }))
+          .image(Painted(fn(laid) { likeness(laid).map(fn(key) { (key, "", 64) }) }))
+          .ground(Painted(fn(laid) { if likeness(laid) is Some(_) { 0L } else { @ui.tree_theme().color(Neutral) } }))
+          .image_in(Painted(fn(laid) {
+            let (wide, high) = laid.size(w).unwrap_or((0.0, 0.0))
+            let (y, _, _) = media_reveal_step(high, k, ready(), e(), @ui.current().scale)
+            Some(((0.0, -y, wide, high), 0L))
+          })) |> ignore
         })
-        |> ignore
-      })
-      |> ignore
-    }
+        let (y0, y1, _) = media_reveal_step(l.height, k, decoded, progress, scale)
+        l.measure(strip, l.width, height=dmax(0.0, y1 - y0)) |> ignore
+        l.place(strip, 0.0, y0)
+      }
+    }) |> ignore
   })
+}
+
+///|
+/// A strip's top, bottom and opacity in a waiting picture, rounded to the window's pixels.
+fn media_reveal_step(h : Double, k : Int, decoded : Bool, progress : Double, scale : Double) -> (Double, Double, Double) {
+  if !decoded {
+    return if k == reveal_steps { (0.0, h, 1.0) } else { (0.0, 0.0, 0.0) }
+  }
+  let band = h * 0.5
+  let top = -band + (h + band) * progress
+  let one = band / reveal_steps.to_double()
+  let (y0, y1, a) = if k == reveal_steps {
+    (top + band, h, 1.0)
+  } else {
+    (top + k.to_double() * one, top + (k + 1).to_double() * one, (k.to_double() + 0.5) / reveal_steps.to_double())
+  }
+  let px_of = fn(y : Double) { (y * scale).round() / scale }
+  (px_of(dmax(0.0, y0)), px_of(dmin(h, y1)), a)
 }

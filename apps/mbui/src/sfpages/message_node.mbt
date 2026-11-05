@@ -391,7 +391,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
               (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", w, at, @sf.message_file_corner, by, fills=true))
+                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { Some(w()) }, at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
@@ -902,17 +902,18 @@ fn quotes_node(
         // the card lets it be, nothing of it read back)
         picture_box=fn(room) {
           room.box(fn(b) {
-            let size = fn() {
-              match (quote_file(q(), files()), quote_picture_most()) {
-                (Some(a), Some(most)) => {
-                  let (bw, bh, _) = image_box(a, image_least, min_side=image_min_side)
-                  let w = dmin(bw, most)
-                  (w, if bw > 0.0 { bh * w / bw } else { 0.0 })
-                }
-                _ => (0.0, 0.0)
+            let file = fn() { quote_file(q(), files()) }
+            // A non-media file keeps the quote's existing placeholder; video uses its own cover's limits.
+            let kind = fn(a : Attachment) { if file_kind(a.name) == "video" { "video" } else { "image" } }
+            let most = fn() {
+              match (file(), quote_picture_most()) {
+                (Some(a), Some(w)) => media_box_width(a, kind(a), Some(w), false)
+                _ => 0.0
               }
             }
-            b.width(By(fn() { Some(size().0) })).height(By(fn() { Some(size().1) })) |> ignore
+            b.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) }))
+            .aspect(By(fn() { file().map(fn(a) { media_box_ratio(a, kind(a)) }).unwrap_or(0.0) }))
+            |> ignore
           })
           |> ignore
         },

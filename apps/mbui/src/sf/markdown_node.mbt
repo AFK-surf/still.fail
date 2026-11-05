@@ -965,25 +965,18 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
   }
   // (each by its key, the file and how many of it are before it: one file twice two images)
   let rows = fn() {
-    let out : Array[Array[(String, String, Double)]] = [[]]
-    let mut used = 0.0
-    let r = room()
+    let all : Array[(String, String, Double)] = []
     let seen : Map[String, Int] = {}
     for named in images() {
       let k = seen.get(named.0).unwrap_or(0)
       seen[named.0] = k + 1
-      let im = (named.0 + "#" + k.to_string(), named.0, named.1)
-      let row = out[out.length() - 1]
-      let w = im.2 * image_row_least + (if row.length() > 0 { image_row_gap } else { 0.0 })
-      if row.length() > 0 && used + w > r {
-        out.push([im])
-        used = im.2 * image_row_least
-      } else {
-        row.push(im)
-        used = used + w
-      }
+      all.push((named.0 + "#" + k.to_string(), named.0, named.1))
     }
-    out
+    md_picture_row_spans(all.map(fn(im) { im.2 }), room()).map(fn(span) {
+      let row : Array[(String, String, Double)] = []
+      for i in span.0..<span.1 { row.push(all[i]) }
+      row
+    })
   }
   p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
     let i = @signals.untracked(fn() { i.get() })
