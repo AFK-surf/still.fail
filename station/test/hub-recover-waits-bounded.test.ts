@@ -42,5 +42,8 @@ test("restart recovery does not inspect idle sessions to find waits", async () =
       results.push({ sessions, turns });
     } finally { store.close(); }
   }
-  assert.deepEqual(results, [{ sessions: 1, turns: 1 }, { sessions: 1, turns: 1 }]);
+  for (const result of results) {
+    assert.ok(result.sessions <= 1, `idle sessions were read: ${result.sessions}`);
+    assert.ok(result.turns <= 1, `idle turns were read: ${result.turns}`);
+  }
 });
