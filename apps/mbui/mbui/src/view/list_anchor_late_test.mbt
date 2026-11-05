@@ -3,7 +3,7 @@
 // first, what it was asked to put put.
 
 ///|
-fn late_case(put_first : (Int, Double)?) -> (@view.Tree, Map[Int, @view.View], @signals.Signal[Array[Int]], @signals.Signal[Double]) {
+fn late_case(put_first : (Int, Double)?, outer? : Bool = false) -> (@view.Tree, Map[Int, @view.View], @signals.Signal[Array[Int]], @signals.Signal[Double]) {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let live : Map[Int, @view.View] = Map([])
@@ -11,14 +11,22 @@ fn late_case(put_first : (Int, Double)?) -> (@view.Tree, Map[Int, @view.View], @
   let put : @signals.Signal[(Int, Double)?] = @signals.signal(put_first)
   let tall = @signals.signal(0.0, same=fn(a, b) { a == b })
   let tree = @view.Tree::new(fn(root) {
-    root.box(fn(o) {
-      o.width(Is(Some(300.0))).height(By(fn() { Some(tall.get()) })) |> ignore
+    let list = fn(o : @view.View) {
       o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead=0.0, shown~, put~, foot_room=fn() { 44.0 }, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         b.height(Is(Some(40.0))) |> ignore
       })
       |> ignore
+    }
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(By(fn() { Some(tall.get()) })) |> ignore
+      // (its own room the same, the box it is in given its height: its room comes from where it is)
+      if outer {
+        o.box(fn(i) { i.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore; list(i) }) |> ignore
+      } else {
+        list(o)
+      }
     })
     |> ignore
   })
@@ -38,6 +46,14 @@ test "scrolls_anchored: laid out first where it has no room, then where it shows
 ///|
 test "scrolls_anchored: put while it has no room yet, put once it shows" {
   let (tree, _, shown, tall) = late_case(Some((10, 0.0)))
+  tall.set(144.0)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_eq(shown.get(), [10, 11, 12])
+}
+
+///|
+test "scrolls_anchored: its room given by the box it is in, nothing it reads changed: laid out again where it shows" {
+  let (tree, _, shown, tall) = late_case(Some((10, 0.0)), outer=true)
   tall.set(144.0)
   tree.frame(390.0, 844.0, now=16.0) |> ignore
   assert_eq(shown.get(), [10, 11, 12])
