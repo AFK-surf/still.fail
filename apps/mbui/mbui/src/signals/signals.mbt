@@ -37,6 +37,8 @@ priv struct Run {
   lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
+  /// where each flush under way was set off from (the set under way, flush_said): the innermost last
+  flush_trail : Array[String]
 }
 
 ///|
@@ -54,6 +56,7 @@ let run : Run = {
   afters: [],
   lasts: [],
   draining: false,
+  flush_trail: [],
 }
 
 ///|
@@ -466,7 +469,55 @@ fn run_effect(e : ReactiveNode) -> Unit {
 }
 
 ///|
+/// How deep flushes may run in each other (a batch that writes, inside an effect, flushes there and then: as deep as
+/// what it sets going goes on so; leaving a long chat, 15).
+pub let flush_deepest : Int = 64
+
+///|
+/// Where an effect is said whose read another effect run inside it set again (two going round, never settled: what it
+/// read set after it read it, it not run again): a test's and a tool's end there (abort); an app's run on a host says
+/// it on its log instead (mbui/ui's run).
+pub let effect_round_said : Ref[(String) -> Unit] = Ref(fn(s) { abort(s) })
+
+///|
+fn effect_round() -> Unit {
+  let at = match setting.val {
+    Some(l) => l.to_string()
+    None => "a batch's end"
+  }
+  (effect_round_said.val)(
+    "signals: an effect under way had what it read set again by another effect run inside it, set at \{at}: the two go round, the first not run again",
+  )
+}
+
+///|
+/// Where flushes too deep are said instead of the program ending (a test's; none: abort).
+pub let flush_too_deep_said : Ref[((String) -> Unit)?] = Ref(None)
+
+///|
 fn flush() -> Unit {
+  // (one inside another past flush_deepest: something set going without end what sets more going, or what is not
+  // the program's (a clock read as it goes) taken into it, each round a flush deeper; said where they were set off,
+  // before it runs the stack out. 2026-11-05: a frame's layout took the host's now, 2000 deep as a chat was left)
+  if run.flushing >= flush_deepest {
+    let from = if run.flush_trail.length() > 8 { run.flush_trail.length() - 8 } else { 0 }
+    let last = Array::makei(run.flush_trail.length() - from, fn(i) { run.flush_trail[from + i] })
+    let said = "signals: flushes \{run.flushing} deep in each other, set off from (the innermost last) \{last}"
+    match flush_too_deep_said.val {
+      // (a test's: said, and what is queued left to the flushes under way)
+      Some(f) => {
+        f(said)
+        return
+      }
+      None => abort(said)
+    }
+  }
+  run.flush_trail.push(
+    match setting.val {
+      Some(l) => l.to_string()
+      None => "a batch's end"
+    },
+  )
   run.flushing += 1
   while run.notify_index < run.queued_length {
     let effect = run.queued[run.notify_index].unwrap()
@@ -477,6 +528,7 @@ fn flush() -> Unit {
   run.notify_index = 0
   run.queued_length = 0
   run.flushing -= 1
+  run.flush_trail.pop() |> ignore
   // (the change told whole, every effect it set going run: what waits for that, in order; what one of them sets
   // flushed in its turn, what waits on that after it)
   if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
