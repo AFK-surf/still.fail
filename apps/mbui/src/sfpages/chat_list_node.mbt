@@ -74,6 +74,9 @@ pub fn chat_list_node(
   let narrow = fn() {
     list_w().map(fn(w) { w <= chat_narrow_w }).unwrap_or(true)
   }
+  // (the same as the list was last laid out, kept where its layout reads it: a layout reads no signal)
+  let narrow_laid = Ref(true)
+  v.reacts(fn() { narrow() }, fn(now) { narrow_laid.val = now })
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
@@ -290,7 +293,7 @@ pub fn chat_list_node(
       let kind = gap_kind(e, i)
       fn() {
         if kind == 0 { 0.0 } else if kind == 1 { joined_gap }
-        else if narrow() { list_gap_narrow } else { list_gap }
+        else if narrow_laid.val { list_gap_narrow } else { list_gap }
       }
     },
     own=fn(e) { e is Foot },
@@ -618,6 +621,7 @@ pub fn chat_list_node(
     }
   })
   let to_end = fn() {
+    println("DBGE to_end")
     // (further than list_glide_rows rows from its end, at once: an old view's list_to_end's glide_to_end)
     let far = @signals.untracked(fn() {
       match shown.get().last() {
