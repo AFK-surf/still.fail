@@ -62,7 +62,7 @@ test("a session's home and member chats are found in bounded source batches", ()
   try {
     const expected: bigint[] = [];
     for (let i = 0; i < 125; i++) {
-      const id = store.openThread("ember", "EMBER", `chat-${i}`, "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${i}`, "Chat", null).id;
       if (i < 3) {
         db.prepare("UPDATE threads SET home = 'ours' WHERE id = ?").run(id);
         expected.push(BigInt(id));

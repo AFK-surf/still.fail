@@ -18,6 +18,7 @@ import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./u
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
+import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -514,7 +515,7 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
       state: agent ? markOf(agent) : null,
     };
   }
-  if (kind === "ember" || kind === "stillfail") return { kind: "ember", name: brand.name(), mine: false };
+  if (isStationAuthor(kind)) return { kind: "station", name: brand.name(), mine: false };
   const mine = isViewer(me, author, slackUsers);
   const member = members.find((m) => sameEmail(get(m, "email"), author));
   const name = mine ? t("core-views.present.you") : (str(get(member, "name")) || saidName || author);
@@ -913,6 +914,10 @@ export function host(h: J): J {
   if (!isObject(h)) return h;
   const src = h as J;
   const o: J = { ...src };
+  // (a station from before the name said its memory as emberRssBytes)
+  const rss = typeof src.stationRssBytes === "number" ? src.stationRssBytes : typeof src.emberRssBytes === "number" ? src.emberRssBytes : 0;
+  delete o.emberRssBytes;
+  o.stationRssBytes = rss;
   const n = (...path: string[]): number => {
     let v: J = src;
     for (const k of path) v = get(v, k);
@@ -1003,11 +1008,11 @@ export function host(h: J): J {
     { label: t("core-views.present.host.hostname"), value: str(src.hostname) ?? "" },
     { label: t("core-views.present.host.chip"), value: [cpuModel, cpus > 0 ? cores : null, arch || null].filter((x) => x !== null).join(" · ") },
     { label: t("core-views.present.host.uptime"), value: uptimeText },
-    { label: brand.name(), value: t("core-views.present.host.process", { size: `${format.round(n("emberRssBytes") / 1024 ** 2)} MB` }) },
+    { label: brand.name(), value: t("core-views.present.host.process", { size: `${format.round(rss / 1024 ** 2)} MB` }) },
   ].filter((d) => d.value !== "");
   o.meters = [cpu, memory, disk];
   o.usage = [memory, disk].map((m) => `${m.label} ${m.value}`).join(" · ");
-  o.emberText = `${brand.name()} ${format.round(n("emberRssBytes") / 1024 ** 2)} MB`;
+  o.stationText = `${brand.name()} ${format.round(rss / 1024 ** 2)} MB`;
   return o;
 }
 

@@ -16,7 +16,7 @@ const card = { type: "options" as const, options: [{ label: "yes" }] };
 test("installing decision statistics only checks whether old messages exist", () => {
   const store = Store.open(":memory:");
   try {
-    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old", null, null).id;
     store.insertMessage({ ...newMessage(thread, "1", "agent", "agent", "pick"), card });
     store.db.exec("DROP TRIGGER card_outcomes_asked; DROP TRIGGER card_outcomes_answered; DROP TRIGGER card_outcomes_dropped; DROP TABLE card_outcomes");
     store.db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "entries" && column
@@ -33,7 +33,7 @@ test("an old database keeps new decisions but never reports its missing history 
   let store: Store | null = null;
   try {
     store = Store.open(path);
-    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old", null, null).id;
     store.insertMessage({ ...newMessage(thread, "1", "agent", "agent", "pick"), card });
     store.insertMessage(newMessage(thread, "2", "person", "person", "yes"));
     // Simulate a station from before either derived table existed.
@@ -74,7 +74,7 @@ test("restoring old archived chats does not reconstruct their decision statistic
   let store: Store | null = null;
   try {
     store = Store.open(path);
-    const threads = ["a", "b"].map((name) => store!.openThread("ember", "EMBER", name, null, null).id);
+    const threads = ["a", "b"].map((name) => store!.openThread("ember", "CHAT", name, null, null).id);
     for (const thread of threads) {
       store.insertMessage({ ...newMessage(thread, "1", "agent", "agent", "pick"), card });
       store.insertMessage(newMessage(thread, "2", "person", "person", "yes"));
@@ -108,7 +108,7 @@ test("an old archive without decisions leaves existing decision statistics avail
   let store: Store | null = null;
   try {
     store = Store.open(path);
-    const thread = store.openThread("ember", "EMBER", "plain", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "plain", null, null).id;
     store.insertMessage(newMessage(thread, "1", "person", "person", "hello"));
     store.insertMessage(newMessage(thread, "2", "agent", "agent", "hello"));
     fileAway(store, thread);
@@ -130,7 +130,7 @@ test("an archived answer does not change an existing decision outcome", () => {
   let store: Store | null = null;
   try {
     store = Store.open(path);
-    const thread = store.openThread("ember", "EMBER", "plain", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "plain", null, null).id;
     store.insertMessage(newMessage(thread, "1", "agent", "agent", "question"));
     store.insertMessage(newMessage(thread, "2", "person", "person", "yes"));
     fileAway(store, thread);

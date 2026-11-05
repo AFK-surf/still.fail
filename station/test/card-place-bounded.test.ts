@@ -6,7 +6,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 test("an operation finds its original card without reading the session's other conversations", () => {
   const store = Store.open(":memory:");
   try {
-    const original = store.openThread("ember", "EMBER", "original", null, null).id;
+    const original = store.openThread("ember", "CHAT", "original", null, null).id;
     store.joinThread(original, "s", "local");
     store.insertMessage({ ...newMessage(original, "card", "agent", "s", "choose"), card: { type: "text" } });
     const add = (from: number, to: number) => {
@@ -44,7 +44,7 @@ test("an operation finds its original card without reading the session's other c
 test("a card place keeps its membership and pending-card semantics", () => {
   const store = Store.open(":memory:");
   try {
-    const thread = store.openThread("ember", "EMBER", "place", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "place", null, null).id;
     store.joinThread(thread, "s", "local");
     assert.equal(cardPlace(store, "s", null, "card"), null);
     assert.equal(cardPlace(store, "s", thread, null), null);

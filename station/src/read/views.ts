@@ -25,13 +25,12 @@ export { makeStore, openStore } from "./store.ts";
 import { knownChannel, knownPerson, slackCreator, teamName } from "./slack-known.ts";
 import { log } from "../ops/log.ts";
 import { type AuthorKind, type EntryRow, type Json, type MessageRow, type SessionRow, type Store, type ThreadRow, type ThreadSummary, STILLFAIL_SURFACE, takeChars } from "./store.ts";
+import { STATION_AUTHOR, STILLFAIL_CONNECT } from "../store/rows.ts";
 
 /// How much of a chat's last message the sidebar gets.
 const LAST_CHARS = 200;
 /// How far back a row says which cards the viewer answered in it: a day and a half.
 const ANSWERED_WITHIN = 36 * 3600 * 1000;
-/// The connect of the station's own chats (chat/internal.rs).
-const INTERNAL_CONNECT = "ember";
 
 /// An error with the status the admin API answers it with (admin/mod.rs `http_error`): the routes' own.
 export { HttpError };
@@ -109,7 +108,7 @@ function turnSummary(t: store.TurnSummary): Json {
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
 export function slackConnectOf(t: ThreadSummary): string | null {
-  return t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
+  return t.sessions.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null;
 }
 
 /// The name a chat has been given: by people, else by its agent.
@@ -194,19 +193,19 @@ export function authorNames(api: Api, thread: number): Names {
     const key = `${kind}:${author}`;
     if (names.has(key)) return names.get(key)!;
     let name: string | null;
-    if (kind === "ember") name = "still.fail";
+    if (kind === STATION_AUTHOR) name = "still.fail";
     else if (kind === "agent") {
       // An agent goes by the name of the connect it posts through (on the page, of the connect that started it).
       const session = store.getSession(api.store, author);
       const via = members.find((m) => m.session === author)?.connect;
-      const connect = via !== undefined && via !== INTERNAL_CONNECT ? via : (session?.connect ?? null);
+      const connect = via !== undefined && via !== STILLFAIL_CONNECT ? via : (session?.connect ?? null);
       const c = api.connects.find((c) => c.id === connect);
       name = c ? c.name : (session?.title ?? null);
     } else if (th !== null && th.surface === STILLFAIL_SURFACE) {
       name = author === "local" ? tr("station.author.admin") : (api.store.names.get(author) ?? author);
     } else {
       // A Slack person: by the name their connect's Slack gives them, as far as known.
-      const connect = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
+      const connect = members.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null;
       const person = connect === null ? null : knownPerson(api.store, connect, author);
       name = person?.name ? person.name : null;
       if (person?.picture) pictures.set(key, person.picture);
@@ -709,7 +708,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
       // No chat yet: mine if the viewer started the session or wrote in its Slack thread.
       mine: false,
       lastActiveAt: x.lastActiveAt,
-      connect: x.connect === INTERNAL_CONNECT ? null : x.connect,
+      connect: x.connect === STILLFAIL_CONNECT ? null : x.connect,
       origin: origin_,
       // No one has written yet: only who started it.
       people: starter === null ? [] : [starter],

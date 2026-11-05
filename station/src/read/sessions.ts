@@ -32,9 +32,8 @@ import { type RuntimeKind, runtimeKind } from "../agents/runtime.ts";
 import { protectedPlace } from "../drive/fs.ts";
 import { realOutside } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
+import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
-/// The connect of the station's own chats (chat/internal.rs).
-const INTERNAL_CONNECT = "ember";
 
 // ---- the config: its connects' names and its profiles' homes (config.rs) ----
 
@@ -208,7 +207,7 @@ function threadView(
   // How far its own log of them goes (store/schema.ts LETTERS: GET /threads/:id/letters), what clients bring of it.
   if (t.lettersLast > 0) v.lettersLast = t.lettersLast;
   // A Slack channel's name, as far as known.
-  v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null, t.thread.channel);
+  v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
   // A still.fail chat's Slack and Feishu threads, where what people send can be copied (docs/relay.md "抄送"), the one
   // said in last first; left out when none.

@@ -11,6 +11,7 @@ import { scrubPaths } from "../ops/telemetry.ts";
 import { platform } from "../platform/index.ts";
 import type { EntryRow, SessionRow, ThreadRow, TurnSummary } from "../store/rows.ts";
 import type { Store } from "../store/store.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 type Json = any;
 
@@ -157,7 +158,7 @@ export function reportRoutes(store: Store, deps: ReportDeps, send: (report: Json
         }
         if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 1) return error(400, tr(r.lang, "station.admin.badN"));
         const entry = store.entriesBetween(thread.id, n, n)[0];
-        if (entry === undefined || entry.authorKind !== "ember" || !/^⚠️/u.test(entry.text ?? "")) return error(404, tr(r.lang, "station.feedback.notAFailure"));
+        if (entry === undefined || entry.authorKind !== STATION_AUTHOR || !/^⚠️/u.test(entry.text ?? "")) return error(404, tr(r.lang, "station.feedback.notAFailure"));
         const report = noticeReport(store, thread, entry, r.viewer, deps);
         let answer: Json;
         try {

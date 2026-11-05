@@ -9,7 +9,7 @@ const viewer = { sub: "me", email: "me", name: "Me", role: "owner", workspace: "
 function fixture() {
   const store = Store.open(":memory:");
   store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "s", createdAt: 1, lastActiveAt: 1 });
-  const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+  const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
   store.joinThread(thread, "s", "ember");
   const read = makeStore(store.db, "/no-station-config");
   return { store, thread, read };

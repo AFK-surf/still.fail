@@ -25,8 +25,8 @@ for (const recursive of [false, true]) {
     try {
       installWidgetSources(db);
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
-      const first = store.openThread("ember", "EMBER", "first", null, null).id;
-      const second = store.openThread("ember", "EMBER", "second", null, null).id;
+      const first = store.openThread("ember", "CHAT", "first", null, null).id;
+      const second = store.openThread("ember", "CHAT", "second", null, null).id;
       assert.equal(widgetSourcesStep(db, first).done, true);
       assert.equal(widgetSourcesStep(db, second).done, true);
       store.joinThread(first, "a", "ember");
@@ -56,8 +56,8 @@ for (const recursive of [false, true]) {
       const store = Store.open(":memory:"), db = store.db;
       try {
         db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
-        const first = store.openThread("ember", "EMBER", "first", null, null).id;
-        const second = store.openThread("ember", "EMBER", "second", null, null).id;
+        const first = store.openThread("ember", "CHAT", "first", null, null).id;
+        const second = store.openThread("ember", "CHAT", "second", null, null).id;
         widgetSourcesStep(db, first); widgetSourcesStep(db, second);
         store.joinThread(first, "a", "ember"); store.joinThread(second, "a", "ember");
         const path = "/w/item.html", files = (name: string) => JSON.stringify([{ path, name }]);
@@ -74,8 +74,8 @@ for (const recursive of [false, true]) {
     const store = Store.open(":memory:"), db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
-      const tracked = store.openThread("ember", "EMBER", "tracked", null, null).id;
-      const other = store.openThread("ember", "EMBER", "other", null, null).id;
+      const tracked = store.openThread("ember", "CHAT", "tracked", null, null).id;
+      const other = store.openThread("ember", "CHAT", "other", null, null).id;
       widgetSourcesStep(db, tracked);
       store.joinThread(tracked, "a", "ember");
       const path = "/w/item.html", files = JSON.stringify([{ path, name: "tracked" }]);
@@ -97,7 +97,7 @@ for (const recursive of [false, true]) {
     const store = Store.open(":memory:"), db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
-      const threads = ["one", "two", "unrequested"].map((name) => store.openThread("ember", "EMBER", name, null, null).id);
+      const threads = ["one", "two", "unrequested"].map((name) => store.openThread("ember", "CHAT", name, null, null).id);
       for (const thread of threads.slice(0, 2)) { widgetSourcesStep(db, thread); store.joinThread(thread, "a", "ember"); }
       const paths = ["/w/one", "/w/two", "/w/three"];
       let seed = 71239;
@@ -131,7 +131,7 @@ test("old widget sources are built in bounded batches while messages change", ()
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old", null, null).id;
     store.joinThread(thread, "a", "ember");
     const path = "/w/item.html", files = (name: string) => JSON.stringify([{ path, name }]);
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
@@ -160,7 +160,7 @@ test("old widget preparation skips edits that are not messages", () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
       beforeIndex(db);
-      const thread = store.openThread("ember", "EMBER", "edits", null, null).id;
+      const thread = store.openThread("ember", "CHAT", "edits", null, null).id;
       const files = JSON.stringify([{ path: "/w/item", name: "item" }]);
       const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
         VALUES(?,?,?,?,'agent','a',?,?)`);
@@ -182,7 +182,7 @@ for (const missing of [null, "entries_said", "entries_letters"] as const) test(`
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "numbered", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "numbered", null, null).id;
     store.joinThread(thread, "a", "ember");
     const path = "/w/item.html";
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
@@ -204,7 +204,7 @@ for (const missing of [null, "entries_said", "entries_letters"] as const) {
     const store = Store.open(":memory:"), db = store.db;
     try {
       beforeIndex(db);
-      const thread = store.openThread("ember", "EMBER", "old-letters", null, null).id;
+      const thread = store.openThread("ember", "CHAT", "old-letters", null, null).id;
       store.joinThread(thread, "a", "ember");
       const path = "/w/item.html", files = (name: string) => JSON.stringify([{ path, name }]);
       const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments,letter)
@@ -234,7 +234,7 @@ test("an edit that leaves the effective files unchanged does not rewrite them", 
   const store = Store.open(":memory:"), db = store.db;
   try {
     installWidgetSources(db);
-    const thread = store.openThread("ember", "EMBER", "same", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "same", null, null).id;
     assert.equal(widgetSourcesStep(db, thread).done, true);
     const files = JSON.stringify([{ path: "/w/item.html", name: "item" }]);
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
@@ -251,7 +251,7 @@ test("an edit that leaves the effective files unchanged does not rewrite them", 
 test("a message inserted after its edit is indexed with that edit's files", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "late-message", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "late-message", null, null).id;
     widgetSourcesStep(db, thread);
     store.joinThread(thread, "a", "ember");
     const path = "/w/item.html", files = JSON.stringify([{ path, name: "edited" }]);
@@ -267,7 +267,7 @@ test("old message numbers beyond JavaScript's safe integers are prepared without
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "wide", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "wide", null, null).id;
     store.joinThread(thread, "a", "ember");
     const path = "/w/item.html", files = JSON.stringify([{ path, name: "wide" }]);
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
@@ -288,7 +288,7 @@ test("another connection's writes remain exact during and after old-thread prepa
   let other: DatabaseSync | null = null;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "writers", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "writers", null, null).id;
     store.joinThread(thread, "a", "ember");
     const pathName = "/w/item.html", files = (name: string) => JSON.stringify([{ path: pathName, name }]);
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
@@ -318,7 +318,7 @@ test("a writer between the old-position read and batch commit cannot be missed",
   let other: DatabaseSync | null = null;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "race", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "race", null, null).id;
     store.joinThread(thread, "a", "ember");
     const pathName = "/w/item.html", files = (name: string) => JSON.stringify([{ path: pathName, name }]);
     db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
@@ -362,7 +362,7 @@ test("a delivery reads all widget sources from one snapshot", () => {
   const dir = mkdtempSync(join(tmpdir(), "widget-snapshot-")), path = join(dir, "station.db");
   const store = Store.open(path), db = store.db, other = new DatabaseSync(path);
   try {
-    const thread = store.openThread("ember", "EMBER", "snapshot", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "snapshot", null, null).id;
     widgetSourcesStep(db, thread);
     store.joinThread(thread, "a", "ember");
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
@@ -392,7 +392,7 @@ test("a bad attachment does not make a message write fail", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     installWidgetSources(db);
-    const thread = store.openThread("ember", "EMBER", "bad", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "bad", null, null).id;
     assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(thread, "a", "ember");
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments) VALUES(?,1,'message','agent','a',1,?)")
@@ -408,13 +408,13 @@ test("a bad attachment does not make a message write fail", () => {
 test("a noncanonical attachment that SQLite can read keeps its original widget source", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "json5", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "json5", null, null).id;
     widgetSourcesStep(db, thread);
     store.joinThread(thread, "a", "ember");
     db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
       VALUES(?,1,'message','agent','a',1,?)`).run(thread, "[{path:'/w/item.html',name:'json5.html'}]");
     const path = "/w/item.html", expected = plain(db.prepare(original).get("a", path));
-    assert.deepEqual(expected, { channel: "EMBER", thread_ts: "json5", name: "json5.html" });
+    assert.deepEqual(expected, { channel: "CHAT", thread_ts: "json5", name: "json5.html" });
     store.putWidgetState("a", path, "{}", "selected");
     assert.equal(store.untoldWidgetModels("a")[0]?.name, "json5.html");
   } finally { store.close(); }
@@ -424,14 +424,14 @@ test("preparing an old noncanonical attachment preserves the original lookup", (
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "old-json5", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old-json5", null, null).id;
     store.joinThread(thread, "a", "ember");
     db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
       VALUES(?,1,'message','agent','a',1,?)`).run(thread, "[{path:'/w/item.html',name:'old-json5.html'}]");
     installWidgetSources(db);
     while (!widgetSourcesStep(db, thread, 1).done) {}
     const path = "/w/item.html";
-    assert.deepEqual(plain(db.prepare(original).get("a", path)), { channel: "EMBER", thread_ts: "old-json5", name: "old-json5.html" });
+    assert.deepEqual(plain(db.prepare(original).get("a", path)), { channel: "CHAT", thread_ts: "old-json5", name: "old-json5.html" });
     store.putWidgetState("a", path, "{}", "selected");
     assert.equal(store.untoldWidgetModels("a")[0]?.name, "old-json5.html");
   } finally { store.close(); }
@@ -453,8 +453,8 @@ test("a failed widget index installation leaves no partial tables or triggers", 
 test("widget source ties follow the original membership and attachment order", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const first = store.openThread("ember", "EMBER", "first", null, null).id;
-    const second = store.openThread("ember", "EMBER", "second", null, null).id;
+    const first = store.openThread("ember", "CHAT", "first", null, null).id;
+    const second = store.openThread("ember", "CHAT", "second", null, null).id;
     widgetSourcesStep(db, first); widgetSourcesStep(db, second);
     store.joinThread(second, "a", "ember"); store.joinThread(first, "a", "ember");
     const path = "/w/item.html", put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
@@ -472,7 +472,7 @@ test("a failed widget source batch rolls back its rows and cursor", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "rollback", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "rollback", null, null).id;
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
       VALUES(?,?,'message','agent','a',?,?)`);
     for (const n of [1, 2]) put.run(thread, n, n, JSON.stringify([{ path: `/w/${n}`, name: String(n) }]));
@@ -491,7 +491,7 @@ test("a failed widget source batch rolls back its rows and cursor", () => {
 test("an incompatible widget index is neither read nor prepared", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "version", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "version", null, null).id;
     store.joinThread(thread, "a", "ember");
     store.putWidgetState("a", "/w/item.html", "{}", "selected");
     db.exec("UPDATE widget_source_meta SET version=2");

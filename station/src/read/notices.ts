@@ -7,6 +7,7 @@ import { type EntryRow, type MessageRow, STILLFAIL_SURFACE, type Store, type Tur
 import * as store from "./store.ts";
 import { apiOf, authorNames, people, titleOf, useNames } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 /// How long a notice's text is kept, in characters (still.fail cloud cuts it shorter).
 const TEXT = 400;
@@ -88,7 +89,7 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   useNames(s);
   const fresh = entries.filter((e) => e.kind === "message" && e.at >= since);
   const person = fresh.filter((e) => e.authorKind === "person").at(-1);
-  const wrong = fresh.filter((e) => e.authorKind === "ember").flatMap((e) => {
+  const wrong = fresh.filter((e) => e.authorKind === STATION_AUTHOR).flatMap((e) => {
     const what = e.text === null ? null : wentWrong(e.text);
     return what === null ? [] : [{ n: e.n, what }];
   }).at(-1);

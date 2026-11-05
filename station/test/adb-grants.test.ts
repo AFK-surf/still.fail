@@ -27,12 +27,18 @@ function world() {
   const subscribers: ((c: { type: string; key?: string; id?: number; ws?: string | null }) => void)[] = [];
   let n = 0;
   let hidden = false;
+  let latestReads = 0;
+  let hasChats = true;
+  let originalJoined = true;
   const hub = {
     store: {
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
-      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any,
-      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any,
+      latestThread: () => {
+        latestReads++;
+        return hasChats ? ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any : null;
+      },
+      sessionThreadById: () => originalJoined ? ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any : null,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card });
         hidden = false;
@@ -53,9 +59,13 @@ function world() {
     notify: (_s: string, text: string) => void told.push(text),
   };
   let ids = 0;
-  const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
+  const db = new DatabaseSync(":memory:");
+  const grants = new PhoneGrants({ db, hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
   return {
-    grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
+    db, grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
+    latestReads: () => latestReads,
+    withoutOriginal: () => { originalJoined = false; },
+    withoutChats: () => { hasChats = false; },
     pass: (ms: number) => void (now += ms),
     archive: (s: string) => {
       sessions.set(s, { ...sessions.get(s)!, archivedAt: now });
@@ -72,6 +82,46 @@ function world() {
     },
   };
 }
+
+test("phone request status stays consistent as it is asked, granted and ended", async () => {
+  const w = world();
+  try {
+    const status = () => {
+      const row = w.db.prepare("SELECT status,body FROM adb_requests WHERE id='p1'").get() as { status: string; body: string };
+      assert.equal(JSON.parse(row.body).status, row.status);
+      return row.status;
+    };
+    await w.grants.ask("s1", "debug the screen");
+    assert.equal(status(), "pending");
+    assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
+    assert.equal(status(), "granted");
+    w.pass(3600_000);
+    assert.deepEqual(w.grants.held("s1"), []);
+    assert.equal(status(), "ended");
+  } finally { w.db.close(); }
+});
+
+test("reusing a pending phone request does not find the latest of the session's other chats", async () => {
+  const w = world();
+  const first = await w.grants.ask("s1", "debug the screen");
+  const before = w.latestReads();
+  assert.equal((await w.grants.ask("s1", "again")).id, first.id);
+  assert.equal(w.latestReads(), before, "the original joined chat is enough to reuse the request");
+  w.hideCard();
+  assert.equal((await w.grants.ask("s1", "again", true)).id, first.id);
+  assert.equal(w.latestReads(), before, "asking again puts the card in its original chat");
+  assert.equal(w.cards.length, 2);
+});
+
+test("a pending phone request still needs a joined chat when its original chat is gone", async () => {
+  const w = world();
+  const first = await w.grants.ask("s1", "debug the screen");
+  w.withoutOriginal();
+  assert.equal((await w.grants.ask("s1", "again")).id, first.id, "another joined chat still permits reuse");
+  await assert.rejects(w.grants.ask("s1", "again", true), /original conversation is no longer available/);
+  w.withoutChats();
+  await assert.rejects(w.grants.ask("s1", "again"), /no chat to ask in/);
+});
 
 test("phone grants are listed, decided and announced only in their chat's workspace", async () => {
   const w = world();

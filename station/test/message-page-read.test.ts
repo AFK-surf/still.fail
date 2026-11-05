@@ -8,7 +8,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 
 function data() {
   const store = Store.open(":memory:");
-  const thread = store.openThread("ember", "EMBER", "1.0", null, null).id;
+  const thread = store.openThread("ember", "CHAT", "1.0", null, null).id;
   for (let i = 1; i <= 1000; i++) store.insertMessage(newMessage(thread, `1.${i}`, "person", "person", `${i}`));
   let rows = 0;
   const db = new Proxy(store.db, {

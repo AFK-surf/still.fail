@@ -298,6 +298,13 @@ export class Readers {
     return this.covered(this.ccIndex.readyNames(sessions, signal), signal);
   }
 
+  /// Prepare the latest conversation for only the old sessions a caller needs.
+  prepareLatestThreads(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.ccIndex ??= new CcIndexBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.ccIndex.readyLatest(sessions, signal), signal);
+  }
+
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }

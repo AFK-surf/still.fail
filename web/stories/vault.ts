@@ -34,20 +34,20 @@ const PLAIN: Record<string, { kind: string; name: string; fields: Record<string,
 };
 
 export const REQUEST: VaultRequest = {
-  id: "r_01JAREQ", vault: PERSONAL.id, vaultName: "个人", item: "i_gh", itemName: "GitHub token", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
+  id: "r_01JAREQ", vault: PERSONAL.id, vaultName: "个人", item: "i_gh", itemName: "GitHub token", session: "chat:c-demo-safari", chat: "CHAT/1792199000.000100",
   station: "local", mode: "proxy", reason: "重跑 PR #512 失败的 release job", command: "gh run rerun 1846 --failed", hosts: ["api.github.com"], at: AT,
 };
 
 /** An agent asking to keep a password it read with 1Password (secret_save). */
 export const SAVE_REQUEST: VaultRequest = {
-  id: "r_01JASAVE", vault: PERSONAL.id, vaultName: "个人", item: "i_test_service", itemName: "测试服务登录", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
+  id: "r_01JASAVE", vault: PERSONAL.id, vaultName: "个人", item: "i_test_service", itemName: "测试服务登录", session: "chat:c-demo-safari", chat: "CHAT/1792199000.000100",
   station: "local", mode: "env", reason: "登录测试服务查看状态", command: "op read 'op://Demo/TestService/password'", hosts: [], at: AT,
   save: { kind: "login", username: "demo-user" },
 };
 
 /** An agent asking the person to type in a key it has no way to read (secret_save with neither value nor command). */
 export const TYPED_REQUEST: VaultRequest = {
-  id: "r_01JATYPED", vault: PERSONAL.id, vaultName: "个人", item: "i_go", itemName: "OpenCode Go", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
+  id: "r_01JATYPED", vault: PERSONAL.id, vaultName: "个人", item: "i_go", itemName: "OpenCode Go", session: "chat:c-demo-safari", chat: "CHAT/1792199000.000100",
   station: "local", mode: "proxy", reason: "在 OpenCode 控制台新建用于测试的 API Key", hosts: ["opencode.ai"], at: AT,
   save: { kind: "token", typed: true },
 };
@@ -158,7 +158,7 @@ export function vaultDemo(story: VaultStory, card: boolean | CardStory = false):
 
 const stamp = (minutes: number, full: string): Stamp => ({ at: (AT - minutes * 60) * 1000, ago: minutes < 60 ? `${minutes} 分钟前` : minutes < 1440 ? `${Math.round(minutes / 60)} 小时前` : `${Math.round(minutes / 1440)} 天前`, full, until: "", past: true });
 const use = (minutes: number, full: string, chatTitle: string, mode: string, command?: string, hosts: string[] = [], denied?: boolean): VaultUse =>
-  ({ at: stamp(minutes, full), session: "ember:c-demo-safari", station: "local", chatTitle, mode, ...(command ? { command } : {}), hosts, ...(denied ? { denied } : {}),
+  ({ at: stamp(minutes, full), session: "chat:c-demo-safari", station: "local", chatTitle, mode, ...(command ? { command } : {}), hosts, ...(denied ? { denied } : {}),
     howText: command ? `${command} · ${modeText(mode)}` : howText(mode, hosts) });
 const USES: Record<string, VaultUse[]> = {
   i_gh: [

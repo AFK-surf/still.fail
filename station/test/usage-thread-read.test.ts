@@ -8,7 +8,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 
 test("usage names still.fail chats without reading their first messages", () => {
   const store = Store.open(":memory:");
-  const own = store.openThread("ember", "EMBER", "1", null, null);
+  const own = store.openThread("ember", "CHAT", "1", null, null);
   const slack = store.openThread("slack:T1", "C1", "2", null, null);
   store.insertMessage(newMessage(own.id, "1.1", "person", "a", "private first message"));
   store.insertMessage(newMessage(slack.id, "2.1", "person", "a", "Slack title"));

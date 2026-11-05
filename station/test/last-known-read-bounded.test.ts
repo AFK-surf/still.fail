@@ -6,10 +6,10 @@ test("the first message numbers itself without scanning other chats' reads", () 
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const withRead = store.openThread("ember", "EMBER", "with-read", null, null).id;
-    const withDelivery = store.openThread("ember", "EMBER", "with-delivery", null, null).id;
-    const empty = store.openThread("ember", "EMBER", "empty", null, null).id;
-    const negative = store.openThread("ember", "EMBER", "negative", null, null).id;
+    const withRead = store.openThread("ember", "CHAT", "with-read", null, null).id;
+    const withDelivery = store.openThread("ember", "CHAT", "with-delivery", null, null).id;
+    const empty = store.openThread("ember", "CHAT", "empty", null, null).id;
+    const negative = store.openThread("ember", "CHAT", "negative", null, null).id;
     const put = db.prepare("INSERT INTO reads(viewer,thread,n,at) VALUES (?,?,?,?)");
     db.exec("BEGIN");
     for (let viewer = 0; viewer < 40; viewer++) {

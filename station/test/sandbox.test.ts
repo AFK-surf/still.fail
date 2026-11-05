@@ -123,7 +123,7 @@ function bridge(spec: object, stdin: string): Promise<{ out: string; err: string
 
 describe("sandbox names", () => {
   test("a key's sandbox has a name the front door takes, the same each time, apart from a key cleaning up the same", () => {
-    const keys = ["C0AQ0C0KVMH-1792584359-921939", "c0aq0c0kvmh-1792584359-921939", "EMBER/1791455700.319000", "-", "a".repeat(80)];
+    const keys = ["C0AQ0C0KVMH-1792584359-921939", "c0aq0c0kvmh-1792584359-921939", "CHAT/1791455700.319000", "-", "a".repeat(80)];
     const names = keys.map(sandboxName);
     for (const n of names) assert.match(n, /^[a-z][a-z0-9-]{0,30}$/, n);
     assert.equal(new Set(names).size, keys.length);
@@ -131,7 +131,7 @@ describe("sandbox names", () => {
   });
 
   test("a session's processes and its jobs go to one sandbox", () => {
-    const key = "EMBER/1791455700.319000";
+    const key = "CHAT/1791455700.319000";
     assert.equal(keyOfRunner(runnerId("claude", key)), keyOfRunner(runnerId("cursor", key)));
   });
 });
@@ -427,7 +427,7 @@ describe("a runtime's process", () => {
     const home = join(dir, "home");
     mkdirSync(home);
     writeFileSync(join(home, ".credentials.json"), "{}");
-    const key = "EMBER/1791455700.319000";
+    const key = "CHAT/1791455700.319000";
     const events: RuntimeEvent[] = [];
     const session = await driver.open(
       { key, profile: { id: "cc", runtime: "claude", home, access: { kind: "opencode-go", key: "k1" } }, cwd: dir, instructions: "", mcpToken: "tok", mcpUrl: "http://127.0.0.1:4750/mcp", route: "r" },
@@ -461,8 +461,8 @@ describe("Codex", () => {
     const a: RuntimeEvent[] = [];
     const b: RuntimeEvent[] = [];
 
-    const one = await open("EMBER/1.1", a);
-    await open("EMBER/2.2", b);
+    const one = await open("CHAT/1.1", a);
+    await open("CHAT/2.2", b);
     const started = () => readFileSync(dump, "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(started().length, 2, "an app-server each");
     // The station's certificate file is not the sandbox's: not named to it.
@@ -470,7 +470,7 @@ describe("Codex", () => {
     // Its state database on the sandbox's own disk, not in its home (on NFS there).
     const sqlite = started()[0].env.CODEX_SQLITE_HOME;
     assert.ok(typeof sqlite === "string" && sqlite.includes("/.cache/stillfail/codex-sqlite/") && !sqlite.startsWith(profile.home), sqlite);
-    assert.deepEqual(new Set(destinations(dir)), new Set(["EMBER/1.1", "EMBER/2.2"].map((k) => `${sandboxName(keyOfRunner(runnerId("codex", k)))}.ws@host`)));
+    assert.deepEqual(new Set(destinations(dir)), new Set(["CHAT/1.1", "CHAT/2.2"].map((k) => `${sandboxName(keyOfRunner(runnerId("codex", k)))}.ws@host`)));
     await one.prompt("say:hi");
     await until("its turn ends", () => a.some((e) => e.type === "turnEnded"));
     assert.deepEqual(a.find((e) => e.type === "turnEnded"), { type: "turnEnded", outcome: { kind: "completed" } });

@@ -19,7 +19,7 @@ function fixture(lengths: number[]) {
     const key = `s${i}`;
     store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
       token: key, createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", `chat${i}`, null, null).id;
+    const thread = store.openThread("ember", "CHAT", `chat${i}`, null, null).id;
     store.joinThread(thread, key, "ember");
     const put = store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     store.db.exec("BEGIN");

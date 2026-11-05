@@ -17,8 +17,8 @@ function oldThreads(store: Store): [number, number] {
   const objects = db.prepare("SELECT type,name FROM sqlite_master WHERE name LIKE 'card_post%' AND type IN ('trigger','table')").all() as { type: string; name: string }[];
   for (const type of ["trigger", "table"] as const) for (const object of objects.filter((item) => item.type === type))
     db.exec(`DROP ${type.toUpperCase()} "${object.name.replaceAll('"', '""')}"`);
-  const first = store.openThread("ember", "EMBER", "long", null, null).id;
-  const second = store.openThread("ember", "EMBER", "short", null, null).id;
+  const first = store.openThread("ember", "CHAT", "long", null, null).id;
+  const second = store.openThread("ember", "CHAT", "short", null, null).id;
   const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,at,card) VALUES(?,?,?,?,'agent','a',?,'{}')");
   db.exec("BEGIN");
   put.run(first, 1, "message", null, 1);
@@ -164,7 +164,7 @@ test("a list of cardless chats does not look up card post readiness for each row
       const key = `s${i}`;
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
         token: key, createdAt: 1, lastActiveAt: 1 });
-      const thread = store.openThread("ember", "EMBER", `cardless-${i}`, null, null).id;
+      const thread = store.openThread("ember", "CHAT", `cardless-${i}`, null, null).id;
       store.joinThread(thread, key, "ember");
       db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES(?,1,'message','agent',?,'hello',1)").run(thread, key);
     }

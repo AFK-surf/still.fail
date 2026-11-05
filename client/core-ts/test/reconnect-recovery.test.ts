@@ -402,7 +402,7 @@ test("a_new_chat_whose_answer_was_lost_is_retried_with_its_first_message", async
   stationReplies(s.host, (req) => {
     if (req.method === "POST" && req.url.endsWith("/admin/api/sessions")) {
       created++;
-      return { key: "ember:c-9", thread: threadView(9, 0) };
+      return { key: "chat:c-9", thread: threadView(9, 0) };
     }
     if (req.method === "POST" && req.url.endsWith("/admin/api/threads/9/messages")) {
       messages.push(JSON.parse(new TextDecoder().decode(req.body!)).text);
@@ -432,7 +432,7 @@ test("a_new_chat_whose_station_went_down_stays_said_down_and_is_asked_for_once_t
   stationReplies(s.host, (req) => {
     if (req.method === "POST" && req.url.endsWith("/admin/api/sessions")) {
       asked.push(req.url);
-      return { key: "ember:c-9", thread: threadView(9, 0) };
+      return { key: "chat:c-9", thread: threadView(9, 0) };
     }
     return undefined;
   });

@@ -239,7 +239,7 @@ function MemberSheet({ view, m }: { view: WorkspaceView; m: MemberView }) {
 
 function removeMember(app: MobileApp, view: WorkspaceView, m: MemberView) {
   confirm(app, {
-    title: t("web-mobile.workspace.removeMemberAsk", { email: m.email, name: view.name }), text: t("web-mobile.workspace.removeMemberText"), action: t("web-mobile.workspace.removeMemberAction"), danger: true, atOnce: "web-mobile.workspace.removeFailed",
+    title: t("web-mobile.workspace.removeMemberAsk", { email: m.email, name: view.name }), text: t("web-mobile.workspace.removeMstationText"), action: t("web-mobile.workspace.removeMemberAction"), danger: true, atOnce: "web-mobile.workspace.removeFailed",
     run: () => cloud.removeMember(app.entry.account.sub, view.id, m.sub).then(() => app.toast(t("web-mobile.workspace.memberRemoved"))),
   });
 }

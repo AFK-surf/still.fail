@@ -58,10 +58,12 @@ export class NameBook {
     this.listener = listener;
   }
 
-  /// A person as far as known; one not known, or known but `stale`, is looked up (again) in the background.
-  person(key: string, fetch: () => Promise<Person | null>, stale: (known: Person) => boolean = () => false): Person | null {
-    const known = this.entries.get(key)?.person ?? null;
-    if (known === null || stale(known)) this.learn(key, async () => {
+  /// A person as far as known; one not known, or known but `stale` (given how long ago they were learned), is looked up
+  /// (again) in the background.
+  person(key: string, fetch: () => Promise<Person | null>, stale: (known: Person, ageMs: number) => boolean = () => false): Person | null {
+    const entry = this.entries.get(key);
+    const known = entry?.person ?? null;
+    if (known === null || stale(known, this.clock.currentTimeMillisUnsafe() - (entry?.at ?? 0))) this.learn(key, async () => {
       const person = await fetch();
       return person === null ? null : { person, at: this.clock.currentTimeMillisUnsafe() };
     });

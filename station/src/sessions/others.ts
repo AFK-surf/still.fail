@@ -274,7 +274,7 @@ export function named(hub: Hub, given: string, ws: string | null = null, write =
 
 /// The conversation a session is best read in: its own chat on the pages, else the one it last heard from.
 export function sessionThreadOf(hub: Hub, key: string): SessionThread {
-  const home = hub.store.sessionThreads(key).find((t) => t.thread.home === key);
+  const home = hub.store.sessionHomeThread(key);
   if (home) return home;
   const latest = hub.store.latestThread(key);
   if (!latest) throw new Error(`session ${key} has no conversation yet`);

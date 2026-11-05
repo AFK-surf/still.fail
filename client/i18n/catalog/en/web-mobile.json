@@ -613,7 +613,7 @@
   "web-mobile.workspace.removeMember": "Remove from workspace",
   "web-mobile.workspace.removeMemberAction": "Remove",
   "web-mobile.workspace.removeMemberAsk": "Remove {email} from \"{name}\"?",
-  "web-mobile.workspace.removeMemberText": "They lose access to this workspace's stations. You can re-invite them later.",
+  "web-mobile.workspace.removeMstationText": "They lose access to this workspace's stations. You can re-invite them later.",
   "web-mobile.workspace.removed": "Removed",
   "web-mobile.workspace.renameTitle": "Workspace name",
   "web-mobile.workspace.renamed": "Renamed",

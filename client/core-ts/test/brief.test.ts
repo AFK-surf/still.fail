@@ -162,7 +162,7 @@ test("the_latest_three_things_it_did_oldest_first", () => {
     call("Grep", { pattern: "width" }, { subagent: true }),
     { kind: "tool_result", text: "ok" },
     { kind: "assistant", text: "测试过了。\n\n接着发消息" },
-    call("mcp__stillfail__chat_post", { to: "EMBER/1", text: "改好了\n详情见 PR" }),
+    call("mcp__stillfail__chat_post", { to: "CHAT/1", text: "改好了\n详情见 PR" }),
     call("mcp__stillfail__chat_state", { kind: "all_done", done: "合了" }),
   ];
   const lines = (live: unknown) => recentOf(live).map((r) => `${r.key} ${r.text}`);

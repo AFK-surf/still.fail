@@ -44,6 +44,7 @@ import * as chatPageCss from "../pages/ChatPage.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { ReadWhole, useWhole } from "../brief.ts";
+import { isOwnSurface } from "../../../client/core-ts/src/titles.ts";
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
 export function openHistory(app: MobileApp, station: string, chat: string, key: string, entry?: number) {
   app.sheet(null);
@@ -326,7 +327,7 @@ function PlaceMark({ station, chat, place }: { station: string; chat: string; pl
     : place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.pop(); } : undefined;
   return (
     <button type="button" className={css.mHPlace} data-link={open ? true : undefined} disabled={!open} onClick={open}>
-      {(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <SlackMark kind={place.surface} size={12} />}<b>{place.name}</b>
+      {isOwnSurface(place.surface) ? <Mark size={12} /> : <SlackMark kind={place.surface} size={12} />}<b>{place.name}</b>
     </button>
   );
 }

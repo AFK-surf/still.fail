@@ -19,6 +19,7 @@ import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts
 import { sendable, sendAlong } from "./peer-files.ts";
 import { RUNTIME_KINDS, type RuntimeKind } from "../agents/runtime.ts";
 import { USED_WITHIN_MS, askWhich, candidates, choose } from "./model-choice.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 type Json = any;
 
@@ -126,7 +127,7 @@ async function sayOpened(hub: Hub, key: string, title: string, link: string | nu
   const text = tr(stationLang(), "station.session.opened", { chat: chatNamed(latest.thread.surface, title, link) });
   try {
     const ts = await hub.chat(latest.connect).post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-    hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, attachments: [] });
+    hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, attachments: [] });
   } catch (error) {
     log.warn("hub", "an opened chat was not said in its opener's", { session: key, error: (error as Error).message });
   }
@@ -294,7 +295,7 @@ export function settled(hub: Hub, key: string, state: Settled, words: string | n
     const text = tr(stationLang(), "station.session.openerNotTold", { error: (error as Error).message });
     try {
       const ts = await hub.chat(latest.connect).post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, attachments: [] });
+      hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, attachments: [] });
     } catch {}
   });
 }

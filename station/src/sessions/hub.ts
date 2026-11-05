@@ -42,7 +42,7 @@ import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, 
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
 import { candidates as modelsRun } from "./model-choice.ts";
-import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
+import { CHAT_KEY, INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
@@ -63,7 +63,7 @@ export const sessionKey = (connect: string, channel: string, threadTs: string) =
 export const newSingleSessionKey = (connect: string) => `${connect}:s-${randomBytes(4).toString("hex")}`;
 
 /// A new session talked to in the station's chat.
-export const newChatKey = () => `${INTERNAL_CONNECT}:c-${randomBytes(5).toString("hex")}`;
+export const newChatKey = () => `${CHAT_KEY}:c-${randomBytes(5).toString("hex")}`;
 
 /// The bearer token a session presents to the MCP endpoint.
 export const newToken = () => randomBytes(24).toString("base64url");

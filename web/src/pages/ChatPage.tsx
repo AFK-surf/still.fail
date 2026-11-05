@@ -64,6 +64,7 @@ import { WorkspaceNamed } from "../WorkspaceMark.tsx";
 import { tx } from "../cloud/words.tsx";
 import { PublishDialog, PublishedLinks, RevokeConfirm } from "../Publish.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
+import { isOwnSurface } from "../../../client/core-ts/src/titles.ts";
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
@@ -91,7 +92,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : "slack";
+    const surface = !chat.thread || isOwnSurface(chat.thread.surface) ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);

@@ -12,7 +12,7 @@ test("the default home source agrees with the original home visibility rules", (
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: `token-${key}`, createdAt: 1, lastActiveAt: 1, ws });
     const make = (name: string, home: string | null, members: string[]) => {
-      const thread = store.openThread("ember", "EMBER", name, name, null).id;
+      const thread = store.openThread("ember", "CHAT", name, name, null).id;
       db.prepare("UPDATE threads SET home = ? WHERE id = ?").run(home, thread);
       for (const member of members) store.joinThread(thread, member, "ember");
       return thread;
@@ -40,7 +40,7 @@ test("home membership sources are read in bounded steps using the chat index", (
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "many", "Many", null).id;
+    const thread = store.openThread("ember", "CHAT", "many", "Many", null).id;
     for (let i = 0; i < 130; i++) {
       const key = `agent-${String(i).padStart(3, "0")}`;
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",

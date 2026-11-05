@@ -708,7 +708,7 @@ fn received(c : @ui.Ctx, src : Source, station : String, key : String, m : Json?
       if user != "" {
         slack_name(c, src, station, key, user, text(from, "name"), flag(from, "bound"))
       } else {
-        c.text(if notice == "stillfail" { "still.fail" } else { text(from, "name") }, style=h_strong) |> ignore
+        c.text(if notice == "stillfail" { @sf.product() } else { text(from, "name") }, style=h_strong) |> ignore
       }
       c.text(@sf.t(if job { "web-main.history.jobMessage.after" } else { "web-main.history.message.after" }), style=h_label_words)
       |> ignore
@@ -756,7 +756,7 @@ fn place_view(c : @ui.Ctx, station : String, key : String, place : Json?) -> Uni
   let hot = goes && c.lit(id)
   c.box(style=if hot { h_place_hot } else { h_place }, id~, fn() {
     match text(place, "surface") {
-      "ember" | "stillfail" =>
+      "chat" | "ember" | "stillfail" =>
         @sf.drawable(c, if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
       "feishu" => @sf.feishu_mark(c, 12.0) |> ignore
       _ => @sf.slack_mark(c, 12.0) |> ignore

@@ -58,7 +58,7 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
   try {
     store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
-    const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+    const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
     store.joinThread(chat.id, "k", "ember");
     store.insertMessage(newMessage(chat.id, "1.2", "person", "ada@x.com", "看一下"));
     const shared = JSON.stringify([{ workspace: "w2", name: "W2", used: Date.now() }]);
@@ -143,11 +143,11 @@ test("the jobs up are listed with their own chats, not every job and chat the st
       store.insertJob({ id, sessionKey: key, name: id, command: "sleep 9", cwd: "/", port, token: id, state, pgid: null, exitCode: null, startedAt: at, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
     // A job running in a listed chat, and a service up in one whose chat is archived.
     session("k", 10);
-    const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+    const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
     store.joinThread(chat.id, "k", "ember");
     store.setThreadTitle(chat.id, "修登录");
     session("old", 5);
-    const gone = store.openThread("ember", "EMBER", "2.1", null, "ada@x.com");
+    const gone = store.openThread("ember", "CHAT", "2.1", null, "ada@x.com");
     store.joinThread(gone.id, "old", "ember");
     store.setArchived("old", true, MANUAL);
     job("j1", "k", "running", 3);
@@ -155,7 +155,7 @@ test("the jobs up are listed with their own chats, not every job and chat the st
     // And 300 chats, listed and archived, each with jobs long over.
     for (let i = 0; i < 300; i++) {
       session(`s${i}`, 1);
-      const t = store.openThread("ember", "EMBER", `3.${i}`, null, "ada@x.com");
+      const t = store.openThread("ember", "CHAT", `3.${i}`, null, "ada@x.com");
       store.joinThread(t.id, `s${i}`, "ember");
       if (i % 2 === 0) store.setArchived(`s${i}`, true, MANUAL);
       job(`x${i}`, `s${i}`, "exited", 1);

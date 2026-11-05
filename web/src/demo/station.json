@@ -280,8 +280,8 @@
    "path": "/Users/lin/.stillfail",
    "totalBytes": 1067299373056
   },
-  "emberRssBytes": 39845888,
-  "emberText": "still.fail 38 MB",
+  "stationRssBytes": 39845888,
+  "stationText": "still.fail 38 MB",
   "facts": [
    "willow",
    "macOS 26.6.2",
@@ -342,8 +342,8 @@
     "path": "/Users/lin/.stillfail",
     "totalBytes": 1067299373056
    },
-   "emberRssBytes": 39845888,
-   "emberText": "still.fail 38 MB",
+   "stationRssBytes": 39845888,
+   "stationText": "still.fail 38 MB",
    "facts": [
     "willow",
     "macOS 26.6.2",
@@ -915,7 +915,7 @@
    "agents": [
     {
      "effort": "medium",
-     "key": "ember:c-demo-a1",
+     "key": "chat:c-demo-a1",
      "lastTurn": {
       "declared": "final",
       "detail": null,
@@ -936,9 +936,9 @@
     "by": "manual"
    },
    "connect": null,
-   "id": "ember:c-demo-a1",
+   "id": "chat:c-demo-a1",
    "last": {
-    "author": "ember:c-demo-a1",
+    "author": "chat:c-demo-a1",
     "authorKind": "agent",
     "authorName": null,
     "createdAt": -259200000,
@@ -948,7 +948,7 @@
    "lastActiveAt": -259200000,
    "mine": true,
    "origin": null,
-   "session": "ember:c-demo-a1",
+   "session": "chat:c-demo-a1",
    "thread": 103,
    "title": "首页首屏加载慢",
    "unread": false
@@ -957,7 +957,7 @@
    "agents": [
     {
      "effort": "medium",
-     "key": "ember:c-demo-a2",
+     "key": "chat:c-demo-a2",
      "lastTurn": {
       "declared": "final",
       "detail": null,
@@ -978,9 +978,9 @@
     "by": "manual"
    },
    "connect": null,
-   "id": "ember:c-demo-a2",
+   "id": "chat:c-demo-a2",
    "last": {
-    "author": "ember:c-demo-a2",
+    "author": "chat:c-demo-a2",
     "authorKind": "agent",
     "authorName": null,
     "createdAt": -432000000,
@@ -990,7 +990,7 @@
    "lastActiveAt": -432000000,
    "mine": true,
    "origin": null,
-   "session": "ember:c-demo-a2",
+   "session": "chat:c-demo-a2",
    "thread": 105,
    "title": "CI 偶发超时",
    "unread": false
@@ -999,7 +999,7 @@
    "agents": [
     {
      "effort": "medium",
-     "key": "ember:c-demo-a3",
+     "key": "chat:c-demo-a3",
      "lastTurn": {
       "declared": "final",
       "detail": null,
@@ -1020,9 +1020,9 @@
     "by": "manual"
    },
    "connect": null,
-   "id": "ember:c-demo-a3",
+   "id": "chat:c-demo-a3",
    "last": {
-    "author": "ember:c-demo-a3",
+    "author": "chat:c-demo-a3",
     "authorKind": "agent",
     "authorName": null,
     "createdAt": -777600000,
@@ -1032,7 +1032,7 @@
    "lastActiveAt": -777600000,
    "mine": true,
    "origin": null,
-   "session": "ember:c-demo-a3",
+   "session": "chat:c-demo-a3",
    "thread": 109,
    "title": "给客服后台加导出",
    "unread": false

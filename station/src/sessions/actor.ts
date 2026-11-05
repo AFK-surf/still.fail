@@ -23,6 +23,8 @@ import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agent
 import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 import { WidgetSourcesUnavailable } from "../store/widget-sources.ts";
+import { STATION_AUTHOR, STILLFAIL_SURFACE } from "../store/rows.ts";
+import { INTERNAL_CONNECT } from "./internal.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -892,13 +894,13 @@ export class SessionActor {
 
   // ── inside the queue ─────────────────────────────────────────────────────────────────────────────────────────
 
-  /// The notices waiting, as the agent reads them: each a message from the station (via="ember", as before the rename).
+  /// The notices waiting, as the agent reads them: each a message from the station (via="station").
   private takeNotices(): string | null {
     const notices = this.notices;
     this.notices = [];
     if (notices.length === 0) return null;
     const at = this.deps.nextTs();
-    return notices.map((n) => `<message via="ember" from="ember" ts="${at}">\n${n}\n</message>`).join("\n");
+    return notices.map((n) => `<message via="station" from="station" ts="${at}">\n${n}\n</message>`).join("\n");
   }
 
   private async giveNotices() {
@@ -951,7 +953,7 @@ export class SessionActor {
   }
 
   private workFor(messages: any[]) {
-    for (const m of messages.filter((m) => m.surface !== "ember")) {
+    for (const m of messages.filter((m) => m.surface !== STILLFAIL_SURFACE)) {
       const at = this.workingFor.find((w) => w.connect === m.connect && w.channel === m.channel && w.threadTs === m.threadTs);
       if (at) at.ts = m.message.ts;
       else this.workingFor.push({ connect: m.connect, channel: m.channel, threadTs: m.threadTs, ts: m.message.ts, firstTs: m.message.ts, since: this.now() });
@@ -1067,7 +1069,7 @@ export class SessionActor {
   /// station's own chats, its runtime and model.
   private agentName(key: string, thread: number): string {
     const via = this.deps.store.threadSessions(thread).find((m) => m.session === key)?.connect;
-    const chat = via && via !== "ember" ? this.deps.chat(via) : undefined;
+    const chat = via && via !== INTERNAL_CONNECT ? this.deps.chat(via) : undefined;
     const name = chat?.botName?.() ?? "";
     if (name !== "") {
       const user = chat?.botUserId?.() ?? "";
@@ -1679,7 +1681,7 @@ export class SessionActor {
   private saidLast(text: string | ((said: string) => boolean)): boolean {
     const latest = this.deps.store.latestThread(this.key);
     const last = latest ? this.deps.store.entriesBefore(latest.thread.id, null, 1).at(-1) : undefined;
-    return last !== undefined && last.authorKind === "ember" && (typeof text === "string" ? last.text === text : text(last.text));
+    return last !== undefined && last.authorKind === STATION_AUTHOR && (typeof text === "string" ? last.text === text : text(last.text));
   }
 
   /// Its account spent with none to move to: at `at` it goes on there by itself, with what waited meanwhile.
@@ -1720,7 +1722,7 @@ export class SessionActor {
     }
     try {
       const ts = await chat.post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
       recorded?.([latest.thread.id, n, ts]);
     } catch (error) {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });
@@ -1819,4 +1821,4 @@ function compactFailed(error: unknown): string {
 }
 
 /// Who wrote a message, as a creator reference: their email on the page, their Slack user through the connect it came by.
-const personRef = (m: any) => (m.surface === "ember" ? m.message.author : `slack:${m.connect}:${m.message.author}`);
+const personRef = (m: any) => (m.surface === STILLFAIL_SURFACE ? m.message.author : `slack:${m.connect}:${m.message.author}`);

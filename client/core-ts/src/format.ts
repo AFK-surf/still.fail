@@ -330,9 +330,9 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
   const when = tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(started, offsetMin) });
-  const own = channel === "EMBER" || channel === "STILLFAIL";
+  const own = titles.isOwnChannel(channel);
   // (a thread its station has not told of is a Slack one by its channel)
-  const where = own ? chatTitle({ ...(thread as object), surface: "ember" }) : placeName(str(get(thread, "surface")) || "slack", channel, str(get(thread, "channelName")) ?? "") ?? `#${channel}`;
+  const where = own ? chatTitle({ ...(thread as object), surface: "chat" }) : placeName(str(get(thread, "surface")) || "slack", channel, str(get(thread, "channelName")) ?? "") ?? `#${channel}`;
   return [where, when];
 }
 
@@ -379,7 +379,7 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
   const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === ts);
   const first = (get(thread, "sessions") as unknown[] | undefined)?.[0];
   const session = str(get(first, "session")) ?? null;
-  if (channel === "EMBER" || channel === "STILLFAIL") return { name: n, surface: "ember", session };
+  if (titles.isOwnChannel(channel)) return { name: n, surface: "chat", session };
   const surface = str(get(thread, "surface"));
   if (isFeishuChat(channel) || surface?.startsWith("feishu:")) {
     const connect = surface?.startsWith("feishu:") ? workspaces.get(surface) : undefined;

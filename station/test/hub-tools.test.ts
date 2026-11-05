@@ -131,7 +131,7 @@ test("chat_leave stops a thread's messages reaching its agent until someone ment
 test("chat_leave refuses a still.fail chat", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, { runtime: "claude" as const, createdBy: "ada@x.com" });
-  assert.ok((await r.refused(key, "chat_leave", { to: `EMBER/${thread.threadTs}` })).includes("cannot be left"));
+  assert.ok((await r.refused(key, "chat_leave", { to: `CHAT/${thread.threadTs}` })).includes("cannot be left"));
   await r.close();
 });
 
@@ -216,7 +216,7 @@ test("a post carries a card, kept with it and checked", async () => {
   const [key, thread] = newSession(r.hub, web());
   sayIn(r.hub, thread.id, "ada@x.com", "fix the spacing");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const kept = () => {
     const n = r.said(thread.id).at(-1)!.n;
     return r.store.entriesBetween(thread.id, n, n)[0]!;
@@ -284,7 +284,7 @@ test("answering a clarification cannot silently restore need_human", async () =>
   const [key, thread] = newSession(r.hub, web());
   sayIn(r.hub, thread.id, "ada@x.com", "改一下");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   await r.call(key, "chat_post", { to, text: "可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
   assert.equal(await r.call(key, "chat_state", { kind: "need_human", need: "确认合并" }), "Recorded state need_human.");
   r.claude.last().complete();
@@ -304,7 +304,7 @@ test("a clarification tells the agent its card stopped waiting, and it cannot re
   const r = new Rig();
   try {
     const [key, thread] = newSession(r.hub, web());
-    const to = `EMBER/${thread.threadTs}`;
+    const to = `CHAT/${thread.threadTs}`;
     sayIn(r.hub, thread.id, "ada@x.com", "做这个");
     await settle();
     const posted = await r.call(key, "chat_post", { to, text: "可以合并吗？", kind: "need_human", need: "确认合并", card: { type: "options", options: [{ label: "合并" }] } });
@@ -335,7 +335,7 @@ test("a newer card remains pending when an unread clarification ended the earlie
   const r = new Rig();
   try {
     const [key, thread] = newSession(r.hub, web());
-    const to = `EMBER/${thread.threadTs}`;
+    const to = `CHAT/${thread.threadTs}`;
     sayIn(r.hub, thread.id, "ada@x.com", "做这个");
     await settle();
     const agent = r.claude.last();
@@ -362,7 +362,7 @@ test("a card withdrawn before a message is not attributed to that message", asyn
   const r = new Rig();
   try {
     const [key, thread] = newSession(r.hub, web());
-    const to = `EMBER/${thread.threadTs}`;
+    const to = `CHAT/${thread.threadTs}`;
     sayIn(r.hub, thread.id, "ada@x.com", "做这个");
     await settle();
     await r.call(key, "chat_post", { to, text: "可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
@@ -403,7 +403,7 @@ test("a message sent before a card was posted does not cancel that card", async 
   const r = new Rig();
   try {
     const [key, thread] = newSession(r.hub, web());
-    const to = `EMBER/${thread.threadTs}`;
+    const to = `CHAT/${thread.threadTs}`;
     sayIn(r.hub, thread.id, "ada@x.com", "做这个");
     await settle();
     const agent = r.claude.last();
@@ -428,7 +428,7 @@ test("a state says which message it is about, the pending card by default", asyn
   const [key, thread] = newSession(r.hub, web());
   sayIn(r.hub, thread.id, "ada@x.com", "上线吧");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const about = () => r.store.lastTurn(key)!.about;
   // need_help after a card: about the card, by default.
   await r.call(key, "chat_post", { to, text: "合吗？", card: { type: "options", options: [{ label: "合" }] } });
@@ -486,7 +486,7 @@ test("a card is pending until a person writes, and a newer one replaces it", asy
   const [key, thread] = newSession(r.hub, web());
   sayIn(r.hub, thread.id, "ada@x.com", "fix the spacing");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const pending = () => {
     const p = r.store.pendingCard(thread.id);
     return p ? [p[0].n, p[1]] : null;
@@ -586,7 +586,7 @@ test("a turn ends all_done, needing a decision or help, or waiting, and the word
 test("a login card names its login, and closes for everyone as the login ends", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, web("local"));
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const kept = () => {
     const n = r.said(thread.id).at(-1)!.n;
     return r.store.entriesBetween(thread.id, n, n)[0]!;
@@ -611,7 +611,7 @@ test("a login card names its login, and closes for everyone as the login ends", 
 test("an agent can withdraw its own card without posting or finishing work", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, web("local"));
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   await r.call(key, "chat_post", { to, text: "保留吗？", card: { type: "text" } });
   const first = r.said(thread.id).at(-1)!;
   assert.ok(!r.store.withdrawCard("someone-else", thread.id, first.ts));
@@ -651,7 +651,7 @@ test("web posts deliver local file links, and refuse missing files before postin
   const workspace = r.session(key).workspace;
   const source = join(workspace, "report.txt");
   writeFileSync(source, "original report");
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   await r.call(key, "chat_post", { to, text: `Read [report](${source})` });
   const posted = r.said(thread.id).at(-1)!;
   assert.equal(posted.text, "Read [report](report%2Etxt)");
@@ -696,7 +696,7 @@ test("an agent can name a chat as soon as its topic is clear without posting a m
   const [key, thread] = newSession(r.hub, web("local"));
   sayIn(r.hub, thread.id, "local", "登录失败了，帮我排查");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const before = r.said(thread.id).length;
   r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
 
@@ -737,7 +737,7 @@ test("an agent names its chat once, and again only after people said enough; nev
   const [key, thread] = newSession(r.hub, web("local"));
   sayIn(r.hub, thread.id, "local", "帮我看下这个");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const post = (title: string) => r.call(key, "chat_post", { to, text: "ok", title });
   const named = () => r.store.getThread(thread.id)!.autoTitle;
   // Its model asks again: it has read what people said meanwhile (else its post says it had not).
@@ -772,7 +772,7 @@ test("a title that waits is given once nobody has the chat open", async (t) => {
   const [key, thread] = newSession(r.hub, web("local"));
   sayIn(r.hub, thread.id, "local", "帮我看下这个");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   await r.call(key, "chat_post", { to, text: "ok", title: "登录" });
   for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `再看 ${n}`);
   r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
@@ -817,7 +817,7 @@ test("a chat that starts a watch may be renamed for it at once", async () => {
   const [key, thread] = newSession(r.hub, web("local"));
   sayIn(r.hub, thread.id, "local", "帮我盯着 CI");
   await settle();
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   const post = (title: string) => r.call(key, "chat_post", { to, text: "ok", title });
   assert.ok((await post("CI")).endsWith('Titled the chat "CI".'));
   assert.ok((await post("监控 · CI")).includes("Title not changed: people have said too little"));
@@ -1002,10 +1002,10 @@ test("a message to another station's session goes through the station transport,
   const asked: [string, Json][] = [];
   r.hub.onPeer(async (station, request) => {
     asked.push([station, request]);
-    return { thread: "EMBER/2.000001" };
+    return { thread: "CHAT/2.000001" };
   });
   const sent = await r.call(keyA, "session_send", { to: "https://ember.test/o/ws/far/s%3A1", text: "ready?" });
-  assert.ok(sent.includes("station far") && sent.includes("EMBER/2.000001"), sent);
+  assert.ok(sent.includes("station far") && sent.includes("CHAT/2.000001"), sent);
   const [station, request] = asked.pop()!;
   assert.equal(station, "far");
   assert.deepEqual([request.method, request.to, request.session, request.text], ["session.message", "s:1", keyA, "ready?"]);
@@ -1034,7 +1034,7 @@ test("a chat on another station of the workspace is read there, by its link", as
   const asked: [string, Json][] = [];
   r.hub.onPeer(async (station, request) => {
     asked.push([station, request]);
-    return { text: "Conversation EMBER/2.000001; its agents: s:1.\nit works" };
+    return { text: "Conversation CHAT/2.000001; its agents: s:1.\nit works" };
   });
   // A still.fail link and a chat's page (as a reference is written) both name the station.
   for (const chat of ["https://ember.test/o/ws/far/s%3A1", "/w/ws/s/far/chats/s%3A1?history=s%3A1&entry=3"]) {
@@ -1208,7 +1208,7 @@ test("an agent opens a chat here: it begins with its message, goes to its starte
   // It opens none itself.
   assert.ok((await r.refused(child, "chat_create", { key: "more", text: "and more" })).includes("opens none"));
   // Its turn ends all_done: the opener is told, with its done.
-  await r.call(child, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "built", kind: "all_done", done: "安卓包已经构建好，apk 在 uploads 里" });
+  await r.call(child, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "built", kind: "all_done", done: "安卓包已经构建好，apk 在 uploads 里" });
   runtimeOf(r, child).complete();
   await settle();
   const told = [...runtimeOf(r, keyA).steers, ...runtimeOf(r, keyA).prompts.slice(1)].join("\n");
@@ -1294,7 +1294,7 @@ test("an agent opens a chat on another station: made there once per key, its fir
   assert.equal(far.store.listSessions().length, 1);
   assert.equal(far.said(thread.id).length, 1);
   // Its turn ends needing a person: the opener there is told.
-  await far.call(child!, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "which device?", kind: "need_human", need: "选一台测试机" });
+  await far.call(child!, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "which device?", kind: "need_human", need: "选一台测试机" });
   await settle();
   runtimeOf(far, child!).complete();
   await settle();
@@ -1309,7 +1309,7 @@ test("an agent opens a chat on another station: made there once per key, its fir
   });
   sayIn(far.hub, thread.id, "lee@example.com", "the pixel one");
   await settle();
-  await far.call(child!, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "done", kind: "all_done", done: "测试全部通过，结果贴在上面" });
+  await far.call(child!, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "done", kind: "all_done", done: "测试全部通过，结果贴在上面" });
   runtimeOf(far, child!).complete();
   await settle();
   const last = far.said(thread.id).at(-1)!;
@@ -1558,8 +1558,8 @@ test("station_* reach the transport, pretty-printed; adb_devices and feedback_se
   const [key] = newSession(r.hub, web("local"));
   const sent: Json[] = [];
   const feedback = feedbackTools(r.store, () => "https://x/o/1", () => async (report) => (sent.push(report), { number: 7 }))[0]!;
-  assert.equal(await feedback.run(key, { to: "EMBER/1.1", title: "chat_post fails", body: "it said 500", area: "station", reporter: "Ada" }), "Sent to the still.fail team as FB-7.");
-  assert.deepEqual([sent[0].area, sent[0].context.session, sent[0].context.thread, sent[0].context.link], ["station", key, "EMBER/1.1", "https://x/o/1"]);
+  assert.equal(await feedback.run(key, { to: "CHAT/1.1", title: "chat_post fails", body: "it said 500", area: "station", reporter: "Ada" }), "Sent to the still.fail team as FB-7.");
+  assert.deepEqual([sent[0].area, sent[0].context.session, sent[0].context.thread, sent[0].context.link], ["station", key, "CHAT/1.1", "https://x/o/1"]);
   await assert.rejects(feedbackTools(r.store, () => null, () => null)[0]!.run(key, { title: "a", body: "b" }), /not connected to still.fail cloud/);
   await r.close();
 });
