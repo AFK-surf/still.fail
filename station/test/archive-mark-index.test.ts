@@ -49,6 +49,23 @@ for (const recursive of [false, true]) test(`archive marks follow mixed replacem
   } finally { store.close(); reference.close(); }
 });
 
+for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
+  test(`replacing old marks by ${alias} leaves both lookups exact (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      db.exec("INSERT INTO pins(rowid,viewer,session,at) VALUES(1,'a','one',1),(2,'b','two',1),(3,'c','one',1)");
+      db.exec("INSERT INTO kept_chats(rowid,viewer,thread) VALUES(1,'a',1),(2,'b',2),(3,'c',1)");
+      db.exec(`UPDATE OR REPLACE pins SET ${alias}=2,viewer='c',session='one' WHERE rowid=1`);
+      db.exec(`UPDATE OR REPLACE kept_chats SET ${alias}=2,viewer='c',thread=1 WHERE rowid=1`);
+      check(store);
+      db.exec(`INSERT OR REPLACE INTO pins(${alias},viewer,session,at) VALUES(2,'b','two',1)`);
+      db.exec(`INSERT OR REPLACE INTO kept_chats(${alias},viewer,thread) VALUES(2,'b',2)`);
+      check(store);
+    } finally { store.close(); }
+  });
+}
+
 test("old marks are prepared in bounded batches as writers change them", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
