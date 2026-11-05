@@ -1,8 +1,9 @@
-// An incremental default-home index. Session-change reconciliation, message ordering, overlap with the explicit
-// home workspace, and the real reader are not connected yet: this module cannot certify a complete page.
+// An incremental default-home index. Message ordering, overlap with the explicit home workspace, and the real
+// reader are not connected yet: this module cannot certify a complete page.
 import type { DatabaseSync } from "node:sqlite";
 import { recentHomeChatStep } from "./chat-list-home-source.ts";
-import { installRecentScopeJournal, trackRecentScope } from "./chat-list-scope-journal.ts";
+import { acknowledgeRecentScopeSession, installRecentScopeJournal, trackRecentScope } from "./chat-list-scope-journal.ts";
+import { recentScopeSessionThreadsStep } from "./chat-list-scope-source.ts";
 
 const mark = (thread: string) => `
   UPDATE recent_home_dirty SET revision = revision + 1 WHERE thread = ${thread};
@@ -27,6 +28,7 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
           NOT EXISTS (SELECT 1 FROM threads LIMIT 1), 0;
         CREATE TABLE recent_home_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL);
         CREATE TABLE recent_home_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL, after_session TEXT, seen INTEGER NOT NULL);
+        CREATE TABLE recent_home_session_work (session TEXT PRIMARY KEY, revision INTEGER NOT NULL, phase TEXT NOT NULL, after INTEGER);
         CREATE TABLE recent_home_rows (thread INTEGER PRIMARY KEY, at INTEGER NOT NULL, said_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
         CREATE INDEX recent_home_order ON recent_home_rows(at DESC, said_at DESC, created_at DESC, thread DESC);
         CREATE TRIGGER recent_home_thread_before_add BEFORE INSERT ON threads BEGIN
@@ -53,6 +55,41 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
       trackRecentScope(db, { kind: "home" });
     }
     db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+/// A session becoming known, disappearing, or moving into/out of the default workspace can change many chats.
+/// Journal their ids in bounded source batches; the caller must wait for this and the per-chat journal to drain.
+export function settleRecentHomeSessionStep(db: DatabaseSync, limit = 64): { sessionsDone: boolean; visited: number } {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent home session batch must be positive");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const next = db.prepare("SELECT session, revision FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' ORDER BY session LIMIT 1");
+    next.setReadBigInts(true);
+    const pending = next.get() as { session: string; revision: bigint } | undefined;
+    if (!pending) { db.exec("COMMIT"); return { sessionsDone: true, visited: 0 }; }
+    const getWork = db.prepare("SELECT revision, phase, after FROM recent_home_session_work WHERE session = ?");
+    getWork.setReadBigInts(true);
+    let work = getWork.get(pending.session) as { revision: bigint; phase: "home" | "members"; after: bigint | null } | undefined;
+    if (!work || work.revision !== pending.revision) {
+      db.prepare(`INSERT INTO recent_home_session_work(session, revision, phase, after) VALUES (?, ?, 'home', NULL)
+        ON CONFLICT(session) DO UPDATE SET revision = excluded.revision, phase = 'home', after = NULL`)
+        .run(pending.session, pending.revision);
+      work = { revision: pending.revision, phase: "home", after: null };
+    }
+    const batch = recentScopeSessionThreadsStep(db, pending.session, { phase: work.phase, after: work.after }, limit);
+    const update = db.prepare("UPDATE recent_home_dirty SET revision = revision + 1 WHERE thread = ?");
+    const insert = db.prepare(`INSERT INTO recent_home_dirty(thread, revision) SELECT ?1, 1
+      WHERE NOT EXISTS (SELECT 1 FROM recent_home_dirty WHERE thread = ?1)`);
+    for (const thread of batch.threads) { update.run(thread); insert.run(thread); }
+    if (batch.cursor.phase === "done") {
+      db.prepare("DELETE FROM recent_home_session_work WHERE session = ?").run(pending.session);
+      acknowledgeRecentScopeSession(db, { kind: "home" }, pending.session, pending.revision);
+    } else db.prepare("UPDATE recent_home_session_work SET phase = ?, after = ? WHERE session = ?")
+      .run(batch.cursor.phase, batch.cursor.after, pending.session);
+    const done = db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' LIMIT 1").get() === undefined;
+    db.exec("COMMIT");
+    return { sessionsDone: done, visited: batch.visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
-import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep } from "../src/store/chat-list-home-index.ts";
+import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
 import { Store } from "../src/store/store.ts";
 
 test("old default-home chats are built in bounded steps while new chats arrive behind the cursor", () => {
@@ -86,4 +86,40 @@ test("a failed default-home batch rolls back its row, count and pending work", (
     assert.equal(settleRecentHomeChatStep(db, 2).chatsDone, true);
     assert.equal(db.prepare("SELECT total FROM recent_home_meta").get()?.total, 1);
   } finally { db.setAuthorizer(null); store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a session moving again while home chats are being marked is reconciled (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "work" });
+    for (let i = 0; i < 8; i++) {
+      const thread = store.openThread("ember", "EMBER", `chat-${i}`, `Chat ${i}`, null).id;
+      if (i < 4) db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(thread);
+      else store.joinThread(thread, "one", "ember");
+    }
+    installRecentHomeIndex(db);
+    while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Enqueue the original chats. */ }
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Account the original chats. */ }
+    assert.equal(db.prepare("SELECT total FROM recent_home_meta").get()?.total, 0);
+    db.prepare("UPDATE sessions SET ws = NULL WHERE key = 'one'").run();
+    assert.equal(settleRecentHomeSessionStep(db, 2).visited, 2);
+    db.prepare("UPDATE sessions SET ws = 'work' WHERE key = 'one'").run();
+    db.prepare("UPDATE sessions SET ws = NULL WHERE key = 'one'").run();
+    let done = false;
+    for (let i = 0; i < 30 && !done; i++) {
+      const batch = settleRecentHomeSessionStep(db, 2);
+      assert.ok(batch.visited <= 2);
+      done = batch.sessionsDone;
+    }
+    assert.ok(done);
+    for (let i = 0; i < 30 && !settleRecentHomeChatStep(db, 2).chatsDone; i++) { /* Apply the marked chats. */ }
+    const rows = db.prepare("SELECT thread FROM recent_home_rows ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC")
+      .all() as { thread: number }[];
+    const expected = recentChatIds(db, "fallback", "fallback", 100);
+    assert.deepEqual(rows.map((row) => row.thread), expected.ids);
+    assert.equal(db.prepare("SELECT total FROM recent_home_meta").get()?.total, expected.total);
+    assert.equal(expected.total, 8);
+  } finally { store.close(); }
 });
