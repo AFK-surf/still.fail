@@ -814,6 +814,14 @@ export class Events {
         this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, { email: change.viewer, sees: { thread: change.thread } });
         this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
         break;
+      case "hidden":
+        this.emit("hidden", { thread: change.thread, hidden: change.hidden }, { email: change.viewer, sees: { thread: change.thread } });
+        this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
+        break;
+      case "muted":
+        this.emit("muted", { thread: change.thread, muted: change.muted }, { email: change.viewer, sees: { thread: change.thread } });
+        this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
+        break;
       case "identities":
         // Who the viewer is on Slack: their overview says it, and their rows count it.
         this.overviewChanged();

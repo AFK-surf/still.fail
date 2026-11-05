@@ -68,15 +68,29 @@ function starterOf(hub: Hub, key: string): string {
 }
 
 /// A new session in a chat of its own for an opener: its runtime, model and effort as asked; the model and effort it
-/// takes after its opener's (`inherited`) are dropped where no profile here runs them. In workspace `ws` (the opener's).
+/// takes after its opener's (`inherited`) are dropped where no profile here runs them. Told no effort, it runs the one
+/// its starter `createdBy` uses most here with that runtime and model, dropped too where it is not run (the model's
+/// own default otherwise: Codex's for gpt-6.1-terra is low, where its people run max). In workspace `ws` (the opener's).
 function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null }) {
-  const options = { runtime: o.runtime, model: o.model, effort: o.effort, title: o.title, createdBy: o.createdBy, ws: o.ws };
+  const usual = o.effort === null ? usualEffort(hub, o.createdBy, o.runtime, o.model) : null;
+  const options = { runtime: o.runtime, model: o.model, effort: o.effort ?? usual, title: o.title, createdBy: o.createdBy, ws: o.ws };
   try {
     return newSession(hub, options);
   } catch (error) {
+    if (usual !== null) {
+      try {
+        return newSession(hub, { ...options, effort: null });
+      } catch {}
+    }
     if (!o.inherited || (o.model === null && o.effort === null)) throw error;
     return newSession(hub, { ...options, model: null, effort: null });
   }
+}
+
+/// The effort `createdBy` started most of their chats here on (runtime, model) with lately (the latest of those used
+/// as often), null when they named none.
+function usualEffort(hub: Hub, createdBy: string, runtime: RuntimeName, model: string | null): string | null {
+  return hub.store.effortsUsedBy(createdBy, runtime, model, hub.now() - USED_WITHIN_MS)[0]?.effort ?? null;
 }
 
 /// What a chat opened here runs when its opener named no model (model-choice.ts): what its starter `createdBy` uses

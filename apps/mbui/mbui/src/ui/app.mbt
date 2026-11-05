@@ -120,6 +120,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
+  // (what comes before the frame's own work, timed for the probe: the window's tree brought, its nodes built and laid
+  // out, and what came from outside handed on as the frame begins, frame_drawn's start)
+  let tw = work_now()
   view_frame(w, h, scale, t)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
@@ -143,7 +146,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
-  slow_probe(c, t, t3 - t0, t4 - t3)
+  slow_probe(c, t, t3 - t0, t4 - t3, tree=t0 - tw)
   perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
   // (what the stacks the window's tree holds say of the frame, as it ends: built whole, painted alone or of its looks
@@ -2280,7 +2283,13 @@ let probe_work : Ref[Double] = { val: 0.0 }
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_phase : FixedArray[Double] = FixedArray::make(5, 0.0)
+let probe_phase : FixedArray[Double] = FixedArray::make(6, 0.0)
+
+///|
+/// The memory the process holds (@hostapi.mem_bytes, MB) at the most of the span's frames, and as its last was drawn:
+/// a rise and fall within a span shows, not only where it is every 5 s.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_mem : FixedArray[Double] = FixedArray::make(2, -1.0)
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
@@ -2448,7 +2457,7 @@ let probe_record_ms : Double = 5000.0
 /// The probe (above): on the log every 2 s with MBUI_PROBE=1, a line for each slow frame too; into the device's
 /// performance record (@hostapi.perf_line, the person's 性能记录) every 5 s while it is kept, its slow frames counted
 /// only. Neither: nothing summed.
-fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
+fn slow_probe(c : Ctx, t : Double, work : Double, present : Double, tree? : Double = 0.0) -> Unit {
   if probe_on.val < 0 {
     probe_on.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
     presented.tell(@hostapi.env("MBUI_PROBE_DAMAGE") == "1")
@@ -2473,6 +2482,10 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   } else {
     looks_why()
   }
+  // (the window's tree brought before the frame's own work, `tree`, the frame's work too: what the window's nodes cost,
+  // a page made once as nodes, is in what the frames cost; where it is most of it, said first)
+  let why = if tree > work + present { "tree: " + why } else { why }
+  let work = work + tree
   // (a summary is of its span's frames, said as the first frame after it comes: a span with none drawn after it, a
   // burst of frames at its start, is said whole, its seconds' busiest beside its average, not with the frames that
   // come after a pause)
@@ -2484,11 +2497,18 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   // (how many frames a second, said every 2 s it draws: 5 s into the record alone)
   probe_frames.val = probe_frames.val + 1
   probe_work.val = probe_work.val + work + present
-  probe_phase[0] = probe_phase[0] + probe_msgs_ms.val
-  probe_phase[1] = probe_phase[1] + c.t_build - probe_msgs_ms.val
-  probe_phase[2] = probe_phase[2] + c.t_layout
-  probe_phase[3] = probe_phase[3] + c.t_paint
-  probe_phase[4] = probe_phase[4] + present
+  probe_phase[0] = probe_phase[0] + tree
+  probe_phase[1] = probe_phase[1] + probe_msgs_ms.val
+  probe_phase[2] = probe_phase[2] + c.t_build - probe_msgs_ms.val
+  probe_phase[3] = probe_phase[3] + c.t_layout
+  probe_phase[4] = probe_phase[4] + c.t_paint
+  probe_phase[5] = probe_phase[5] + present
+  // (the memory held as it was drawn, and the most of the span's frames)
+  let mem = h_mem_mb()
+  probe_mem[1] = mem
+  if mem > probe_mem[0] {
+    probe_mem[0] = mem
+  }
   probe_last_why.val = why
   // (what the frames were for, by why: the record's, and the log's with MBUI_PROBE=1)
   if recording || probe_on.val == 1 {
@@ -2535,7 +2555,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   if probe_on.val == 1 && (work > probe_slow_ms || gap > 3.0 * probe_slow_ms) {
     h_log(
-      "PROBE slow frame: work=\{work.round()}ms (messages=\{probe_msgs_ms.val.round()} build=\{c.t_build.round()} " +
+      "PROBE slow frame: work=\{work.round()}ms (tree=\{tree.round()} messages=\{probe_msgs_ms.val.round()} build=\{c.t_build.round()} " +
       "layout=\{c.t_layout.round()} paint=\{c.t_paint.round()} present=\{present.round()}) since_last=\{gap.round()}ms " +
       "handed=\{messages_handed.val} nodes=\{c.count}",
     )
@@ -2559,7 +2579,8 @@ fn probe_said(c : Ctx, t : Double, recording : Bool) -> Unit {
   let n = probe_frames.val.to_double()
   let said = "fps=\{(n * 1000.0 / span).round()} fps_peak=\{probe_peak.val} span=\{(span / 100.0).round() / 10.0}s cpu=\{cpu}% looks_alone=\{stepped} painted_alone=\{painted} (last: \{probe_last_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
     "work_avg=\{(probe_work.val / n * 10.0).round() / 10.0}ms " +
-    "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / n * 10.0).round() / 10.0 })} nodes=\{c.count} " +
+    "mem=\{probe_mem[1].round()}MB mem_peak=\{probe_mem[0].round()}MB " +
+    "avg tree/msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / n * 10.0).round() / 10.0 })} nodes=\{c.count} " +
     "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / n * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / n).round()}% " +
     "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms slow=\{probe_slow.val}"
   // (each line into the record, and on the log with MBUI_PROBE=1: a Mac's, which keeps no record)
@@ -2629,9 +2650,11 @@ fn probe_reset(t : Double) -> Unit {
   probe_damage.val = 0.0
   probe_gpu.val = 0.0
   probe_gpu_n.val = 0
-  for i in 0..<5 {
+  for i in 0..<6 {
     probe_phase[i] = 0.0
   }
+  probe_mem[0] = -1.0
+  probe_mem[1] = -1.0
   probe_frames.val = 0
   probe_work.val = 0.0
   probe_slow.val = 0

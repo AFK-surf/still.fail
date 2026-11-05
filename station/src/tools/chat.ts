@@ -393,7 +393,7 @@ export const CHAT_CREATE = {
       },
       "effort": {
         "type": "string",
-        "description": "Its agent's reasoning effort. Default: its model's."
+        "description": "Its agent's reasoning effort. Default: the one the person it goes to has opened most chats with on that runtime and model there lately, else its model's."
       },
       "files": {
         "type": "array",

@@ -162,6 +162,18 @@ CREATE TABLE IF NOT EXISTS reads (
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, thread)
 );
+-- A viewer's personal list visibility; this is independent of the thread's archived state.
+CREATE TABLE IF NOT EXISTS hidden_chats (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread)
+);
+-- Notifications can be silenced independently of list visibility.
+CREATE TABLE IF NOT EXISTS muted_chats (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread)
+);
 CREATE TABLE IF NOT EXISTS profile_status (
   profile TEXT PRIMARY KEY,
   check_json TEXT, checked_at INTEGER,
@@ -1215,6 +1227,7 @@ export function addPendingCards(db: DatabaseSync): void {
 /// - turns_by_end: a session's turns by when they ended (`TOLD_BLOCKED`, whether a blocked ask was told already): by
 ///   when they started, every turn the session had was read.
 /// - sessions_models: the chats someone started by when, with their runtime and model (store.ts MODELS_USED_BY).
+/// - sessions_efforts: the efforts someone's chats on a runtime and model ran at, by when (store.ts EFFORTS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
   db.exec(ENTRIES_SAID_INDEX);
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
@@ -1224,6 +1237,7 @@ export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS sessions_put_away ON sessions (archived_at, key) WHERE archived_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_efforts ON sessions (created_by, runtime, model, created_at, effort)");
 }
 
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).

@@ -489,6 +489,23 @@ export function readsOf(s: Store, viewer: string, threads: number[]): Map<number
   return out;
 }
 
+/// A viewer's hidden chats, limited to the threads this read can name.
+export function hiddenChats(s: Store, viewer: string, threads: number[]): Set<number> {
+  if (threads.length === 0) return new Set();
+  return new Set(all(s, "SELECT thread FROM hidden_chats WHERE viewer = ?1 AND thread IN (SELECT value FROM json_each(?2))", viewer, JSON.stringify(threads)).map((r) => r.thread));
+}
+
+/// A viewer's muted chats and, for a notice, which of its recipients muted that chat.
+export function mutedChats(s: Store, viewer: string, threads: number[]): Set<number> {
+  if (threads.length === 0) return new Set();
+  return new Set(all(s, "SELECT thread FROM muted_chats WHERE viewer = ?1 AND thread IN (SELECT value FROM json_each(?2))", viewer.toLowerCase(), JSON.stringify(threads)).map((r) => r.thread));
+}
+
+export function mutedViewers(s: Store, thread: number, viewers: string[]): Set<string> {
+  if (viewers.length === 0) return new Set();
+  return new Set(all(s, "SELECT viewer FROM muted_chats WHERE viewer IN (SELECT value FROM json_each(?1)) AND thread = ?2", JSON.stringify(viewers), thread).map((r) => r.viewer));
+}
+
 function unreadOf(s: Store, thread: number, read: number, selves: string[], mode: "count" | "exists" = "count"): number {
   return one(s, mode === "exists" ? HAS_UNREAD : UNREAD, thread, read, JSON.stringify(selves)).c;
 }

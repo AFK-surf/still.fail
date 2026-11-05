@@ -111,6 +111,7 @@ fn home_top_bar_node(
                     match filter {
                       "mine" => "android-chat.home.filter.mine"
                       "watching" => "android-chat.home.filter.watching"
+                      "hidden" => "web-main.filter.hidden"
                       _ => "android-chat.home.filter.all"
                     },
                   ),

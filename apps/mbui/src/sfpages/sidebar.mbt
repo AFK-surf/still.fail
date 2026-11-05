@@ -64,7 +64,7 @@ fn lists_kept_key(frame : ListsFrame, w : Double, h : Double) -> String {
 ///|
 /// The lists the track holds first, in this order (Sidebar.tsx, mobile/Home.tsx: all, mine, watching).
 // kept across runs: a table, never written
-pub let list_filters : Array[String] = ["all", "mine", "watching"]
+pub let list_filters : Array[String] = ["all", "mine", "watching", "hidden"]
 
 ///|
 /// Which of the lists the filter shows (0 all, 1 mine, 2 watching).
@@ -82,7 +82,7 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
   // the time one is picked)
   if @sf.presented_drawn_of(filter_menu_serial.val) {
     for f in list_filters {
-      @sfbase.chats_of(src, w.id, f) |> ignore
+      if f != "hidden" { @sfbase.chats_of(src, w.id, f) |> ignore }
     }
   }
   let width = c.width
@@ -472,6 +472,7 @@ fn list_empty(c : @ui.Ctx, v : ChatsView, filter : String) -> Unit {
       match filter {
         "mine" => c.text(@sf.t("web-main.sidebar.noneMine"), style=said_words) |> ignore
         "watching" => c.text(@sf.t("web-main.sidebar.noneWatching"), style=said_words) |> ignore
+        "hidden" => c.text(@sf.t("web-main.filter.hiddenEmpty"), style=said_words) |> ignore
         _ if v.stations > 0 => c.text(@sf.t("web-main.sidebar.none"), style=said_words) |> ignore
         _ =>
           c.rich(
@@ -504,6 +505,7 @@ fn list_empty(c : @ui.Ctx, v : ChatsView, filter : String) -> Unit {
     match filter {
       "mine" => c.text(@sf.t("android-chat.home.empty.mine"), style=empty_words) |> ignore
       "watching" => c.text(@sf.t("android-chat.home.empty.watching"), style=empty_words) |> ignore
+      "hidden" => c.text(@sf.t("web-main.filter.hiddenEmpty"), style=empty_words) |> ignore
       _ => {
         c.text(
           @sf.t(if v.stations > 1 { "android-chat.home.empty.many" } else { "android-chat.home.empty.one" }),
@@ -595,6 +597,7 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
       item("all", "web-main.filter.chats.all"),
       item("mine", "web-main.filter.chats.mine"),
       item("watching", "web-main.filter.watching"),
+      item("hidden", "web-main.filter.hidden"),
       None,
       item("archive", "web-main.filter.archived"),
     ],
