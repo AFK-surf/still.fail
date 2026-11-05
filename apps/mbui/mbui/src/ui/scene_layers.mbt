@@ -81,12 +81,13 @@ priv struct SceneLayer {
 priv struct SceneEntry {
   c : @view.Content
   depth : Int
-  x : Double
-  y : Double
-  a : Double
-  s : Double
-  ux : Double
-  uy : Double
+  /// (of a layer it holds, where that is in it as it was last drawn: worked out again as it is placed otherwise)
+  mut x : Double
+  mut y : Double
+  mut a : Double
+  mut s : Double
+  mut ux : Double
+  mut uy : Double
   layer : Bool
   /// the looks its glyphs and those of all it holds are drawn by (Tree::glyphs_of), whether it is drawn over the scrim,
   /// how it is turned, where its ground is drawn off and bigger, how what it holds fades towards its edges (its soft cut's
@@ -112,6 +113,8 @@ priv struct SceneEntry {
   reach : @damage.Rect
   mut moved : Bool
   mut ring_n : Int
+  /// of a layer it holds: left out of its row since (Tree::placed_in, none), drawn nowhere
+  mut gone : Bool
 }
 
 ///|
@@ -156,6 +159,7 @@ fn scene_entry(
     reach: @damage.Rect::none(),
     moved: false,
     ring_n: 0,
+    gone: false,
   }
 }
 

@@ -1290,23 +1290,32 @@ fn Ctx::tree_step(
   let (ox, oy, oa, os, oux, ouy) = at
   if e.layer {
     // (where it is in this layer now: where the walk found it, composed as the walk composes it, unless it was placed
-    // otherwise since it was kept (scene_moved_layer), then as the tree has it now, composed the same way, number for
-    // number (Tree::placed_in); none where it is left out of its row)
-    let mut x = e.x
-    let mut y = e.y
-    let mut a = e.a
-    let mut s = e.s
-    let mut ux = e.ux
-    let mut uy = e.uy
+    // otherwise since it was last drawn (scene_moved_layer), then as the tree has it now, composed the same way, number
+    // for number (Tree::placed_in), kept so; none where it is left out of its row, kept so till it is placed again,
+    // what holds it marked as it comes back (its layer let go meanwhile, no longer kept: scene_told))
     if !made && scene.moved_layers.contains(c.id) {
-      guard tree.placed_in(c.id, from, oa, os) is Some((px, py, pa, ps, pux, puy)) else { return }
-      x = px
-      y = py
-      a = pa
-      s = ps
-      ux = pux
-      uy = puy
+      match tree.placed_in(c.id, from, oa, os) {
+        Some((px, py, pa, ps, pux, puy)) => {
+          e.x = px
+          e.y = py
+          e.a = pa
+          e.s = ps
+          e.ux = pux
+          e.uy = puy
+          e.gone = false
+        }
+        None => e.gone = true
+      }
     }
+    if e.gone {
+      return
+    }
+    let x = e.x
+    let y = e.y
+    let a = e.a
+    let s = e.s
+    let ux = e.ux
+    let uy = e.uy
     let place = (ox + x, oy + y, a, s, oux + ux, ouy + uy)
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none
     // of its, out of the way by now; the old layers under it first, the root's)
