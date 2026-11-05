@@ -52,6 +52,9 @@ pub struct Options {
     pub relay_entries: Option<Vec<RelayEntry>>,
     /// Found on the LAN and through the DHT, as a station is. Off for tests.
     pub discovery: Option<bool>,
+    /// The DHT among them, off by default: some companies' filters mark the Mainline DHT (its bootstrap nodes, among
+    /// them relay.pkarr.org) as risky. Without it mDNS stays, and devices learn a changed relay from the cloud alone.
+    pub dht: Option<bool>,
     /// Where to listen; any free port when not said.
     pub bind_addr: Option<String>,
     /// A client's endpoint (the core in TypeScript, client/core-ts): it looks stations up on the LAN and in the DHT
@@ -160,16 +163,21 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     if options.relay_only.unwrap_or(false) {
         builder = builder.clear_ip_transports();
     }
+    let dht = options.dht.unwrap_or(false);
     if options.lookup.unwrap_or(false) && !relays.is_empty() {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false)))
-            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false)))
-            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish()));
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false)));
+        if dht {
+            builder = builder.address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish()));
+        }
     } else if options.discovery.unwrap_or(true) {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
-            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE)))
-            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key)));
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE)));
+        if dht {
+            builder = builder.address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key)));
+        }
     }
     Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), homes: relays, held: Arc::default(), accepted: Arc::default() })
 }

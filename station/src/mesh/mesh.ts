@@ -51,7 +51,7 @@ export const MeshLive = Layer.effectDiscard(
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", dht: process.env.STILLFAIL_DHT === "1", congestion: congestionOf(config.raw()) })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
