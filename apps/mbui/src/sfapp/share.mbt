@@ -321,7 +321,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
 /// says was shared taken as it says it (on_host_said), while nothing shared is up; put up as it is, in a sheet or the
 /// wide panel as the window's width says and as that changes; let go as its sheet closes. Nothing asked each frame.
 fn share_in_node(v : @view.View) -> Unit {
-  let small = fn() { @sf.layout(v.window().0) is Small }
+  let small = fn() { sheet_small_at(v.window().0) }
   @ui.on_host_said(
     v,
     kind="share-in",
