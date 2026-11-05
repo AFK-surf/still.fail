@@ -466,7 +466,7 @@ test("a_stations_host_reading_makes_its_overview_in_the_list_again_not_every_tim
   const item = () => (core.inner.store.get({ topic: "stations", scope: "ws" }) as J[]).find((s) => s.station === ST);
   const before = item();
   assert.ok(before.overview !== null && typeof before.overview === "object", JSON.stringify(before).slice(0, 300));
-  core.inner.stations.link(ST)!.memory.set("host", { os: "macOS", cpus: 8, load: 1, memory: { usedBytes: 1, totalBytes: 2 } });
+  core.inner.stations.link(ST)!.memory.set("host", { hostname: "studio", os: "macOS", arch: "arm64", cpus: 8, cpuModel: "M4", load: 1, uptimeSec: 100, memory: { totalBytes: 2, usedBytes: 1, swapUsedBytes: null }, disk: { path: "/", totalBytes: 2, freeBytes: 1 }, stationRssBytes: 1, checkedAt: 1 });
   core.inner.stations.onChange(ST, "host");
   await host.time.pass(COALESCE_MS * 2, 10);
   const after = item();
@@ -1646,6 +1646,47 @@ test("overview_and_host_come_from_events", async () => {
   await host.time.pass(EVICT_AFTER_MS + 500, 500);
   assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1"]);
   assert.equal(gets(host, "/admin/api/host"), 0);
+  core.close();
+});
+
+test("a_station_saying_what_this_core_cannot_read_keeps_its_row_and_says_so", async () => {
+  // A station newer than the app: one required field gone from its reading must not fail the list it is in.
+  const { host, core, push } = await started();
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "stations", scope: "ws" });
+  await host.settle();
+  const reading = { hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, cpuModel: "M4", load: 0.2, uptimeSec: 100, memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, stationRssBytes: 1, checkedAt: 1 };
+  subscribe(core, ui, 2, { topic: "host", station: ST });
+  subscribe(core, ui, 3, { topic: "chats", scope: "ws", mine: false });
+  await host.settle();
+  await host.settle();
+  push("host", reading);
+  await host.settle();
+  apply(host, values);
+  const chats = () => core.inner.store.get({ topic: "chats", scope: "ws", mine: false }) as J;
+  const station = () => (values.get(1) as J[]).find((s) => s.station === ST);
+  assert.equal(station().host.hostname, "studio");
+  assert.deepEqual(station().problems, []);
+  const { memory: _gone, ...unreadable } = reading;
+  push("host", unreadable);
+  await host.settle();
+  apply(host, values);
+  assert.equal(station().host, undefined);
+  assert.equal(station().summary, t("core-views.station.incompatible_short"));
+  assert.deepEqual(station().problems.map((p: J) => p.key), ["incompatible"]);
+  // And the rail's bell says it, as it does a station down.
+  assert.equal(chats().trouble.state, "incompatible");
+  // Fixed by an update: as any other reading, and silent is not said for it meanwhile.
+  await host.time.pass(60_000, 1000);
+  apply(host, values);
+  assert.deepEqual(station().problems.map((p: J) => p.key), ["incompatible"]);
+  push("host", reading);
+  await host.settle();
+  apply(host, values);
+  assert.equal(station().host.hostname, "studio");
+  assert.deepEqual(station().problems, []);
+  assert.equal(chats().trouble ?? null, null);
   core.close();
 });
 

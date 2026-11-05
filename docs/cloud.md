@@ -45,10 +45,10 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 ## 状态页
 
-[still.fail/status](https://still.fail/status)（`site/status.html`）是一个不依赖其他资源的静态页，读两样东西：
+[still.fail/status](https://still.fail/status)（`cloud/status/status.html`）是一个不依赖其他资源的静态页，有自己的 Worker（`still-fail-status`），随 main 部署，不等发正式版。它只读 `GET /v1/status`，里面有两样东西：
 
-- `GET /v1/status`（`cloud/src/status.ts`）：cron 每分钟检查一次官网、网页版、分享页（`STATUS_PAGES`）、API（Directory 能读）、安装与更新（R2 的 `station.json`）和各中继（几分钟内上报过计数，`relay-load.ts`；自家中继到了预算上限算受限）。连续失败两次才算故障，每天的通过比例保留 30 天。页面还在访问者的浏览器里测每个中继的 `/ping`。
-- `site/incidents.json`：人写的事故记录。探活只能看出服务不响应，看不出 app 用不了它的响应（2026-11-05 的 `emberRssBytes` 就是这样），所以这类问题要写在这里。`end` 为 `null` 时页面显示有进行中的事故，恢复后填上时间。合进 main 并部署官网后生效。级别：**P1** 是用不了 still.fail 或它的某个主要页面，只发生在测试版也算；**P2** 是次要功能受影响。
+- **检查**（`cloud/src/status.ts`）：cron 每分钟检查一次官网、网页版、分享页（`STATUS_PAGES`）、API（Directory 能读）、安装与更新（R2 的 `station.json`）和各中继（几分钟内上报过计数，`relay-load.ts`；自家中继到了预算上限算受限）。连续失败两次才算故障，每天的通过比例保留 30 天。页面还在访问者的浏览器里测每个中继的 `/ping`。
+- **事故**是仓库里带 `incident` 标签的 GitHub issue，再加 `P1` 或 `P2` 标签。开 issue 就是发布，关 issue 就是结束，cron 每分钟读一次，一分钟内上页面，不用部署。只有仓库成员能打标签，外人开的 issue 不会上页面。探活只能看出服务不响应，看不出 app 用不了它的响应（2026-11-05 的 `emberRssBytes` 就是这样），所以这类问题要开 issue。标题和正文公开显示；事故比 issue 开得早时，正文里单独一行写 `started: 2026-11-05T21:15:00+08:00`。级别：**P1** 是用不了 still.fail 或它的某个主要页面，只发生在测试版也算；**P2** 是次要功能受影响。
 
 ## 套餐和额度
 

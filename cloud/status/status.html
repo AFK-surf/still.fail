@@ -7,8 +7,8 @@
 <meta name="description" content="still.fail 各项服务现在的状态。">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/png" href="/favicon-32.png">
-<!-- still.fail/status: all of it in this file, asking only GET /v1/status (cloud/src/status.ts) and the incidents written
-     down beside it (incidents.json), so that it loads when the rest does not (web/vite.demo.config.ts statusPage). The theme and the language are the site's choices
+<!-- still.fail/status: all of it in this file, asking only GET /v1/status (cloud/src/status.ts), so that it loads when the
+     rest does not. Deployed on its own (cloud/wrangler.status.jsonc). The theme and the language are the site's choices
      (web/src/site/ThemeSwitch.tsx, Site.tsx). -->
 <script>try{var t=localStorage.getItem("stillfail.site.theme");if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <style>
@@ -42,7 +42,8 @@ h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
 .incident{padding:16px 0;border-bottom:1px solid var(--line)}
 .incident .top{margin-bottom:4px}
 .level{flex:none;padding:0 7px;border-radius:999px;font-size:12px;font-weight:600;line-height:20px;color:#fff;background:var(--c)}
-.incident p{margin:0;color:var(--muted);font-size:14px}
+.incident p{margin:0;color:var(--muted);font-size:14px;white-space:pre-line;overflow-wrap:anywhere}
+.incident .name:hover{text-decoration:underline}
 .incident time{display:block;margin-bottom:6px;color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
 .note{margin:32px 0 0;color:var(--dim);font-size:13px}
 </style>
@@ -145,24 +146,24 @@ h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
     });
   }
 
-  // Incidents are written down by people (site/incidents.json): the checks see a service that does not answer, not one
-  // whose answers an app cannot use. P1: still.fail or a main page of it cannot be used, on the test channel too.
-  var incidents = [];
+  // Incidents are opened by people, as GitHub issues (cloud/src/status.ts): the checks see a service that does not answer,
+  // not one whose answers an app cannot use. P1: still.fail or a main page of it cannot be used, on the test channel too.
   function stamp(iso) { return new Date(iso).toLocaleString(en ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
   function incident(item) {
     var box = el("div", "incident");
-    var words = item[en ? "en" : "zh"];
     var top = el("div", "top");
     var level = el("span", "level", item.level);
     level.dataset.state = item.end ? "degraded" : "down";
     top.appendChild(level);
-    top.appendChild(el("span", "name", words.title));
+    var title = el("a", "name", item.title);
+    title.href = item.url;
+    top.appendChild(title);
     box.appendChild(top);
     box.appendChild(el("time", "", stamp(item.start) + " – " + (item.end ? stamp(item.end) : say.ongoing)));
-    box.appendChild(el("p", "", words.body));
+    if (item.body) box.appendChild(el("p", "", item.body));
     return box;
   }
-  function showIncidents() {
+  function showIncidents(incidents) {
     var parts = [["now", say.open, function (i) { return !i.end; }], ["past", say.past, function (i) { return i.end; }]];
     parts.forEach(function (part) {
       var into = document.getElementById(part[0]);
@@ -183,11 +184,12 @@ h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
       list.appendChild(el("h2", "", group[0]));
       group[1].forEach(function (service) { list.appendChild(row(service, status.now, status.days)); });
     });
+    showIncidents(status.incidents);
     var states = status.services.map(function (s) { return s.state; });
     var when = say.updated(new Date(status.now * 1000).toLocaleTimeString(en ? "en" : "zh-CN", { hour: "2-digit", minute: "2-digit" }));
     if (states.indexOf("down") >= 0) verdict("down", say.some, when);
     else if (states.indexOf("degraded") >= 0) verdict("degraded", say.some, when);
-    else if (incidents.some(function (i) { return !i.end; })) verdict("down", say.incident, when);
+    else if (status.incidents.some(function (i) { return !i.end; })) verdict("down", say.incident, when);
     else if (states.indexOf("unknown") >= 0) verdict("degraded", say.stale, when);
     else verdict("up", say.up, when);
   }
@@ -197,15 +199,13 @@ h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
       if (!r.ok) throw new Error(String(r.status));
       return r.json();
     }).then(show).catch(function () {
+      showIncidents([]);
       document.getElementById("list").replaceChildren();
       verdict("down", say.unreachable, say.unreachableWhen);
     });
   }
-  function loadIncidents() {
-    return fetch("/incidents.json", { cache: "no-cache" }).then(function (r) { return r.ok ? r.json() : []; }).then(function (list) { incidents = list; showIncidents(); }).catch(function () {});
-  }
-  loadIncidents().then(load);
-  setInterval(function () { loadIncidents().then(load); }, 60000);
+  load();
+  setInterval(load, 60000);
 })();
 </script>
 </body>
