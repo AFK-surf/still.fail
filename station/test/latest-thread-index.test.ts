@@ -213,8 +213,13 @@ for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", 
       const add = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,? ,?,NULL)");
       add.run(100, a.id, 1, "s1"); add.run(101, b.id, 1, "s2");
       installLatestThreadIndex(db); prepare(store, "s1"); prepare(store, "s2");
-      const check = () => { for (const s of ["s1", "s2"])
-        assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null); };
+      const check = () => {
+        for (const s of ["s1", "s2"])
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null);
+        assert.deepEqual(db.prepare("SELECT thread,session FROM latest_thread_members ORDER BY thread,session").all(),
+          db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+            ORDER BY m.thread,m.session`).all());
+      };
       check();
       db.exec("BEGIN");
       db.prepare(`INSERT OR REPLACE INTO deliveries(${alias},thread,n,session,delivered_at) VALUES(100,?,2,'s2',NULL)`).run(a.id);
@@ -227,6 +232,11 @@ for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", 
       check();
       add.run(102, b.id, 2, "s1");
       check();
+      // One replacement can displace both a different rowid and an existing (thread,session) pair.
+      const member = db.prepare("SELECT rowid FROM thread_sessions WHERE thread=? AND session='s1'").get(a.id)!.rowid;
+      const replace = db.prepare(`INSERT OR REPLACE INTO thread_sessions(${alias},thread,session,connect,joined_at) VALUES(?,?,'s2','b',10)`);
+      db.exec("BEGIN"); replace.run(member, b.id); check(); db.exec("ROLLBACK"); check();
+      replace.run(member, b.id); check();
     } finally { store.close(); }
   });
 }
