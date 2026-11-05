@@ -5,6 +5,7 @@
 // listens on a socket in a directory of its own, named only in its environment.
 import net from "node:net";
 import { realpath } from "node:fs/promises";
+import { wall } from "../ops/fibers.ts";
 import type { ProcessInfo } from "../platform/index.ts";
 
 /// Why these processes (those holding the client's end of a connection) may not use grant `id`'s server, or null.
@@ -20,7 +21,7 @@ const REFUSING_MS = 5000;
 
 /// The client told why, what it sent read so that its end gets the words rather than a reset.
 function refuse(socket: net.Socket, message: string): void {
-  socket.setTimeout(REFUSING_MS, () => socket.destroy());
+  socket.once("close", wall.after(REFUSING_MS, () => socket.destroy()));
   socket.resume();
   socket.end(failure(message));
 }
