@@ -83,6 +83,7 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
   let at = self.at
   let (set, ink) = match look {
     Is(l) => (Is((l.code_scale, l.words, l.code_ground != 0L, l.max_lines, l.breaks)), Is((l.link, l.pressed, l.code_ink, l.code_ground)))
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       (
         By(fn() {
@@ -325,6 +326,7 @@ pub fn View::max_width(self : View, w : Live[Double?]) -> View {
   self.bind(MaxWidth, w, Layout, fn(w) {
     // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
     self.tree.nodes[self.at].max_w_said = Some(w)
+    self.tree.nodes[self.at].max_w_within = false
     self.tree.capped_applied(self.at)
   })
   self
@@ -557,6 +559,7 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
 pub fn View::min_width(self : View, w : Live[Double?]) -> View {
   self.bind(MinWidth, w, Layout, fn(w) {
     self.tree.nodes[self.at].min_w_said = Some(w)
+    self.tree.nodes[self.at].min_w_within = false
     self.tree.give_way_applied(self.at)
   })
   self
@@ -668,11 +671,37 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
         n.props[Points] = stop
       })
   }
+  self
+}
+
+///|
+/// How wide it is at the least: `w` points, or all of what holds it where that is less (CSS's `min(100%, w)`), as it
+/// changes (None: as what it is makes it). Said, not read back from its holder's size: layout's. Its field is
+/// min_width's (one binding to a field: the one said last).
+pub fn View::min_width_within(self : View, w : Live[Double?]) -> View {
+  self.bind(MinWidth, w, Layout, fn(w) {
+    self.tree.nodes[self.at].min_w_said = Some(w)
+    self.tree.nodes[self.at].min_w_within = true
+    self.tree.give_way_applied(self.at)
+  })
+  self
+}
+
+///|
+/// How wide it is at the most: `w` points, or all of what holds it where that is less, as it changes (None: as what it
+/// is makes it). Its field is max_width's.
+pub fn View::max_width_within(self : View, w : Live[Double?]) -> View {
+  self.bind(MaxWidth, w, Layout, fn(w) {
+    self.tree.nodes[self.at].max_w_said = Some(w)
+    self.tree.nodes[self.at].max_w_within = true
+    self.tree.capped_applied(self.at)
+  })
   self
 }

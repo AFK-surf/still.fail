@@ -29,10 +29,53 @@
 // are `Drawn` records the host turns into its own.
 
 ///|
-/// A property's value: set once (`Is`), or worked out (`By`), tracked, and set again as what it read changes.
+/// A property's value: set once (`Is`), or worked out (`By`), tracked, and set again as what it read changes; or, of a
+/// place or a look alone, worked out as the frame is painted (`Painted`), after its one layout, from where things were
+/// laid out in it (`Laid`): what it reads of layout read there and nowhere else (retained.md, "Layout read back").
 pub(all) enum Live[T] {
   Is(T)
   By(() -> T)
+  Painted((Laid) -> T)
+}
+
+///|
+/// Where things were laid out in the frame being painted, as a `Painted` property reads it: a node's place in the window
+/// and its size, as this frame laid it out (its holders' places and offsets counted, nothing it is drawn off by).
+pub struct Laid {
+  priv tree : Tree
+}
+
+///|
+/// Where `v` is in the window as this frame laid it out, and how big; None: let go, or laid out nowhere.
+pub fn Laid::rect(self : Laid, v : View) -> (Double, Double, Double, Double)? {
+  guard physical_equal(v.tree, self.tree) && v.live() is Some(n) else { return None }
+  if self.tree.out_at(v.at) {
+    return None
+  }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut i = v.at
+  while i >= 0 {
+    let m = self.tree.nodes[i]
+    if !m.slot {
+      x = x + m.lx
+      y = y + m.ly
+    }
+    i = m.parent
+  }
+  Some((x, y, n.lw, n.lh))
+}
+
+///|
+/// How big `v` is as this frame laid it out; None: let go, or laid out nowhere.
+pub fn Laid::size(self : Laid, v : View) -> (Double, Double)? {
+  self.rect(v).map(fn(r) { (r.2, r.3) })
+}
+
+///|
+/// What reads it abort here: a property `Painted` is a place's or a look's, worked out as the frame is painted.
+fn[T] not_painted(what : String) -> T {
+  abort("View: \{what} is no place nor look: a Painted value is worked out only as the frame is painted")
 }
 
 ///|
@@ -447,6 +490,10 @@ struct Node {
   /// how wide it may be at most as said of it (View::max_width; None: not said, as what it is makes it:
   /// Tree::capped_applied)
   mut max_w_said : Double??
+  /// the least and the most width said as so many points or all of what holds it where that is less (View::min_width_within,
+  /// max_width_within: a card 360 to 560 within its room)
+  mut min_w_within : Bool
+  mut max_w_within : Bool
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -599,6 +646,9 @@ pub struct Tree {
   /// whether the order is to be made again; whether any of it is (what hosts it told as it first is)
   looks_due : Array[Int]
   places_due : Array[Int]
+  /// the properties said `Painted`, each worked out again as each frame is painted (Tree::painted_now): its node and
+  /// making, and what works it out and sets it where it came out otherwise
+  painted : Array[(Int, Int, () -> Unit)]
   /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
   /// step of what goes by steps (View::steps); and how many were ever told (each one's place among those due together)
   timeline : Array[Due]
@@ -881,6 +931,7 @@ pub fn Tree::new(
     free: [],
     looks_due: [],
     places_due: [],
+    painted: [],
     bindings_due: [],
     pulls: {},
     pulls_made: 0,
@@ -1024,6 +1075,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.shrink_said = None
       n.min_w_said = None
       n.max_w_said = None
+      n.min_w_within = false
+      n.max_w_within = false
       n.look.runs = []
       n.look.runs_look = runs_plain
       n.look.runs_pressed = -1
@@ -1226,6 +1279,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         shrink_said: None,
         min_w_said: None,
         max_w_said: None,
+        min_w_within: false,
+        max_w_within: false,
         shorter: [],
         claims_scroll: false,
         scroll_held: -1,
@@ -2122,6 +2177,38 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       })
       n.props[prop] = stop
     }
+    Painted(f) => {
+      match phase {
+        Paint | Place => ()
+        _ => not_painted("a property layout reads")
+      }
+      let last : Ref[T?] = Ref(None)
+      let gen = self.gen
+      // (what it reads of signals, followed: changed, its node is to be painted again, a frame asked for)
+      let watch = @signals.watch(fn() { marked() })
+      let run = fn() {
+        let n = tree.nodes[at]
+        if !n.live || n.gen != gen {
+          return
+        }
+        let v = watch.read(fn() { f({ tree, }) })
+        if last.val != Some(v) {
+          last.val = Some(v)
+          apply(v)
+          marked()
+        }
+      }
+      // (first worked out as the frame it is said in is painted, after its layout: Tree::painted_now; a frame owed)
+      tree.painted.push((at, gen, run))
+      marked()
+      n.props[prop] = fn() {
+        watch.stop()
+        match tree.painted.search_by(fn(e) { e.0 == at && e.1 == gen }) {
+          Some(i) => tree.painted.remove(i) |> ignore
+          None => ()
+        }
+      }
+    }
   }
 }
 
@@ -2186,6 +2273,7 @@ pub fn View::pad(self : View, p : Live[Double]) -> View {
   self.padding(
     match p {
       Is(v) => Is((v, v, v, v))
+      Painted(_) => not_painted("what is said here")
       By(f) =>
         By(fn() {
           let v = f()
@@ -2202,6 +2290,7 @@ pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
   self.padding(
     match lr {
       Is(v) => Is((v.0, 0.0, v.1, 0.0))
+      Painted(_) => not_painted("what is said here")
       By(f) =>
         By(fn() {
           let v = f()
@@ -3225,6 +3314,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -3260,6 +3350,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -3450,6 +3541,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -4295,6 +4387,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
@@ -6197,6 +6290,9 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     self.walk_from = -1
     self.walk(0, gen, true)
   }
+  // (what is worked out as the frame is painted, from where this layout put things: its place or its look set, then
+  // placed or drawn again below with the rest)
+  self.painted_now()
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
     let n = self.nodes[at]
@@ -6676,7 +6772,7 @@ fn Tree::capped_applied(self : Tree, at : Int) -> Unit {
     }
   } else {
     match said {
-      Some(w) => Pt(w)
+      Some(w) => if n.max_w_within { Within(w) } else { Pt(w) }
       None => Auto
     }
   }
@@ -6713,7 +6809,7 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
     }
   }
   let min : @flex.Dim = match n.min_w_said {
-    Some(Some(w)) => Pt(w)
+    Some(Some(w)) => if n.min_w_within { Within(w) } else { Pt(w) }
     Some(None) => Auto
     // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
     None =>
@@ -8353,4 +8449,30 @@ fn layout_read(what : String) -> Unit {
     Some(why) => fault("View::\{what} read in \{why}: nothing is laid out yet there")
     None => ()
   }
+}
+
+///|
+/// The properties said `Painted` worked out, from where the frame's layout put things (Laid): each set where it came out
+/// otherwise, its node placed or drawn again as any property of its phase is.
+fn Tree::painted_now(self : Tree) -> Unit {
+  if self.painted.is_empty() {
+    return
+  }
+  for e in self.painted.copy() {
+    (e.2)()
+  }
+}
+
+///|
+/// Where it is in the window and how big, as the tree last placed it (the frame on screen, or brought to an event's
+/// moment: where a press finds things): for an input event's handler and a hit test (a menu opened beside what was
+/// pressed, where a row was for a jump), never followed. None: let go, or laid out nowhere.
+pub fn View::shown_rect(self : View) -> (Double, Double, Double, Double)? {
+  { tree: self.tree }.rect(self)
+}
+
+///|
+/// How big it is as the tree last placed it (View::shown_rect's terms). None: let go, or laid out nowhere.
+pub fn View::shown_size(self : View) -> (Double, Double)? {
+  { tree: self.tree }.size(self)
 }

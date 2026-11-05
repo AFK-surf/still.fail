@@ -74,6 +74,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   }
   match on {
     Is(v) => set(v, true)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         // (its first reading, done as it is said, by this call; each after it, as what it read changed)
@@ -498,6 +499,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v, true)
+    Painted(_) => not_painted("what is said here")
     By(f) =>
       self.owning(fn() {
         let first = Ref(true)

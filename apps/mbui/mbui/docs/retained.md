@@ -314,7 +314,7 @@ many there were (rule 9). So none of it is a signal any more, in a frame or afte
 three places, each untracked, and nowhere else:
 
 1. **Paint, this frame's.** A place property (`offset`, `drawn_off`, `scale`, `alpha`, `radius`) may be given as
-   `Drawn(fn(laid) { … })`, a third `Live` beside `Is` and `By`: worked out as the frame is painted, after its one
+   `Painted(fn(laid) { … })` (not `Drawn`: a `Pivot` is that), a third `Live` beside `Is` and `By`: worked out as the frame is painted, after its one
    layout, reading where nodes were laid out this frame through `laid` (`Laid::rect(v)`, `Laid::size(v)`). A signal it
    reads, or a node it read laid out elsewhere, draws its layer again (rule 16), never lays anything out. What a flight lands on, a preview beside its link, a
    ring around what is picked, a thumbnail following its node: paint, drawn where things are in the frame shown, a frame
@@ -333,8 +333,8 @@ three places, each untracked, and nowhere else:
    - *what one is laid out at, from another measured first* (the composer measured, the list given what is left; a
      header's copy key at the header's foot; a box opening to a share of what it holds measured whole);
    - *filling what holds it* needs nothing new: `over(Is(true))` is laid out over all of its holder, `width_share(1.0)`
-     as wide, `Within(n)` as wide as `n` or the holder where that is less; `min_width` and `max_width` take a `Dim` as
-     `width` does, so a card between 360 and 560 within its room is said, not read back;
+     as wide, `Within(n)` as wide as `n` or the holder where that is less; `min_width_within` and `max_width_within` say
+     the least and most so, so a card between 360 and 560 within its room is said, not read back;
    - *a long list* (rule 11) lays out its rows from its anchor in its own layout box (list_anchor.mbt): which rows are
      made, where they are, how far it may scroll, whether it is at its end, all from one pass; what it measured last
      time (its `ListLaid`, the heights it kept by key) is its own record, read by its next layout, never a signal; a row's
@@ -365,7 +365,7 @@ host shuts and opens of layout reads (`shut_layout_reads`, `reads_own`: #4105, #
 everywhere. An old view hosted still lays out the old way, its passes counted as owed until it is gone (rule 10).
 
 **Wrong is red,** by where a read is, not by whether it is tracked: the frame's phase says where it is (an input
-event, a hit test, a `Drawn` being painted, a layout box's `place` of its own children). `laid` read outside a `Drawn`,
+event, a hit test, a `Painted` being worked out, a layout box's `place` of its own children). `laid` read outside a `Painted`,
 `shown_*` outside an event's handler or a hit test, a size or a place of layout's anywhere else, and a signal a build or
 a layout reads set in `on_first_drawn`: each a fault naming what read it and which node; `laid_out`
 entered a second time in a frame is a fault; detlint's `layout-read-back` counts what is left and only falls, to 0. In
@@ -376,7 +376,7 @@ in one jump; a row let go and made again decodes nothing again.
 
 **The way there,** each a PR, CI at its baseline, the six steps' table no worse, one pass a frame where the step
 reaches:
-1. the framework's: `Drawn`, `Laid`, `shown_rect`, `by_room`, `min_width`/`max_width` of a `Dim`, the list's intents and
+1. the framework's: `Painted`, `Laid`, `shown_rect`, `by_room`, `min_width_within`/`max_width_within`, the list's intents and
    its rooms set in its layout, `on_first_drawn`; the old interfaces kept as they are (laid out again in the frame,
    under the cap), so the passes a frame counted fall only as readers move, never by telling later;
 2. the app's readers moved, by the inventory (85 lines: paint 16, the hand 6, a holder's layout 60, a wait 3);
