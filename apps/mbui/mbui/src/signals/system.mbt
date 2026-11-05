@@ -43,7 +43,7 @@ enum NodeKind {
 /// Computed and their update: as one reference of another type (`%identity`) the Wasm GC's types do not take it.)
 priv enum Own {
   NoOwn
-  EffectOwn(() -> (() -> Unit)?)
+  EffectOwn(() -> (() -> Unit)?, SourceLoc)
   WatchOwned(WatchOwn)
 }
 
@@ -192,7 +192,7 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
       // (an effect under way, what it read already set by another run inside it: it is not run again, and stays as it
       // was before that set, the two going round never settled; said, signals.mbt's effect_round_said)
       if sub.kind is EffectNode && !(run.running is Some(r) && physical_equal(r, sub)) {
-        effect_round()
+        effect_round(sub)
       }
       flags = flags & MUTABLE
     } else {

@@ -273,22 +273,25 @@ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
 
 ///|
 /// An effect: `fn` run now, and again as what it read changes; the function that stops it.
-pub fn effect(f : () -> Unit) -> () -> Unit {
-  effect_of(fn() {
-    f()
-    None
-  })
+pub fn effect(f : () -> Unit, loc~ : SourceLoc = _) -> () -> Unit {
+  effect_of(
+    fn() {
+      f()
+      None
+    },
+    loc,
+  )
 }
 
 ///|
 /// An effect whose run returns its cleanup, run before it runs again and as it is stopped.
-pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
-  effect_of(fn() { Some(f()) })
+pub fn effect_cleanup(f : () -> (() -> Unit), loc~ : SourceLoc = _) -> () -> Unit {
+  effect_of(fn() { Some(f()) }, loc)
 }
 
 ///|
-fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
-  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f))
+fn effect_of(f : () -> (() -> Unit)?, loc : SourceLoc) -> () -> Unit {
+  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f, loc))
   let parent = owner_now()
   let prev_sub = set_active_sub(Some(e))
   let prev_owner = set_owner(Some(e))
@@ -464,7 +467,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.cycle += 1
     run.run_depth += 1
     if e.kind is EffectNode {
-      guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
+      guard e.own is EffectOwn(f, _) else { abort("an effect without its fn") }
       let running = run.running
       run.running = Some(e)
       e.cleanup = f()
@@ -487,18 +490,30 @@ pub let flush_deepest : Int = 64
 
 ///|
 /// Where an effect is said whose read another effect run inside it set again (two going round, never settled: what it
-/// read set after it read it, it not run again): a test's and a tool's end there (abort); an app's run on a host says
-/// it on its log instead (mbui/ui's run).
-pub let effect_round_said : Ref[(String) -> Unit] = Ref(fn(s) { abort(s) })
+/// read set after it read it, it not run again): printed (a test's, a tool's); an app's run on a host says it on its
+/// log (mbui/ui's run). Not an end yet: the app's pages do it in places (sfbase's compose.mbt, writing_text), to be
+/// made right first.
+pub let effect_round_said : Ref[(String) -> Unit] = Ref(fn(s) { println(s) })
 
 ///|
-fn effect_round() -> Unit {
+fn effect_round(under_way : ReactiveNode) -> Unit {
   let at = match setting.val {
     Some(l) => l.to_string()
     None => "a batch's end"
   }
+  let made = fn(n : ReactiveNode) {
+    match n.own {
+      EffectOwn(_, l) => "the effect made at \{l}"
+      WatchOwned(o) => "the watch made at \{o.at}"
+      _ => "?"
+    }
+  }
+  let inside = match run.running {
+    Some(r) => made(r)
+    None => "nothing running"
+  }
   (effect_round_said.val)(
-    "signals: an effect under way had what it read set again by another effect run inside it, set at \{at}: the two go round, the first not run again",
+    "signals: \{made(under_way)}, under way, had what it read set again at \{at} by \{inside}, run inside it: the two go round, the first not run again",
   )
 }
 
@@ -521,7 +536,10 @@ fn flush() -> Unit {
         f(said)
         return
       }
-      None => abort(said)
+      None => {
+        println(said)
+        abort(said)
+      }
     }
   }
   run.flush_trail.push(
@@ -873,6 +891,8 @@ priv struct WatchOwn {
   /// the set that marked it, as it marked it (`setting`, None: a trigger, …): said as it is told (setting_at), where
   /// that is later (a batch's end) and no set is under way then
   marked_by : Ref[SourceLoc?]
+  /// where it was made (watch's caller), said where it goes round with an effect (effect_round)
+  at : SourceLoc
 }
 
 ///|
@@ -897,7 +917,7 @@ let watch_reading : WatchReading = { depth: 0, sets: [] }
 ///|
 /// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
 /// till the next read.
-pub fn watch(changed : () -> Unit) -> Watch {
+pub fn watch(changed : () -> Unit, loc~ : SourceLoc = _) -> Watch {
   let stale = Ref(true)
   // (told once till it reads anew: what changes again meanwhile adds nothing to its being stale)
   let told : () -> Unit = fn() {
@@ -907,7 +927,7 @@ pub fn watch(changed : () -> Unit) -> Watch {
     }
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None) }
+  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None), at: loc }
   let node = ReactiveNode::new(NONE, WatchNode, own=WatchOwned(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)

@@ -64,6 +64,9 @@ test "two effects each setting what the other reads: said, with where the set go
   s1()
   s2()
   assert_true(said.length() > 0, msg="nothing said; a \{a.get()}, b \{b.get()}")
+  // (both effects named by where they were made, and the set going round)
+  assert_true(said[0].contains("the effect made at"), msg=said[0])
+  assert_true(said[0].contains("by the effect made at"), msg=said[0])
   assert_true(said[0].contains("flush_deep_wbtest.mbt"), msg=said[0])
 }
 

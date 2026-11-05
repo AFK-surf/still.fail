@@ -6164,8 +6164,10 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
 }
 
 ///|
-/// How many layout passes one may take (each what the one before told marking more: opening a long chat, 19).
-pub let laid_passes_most : Int = 32
+/// How many layout passes one may take (each what the one before told marking more: opening a long chat, 19; a quoted
+/// picture's card flown to its message, its rows placed a few points on in each, more than 32): a guard against passes
+/// that never stop, not a budget.
+pub let laid_passes_most : Int = 512
 
 ///|
 /// Each layout pass's sizes told otherwise said (a switch for finding why passes go on: what was told, from what to
@@ -6204,9 +6206,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     passes += 1
     self.laid_passes = passes
     if passes > laid_passes_most {
-      fault(
-        "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}",
-      )
+      let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}"
+      println(said)
+      fault(said)
       self.due = false
       break
     }
