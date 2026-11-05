@@ -1423,6 +1423,7 @@ let zh : Map[String, String] = {
   "web-pages.security.pairFinding": "正在联系你的受信任设备",
   "web-pages.security.pairNone": "未找到在线的受信任设备：在你已获批的设备上打开 still.fail 后重试",
   "web-pages.security.pairNote": "安全码只显示在此设备上，不会发送给任何人",
+  "web-pages.security.pairRetry": "没收到？重新申请",
   "web-pages.security.pairTitle": "{name}的新设备请求批准",
   "web-pages.security.pairWrong": "安全码不对，还可以试 {n} 次",
   "web-pages.security.people": "成员和设备",

@@ -1450,6 +1450,7 @@ let en : Map[String, String] = {
   "web-pages.security.pairFinding": "Reaching your trusted devices",
   "web-pages.security.pairNone": "No trusted device answered. Open still.fail on a device that's already approved, then try again.",
   "web-pages.security.pairNote": "The security code shows only on this device and is never sent",
+  "web-pages.security.pairRetry": "Nothing yet? Ask again",
   "web-pages.security.pairTitle": "{name}'s new device asks for approval",
   "web-pages.security.pairWrong": "That security code isn't right; {n} tries left",
   "web-pages.security.people": "Members and devices",

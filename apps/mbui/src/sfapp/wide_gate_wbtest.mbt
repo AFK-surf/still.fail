@@ -307,3 +307,41 @@ test "Duo: while the device waits in the lock the workspace's button is in the s
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfbase.workspace_in_view(src).0.map(fn(w) { w.id }), Some("ws2"))
 }
+
+///|
+test "wide: while the device looks for its trusted devices, 没收到？重新申请 under it asks again at once (a trusted device opened and nothing came up)" {
+  new_run()
+  let base = fixture("chat")
+  let calls : Array[String] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name)
+      (base.call)(name, params, done)
+    },
+    topic: fn(name, params) {
+      let topic = (base.topic)(name, params)
+      if name == "lock" {
+        {
+          ..topic,
+          value: Some({
+            "me": {
+              "waiting": Json::boolean(true),
+              "unsigned": Json::boolean(false),
+              "pair": { "state": Json::string("finding") },
+            },
+          }),
+          version: topic.version + 1,
+        }
+      } else {
+        topic
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
+  t.frame()
+  assert_true(t.find("正在联系你的受信任设备") is Some(_))
+  t.tap_text("没收到？重新申请")
+  t.frame()
+  assert_true(calls.contains("lock.pair"), msg="\{calls}")
+}
