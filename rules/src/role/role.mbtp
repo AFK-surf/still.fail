@@ -71,3 +71,166 @@ predicate no_impersonation(by_them : Bool, kept : Bool, had_own : Bool, result :
 predicate own_post(by_them : Bool, kept : Bool, who : Role, had_own : Bool, result : Bool) {
   own_sound(by_them, kept, who, had_own, result) && own_complete(by_them, kept, who, had_own, result) && no_impersonation(by_them, kept, had_own, result)
 }
+
+predicate one_left(owners : Int, was : Bool, becomes : Bool) {
+  owners - one_if(was) + one_if(becomes) >= 1
+}
+
+predicate keeps_sound(owners : Int, was : Bool, becomes : Bool, result : Bool) {
+  result → one_left(owners, was, becomes)
+}
+
+predicate keeps_complete(owners : Int, was : Bool, becomes : Bool, result : Bool) {
+  one_left(owners, was, becomes) → result
+}
+
+predicate keeps_post(owners : Int, was : Bool, becomes : Bool, result : Bool) {
+  keeps_sound(owners, was, becomes, result) && keeps_complete(owners, was, becomes, result)
+}
+
+predicate effect_sound(own : Bool, result : Bool) {
+  result → own
+}
+
+predicate effect_complete(own : Bool, result : Bool) {
+  own → result
+}
+
+predicate effect_post(own : Bool, result : Bool) {
+  effect_sound(own, result) && effect_complete(own, result)
+}
+
+predicate signs_now(holds : Bool, live : Bool, member : Bool) {
+  holds && live && member
+}
+
+predicate replaces_rule(own_found : Bool, holds : Bool, live : Bool, member : Bool) {
+  !own_found && signs_now(holds, live, member)
+}
+
+predicate replaces_sound(own_found : Bool, holds : Bool, live : Bool, member : Bool, result : Bool) {
+  result → replaces_rule(own_found, holds, live, member)
+}
+
+predicate replaces_complete(own_found : Bool, holds : Bool, live : Bool, member : Bool, result : Bool) {
+  replaces_rule(own_found, holds, live, member) → result
+}
+
+predicate replaces_post(own_found : Bool, holds : Bool, live : Bool, member : Bool, result : Bool) {
+  replaces_sound(own_found, holds, live, member, result) && replaces_complete(own_found, holds, live, member, result)
+}
+
+predicate admitted(a : Admission) {
+  match a {
+    Admitted => true
+    _ => false
+  }
+}
+
+predicate let_in(found : Bool, theirs : Bool, live : Bool, member : Bool) {
+  found && theirs && live && member
+}
+
+predicate admission_sound(found : Bool, theirs : Bool, live : Bool, member : Bool, result : Admission) {
+  admitted(result) → let_in(found, theirs, live, member)
+}
+
+predicate admission_complete(found : Bool, theirs : Bool, live : Bool, member : Bool, result : Admission) {
+  let_in(found, theirs, live, member) → admitted(result)
+}
+
+predicate admission_post(found : Bool, theirs : Bool, live : Bool, member : Bool, result : Admission) {
+  admission_sound(found, theirs, live, member, result) && admission_complete(found, theirs, live, member, result)
+}
+
+predicate signs_with(app : Bool, holds : Bool) {
+  app && holds
+}
+
+predicate own_member(own : Bool, member : Bool) {
+  own && member
+}
+
+predicate device_signs_rule(app : Bool, holds : Bool, own : Bool, member : Bool) {
+  signs_with(app, holds) && own_member(own, member)
+}
+
+predicate device_signs_sound(app : Bool, holds : Bool, own : Bool, member : Bool, result : Bool) {
+  result → device_signs_rule(app, holds, own, member)
+}
+
+predicate device_signs_complete(app : Bool, holds : Bool, own : Bool, member : Bool, result : Bool) {
+  device_signs_rule(app, holds, own, member) → result
+}
+
+predicate device_signs_post(app : Bool, holds : Bool, own : Bool, member : Bool, result : Bool) {
+  device_signs_sound(app, holds, own, member, result) && device_signs_complete(app, holds, own, member, result)
+}
+
+predicate signed_by_rule(found : Bool, whose : Bool) {
+  found && whose
+}
+
+predicate signed_by_sound(found : Bool, whose : Bool, result : Bool) {
+  result → signed_by_rule(found, whose)
+}
+
+predicate signed_by_complete(found : Bool, whose : Bool, result : Bool) {
+  signed_by_rule(found, whose) → result
+}
+
+predicate signed_by_post(found : Bool, whose : Bool, result : Bool) {
+  signed_by_sound(found, whose, result) && signed_by_complete(found, whose, result)
+}
+
+predicate cert_device_rule(own : Bool, ever : Bool) {
+  own || ever
+}
+
+predicate cert_device_sound(own : Bool, ever : Bool, result : Bool) {
+  result → cert_device_rule(own, ever)
+}
+
+predicate cert_device_complete(own : Bool, ever : Bool, result : Bool) {
+  cert_device_rule(own, ever) → result
+}
+
+predicate cert_device_post(own : Bool, ever : Bool, result : Bool) {
+  cert_device_sound(own, ever, result) && cert_device_complete(own, ever, result)
+}
+
+predicate ever_had(ever : Bool, had : Bool) {
+  ever && had
+}
+
+predicate cert_key_rule(current : Bool, ever : Bool, had : Bool) {
+  current || ever_had(ever, had)
+}
+
+predicate cert_key_sound(current : Bool, ever : Bool, had : Bool, result : Bool) {
+  result → cert_key_rule(current, ever, had)
+}
+
+predicate cert_key_complete(current : Bool, ever : Bool, had : Bool, result : Bool) {
+  cert_key_rule(current, ever, had) → result
+}
+
+predicate cert_key_post(current : Bool, ever : Bool, had : Bool, result : Bool) {
+  cert_key_sound(current, ever, had, result) && cert_key_complete(current, ever, had, result)
+}
+
+predicate key_rule(seen : Bool, member : Bool) {
+  !seen && member
+}
+
+predicate key_sound(seen : Bool, member : Bool, result : Bool) {
+  result → key_rule(seen, member)
+}
+
+predicate key_complete(seen : Bool, member : Bool, result : Bool) {
+  key_rule(seen, member) → result
+}
+
+predicate key_post(seen : Bool, member : Bool, result : Bool) {
+  key_sound(seen, member, result) && key_complete(seen, member, result)
+}

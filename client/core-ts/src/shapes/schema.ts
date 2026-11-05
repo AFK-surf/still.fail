@@ -2317,8 +2317,8 @@ export const SHAPES: Record<string, Shape> = {
     ["accountWarn", "bool"],
     ["saveText", "String"],
     ["borrow", opt("PickBorrow"), { default: true, doc: "The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it." }],
-    ["near", vec("String"), { default: true, doc: "A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most\nfour, the station's own: kept nearest what opened its panel, the rest past them." }],
-    ["liked", vec("String"), { default: true, doc: "The models (their `model`) starred (`pick.like`), the first starred first, those in `near` left out:\npast them, before the rest." }],
+    ["near", vec("String"), { default: true, doc: "A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most\nfour, the station's own, the starred left out: kept nearest what opened its panel, the rest past them." }],
+    ["liked", vec("String"), { default: true, doc: "The models (their `model`) starred (`pick.like`), the first starred first, every one of them however\noften used: past `near`, before the rest." }],
     ["makers", vec("ModelMaker"), { default: true, doc: "The makers of its options, in the order their models come, none known last: what the list of\nthem all is grouped by." }],
   ], { doc: "A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,\nuntil `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the\nstation's pick, said so (`dropped`, `force`)." }),
   ContextLevel: struct([

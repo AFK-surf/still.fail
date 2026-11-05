@@ -47,6 +47,11 @@ export const validId = (value: unknown): value is string => typeof value === "st
 /** The Android app's callbacks: the app registers this scheme and host for the Custom Tab to return to (apps from before the rename, ember://). */
 // The beta apps (fail.still.android.beta, fail.still.desktop.beta: 「youdid.wtf」) come back on a scheme of their own.
 export const APP_REDIRECTS = ["stillfail://auth/callback", "ember://auth/callback", "stillfail-beta://auth/callback"];
+/**
+ * The Android apps' own: each build comes back on its package (apps/mbui WebAuth, its manifest's
+ * `${applicationId}://auth`), so the stable, beta and dev apps installed side by side never take each other's.
+ */
+const ANDROID_REDIRECT = /^(fail\.still\.android|build\.monoid\.android)(\.beta|\.dev)?:\/\/auth\/callback$/;
 
 /**
  * Where a login may return: the web app's own callback on one of its origins
@@ -55,7 +60,7 @@ export const APP_REDIRECTS = ["stillfail://auth/callback", "ember://auth/callbac
  */
 export function validRedirect(env: Env, value: string): boolean {
   const beta = betaOrigin(env);
-  if ([...publicOrigins(env), ...adminOrigins(env), ...(beta ? [beta] : [])].some((origin) => value === `${origin}/auth/callback`) || APP_REDIRECTS.includes(value)) return true;
+  if ([...publicOrigins(env), ...adminOrigins(env), ...(beta ? [beta] : [])].some((origin) => value === `${origin}/auth/callback`) || APP_REDIRECTS.includes(value) || ANDROID_REDIRECT.test(value)) return true;
   try {
     const url = new URL(value);
     return url.protocol === "http:" && url.hostname === "127.0.0.1" && Number(url.port) > 0 && url.pathname === "/oauth/callback" && !url.username && !url.password && !url.search && !url.hash;

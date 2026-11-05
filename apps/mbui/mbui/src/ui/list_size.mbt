@@ -243,17 +243,31 @@ fn RowCauses::height(
     r.a = if x > 0.02 { (h - base(r)) / x } else { 0.0 }
   } else if r.cause != cause || r.start != c.start || r.end != c.end {
     let t = c.start
-    // (till then, on the way it was on; one whose own cause sets out then (timed on: words sent leaving the composer)
-    // as it is now, till then)
-    let held = cause.at() > now
-    let (h, v) = if held { (r.at(now, base(r), r.k).0, 0.0) } else { r.at(t, base(r), r.k) }
-    r.before = if t <= now {
+    // A future way replaces another future way, not the motion already under way. Keep that motion until the new
+    // start, including when the future way is retimed again or a closing row is due to return.
+    let before = if t <= now {
       None
-    } else if held {
+    } else if cause.at() > now && r.cause.at() == now &&
+      ((cause is Comes(_) && r.cause is Comes(_)) || (cause is Changed(_) && r.cause is Changed(_))) {
+      // The row's own start was just moved into the future, before that change set out.
+      let (h, _) = r.at(now, base(r), r.k)
       Some((h - base(r), base(r), @double.infinity, @double.infinity, 0.0))
+    } else if r.start > now {
+      match r.before {
+        Some(previous) => Some(previous)
+        None => Some((r.a, base(r), @double.infinity, @double.infinity, 0.0))
+      }
     } else {
       Some((r.a, base(r), r.start, r.end, r.k))
     }
+    let (h, v) = match before {
+      Some((a, bto, start, end, k)) => {
+        let (x, speed) = way_share(t, start, end, k)
+        (bto + a * x, a * speed)
+      }
+      None => r.at(t, base(r), r.k)
+    }
+    r.before = before
     r.a = h - to
     r.to = to
     r.start = c.start

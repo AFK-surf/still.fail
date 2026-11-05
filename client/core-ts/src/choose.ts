@@ -733,15 +733,15 @@ export class Choose implements Owner {
       const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
       return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0, liked: likedKeys.includes(model.key(id)) };
     });
-    const near = o.kind === "new" || o.kind === "session"
-      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable").sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
-      : [];
-    // The starred, in the order they were starred, past those used most (not twice); then every model, by its maker
-    // (`makers`).
+    // The starred, in the order they were starred, every one of them: what the person keeps at hand stays put however
+    // often it is used. Those used most leave them out (not twice); then every model, by its maker (`makers`).
     const liked = likedKeys.flatMap((k) => {
       const found = annotated.find((x: J) => model.key(x.model) === k);
-      return found !== undefined && !near.includes(found.model) ? [found.model] : [];
+      return found !== undefined ? [found.model] : [];
     });
+    const near = o.kind === "new" || o.kind === "session"
+      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable" && !liked.includes(x.model)).sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
+      : [];
     const makers = this.#makers(annotated);
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
