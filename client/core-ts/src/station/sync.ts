@@ -79,6 +79,7 @@ const SEARCHED = new Set(["session", "session-removed", "thread", "thread-remove
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
 const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
+const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
@@ -1713,8 +1714,10 @@ export class StationsSync {
   }
 
   /// What `address`'s stream told since `read` was asked, on top of what it brought (retold.ts).
-  #retell(address: string, read: number): void {
-    for (const { name, data } of this.#retold.since(read, address)) this.#held(address, name, data);
+  #retell(address: string, read: number, shared = false): void {
+    // Only a shared-list read replaces sharedRows. Replaying its events after an unrelated, slower read could put an
+    // older row back over a newer shared-list answer.
+    for (const { name, data } of this.#retold.since(read, address)) if (SHARED_RETOLD.has(name) === shared) this.#held(address, name, data);
   }
 
   /// A session's summary changed: in place among the listed (and in its detail); its detail is read again when its
@@ -1820,7 +1823,7 @@ export class StationsSync {
       }
       if (!Array.isArray(answer.success)) return unread?.();
       link.sharedRows = new Map(answer.success.flatMap((r) => (isObject(r) && typeof get(r, "id") === "string" ? [[get(r, "id") as string, r as Record<string, any>]] : [])));
-      this.#retell(address, asked);
+      this.#retell(address, asked, true);
       this.#made(address);
     }));
   }

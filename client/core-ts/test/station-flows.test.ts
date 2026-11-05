@@ -1368,6 +1368,37 @@ test("a_failed_shared_list_refresh_keeps_the_old_list_and_retries", async () => 
   core.close();
 });
 
+test("an_unrelated_read_does_not_reapply_an_older_shared_chat", async () => {
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
+  const row = (title: string) => ({ id: "k1", session: "k1", thread: 8, agents: [{ key: "k1", runtime: "claude" }], lastActiveAt: 1, ws: null, named: { thread: { surface: "ember", title }, firstText: null, channelName: null }, mineOf: [], said: null });
+  const answers: J = { ...base(), "GET /chats": [], "GET /sessions": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [row("first")] };
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true, shared: true });
+  await coalesce(host);
+  let finishOverview: (() => void) | undefined;
+  let finishSessions: (() => void) | undefined;
+  stationLater(host, (req) => {
+    if (req.url.endsWith("/overview")) return new Promise((resolve) => { finishOverview = () => resolve(jsonResponse(200, answers["GET /overview"])); });
+    if (req.url.endsWith("/sessions")) return new Promise((resolve) => { finishSessions = () => resolve(jsonResponse(200, [])); });
+    return undefined;
+  });
+  answers["GET /chats?shared=1"] = [row("newer")];
+  core.inner.stations.snapshot(ST);
+  await host.time.pass(300, 20);
+  assert.ok(finishOverview);
+  assert.ok(finishSessions);
+  push("chat-shared", row("older"));
+  await coalesce(host);
+  finishSessions();
+  await host.time.pass(500, 20);
+  assert.equal((core.inner.data.chat(ST, "k1") as J)?.title, "newer");
+  finishOverview();
+  await coalesce(host);
+  assert.equal((core.inner.data.chat(ST, "k1") as J)?.title, "newer");
+  core.close();
+});
+
 for (const removed of [false, true]) test(`a_shared_chat_${removed ? "removed" : "added"}_while_the_list_is_read_is_not_lost`, async () => {
   const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
   const row = {
