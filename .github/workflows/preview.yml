@@ -378,6 +378,22 @@ jobs:
       # npm's and yarn's versions, their first start on the runner (29-81 s of some runs, 2026-10-25, 40225325122; the
       # setup's own setup-node after it, ~0.5 s), and that start is the setup's, beside cl. setup-node when the image
       # has not that Node.
+      # (that Node kept in the Actions cache by its version where the image has it not: windows-2025 had no 24.22.1 by
+      # 2026-11-05, and setup-node fetched it and copied it in on each run's way to the build, 11 s of 42066369298;
+      # saved by main's run, read by every branch's)
+      - id: node-keep
+        run: |
+          v=$(tr -d 'v[:space:]' < .node-version); d="$RUNNER_TOOL_CACHE/node/$v/x64"
+          echo "dir=$d" >> "$GITHUB_OUTPUT"
+          echo "key=node-win32-x64-$v" >> "$GITHUB_OUTPUT"
+          [ ! -x "$(cygpath -u "$d")/node.exe" ] || echo "kept=true" >> "$GITHUB_OUTPUT"
+      - if: steps.node-keep.outputs.kept != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.node-keep.outputs.dir }}
+            ${{ steps.node-keep.outputs.dir }}.complete
+          key: ${{ steps.node-keep.outputs.key }}
       - id: node
         run: |
           d="$(cygpath -u "$RUNNER_TOOL_CACHE")/node/$(tr -d 'v[:space:]' < .node-version)/x64"
