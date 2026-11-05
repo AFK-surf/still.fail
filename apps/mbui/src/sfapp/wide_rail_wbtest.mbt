@@ -255,6 +255,22 @@ test "wide: ⌃2 goes to the second workspace (prefs.set workspace)" {
   t.frame()
   assert_eq(app.picked.get(), "ws2")
   assert_true(named(calls, "prefs.set").iter().any(fn(m) { text(Some(m.params), "workspace") == "ws2" }))
+  // landed in it as the stack comes to Home, once (nav_home's pops one change: no land on a page half-way down, which
+  // the pops after it would take off again, and land again, never done), and as the frame did before at its frames
+  assert_true(app.nav.pages() == [Home, NewChat])
+}
+
+///|
+test "wide: the gear, in the settings, goes back out of them to the chats, landed again on Home (nav_home)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  for into in [true, false] {
+    let (x, y, w, h) = t.query(Button, label=@sf.t("web-pages.settings.title")).unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.frame()
+    t.run_for(@ui.move_most_ms)
+    assert_eq(app.nav.pages() == [Home, NewChat], !into, msg="in the settings: \{into}")
+  }
 }
 
 ///|

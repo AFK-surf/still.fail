@@ -109,12 +109,16 @@ pub fn close_page(p : Page) -> Bool {
   if at < 0 {
     return false
   }
+  // (one change, all its pops and the entry it leaves, as back_pop's: what acts as the stack comes to a page (the wide
+  // frame's land, on Home) acts on where it comes to, not on a page half-way down the pops still take off)
+  @signals.start_batch()
   while app.nav.depth() > at {
     if !app.nav.pop() {
       break
     }
   }
   history_closed()
+  @signals.end_batch()
   true
 }
 

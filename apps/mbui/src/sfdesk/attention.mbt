@@ -302,7 +302,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
             if g.0 != w.id {
               app.picked.set(g.0)
               (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), fn(_) {  })
-              desk_home()
+              @sfbase.nav_home()
             }
             let chat : ChatRef = {
               station: text(v, "station"),

@@ -835,6 +835,8 @@ fn share_opened(
     @ui.over_done(open_app=true)
   }
   if session == "" {
+    // (one change: the stack down to Home and the new chat over it, nothing landing on Home between)
+    @signals.start_batch()
     pick()
     while app.nav.depth() > 1 {
       if !app.nav.pop() {
@@ -842,6 +844,7 @@ fn share_opened(
       }
     }
     open_page(NewChat)
+    @signals.end_batch()
   } else {
     app.nav.push(Chat({ station, session, title, station_name: "" }))
   }
