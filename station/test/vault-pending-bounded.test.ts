@@ -84,6 +84,39 @@ test("a pending list reads its member vaults and follows membership changes", as
   } finally { db.close(); }
 });
 
+test("a pending list checks each member vault once, however many of its requests wait", async () => {
+  async function vaultReads(n: number) {
+    const db = new DatabaseSync(":memory:");
+    let reads = 0, reading = false;
+    const observed = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (reading && sql === "SELECT body FROM vaults WHERE ws = ? AND id = ?") reads++;
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    try {
+      const vaults = new VaultStore(observed);
+      vaults.putVault({ ws: "w", id: "v", seq: 0, members: ["alice"] } as never);
+      const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => ({ ws: "w" } as never),
+        hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+        proxy: {} as never, vaults, plain: {} as never });
+      const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','pending',?)");
+      for (let i = 0; i < n; i++) {
+        const id = `r-${i}`;
+        insert.run(id, JSON.stringify({ ws: "w", id, session: "s", vault: "v", at: 0, item: "i", mode: "env", status: "pending" }));
+      }
+      await secrets.preparePending("w");
+      reading = true;
+      assert.equal(secrets.pending("w", { ws: "w" } as never, { sub: "alice", email: "alice@example.test" }).length, n);
+      reading = false;
+      return reads;
+    } finally { db.close(); }
+  }
+  assert.deepEqual(await Promise.all([vaultReads(40), vaultReads(400)]), [1, 1]);
+});
+
 test("preparing a pending list waits for the previous process to finish writing", async () => {
   const db = new DatabaseSync(":memory:");
   let exited!: () => void;
