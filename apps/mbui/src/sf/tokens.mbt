@@ -1968,21 +1968,6 @@ pub let stage_plain : Int64 = 0xF4F4F51FL
 pub let stage_plain_lit : Int64 = 0xF4F4F533L
 
 ///|
-/// A job left up's name's line (open_job_row's: 14 on 18), and where it is and how long's (12 on 16).
-pub let job_name_line : @ui.Leading = Exact(18.0)
-
-///|
-pub let job_where_line : @ui.Leading = Exact(16.0)
-
-///|
-/// The line of a caption said by its size alone (as an old view's words were): the theme's share of the size
-/// (`text_line`), not the caption's own line.
-pub fn caption_share_line() -> @ui.Leading {
-  let th = @ui.tree_theme()
-  Exact(th.text_size(Caption).0 * th.text_line)
-}
-
-///|
 /// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.
 pub let pick_sub_line : @ui.Leading = Exact(17.0)
 

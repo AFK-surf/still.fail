@@ -42,7 +42,7 @@ fn open_jobs_group_node(v : @view.View, src : Source, g : @signals.Signal[Json])
   v.width_share(Is(1.0)).gap(Is(2.0)) |> ignore
   v.box(fn(h) {
     h.padding(Is((10.0, 2.0, 10.0, 2.0))) |> ignore
-    @sf.words_node(h, fn() { text(Some(g.get()), "head") }, fn() { open_jobs_head() }) |> ignore
+    open_jobs_head_node(h, fn() { text(Some(g.get()), "head") })
   })
   |> ignore
   v.each(shown, fn(j) { text(Some(j), "station") + "/" + text(Some(j), "id") }, fn(r, j) { open_job_row_node(r, src, j) })
@@ -53,7 +53,7 @@ fn open_jobs_group_node(v : @view.View, src : Source, g : @signals.Signal[Json])
         fill("android-misc.openJobs.more", [("n", (list().length() - shown().length()).to_string())])
       }
       @sf.pressed_node(more, fn() { open_jobs_unfolded.set(open_jobs_unfolded.get() + [gkey()]) }, Is(8.0), Button, words)
-      @sf.words_node(more, words, fn() { open_jobs_head() }) |> ignore
+      open_jobs_head_node(more, words)
     })
     |> ignore
   })
@@ -148,18 +148,29 @@ fn open_job_row_node(r : @view.View, src : Source, job : @signals.Signal[Json]) 
 }
 
 ///|
-/// A group's heading and 还有 N 个 (caption, muted, one line): on the theme's share of its size, as words said only by
-/// their size are (open_jobs's), not the caption's own line.
-fn open_jobs_head() -> @ui.TextStyle {
-  @ui.text_style(size=Caption, color=Muted, wrap=false, leading=@sf.caption_share_line())
+/// A group's heading and 还有 N 个 (caption, muted, one line) in node `parent`: on the theme's share of its size, as
+/// words said only by their size are (open_jobs's), not the caption's own line.
+fn open_jobs_head_node(parent : @view.View, words : () -> String) -> Unit {
+  parent.box(fn(w) {
+    w
+    .words(By(words))
+    .words_look(By(fn() {
+      let th = @ui.tree_theme()
+      let size = th.text_size(Caption).0
+      { size, weight: 400, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
+    }))
+    .ink(By(fn() { @sf.theme().p.muted }))
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
-/// A job's name (14 on 18, the ink, cut short on its line).
+/// A job's name (14 on L5's 18, the ink, cut short on its line).
 // kept across runs: a value (no field of it changes)
-let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, leading=@sf.job_name_line, w=Cut)
+let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, leading=L5, w=Cut)
 
 ///|
-/// Where it is and how long (caption on 16, muted, cut short on its line).
+/// Where it is and how long (caption on L4's 16, muted, cut short on its line).
 // kept across runs: a value (no field of it changes)
-let open_job_where : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, leading=@sf.job_where_line, w=Cut)
+let open_job_where : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, leading=L4, w=Cut)
