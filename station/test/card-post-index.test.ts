@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
-import { cardPostsReady, cardPostsStep, installCardPosts } from "../src/store/card-post-index.ts";
+import { CARD_POST_ADD_CHANGED, cardPostsReady, cardPostsStep, installCardPosts } from "../src/store/card-post-index.ts";
 
 const textCard = '{"type":"text"}';
 const posts = (db: DatabaseSync, thread: number) => db.prepare(
@@ -14,6 +14,17 @@ const posts = (db: DatabaseSync, thread: number) => db.prepare(
 const original = (db: DatabaseSync, thread: number) => db.prepare(
   "SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND kind='message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY entries.n",
 ).all(thread).map((row) => row.n);
+
+test("reconciling a card post seeks its changed entries", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installCardPosts(db);
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${CARD_POST_ADD_CHANGED}`).all().map((row) => String(row.detail)).join("\n");
+    assert.match(plan, /SCAN c/);
+    assert.match(plan, /SEARCH e USING INDEX .*entries/);
+    assert.doesNotMatch(plan, /SCAN e/);
+  } finally { store.close(); }
+});
 
 for (const recursive of [false, true]) {
   test(`card posts follow mixed writes and replacements (recursive triggers ${recursive})`, () => {

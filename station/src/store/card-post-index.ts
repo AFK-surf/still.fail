@@ -27,11 +27,12 @@ const stage = (update: boolean) => `DELETE FROM card_post_changed;
   SELECT k.thread,k.n FROM (SELECT NEW.thread AS thread,NEW.n AS n UNION ${conflicts}
     ${update ? "UNION SELECT OLD.thread,OLD.n" : ""}) k
   WHERE EXISTS (SELECT 1 FROM card_post_scopes s WHERE s.thread=k.thread);`;
+// The changed set is tiny. Without CROSS JOIN SQLite may choose to scan every entry on every card write.
+export const CARD_POST_ADD_CHANGED = `INSERT INTO card_posts(thread,n)
+  SELECT e.thread,e.n FROM card_post_changed c CROSS JOIN entries e ON e.thread=c.thread AND e.n=c.n
+  WHERE e.kind='message' AND (e.card IS NOT NULL OR e.options IS NOT NULL)`;
 const reconcile = `DELETE FROM card_posts WHERE (thread,n) IN (SELECT thread,n FROM card_post_changed);
-  INSERT INTO card_posts(thread,n)
-  SELECT e.thread,e.n FROM card_post_changed c JOIN entries e ON e.thread=c.thread AND e.n=c.n
-  WHERE e.kind='message' AND (e.card IS NOT NULL OR e.options IS NOT NULL);
-  DELETE FROM card_post_changed;`;
+  ${CARD_POST_ADD_CHANGED}; DELETE FROM card_post_changed;`;
 
 export function installCardPosts(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_post_meta'").get() !== undefined;
