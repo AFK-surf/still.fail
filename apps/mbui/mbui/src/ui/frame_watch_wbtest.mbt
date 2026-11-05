@@ -201,6 +201,55 @@ test "a signal the view did not read, set: the next frame is of the look alone" 
 }
 
 ///|
+/// A mark as wide as `wide` says, turning, the view's builds counted; `reads`: it reads where the mark was laid out
+/// (Ctx::laid_rect) as it is built.
+fn laid_tester(wide : @signals.Signal[Bool], reads : Bool) -> Tester {
+  Tester::new(fn(c) {
+    let k = c.id("mark")
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.text("waiting", size=12.0) |> ignore
+      let mark = c.box(id=k, w=Px(if wide.get() { 40.0 } else { 20.0 }), h=Px(8.0), bg=0x3366CCFFL, fn() {  })
+      c.cycle_look(mark, looks_turn_ms, fn(f) { look(rot=f * 6.283185307179586) })
+    })
+    |> ignore
+    if reads {
+      c.laid_rect(k) |> ignore
+    }
+  })
+}
+
+///|
+test "laid out otherwise by a signal, nothing of the layout read as it was built: the frame after it of the look alone" {
+  let wide = @signals.signal(false)
+  let t = laid_tester(wide, false)
+  t.clock_frame()
+  t.clock_frame()
+  wide.set(true)
+  t.clock_frame()
+  assert_true(t.built_why().has_prefix("what it read changed"), msg=t.built_why())
+  // (built of nothing of how it was laid out: laid out otherwise, nothing of that for the next to build again)
+  t.clock_frame()
+  assert_eq(t.built_why(), "")
+}
+
+///|
+test "laid out otherwise by a signal, where a box was laid out read as it was built: the frame after it built whole, saying where" {
+  let wide = @signals.signal(false)
+  let t = laid_tester(wide, true)
+  t.clock_frame()
+  t.clock_frame()
+  t.clock_frame()
+  wide.set(true)
+  t.clock_frame()
+  t.clock_frame()
+  let why = t.built_why()
+  assert_true(why.has_prefix("the one before it laid out otherwise, its layout read as it was built (laid_rect at "), msg=why)
+  t.clock_frame()
+  t.clock_frame()
+  assert_eq(t.built_why(), "")
+}
+
+///|
 test "a tell a build says once (a page left): told once, and the frames after it of the look alone, as before it" {
   let poke = @signals.signal(0)
   let seen = Ref(0)

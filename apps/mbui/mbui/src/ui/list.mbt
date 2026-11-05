@@ -413,6 +413,11 @@ pub fn Ctx::list(
   loc~ : SourceLoc,
 ) -> Int {
   let id = self.id(key)
+  // (which rows it builds is worked out of how tall each was laid out and where it was scrolled to: a read of the
+  // layout, frame_watch.mbt layout_read)
+  if building.val {
+    layout_read("list \"\{key}\"'s rows, by their heights as laid out, at \{loc}")
+  }
   let st = match self.lists.get(id) {
     Some(s) => s
     None => {
@@ -1396,6 +1401,7 @@ pub fn[T : Eq] Ctx::list_info_as(self : Ctx, key : String, made : (ListInfo?) ->
   let id = self.id(key)
   let v = self.list_info_of(id)
   if building.val {
+    layout_read("list_info \"\{key}\"")
     let was = made(v)
     self.info_reads.push((key, fn() { made(self.list_info_of(id)) != was }))
   }
@@ -1470,6 +1476,9 @@ pub fn Ctx::list_place(self : Ctx, key : String) -> (Int, Double, Double)? {
   // (by its id where it is read: the scope it is built in)
   let id = self.id(key)
   let v = self.list_place_of(id)
+  if building.val {
+    layout_read("list_place \"\{key}\"")
+  }
   if building.val && !self.place_reads.contains(id) {
     self.place_reads[id] = (key, v)
   }
@@ -1491,6 +1500,9 @@ fn Ctx::list_place_of(self : Ctx, id : Int) -> (Int, Double, Double)? {
 pub fn Ctx::list_row_height(self : Ctx, key : String, item : Int) -> Double? {
   let id = self.id(key)
   let v = self.list_row_height_of(id, item)
+  if building.val {
+    layout_read("list_row_height \"\{key}\"")
+  }
   if building.val && !self.row_reads.contains((id, item)) {
     self.row_reads[(id, item)] = (key, v)
   }

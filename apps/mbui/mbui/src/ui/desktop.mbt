@@ -1396,6 +1396,7 @@ pub fn Ctx::selection_end(self : Ctx, loc~ : SourceLoc) -> (Double, Double, Doub
     (e.1 + dx, e.2 + dy, e.3)
   })
   if building.val {
+    layout_read("selection_end at \{loc}")
     if sel_read.val is None {
       sel_read.val = Some((v, loc))
     }

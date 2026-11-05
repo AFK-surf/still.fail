@@ -266,6 +266,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.periodic.clear()
   c.nav_rest = -1.0
   c.read_back_moved = false
+  // (what of the layout the frame's builds read, from none: frame_watch.mbt layout_read_at)
+  layout_read_at.val = ""
   faces_from_env()
   if text_frame() {
     // (what the host measures changed: every layout made anew, kept rows' too)

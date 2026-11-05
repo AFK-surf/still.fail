@@ -436,13 +436,30 @@ priv struct PaintBase {
   mut sig : Int64
   mut had : Bool
   mut laid_same : Bool
+  /// what of the layout the last build read, the first (layout_read; "" none)
+  mut read_at : String
   mut root : Int
   mut wake : Double
 }
 
 ///|
 // kept across runs: put back with the globals (looks_reset), else made again by each frame built and painted
-let paint_base : PaintBase = { sig: 0L, had: false, laid_same: false, root: 0, wake: -1.0 }
+let paint_base : PaintBase = { sig: 0L, had: false, laid_same: false, read_at: "", root: 0, wake: -1.0 }
+
+///|
+/// What the frame's builds read of the layout as the last frame laid it out (readback.mbt's reads, a row kept reading
+/// it again), the first by where it was read ("" none): a build that read none of it builds nothing from how the one
+/// before laid out, so laid out otherwise, nothing of it is for the frame after it to build again (laid_kept).
+// kept across runs: put back as each frame's build begins (frame_body)
+let layout_read_at : Ref[String] = Ref("")
+
+///|
+/// What a build read of the layout (`what`, where it was read): the first a frame's builds read kept (layout_read_at).
+fn layout_read(what : String) -> Unit {
+  if layout_read_at.val == "" {
+    layout_read_at.val = what
+  }
+}
 
 ///|
 /// Whether the looks by the clock are being applied (looks_apply): a wake asked now is theirs.
@@ -517,6 +534,8 @@ fn looks_reset() -> Unit {
   looks_base.settled = false
   paint_base.had = false
   paint_base.laid_same = false
+  paint_base.read_at = ""
+  layout_read_at.val = ""
   paint_base.root = 0
   paint_base.wake = -1.0
   looks_tells.now = []
@@ -636,10 +655,12 @@ let env_changed : Ref[String] = Ref("")
 
 ///|
 /// The frame is built and laid out, `root` its tree (frame_body): what it laid out said as one number, and whether the
-/// build before it laid out the same.
+/// build before it laid out the same, or nothing it built came of how that one laid out (it read none of the layout:
+/// layout_read_at), laid out otherwise all the same.
 fn laid_kept(c : Ctx, root : Int) -> Unit {
   let sig = tree_sig(c)
-  paint_base.laid_same = paint_base.had && sig == paint_base.sig
+  paint_base.read_at = layout_read_at.val
+  paint_base.laid_same = paint_base.had && (sig == paint_base.sig || paint_base.read_at == "")
   paint_base.had = true
   paint_base.sig = sig
   paint_base.root = root
@@ -1034,6 +1055,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()
+  // (the pointer's shape as what it is over says it now, a node's shape said anew though nothing it is over moved:
+  // told the host whatever this frame does, built, painted or not, view_host.mbt)
+  view_cursor_tell()
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
@@ -1105,7 +1129,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     }) +
     (if part_at != "" { ", the clock read in it at \{said_clock(part_at, part_who)}" } else { "" })
   } else if !paint_base.laid_same {
-    "the one before it laid out otherwise"
+    "the one before it laid out otherwise, its layout read as it was built (\{paint_base.read_at})"
   } else {
     ""
   }
