@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { ccSessionReady } from "../src/store/cc-thread-index.ts";
@@ -83,4 +87,66 @@ test("both chat candidates seek their own ordered index", () => {
       assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
     }
   } finally { store.close(); }
+});
+
+test("the two orders keep SQLite's tie breaking and old non-integer times", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installSessionChatIndex(db);
+    const ids = Array.from({ length: 4 }, (_, n) => {
+      const id = store.openThread(n % 2 ? "ember" : "slack", "C", `tie-${n}`, null, null).id;
+      store.joinThread(id, "s", "c");
+      db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(id);
+      db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',?)")
+        .run(id, n < 2 ? 4.25 : 4.5);
+      return id;
+    });
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, ids[3]);
+    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    db.prepare("UPDATE entries SET at=? WHERE thread=? AND n=1").run("old-text-time", ids[0]!);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, ids[0]);
+    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+  } finally { store.close(); }
+});
+
+test("readiness and the chosen chat share a snapshot with another writer", () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-snapshot-")), path = join(dir, "stillfail.db");
+  const store = Store.open(path), db = store.db, writer = new DatabaseSync(path);
+  try {
+    installSessionChatIndex(db);
+    const first = store.openThread("ember", "C", "first", null, null).id;
+    const later = store.openThread("slack", "C", "later", null, null).id;
+    store.joinThread(first, "s", "c"); store.joinThread(later, "s", "c");
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',10)").run(first);
+    prepare(store, "s");
+    let changed = false;
+    const proxy = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (sql.includes("WITH own AS MATERIALIZED")) return new Proxy(statement, {
+            get(query, key) {
+              if (key === "get") return (...args: unknown[]) => {
+                writer.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',20)").run(later);
+                changed = true;
+                return query.get(...(args as never[]));
+              };
+              const value = Reflect.get(query, key, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+          return statement;
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.equal(indexedSessionChat(proxy, "s")?.id, first);
+    assert.ok(changed);
+    assert.equal(sessionChatReady(db, "s"), false);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, later);
+  } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
