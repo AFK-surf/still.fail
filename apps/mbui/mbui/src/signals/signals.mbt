@@ -37,6 +37,13 @@ priv struct Run {
   lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
+  /// the outermost flush's number, each begun a new one; how deep effects run in each other now and at most since it
+  /// was last asked (effect_nesting_most: one, as a flush never runs in another); the sets that queued an effect run
+  /// too often in one flush, as it goes past effect_runs_noted
+  mut flush_id : Int
+  mut effect_nesting : Int
+  mut effect_nesting_most : Int
+  trail : Array[String]
 }
 
 ///|
@@ -54,6 +61,10 @@ let run : Run = {
   afters: [],
   lasts: [],
   draining: false,
+  flush_id: 0,
+  effect_nesting: 0,
+  effect_nesting_most: 0,
+  trail: [],
 }
 
 ///|
@@ -122,6 +133,7 @@ fn notify(first : ReactiveNode) -> Unit {
   let mut first_inserted = insert_index
   while true {
     // (queued[insertIndex++] = effect, the array grown as index.ts's is by its index)
+    effect.queued_by = setting.val
     if insert_index < run.queued.length() {
       run.queued[insert_index] = Some(effect)
     } else {
@@ -397,7 +409,50 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
 }
 
 ///|
+/// How many times one effect may run in one flush: past it, effects set each other round in a cycle, which is said and
+/// ends the program (a flush that never ends otherwise, or one as deep as the cycle goes).
+pub let effect_runs_most : Int = 64
+
+///|
+/// From how many runs in one flush an effect's queuing sets are noted, for what the cycle is said with.
+let effect_runs_noted : Int = 56
+
+///|
+/// How deep effects ran in each other at most since this was last asked, and from now none (a flush never runs in
+/// another: one; two where an effect is run by hand inside one).
+pub fn effect_nesting_most() -> Int {
+  let most = run.effect_nesting_most
+  run.effect_nesting_most = run.effect_nesting
+  most
+}
+
+///|
 fn run_effect(e : ReactiveNode) -> Unit {
+  if e.ran_in != run.flush_id {
+    e.ran_in = run.flush_id
+    e.ran = 0
+  }
+  e.ran += 1
+  if e.ran > effect_runs_noted {
+    run.trail.push(e.queued_by.map(fn(l) { l.to_string() }).unwrap_or("no set"))
+  }
+  if e.ran > effect_runs_most {
+    let from = if run.trail.length() > 8 { run.trail.length() - 8 } else { 0 }
+    let last = Array::makei(run.trail.length() - from, fn(i) { run.trail[from + i] })
+    abort(
+      "signals: an effect ran \{e.ran - 1} times in one flush, effects setting each other round; it was queued by the sets at \{last}",
+    )
+  }
+  run.effect_nesting += 1
+  if run.effect_nesting > run.effect_nesting_most {
+    run.effect_nesting_most = run.effect_nesting
+  }
+  run_effect_inner(e)
+  run.effect_nesting -= 1
+}
+
+///|
+fn run_effect_inner(e : ReactiveNode) -> Unit {
   let flags = e.flags
   // (a watch told: what it read changed, it says so; what it read stays followed till it reads anew, Watch::read)
   if e.kind is WatchNode {
@@ -468,6 +523,10 @@ fn run_effect(e : ReactiveNode) -> Unit {
 
 ///|
 fn flush() -> Unit {
+  if run.flushing == 0 {
+    run.flush_id += 1
+    run.trail.clear()
+  }
   run.flushing += 1
   while run.notify_index < run.queued_length {
     let effect = run.queued[run.notify_index].unwrap()

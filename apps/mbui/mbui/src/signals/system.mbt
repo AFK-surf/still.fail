@@ -22,6 +22,11 @@ pub struct ReactiveNode {
   priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
+  /// an effect's runs in the flush it last ran in (`ran_in`, Run's flush_id), and the set that last queued it there: a
+  /// cycle of effects setting each other found and said (signals.mbt run_effect)
+  priv mut ran : Int
+  priv mut ran_in : Int
+  priv mut queued_by : SourceLoc?
 }
 
 ///|
@@ -98,7 +103,20 @@ fn ReactiveNode::new(
   own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
+  {
+    deps: None,
+    deps_tail: None,
+    subs: None,
+    subs_tail: None,
+    flags,
+    kind,
+    own,
+    update,
+    cleanup: None,
+    ran: 0,
+    ran_in: -1,
+    queued_by: None,
+  }
 }
 
 ///|
