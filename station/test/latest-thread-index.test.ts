@@ -370,6 +370,58 @@ for (const recursive of [false, true]) {
   });
 }
 
+for (const recursive of [false, true]) {
+  test(`interleaved source writes agree with the original order (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? 1 : 0}`);
+      for (const s of ["s0", "s1", "s2"]) store.insertSession({ key: s, connect: "ember", runtime: "claude", profile: "cc",
+        workspace: `/w/${s}`, token: s, createdAt: 1, lastActiveAt: 1 });
+      for (let id = 1; id <= 8; id++) db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C',?,1)").run(id, `t${id}`);
+      installLatestThreadIndex(db);
+      for (const s of ["s0", "s1", "s2"]) prepare(store, s);
+      let state = 0x3250ab41;
+      const pick = (n: number) => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return (state >>> 8) % n; };
+      const session = () => `s${pick(3)}`, thread = () => 1 + pick(8), memberId = () => 1 + pick(20), deliveryId = () => 1 + pick(40);
+      const expected = db.prepare(`SELECT m.session,m.thread,d.rowid IS NOT NULL AS has_last,COALESCE(d.rowid,0) AS last_delivery,
+        m.joined_at,m.rowid AS member_rowid FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+        JOIN threads t ON t.id=m.thread LEFT JOIN deliveries d ON d.rowid=(SELECT rowid FROM deliveries
+          WHERE session=m.session AND thread=m.thread ORDER BY rowid DESC LIMIT 1) ORDER BY m.session,m.thread`);
+      const actual = db.prepare("SELECT session,thread,has_last,last_delivery,joined_at,member_rowid FROM latest_thread_rows ORDER BY session,thread");
+      const members = db.prepare("SELECT thread,session FROM latest_thread_members ORDER BY thread,session");
+      const wantedMembers = db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+        ORDER BY m.thread,m.session`);
+      const check = (at: number) => {
+        assert.deepEqual(actual.all(), expected.all(), `ordered rows after step ${at}`);
+        assert.deepEqual(members.all(), wantedMembers.all(), `tracked members after step ${at}`);
+        for (const s of ["s0", "s1", "s2"])
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null, `${s} after step ${at}`);
+      };
+      for (let n = 0; n < 240; n++) {
+        const rollback = n % 11 === 0;
+        if (rollback) db.exec("BEGIN");
+        switch (pick(8)) {
+          case 0: db.prepare("INSERT OR REPLACE INTO thread_sessions(rowid,thread,session,connect,joined_at) VALUES(?,?,?,'c',?)")
+            .run(memberId(), thread(), session(), pick(9) / 2); break;
+          case 1: db.prepare("UPDATE OR REPLACE thread_sessions SET rowid=?,thread=?,session=?,joined_at=? WHERE rowid=?")
+            .run(memberId(), thread(), session(), pick(9) / 2, memberId()); break;
+          case 2: db.prepare("DELETE FROM thread_sessions WHERE rowid=?").run(memberId()); break;
+          case 3: db.prepare("INSERT OR REPLACE INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,?,?,NULL)")
+            .run(deliveryId(), thread(), 1 + pick(4), session()); break;
+          case 4: db.prepare("UPDATE OR REPLACE deliveries SET rowid=?,thread=?,n=?,session=? WHERE rowid=?")
+            .run(deliveryId(), thread(), 1 + pick(4), session(), deliveryId()); break;
+          case 5: db.prepare("DELETE FROM deliveries WHERE rowid=?").run(deliveryId()); break;
+          case 6: db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C',?,1)")
+            .run(thread(), `t${thread()}`); break;
+          case 7: db.prepare("DELETE FROM threads WHERE id=?").run(thread()); break;
+        }
+        check(n);
+        if (rollback) { db.exec("ROLLBACK"); check(n); }
+      }
+    } finally { store.close(); }
+  });
+}
+
 for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
   test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
