@@ -2,9 +2,11 @@
 // every minute, and how each has done on each of the last days. What is checked is only what still.fail runs itself: a
 // station's own state is seen from the devices that reach it (docs/cloud.md), and a client that fails on what a service
 // answers is not seen here: those are incidents people open, as GitHub issues labelled `incident` (P1 or P2 beside it),
-// and end by closing them, with no deploy and nothing else to sign in to. Only the repository's own can label an issue.
+// and end by closing them, with no deploy and nothing else to sign in to. Only the repository's own can label an issue,
+// and a workflow sends them here when one changes (receiveIncidents).
 import { DurableObject } from "cloudflare:workers";
-import { nowSeconds, reply } from "./auth";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import { bearerToken, denied, nowSeconds, reply } from "./auth";
 import type { Env } from "./env";
 import { relayUrls } from "./relays";
 
@@ -36,8 +38,6 @@ export type ServiceView = {
 /** An incident as the page shows it. `end` null: still open. */
 export type Incident = { number: number; url: string; level: string; title: string; body: string; start: string; end: string | null };
 
-/** How many of the latest incidents are read and shown. */
-const INCIDENTS = 20;
 /** A line of an issue's body saying when it began, when that was before the issue was opened. */
 const STARTED = /^started:[ \t]*(\S+)[ \t]*$/im;
 
@@ -83,14 +83,8 @@ export class ServiceStatus extends DurableObject<Env> {
     this.ctx.storage.sql.exec("DELETE FROM days WHERE day <= ?", today - DAYS);
   }
 
-  /** The GitHub answer the incidents were last read from: what to ask it again with. */
-  incidentsTag(): string | null {
-    return this.ctx.storage.sql.exec<{ value: string }>("SELECT value FROM kept WHERE key = 'incidents_tag'").toArray()[0]?.value ?? null;
-  }
-
-  keepIncidents(incidents: Incident[], tag: string | null): void {
+  keepIncidents(incidents: Incident[]): void {
     this.ctx.storage.sql.exec("INSERT OR REPLACE INTO kept (key, value) VALUES ('incidents', ?)", JSON.stringify(incidents));
-    this.ctx.storage.sql.exec("INSERT OR REPLACE INTO kept (key, value) VALUES ('incidents_tag', ?)", tag ?? "");
   }
 
   incidents(): Incident[] {
@@ -118,22 +112,25 @@ function serviceIds(env: Env): string[] {
 
 const passes = async (check: () => Promise<boolean>) => (await check().catch(() => false)) ? "up" : "down";
 
+const GITHUB_ACTIONS = "https://token.actions.githubusercontent.com";
+const githubKeys = createRemoteJWKSet(new URL(`${GITHUB_ACTIONS}/.well-known/jwks`));
+/** At most this much of what GitHub lists is read (20 issues, each up to its limit of some 64 KB). */
+const MAX_ISSUES = 2 * 1024 * 1024;
+
 /**
- * The incidents, asked of GitHub once a minute: an answer that says nothing changed does not count against its limit. No
- * answer keeps what was last read: GitHub being out says nothing of still.fail.
+ * POST /v1/status/incidents: the repository's issues labelled `incident`, as GitHub lists them, from its workflow
+ * (.github/workflows/status-incidents.yml), believed by the OIDC token GitHub gives that workflow on the default branch.
  */
-async function readIncidents(env: Env): Promise<void> {
-  if (!env.STATUS_REPO) return;
-  const status = env.SERVICE_STATUS.getByName("primary");
-  const tag = await status.incidentsTag();
-  const url = `https://api.github.com/repos/${env.STATUS_REPO}/issues?labels=incident&state=all&per_page=${INCIDENTS}`;
-  const answer = await fetch(url, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "stillfail-status", ...(tag ? { "if-none-match": tag } : {}) },
-    signal: AbortSignal.timeout(CHECK_MS),
-  }).catch(() => null);
-  if (!answer?.ok) return;
-  const issues: unknown = await answer.json().catch(() => null);
-  if (Array.isArray(issues)) await status.keepIncidents(incidentsOf(issues), answer.headers.get("etag"));
+export async function receiveIncidents(request: Request, env: Env): Promise<Response> {
+  if (!env.STATUS_REPO) return reply({ error: "not_found" }, 404);
+  const token = bearerToken(request);
+  const claims = token ? await jwtVerify(token, githubKeys, { issuer: GITHUB_ACTIONS, audience: env.PUBLIC_ORIGIN }).then((v) => v.payload, () => null) : null;
+  if (!claims || claims.repository !== env.STATUS_REPO || claims.workflow_ref !== `${env.STATUS_REPO}/.github/workflows/status-incidents.yml@refs/heads/main`) return denied();
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_ISSUES) return reply({ error: "too_large" }, 413);
+  const issues: unknown = await request.json().catch(() => null);
+  if (!Array.isArray(issues)) return reply({ error: "invalid_request" }, 400);
+  await env.SERVICE_STATUS.getByName("primary").keepIncidents(incidentsOf(issues));
+  return reply({ ok: true });
 }
 
 /** One round of checks (the cron's, a minute apart). `full`: which limits of its budget still.fail's own relay has reached (relay-load.ts). */
@@ -153,7 +150,7 @@ export async function checkServices(env: Env, full: string[]): Promise<void> {
     const found = at === null || now - at > RELAY_SAMPLED ? "down" : i === 0 && full.length > 0 ? "degraded" : "up";
     return { id: `relay:${url}`, found };
   });
-  await Promise.all([env.SERVICE_STATUS.getByName("primary").record(await Promise.all([...pages, api, ...releases, ...relays])), readIncidents(env)]);
+  await env.SERVICE_STATUS.getByName("primary").record(await Promise.all([...pages, api, ...releases, ...relays]));
 }
 
 /** GET /v1/status. From any page, as the site's status page is on a host of its own; what it says is no secret. */

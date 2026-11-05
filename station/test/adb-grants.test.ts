@@ -102,6 +102,34 @@ test("phone request status stays consistent as it is asked, granted and ended", 
   } finally { w.db.close(); }
 });
 
+test("internal owner grant reads end expired grants and retain the other live ones", async () => {
+  const w = world();
+  try {
+    await w.grants.ask("s1", "one hour");
+    assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
+    await w.grants.ask("s2", "until archived");
+    assert.equal(w.grants.decide("pat@example.com", "p2", "chat", "work-b"), null);
+    w.pass(3600_000);
+    assert.deepEqual(w.grants.grantedOfOwner("PAT@example.com").map((r) => r.id), ["p2"]);
+    assert.equal(w.grants.get("p1")!.status, "ended");
+    assert.equal(w.heard.at(-1)!.status, "ended");
+    assert.equal(w.audiences.at(-1), "work-a");
+  } finally { w.db.close(); }
+});
+
+test("an internal owner grant read does not cause a title notification for an unseen request", () => {
+  const w = world();
+  try {
+    const request: PhoneRequest = { id: "old", session: "s1", chat: "CHAT/1.0", owner: "pat@example.com",
+      reason: "test", at: 1, status: "granted", exp: 1_800_003_600 };
+    w.db.prepare("INSERT INTO adb_requests(id,session,owner,status,body) VALUES(?,?,?,?,?)")
+      .run(request.id, request.session, request.owner, request.status, JSON.stringify(request));
+    assert.deepEqual(w.grants.grantedOfOwner("pat@example.com").map((r) => r.id), ["old"]);
+    w.rename("s1", "Renamed");
+    assert.deepEqual(w.heard, []);
+  } finally { w.db.close(); }
+});
+
 test("reusing a pending phone request does not find the latest of the session's other chats", async () => {
   const w = world();
   const first = await w.grants.ask("s1", "debug the screen");
