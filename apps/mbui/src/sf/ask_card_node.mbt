@@ -8,20 +8,15 @@
 /// `body` makes what it holds.
 pub fn ask_card_room_node(parent : @view.View, body : (@view.View) -> Unit, least? : Double = 320.0) -> @view.View {
   parent.box(fn(room) {
-    room
-    .min_width(By(fn() {
-      let w = match parent.laid_size_told() {
-        Some((w, _)) => w
-        None => least
-      }
-      Some(dmin(least, w))
-    }))
-    // (never wider than what holds it)
-    .max_width(By(fn() {
-      Some(dmin(560.0, parent.laid_size_told().map(fn(z) { z.0 }).unwrap_or(560.0)))
-    }))
-    |> ignore
-    body(room)
+    room.max_width(Is(Some(560.0))) |> ignore
+    let content = room.box(body)
+    room.layout(Is(least), fn(least, space) {
+      let natural = space.measure(content)
+      let limit = space.max_width().unwrap_or(560.0)
+      let width = space.width().unwrap_or(dmin(limit, dmax(least, natural.size().0)))
+      let card = space.measure(content, width~)
+      @view.arrangement(width, card.size().1, [card.at(0.0, 0.0)])
+    }) |> ignore
   })
 }
 

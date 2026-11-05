@@ -284,6 +284,7 @@ fn touch(node : Node) -> Unit {
     node.cache_gen = cache_generation.val
     if !reusing.val || node.dirty {
       node.cache_n = 0
+      node.arrangements = None
       node.p_ok = false
       node.dirty = false
     }
@@ -450,6 +451,7 @@ pub fn[T] measure_pass(read : () -> T) -> T {
 /// only when that answer changes the node's geometry.
 pub fn Node::measure_stale(self : Node) -> Unit {
   self.cache_n = 0
+  self.arrangements = None
   self.pre_gen = -1
 }
 
@@ -552,13 +554,15 @@ fn size_node(
   touch(node)
   if perform {
     // laid out before as now asked, nothing under it changed since: it
-    // stands as it is. (A layout is always asked with the space available
-    // the size it is to have, or for a root, its containing block: those
-    // two say it all.)
+    // stands as it is. Available space is part of the request too: a parent
+    // arrangement can place an intrinsically measured child without making
+    // the child's resulting size into a new constraint.
     if reusing.val &&
       node.p_ok &&
       same(node.p_kw, kw) &&
       same(node.p_kh, kh) &&
+      same(node.p_aw, aw) &&
+      same(node.p_ah, ah) &&
       same(node.p_cbw, cb_w) &&
       same(node.p_cbh, cb_h) {
       node.skip_gen = generation.val
@@ -609,6 +613,8 @@ fn size_node(
     node.p_ok = true
     node.p_kw = kw
     node.p_kh = kh
+    node.p_aw = aw
+    node.p_ah = ah
     node.p_cbw = cb_w
     node.p_cbh = cb_h
     node.p_w = w
@@ -692,6 +698,10 @@ fn size_uncached(
   }
   let pbw = b.pbw()
   let pbh = b.pbh()
+  match node.arrange {
+    Some(arrange) => return arrange_node(node, arrange, b, w, h, aw, ah, perform)
+    None => ()
+  }
   // leaves measured from their content
   match node.measure {
     Some(m) =>
@@ -1169,6 +1179,7 @@ fn layout_flex(
         c.cache_gen = cache_generation.val
         if !reusing.val || c.dirty {
           c.cache_n = 0
+          c.arrangements = None
           c.p_ok = false
           c.dirty = false
         }
@@ -1739,6 +1750,8 @@ fn layout_flex(
         n.p_ok = true
         n.p_kw = iw
         n.p_kh = ih
+        n.p_aw = iw
+        n.p_ah = ih
         n.p_cbw = cb_w
         n.p_cbh = cb_h
         n.p_w = rw
@@ -2441,7 +2454,13 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
     }
     // a box whose layout was reused holds its absolute boxes as they were
     // (and one with no children has none to place)
-    if cs.position == Absolute {
+    if node.arrange is Some(_) {
+      // The container's plan already placed this child, including overlays.
+      // Its descendants still resolve their own containing blocks normally.
+      if c.line >= 0 && !kept(c) && c.children.length() > 0 {
+        layout_static_absolute(c, c, 0.0, 0.0)
+      }
+    } else if cs.position == Absolute {
       place_absolute(cb, node, c, ox, oy)
       if !kept(c) && c.children.length() > 0 {
         layout_static_absolute(c, c, 0.0, 0.0)

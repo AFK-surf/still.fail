@@ -2011,6 +2011,7 @@ priv enum Prop {
   BoundsInput
   OverScrim
   Measured
+  Arrangement
   WordsCentered
   EllipsisPast
   Points

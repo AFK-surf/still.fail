@@ -583,6 +583,9 @@ pub fn[T] Signal::get(self : Signal[T]) -> T {
 /// The signal set (signalOper write): what follows it told, unless it is the same as what was set.
 #callsite(autofill(loc))
 pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
+  guard read_only_depth.val == 0 else {
+    abort("a projection cannot write model state at \{loc}")
+  }
   let state = self.1
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value

@@ -1011,6 +1011,8 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : MeasureFn?
+  mut arrange : ArrangeFn?
+  mut arrangements : Array[Arranged]?
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1043,6 +1045,8 @@ pub(all) struct Node {
   mut p_ok : Bool
   mut p_kw : Double
   mut p_kh : Double
+  mut p_aw : Double
+  mut p_ah : Double
   mut p_cbw : Double
   mut p_cbh : Double
   mut p_w : Double
@@ -1070,6 +1074,8 @@ pub fn Node::new() -> Node {
     style: Style::new(),
     children: [],
     measure: None,
+    arrange: None,
+    arrangements: None,
     left: 0.0,
     top: 0.0,
     width: 0.0,
@@ -1086,6 +1092,8 @@ pub fn Node::new() -> Node {
     p_ok: false,
     p_kw: 0.0,
     p_kh: 0.0,
+    p_aw: 0.0,
+    p_ah: 0.0,
     p_cbw: 0.0,
     p_cbh: 0.0,
     p_w: 0.0,

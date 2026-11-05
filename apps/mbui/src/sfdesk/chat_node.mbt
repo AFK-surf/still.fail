@@ -115,8 +115,6 @@ fn chat_talk_node(
   talk.show(fn() { view() is None }, fn(b) {
     b
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
   })
@@ -131,8 +129,6 @@ fn chat_talk_node(
   talk.box(fn(f) {
     f
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     .lies_along(Is(End))
     |> ignore
     // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
@@ -161,8 +157,6 @@ fn chat_talk_node(
   talk.box(fn(fl) {
     fl
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     @sfpages.chat_flight_layer_made(r, fl)
     @sfbase.send_flight_node(
@@ -178,8 +172,6 @@ fn chat_talk_node(
   talk.box(fn(pl) {
     pl
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { chat_bar_room() }, room_now)
   })
@@ -192,14 +184,10 @@ fn chat_talk_node(
     o.reacts(fn() { o.laid_window_told() }, fn(r) { pane_rect.val = r })
     o
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     o.show(fn() { app.nav.shows(k) }, fn(s) {
       // (all of the chat's room: what opens over it opens in it)
       s
-      .width(By(fn() { o.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { o.laid_size_told().map(fn(z) { z.1 }) }))
       |> ignore
       @ui.old(s, fn(c) {
         app.nav.page_old(c, k, fn(c) {
