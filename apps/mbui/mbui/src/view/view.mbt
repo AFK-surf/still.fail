@@ -1895,7 +1895,7 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       Some(about) => " (" + about() + ")"
       None => ""
     }
-    let set_by = match .setting_at() {
+    let set_by = match @signals.setting_at() {
       Some(loc) => ", by what was set at " + loc.to_string()
       None => ""
     }
@@ -1923,7 +1923,7 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       Some(about) => " (" + about() + ")"
       None => ""
     }
-    let set_by = match .setting_at() {
+    let set_by = match @signals.setting_at() {
       Some(loc) => ", by what was set at " + loc.to_string()
       None => ""
     }
