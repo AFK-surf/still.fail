@@ -117,6 +117,9 @@ fn link_peeks_node(
       // (under the piece of line it rests on, at its start; kept in the chat's room: from where this frame laid the
       // layer out, read as it is painted)
       card
+      // (what it holds at its start, as wide as it is: its island measured at its own width, `most` at most, not
+      // stretched across the layer first and then measured as wide as that (old's fits: no narrower than its node))
+      .lines_up(Is(Some(Start)))
       .offset(Painted(fn(laid) {
         match laid.rect(l) {
           Some((lx, ly, lw, _)) => {
