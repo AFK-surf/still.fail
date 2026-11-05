@@ -572,6 +572,8 @@ pub fn flight_carry_shift(@ui.Ctx, String) -> Double
 
 pub fn flight_carry_start(@ui.Ctx, String, String, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
+pub fn flight_carry_start_from(String, String, Array[FlyingFile], @ui.FieldLines?, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+
 pub fn flight_carry_waiting(@ui.Ctx) -> Unit
 
 pub let flight_desk_ms : Double
@@ -2173,6 +2175,8 @@ pub(all) struct ChatItem {
   creator : String
   pinned : Bool?
   kept : Bool
+  hidden : Bool?
+  muted : Bool?
   client_key : String
   opener : Opener?
 }

@@ -273,12 +273,31 @@ pub fn flight_carry_start(
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
+  // (where its field laid its words out last: the same as a field of the tree's says it, flight_carry_start_from)
+  flight_carry_start_from(chat, words, files, c.field_lines(field), hold~, desk~, marks~, runs~)
+}
+
+///|
+/// The same from a field of the window's tree's (a composer's of the tree's: its words where they are laid out,
+/// `source`, as flight_start_from's), not an old view's field read by its key.
+pub fn flight_carry_start_from(
+  chat : String,
+  words : String,
+  files : Array[FlyingFile],
+  source : @ui.FieldLines?,
+  hold~ : (Double) -> Unit,
+  desk~ : Bool,
+  marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
+) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
-  match c.field_words(field) {
-    Some(((x, y), (rx, ry, w, h))) => {
+  match source {
+    Some(source) => {
+      let (x, y) = (source.x, source.y)
+      let (rx, ry, w, h) = source.room
       // without words, the list comes up from where the first file was (ChatHost.kt landingFile: rise)
       let from_top = if words != "" {
         y - 8.0

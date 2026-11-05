@@ -326,7 +326,8 @@ fn run_sample() -> Json {
 
 ///|
 /// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page.
-let machine_sessions : Map[String, Array[Json]] = Map([])
+// kept across runs: put back by the package's reset (core.mbt)
+let machine_sessions : @sf.LiveMap[String, Array[Json]] = @sf.LiveMap::new()
 
 ///|
 /// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessions.css.ts offer):
@@ -334,16 +335,19 @@ let machine_sessions : Map[String, Array[Json]] = Map([])
 /// before going on with it are sheets. Drawn by a new chat's page (sfpages), which says where it hangs.
 pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name : String) -> Unit {
   let t = @sf.theme()
-  if !machine_sessions.contains(station) {
-    machine_sessions[station] = []
-    // (asked once the frame's builds are over: the build that first comes to it alone)
+  if !@signals.untracked(fn() { machine_sessions.contains(station) }) {
+    // (asked once the frame's builds are over: the build that first comes to it alone; what it keeps set then, never
+    // as a build reads it)
     c.tell("machineSessions.list/" + station, fn() {
-      (core.call)("machineSessions.list", obj([("station", str(station))]), fn(r) {
-        match r {
-          Ok(v) => machine_sessions[station] = items(Some(v), "sessions")
-          Err(_) => ()
-        }
-      })
+      if !machine_sessions.contains(station) {
+        machine_sessions[station] = []
+        (core.call)("machineSessions.list", obj([("station", str(station))]), fn(r) {
+          match r {
+            Ok(v) => machine_sessions[station] = items(Some(v), "sessions")
+            Err(_) => ()
+          }
+        })
+      }
     })
   }
   let sessions = machine_sessions.get(station).unwrap_or([])
@@ -364,6 +368,50 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
     @sf.press_ripple(c, id, @sf.small_corner)
   })
   c.semantics(b, Button, id~, label=words)
+}
+
+///|
+/// The same in node `parent` of the window's tree, for `station` named `name` as they change: asked once for a station
+/// as it comes (machineSessions.list), shown once it has kept any; pressed, their dialog (open_machine_sessions).
+pub fn machine_sessions_offer_node(parent : @view.View, core : Core, station : () -> String, name : () -> String) -> Unit {
+  parent.reacts(station, fn(st) {
+    if st != "" && !@signals.untracked(fn() { machine_sessions.contains(st) }) {
+      machine_sessions[st] = []
+      (core.call)("machineSessions.list", obj([("station", str(st))]), fn(r) {
+        match r {
+          Ok(v) => machine_sessions[st] = items(Some(v), "sessions")
+          Err(_) => ()
+        }
+      })
+    }
+  })
+  let words = fn() {
+    fill("android-chat.new.machine.offer", [
+      ("station", if name() == "" { tr("android-chat.new.machine.here") } else { name() }),
+    ])
+  }
+  parent.show(fn() { machine_sessions.get(station()).unwrap_or([]).length() > 0 }, fn(b) {
+    let lit = fn() { b.pointed() || b.focus_shown() }
+    b
+    .row(Is(true))
+    .padding(Is((10.0, 4.0, 10.0, 4.0)))
+    .gap(Is(6.0))
+    .lines_up(Is(Some(Middle)))
+    .radius(Is(@sf.small_corner))
+    .ground(By(fn() { if lit() { @sf.theme().p.hover } else { 0L } }))
+    |> ignore
+    @sf.pressed_node(b, fn() { open_machine_sessions(core, station(), name()) }, Is(@sf.small_corner), Button, words)
+    @sf.icon_node(b, "monitor", machine_offer_mark, By(fn() { if lit() { @sf.theme().p.text } else { @sf.theme().p.muted } }))
+    |> ignore
+    b.box(fn(t) {
+      t
+      .words(By(words))
+      .words_look(By(fn() { @ui.style_words(if lit() { machine_offer_words_lit } else { machine_offer_words }) }))
+      .ink(By(fn() { @ui.style_ink(if lit() { machine_offer_words_lit } else { machine_offer_words }) }))
+      |> ignore
+    })
+    |> ignore
+  })
 }
 
 ///|
