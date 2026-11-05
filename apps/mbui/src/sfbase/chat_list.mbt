@@ -672,10 +672,12 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     })
     // words sent from here on their way: their landing as declared (-2: not laid out yet), -1 none or landed
     // (emit_step)
-    let sending = match send_flight.get() {
-      Some(f) if f.turns == rk && !f.placed => -2.0
-      Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
-      _ => -1.0
+    let sending = fn() {
+      match send_flight.get() {
+        Some(f) if f.turns == rk && !f.placed => -2.0
+        Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
+        _ => -1.0
+      }
     }
     emit_step(c, em, turns, sending)
   }

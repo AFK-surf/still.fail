@@ -771,7 +771,7 @@ pub fn fix_now(f : () -> Unit) -> Unit {
 }
 
 ///|
-/// What was said later before the window's first frame (as the fixture is made): handed to its runtime as the
+/// What was said later before the window's first frame (as the fixture is made): handed to its timeline as the
 /// fixture is first read, `ms` from then.
 pub let fix_unsaid : Array[(Double, () -> Unit)] = []
 
@@ -784,7 +784,7 @@ pub let fix_timers : Array[(Double, () -> Unit)] = []
 pub let fix_ctx : Ref[@ui.Ctx?] = { val: None }
 
 ///|
-/// A test's own clock for the fixture's station, moved on by the test (fix_clock_set; none: the window's runtime times
+/// A test's own clock for the fixture's station, moved on by the test (fix_clock_set; none: the window's timeline times
 /// it).
 pub let fix_clock : Ref[(() -> Double)?] = { val: None }
 
@@ -810,7 +810,7 @@ pub let fix_xshared : Map[String, Bool] = {}
 pub let fix_serial : Ref[Int] = { val: 0 }
 
 ///|
-/// What was said before the first frame, handed to the runtime as the fixture is first read in a window (fix_later).
+/// What was said before the first frame, handed to the timeline as the fixture is first read in a window (fix_later).
 fn fix_tick() -> Unit {
   if fix_ctx.val is Some(_) && fix_unsaid.length() > 0 {
     let unsaid = fix_unsaid.copy()
@@ -823,16 +823,22 @@ fn fix_tick() -> Unit {
 
 ///|
 /// A test's own clock (`clock`, fix_clock's) moved on to `ms`: what the station said it would do by then done, in the
-/// order it was said, and told (fix_now), as the core tells a change at its cause; what that says later in turn, done
+/// order of their moments (registration order at the same moment), and told (fix_now) at each cause; what that says later in turn, done
 /// too once it is due by then.
 pub fn fix_clock_set(clock : Ref[Double], ms : Double) -> Unit {
-  clock.val = ms
   while true {
-    match fix_timers.search_by(fn(t) { t.0 <= ms }) {
-      Some(i) => fix_now(fix_timers.remove(i).1)
-      None => break
+    let mut first = -1
+    for i in 0..<fix_timers.length() {
+      if fix_timers[i].0 <= ms && (first < 0 || fix_timers[i].0 < fix_timers[first].0) {
+        first = i
+      }
     }
+    if first < 0 { break }
+    let (at, say) = fix_timers.remove(first)
+    clock.val = at
+    fix_now(say)
   }
+  clock.val = ms
 }
 
 ///|
@@ -852,7 +858,12 @@ pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
     (Some(clock), _) => fix_timers.push((clock() + ms, f))
     // (done at its moment and told then, as the core tells a change it made at its cause: what follows the made-up core
     // reads it anew, nothing of it done as that reads it)
-    (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_now(f) })
+    (None, Some(_)) => {
+      match @ui.view_tree() {
+        Some(tree) => tree.root().at_moment(tree.logic_at() + ms, fn() { fix_now(f) }) |> ignore
+        None => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_now(f) })
+      }
+    }
     (None, None) => fix_unsaid.push((ms, f))
   }
 }

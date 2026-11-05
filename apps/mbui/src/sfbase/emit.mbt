@@ -402,10 +402,10 @@ pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// The poses played on, a frame at a time (ChatMotion.play): each to its end, then the next; the next waiting starts
 /// once none plays. They take one turn among what changes the list's height (`turns`, ChatMotion.start): the first
 /// waiting starts as it comes, from then, and it is over once none is left. Not watched, all of it at once.
-/// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
+/// `sending`: words sent from here on their way (flight.mbt), read only while an avatar can be held by them: their declared landing, or -2 while their row is not laid
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
-pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
+pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
   let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
   // the words of what came out all in: drawn as laid out from here, what showed them built again (emit_out)
@@ -436,6 +436,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     }
     emit_next(c, e, "", at=turns.started_at(emits_turn))
   }
+  let sending = sending()
   // a pose's end reached: the next pose, from its own beginning in this frame
   let was = e.current
   let mut steps = 0

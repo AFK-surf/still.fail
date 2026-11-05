@@ -574,3 +574,18 @@ regression sends Back and a later input with no frame between: the previous
 source loses the saved position, the new source saves it and closes the view.
 All 35 player, chat and chat-open checks pass. This does not yet remove the
 remaining small-screen departure rebuilds or glass damage expansion.
+
+The send landing was still read by an idle avatar animation, even when there was
+no animation to hold for the sent row. Reading that input only after the empty
+or inactive cases removes the first small-screen departure rebuild. The existing
+send, activity and timing selection passes 52 of 55 checks; the same three
+host-work contracts still fail for other causes. This is dependency removal,
+not completion of the frame-independent chat-motion migration.
+
+The fixture's delayed replies also exposed a clock error: advancing directly to
+1300 delivered replies scheduled at 1100 and 1200 backwards and at 1300, losing
+a nested reply. Its manual clock now processes deadlines in order at each declared
+moment; the real window fixture uses the input timeline, with the old-only
+runtime adapter retained. Both sparse/dense and no-drawn-frame regressions first
+failed, then passed in that 55-check selection. These checks correct the test
+source's input semantics; they do not measure real core or Android performance.

@@ -436,7 +436,7 @@ pub fn emit_release(Emits) -> Unit
 
 pub let emit_rooms : @sf.LiveMap[String, () -> Double?]
 
-pub fn emit_step(@ui.Ctx, Emits, Turns, Double) -> Unit
+pub fn emit_step(@ui.Ctx, Emits, Turns, () -> Double) -> Unit
 
 pub fn emit_take(@ui.Ctx, Emits, ChatView, Map[String, Bool]) -> Unit
 
