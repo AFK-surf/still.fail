@@ -24,6 +24,8 @@ pub struct Sub {
   /// (core-ts store.ts `waits`), not the core still reading it
   mut waiting : Bool
   priv key : String
+  /// what finds it among the subscriptions (by_key: subscribe_key), as `key` names it in what is awaited
+  priv look : String
   changes : @signals.Signal[Int]
   /// its keyed lists asked for by their items (Sub::list, sub_list.mbt)
   priv lists : Array[@rows.TopicList]
@@ -174,6 +176,32 @@ fn topic_json(topic : String, params : Map[String, Json]) -> Json {
 }
 
 ///|
+/// What finds the subscription to `topic` with `params` (Client::by_key): its name and each param in their order, as
+/// its JSON's text (topic_json) would have them, a param's string as it is, each part's length before it; made without
+/// the JSON (no object made, no text escaped), since a page asks for its topics every time it reads them, hundreds of
+/// times as a chat's page is entered or left (on a phone, writing each out was most of the 185 ms a leave spent
+/// asking: 2026-11-05).
+fn subscribe_key(topic : String, params : Map[String, Json]) -> String {
+  let b = StringBuilder::new()
+  // (each part its length first: no param's text read as two, nor two as one)
+  let part = fn(kind : Char, x : String) {
+    b.write_char(kind)
+    b.write_string(x.length().to_string())
+    b.write_char(':')
+    b.write_string(x)
+  }
+  part('t', topic)
+  for k, v in params {
+    part('k', k)
+    match v {
+      String(x) => part('s', x)
+      _ => part('j', v.stringify())
+    }
+  }
+  b.to_string()
+}
+
+///|
 /// A topic's name (its `topic`), without its params.
 fn topic_name(t : Json) -> String {
   match t {
@@ -222,16 +250,17 @@ pub fn Client::subscribe(
   topic : String,
   params? : Map[String, Json] = {},
 ) -> Sub {
-  let t = topic_json(topic, params)
-  let key = t.stringify()
-  match self.by_key.get(key) {
+  let look = subscribe_key(topic, params)
+  match self.by_key.get(look) {
     Some(s) => s
     None => {
+      let t = topic_json(topic, params)
+      let key = t.stringify()
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, whole: None, lists_in: true, error: None, version: 0, waiting: false, key, changes: @signals.signal(0), lists: [], rest: None }
+      let s = { id, topic: t, whole: None, lists_in: true, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), lists: [], rest: None }
       self.subs[id] = s
-      self.by_key[key] = s
+      self.by_key[look] = s
       self.ask(s)
       match self.timing {
         Some(f) => f(id, topic, None, false)
@@ -262,7 +291,7 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
   if self.subs.contains(s.id) {
     self.end_sub_wait(s.id)
     self.subs.remove(s.id)
-    self.by_key.remove(s.key)
+    self.by_key.remove(s.look)
     s.changed(ended=true)
     let m : Map[String, Json] = {
       "id": Json::number(s.id.to_double()),
@@ -279,8 +308,7 @@ pub fn Client::unsubscribe_topic(
   topic : String,
   params? : Map[String, Json] = {},
 ) -> Unit {
-  let key = topic_json(topic, params).stringify()
-  match self.by_key.get(key) {
+  match self.by_key.get(subscribe_key(topic, params)) {
     Some(s) => self.unsubscribe(s)
     None => ()
   }

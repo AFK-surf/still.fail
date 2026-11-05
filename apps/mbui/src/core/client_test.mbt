@@ -37,6 +37,27 @@ test "params make another subscription" {
 }
 
 ///|
+test "a topic asked again with params made anew finds the one subscription; a param of another kind is another" {
+  let (c, sent) = recorder()
+  let a = c.subscribe("chat", params={ "station": "ws/a", "session": "s1", "compact": true })
+  let again = c.subscribe("chat", params={ "station": "ws/a", "session": "s1", "compact": true })
+  assert_true(physical_equal(a, again))
+  // (a string and what is not one, the same text: another param; as the topic's JSON says them, so the core is
+  // asked another)
+  let b = c.subscribe("chat", params={ "station": "ws/a", "session": "s1", "compact": "true" })
+  assert_true(a.id != b.id)
+  // (one param's text that reads as two params is still one)
+  let d = c.subscribe("chat", params={ "station": "ws/aksession" })
+  let e = c.subscribe("chat", params={ "station": "ws/a", "session": "" })
+  assert_true(d.id != e.id)
+  assert_eq(sent.length(), 4)
+  // (left, the one found by the same params is the one left: asked again, a new one)
+  c.unsubscribe_topic("chat", params={ "station": "ws/a", "session": "s1", "compact": true })
+  let f = c.subscribe("chat", params={ "station": "ws/a", "session": "s1", "compact": true })
+  assert_true(f.id != a.id)
+}
+
+///|
 test "a call's answer goes to its on_done" {
   let (c, sent) = recorder()
   let got : Array[String] = []
