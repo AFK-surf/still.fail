@@ -194,7 +194,7 @@ fn host_frame_drawn(at : Double) -> Unit {
   } else {
     0.0
   }
-  let old_built = !(p.looks || p.painted || p.alone)
+  let old_built = !(p.looks || p.painted)
   r.push({
     at,
     asked: host_asked_next.val,
@@ -204,7 +204,7 @@ fn host_frame_drawn(at : Double) -> Unit {
     parts_built: if old_built { p.rows } else { 0 },
     damage: parts,
     damage_share: share,
-    whole_why: scene.parts.why(),
+    whole_why: host_presented.why(),
     glass,
     laid: p.laid + tree_laid - host_tree_laid.val,
     passes: p.passes,

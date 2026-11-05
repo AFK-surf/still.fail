@@ -29,43 +29,6 @@ let host_typed : Array[String] = ["看", "一", "下", "第", "三", "项", "的
 let host_erased : Int = 5
 
 ///|
-/// `base` with its chats' messages as a core gives them (Source.list: a list followed, @rows.TopicList), not made
-/// again of the topic's whole value each time it is read (the made-up source's way, ChatMessages::of_value): told
-/// whole only where the messages are another value, as a core's subscription is. What a key typed costs is the
-/// page's, not the made-up source's.
-fn core_lists(base : Source) -> Source {
-  let kept : Map[String, (Json, @rows.TopicList)] = {}
-  {
-    ..base,
-    list: fn(name, params, path, fields) {
-      if name != "chat" {
-        return (base.list)(name, params, path, fields)
-      }
-      let v = (base.topic)(name, params).value
-      let messages = match v {
-        Some(Object(o)) => o.get("messages").unwrap_or(Json::null())
-        _ => Json::null()
-      }
-      let key = Json::object(params).stringify()
-      match kept.get(key) {
-        Some((was, l)) => {
-          if !physical_equal(was, messages) {
-            l.given(v)
-            kept[key] = (messages, l)
-          }
-          Some(l)
-        }
-        None => {
-          let l = @rows.TopicList::new(path, fields, v)
-          kept[key] = (messages, l)
-          Some(l)
-        }
-      }
-    },
-  }
-}
-
-///|
 /// The frames of one step of the walk, and the composer's room as it stood (x0, y0, x1, y1: where a key draws).
 struct HostStep {
   what : String
@@ -77,7 +40,7 @@ struct HostStep {
 /// step's frames, and the composer's room once focused.
 fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[HostStep], (Double, Double, Double, Double)) {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, mode~, w~, h~, platform~, wrap=core_lists)
+  let t = wide_tester(calls, mode~, w~, h~, platform~)
   t.set_frame_period(if platform == 0 { host_desk_period } else { host_phone_period })
   t.run_for(@ui.move_most_ms)
   if w > 600.0 && w < 840.0 {
@@ -94,7 +57,6 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
   t.record_host()
   // (what a chat's page makes outside frames too: its list's entries, its messages made of their JSON)
   t.count_between("entries", @sfbase.entries_made)
-  t.count_between("messages", @sfbase.messages_made)
   // (a tap as the host hands it: down and up at one moment, the frames it asks for after)
   let tap = fn(x : Double, y : Double) {
     t.touch_at(0, x, y, t.time())
