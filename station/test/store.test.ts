@@ -23,7 +23,22 @@ import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
 import { usageSummaryEdgeQuery } from "../src/read/usage-batched.ts";
 import { usageSummaryBlockOverlayQuery, usageSummaryBlockPendingQuery, usageSummaryBlockQueries } from "../src/read/usage-summary-blocks.ts";
+import { recentChatDisplacedEntry } from "../src/store/chat-list-entry-rowid.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTORY_TOTAL } from "../src/store/usage-history.ts";
+import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
+import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
+import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
+import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_HOME,
+  RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_SCOPE_VISIBILITY_ROWS_SMALL,
+  RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
+import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
+import { FIRST_SCOPE_CANDIDATE_SESSION, NEXT_SCOPE_CANDIDATE_SESSION, PUT_SCOPE_CANDIDATE, RECENT_SCOPE_MEMBER_EXISTS,
+  REMOVE_SCOPE_CANDIDATE } from "../src/store/chat-list-scope-build.ts";
+import { RECENT_CHAT_SCHEMA_VERSION } from "../src/store/chat-list-schema.ts";
+import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
+  FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
+  SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, SCOPE_SESSIONS_THROUGH } from "../src/store/chat-list-scope-source.ts";
+import { FIRST_HOME_CHAT_MEMBERS, NEXT_HOME_CHAT_MEMBERS } from "../src/store/chat-list-home-source.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -53,6 +68,86 @@ function open(path: string, archive: string | null = null): Store {
 }
 
 const memory = () => open(":memory:");
+
+function assertRecentChatPlans() {
+  const db = memory().db;
+  installRecentChatIndex(db);
+  installRecentHomeOverlap(db);
+  const plan = (sql: string, args: unknown[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+  const versionSteps = plan(RECENT_CHAT_SCHEMA_VERSION, ["global", "recent_chat_meta"]);
+  assert.ok(versionSteps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (part=?)")), versionSteps.join(" | "));
+  const displacedSteps = plan(recentChatDisplacedEntry("?"), [1]);
+  assert.ok(displacedSteps.some((s) => s.startsWith("SEARCH e ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), displacedSteps.join(" | "));
+  assert.ok(displacedSteps.some((s) => s.startsWith("SEARCH s ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), displacedSteps.join(" | "));
+  // An ordered scan is safe here only because the query stops at the requested page size.
+  for (const [sql, args, index, seek] of [
+    [RECENT_GLOBAL_PAGE, [5], "recent_chat_order", false],
+    [RECENT_DEFAULT_HOME_PAGE, [5], "recent_home_order", false],
+    [RECENT_HOME_ORDER_PAGE, [5], "recent_home_order", false],
+    [RECENT_WORKSPACE_PAGE, ["ws", 5], "recent_scope_order", true],
+    [RECENT_HOME_WORKSPACE_ORDER_PAGE, ["ws", 5], "recent_scope_order", true],
+  ] as [string, unknown[], string, boolean][]) {
+    const steps = plan(sql, args), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /LIMIT \?\s*$/);
+    assert.ok(steps.some((s) => s.includes(index) && (seek ? s.startsWith("SEARCH ") && s.includes("ws=?") : s.startsWith("SCAN "))), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  // The pending-job input is limited before each primary-key lookup into the requested workspace.
+  for (const sql of [RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_PENDING]) {
+    const steps = plan(sql, ["ws"]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /ORDER BY thread LIMIT 65/);
+    assert.ok(steps.some((s) => s.includes("SEARCH r USING PRIMARY KEY (ws=? AND thread=?)")), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  const visibilitySteps = plan(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, ["ws"]);
+  assert.match(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, /ORDER BY thread LIMIT 65/);
+  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH c ") && s.includes("PRIMARY KEY (ws=? AND thread=?)")), visibilitySteps.join(" | "));
+  for (const sql of [RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISIBILITY_ROWS_SMALL, RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL]) {
+    const steps = plan(sql, ["ws"]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /WHERE ws = \?1 ORDER BY thread(?:, session)? LIMIT 65/);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")), detail);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH d ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  const homeSteps = plan(RECENT_SCOPE_VISIBILITY_HOME, ["ws"]);
+  assert.ok(homeSteps.some((s) => s.startsWith("SEARCH ") && s.includes("recent_scope_visibility_home") && s.includes("home_ws=?")),
+    homeSteps.join(" | "));
+  for (const sql of [PUT_SCOPE_CANDIDATE, REMOVE_SCOPE_CANDIDATE]) {
+    const steps = plan(sql, ["ws", 1, "a"]);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH recent_scope_candidates ") && s.includes("PRIMARY KEY (ws=? AND thread=? AND session=?)")),
+      `${sql}\n  ${steps.join(" | ")}`);
+  }
+  const memberSteps = plan(RECENT_SCOPE_MEMBER_EXISTS, [1, "a", "ws"]);
+  assert.ok(memberSteps.some((s) => s.startsWith("SEARCH m ") && s.includes("thread=? AND session=?")), memberSteps.join(" | "));
+  assert.ok(memberSteps.some((s) => s.startsWith("SEARCH s ") && s.includes("key=?")), memberSteps.join(" | "));
+  const memberWrites = recentScopeHomeMemberQueries("?1");
+  for (const sql of [memberWrites.update, memberWrites.insert]) {
+    const steps = plan(sql, [1]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /WHERE thread = \?1 ORDER BY session LIMIT 64/);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("thread_sessions") && s.includes("thread=?")), detail);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY")), detail);
+    assert.ok(steps.every((s) => !s.startsWith("SCAN recent_scope_member_dirty") && !s.includes("TEMP B-TREE")), detail);
+  }
+  // Old source scans seek each connection, workspace, session or chat before applying their batch limits.
+  for (const [sql, args, index, seek] of [
+    [FIRST_SCOPE_CONNECT, [], "sessions_by_connect", false], [NEXT_SCOPE_CONNECT, ["a"], "sessions_by_connect", true],
+    [FIRST_SCOPE_SESSIONS, ["a", "ws", 5], "sessions_by_connect", true], [SCOPE_SESSIONS, ["a", "ws", 0n, 5], "sessions_by_connect", true],
+    [FIRST_SCOPE_SESSIONS_THROUGH, ["a", "ws", 10n, 5], "sessions_by_connect", true],
+    [SCOPE_SESSIONS_THROUGH, ["a", "ws", 0n, 10n, 5], "sessions_by_connect", true],
+    [FIRST_SCOPE_OLD_SESSION, [10n], "INTEGER PRIMARY KEY", true], [NEXT_SCOPE_OLD_SESSION, [0n, 10n], "INTEGER PRIMARY KEY", true],
+    [FIRST_SCOPE_CANDIDATE_SESSION, ["ws", "a", 5], "recent_scope_candidates_session", true],
+    [NEXT_SCOPE_CANDIDATE_SESSION, ["ws", "a", 0n, 5], "recent_scope_candidates_session", true],
+    [FIRST_SCOPE_HOME_THREADS, ["a", 5], "threads_home", true], [SCOPE_HOME_THREADS, ["a", 0n, 5], "threads_home", true],
+    [FIRST_SCOPE_MEMBER_THREADS, ["a", 5], "thread_sessions_session", true], [SCOPE_MEMBER_THREADS, ["a", 0n, 5], "thread_sessions_session", true],
+    [SCOPE_MEMBER_WITHOUT_HOME, [1], "INTEGER PRIMARY KEY", true],
+    [FIRST_HOME_CHAT_MEMBERS, [1, 5], "thread_sessions", true], [NEXT_HOME_CHAT_MEMBERS, [1, "a", 5], "thread_sessions", true],
+  ] as [string, unknown[], string, boolean][]) {
+    const steps = plan(sql, args), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.ok(steps.some((s) => s.includes(index) && (seek ? s.startsWith("SEARCH ") : s.startsWith("SCAN "))), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+}
 
 function session(store: Store, key: string) {
   store.insertSession({ key, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
@@ -1289,6 +1384,7 @@ test("usage: the sessions at work are found by when their turns ended, once each
 });
 
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
+  assertRecentChatPlans();
   const store = memory();
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
   const compact = memory();
@@ -1432,6 +1528,7 @@ test("what the station asks again and again is planned by an index, never a scan
 });
 
 test("what is told as chats change is planned by the size of what it finds, not by a chat's or a session's history", () => {
+  assertRecentChatPlans();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
   // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its

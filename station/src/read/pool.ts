@@ -15,6 +15,8 @@ import { MinuteReader } from "../usage/minute-reader.ts";
 import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
 import { SaidBuilder } from "./said-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";
+import { RecentChatBuilder } from "./recent-chat-builder.ts";
+import { RECENT_CHAT_PENDING } from "./recent-chat.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
@@ -108,6 +110,7 @@ export class Readers {
   private outflowChats: OutflowChatIndex | null = null;
   private said: SaidBuilder | null = null;
   private turns: TurnBuilder | null = null;
+  private recentChats: RecentChatBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -216,6 +219,7 @@ export class Readers {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
+    if (op === "recentChatList") return this.recentChatRead(args, lang, told, signal);
     return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
@@ -316,6 +320,22 @@ export class Readers {
         if (!(error instanceof HttpError) || error.message !== OUTFLOW_CHATS_PENDING) throw error;
         this.outflowChats ??= new OutflowChatIndex(join(this.data, "stillfail.db"), this.backfill);
         await this.covered(this.outflowChats.ready(viewer, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async recentChatRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    const a = args as { ws?: unknown; home?: unknown } | null;
+    const ws = a?.ws, home = a?.home;
+    if ((ws !== null && typeof ws !== "string") || (home !== null && typeof home !== "string"))
+      throw new HttpError(400, "invalid recent chat scope");
+    while (!this.closed) {
+      try { return await this.saidRead("recentChatList", args, lang, told, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== RECENT_CHAT_PENDING) throw error;
+        this.recentChats ??= new RecentChatBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.recentChats.readyScope({ ws, home }, signal), signal);
       }
     }
     throw new HttpError(502, "station stopping");
@@ -441,6 +461,7 @@ export class Readers {
     if (this.outflowChats !== null) void this.outflowChats.close();
     if (this.said !== null) void this.said.close();
     if (this.turns !== null) void this.turns.close();
+    if (this.recentChats !== null) void this.recentChats.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
