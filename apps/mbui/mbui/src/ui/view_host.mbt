@@ -3889,11 +3889,11 @@ fn view_key(code : Int, mods : Int) -> Bool {
   if c.dev.catchers.contains(focus) || c.focus_keeps(code, mods) {
     return false
   }
-  // (a field with the focus: its own keys (field_key: its moves, deletions, Enter) and those read with ⌘ or Ctrl held
-  // (its undo and redo, paste, the app's shortcuts: key_in) the old frame's, as ever; what it takes not (Escape) the
-  // layers', of the tree's what holds it alone, by the stack as any focus's)
+  // (a field with the focus: what it takes as its own (field_takes: its moves, deletions, Enter, its undo and redo,
+  // paste) its, by the old frame's way, as ever; what it does not take (Escape, the app's ⌘ and Ctrl keys) goes on out,
+  // as any focus's: the layers', what holds it, the root's)
   let field = c.editors.contains(focus)
-  if field && (field_key(code) || (mods & (mod_cmd | mod_ctrl)) != 0) {
+  if field && field_takes(code, mods) {
     return false
   }
   // (the old frame's layers take the keys; where the focus is on what of the tree is over all of them (View::over_all),
@@ -3932,6 +3932,15 @@ fn view_key(code : Int, mods : Int) -> Bool {
     }
   }
   tree.key_at(code, mods, view_moment(), above=old_keys, within=if field { held } else { None })
+}
+
+///|
+/// Whether a field with the focus takes key `code` (`mods` held) as its own: its moves, deletions and Enter (field_key),
+/// its undo and redo (step_of), paste (⌘V, Ctrl+V). What it does not take goes on out to what holds it (view_key).
+fn field_takes(code : Int, mods : Int) -> Bool {
+  field_key(code) ||
+  step_of(code, mods, h_keys()) is Some(_) ||
+  (code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0)
 }
 
 ///|
