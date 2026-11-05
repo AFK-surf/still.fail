@@ -100,3 +100,34 @@ test "what waits for all of it: done once what waits by after_flush is done, wha
   after_all_flushed(fn() { log.push("now") })
   assert_eq(log.length(), 4)
 }
+
+///|
+test "many asked by one change, each asking another and one more for all of it: all done, in order" {
+  let a = signal(0)
+  let n = 200000
+  let log : Array[Int] = []
+  let lasts = Ref(0)
+  effect(fn() {
+    if a.get() > 0 {
+      for i in 0..<n {
+        after_flush(fn() {
+          log.push(i)
+          after_flush(fn() { log.push(n + i) })
+          if i % 2 == 0 {
+            after_all_flushed(fn() { lasts.val += 1 })
+          }
+        })
+      }
+    }
+  })
+  |> ignore
+  a.set(1)
+  assert_eq(log.length(), 2 * n)
+  for i, v in log {
+    assert_eq(v, i)
+  }
+  assert_eq(lasts.val, n / 2)
+  // (none left over for the next change)
+  after_flush(fn() { log.push(-1) })
+  assert_eq(log.length(), 2 * n + 1)
+}

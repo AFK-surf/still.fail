@@ -481,10 +481,23 @@ fn flush() -> Unit {
   // flushed in its turn, what waits on that after it)
   if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
     run.draining = true
-    while run.afters.length() > 0 || run.lasts.length() > 0 {
-      let f = if run.afters.length() > 0 { run.afters.remove(0) } else { run.lasts.remove(0) }
+    // (taken by where each queue is up to, not removed from its head: removing the first shifted all the rest down
+    // each time, a change that asked 10⁴s of them (a long page's buttons each going together) held the desktop app's
+    // main thread 3.2 s, 0.1.7302, 2026-11-05)
+    let mut a = 0
+    let mut l = 0
+    while a < run.afters.length() || l < run.lasts.length() {
+      let f = if a < run.afters.length() {
+        a += 1
+        run.afters[a - 1]
+      } else {
+        l += 1
+        run.lasts[l - 1]
+      }
       f()
     }
+    run.afters.clear()
+    run.lasts.clear()
     run.draining = false
   }
 }
