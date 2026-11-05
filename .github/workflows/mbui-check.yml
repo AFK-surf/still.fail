@@ -11,11 +11,19 @@ on:
   # (once a day: sfapp's page tests all in one process, below)
   schedule:
     - cron: "53 3 * * *"
+  # arch/next's units kept where every branch can take them: a run on main's ref after each of its pipelines, building
+  # its commit (a branch off it took main's store alone, the other architecture's, and compiled 494 of the replay's 600
+  # units, 145 s, cancelled at the 5 minutes: ed42f90964, 2026-11-05; a cache a branch's push keeps is its own alone,
+  # GitHub's, main's are everyone's)
+  workflow_run:
+    workflows: [pipeline]
+    types: [completed]
+    branches: [arch/next]
 # main: one run at a time, the newest waiting (a red one seen, as every commit's was in the pipeline); called, the
 # caller's own (a branch's newest push stops its run before). A call from main (mbui-testflight.yml) keeps its own too:
 # in main's group the next push's run, waiting, cancelled the release's waiting tests (2026-11-02).
 concurrency:
-  group: ${{ github.workflow == 'mbui-check' && github.ref == 'refs/heads/main' && format('mbui-check-{0}', github.ref) || format('mbui-check-call-{0}-{1}', github.run_id, github.run_attempt) }}
+  group: ${{ github.event_name != 'workflow_run' && github.workflow == 'mbui-check' && github.ref == 'refs/heads/main' && format('mbui-check-{0}', github.ref) || format('mbui-check-call-{0}-{1}', github.run_id, github.run_attempt) }}
   cancel-in-progress: false
 permissions:
   contents: read
@@ -56,9 +64,11 @@ jobs:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-linux-store-${{ matrix.store }}-
       # (main's units under m-, a branch's under b-: a branch takes main's newest and its own, below)
-      OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
+      OWN: ${{ github.event_name == 'workflow_run' && 'a-' || github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps: &native-steps
       - uses: actions/checkout@v5
+        # (arch/next's commit, on main's ref: workflow_run, above)
+        with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - name: The core takes input and due timers in order
         if: env.PART == 'replay'
         run: |
@@ -102,22 +112,34 @@ jobs:
           restore-keys: |
             ${{ env.CACHE_PREFIX }}m-
             mbui-linux-store-${{ env.PART }}-m-
-      - if: github.ref != 'refs/heads/main'
+      - if: env.OWN != 'm-'
         run: |
           mkdir -p "$MBC_STORE"
           mv "$MBC_STORE" "$RUNNER_TEMP/store-main"
+      # (and a branch's, arch/next's newest beside main's: a branch off it has most of its units there, none of main's)
       - uses: actions/cache/restore@v4
-        id: own
-        if: github.ref != 'refs/heads/main'
+        if: env.OWN == 'b-'
         with:
           path: ${{ env.MBC_STORE }}
-          key: ${{ env.CACHE_PREFIX }}b-${{ github.sha }}
-          restore-keys: ${{ env.CACHE_PREFIX }}b-
-      - if: github.ref != 'refs/heads/main'
+          key: ${{ env.CACHE_PREFIX }}a-${{ github.sha }}
+          restore-keys: ${{ env.CACHE_PREFIX }}a-
+      - if: env.OWN == 'b-'
         run: |
           mkdir -p "$MBC_STORE"
+          mv "$MBC_STORE" "$RUNNER_TEMP/store-arch"
+      - uses: actions/cache/restore@v4
+        id: own
+        if: env.OWN != 'm-'
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: ${{ env.CACHE_PREFIX }}${{ env.OWN }}${{ github.sha }}
+          restore-keys: ${{ env.CACHE_PREFIX }}${{ env.OWN }}
+      - if: env.OWN != 'm-'
+        run: |
+          mkdir -p "$MBC_STORE" "$RUNNER_TEMP/store-arch"
           cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
-          echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l))"
+          cp -a -n "$RUNNER_TEMP/store-arch/." "$MBC_STORE/"
+          echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l), arch/next's $(find "$RUNNER_TEMP/store-arch" -mindepth 2 -maxdepth 2 -type d | wc -l))"
       - name: The mbui app's tests and the flows seen again (native, ${{ env.PART }})
         id: tests
         run: |
@@ -156,7 +178,11 @@ jobs:
         run: |
           S=$MBC_STORE
           [ ! -d $S ] || find $S -name '*.lock' -delete
-          [ ! -d $S ] || [ "${{ steps.tests.outcome }}" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
+          # (arch/next's run after a red test too: its tests ran on all it built, and red ones are its own to mend, its
+          # store grown with each push else)
+          went=${{ steps.tests.outcome }}
+          [ "$OWN" != a- ] || [ "$went" != failure ] || went=success
+          [ ! -d $S ] || [ "$went" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
           c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
       - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
@@ -164,7 +190,7 @@ jobs:
         with:
           path: ${{ env.MBC_STORE }}
           key: ${{ env.BUILD_KEY }}
-      - if: always() && github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+      - if: always() && env.OWN == 'm-' && steps.moon.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
@@ -199,7 +225,7 @@ jobs:
       GROUP: build
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-linux-store-app-sfapp-
-      OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
+      OWN: ${{ github.event_name == 'workflow_run' && 'a-' || github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps: *native-steps
 
   # sfapp's tests, the app part's groups (scripts/test.sh app_group_of), each run on the program app-build made
@@ -207,6 +233,8 @@ jobs:
   app:
     name: native (app ${{ matrix.group }})
     needs: app-build
+    # (arch/next's run keeps its units: its tests are its pipeline's)
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-24.04
     # (a push's 5 minutes; the day's, its pages in one process, 10)
     timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
