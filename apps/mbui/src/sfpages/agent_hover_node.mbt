@@ -10,11 +10,14 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
   // (pointed at as the pointer is over it, nothing pressed for it: what takes a press under it takes it as ever)
   pic.points(Is(true)) |> ignore
   let open = @signals.signal(false, same=fn(a, b) { a == b })
-  let card_on : Ref[@view.View?] = Ref(None)
+  let card_on : @signals.Signal[@view.View?] = @signals.signal(None,
+    same=fn(a, b) { a.map(fn(v) { v.id() }) == b.map(fn(v) { v.id() }) })
   let due : Ref[() -> Unit] = Ref(fn() {  })
   let on_it = fn() {
     // A name's link takes the pointer inside its room; the card belongs to the room that keeps that link.
-    @sf.pointer_rests() && (pic.pointed_in() || card_on.val.map(pointer_over).unwrap_or(false))
+    // Follow the card as soon as it exists, while the pointer is still over the picture, so the next input samples it.
+    let over_card = card_on.get().map(pointer_over).unwrap_or(false)
+    @sf.pointer_rests() && (pic.pointed_in_on_input() || over_card)
   }
   // (rested on, opened; left, both it and the card, closed: each from the moment the pointer came or went)
   pic.reacts(fn() { agent() != "" && on_it() }, fn(on) {
@@ -34,7 +37,7 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
     l.box(fn(card) {
       // (as wide as what it holds, 420 at most, 220 at least: hover_tile's, as the old view laid it out)
       let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-      card.owns(fn() { card_on.val = None }) |> ignore
+      card.owns(fn() { card_on.set(None) }) |> ignore
       card.beside(pic.id(), side=Bottom, along=Start, offset=hover_offset, padding=8.0) |> ignore
       @ui.old(card, fn(c) {
         let rr = r()
@@ -56,7 +59,7 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
       // (as wide as the old frame lays what it holds out: it takes presses and the pointer there, all of it, its own
       // lighting and tips by it)
       .width(By(fn() { card_w.get() }))
-      |> fn(island) { card_on.val = Some(island) }
+      |> fn(island) { card_on.set(Some(island)) }
     })
     .lives_with(anchor)
     |> ignore
@@ -71,8 +74,5 @@ let agent_card_most : Double = 420.0
 /// Whether the pointer is over card `v` (where it is laid out, what it holds the old view's: its own hover and tips
 /// by it, so not pointed at as a node of the tree's is), followed as it moves.
 fn pointer_over(v : @view.View) -> Bool {
-  match (v.pointer_here_told(), v.laid_size_told()) {
-    (Some((x, y)), Some((w, h))) => x >= 0.0 && y >= 0.0 && x < w && y < h
-    _ => false
-  }
+  v.pointer_within_on_input()
 }

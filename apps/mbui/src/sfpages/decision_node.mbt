@@ -323,8 +323,9 @@ fn dismiss_node(
     u.box(fn(w) {
       let hot = fn() { live() && w.pointed() }
       w
-      .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
-      .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+      .words(By(fn() { @sf.t("web-main.chat.asks.dismiss") }))
+      .words_underlined(By(hot))
+      .words_look(By(fn() { @ui.style_words(dismiss_words) }))
       .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
       .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.chat.asks.dismiss"))) }))
       |> ignore

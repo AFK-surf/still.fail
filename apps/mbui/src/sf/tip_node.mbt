@@ -115,7 +115,7 @@ pub fn tip_node(
   // whether it takes input at all, whether there is anything to say)
   let state = fn() {
     (
-      @ui.pointing() is Mouse && (if within { anchor.pointer_within() } else { anchor.pointed() }),
+      @ui.pointing() is Mouse && (if within { anchor.pointer_within_on_input() } else { anchor.pointed_on_input() }),
       anchor.pressed(),
       anchor.focus_shown(),
       anchor.takes_input(),

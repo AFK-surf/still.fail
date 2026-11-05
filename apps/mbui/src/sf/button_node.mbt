@@ -38,11 +38,20 @@ pub fn button_node(
         Finger => v.pressed()
       })))
     }
-    let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
+    let hand = EdgeWay::new(0.0)
     let turning = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let open = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let seen = EdgeWay::new(if @signals.untracked(disabled) { 0.45 } else { 1.0 })
-    v.reacts(lit, fn(on) { hand.go(v, if on { 1.0 } else { 0.0 }, dur_ms) })
+    let first_hand = Ref(true)
+    v.reacts(lit, fn(on) {
+      let to = if on { 1.0 } else { 0.0 }
+      if first_hand.val {
+        first_hand.val = false
+        hand.put(to)
+      } else {
+        hand.go(v, to, dur_ms)
+      }
+    })
     v.reacts(busy, fn(on) {
       turning.go(v, if on { 1.0 } else { 0.0 }, dur_ms)
       open.go_by(v, if on { 1.0 } else { 0.0 }, button_reshape)

@@ -236,3 +236,32 @@ fn line_parts_seen() -> Int {
   }
   n
 }
+
+///|
+test "an edge's height keeps the pointer input while its paint follows the moved edge" {
+  let t = @ui.Tester::new(fn(_c) { }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  let x = @signals.signal(140.0, same=fn(a, b) { a == b })
+  @ui.set_view_app(fn(root) {
+    root.box(fn(e) {
+      e.over(Is(true)).offset(By(fn() { (x.get(), 20.0) }))
+      .width(Is(Some(handle_w))).height(Is(Some(200.0))).on_press(fn() { }) |> ignore
+      edge_look_node(e, fn() { true }, fn() { e.pointed() }, fn() { false },
+        on_input=fn() { e.pointed_on_input() }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  t.move(140.0 + handle_w / 2.0, 120.0)
+  t.run_for(edge_bar_ms)
+  assert_eq(edge_drawn(t, 140.0).bar.map(fn(b) { b.1 }), [@ui.Space::px(S12)])
+  let tree = @ui.view_tree().unwrap()
+  tree.event(t.time(), fn() { x.set(240.0) })
+  t.frame()
+  t.run_for(edge_bar_ms)
+  let moved = edge_drawn(t, 240.0)
+  assert_eq(moved.bar.map(fn(b) { b.1 }), [@ui.Space::px(S12)], msg="no new pointer input: the height stays")
+  assert_eq(moved.parts, 0, msg="the line follows the edge now being away from the pointer")
+  t.move(141.0 + handle_w / 2.0, 120.0)
+  t.run_for(edge_bar_ms)
+  assert_eq(edge_drawn(t, 240.0).bar.map(fn(b) { b.1 }), [@ui.Space::px(S6)], msg="the next move samples the moved edge")
+}

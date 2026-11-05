@@ -203,6 +203,7 @@ pub fn View::runs_picked_now(self : View) -> (Int, Int) {
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
 /// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
 pub fn View::pointer_here(self : View) -> (Double, Double)? {
+  @signals.hover_read()
   guard self.alive() else { return None }
   self.tree.pointer_in(self.at)
 }
@@ -226,6 +227,7 @@ fn Tree::pointer_in(self : Tree, at : Int) -> (Double, Double)? {
 /// waited for (as View::pointer_within is: Tree::withins_told). Never what a move of the pointer's own is told by
 /// (View::on_pointer_moved).
 pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
+  @signals.hover_read()
   guard self.live() is Some(n) else { return None }
   let cell = match n.here_cell {
     Some(c) => c
@@ -670,5 +672,15 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
         n.props[Points] = stop
       })
   }
+  self
+}
+
+///|
+/// Underline the shaped words as a paint decoration. It changes no text, font,
+/// measurement, wrapping or hit geometry; presentation hover may drive it.
+pub fn View::words_underlined(self : View, on : Live[Bool]) -> View {
+  self.bind(WordsUnderlined, on, Paint, fn(on) {
+    self.tree.nodes[self.at].look.words_underlined = on
+  })
   self
 }

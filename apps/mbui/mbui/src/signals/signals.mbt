@@ -65,6 +65,7 @@ struct Signal[T](ReactiveNode, SignalState[T])
 priv struct SignalState[T] {
   mut current : T
   mut pending : T
+  mut pending_hover : Bool
   same : ((T, T) -> Bool)?
 }
 
@@ -240,15 +241,12 @@ pub fn end_batch() -> Unit {
 ///|
 /// A signal holding `initial`.
 pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
-  let state : SignalState[T] = { current: initial, pending: initial, same }
-  Signal(
-    ReactiveNode::new(
-      MUTABLE,
-      SignalNode,
-      update=signal_update(state),
-    ),
-    state,
-  )
+  let hovered = from_hover()
+  let state : SignalState[T] = { current: initial, pending: initial, pending_hover: hovered, same }
+  let node = ReactiveNode::new(MUTABLE, SignalNode, update=signal_update(state))
+  node.observes_hover = hovered
+  node.observes_output = hovered
+  Signal(node, state)
 }
 
 ///|
@@ -294,7 +292,10 @@ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
     None => ()
   }
   run.run_depth += 1
+  let prev_deriving = deriving.val
+  deriving.val = Some(e)
   e.cleanup = f()
+  deriving.val = prev_deriving
   run.run_depth -= 1
   run.active_sub = prev_sub
   run.owner = prev_owner
@@ -377,9 +378,11 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   run.cycle += 1
   let old_value = state.value
   let old_output = c.observes_output
+  let old_hover = c.observes_hover
   let prev_deriving = deriving.val
   deriving.val = Some(c)
   c.observes_output = false
+  c.observes_hover = false
   let value = (state.getter)(old_value)
   deriving.val = prev_deriving
   state.value = Some(value)
@@ -387,7 +390,7 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   c.flags = c.flags & RECURSED_CHECK.lnot()
   purge_deps(c)
   match old_value {
-    Some(old) => old_output != c.observes_output || !same_as(state.same, old, value)
+    Some(old) => old_output != c.observes_output || old_hover != c.observes_hover || !same_as(state.same, old, value)
     None => true
   }
 }
@@ -396,8 +399,11 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
 fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
   s.flags = MUTABLE
   let was = state.current
+  let was_hover = s.observes_hover
   state.current = state.pending
-  !same_as(state.same, was, state.current)
+  s.observes_hover = state.pending_hover
+  s.observes_output = state.pending_hover
+  was_hover != s.observes_hover || !same_as(state.same, was, state.current)
 }
 
 ///|
@@ -458,7 +464,12 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.run_depth += 1
     if e.kind is EffectNode {
       guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
+      let prev_deriving = deriving.val
+      deriving.val = Some(e)
+      e.observes_output = false
+      e.observes_hover = false
       e.cleanup = f()
+      deriving.val = prev_deriving
     }
     run.run_depth -= 1
     run.active_sub = prev_sub
@@ -563,12 +574,13 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
     let prev_deriving = deriving.val
     deriving.val = Some(node)
     node.observes_output = false
+    node.observes_hover = false
     state.value = Some((state.getter)(None))
     deriving.val = prev_deriving
     run.active_sub = prev_sub
     node.flags = node.flags & RECURSED_CHECK.lnot()
   }
-  if node.observes_output { output_read() }
+  read_provenance(node)
   track(node)
   state.value.unwrap()
 }
@@ -587,6 +599,7 @@ pub fn[T] Signal::get(self : Signal[T]) -> T {
       }
     }
   }
+  read_provenance(node)
   track(node)
   state.current
 }
@@ -599,8 +612,10 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     abort("a projection cannot write model state at \{loc}")
   }
   let state = self.1
-  let changed = !same_as(state.same, state.pending, value)
+  let hovered = from_hover()
+  let changed = state.pending_hover != hovered || !same_as(state.same, state.pending, value)
   state.pending = value
+  state.pending_hover = hovered
   if changed {
     if run.batch_depth > 0 { run.batch_changed = true }
     // (set as a watch reads: where, for it to say what changed what it read as it read, Watch::set_as_read)
@@ -730,7 +745,7 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
 /// What the computed made last, not worked out again (none before it was first read).
 pub fn[T] Computed::peek(self : Computed[T]) -> T? {
   signal_read()
-  if self.0.observes_output { output_read() }
+  read_provenance(self.0)
   let state = self.1
   state.value
 }
@@ -787,6 +802,7 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
 /// computed's run reads anew, as what it read is.
 pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
   let had_output = self.0.observes_output
+  let had_hover = self.0.observes_hover
   let prev_sub = set_active_sub(Some(self.0))
   let prev_deriving = deriving.val
   deriving.val = Some(self.0)
@@ -794,7 +810,8 @@ pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
   deriving.val = prev_deriving
   run.active_sub = prev_sub
   if !had_output && self.0.observes_output { output_borrowed(self.0) }
-  if self.0.observes_output { output_read() }
+  if !had_hover && self.0.observes_hover { hover_borrowed(self.0) }
+  read_provenance(self.0)
   v
 }
 
@@ -805,6 +822,10 @@ pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
   if self.0.observes_output && !to.0.observes_output {
     to.0.observes_output = true
     output_borrowed(to.0)
+  }
+  if self.0.observes_hover && !to.0.observes_hover {
+    to.0.observes_hover = true
+    hover_borrowed(to.0)
   }
   let mut l = self.0.deps
   while true {
@@ -902,7 +923,12 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   self.stale.val = false
   let prev_sub = set_active_sub(Some(e))
   run.cycle += 1
+  let prev_deriving = deriving.val
+  deriving.val = Some(e)
+  e.observes_output = false
+  e.observes_hover = false
   let v = f()
+  deriving.val = prev_deriving
   run.active_sub = prev_sub
   watch_reading.depth -= 1
   e.flags = e.flags & RECURSED_CHECK.lnot()
@@ -932,6 +958,23 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
     }
   }
   v
+}
+
+///|
+/// Reply to the value returned by the last read. Its provenance still applies
+/// even though dependency tracking has ended. Timers and later inputs begin
+/// their own reply; they do not inherit this call scope. Extra reads made by
+/// the reply belong to this watch, not to a computation that happens to run it.
+pub fn[T] Watch::reply(self : Watch, f : () -> T) -> T {
+  let was = replying_to_hover.val
+  let prev_deriving = deriving.val
+  replying_to_hover.val = from_hover() || self.node.observes_hover
+  deriving.val = Some(self.node)
+  defer {
+    deriving.val = prev_deriving
+    replying_to_hover.val = was
+  }
+  f()
 }
 
 ///|

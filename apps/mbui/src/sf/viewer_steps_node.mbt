@@ -69,8 +69,17 @@ fn step_disc(
   // (there while the bars are, or the hand is on it or holds it: a mouse's button held down on it and moved off it, it
   // stays, as one lit or pressed does)
   let woke = fn() { awake() || hot() || b.pressed() }
-  let seen = EdgeWay::new(if @signals.untracked(woke) { 1.0 } else { 0.0 })
-  b.reacts(woke, fn(on) { seen.go(b, if on { 1.0 } else { 0.0 }, if on { wake_ms } else { sleep_ms }) })
+  let seen = EdgeWay::new(0.0)
+  let first = Ref(true)
+  b.reacts(woke, fn(on) {
+    let to = if on { 1.0 } else { 0.0 }
+    if first.val {
+      first.val = false
+      seen.put(to)
+    } else {
+      seen.go(b, to, if on { wake_ms } else { sleep_ms })
+    }
+  })
   b
   .width(By(fn() { Some(disc()) }))
   .height(By(fn() { Some(disc()) }))

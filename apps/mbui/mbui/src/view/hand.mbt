@@ -8,6 +8,7 @@
 /// first read while it is so), `on`; or, `on` false, each as the hand has it (Tree's `pointed`, `pressing`).
 pub fn Tree::lit_all(self : Tree, on : Bool) -> Unit {
   self.lit_every = on
+  self.input_hover_lit_all(on)
   for at in 0..<self.nodes.length() {
     let n = self.nodes[at]
     if !n.live {
@@ -64,7 +65,7 @@ pub fn Tree::hand_nodes(self : Tree) -> Array[HandNode] {
       key,
       holder,
       said: n.look.words,
-      lights: n.pointed_cell is Some(_) || n.pressed_cell is Some(_) || n.on_press is Some(_),
+      lights: n.pointed_cell is Some(_) || n.pressed_cell is Some(_) || n.on_press is Some(_) || self.input_hover.contains(at),
       y: n.ly,
       w: n.lw,
       h: n.lh,

@@ -141,7 +141,7 @@ fn chats_pane_node(
   let slack : @signals.Signal[Double] = @signals.signal(0.0)
   let owed = Ref(false)
   // (while the hand is on the list or it glides, its rows keep their places; a row the viewer moved goes at once)
-  let held = fn() { v.pointed_in() || scroll.glides_till() is Some(_) }
+  let held = fn() { v.pointed_in_on_input() || scroll.glides_till() is Some(_) }
   // its days in the order shown, and its rows by their names: worked out once as what is read, or the hand on it,
   // changes (held_order), what its lines and rows read
   let ordered : @signals.Signal[Array[ChatDay]] = @signals.signal([])

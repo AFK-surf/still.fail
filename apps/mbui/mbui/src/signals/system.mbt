@@ -24,6 +24,8 @@ pub struct ReactiveNode {
   priv mut cleanup : (() -> Unit)?
   /// Whether the cached computed value read a later phase's output.
   priv mut observes_output : Bool
+  /// Presentation hover is an output that can feed paint, never an earlier phase.
+  priv mut observes_hover : Bool
 }
 
 ///|
@@ -100,7 +102,7 @@ fn ReactiveNode::new(
   own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None, observes_output: false }
+  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None, observes_output: false, observes_hover: false }
 }
 
 ///|

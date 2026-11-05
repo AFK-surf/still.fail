@@ -198,6 +198,8 @@ pub let hold_slop : Double
 
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
 
+pub fn image_available(String) -> Bool
+
 pub let image_fade_ms : Double
 
 pub fn image_natural(String) -> (Double, Double)?
@@ -1240,7 +1242,7 @@ pub fn Ctx::holds_through(Self, Int32) -> Unit
 pub fn Ctx::hover_since(Self, Int32) -> Double
 pub fn Ctx::hovered(Self, Int32) -> Bool
 pub fn Ctx::id(Self, String) -> Int32
-pub fn Ctx::image(Self, String, w? : Size, h? : Size, fit? : Fit, radius? : Double, bg? : Int64, fade? : Bool, still? : Bool, matte? : Bool) -> Int32
+pub fn Ctx::image(Self, String, w? : Size, h? : Size, fit? : @view.Fit, radius? : Double, bg? : Int64, fade? : Bool, still? : Bool, matte? : Bool) -> Int32
 pub fn Ctx::image_bytes(Self, String, Bytes) -> Unit
 pub fn Ctx::image_pixels(Self, String, Int32) -> ImagePixels
 pub fn Ctx::image_ready(Self, String, Double) -> Bool
@@ -1424,7 +1426,7 @@ pub fn Ctx::stick(Self, Int32, Double) -> Unit
 pub fn Ctx::still(Self) -> Bool
 pub fn Ctx::stop_wheel(Self, Int32) -> Unit
 pub fn Ctx::stratum(Self, Int32, Stratum) -> Unit
-pub fn Ctx::stream(Self, Stream, w? : Size, h? : Size, fit? : Fit, radius? : Double, at? : (Double, Double, Double, Double)?, layer? : Bool) -> Int32
+pub fn Ctx::stream(Self, Stream, w? : Size, h? : Size, fit? : @view.Fit, radius? : Double, at? : (Double, Double, Double, Double)?, layer? : Bool) -> Int32
 pub fn Ctx::style_size(Self, TextStyle) -> (Double, Double)
 pub fn Ctx::surface(Self, Int32) -> Unit
 pub fn Ctx::take_back(Self, () -> Unit) -> Unit
@@ -1608,14 +1610,6 @@ pub(all) enum FilmFailure {
 pub(all) struct FilmRun {
   logs : Array[String]
   failure : FilmFailure?
-}
-
-#derive(Eq)
-pub(all) enum Fit {
-  FitCover
-  FitCoverAt(Double)
-  FitContain
-  FitFill
 }
 
 type FloatCaret
@@ -3127,6 +3121,8 @@ pub using @paint {type CornerOf}
 pub using @paint {type CornerRoots}
 
 pub using @view {type Cursor}
+
+pub using @view {type Fit}
 
 pub using @paint {type Glass}
 

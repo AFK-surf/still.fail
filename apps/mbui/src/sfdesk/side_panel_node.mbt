@@ -141,7 +141,8 @@ fn side_panel_node(
         }, fn(on) { held.set(on) }, tips~)
       e.box(fn(look) {
         look.over(Is(true)) |> ignore
-        @sf.edge_look_node(look, @sf.edge_over, fn() { e.pointed() || held.get() }, fn() { held.get() }) |> ignore
+        @sf.edge_look_node(look, @sf.edge_over, fn() { e.pointed() || held.get() }, fn() { held.get() },
+          on_input=fn() { e.pointed_on_input() || held.get() }) |> ignore
       }) |> ignore
     })
   })
@@ -167,8 +168,9 @@ fn side_tab_node(v : @view.View, src : Source, r : ChatRef, view : () -> ChatVie
   side_tab_mark_node(v, src, r, view, fn() { tab }, fn() { front() || lit() })
   v.box(fn(words) {
     side_words_node(words, fn() { names().0 }, fn() {
-      if front() { side_tab_front } else if lit() { side_tab_words_lit } else { side_tab_words }
+      if front() { side_tab_front } else { side_tab_words }
     })
+    words.ink(By(fn() { @ui.style_ink(if front() { side_tab_front } else if lit() { side_tab_words_lit } else { side_tab_words }) })) |> ignore
   }) |> ignore
   v.box(fn(close) {
     close.width(Is(Some(20.0))).height(Is(Some(20.0))).shrink(Is(0.0)).radius(Is(10.0))

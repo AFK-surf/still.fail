@@ -577,7 +577,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // then, the bar itself as it shows; as the pointer comes in or goes out)
   n.box(fn(top) {
     top.over(Is(true)).height(Is(Some(@sf.viewer_bar_h))) |> ignore
-    top.reacts(fn() { top.pointer_within() && @sf.pointer_rests() }, fn(near) {
+    top.reacts(fn() { top.pointer_within_on_input() && @sf.pointer_rests() }, fn(near) {
       if vw.near_bar != near {
         vw.near_bar = near
         vw.awake_said()

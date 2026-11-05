@@ -397,7 +397,7 @@ fn table_key_node(
     .min_height(By(fn() { Some(top() + table_key_size) }))
     .padding(By(fn() { (table_key_gap, top(), table_key_gap, 0.0) }))
     |> ignore
-    let shown = fn() { beside.pointed_in() || menu_open.get() || copied.get() || @ui.pointing() is Finger }
+    let shown = fn() { beside.pointed_in_on_input() || menu_open.get() || copied.get() || @ui.pointing() is Finger }
     let seen = EdgeWay::new(0.0)
     // (there while it shows or fades: gone, as it fades out to nothing, at that moment)
     let there = @signals.signal(false)

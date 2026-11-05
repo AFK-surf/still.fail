@@ -9,14 +9,17 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
   trigger.points(Is(true)) |> ignore
   let open = @signals.signal(false, same=fn(a, b) { a == b })
   let held = @signals.signal(false, same=fn(a, b) { a == b })
-  let card_on : Ref[@view.View?] = Ref(None)
+  let card_on : @signals.Signal[@view.View?] = @signals.signal(None,
+    same=fn(a, b) { a.map(fn(v) { v.id() }) == b.map(fn(v) { v.id() }) })
   let due : Ref[() -> Unit] = Ref(fn() { })
   let close = fn() { (due.val)(); held.set(false); open.set(false) }
   trigger.reacts(fn() {
+    // Register the card's input sample when it appears, before the pointer moves off the trigger into it.
+    let over_card = card_on.get().map(fn(card) {
+      pointer_over(card) || @ui.old_overlay_in_use(card)
+    }).unwrap_or(false)
     @sf.pointer_rests() && !@ui.pointer_pressed() &&
-      (trigger.pointed() || card_on.val.map(fn(card) {
-        pointer_over(card) || @ui.old_overlay_in_use(card)
-      }).unwrap_or(false) || hover_held(key))
+      (trigger.pointed_on_input() || over_card || hover_held(key))
   }, fn(on) {
     (due.val)()
     guard !@signals.untracked(fn() { held.get() }) else { return }
@@ -56,8 +59,8 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
         })
       })
       .width(if tile { By(fn() { card_width.get() }) } else { Is(Some(320.0)) })
-      |> fn(island) { card_on.val = Some(island) }
-      card.owns(fn() { card_on.val = None }) |> ignore
+      |> fn(island) { card_on.set(Some(island)) }
+      card.owns(fn() { card_on.set(None) }) |> ignore
     }) |> ignore
     layer.focus_returns() |> ignore
   }, leave=hover_out_ms)

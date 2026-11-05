@@ -31,7 +31,8 @@ fn message_name_node(parent : @view.View, name : () -> String, press : (() -> Un
     room.max_width(Is(Some(240.0))).min_width(Is(Some(0.0))) |> ignore
     room.box(fn(w) {
       w
-      .words_runs(By(fn() { [@ui.span(name(), underline=press is Some(_) && w.pointed())] }))
+      .words_runs(By(fn() { [@ui.span(name())] }))
+      .words_underlined(By(fn() { press is Some(_) && w.pointed() }))
       .words_look(By(fn() { @ui.style_words(msg_name) }))
       .ink(By(fn() { @ui.style_ink(msg_name) }))
       .cuts(Is(true))
@@ -204,7 +205,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       let anchor = Ref(head)
       let key = fn() { "m:" + m().ts + "/message-menu" }
       let close = fn() { if @sf.menu_is_open(key()) { @sf.menu_open_here("", 0.0, 0.0) } }
-      head.show(fn() { row.pointed_in() || @sfbase.message_menu_on("m:" + m().ts) }, fn(more) {
+      head.show(fn() { row.pointed_in_on_input() || @sfbase.message_menu_on("m:" + m().ts) }, fn(more) {
         anchor.val = more
         more.width(Is(Some(24.0))).height(Is(Some(24.0))).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
         // (the library's ⋯ menu by its key, as menu_of keeps it: one open at a time, its button pressed again closing it)
@@ -796,7 +797,8 @@ fn unsent_button_node(
         _ => @sf.icon_node(mark, icon, unsent_icon, By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } })) |> ignore
       }
     })
-    @sf.words_node(b, label, fn() { if hot() { unsent_label_hot } else { unsent_label } }) |> ignore
+    @sf.words_node(b, label, fn() { unsent_label })
+    .ink(By(fn() { @ui.style_ink(if hot() { unsent_label_hot } else { unsent_label }) })) |> ignore
     match tips {
       Some(layer) => @sf.tip_node(layer, b, fn() { failed().unwrap_or("") }) |> ignore
       None => ()
@@ -1045,7 +1047,8 @@ fn blocked_line_node(foot : @view.View, src : Source, station : () -> String, b 
     @sf.words_node(a, fn() { "·" }, fn() { blocked_dot }) |> ignore
     a.box(fn(w) {
       w
-      .words_runs(By(fn() { [@ui.span(b().action, underline=acts() && foot.pointed_in())] }))
+      .words_runs(By(fn() { [@ui.span(b().action)] }))
+      .words_underlined(By(fn() { acts() && foot.pointed_in() }))
       .words_look(By(fn() { @ui.style_words(blocked_act) }))
       .ink(By(fn() { @ui.style_ink(blocked_act) }))
       |> ignore

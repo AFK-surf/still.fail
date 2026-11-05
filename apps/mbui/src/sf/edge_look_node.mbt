@@ -106,31 +106,54 @@ pub fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
 
 ///|
 /// A column's edge's look in a node of `parent`'s (as tall as it, `handle_w` across, its middle that of `parent`), as
-/// edge_look draws it: its bar while `over()` its column, longer while `on()` it (pointed at, in hand), in the field's
+/// edge_look draws it: its bar while `over()` its column, longer while `on_input()` it (pointed at, in hand), in the field's
 /// edge grey while `active()` (pressed, dragged), else the strong line's grey; its line while on it (unless `line()` says
 /// no, as that changes: a sidebar folded) or active. Its bar's height and showing move over edge_bar_ms, its grey over edge_ink_ms, its line over
-/// edge_line_ms, each eased out, from the moment its state changed. Taking nothing. The node.
+/// edge_line_ms, each eased out, from the moment its state changed. `on_input` defaults to `on` for model state;
+/// pointer hover gives it the input sample separately, while `on` follows presentation for paint. Taking nothing. The node.
 pub fn edge_look_node(
   parent : @view.View,
   over : () -> Bool,
   on : () -> Bool,
   active : () -> Bool,
   line? : () -> Bool = fn() { true },
+  on_input? : () -> Bool,
 ) -> @view.View {
   parent.box(fn(v) {
     let theme = fn() { @ui.tree_theme() }
     let state = fn() { edge_state(over(), on(), active(), line()) }
-    let now = @signals.untracked(state)
-    // (each as the state is as it is made: still)
-    let shows = EdgeWay::new(if (now & 1) != 0 { 1.0 } else { 0.0 })
-    let long = EdgeWay::new(if (now & 2) != 0 { 1.0 } else { 0.0 })
-    let ink = EdgeWay::new(if (now & 4) != 0 { 1.0 } else { 0.0 })
-    let lit = EdgeWay::new(if (now & 8) != 0 { 1.0 } else { 0.0 })
+    let shows = EdgeWay::new(0.0)
+    let long = EdgeWay::new(0.0)
+    let ink = EdgeWay::new(0.0)
+    let lit = EdgeWay::new(0.0)
+    // Initial paint belongs to its reaction too; reading it while making the
+    // geometry would make that geometry depend on presentation hover.
+    let first = Ref(true)
     v.reacts(state, fn(s) {
-      shows.go(v, if (s & 1) != 0 { 1.0 } else { 0.0 }, edge_bar_ms)
-      long.go(v, if (s & 2) != 0 { 1.0 } else { 0.0 }, edge_bar_ms)
-      ink.go(v, if (s & 4) != 0 { 1.0 } else { 0.0 }, edge_ink_ms)
-      lit.go(v, if (s & 8) != 0 { 1.0 } else { 0.0 }, edge_line_ms)
+      let (a, b, c) = (if (s & 1) != 0 { 1.0 } else { 0.0 }, if (s & 4) != 0 { 1.0 } else { 0.0 }, if (s & 8) != 0 { 1.0 } else { 0.0 })
+      if first.val {
+        first.val = false
+        shows.put(a)
+        ink.put(b)
+        lit.put(c)
+      } else {
+        shows.go(v, a, edge_bar_ms)
+        ink.go(v, b, edge_ink_ms)
+        lit.go(v, c, edge_line_ms)
+      }
+    })
+    // Height follows the input's hit. The colours and fading above keep
+    // following the presented tree while that height is on its way.
+    let length_on = on_input.unwrap_or(on)
+    let first_length = Ref(true)
+    v.reacts(fn() { length_on() || active() }, fn(on) {
+      let to = if on { 1.0 } else { 0.0 }
+      if first_length.val {
+        first_length.val = false
+        long.put(to)
+      } else {
+        long.go(v, to, edge_bar_ms)
+      }
     })
     v.owns(fn() {
       for w in [shows, long, ink, lit] {

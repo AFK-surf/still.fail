@@ -60,6 +60,23 @@ changes, laid out or painted again alone, a move or a fade only painted (a trans
    nodes marked (.compute's reuse: only the dirty ones), places and looks at what changed, and paints the
    instances that changed, kept by node. A frame where nothing was marked is no frame.
 
+## Hover is either input or presentation
+
+`pointed`, `pointed_in`, `pointer_within`, `pointer_here_told` and `bar_near` describe the presented tree. Paint and
+accessibility may follow them each frame. Structure, layout and placement may not read them: the binding fails at
+that read, including an untracked read, a cached computed, a signal relaying the result or an immediate reaction.
+Underline is paint (`words_underlined`); changing it does not reshape `words_runs`.
+
+A row that makes room for a control uses `pointed_on_input`, `pointed_in_on_input`, `pointer_within_on_input` or
+`pointer_here_on_input`. These sample the tree brought to the cause's moment (`Tree::bring_to`) on pointer movement,
+each wheel input, entry or exit, and the exact endpoint of release inertia. All hits are sampled before any reader
+is notified. Display frames during release inertia do not change the sample. A control may move away from the
+pointer in response to that sample; it is not sampled again until another such input. Paint still follows its
+presented position.
+
+Publishing presentation hover never reads its previous result into an outer calculation. Layout publishes it once
+and then applies paint; there is no loop laying out again to find a fixed point under the pointer.
+
 ## What it is in mbui
 
 - **Nodes** stay a pool of `Node` by index (node.mbt: no pointer cycles under reference counting), each made once and

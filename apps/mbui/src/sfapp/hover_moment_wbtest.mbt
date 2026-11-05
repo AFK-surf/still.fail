@@ -15,6 +15,21 @@ fn hover_tag_tester() -> (@ui.Tester, Double, Double) raise {
 let hover_around_ms : Double = 20.0
 
 ///|
+test "a newly opened hover card keeps the first pointer input carried from its trigger into the card" {
+  for framed in [false, true] {
+    let (t, x, y) = hover_tag_tester()
+    t.move(x, y)
+    t.run_for(@sfpages.hover_open_ms * 2.0)
+    let (cx, cy, cw, ch) = t.rect_of("机器详情").unwrap()
+    t.touch_at(1, cx + cw / 2.0, cy + ch / 2.0, t.time())
+    if framed { t.frame() }
+    t.advance(@sfpages.hover_close_ms * 2.0)
+    t.frame()
+    assert_true(t.find("机器详情") is Some(_), msg="moving into the card cancels no-longer-needed closing")
+  }
+}
+
+///|
 test "a hover card opens hover_open_ms after the pointer came to its trigger, as the host says it came, a frame late or not" {
   let seen : Array[(Double, Bool)] = []
   for late in [0.0, 200.0] {

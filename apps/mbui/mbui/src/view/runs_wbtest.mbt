@@ -104,131 +104,34 @@ test "the pointer within a node: told as it was placed, the pointer there before
 }
 
 ///|
-test "the pointer within a node, read by how it is drawn (its alpha) and by what it holds (one shown while within): in the frame that places it, made under a pointer that stays or moved from under it, drawn so at that frame's end, nothing owed after" {
+test "presentation hover changes opacity in the same frame without another layout" {
   let there = @signals.signal(false, same=fn(a, b) { a == b })
   let down = @signals.signal(0.0, same=fn(a, b) { a == b })
   let id : Ref[NodeId?] = Ref(None)
-  let mark : Ref[NodeId?] = Ref(None)
-  let t = Tree::new(
-    fn(root) {
-      root.lines_up(Is(Some(Start))) |> ignore
-      root.box(fn(holder) {
-        holder.width(Is(Some(200.0))).height(Is(Some(100.0))).offset(By(fn() { (0.0, down.get()) })) |> ignore
-        holder.show(fn() { there.get() }, fn(band) {
-          id.val = Some(band.id())
-          band
-          .width(Is(Some(200.0)))
-          .height(Is(Some(20.0)))
-          .ground(Is(1L))
-          .alpha(By(fn() { if band.pointer_within() { 1.0 } else { 0.5 } }))
-          |> ignore
-          band.show(fn() { band.pointer_within() }, fn(m) {
-            mark.val = Some(m.id())
-            m.width(Is(Some(10.0))).height(Is(Some(10.0))).ground(Is(2L)) |> ignore
-          })
-        })
-      })
-      |> ignore
-    },
-    time=fn() { 0.0 },
-  )
+  let t = Tree::new(fn(root) {
+    root.show(fn() { there.get() }, fn(band) {
+      id.val = Some(band.id())
+      band.width(Is(Some(200.0))).height(Is(Some(20.0)))
+      .offset(By(fn() { (0.0, down.get()) }))
+      .ground(Is(1L))
+      .alpha(By(fn() { if band.pointer_within() { 1.0 } else { 0.5 } })) |> ignore
+    })
+  }, time=fn() { 0.0 })
+  defer { t.dispose() }
   t.frame(400.0, 300.0) |> ignore
   t.point_at(10.0, 10.0)
-  there.set(true)
-  t.frame(400.0, 300.0) |> ignore
-  assert_eq(t.drawn_of(id.val.unwrap()).unwrap().alpha, 1.0, msg="made under the pointer: drawn as within, that frame")
-  assert_true(mark.val is Some(m) && t.drawn_of(m) is Some(_), msg="and what it shows while within, that frame")
-  assert_true(!t.due, msg="nothing owed")
-  down.set(50.0)
-  t.frame(400.0, 300.0) |> ignore
-  assert_eq(t.drawn_of(id.val.unwrap()).unwrap().alpha, 0.5, msg="moved from under it: drawn as not, that frame")
-  assert_true(t.drawn_of(mark.val.unwrap()) is None, msg="what it shows while within gone, that frame")
-  assert_true(!t.due, msg="nothing owed")
-}
-
-///|
-test "the pointer within a node, a chain of six: each placed under the pointer as the one before it is told it is under it, through its own properties; all of them under it and told so in the first frame, nothing owed after" {
-  let ids : Array[NodeId] = []
-  let views : Array[View] = []
-  let t = Tree::new(
-    fn(root) {
-      for k in 0..<6 {
-        root.box(fn(n) {
-          ids.push(n.id())
-          let before = if k > 0 { Some(views[k - 1]) } else { None }
-          views.push(n)
-          n
-          .over(Is(true))
-          .width(Is(Some(100.0)))
-          .height(Is(Some(20.0)))
-          .ground(Is(1L))
-          // (the first under the pointer; each after it there once the one before it is told it is, else far below)
-          .offset(By(fn() {
-            match before {
-              None => (0.0, 80.0)
-              Some(b) => if b.pointer_within() { (0.0, 80.0) } else { (0.0, 250.0) }
-            }
-          }))
-          |> ignore
-        })
-        |> ignore
-      }
-    },
-    time=fn() { 0.0 },
-  )
-  t.point_at(10.0, 90.0)
-  t.frame(400.0, 300.0) |> ignore
-  for k in 0..<6 {
-    assert_eq(t.drawn_of(ids[k]).unwrap().y, 80.0, msg="\{k}: under the pointer, the first frame")
-    assert_true(@signals.untracked(fn() { views[k].pointer_within() }), msg="\{k}: told so")
+  for (shown, y, alpha) in [(true, 0.0, 1.0), (true, 50.0, 0.5), (true, 0.0, 1.0)] {
+    @signals.start_batch()
+    there.set(shown)
+    down.set(y)
+    @signals.end_batch()
+    t.work.computes = 0
+    t.frame(400.0, 300.0) |> ignore
+    assert_eq(t.drawn_of(id.val.unwrap()).unwrap().alpha, alpha)
+    assert_true(t.work.computes <= 1, msg="one root layout in each frame")
+    assert_false(t.due, msg="paint is finished in this frame")
+    assert_false(t.layout_due, msg="no layout deferred to the next frame")
   }
-  assert_true(!t.due, msg="nothing owed")
-}
-
-///|
-test "the pointer within nodes, three counting up: each placed under the pointer as the next count its bits say (000 to 111, a cell told otherwise more than once on the way), as their own properties read it; all under it and told so in the first frame, nothing owed after" {
-  let views : Array[View] = []
-  let ids : Array[NodeId] = []
-  let t = Tree::new(
-    fn(root) {
-      for k in 0..<3 {
-        root.box(fn(n) {
-          ids.push(n.id())
-          views.push(n)
-          n
-          .over(Is(true))
-          .width(Is(Some(100.0)))
-          .height(Is(Some(20.0)))
-          .ground(Is(1L))
-          // (the count the three say now, one more (at most 7): this one under the pointer where its bit is set)
-          .offset(By(fn() {
-            let mut v = 0
-            for j in 0..<views.length() {
-              if views[j].pointer_within() {
-                v = v + (1 << j)
-              }
-            }
-            let next = if v + 1 > 7 { 7 } else { v + 1 }
-            if ((next >> k) & 1) == 1 {
-              (0.0, 80.0)
-            } else {
-              (0.0, 250.0)
-            }
-          }))
-          |> ignore
-        })
-        |> ignore
-      }
-    },
-    time=fn() { 0.0 },
-  )
-  t.point_at(10.0, 90.0)
-  t.frame(400.0, 300.0) |> ignore
-  for k in 0..<3 {
-    assert_eq(t.drawn_of(ids[k]).unwrap().y, 80.0, msg="\{k}: under the pointer, the first frame (111)")
-    assert_true(@signals.untracked(fn() { views[k].pointer_within() }), msg="\{k}: told so")
-  }
-  assert_true(!t.due, msg="nothing owed")
 }
 
 ///|

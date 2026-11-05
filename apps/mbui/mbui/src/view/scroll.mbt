@@ -496,6 +496,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
     self.fling.set(None)
     // (within how far it can go as of then: what holds it may have come to be shorter meanwhile)
     self.x.set(dclamp(end_x, 0.0, self.most()))
+    @signals.after_flush(fn() { v.tree.hover_after_scroll(end_t) })
   })
 }
 

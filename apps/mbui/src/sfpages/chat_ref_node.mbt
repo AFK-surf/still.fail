@@ -117,7 +117,7 @@ fn ref_menu_node(
             .ground(By(fn() { if chosen() { @sf.theme().p.hover } else { 0L } }))
             .presses(Is(true)).on_press(fn() { pick(value.get()) |> ignore })
             .on_pointer_moved(fn() {
-              if row.pointed() {
+              if row.pointed_on_input() {
                 match data().chats.search_by(fn(x) { row_key(x) == key }) {
                   Some(i) => @sfbase.refs_active(w.key, data().chats.length(), to=i) |> ignore
                   None => ()

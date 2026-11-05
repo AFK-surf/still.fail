@@ -1944,7 +1944,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       unplaced=glyphs,
       center_in~,
     )
-    self.paint_run_lines(r, lay, 0.0, 0.0, colors, 1.0, center_in~)
+    self.paint_run_lines(r, lay, 0.0, 0.0, colors, 1.0, center_in~, underlined=c.words_underlined)
     // (past its box where it says so, View::ellipsis_past: as its plain words, below)
     if over && lay.w > c.w + 0.5 && !c.ellipsis_past {
       cut = (from, self.ninst - start)
@@ -1960,6 +1960,14 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let from = self.ninst - start
     // (each line in the middle of its width where it says so, as an old view's centred words: Ctx::text's `center`)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0, unplaced=glyphs, center_in=if c.words_center { c.w } else { -1.0 })
+    if c.words_underlined {
+      let thickness = dmax(1.0, (size / 15.0 * self.scale).round() / self.scale)
+      for line, width in tl.line_w {
+        let x = if c.words_center { dmax((c.w - width) / 2.0, 0.0) } else { 0.0 }
+        let y = glyph_y(line.to_double() * tl.line_h + tl.ascent + size * 0.12, self.scale)
+        self.emit_rect(x, y, width, thickness, 0.0, c.ink, 0.0, 0L, 1.0)
+      }
+    }
     // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it;
     // or, said so, its ellipsis drawn past it as an old view's words cut short (`w=Cut`) are: View::ellipsis_past)
     if !k.wrap && tl.w > c.w + 0.5 && !c.ellipsis_past {

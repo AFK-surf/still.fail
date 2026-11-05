@@ -7,13 +7,7 @@
 ///|
 fn Tree::layout_inputs(self : Tree) -> Unit {
   while true {
-    let mut i = 0
-    while i < self.bindings_due.length() {
-      let binding = self.bindings_due[i]
-      if binding.queued { (binding.run)() }
-      i += 1
-    }
-    self.bindings_due.clear()
+    self.bindings_applied()
     self.heights_resolved()
     if self.list_measures.is_empty() { break }
     guard !self.measuring_lists else {
@@ -35,4 +29,16 @@ fn Tree::layout_inputs(self : Tree) -> Unit {
     self.measuring_lists = false
     if !changed && self.bindings_due.is_empty() && self.heights_due.is_empty() { break }
   }
+}
+
+///|
+/// Apply queued properties without asking for intrinsic row measurements.
+fn Tree::bindings_applied(self : Tree) -> Unit {
+  let mut i = 0
+  while i < self.bindings_due.length() {
+    let binding = self.bindings_due[i]
+    if binding.queued { (binding.run)() }
+    i += 1
+  }
+  self.bindings_due.clear()
 }

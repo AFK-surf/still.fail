@@ -1231,7 +1231,8 @@ fn tape_edge_at(
       (before + (bar_gap_now() - @sf.handle_w) / 2.0, 0.0, 0.0, 0.0)
     }))
     |> ignore
-    @sf.edge_look_node(g, @sf.edge_over, fn() { e.pointed() || on.held.get() }, fn() { on.held.get() })
+    @sf.edge_look_node(g, @sf.edge_over, fn() { e.pointed() || on.held.get() }, fn() { on.held.get() },
+      on_input=fn() { e.pointed_on_input() || on.held.get() })
     |> ignore
   })
   |> ignore

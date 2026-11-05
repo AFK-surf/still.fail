@@ -937,6 +937,7 @@ fn pane_edge(n : @view.View, holder : @view.View, src : Source, tips : @sf.TipLa
       fn() { e.pointed() || e.focus_shown() || held.get() },
       fn() { held.get() },
       line=fn() { !wide.folded.get() },
+      on_input=fn() { e.pointed_on_input() || e.focus_shown() || held.get() },
     )
     |> ignore
   })

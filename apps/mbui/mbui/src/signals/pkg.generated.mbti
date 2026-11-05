@@ -24,6 +24,8 @@ pub fn after_flush(() -> Unit) -> Unit
 
 pub fn batch_depth() -> Int32
 
+pub fn[T] before_hover(() -> T) -> T
+
 pub fn[T] capture_inputs(() -> T) -> T
 
 pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
@@ -36,6 +38,8 @@ pub fn effect_scope(() -> Unit) -> () -> Unit
 
 pub fn end_batch() -> Unit
 
+pub fn hover_read() -> Unit
+
 pub fn[K : Hash + Eq] keyed() -> Keyed[K]
 
 pub fn last_set_at() -> String
@@ -45,6 +49,8 @@ pub fn output_read() -> Unit
 pub fn[T] project(() -> T) -> T
 
 pub fn[T] read_only(() -> T) -> T
+
+pub fn require_before_hover() -> Unit
 
 pub fn require_mutable() -> Unit
 
@@ -106,6 +112,7 @@ pub fn Watch::gone(Self) -> Bool
 pub fn Watch::is_stale(Self) -> Bool
 pub fn Watch::on_marked(Self, () -> Unit) -> Unit
 pub fn[T] Watch::read(Self, () -> T) -> T
+pub fn[T] Watch::reply(Self, () -> T) -> T
 pub fn Watch::set_as_read(Self) -> Array[String]
 pub fn Watch::stop(Self) -> Unit
 pub fn Watch::touch(Self) -> Unit

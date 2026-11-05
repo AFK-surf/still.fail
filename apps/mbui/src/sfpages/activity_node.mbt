@@ -60,7 +60,7 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
       open_detail(src, here_ref(h), key)
     })
     // (over it or over what it holds: its words take the pointer too, to be picked)
-    hot.val = fn() { row.pointed_in() }
+    hot.val = fn() { row.pointed_in_on_input() }
     // (its picture with the ring round it, 24 across, the ring reaching 3 past the picture into no room of the line's;
     // away while its copy flies, its ring with it)
     line.box(fn(face) {

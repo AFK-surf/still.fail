@@ -25,6 +25,13 @@ pub fn lit_in_node(v : @view.View) -> Bool {
 }
 
 ///|
+/// The same hand state for making room or showing controls: hover is sampled at
+/// pointer input, while keyboard focus and presses keep their own input causes.
+pub fn lit_in_on_input_node(v : @view.View) -> Bool {
+  v.focus_shown() || v.pressed() || (@ui.pointing() is Mouse && v.pointed_in_on_input())
+}
+
+///|
 /// `v` pressed as an old view's box with an id is (a tap on it, a mouse's let go on it, Enter or Space with the
 /// keyboard's focus on it, a screen reader's Activate), `press` done then; while `on` says so (a box given no id: none
 /// of these). Nothing drawn of it: what it draws as the hand is on it is its own (lit_node). `menu`: held still by a

@@ -12,6 +12,75 @@ let projecting : Ref[Int] = Ref(0)
 let deriving : Ref[ReactiveNode?] = Ref(None)
 
 ///|
+let before_hover_depth : Ref[Int] = Ref(0)
+
+///|
+let replying_to_hover : Ref[Bool] = Ref(false)
+
+///|
+/// Read inputs to structure, layout or placement. Presentation hover is found
+/// after those phases, so it cannot be an input to them, even through a cache.
+pub fn[T] before_hover(f : () -> T) -> T {
+  require_before_hover()
+  before_hover_depth.val += 1
+  defer { before_hover_depth.val -= 1 }
+  f()
+}
+
+///|
+fn from_hover() -> Bool {
+  replying_to_hover.val || (match deriving.val {
+    Some(node) => node.observes_hover
+    None => false
+  })
+}
+
+///|
+/// An immediate reply to presentation hover may change paint and accessibility,
+/// but cannot move the geometry from which that hover was found.
+pub fn require_before_hover() -> Unit {
+  guard !from_hover() else {
+    abort("presentation hover cannot change structure, layout or placement")
+  }
+}
+
+///|
+/// Mark a presentation hover accessor, including reads made without tracking.
+pub fn hover_read() -> Unit {
+  guard before_hover_depth.val == 0 else {
+    abort("structure, layout and placement cannot read presentation hover")
+  }
+  output_read()
+  match deriving.val {
+    Some(node) => node.observes_hover = true
+    None => ()
+  }
+}
+
+///|
+fn read_provenance(node : ReactiveNode) -> Unit {
+  if node.observes_hover { hover_read() }
+  else if node.observes_output { output_read() }
+}
+
+///|
+fn hover_borrowed(node : ReactiveNode) -> Unit {
+  let pending = [node]
+  while pending.pop() is Some(source) {
+    let mut link = source.subs
+    while link is Some(l) {
+      let sub = l.sub
+      if sub.kind is ComputedNode && !sub.observes_hover {
+        sub.observes_hover = true
+        sub.observes_output = true
+        pending.push(sub)
+      }
+      link = l.next_sub
+    }
+  }
+}
+
+///|
 /// Capture model inputs with their dependencies, without writing state or
 /// reading a later phase's output. Unlike read_only, tracking is preserved.
 pub fn[T] capture_inputs(f : () -> T) -> T {
