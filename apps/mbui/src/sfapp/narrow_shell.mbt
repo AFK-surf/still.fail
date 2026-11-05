@@ -250,8 +250,10 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = f
     // files being kept on the device, said once kept (keep.mbt)
     keeps_frame(c)
   }
-  // what another app shared in (share.mbt)
-  share_in_frame(c)
+  // what another app shared in (share.mbt; a shell of the window's tree's says it at its causes: share_in_node)
+  if !reacted {
+    share_in_frame(c)
+  }
   // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
   @sfdesk.keys(c, src, w)
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
@@ -287,6 +289,8 @@ fn signed_in_said(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 fn signed_in_node(v : @view.View, src : Source) -> Unit {
   v.over(Is(true)) |> ignore
   shell_reacts(v, src)
+  // what another app shared in (share.mbt)
+  share_in_node(v)
   // a link the system opened the app with: what the core says of it shown by the frame after (open_links.mbt)
   @ui.on_host_said(
     v,

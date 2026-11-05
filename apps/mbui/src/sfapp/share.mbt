@@ -189,95 +189,174 @@ let share_reading_box : @ui.Style = @ui.css("w=Full px=S5 pt=S2")
 let searched_from : Int = 6
 
 ///|
-/// Each frame once signed in: what another app shared since, its sheet raised; let go once its sheet closed.
-fn share_in_frame(c : @ui.Ctx) -> Unit {
-  // up: in a sheet on a Small window (and over another app), else in the wide panel, as the window is now
-  if share_in.raised.get() && !share_over.get() {
-    let small = sheet_small(c)
-    if small && share_wide.get() {
-      share_wide.set(false)
-      raise_sheet(ShareSheet)
-    } else if !small && sheet_host.kind == ShareSheet {
-      share_wide.set(true)
-      lower_sheet()
+/// What another app shared, as the host says it (taken: asked once it is), else the scripted run's words
+/// (MBUI_SHARE_TEXT) the first time: its words, its subject, its files (pictures among them kept by their bytes to be
+/// shown). None: nothing shared, or nothing in it.
+fn share_said() -> ((String, String?), Array[SharedFile])? {
+  let said = @ui.shared_in()
+  let mut got : (String, String?)? = None
+  let files : Array[SharedFile] = []
+  if said != "" {
+    let v = try Some(@json.parse(said)) catch { _ => None }
+    let title = text(v, "title")
+    got = Some((text(v, "text"), if title == "" { None } else { Some(title) }))
+    for i, f in items(v, "files") {
+      let bytes = @ui.shared_in_file(i)
+      if bytes.length() == 0 {
+        continue
+      }
+      let name = text(Some(f), "name")
+      let image = match @pixels.image_size(bytes) {
+        Some(_) => {
+          share_files_made.val += 1
+          let key = "mem:share-in/\{share_files_made.val}"
+          @ui.add_image(key, bytes)
+          key
+        }
+        None => ""
+      }
+      files.push({ name, bytes, image })
     }
+    // (the host's words are these: the scripted run's are not taken again)
+    share_in.env_taken.set(true)
+  } else if !share_in.env_taken.get() {
+    share_in.env_taken.set(true)
+    let words = @ui.env("MBUI_SHARE_TEXT")
+    if words != "" {
+      let title = @ui.env("MBUI_SHARE_TITLE")
+      got = Some((words, if title == "" { None } else { Some(title) }))
+    }
+  }
+  match got {
+    Some((words, title)) if words.trim() != "" || files.length() > 0 => Some(((words, title), files))
+    _ => None
+  }
+}
+
+///|
+/// What another app shared taken (share_said's): its sheet to come up, nothing of a share before it kept; the focus
+/// let go (`blur`: the frame's or the window's tree's).
+fn share_taken(got : ((String, String?), Array[SharedFile]), blur : () -> Unit) -> Unit {
+  let ((words, title), files) = got
+  @hostapi.log("share in: \{words.length()} characters, \{files.length()} files")
+  share_in.shared.set(Some((words, title)))
+  share_in.files.set(files)
+  share_in.raised.set(false)
+  share_in.searching.set(false)
+  share_in.choosing.set(false)
+  share_in.opening.set(None)
+  share_in.error.set("")
+  blur()
+}
+
+///|
+/// Its sheet closed (the scrim, back, dragged down): what was shared let go; over another app, the app goes once the
+/// sheet has sunk away (share_closing).
+fn share_let_go() -> Unit {
+  share_in.shared.set(None)
+  share_in.files.set([])
+  share_in.raised.set(false)
+  if share_over.get() {
+    share_closing.val = true
+  }
+}
+
+///|
+/// Put up once shared: in a sheet on a Small window or over another app (`small`), the wide panel otherwise; filling
+/// the window the browser extension opened.
+fn share_put_up(small : Bool) -> Unit {
+  if share_inline() {
+    ()
+  } else if !share_over.get() && !small {
+    share_wide.set(true)
+  } else {
+    raise_sheet(ShareSheet)
+  }
+  share_in.raised.set(true)
+}
+
+///|
+/// Up, as the window is now (`small`): in a sheet on a Small window (and over another app), else in the wide panel.
+fn share_as_window(small : Bool) -> Unit {
+  if small && share_wide.get() {
+    share_wide.set(false)
+    raise_sheet(ShareSheet)
+  } else if !small && sheet_host.kind == ShareSheet {
+    share_wide.set(true)
+    lower_sheet()
+  }
+}
+
+///|
+/// Each frame of an old view's (over another app's, over_view; the old frame signed in): what another app shared
+/// since, its sheet raised; let go once its sheet closed.
+fn share_in_frame(c : @ui.Ctx) -> Unit {
+  if share_in.raised.get() && !share_over.get() {
+    share_as_window(sheet_small(c))
   }
   // (what the host says was shared, taken once: the same whichever build takes it)
   if share_in.shared.get() is None {
-    let said = @ui.shared_in()
-    let mut got : (String, String?)? = None
-    let files : Array[SharedFile] = []
-    if said != "" {
-      let v = try Some(@json.parse(said)) catch { _ => None }
-      let title = text(v, "title")
-      got = Some((text(v, "text"), if title == "" { None } else { Some(title) }))
-      for i, f in items(v, "files") {
-        let bytes = @ui.shared_in_file(i)
-        if bytes.length() == 0 {
-          continue
-        }
-        let name = text(Some(f), "name")
-        let image = match @pixels.image_size(bytes) {
-          Some(_) => {
-            share_files_made.val += 1
-            let key = "mem:share-in/\{share_files_made.val}"
-            @ui.add_image(key, bytes)
-            key
-          }
-          None => ""
-        }
-        files.push({ name, bytes, image })
-      }
-      // (the host's words are these: the scripted run's are not taken again)
-      share_in.env_taken.set(true)
-    } else if !share_in.env_taken.get() {
-      share_in.env_taken.set(true)
-      let words = @ui.env("MBUI_SHARE_TEXT")
-      if words != "" {
-        let title = @ui.env("MBUI_SHARE_TITLE")
-
-        got = Some((words, if title == "" { None } else { Some(title) }))
-      }
-    }
-    match got {
-      Some((words, title)) if words.trim() != "" || files.length() > 0 => {
-        @hostapi.log("share in: \{words.length()} characters, \{files.length()} files")
-        share_in.shared.set(Some((words, title)))
-        share_in.files.set(files)
-        share_in.raised.set(false)
-        share_in.searching.set(false)
-        share_in.choosing.set(false)
-        share_in.opening.set(None)
-        share_in.error.set("")
-        c.blur()
-      }
-      _ => ()
+    match share_said() {
+      Some(got) => share_taken(got, fn() { c.blur() })
+      None => ()
     }
   } else if share_in.raised.get() && sheet_host.kind != ShareSheet && !share_wide.get() && !share_inline() {
-    // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
-    share_in.shared.set(None)
-    share_in.files.set([])
-    share_in.raised.set(false)
-    if share_over.get() {
-      share_closing.val = true
-    }
+    share_let_go()
   }
-  // put up once shared: in a sheet on a Small window or over another app, the wide panel otherwise; filling the window
-  // the browser extension opened
   if share_in.shared.get() is Some(_) && !share_in.raised.get() {
-    if share_inline() {
-      ()
-    } else if !share_over.get() && !sheet_small(c) {
-      share_wide.set(true)
-    } else {
-      raise_sheet(ShareSheet)
-    }
-    share_in.raised.set(true)
+    share_put_up(sheet_small(c))
   }
   if share_closing.val && share_over.get() && !@sf.presented_drawn() {
     share_closing.val = false
     @ui.over_done(open_app=false)
   }
+}
+
+///|
+/// The same in node `v` of the window's tree (the signed-in shell's, signed_in_node), each at its cause: what the host
+/// says was shared taken as it says it (on_host_said), while nothing shared is up; put up as it is, in a sheet or the
+/// wide panel as the window's width says and as that changes; let go as its sheet closes. Nothing asked each frame.
+fn share_in_node(v : @view.View) -> Unit {
+  let small = fn() { @sf.layout(v.window().0) is Small }
+  @ui.on_host_said(
+    v,
+    kind="share-in",
+    fn() { if @signals.untracked(fn() { share_in.shared.get() }) is None { share_said() } else { None } },
+    fn(got) { share_taken(got, fn() { @ui.current().blur() }) },
+  )
+  // (the scripted run's words, as the shell comes: nothing for the host to say for them)
+  if !share_in.env_taken.get() && share_in.shared.get() is None {
+    match share_said() {
+      Some(got) => share_taken(got, fn() { @ui.current().blur() })
+      None => ()
+    }
+  }
+  v.reacts(fn() { share_in.raised.get() && !share_over.get() && small() }, fn(_) {
+    if @signals.untracked(fn() { share_in.raised.get() && !share_over.get() }) {
+      share_as_window(@signals.untracked(small))
+    }
+  })
+  v.reacts(fn() { share_in.shared.get() is Some(_) && !share_in.raised.get() }, fn(up) {
+    if up {
+      share_put_up(@signals.untracked(small))
+    }
+  })
+  // (its sheet's kind changes with the presenter it is: followed by what follows that, @sf.presenting)
+  v.reacts(
+    fn() {
+      @sf.presenting() |> ignore
+      share_in.shared.get() is Some(_) &&
+      share_in.raised.get() &&
+      sheet_host.kind != ShareSheet &&
+      !share_wide.get() &&
+      !share_inline()
+    },
+    fn(closed) {
+      if closed {
+        share_let_go()
+      }
+    },
+  )
 }
 
 ///|
