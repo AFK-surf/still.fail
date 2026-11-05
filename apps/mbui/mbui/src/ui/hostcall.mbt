@@ -1482,10 +1482,15 @@ fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
     }
     Some(f) => {
       f.image_loads.push(("bytes:\{data.length()}", max_px))
-      // as the host decoded these bytes, when kept with the text; else a made-up 400 × 300
-      match (text_table.val, kept_sizes(kept_answer("ib", head))) {
-        (Some(_), Some((w, h, ow, oh))) => fake_image_sized(f, w, h, ow, oh)
-        _ => fake_image(f, 400, 300, max_px)
+      // A test may say this source's natural size just as it can for a source loaded by name. Otherwise use the
+      // recorded host answer, or the usual made-up 400 × 300 when there is none.
+      match f.image_sizes.get(src) {
+        Some((w, h)) => fake_image(f, w, h, max_px)
+        None =>
+          match (text_table.val, kept_sizes(kept_answer("ib", head))) {
+            (Some(_), Some((w, h, ow, oh))) => fake_image_sized(f, w, h, ow, oh)
+            _ => fake_image(f, 400, 300, max_px)
+          }
       }
     }
     None => {

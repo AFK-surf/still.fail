@@ -1403,8 +1403,15 @@ fn Ctx::tree_draw_node(
       // (none in its bones: nothing it would show asked for, View::bones)
       Some((src, _, most)) if c.bones == 0L => {
         let (fw, fh) = c.image_for
-        let room = if fw > 0.0 || fh > 0.0 { dmax(fw, fh) * s } else { dmax(c.w * s, c.h * s) }
-        self.image_ready(src, dmin(room * self.scale, most.to_double())) |> ignore
+        let px = if fw > 0.0 || fh > 0.0 {
+          dmax(fw, fh) * s * self.scale
+        } else {
+          match c.image_in {
+            Some(((_, _, iw, ih), _)) => dmax(iw, ih) * s * self.scale
+            None => self.image_px(src, c.w * s, c.h * s, if c.image_cover { FitCover } else { FitFill })
+          }
+        }
+        self.image_ready(src, dmin(px, most.to_double())) |> ignore
       }
       _ => ()
     }

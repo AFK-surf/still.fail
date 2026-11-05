@@ -246,7 +246,7 @@ fn leaked_state() -> Array[String] {
 /// A tester showing `view` in a window of w × h logical pixels; it has
 /// already drawn the first frame, and the frames it owes at that moment
 /// (Tester::draw's). `images`: sources views may load, with
-/// their size in pixels (others fail to load).
+/// their natural size in pixels, whether loaded by name or supplied as bytes (other names fail to load).
 /// `dark`, `window_inset`, `env`, `app_version`: what the app reads of where
 /// it runs (hostread.mbt): the system dark, the window's buttons in its top
 /// row, environment variables, the build's version code.
@@ -2331,7 +2331,7 @@ pub fn Tester::tap_run(self : Tester, s : String) -> Unit {
 }
 
 ///|
-/// Makes up an image at `src`, `w` × `h` pixels, for views to load.
+/// Makes up an image at `src`, `w` × `h` natural pixels, for views to load by name or from bytes at that source.
 pub fn Tester::add_image(self : Tester, src : String, w : Int, h : Int) -> Unit {
   self.fake.image_sizes[src] = (w, h)
 }
