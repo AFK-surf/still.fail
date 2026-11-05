@@ -225,3 +225,35 @@ test "scrolls_window: what holds its blocks laid out as tall as they reach in th
   assert_eq(seen, [(true, false), (false, true), (true, false)])
   assert_true(!tree.told_since(), msg="nothing owed")
 }
+
+///|
+test "scrolls_window: put at a block as a cause says, going as far as reach_to says however few blocks follow it (a search tucked out of view over a few rows), what holds them as tall as that in the same frame" {
+  let s = @view.Scroll::list()
+  let put : @signals.Signal[(String, Double)?] = @signals.signal(None)
+  let tucks = @signals.signal(true)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(col) {
+      col.height(Is(Some(300.0))) |> ignore
+      col.scrolls_window(
+        s,
+        fn() { ["search", "a", "b"] },
+        fn(b, k) { b.box(fn(line) { line.height(Is(Some(if k == "search" { 50.0 } else { 40.0 }))) |> ignore }) |> ignore },
+        put~,
+        reach_to=fn() { if tucks.get() { Some(("a", 0.0)) } else { None } },
+      )
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(400.0, 300.0) |> ignore
+  let first = s.at(tree)
+  // (put there by its cause: the search's 50 past, all three 130 of the 300 there is)
+  put.set(Some(("a", 0.0)))
+  tree.frame(400.0, 300.0) |> ignore
+  let tucked = s.at(tree)
+  // (going there no more: back within how far it can go, as it is laid out)
+  tucks.set(false)
+  tree.frame(400.0, 300.0) |> ignore
+  assert_eq((first, tucked, s.at(tree)), (0.0, 50.0, 0.0))
+  assert_true(!tree.told_since(), msg="nothing owed")
+}

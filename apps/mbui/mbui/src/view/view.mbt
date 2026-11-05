@@ -3311,9 +3311,15 @@ fn Tree::lists_laid_out(self : Tree, place : Bool) -> Bool {
 }
 
 ///|
+/// How many rounds a frame lays the windowed lists out in at most (Tree::lists_laid): as deep as lists and nodes made by
+/// their room are held in one another's blocks, and one more.
+let lists_rounds : Int = 8
+
+///|
 /// The windowed lists' blocks laid out by their lists (Tree::lays_blocks), each living, where anything of it is to be:
-/// once, and once more where one of their blocks was marked meanwhile (in another's, by what one made); whether any
-/// placed anything.
+/// once, and again while one of their blocks was marked meanwhile (in another's, by what one made or laid out: what a
+/// node made by its room in a list's block holds, laid out after the block, makes the block as tall), each round those
+/// marked or told alone, as deep as they hold one another; whether any placed anything.
 fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
   if self.lists.is_empty() {
     self.lists_due = false
@@ -3321,7 +3327,7 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
   }
   let mut placed = false
   let mut rounds = 0
-  while rounds < 2 {
+  while rounds < lists_rounds {
     self.lists_due = false
     // (what they set going told once they are all laid out, as one change: a block made reads what it reads as it is
     // then, what follows it told after)

@@ -296,8 +296,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     blocks[k] = b
     lay_block(k, b, w) |> ignore
   }
-  // (the blocks whose room meets what shows, `x` down to `x + vh`, as they are counted now, in order: those as tall as
-  // nothing at its edges with them, where rooms open and close)
+  // (the blocks whose room meets what shows, `x` down to `x + vh`, as they are counted now, in order: one as tall as
+  // nothing at its top with them (what it holds to come to its height as that is laid out: View::by_room), and at its
+  // foot where rooms open and close)
   let sight_of = fn(all : Array[K], xa : Double, vh : Double) -> Array[K] {
     let out : Array[K] = []
     let hs = index.val
@@ -309,7 +310,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       if top >= xb && !(room is Some(_) && h == 0.0 && top == xb) {
         break
       }
-      if top + h > xa || (room is Some(_) && h == 0.0 && top >= xa) {
+      if top + h > xa || (h == 0.0 && top >= xa) {
         out.push(all[i])
       }
       top = top + h
@@ -754,6 +755,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (what holds them as tall as they reach, with the room at its foot; from its end, at least as tall as what shows,
     // they at its foot: laid out so, what asks how far what it holds goes finds it there, as for any that scrolls
     // (whether it scrolls, whether what it holds ends above its foot: Tree::scrolls_now, the corner rule))
+    // (where it is, at rest, within how far it can go as it is laid out now: its own layout's, as Scroll::kept_in has it
+    // for any that scrolls, what that moves laid out again in this same pass, nothing of it owed)
+    let most_now = dmax(0.0, extent_now() - vh)
+    @signals.untracked(fn() {
+      if s.x.get() > most_now && s.glides_till() is None {
+        s.x.set(most_now)
+      }
+    })
     let reach = if from_end { dmax(vh, extent_now()) } else { extent_now() }
     if reach != laid_reach.val {
       laid_reach.val = reach

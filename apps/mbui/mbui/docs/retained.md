@@ -197,7 +197,15 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    thing's size decides another's (the composer's height and the room the messages leave under them), their nearest
    common holder lays both out (a layout of its own: Compose's "the minimal shared parent serves as the source of
    truth"), not a size told back and set on the other. The one structure made in layout is a lazy container's
-   (rule 11): it makes and lets go of nodes in its own subtree as it lays them out. `Tree::laid_out` does not call
+   (rule 11): it makes and lets go of nodes in its own subtree as it lays them out. What mbui has for each of these:
+   a node laid out after all else (`View::laid_after`), its size and place worked out of where the rest is laid out;
+   what a node holds made by the room it is laid out in (`View::by_room`, Compose's BoxWithConstraints), made again
+   only as what that says comes out otherwise, the node as tall as it in the same pass; a property worked out of where
+   things are laid out (`Live::Placed`), anywhere for paint, place and what is said (as the tree is placed), for a
+   property layout reads only inside such a root of its own, as that root is about to be laid out (never of what that
+   root itself lays out); a page's width given by the frame, never read from its layout. A cause reads where things
+   are laid out as of its moment (`View::laid_window_now`; once its change is committed whole, `View::when_committed`)
+   for what it sets going then, said once (how long a send flies, by how far its landing is), never followed. `Tree::laid_out` does not call
    itself; a node marked during layout fails a test where what is marked and what marked it are the tree's own (an old view
    lays out the old way, reading its layout back and building again: what it marks is counted as owed, the count only
    ever smaller, never let fail what is not yet the tree's) (the browser's ResizeObserver defers what it cannot deliver and
@@ -211,7 +219,10 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    nothing in sight; going to a message is its key put as the anchor. Heights measured are kept by key for the scroll
    bar's estimate of the whole, and only for that. A row coming, going or moving is drawn moved (an offset, a cut, a
    fade, in paint) from its cause: the list is laid out where its rows end up, each of their changes of place drawn
-   on the way there; a row whose own height moves is laid out again alone, as what it holds changes.
+   on the way there; a row whose own height moves is laid out again alone, as what it holds changes. Where it is
+   scrolled to is its own layout's too: kept within how far it can go as it is laid out (`Scroll::kept_in`), put at a
+   block by a cause (`put`), going at least as far as a block it keeps tucked (`reach_to`: a search over a few rows),
+   what holds its blocks as tall as they reach in the same pass.
 12. **A list is read by its index, its changes told with their cause.** What a list shows is given as how many rows,
    the key and the value of row i, and the changes since (inserted, removed, moved, one row's value set), each with
    what caused it (a message come, one sent, history fetched): a row's coming or going moves by that cause, never by

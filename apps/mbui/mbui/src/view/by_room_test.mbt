@@ -54,3 +54,36 @@ test "by_room: what it holds made for the width it is laid out at, in the frame 
   )
   assert_true(!tree.told_since(), msg="nothing owed")
 }
+
+///|
+test "a property layout reads worked out of where what holds its root is laid out, as that root is laid out: in what a block of a windowed list makes by its room, the list laid out wider and narrower" {
+  let holder : Ref[@view.View?] = Ref(None)
+  let inner : Ref[@view.View?] = Ref(None)
+  let s = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(col) {
+      col.height(Is(Some(300.0))) |> ignore
+      col.scrolls_window(s, fn() { ["a"] }, fn(b, _) {
+        holder.val = Some(
+          b.box(fn(h) {
+            h.by_room(fn(_) { () }, fn(v, _) {
+              // (half as wide as what holds it is laid out in the list's block: worked out as its own is laid out)
+              inner.val = Some(v.box(fn(i) { i.width(Placed(fn() { Some(h.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            })
+            |> ignore
+          }),
+        )
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let seen = fn() { (holder.val.unwrap().laid_size().0, inner.val.unwrap().laid_size().0) }
+  tree.frame(400.0, 300.0) |> ignore
+  let first = seen()
+  tree.frame(300.0, 300.0) |> ignore
+  let narrower = seen()
+  tree.frame(500.0, 300.0) |> ignore
+  assert_eq((first, narrower, seen()), ((400.0, 200.0), (300.0, 150.0), (500.0, 250.0)))
+  assert_true(!tree.told_since(), msg="nothing owed")
+}

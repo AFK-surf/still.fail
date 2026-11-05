@@ -511,6 +511,7 @@ fn seg_fill_fitted(
         }))
         |> ignore
       })
+      |> ignore
       // its options: each its share (alike as laid out till the track's room is known), its words in its middle, the
       // chosen one's in the ink, the others muted, smaller as fitted
       for k in 0..<count {
