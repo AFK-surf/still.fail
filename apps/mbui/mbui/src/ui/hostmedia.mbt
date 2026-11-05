@@ -232,7 +232,9 @@ pub fn shared_in() -> String {
   match fake.val {
     Some(f) =>
       match f.share {
-        Some((said, frame)) if g().frame_no > frame => {
+        // (from the next frame: its build, or as it begins where what the host has once is asked (host_said_arrive),
+        // which is before that frame is counted)
+        Some((said, frame)) if g().frame_no > frame || host_said_asking.val => {
           f.share = None
           said
         }

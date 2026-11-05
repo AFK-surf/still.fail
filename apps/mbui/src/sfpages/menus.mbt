@@ -116,12 +116,6 @@ fn copy_menu_link(href : String) -> Unit {
 }
 
 ///|
-/// The wide page still calls this while it is migrated; menu choices now do their work at their events.
-pub fn chat_menus_frame(c : @ui.Ctx) -> Unit {
-  ignore(c)
-}
-
-///|
 // kept across runs: only the most recent menu copy is pending; reset stops it
 let copying_image : Ref[(() -> Unit)?] = Ref(None)
 

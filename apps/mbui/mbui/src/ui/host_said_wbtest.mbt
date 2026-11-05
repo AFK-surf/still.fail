@@ -200,3 +200,31 @@ test "a run stopped in a hand-off (what is laid out shut): the Tester after it r
   t.draw()
   assert_eq(size.val, Some((100.0, 40.0)))
 }
+
+///|
+test "what a test shared in (Tester::share_in) is handed to its holder as the next frame begins, as a host's is" {
+  let got : Array[String] = []
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    on_host_said(
+      root,
+      kind="share-in",
+      fn() {
+        let said = shared_in()
+        if said == "" {
+          None
+        } else {
+          Some(said)
+        }
+      },
+      fn(said) { got.push(said) },
+    )
+  })
+  t.draw()
+  t.share_in("from another app")
+  t.draw()
+  assert_eq(got.length(), 1, msg="the next frame's, as it begins")
+  assert_true(got[0].contains("from another app"))
+  t.draw()
+  assert_eq(got.length(), 1, msg="once")
+}

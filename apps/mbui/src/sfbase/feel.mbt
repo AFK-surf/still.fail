@@ -60,13 +60,42 @@ fn felt_take() -> Unit {
 }
 
 ///|
+/// Chat `r`'s page made as nodes (`v`, its view `view`) coming to need the viewer while it shows (`shown`), felt as
+/// feel_needed feels it: at the change that makes it so, with the app in front; not as it is first seen, nor while it
+/// stays, nor as its page is come back to with it so (what it was seen to be let go as it is no more shown).
+pub fn feel_needed_node(v : @view.View, view : () -> ChatView?, shown : () -> Bool) -> Unit {
+  let seen : Ref[Bool?] = Ref(None)
+  v.reacts(fn() {
+    if !shown() {
+      return None
+    }
+    view().map(chat_needs)
+  }, fn(now) {
+    match now {
+      Some(needs) => {
+        if needs && seen.val == Some(false) && app_in_front() {
+          @ui.haptic(Confirm)
+        }
+        seen.val = Some(needs)
+      }
+      None => seen.val = None
+    }
+  })
+}
+
+///|
+/// Whether a chat's view says it needs the viewer: a card waiting for them, or its agent saying it needs them.
+fn chat_needs(v : ChatView) -> Bool {
+  v.asks.length() > 0 ||
+  (match v.state {
+    Some((_, lead, _)) => lead == "need"
+    None => false
+  })
+}
+
+///|
 /// The chat open as `v` coming to need the viewer (a card waiting for them, `asks`, or its agent saying it needs them:
 /// the state's `need`), felt as something done.
 pub fn feel_needed(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
-  let needs = v.asks.length() > 0 ||
-    (match v.state {
-      Some((_, lead, _)) => lead == "need"
-      None => false
-    })
-  felt_change(c, "needed/" + r.station + "/" + r.session, needs, Confirm)
+  felt_change(c, "needed/" + r.station + "/" + r.session, chat_needs(v), Confirm)
 }

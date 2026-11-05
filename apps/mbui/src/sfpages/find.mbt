@@ -82,6 +82,16 @@ pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
+/// ⌘F's bar open in the chat `key` at the key's moment (find_open's, its bar a node's: its field takes the keyboard).
+pub fn find_open_now(key : String) -> Unit {
+  if finding.chat.get() != key {
+    find_close()
+    finding.chat.set(key)
+  }
+  finding.field.focus()
+}
+
+///|
 /// ⌘F's bar closed: what it looked for forgotten (what the list marked for it is the page's to let go: FindList).
 pub fn find_close() -> Unit {
   finding.chat.set("")

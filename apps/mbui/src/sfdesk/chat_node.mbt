@@ -178,8 +178,15 @@ fn chat_talk_node(
     @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { chat_bar_room() }, room_now)
   })
   |> ignore
-  // (the bar and what opens over it, what is let go over the pane and what is picked in the messages, the chat's keys:
-  // the old view's, an island over all of it, built as the stack's page)
+  // (the chat's keys, done while it takes input; what it needs of the viewer felt as that comes; ⌘F's bar let go as
+  // another chat shows)
+  chat_actions_node(talk, src, w, r, view, fn() { (latest.val)() })
+  @sfbase.feel_needed_node(talk, view, fn() { app.nav.shows(k) })
+  talk.reacts(fn() { app.nav.shows(k) && find_chat() != "" && find_chat() != chat_key(r) }, fn(other) {
+    if other { (chat_find_list(r).forget)() }
+  })
+  // (the bar and what opens over it, what is let go over the pane and what is picked in the messages: the old view's,
+  // an island over all of it, built as the stack's page)
   talk.box(fn(o) {
     // (where it is in the window, as laid out: followed, so as it is laid out it is known, not asked of it at a moment)
     let pane_rect : Ref[(Double, Double, Double, Double)?] = Ref(None)
@@ -194,7 +201,7 @@ fn chat_talk_node(
       |> ignore
       @ui.old(s, fn(c) {
         app.nav.page_old(c, k, fn(c) {
-          over(c, fn() { chat_over(c, src, w, r, @signals.untracked(room_now), fn() { (latest.val)() }, fn() { pane_rect.val }) })
+          over(c, fn() { chat_over(c, src, w, r, @signals.untracked(room_now), fn() { pane_rect.val }) })
         })
       })
       .grow(Is(1.0))
@@ -207,52 +214,20 @@ fn chat_talk_node(
 }
 
 ///|
-/// What of chat `r`'s page is drawn over its messages by the old view it was (chat_page's, chat_talk's): its keys and
-/// ⌘F, the bar and its popovers, what a row carried over the pane frosts and what is let go there, what is picked in
-/// the messages, the new chat it became leaving over it. `room` the composer's at the foot; `latest` the list to its end
-/// (⌘↓, latest_key's); `pane_at` where the pane is in the window, as the tree laid it out.
+/// What of chat `r`'s page is drawn over its messages by the old view it was (chat_page's, chat_talk's): the bar and
+/// its popovers, what a row carried over the pane frosts and what is let go there, what is picked in the messages, the
+/// new chat it became leaving over it. `room` the composer's at the foot; `pane_at` where the pane is in the window, as
+/// the tree laid it out.
 fn chat_over(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
   r : ChatRef,
   room : Double,
-  latest : () -> Unit,
   pane_at : () -> (Double, Double, Double, Double)?,
 ) -> Unit {
-  // (what a menu's choice in its messages left: menus.mbt)
-  @sfpages.chat_menus_frame(c)
   let chat = (src.topic)("chat", chat_params(r)).value
   let view = view_of_chat(src, r).0
-  let key = chat_key(r)
-  let list = chat_find_list(r)
-  if find_chat() != "" && find_chat() != key {
-    (list.forget)()
-  }
-  let prefs = (src.topic)("prefs", {}).value
-  match view {
-    Some(v) => {
-      @sfbase.feel_needed(c, r, v)
-      if @settings.action_pressed(c, prefs, "chat.find") && v.thread is Some(_) {
-        chat_find_open(c, r)
-      }
-      chat_keys(c, src, w, r, v, chat)
-      // ⌘↓ (chat.latest): the list to its end, following it again; short of the chat's end, its latest page
-      if @settings.action_pressed(c, prefs, "chat.latest") {
-        match (v.newer, v.thread) {
-          (false, _) => c.tell("chat.latest", latest)
-          (true, Some(th)) => {
-            let station = r.station
-            c.tell("chat.latest", fn() {
-              (src.call)("chat.latest", { "station": Json::string(station), "thread": Json::number(th) }, fn(_) {  })
-            })
-          }
-          _ => ()
-        }
-      }
-    }
-    None => ()
-  }
   let draft = r.station + ":" + r.session
   chat_bar_host(c, src, w, r, view, chat)
   let pane = c.box(style=chat_over_box, fn() { })
@@ -260,8 +235,8 @@ fn chat_over(
     drop_hint(c, pane)
     chat_layers(c, src, r, draft, pane, room)
   }
-  // (a row of the 文件 tab let go over it, into the draft; files from this machine's Finder, where it is a station, by
-  // their station and path; words dragged in from another app, into the composer's field at its caret: chat_talk's)
+  // (a row of the 文件 tab let go over it, into the draft: chat_talk's; files from Finder and words from another app
+  // the composer's own, over all of the chat: chat_composer_node's `drops`)
   // (where the pane is the tree's to say: built again only for what it reads, this box's own place not laid out yet
   // as a row is let go over it)
   match tab_take_drop(c) {
@@ -271,18 +246,6 @@ fn chat_over(
       })
     _ => ()
   }
-  if @sfbase.finder_by_station() {
-    match c.paths_into(pane, @sfpages.composer_field_key) {
-      Some(paths) => {
-        let dragged = @sfbase.finder_dragged(src, paths)
-        c.tell("chat-drop/" + draft, fn() {
-          writing_drop(src, writing(src, draft), r.station, dragged.map(@sfpages.dropped_of), @sfpages.drops_as_files(src, draft))
-        })
-      }
-      None => ()
-    }
-  }
-  c.words_into(pane, @sfpages.composer_field_key)
   new_chat_after(c, src, w, r)
 }
 
