@@ -148,54 +148,58 @@ export function scanRecentHomeChatsStep(db: DatabaseSync, limit = 64): { scanDon
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-/// Account one changed chat using bounded membership batches. The revision prevents changes during a long scan
-/// from being lost; writes to the row, count, cursor and marker are committed together.
+/// Account changed chats using bounded membership batches. A simple chat consumes at least one unit, so a batch
+/// can make progress on several chats without holding the write transaction for an unbounded number of them.
+/// The revision prevents changes during a long scan from being lost; row, count, cursor and marker commit together.
 export function settleRecentHomeChatStep(db: DatabaseSync, limit = 64): { chatsDone: boolean; visited: number } {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent home chat batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
     const next = db.prepare("SELECT thread, revision FROM recent_home_dirty ORDER BY thread LIMIT 1");
     next.setReadBigInts(true);
-    const pending = next.get() as { thread: bigint; revision: bigint } | undefined;
-    if (!pending) { db.exec("COMMIT"); return { chatsDone: true, visited: 0 }; }
     const getWork = db.prepare("SELECT revision, after_session, seen FROM recent_home_work WHERE thread = ?");
     getWork.setReadBigInts(true);
-    let work = getWork.get(pending.thread) as { revision: bigint; after_session: string | null; seen: bigint } | undefined;
-    if (!work || work.revision !== pending.revision) {
-      db.prepare(`INSERT INTO recent_home_work(thread, revision, after_session, seen) VALUES (?, ?, NULL, 0)
-        ON CONFLICT(thread) DO UPDATE SET revision = excluded.revision, after_session = NULL, seen = 0`)
-        .run(pending.thread, pending.revision);
-      work = { revision: pending.revision, after_session: null, seen: 0n };
+    const current = db.prepare(`SELECT COALESCE(e.at, t.created_at) AS at, COALESCE(e.at, 0) AS said_at, t.created_at
+      FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
+      LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message' WHERE t.id = ?`);
+    current.setReadBigInts(true);
+    let visited = 0;
+    while (visited < limit) {
+      const pending = next.get() as { thread: bigint; revision: bigint } | undefined;
+      if (!pending) break;
+      let work = getWork.get(pending.thread) as { revision: bigint; after_session: string | null; seen: bigint } | undefined;
+      if (!work || work.revision !== pending.revision) {
+        db.prepare(`INSERT INTO recent_home_work(thread, revision, after_session, seen) VALUES (?, ?, NULL, 0)
+          ON CONFLICT(thread) DO UPDATE SET revision = excluded.revision, after_session = NULL, seen = 0`)
+          .run(pending.thread, pending.revision);
+        work = { revision: pending.revision, after_session: null, seen: 0n };
+      }
+      const batch = recentHomeChatStep(db, pending.thread, { after: work.after_session, seen: work.seen === 1n }, limit - visited);
+      visited += Math.max(1, batch.visited);
+      if (!batch.done) {
+        db.prepare("UPDATE recent_home_work SET after_session = ?, seen = ? WHERE thread = ?")
+          .run(batch.cursor.after, batch.cursor.seen ? 1 : 0, pending.thread);
+        break;
+      }
+      const had = db.prepare("SELECT 1 FROM recent_home_rows WHERE thread = ?").get(pending.thread) !== undefined;
+      if (batch.included) {
+        const row = current.get(pending.thread) as { at: bigint; said_at: bigint; created_at: bigint } | undefined;
+        if (!row) throw new Error("recent home chat disappeared inside a write transaction");
+        db.prepare(`INSERT INTO recent_home_rows(thread, at, said_at, created_at) VALUES (?, ?, ?, ?)
+          ON CONFLICT(thread) DO UPDATE SET at = excluded.at, said_at = excluded.said_at, created_at = excluded.created_at`)
+          .run(pending.thread, row.at, row.said_at, row.created_at);
+        if (!had) db.prepare("UPDATE recent_home_meta SET total = total + 1 WHERE id = 1").run();
+      } else if (had) {
+        db.prepare("DELETE FROM recent_home_rows WHERE thread = ?").run(pending.thread);
+        db.prepare("UPDATE recent_home_meta SET total = total - 1 WHERE id = 1").run();
+      }
+      db.prepare("DELETE FROM recent_home_work WHERE thread = ?").run(pending.thread);
+      db.prepare("DELETE FROM recent_home_dirty WHERE thread = ? AND revision = ?").run(pending.thread, pending.revision);
+      db.prepare("DELETE FROM recent_home_order_dirty WHERE thread = ?").run(pending.thread);
     }
-    const batch = recentHomeChatStep(db, pending.thread, { after: work.after_session, seen: work.seen === 1n }, limit);
-    if (!batch.done) {
-      db.prepare("UPDATE recent_home_work SET after_session = ?, seen = ? WHERE thread = ?")
-        .run(batch.cursor.after, batch.cursor.seen ? 1 : 0, pending.thread);
-      db.exec("COMMIT");
-      return { chatsDone: false, visited: batch.visited };
-    }
-    const had = db.prepare("SELECT 1 FROM recent_home_rows WHERE thread = ?").get(pending.thread) !== undefined;
-    if (batch.included) {
-      const current = db.prepare(`SELECT COALESCE(e.at, t.created_at) AS at, COALESCE(e.at, 0) AS said_at, t.created_at
-        FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
-        LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message' WHERE t.id = ?`);
-      current.setReadBigInts(true);
-      const row = current.get(pending.thread) as { at: bigint; said_at: bigint; created_at: bigint } | undefined;
-      if (!row) throw new Error("recent home chat disappeared inside a write transaction");
-      db.prepare(`INSERT INTO recent_home_rows(thread, at, said_at, created_at) VALUES (?, ?, ?, ?)
-        ON CONFLICT(thread) DO UPDATE SET at = excluded.at, said_at = excluded.said_at, created_at = excluded.created_at`)
-        .run(pending.thread, row.at, row.said_at, row.created_at);
-      if (!had) db.prepare("UPDATE recent_home_meta SET total = total + 1 WHERE id = 1").run();
-    } else if (had) {
-      db.prepare("DELETE FROM recent_home_rows WHERE thread = ?").run(pending.thread);
-      db.prepare("UPDATE recent_home_meta SET total = total - 1 WHERE id = 1").run();
-    }
-    db.prepare("DELETE FROM recent_home_work WHERE thread = ?").run(pending.thread);
-    db.prepare("DELETE FROM recent_home_dirty WHERE thread = ? AND revision = ?").run(pending.thread, pending.revision);
-    db.prepare("DELETE FROM recent_home_order_dirty WHERE thread = ?").run(pending.thread);
     const done = db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() === undefined;
     db.exec("COMMIT");
-    return { chatsDone: done, visited: batch.visited };
+    return { chatsDone: done, visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 

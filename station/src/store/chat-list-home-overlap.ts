@@ -74,44 +74,49 @@ export function scanRecentHomeOverlapStep(db: DatabaseSync, limit = 64): { scanD
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-/// Bring one default chat's workspace intersections up to date in bounded batches. A default-row flip restarts the
-/// cursor; workspace row changes behind it are applied directly by the scope-row triggers.
+/// Bring default chats' workspace intersections up to date in bounded batches. Even a chat with no workspaces costs
+/// one unit. A default-row flip restarts the cursor; workspace row changes behind it are applied by the row triggers.
 export function settleRecentHomeOverlapStep(db: DatabaseSync, limit = 64): { overlapsDone: boolean; visited: number } {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent home overlap batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
     const next = db.prepare("SELECT thread, revision FROM recent_home_overlap_dirty ORDER BY thread LIMIT 1");
     next.setReadBigInts(true);
-    const pending = next.get() as { thread: bigint; revision: bigint } | undefined;
-    if (!pending) { db.exec("COMMIT"); return { overlapsDone: true, visited: 0 }; }
     const getWork = db.prepare("SELECT revision, after_ws FROM recent_home_overlap_work WHERE thread = ?");
     getWork.setReadBigInts(true);
-    let work = getWork.get(pending.thread) as { revision: bigint; after_ws: string | null } | undefined;
-    if (!work || work.revision !== pending.revision) {
-      db.prepare(`INSERT INTO recent_home_overlap_work(thread, revision, after_ws) VALUES (?, ?, NULL)
-        ON CONFLICT(thread) DO UPDATE SET revision = excluded.revision, after_ws = NULL`).run(pending.thread, pending.revision);
-      work = { revision: pending.revision, after_ws: null };
-    }
-    const included = db.prepare("SELECT 1 FROM recent_home_rows WHERE thread = ?").get(pending.thread) !== undefined;
-    const table = included ? "recent_scope_rows INDEXED BY recent_scope_rows_thread" : "recent_home_overlap_rows INDEXED BY recent_home_overlap_by_thread";
-    const query = db.prepare(work.after_ws === null
-      ? `SELECT ws FROM ${table} WHERE thread = ?1 ORDER BY ws LIMIT ?2`
-      : `SELECT ws FROM ${table} WHERE thread = ?1 AND ws > ?2 ORDER BY ws LIMIT ?3`);
-    const rows = (work.after_ws === null ? query.all(pending.thread, limit)
-      : query.all(pending.thread, work.after_ws, limit)) as { ws: string }[];
     const add = db.prepare(`INSERT INTO recent_home_overlap_rows(ws, thread) SELECT ?1, ?2
       WHERE NOT EXISTS (SELECT 1 FROM recent_home_overlap_rows WHERE ws = ?1 AND thread = ?2)`);
     const remove = db.prepare("DELETE FROM recent_home_overlap_rows WHERE ws = ? AND thread = ?");
-    for (const row of rows) if (included) add.run(row.ws, pending.thread); else remove.run(row.ws, pending.thread);
-    if (rows.length === limit) db.prepare("UPDATE recent_home_overlap_work SET after_ws = ? WHERE thread = ?")
-      .run(rows.at(-1)!.ws, pending.thread);
-    else {
+    let visited = 0;
+    while (visited < limit) {
+      const pending = next.get() as { thread: bigint; revision: bigint } | undefined;
+      if (!pending) break;
+      let work = getWork.get(pending.thread) as { revision: bigint; after_ws: string | null } | undefined;
+      if (!work || work.revision !== pending.revision) {
+        db.prepare(`INSERT INTO recent_home_overlap_work(thread, revision, after_ws) VALUES (?, ?, NULL)
+          ON CONFLICT(thread) DO UPDATE SET revision = excluded.revision, after_ws = NULL`).run(pending.thread, pending.revision);
+        work = { revision: pending.revision, after_ws: null };
+      }
+      const included = db.prepare("SELECT 1 FROM recent_home_rows WHERE thread = ?").get(pending.thread) !== undefined;
+      const table = included ? "recent_scope_rows INDEXED BY recent_scope_rows_thread" : "recent_home_overlap_rows INDEXED BY recent_home_overlap_by_thread";
+      const query = db.prepare(work.after_ws === null
+        ? `SELECT ws FROM ${table} WHERE thread = ?1 ORDER BY ws LIMIT ?2`
+        : `SELECT ws FROM ${table} WHERE thread = ?1 AND ws > ?2 ORDER BY ws LIMIT ?3`);
+      const remaining = limit - visited;
+      const rows = (work.after_ws === null ? query.all(pending.thread, remaining)
+        : query.all(pending.thread, work.after_ws, remaining)) as { ws: string }[];
+      for (const row of rows) if (included) add.run(row.ws, pending.thread); else remove.run(row.ws, pending.thread);
+      visited += Math.max(1, rows.length);
+      if (rows.length === remaining) {
+        db.prepare("UPDATE recent_home_overlap_work SET after_ws = ? WHERE thread = ?").run(rows.at(-1)!.ws, pending.thread);
+        break;
+      }
       db.prepare("DELETE FROM recent_home_overlap_work WHERE thread = ?").run(pending.thread);
       db.prepare("DELETE FROM recent_home_overlap_dirty WHERE thread = ? AND revision = ?").run(pending.thread, pending.revision);
     }
     const done = db.prepare("SELECT 1 FROM recent_home_overlap_dirty LIMIT 1").get() === undefined;
     db.exec("COMMIT");
-    return { overlapsDone: done, visited: rows.length };
+    return { overlapsDone: done, visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
