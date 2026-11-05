@@ -158,7 +158,10 @@ fn system_said(json : String) -> Unit {
   for s in said {
     match s {
       // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-      Link(url) => link_later.push(app_link(url))
+      Link(url) => {
+        link_later.push(app_link(url))
+        links_came.set(@signals.untracked(fn() { links_came.get() }) + 1)
+      }
       // shown over another app, or in its own window again (share.mbt)
       Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
@@ -206,6 +209,14 @@ fn system_said(json : String) -> Unit {
 /// with, would be left with none).
 fn init {
   @ui.on_message(@hostapi.system_channel, fn(json, _) { system_said(json) })
+  // (links alone, taken as the frame begins: kept for what opens them (link_later), which is told before the frame is
+  // built, a shell of the window's tree's on_host_said; not left for the frame's build after that)
+  @ui.on_message_said(@hostapi.system_channel, fn(json, _) {
+    let said = @hostapi.system_said(json)
+    guard said.length() > 0 && said.iter().all(fn(s) { s is Link(_) }) else { return false }
+    system_said(json)
+    true
+  })
   // what the phone has for 共享调试, as its host says by itself (the app's Android: AdbShare.java)
   @ui.on_message("native:adb.phone", fn(json, _) { @settings.adb_phone_said(json) })
   // its notifications' words, for a share a chat's grant starts with no page shown (AdbShare.java `adb.texts`)
@@ -269,20 +280,33 @@ let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a ==
 /// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
 /// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
 pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  match badge_of(src, w) {
+    Some(badge) if badge != badge_told.get() => c.after_build("badge", fn() { badge_say(badge) })
+    _ => ()
+  }
+}
+
+///|
+/// The number on the app's icon in workspace `w`, as the core says its marks (None till it has).
+pub fn badge_of(src : Source, w : Workspace) -> Int? {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-  let badge = match field(marks, "badge") {
-    Some(Number(_, ..)) => count(marks, "badge")
+  guard marks is Some(_) else { return None }
+  match field(marks, "badge") {
+    Some(Number(_, ..)) => Some(count(marks, "badge"))
     _ =>
       match field(marks, "workspaces") {
-        Some(Object(m)) => m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") })
-        _ => 0
+        Some(Object(m)) => Some(m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") }))
+        _ => Some(0)
       }
   }
-  if marks is Some(_) && badge != badge_told.get() {
-    c.after_build("badge", fn() {
-      badge_told.set(badge)
-      @ui.set_badge(badge)
-    })
+}
+
+///|
+/// The number `badge` put on the app's icon, where it is another than the one put there last.
+pub fn badge_say(badge : Int) -> Unit {
+  if badge != @signals.untracked(fn() { badge_told.get() }) {
+    badge_told.set(badge)
+    @ui.set_badge(badge)
   }
 }
 

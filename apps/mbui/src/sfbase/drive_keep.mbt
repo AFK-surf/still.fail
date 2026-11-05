@@ -47,37 +47,53 @@ priv struct Keeping {
 let keepings : @sf.LiveArray[Keeping] = @sf.LiveArray::new()
 
 ///|
-/// Each frame (app.mbt): the keeps the host has answered, said in a toast.
+/// Each frame (app.mbt, where the window is no tree): the keeps the host has answered, said in a toast (keeps_take).
 pub fn keeps_frame(c : @ui.Ctx) -> Unit {
-  // (what the host says of its keeps, the same in each build of the frame; each said once, then let go)
-  if keepings.is_empty() {
-    return
+  if keeps_answered() {
+    // (told once the frame's builds are over, as the answer is the build's that took it)
+    for i, then in keeps_take() {
+      c.tell("keep-then/\{i}", then)
+    }
   }
+}
+
+///|
+/// Whether the host has answered a keep since (kept, called off, failed): what a shell of the window's tree is told
+/// as each frame begins (sfapp's signed_in_node, @ui.on_host_said).
+pub fn keeps_answered() -> Bool {
+  keepings.iter().any(fn(k) { !(k.keep.kept() is Keeping) })
+}
+
+///|
+/// The keeps the host has answered, each said in a toast and let go: what waits on each, to be told it.
+pub fn keeps_take() -> Array[() -> Unit] {
+  // (what the host says of its keeps; each said once, then let go)
   let left = []
-  for i, k in keepings {
+  let told : Array[() -> Unit] = []
+  for k in keepings {
     let kept = k.keep.kept()
     match kept {
       Keeping => left.push(k)
       KeptAt(at) => {
         @hostapi.log("kept \{k.name}: \{at}")
         k.keep.end()
-        say(c, k.saved)
+        toast_later(k.saved)
       }
       // the person called the panel or the sheet off: nothing to say
       CalledOff => k.keep.end()
       Failed => {
         @hostapi.log("keep \{k.name}: failed")
         k.keep.end()
-        say(c, k.failed)
+        toast_later(k.failed)
       }
     }
     if !(kept is Keeping) {
-      // (told once the frame's builds are over, as the answer is the build's that took it)
-      c.tell("keep-then/\{i}/\{k.name}", fn() { (k.then)(kept) })
+      told.push(fn() { (k.then)(kept) })
     }
   }
   keepings.clear()
   keepings.push_iter(left.iter())
+  told
 }
 
 ///|

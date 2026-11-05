@@ -43,6 +43,8 @@ fn entry_tree(v : @view.View, page : (@view.View) -> Unit, over : (@ui.Ctx) -> U
 /// (its sheet saying to sign in first) and the library's presenters.
 fn signed_out_tree(v : @view.View, src : Source) -> Unit {
   entry_tree(v, fn(body) { @sfpages.sign_in_node(body, src) |> ignore }, fn(c) {
+    // (read so: built again as one comes, links_came)
+    @sfbase.links_came.get() |> ignore
     if !link_later.is_empty() {
       c.tell("links", fn() { signed_out_links(src) })
     }

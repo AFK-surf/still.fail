@@ -73,6 +73,13 @@ pub let link_src : Ref[Source?] = Ref(None)
 pub let link_later : Array[String] = []
 
 ///|
+/// How many links the system has opened the app with (link_later), followed: what opens them where the window's
+/// tree hosts an old view (the sign-in page's, sfapp's signed_out_tree) built again as one comes, the link taken as
+/// the frame begins (app_frame.mbt), no frame built whole for it.
+// kept across runs: it only counts on
+pub let links_came : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// Each frame signed in, the workspace `w` in view: the core and the workspace a link is opened against.
 pub fn links_frame(src : Source, w : Workspace) -> Unit {
   link_workspace.val = w.id

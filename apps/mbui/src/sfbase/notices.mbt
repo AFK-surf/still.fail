@@ -162,15 +162,27 @@ fn notify_params(workspace : String) -> Map[String, Json] {
 }
 
 ///|
-/// Each frame, signed in, the workspace `w` in view.
+/// Each frame, signed in, the workspace `w` in view (where the window is no tree: sfapp's signed_in_frame; a shell of
+/// the window's tree does each part as what it follows changes, sfapp's signed_in_node).
 pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   if src.read_only {
     return
   }
+  notices_said(src, (src.topic)("notify", Map::new()).value, @ui.app_visible())
+  match notices_host_said() {
+    Some(h) => notices_host_take(src, h)
+    None => ()
+  }
+  notices_followed(src, w.id, @ui.app_awake())
+  notices_top(app.nav.top())
+}
+
+///|
+/// What the core says of notifications (`notify`) with the app shown or not (`shown`): what the system allows told it
+/// once shown, asked once, the registration for pushes made once.
+pub fn notices_said(src : Source, notify : Json?, shown : Bool) -> Unit {
   notice_state.src = Some(src)
   let h = notice_host.val
-  let shown = @ui.app_visible()
-  let notify = (src.topic)("notify", Map::new()).value
   match notify {
     Some(_) => {
       // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)
@@ -190,18 +202,47 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
         notice_state.token = (h.token)()
         push_sync(src, None)
       }
-      // a token come since (the push service's first, given after the start, or a new one): registered as the core
-      // says (PushService.onNewToken)
-      let token = (h.token)()
-      if token != "" && token != notice_state.token {
-        notice_state.token = token
-        push_sync(src, None)
-      }
     }
     None => ()
   }
+}
+
+///|
+/// What the system has said of notifications since it was last asked: the answer to an ask, a notification tapped (""
+/// none), a token for pushes other than the one registered ("" none). None where it has said nothing.
+pub(all) struct NoticesSaid {
+  answer : Bool?
+  opened : String
+  token : String
+}
+
+///|
+/// What the system has said of notifications since (NoticesSaid), taken: none where nothing.
+pub fn notices_host_said() -> NoticesSaid? {
+  let h = notice_host.val
+  let answer = (h.answer)()
+  let opened = (h.opened)()
+  let token = (h.token)()
+  let token = if token != "" && token != notice_state.token { token } else { "" }
+  if answer is None && opened == "" && token == "" {
+    None
+  } else {
+    Some({ answer, opened, token })
+  }
+}
+
+///|
+/// What the system said of notifications (notices_host_said) done: a token come since registered as the core says
+/// (where it has notifications), the answer to an ask told the core, a notification tapped opened.
+pub fn notices_host_take(src : Source, said : NoticesSaid) -> Unit {
+  // a token come since (the push service's first, given after the start, or a new one): registered as the core
+  // says (PushService.onNewToken)
+  if said.token != "" && notice_state.synced && (src.topic)("notify", Map::new()).value is Some(_) {
+    notice_state.token = said.token
+    push_sync(src, None)
+  }
   // the system's answer to an ask
-  match (h.answer)() {
+  match said.answer {
     Some(granted) => {
       if !granted && notice_state.from_switch {
         toast_later(@sf.t("android-misc.notify.allowInSettings", args=[("app", "still.fail")]))
@@ -215,24 +256,32 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
     }
     None => ()
   }
-  // the notices to show while the app goes on (Notices.kt showNotices)
-  if @ui.app_awake() {
-    follow_notices(src, w.id)
+  // a notification tapped
+  if said.opened != "" {
+    open_notice(src, said.opened)
+  }
+}
+
+///|
+/// The notices to show followed while the app goes on (`awake`) in workspace `workspace`, let go once it does not
+/// (Notices.kt showNotices).
+pub fn notices_followed(src : Source, workspace : String, awake : Bool) -> Unit {
+  if awake {
+    follow_notices(src, workspace)
   } else {
     leave_notices(src)
   }
-  // a notification tapped
-  match (h.opened)() {
-    "" => ()
-    opens => open_notice(src, opens)
-  }
-  // a chat on top: its notification goes (App.kt LaunchedEffect(top))
-  match app.nav.top() {
+}
+
+///|
+/// The page on top `top`: a chat's notification goes (App.kt LaunchedEffect(top)).
+pub fn notices_top(top : Page) -> Unit {
+  match top {
     Chat(r) => {
       let tag = r.station + "/" + r.session
       if notice_state.cancelled != tag {
         notice_state.cancelled = tag
-        (h.cancel)(tag)
+        (notice_host.val.cancel)(tag)
       }
     }
     _ => notice_state.cancelled = ""

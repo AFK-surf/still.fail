@@ -550,6 +550,9 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         // signed in, the shell it is laid out in a node picked by the window's width and what is in view
         // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
         // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width
+        // what the signed-in shells do with a workspace in view as what they follow changes, held while one of them is
+        // laid out, whichever (signed_in_node: none of it done again as another is picked)
+        v.show(fn() { shell_is(src, v.window().0) is (Stacked | Taped | Paned) }, fn(n) { signed_in_node(n, src) })
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
           match shell {
@@ -616,16 +619,23 @@ fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
 }
 
 ///|
+/// Where the window's buttons are in the app's top row (@ui.window_inset), its top band in node `v`, under all else of
+/// it: dragging it moves the window.
+fn window_band_node(v : @view.View) -> Unit {
+  v.show(fn() { @ui.window_inset_now() }, fn(o) {
+    o.over(Is(true)) |> ignore
+    o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
+  })
+}
+
+///|
 /// A window of its own (sfbase's window.mbt) in node `v` (shell_is's Lone): on the window's ground, its top dragging it
 /// where its buttons are in the app's top row (under all of it), its page alone over all of it, an old view the tree
 /// hosts (lone_page_view: closing it ends the run), the library's presenters and the toasts over that, taking a finger
 /// only where they draw something.
 fn lone_tree(v : @view.View, src : Source) -> Unit {
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
-  v.show(fn() { @ui.window_inset_now() }, fn(o) {
-    o.over(Is(true)) |> ignore
-    o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
-  })
+  window_band_node(v)
   @ui.old(v, fn(c) {
     match @sfbase.lone_page.val {
       Some(p) => lone_page_view(c, src, p)

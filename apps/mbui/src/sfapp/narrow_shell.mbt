@@ -63,6 +63,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   // how the lists take a mouse, as the hand changes (narrow_lists' for the old frame)
   @ui.mouse_drags_lists(v, stack_by_finger)
+  window_band_node(v)
   @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
   // back at the stack's root while the shell takes it (narrow_takes_back), a node of the window's tree's: before the
   // pages, what they and what is over them say takes back (a page's own stack, a menu, a sheet) taking it first; whose
@@ -161,14 +162,9 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
 /// Under the narrow shell's pages (an island): what every frame of the app's state does (app_state_island's), what the
 /// signed-in frame does before its pages (signed_in_frame).
 fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
-  if @ui.window_inset() {
-    let id = c.id("window-ground-band")
-    c.window_drag(id)
-    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-  }
   frame_bare.val = false
   match workspace_in_view(src).0 {
-    Some(w) => signed_in_frame(c, src, w)
+    Some(w) => signed_in_frame(c, src, w, reacted=true)
     None => ()
   }
 }
@@ -196,36 +192,130 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
 ///|
 /// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: what is
 /// told as the frame ends, the icon's number, links, updates, what was shared in, the keys, whether the first page waits.
-fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
-  c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
+/// `reacted`: in a shell of the window's tree, whose node does what follows the state as it changes and what the host
+/// says as each frame begins (signed_in_node), not here: what is told the core, the links and the icon's number, the
+/// update asked for, the notifications, a link given, a keep answered.
+fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = false) -> Unit {
+  if !reacted {
+    signed_in_said(c, src, w)
+  }
   // (a person's act taken as an old view builds (a row pressed: its change is that build's), done with it: where it
   // left from let go where it went nowhere; where the app is noted as it changes, app_state_tree)
   c.after_build("history", fn() { @sfbase.history_settled() })
-  // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
-  // frame's builds are over: a build let go of follows no workspace)
-  c.after_build("notices", fn() { notices_frame(src, w) })
-  // the core and the workspace links are opened against, as the frame ends (links.mbt)
-  c.after_build("links", fn() { links_frame(src, w) })
-  // the number on the app's icon (app_frame.mbt)
-  badge_frame(c, src, w)
-  // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
-  if !link_later.is_empty() {
-    c.tell("links-given", fn() { links_given(src) })
+  if !reacted {
+    // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
+    // frame's builds are over: a build let go of follows no workspace)
+    c.after_build("notices", fn() { notices_frame(src, w) })
+    // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
+    if !link_later.is_empty() {
+      c.tell("links-given", fn() { links_given(src) })
+    }
+    // files being kept on the device, said once kept (keep.mbt)
+    keeps_frame(c)
   }
-  // a newer build of the app asked for once (updates.mbt)
-  // (asked once, with the app's version: nothing a build changes)
-  update_first(src)
   // what another app shared in (share.mbt)
   share_in_frame(c)
-  // files being kept on the device, said once kept (keep.mbt)
-  keeps_frame(c)
   // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
   @sfdesk.keys(c, src, w)
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
   first_hide(first_waiting.val)
+}
+
+///|
+/// What the old frame signed in (signed_in, where the window is no tree) tells each frame as the shell's node does as it
+/// changes (shell_reacts): the app attended to, the links' workspace, the icon's number, the update asked for once.
+fn signed_in_said(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
+  c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
+  // the core and the workspace links are opened against, as the frame ends (links.mbt)
+  c.after_build("links", fn() { links_frame(src, w) })
+  // the number on the app's icon (app_frame.mbt)
+  badge_frame(c, src, w)
+  // a newer build of the app asked for once (updates.mbt)
+  // (asked once, with the app's version: nothing a build changes)
+  update_first(src)
+}
+
+///|
+/// What the signed-in shells (narrow_shell's, taped_shell's, paned_shell's) do with a workspace in view, in node `v`,
+/// held while one of them is laid out, whichever (app_state_tree's): as what they follow comes to hold (shell_reacts;
+/// the notices followed as the core says them, the app awake or not, the chat on top), and, as each frame begins, what
+/// the host has said since (a link the app was opened with, a keep answered, what the system said of notifications),
+/// never frame by frame.
+fn signed_in_node(v : @view.View, src : Source) -> Unit {
+  v.over(Is(true)) |> ignore
+  shell_reacts(v, src)
+  // a link the system opened the app with: what the core says of it shown by the frame after (open_links.mbt)
+  @ui.on_host_said(
+    v,
+    kind="links",
+    fn() { if link_later.is_empty() { None } else { Some(()) } },
+    fn(_) { links_given(src) },
+  )
+  // files being kept on the device, said once kept (drive_keep.mbt)
+  @ui.on_host_said(v, kind="keeps", fn() { if @sfbase.keeps_answered() { Some(()) } else { None } }, fn(_) {
+    for then in @sfbase.keeps_take() {
+      then()
+    }
+  })
+  guard !src.read_only else { return }
+  // notifications (sfbase's notices.mbt): what the system said of them; what the core says of them, the app shown or
+  // not; shown while the app is awake, in the workspace in view; the one of a chat on top taken off
+  @ui.on_host_said(v, kind="notices", fn() { @sfbase.notices_host_said() }, fn(said) {
+    @sfbase.notices_host_take(src, said)
+  })
+  v.reacts(fn() { ((src.topic)("notify", Map::new()).value, @ui.app_visible()) }, fn(said) {
+    @sfbase.notices_said(src, said.0, said.1)
+  })
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(w) => Some((w.id, @ui.app_awake(), (src.topic)("notify", { "workspace": Json::string(w.id) }).value))
+        None => None
+      }
+    },
+    fn(said) {
+      match said {
+        Some((ws, awake, _)) => @sfbase.notices_followed(src, ws, awake)
+        None => ()
+      }
+    },
+  )
+  v.reacts(fn() { app.nav.top() }, fn(top) { @sfbase.notices_top(top) })
+}
+
+///|
+/// What the signed-in shell in node `v` (narrow_shell's, taped_shell's, paned_shell's) does as the state it follows
+/// comes to hold, at the moment it does, never found frame by frame: the core told the workspace in view and whether a
+/// new chat is on top (attend), the links opened against it, the icon's number as the core says its marks; a newer
+/// build asked for once.
+fn shell_reacts(v : @view.View, src : Source) -> Unit {
+  update_first(src)
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(w) => Some((w.id, app.nav.top() is NewChat))
+        None => None
+      }
+    },
+    fn(said) {
+      match (said, @signals.untracked(fn() { workspace_in_view(src).0 })) {
+        (Some((id, new_chat)), Some(w)) => {
+          attend(src, id, new_chat)
+          links_frame(src, w)
+        }
+        _ => ()
+      }
+    },
+  )
+  v.reacts(fn() { workspace_in_view(src).0.bind(fn(w) { badge_of(src, w) }) }, fn(badge) {
+    match badge {
+      Some(n) => badge_say(n)
+      None => ()
+    }
+  })
 }
 
 ///|

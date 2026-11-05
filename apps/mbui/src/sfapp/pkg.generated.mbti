@@ -68,6 +68,10 @@ pub fn attend(@sfbase.Source, String, Bool) -> Unit
 
 pub fn badge_frame(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 
+pub fn badge_of(@sfbase.Source, @sfbase.Workspace) -> Int32?
+
+pub fn badge_say(Int32) -> Unit
+
 pub fn bar_landed() -> Double
 
 pub fn bar_rest() -> Double
