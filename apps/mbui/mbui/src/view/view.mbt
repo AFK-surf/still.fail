@@ -7149,11 +7149,25 @@ pub fn Tree::laid_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
 }
 
 ///|
+/// Whether this child supplies a box to the scene. Slots have no box of their own: look through them for what they
+/// hold, and leave an empty slot out just as an absent child is.
+fn Tree::child_drawn(self : Tree, at : Int) -> Bool {
+  let child = self.nodes[at]
+  if !child.live || child.out {
+    false
+  } else if child.slot {
+    child.kids.iter().any(fn(k) { self.child_drawn(k) })
+  } else {
+    true
+  }
+}
+
+///|
 /// Whether node `id` holds a node of its own in the scene now (one living, not left out of its row): what is drawn over
 /// its ground, under the edge round it (an old view's box's border_over: drawn after what it holds).
 pub fn Tree::holds_drawn(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
-  self.nodes[id.at].kids.iter().any(fn(k) { self.nodes[k].live && !self.nodes[k].out })
+  self.nodes[id.at].kids.iter().any(fn(k) { self.child_drawn(k) })
 }
 
 ///|
