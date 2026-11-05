@@ -107,7 +107,7 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
 }
 
 /// The lists a workspace's chat list can show (`listFilter`'s words).
-const LIST_FILTERS = ["all", "mine", "watching", "archive"];
+const LIST_FILTERS = ["all", "mine", "watching", "hidden", "archive"];
 
 /// The list filters as kept, without those this build does not know (奏, gone: the list it shows then is all).
 function listFiltersOf(v: unknown): Map_ {

@@ -312,7 +312,8 @@ pub fn chat_row(
               row_rename(c, src, item)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
-              @sf.name_words(c, item.title, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
+              let named = if item.hidden == Some(true) { item.title + " · " + @sf.t("web-main.filter.hidden") } else { item.title }
+              @sf.name_words(c, named, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
             }
             // pinned, renamed or archived: nothing while its station answers (the core's list has it so at once);
             // failed, a red mark a few seconds, why on it (the menu that asked has closed, the core put it back)
@@ -725,6 +726,28 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       )
     _ => ()
   }
+  match (item.thread, item.hidden) {
+    (Some(_), Some(hidden)) =>
+      items.push(Some(@sf.menu_item_of(@sf.t(if hidden { "web-main.chat.unhide" } else { "web-main.chat.hide" }), icon="eye", fn() {
+        hide_row(src, item, !hidden)
+      })))
+    _ => ()
+  }
+  match (item.thread, item.muted) {
+    (Some(thread), Some(muted)) =>
+      items.push(Some(@sf.menu_item_of(@sf.t(if muted { "web-main.chat.unmute" } else { "web-main.chat.mute" }), icon="bell", fn() {
+        act(
+          src,
+          @sf.t(if muted { "web-main.chat.unmute" } else { "web-main.chat.mute" }),
+          "",
+          "chat.mute",
+          { "station": Json::string(item.station), "thread": Json::number(thread), "muted": Json::boolean(!muted) },
+          done=@sf.t(if muted { "web-main.chat.unmutedNotice" } else { "web-main.chat.mutedNotice" }),
+          at_once=true,
+        )
+      })))
+    _ => ()
+  }
   // with the chat's own state (pinned, kept), not last: a sheet's last row is over the screen's foot, where a thumb
   // going home or back lands on it
   items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
@@ -770,6 +793,23 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
     items.pop() |> ignore
   }
   items
+}
+
+/// Hide only from this person's lists, or put the chat back; undo uses the same personal mark.
+fn hide_row(src : Source, item : ChatItem, hidden : Bool) -> Unit {
+  guard item.thread is Some(thread) else { return }
+  let words = @sf.t(if hidden { "web-main.chat.hide" } else { "web-main.chat.unhide" })
+  act(
+    src,
+    words,
+    "",
+    "chat.hide",
+    { "station": Json::string(item.station), "thread": Json::number(thread), "hidden": Json::boolean(hidden) },
+    done=@sf.t(if hidden { "web-main.chat.hiddenNotice" } else { "web-main.chat.unhiddenNotice" }),
+    done_action=if hidden { @sf.t("android-chat.archived.undo") } else { "" },
+    done_run=fn() { hide_row(src, item, false) },
+    at_once=true,
+  )
 }
 
 ///|
@@ -1186,6 +1226,19 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
         }
       }
     None => ()
+  }
+  if found is None {
+    match @sfbase.chats_of(src, scope, "hidden").0 {
+      Some(view) =>
+        for d in view.days {
+          for i in d.items {
+            if found is None && @sfbase.row_is(i, r) {
+              found = Some(i)
+            }
+          }
+        }
+      None => ()
+    }
   }
   let items : Array[@sf.MenuItem?] = match found {
     Some(item) => chat_menu_items(src, item, extra)

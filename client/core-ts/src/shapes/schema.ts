@@ -1490,7 +1490,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts)." }),
   Appearance: words(["system","light","dark"], { doc: "How the pages look: as the system does (the default), or always light, or always dark.", default: "system" }),
   RowPictureSetting: words(["auto","agents","people"], { doc: "Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the\npeople's.", default: "auto" }),
-  ListFilter: words(["all","mine","watching","archive"], { doc: "What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide\nscreen the archived chats (已归档) in place of the chats.", default: "all" }),
+  ListFilter: words(["all","mine","watching","hidden","archive"], { doc: "What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), the viewer's hidden chats (已隐藏), or archived chats (已归档).", default: "all" }),
   Lead: words(["agents","people"], { doc: "Whose pictures lead the rows of a list (`ChatsView::leading`)." }),
   KeptTabs: struct([
     ["tabs", vec("String")],
@@ -2117,7 +2117,7 @@ export const SHAPES: Record<string, Shape> = {
     ["changed", "bool", { doc: "Its keys were changed on this device." }],
     ["listed", "bool", { doc: "Listed among the shortcuts here: those only the desktop app has keys for are not shown elsewhere." }],
   ]),
-  RailPlaceId: words(["chats", "mine", "watching", "archive", "attention", "files", "stations", "profiles", "connects", "usage"], { doc: "A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已归档), 待处理's panel, or a page\n(文件, Station, Profile, 连接, 用量)." }),
+  RailPlaceId: words(["chats", "mine", "watching", "hidden", "archive", "attention", "files", "stations", "profiles", "connects", "usage"], { doc: "A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已隐藏, 已归档), 待处理's panel, or a page\n(文件, Station, Profile, 连接, 用量)." }),
   RailKind: words(["places", "lists", "attention"], { doc: "What kind of place: a page of its own, one of the chats' lists, 待处理." }),
   RailPlace: struct([
     ["id", "RailPlaceId"],
@@ -2641,6 +2641,8 @@ export const SHAPES: Record<string, Shape> = {
     ["swipeArchive", opt("bool"), { doc: "A made chat whose station is online: a finger's swipe left archives it (`chat.archive`), whatever its state,\nunread, pinned, kept or not recommended by its station's archive review alike. Absent otherwise." }],
     ["swipeAsk", opt("String"), { said: true, doc: "Swiped away, asked first in these words (only the swipe asks so): its watch's while one of its agents keeps\nwatch, else while one is at work or waits on work it started. Absent otherwise." }],
     ["kept", opt("bool"), { doc: "The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise." }],
+    ["hidden", opt("bool"), { doc: "The viewer hid this chat from their list; false when visible, absent on stations before hiding." }],
+    ["muted", opt("bool"), { doc: "The viewer silenced notifications for this chat; false when heard, absent on stations before muting." }],
     ["stateText", opt("String"), { said: true, doc: "Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 待处理 · … (a\ncard waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with\nno card waiting, or with nothing to say." }],
     ["stateLead", opt("StateLead"), { doc: "What leads `stateText`, for a client to say as a mark of its own (a bell, a check, the waiting arc, the radar;\n待处理 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message)." }],
     ["stateLeadText", opt("String"), { doc: "A card's line's lead word (待处理, Needs attention), drawn in bold before the rest of `stateText`. Absent otherwise." }],

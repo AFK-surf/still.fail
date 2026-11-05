@@ -630,6 +630,7 @@ fn found_line(
     Chat(ch) =>
       [
         if ch.archived { @sf.t("web-main.switcher.archived") } else { "" },
+        if ch.item.hidden == Some(true) { @sf.t("web-main.filter.hidden") } else { "" },
         if several { ch.item.station_name } else { "" },
         ch.item.ago,
       ]

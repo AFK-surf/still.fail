@@ -55,7 +55,9 @@ function notice(s: Store, thread: number, seq: number | null, session: string, k
   const t = store.getThread(s, thread);
   if (t === null) return null;
   const sessions = store.threadSessions(s, thread).map((m) => m.session);
-  const to = emailsOf(s, t.createdBy, store.threadPeople(s, thread, t.surface), sessions, except);
+  const recipients = emailsOf(s, t.createdBy, store.threadPeople(s, thread, t.surface), sessions, except);
+  const muted = store.mutedViewers(s, thread, recipients);
+  const to = recipients.filter((email) => !muted.has(email));
   if (to.length === 0) return null;
   return { to, kind, session, thread, seq, title: titleOf(t, store.firstText(s, thread), null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }

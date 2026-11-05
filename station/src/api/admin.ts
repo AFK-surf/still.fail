@@ -53,7 +53,7 @@ import { tr } from "../ops/i18n.ts";
 
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
-const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/;
+const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|hidden|muted|dismissed|closed-card)(?:\/.*)?$/;
 /// Reads that send what the client holds (routes/changed.ts), and several reads in one (`batch`).
 const READS = /^\/*(changed\/+(chats|threads|sessions)|batch)$/;
 /// What a batch may read (POST /batch): the history a client brings onto its device in the background, each a read

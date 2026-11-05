@@ -1145,14 +1145,14 @@ export class Views implements Owner {
   #compute(view: Topic): Value | undefined {
     switch (view.topic) {
       case "chats":
-        return this.#chats(view.scope as string, view.mine === true, view.watching === true);
+        return this.#chats(view.scope as string, view.mine === true, view.watching === true, view.hidden === true ? "hidden" : "visible");
       case "search": {
-        const chats = this.#chats(view.scope as string, false, false);
+        const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (chats === undefined || !("ok" in chats)) return chats;
         return searchView(this.#searchSource, chats.ok, view);
       }
       case "chatSearch": {
-        const chats = this.#chats(view.scope as string, false, false);
+        const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (chats === undefined || !("ok" in chats)) return chats;
         const elsewhere = view.elsewhere === true && String(view.query ?? "").trim() !== "";
         const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, elsewhere ? undefined : (view.limit as number | undefined));
@@ -1162,7 +1162,7 @@ export class Views implements Owner {
           const others: J[] = [];
           for (const place of this.#core.places?.() ?? []) {
             if (place.id === view.scope) continue;
-            const theirs = this.#chats(place.id, false, false);
+            const theirs = this.#chats(place.id, false, false, "all");
             if (theirs === undefined || !("ok" in theirs)) continue;
             for (const item of arr(refs.search(theirs.ok, view.query as string, undefined, undefined, undefined).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
           }
@@ -1405,7 +1405,7 @@ export class Views implements Owner {
 
   // ── the chat list ──
 
-  #chats(scope: string, mine: boolean, watching: boolean): Value | undefined {
+  #chats(scope: string, mine: boolean, watching: boolean, visibility: "visible" | "hidden" | "all" = "visible"): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const data = this.#core.data;
@@ -1444,6 +1444,8 @@ export class Views implements Owner {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
           const shown = this.local.asChanging(s.address, raw);
+          if (visibility === "visible" && get(shown, "hidden") === true) continue;
+          if (visibility === "hidden" && get(shown, "hidden") !== true) continue;
           // Only a frozen row (db/account.ts) is surely as it was when its row was made.
           const keepable = isObject(shown) && Object.isFrozen(shown);
           const kept = keepable ? this.#rowsMade.get(shown) : undefined;

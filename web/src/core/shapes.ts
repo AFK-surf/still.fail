@@ -2091,6 +2091,10 @@ export interface ChatItem {
 	swipeAsk?: string;
 	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
 	kept?: boolean;
+	/** The viewer hid this chat from their list; false when visible, absent on stations before hiding. */
+	hidden?: boolean;
+	/** The viewer silenced notifications for this chat; false when heard, absent on stations before muting. */
+	muted?: boolean;
 	/**
 	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 待处理 · … (a
 	 * card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
@@ -5897,11 +5901,8 @@ export interface OpenChat {
 	key: string;
 }
 
-/**
- * What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
- * screen the archived chats (已归档) in place of the chats.
- */
-export type ListFilter = "all" | "mine" | "watching" | "archive";
+/** What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), the viewer's hidden chats (已隐藏), or archived chats (已归档). */
+export type ListFilter = "all" | "mine" | "watching" | "hidden" | "archive";
 
 /** How the pages look: as the system does (the default), or always light, or always dark. */
 export type Appearance = "system" | "light" | "dark";
@@ -5932,10 +5933,10 @@ export interface ReaderPrefs {
 }
 
 /**
- * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已归档), 待处理's panel, or a page
+ * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已隐藏, 已归档), 待处理's panel, or a page
  * (文件, Station, Profile, 连接, 用量).
  */
-export type RailPlaceId = "chats" | "mine" | "watching" | "archive" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
+export type RailPlaceId = "chats" | "mine" | "watching" | "hidden" | "archive" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
 
 /** What kind of place: a page of its own, one of the chats' lists, 待处理. */
 export type RailKind = "places" | "lists" | "attention";

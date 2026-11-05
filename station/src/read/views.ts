@@ -486,7 +486,9 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   if (ms >= 1_000) log.warn("readers", "a chat marks read's stages", { ms, chats: own.length, scoped: scope !== null, ...(scope !== null ? { sessions: scope.sessions.length, threads: scope.threads.length } : {}), ...stages });
   // What is the viewer's own of the chat list (client/core-ts/src/chat-row.ts): the cards they let go, where they read.
   const reads = Object.fromEntries(store.readsOf(s, viewer.email, ids));
-  return { card, need, answered, suggested, verdicts, reviews: api.reviews, kept, pins, openers, opened, shares, clientKeys, teams, selves, dismissed: [...dismissed], reads };
+  const hidden = [...store.hiddenChats(s, viewer.email, ids)];
+  const muted = [...store.mutedChats(s, viewer.email, ids)];
+  return { card, need, answered, suggested, verdicts, reviews: api.reviews, kept, hidden, muted, pins, openers, opened, shares, clientKeys, teams, selves, dismissed: [...dismissed], reads };
 }
 
 /// The viewer's sidebar: one kind of item, an agent (a shown session) merged with its internal chat. An agent in an
@@ -510,6 +512,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     reads: store.readsOf(s, viewer.email, threads),
     dismissed: store.dismissed(s, viewer.email, scope?.threads ?? null),
     kept: store.keptChats(s, viewer.email, scope?.threads ?? null),
+    hidden: store.hiddenChats(s, viewer.email, threads),
+    muted: store.mutedChats(s, viewer.email, threads),
     // When the viewer pinned each to the top of their list.
     pins: store.pins(s, viewer.email, scope === null ? null : keys),
   };

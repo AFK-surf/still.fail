@@ -157,7 +157,7 @@ export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL S
 // These marks are keyed by viewer first. For a large table seek once per viewer instead of scanning everybody's other
 // chats. On a small table a scan can be cheaper, especially when most viewers have one mark. A rowid span bounds the
 // number of rows without counting them; the viewer probes are capped so choosing a plan does not scan a long history.
-function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins", key: "thread" | "session") {
+function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "hidden_chats" | "muted_chats" | "pins", key: "thread" | "session") {
   const choice = `WITH RECURSIVE few(viewer, count) AS (
     SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
     UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
@@ -183,6 +183,8 @@ function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins",
 export const READ_MARKS = deleteViewerMarks("reads", "thread");
 const DISMISSED_MARKS = deleteViewerMarks("dismissed", "thread");
 const KEPT_MARKS = deleteViewerMarks("kept_chats", "thread");
+const HIDDEN_MARKS = deleteViewerMarks("hidden_chats", "thread");
+const MUTED_MARKS = deleteViewerMarks("muted_chats", "thread");
 const PIN_MARKS = deleteViewerMarks("pins", "session");
 export const DELETE_READS_OF_THREAD = READ_MARKS.indexed;
 export const DELETE_DISMISSED_OF_THREAD = DISMISSED_MARKS.indexed;
@@ -1175,6 +1177,8 @@ export class Store {
           this.#deleteMarks(DISMISSED_MARKS, thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
           this.#deleteMarks(KEPT_MARKS, thread);
+          this.#deleteMarks(HIDDEN_MARKS, thread);
+          this.#deleteMarks(MUTED_MARKS, thread);
           // Its published snapshots go with it.
           for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
           this.#run("DELETE FROM published WHERE thread = ?", thread);
@@ -1891,6 +1895,25 @@ export class Store {
       const now = this.readPosition(viewer, thread);
       changes.push({ type: "read", viewer, thread, n: now });
       return now;
+    });
+  }
+
+  /// A personal list mark: it does not affect the task, archive policy, or another viewer.
+  setChatHidden(viewer: string, thread: number, hidden: boolean): void {
+    this.#with((changes) => {
+      if (hidden) this.#run("INSERT OR IGNORE INTO hidden_chats (viewer, thread) VALUES (?, ?)", viewer, thread);
+      else this.#run("DELETE FROM hidden_chats WHERE viewer = ? AND thread = ?", viewer, thread);
+      changes.push({ type: "hidden", viewer, thread, hidden });
+    });
+  }
+
+  /// A separate personal notification mark; pending decisions stay visible in 待处理.
+  setChatMuted(viewer: string, thread: number, muted: boolean): void {
+    this.#with((changes) => {
+      const email = viewer.toLowerCase();
+      if (muted) this.#run("INSERT OR IGNORE INTO muted_chats (viewer, thread) VALUES (?, ?)", email, thread);
+      else this.#run("DELETE FROM muted_chats WHERE viewer = ? AND thread = ?", email, thread);
+      changes.push({ type: "muted", viewer, thread, muted });
     });
   }
 
