@@ -7,18 +7,20 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
   let calls : Array[Made] = []
   let web = fixture_file_png("compare.png")
   let phone = fixture_file_png("peek.png")
+  let changed = @signals.signal(false)
   let answer : Ref[((Json?) -> Unit)?] = Ref(None)
   let t = wide_tester(calls, mode="chat-many-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
     { ..base, images,
       topic: fn(name, params) {
         let got = (base.topic)(name, params)
         if name != "chat" { return got }
+        if !changed.get() { return got }
         guard got.value is Some(value) else { return got }
         let files : Array[Json] = [
           { "name": "web-folded.png", "path": "work/s-c1/web-folded.png", "owner": "s-c1", "width": 1440, "height": 900 },
           { "name": "phone.png", "path": "work/s-c1/phone.png", "owner": "s-c1", "width": 780, "height": 1688 },
         ]
-        { ..got, value: Some(with_chat_message(value, 129.0, [
+        { ..got, version: got.version + 1, value: Some(with_chat_message(value, 129.0, [
           ("text", Json::string(table_images_answer)),
           ("placed", ["web-folded.png", "phone.png"]), ("attachments", Json::array(files)),
         ])) }
@@ -31,11 +33,13 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
       },
     }
   })
+  t.check_looks(false)
+  t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
   @sf.markdown_read.val = Some(fn(text, done) {
     if text == table_images_answer { answer.val = Some(done) } else { done(None) }
   })
-  t.check_looks(false)
-  t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
+  changed.set(true)
+  t.frames_owed()
   assert_true(answer.val is Some(_), msg="the message's Markdown has been requested")
   let picture_loads = fn() {
     t.image_loads().filter(fn(load) { load.0 == "bytes:\{web.length()}" || load.0 == "bytes:\{phone.length()}" })
