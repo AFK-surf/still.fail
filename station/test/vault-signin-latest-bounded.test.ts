@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
@@ -75,4 +76,72 @@ test("a sign-in waits for an old session's latest chat without scanning its memb
       store.close();
     }
   }
+});
+
+function waitingSignin() {
+  const db = new DatabaseSync(":memory:"), gate = Promise.withResolvers<void>();
+  const form = Promise.withResolvers<{ username: boolean; password: boolean; code: boolean; blocked: boolean }>();
+  const thread = { connect: "slack", thread: { id: 1, channel: "C", threadTs: "latest", surface: "slack" } };
+  let ready = false, present = true, requested = 0, posted = 0, looked = 0, ids = 0;
+  const hub = {
+    store: {
+      getSession: () => present ? { archivedAt: null } : null, starter: () => "p@example.test",
+      latestThread: () => { throw new Error("unbounded latest read"); }, latestThreadIfReady: () => ready ? thread : undefined,
+      sessionThreadById: () => thread, pendingCard: () => null, insertMessage: () => [1],
+      withdrawCard: () => true, restateCard: () => true, subscribe: () => {},
+    },
+    prepareLatestThreads: async () => { requested++; await gate.promise; },
+    chat: () => ({ post: async () => { posted++; return "posted"; } }), shared: () => {}, notify: () => {},
+  } as any;
+  const signIns = new SignIns({ db, hub, now: () => 1_800_000_000_000, after: () => () => {},
+    workspace: () => "w", screenLink: () => null, id: () => `g${++ids}`,
+    browser: { tabs: () => [{ id: "tab", url: "https://example.com/login" }],
+      look: () => { looked++; return form.promise; }, drive: async () => ({ state: "left" }) },
+    vault: { listed: () => null, held: () => null, use: async () => "", keep: async () => "" } });
+  return { db, signIns, gate, form, requested: () => requested, posted: () => posted, looked: () => looked,
+    ready: () => { ready = true; }, remove: () => { present = false; } };
+}
+
+test("concurrent sign-ins after preparation make only one request", async () => {
+  const w = waitingSignin();
+  try {
+    const first = w.signIns.ask("s", { site: "example.com", reason: "one" });
+    const second = w.signIns.ask("s", { site: "example.com", reason: "two" });
+    assert.equal(w.requested(), 2);
+    w.ready(); w.gate.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(w.looked(), 2);
+    w.form.resolve({ username: true, password: true, code: false, blocked: false });
+    const results = await Promise.all([first, second]);
+    assert.ok(results.every((r) => r.includes("g1")));
+    assert.equal(w.posted(), 1);
+    assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM signin_asks").get()?.n, 1);
+  } finally { w.gate.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a removed session does not get a sign-in after preparation or browser inspection", async () => {
+  for (const during of ["preparation", "inspection"] as const) {
+    const w = waitingSignin();
+    try {
+      if (during === "inspection") w.ready();
+      const asking = w.signIns.ask("s", { site: "example.com", reason: "test" });
+      w.remove();
+      w.gate.resolve();
+      w.form.resolve({ username: true, password: true, code: false, blocked: false });
+      await assert.rejects(asking, /archived or gone/);
+      assert.equal(w.posted(), 0);
+      assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM signin_asks").get()?.n, 0);
+    } finally { w.gate.resolve(); await w.signIns.close(); w.db.close(); }
+  }
+});
+
+test("a failed sign-in destination preparation posts nothing", async () => {
+  const w = waitingSignin();
+  try {
+    const asking = w.signIns.ask("s", { site: "example.com", reason: "test" });
+    w.gate.reject(new Error("preparation stopped"));
+    await assert.rejects(asking, /preparation stopped/);
+    assert.equal(w.posted(), 0);
+    assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM signin_asks").get()?.n, 0);
+  } finally { await w.signIns.close(); w.db.close(); }
 });
