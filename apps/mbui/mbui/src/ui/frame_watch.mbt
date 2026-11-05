@@ -631,7 +631,7 @@ fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
   // (what of it changed since the frame before, named, where a probe or a test says why a frame was built: frame_drawn.
   // Else none of that: no frame's work for what nobody reads)
   if !(perf_frames_said() || fake.val is Some(_)) {
-    return "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch}"
+    return "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{atlas_now()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch}"
   }
   let terms = looks_env_terms(c, w, h, scale)
   let was = env_terms_before.val
@@ -651,7 +651,7 @@ fn looks_env_terms(c : Ctx, w : Double, h : Double, scale : Double) -> Array[(St
     ("window", "\{w} \{h} \{scale}"),
     ("whole pixels", whole_px_layout().to_string()),
     ("font scale", font_scale().to_string()),
-    ("atlas", h_atlas_generation().to_string()),
+    ("atlas", atlas_now().to_string()),
     ("a screen reader", h_a11y_on().to_string()),
     ("reduced motion", reduced_motion().to_string()),
     ("reduced transparency", h_reduce_transparency().to_string()),
@@ -1103,6 +1103,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
+  // (the host's glyphs' generation asked once, as the frame begins: what follows reads it, atlas_now)
+  atlas_said.val = Some(h_atlas_generation())
   frame_env.set(looks_env(c, w, h, scale))
   clock_frame_start(t)
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
