@@ -91,7 +91,7 @@ fn transfers_list(
   c : @ui.Ctx,
   src : Source,
   ws : String,
-  id : Int,
+  from : @sf.Anchor,
   go : (DriveAt) -> Unit,
   none : Bool,
   side? : @ui.Side = Bottom,
@@ -103,19 +103,8 @@ fn transfers_list(
   if ftransfers.open.get() && ftransfers.shown == 0 {
     @sf.panel(
       @sf.t("web-pages.files.transfers"),
-      fn(c, _) {
-        let all = coming(src, ws)
-        for k in all.keeping {
-          keeping_row(c, src, k)
-        }
-        for d in all.downloads {
-          download_row(c, src, d)
-        }
-        for x in all.transfers {
-          transfer_row(c, src, x, go)
-        }
-      },
-      from=Of(id),
+      fn(c, _) { transfers_rows(c, src, ws, go) },
+      from~,
       w=ftransfers_w,
       side~,
       along~,
@@ -134,6 +123,21 @@ fn transfers_list(
 
 
 ///|
+/// The list's rows: what is being brought first, then the downloads, then the copies (read as they are drawn).
+fn transfers_rows(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -> Unit) -> Unit {
+  let all = coming(src, ws)
+  for k in all.keeping {
+    keeping_row(c, src, k)
+  }
+  for d in all.downloads {
+    download_row(c, src, d)
+  }
+  for x in all.transfers {
+    transfer_row(c, src, x, go)
+  }
+}
+
+///|
 /// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
 /// comes and goes, as far as it has come (@sf.coming_mark in its mark's place), red's dot when one failed; pressed, their list beside
 /// it. Nothing while there is none.
@@ -142,7 +146,7 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let id = c.id("rail/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, id, go, true, side=Right, along=End)
+    transfers_list(c, src, ws, Of(id), go, true, side=Right, along=End)
     return
   }
   let (n, percent, failed) = all.going()
@@ -162,7 +166,7 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     },
     label=coming_words(n, percent),
   )
-  transfers_list(c, src, ws, id, go, false, side=Right, along=End)
+  transfers_list(c, src, ws, Of(id), go, false, side=Right, along=End)
 }
 
 ///|
@@ -175,7 +179,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let id = c.id("home/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, id, go, true)
+    transfers_list(c, src, ws, Of(id), go, true)
     return
   }
   let (n, percent, failed) = all.going()
@@ -184,7 +188,92 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~) {
     ftransfers.open.set(!ftransfers.open.get())
   }
-  transfers_list(c, src, ws, id, go, false)
+  transfers_list(c, src, ws, Of(id), go, false)
+}
+
+///|
+/// In a small screen's home's top bar, as a node (transfers_key's): what comes to this device and goes between the
+/// stations, as one key (@sf.progress_key_node: the download's mark, a ring as far as what comes has come, red's dot
+/// when one failed); pressed, their list from where the key is (from the foot). Nothing while there is none, its list
+/// closed then.
+pub fn transfers_key_node(parent : @view.View, src : Source, ws : () -> String?, side : Double, mark : Double) -> Unit {
+  let all = fn() {
+    match ws() {
+      Some(w) => Some(coming(src, w))
+      None => None
+    }
+  }
+  let none = fn() {
+    match all() {
+      Some(a) => a.none()
+      None => true
+    }
+  }
+  let go = fn(at : DriveAt) { open_page(Drive(at)) }
+  let o = parent
+  // (nothing comes: its list closed)
+  o.reacts(none, fn(n) { if n { ftransfers.open.set(false) } })
+  o.show(fn() { !none() }, fn(s) {
+    let key = @sf.progress_key_node(
+      s,
+      side,
+      mark,
+      "download",
+      fn() {
+        match all() {
+          Some(a) => {
+            let (n, percent, _) = a.going()
+            if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
+          }
+          None => ""
+        }
+      },
+      fn() {
+        match all() {
+          Some(a) => {
+            let (n, percent, _) = a.going()
+            if n > 0 { Some(Some(percent.to_double() / 100.0)) } else { None }
+          }
+          None => None
+        }
+      },
+      fn() {
+        match all() {
+          Some(a) => a.going().2
+          None => false
+        }
+      },
+      fn() { ftransfers.open.set(!ftransfers.open.get()) },
+    )
+    // (its list opened and closed as it is said to be, from where the key is then)
+    s.reacts(fn() { ftransfers.open.get() }, fn(open) {
+      if open && ftransfers.shown == 0 {
+        let (x, y, w, h) = key.placed_window_now()
+        match @signals.untracked(ws) {
+          Some(w0) => {
+            @sf.panel(
+              @sf.t("web-pages.files.transfers"),
+              fn(c, _) { transfers_rows(c, src, w0, go) },
+              from=At(x, y, w, h),
+              w=ftransfers_w,
+              side=Bottom,
+              along=Start,
+              offset=@sf.panel_offset,
+              gone=fn() {
+                ftransfers.open.set(false)
+                ftransfers.shown = 0
+              },
+            )
+            ftransfers.shown = @sf.last_presented()
+          }
+          None => ()
+        }
+      } else if !open && ftransfers.shown > 0 {
+        @sf.close_presented_of(ftransfers.shown)
+        ftransfers.shown = 0
+      }
+    })
+  })
 }
 
 ///|

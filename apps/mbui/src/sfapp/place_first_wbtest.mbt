@@ -40,9 +40,27 @@ test "each place comes in the same way the first time and again" {
 }
 
 ///|
-/// The hosted page islands' positions during a transition, including a page rising from the foot.
-fn first_open_islands() -> Array[(Double, Double, Double, Double)] {
-  @ui.view_tree().unwrap().drawn().filter(fn(d) { d.hosted }).map(fn(d) { (d.x, d.y, d.w, d.h) })
+/// Where what is drawn stands during a transition: each of its words (what they say, where they are) and each old view
+/// hosted (its place and size) — the page coming in whether it is made of nodes or hosted, so a page's place is read
+/// the same however much of it is still an old view.
+fn first_open_drawn() -> Array[(String, Double, Double, Double, Double)] {
+  @ui.view_tree()
+  .unwrap()
+  .drawn()
+  .filter(fn(d) { d.hosted || d.words != "" })
+  .map(fn(d) { (if d.hosted { "\u{1}hosted" } else { d.words }, d.x, d.y, d.w, d.h) })
+}
+
+///|
+/// Whether some of what is drawn at rest (`rest`) stands elsewhere in `moving`: the page that came in, drawn on its
+/// way there (a hosted island off the window's corner is one, as before).
+fn page_moving(moving : Array[(String, Double, Double, Double, Double)], rest : Array[(String, Double, Double, Double, Double)]) -> Bool {
+  moving.iter().any(fn(m) { m.0 == "\u{1}hosted" && (m.1.abs() > 1.0 || m.2.abs() > 1.0) }) ||
+  rest.iter().any(fn(r) {
+    r.0 != "\u{1}hosted" &&
+    moving.iter().any(fn(m) { m.0 == r.0 }) &&
+    !moving.iter().any(fn(m) { m.0 == r.0 && (m.1 - r.1).abs() <= 1.0 && (m.2 - r.2).abs() <= 1.0 })
+  })
 }
 
 ///|
@@ -79,15 +97,16 @@ test "the pages of the stack come in the same way the first time and again" {
     let start = t.time()
     tree.event(start, fn() { @sfbase.stack_open(page) })
     t.frame_at(start + @ui.move_most_ms / 4.0)
-    let first = first_open_islands()
-    assert_true(first.iter().any(fn(p) { p.0.abs() > 1.0 || p.1.abs() > 1.0 }), msg="\{mode}: no page moving: \{first}")
+    let first = first_open_drawn()
     t.run_for(@ui.move_most_ms)
+    let rest = first_open_drawn()
+    assert_true(page_moving(first, rest), msg="\{mode}: no page moving: \{first}")
     tree.event(t.time(), fn() { app.nav.pop() |> ignore })
     t.run_for(@ui.move_most_ms)
     let again_at = t.time()
     tree.event(again_at, fn() { @sfbase.stack_open(page) })
     t.frame_at(again_at + @ui.move_most_ms / 4.0)
-    assert_eq(first_open_islands(), first, msg=mode)
+    assert_eq(first_open_drawn(), first, msg=mode)
   }
 }
 
