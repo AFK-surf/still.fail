@@ -319,6 +319,7 @@ fn[P] Nav::go(
     Some(h) => (h.now)()
     None => if in_frame.val { g().clock } else { -1.0 }
   }
+  h_log("nav: pass \{@view.probe_pass.val} go mode \{self.mode} t0 \{self.t0} p \{self.p} dur \{self.dur} room \{room}")
   self.wait_from = -1.0
   self.waited = false
   // (a page brought in: its start moved on by how late its first frame is to the screen)
@@ -1125,6 +1126,7 @@ fn[P] Nav::late_check(self : Nav[P], c : Ctx) -> Unit {
     let late = dmin(h_frame_late(), nav_late_most)
     if late > 0.0 {
       self.t0 = self.t0 + late
+      h_log("nav: pass \{@view.probe_pass.val} late \{late} t0 \{self.t0}")
       c.moving(self.mover, self as &Moving, what="a stack's slide")
     }
   }

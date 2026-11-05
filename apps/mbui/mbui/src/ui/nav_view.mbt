@@ -111,6 +111,9 @@ fn[P] Nav::shift_of(self : Nav[P], serial : Int, now : () -> Double) -> (Double,
   }
   let (top, beside) = self.top_beside()
   let rising = top.rise
+  if @view.probe_pass.val >= 40 {
+    h_log("nav: pass \{@view.probe_pass.val} shift_of \{serial} mode \{self.mode} t0 \{self.t0} now \{now()} p \{p} self.p \{self.p} dur \{self.dur}")
+  }
   let way = if (self.from_left)(top.page, top.under) { -1.0 } else { 1.0 }
   if top.serial == serial {
     if rising {
@@ -316,6 +319,7 @@ fn[P] Nav::held_by(
     if nav.t0 == nav_held {
       nav.waited = true
       nav.t0 = s.logic_at()
+      h_log("nav: pass \{@view.probe_pass.val} goes t0 \{nav.t0}")
       sets_out()
       g().moving(nav.mover, nav as &Moving, what="a stack's slide")
       nav.shown_told()
@@ -328,6 +332,7 @@ fn[P] Nav::held_by(
       (due.val)()
       due.val = fn() {  }
       // (no frame has given the window yet: how far it goes and so how long, not known; set out once it is)
+      h_log("nav: pass \{@view.probe_pass.val} went window \{@signals.untracked(fn() { s.window() })} t0 \{nav.t0}")
       if @signals.untracked(fn() { s.window() }).0 <= 0.0 {
         nav.t0 = -1.0
         return

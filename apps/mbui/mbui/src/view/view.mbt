@@ -6273,6 +6273,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   while self.due {
     passes += 1
     self.laid_passes = passes
+    probe_pass.val = passes
     if passes > laid_passes_most {
       let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
       println(said)
@@ -6285,6 +6286,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     placing = placing || p
     ordered = ordered || o
   }
+  probe_pass.val = 0
   self.laid_passes = 0
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
@@ -8235,3 +8237,7 @@ pub fn Tree::rows_alive(self : Tree) -> Array[NodeId] {
 fn Tree::alive_id(self : Tree, id : NodeId) -> Bool {
   id.at >= 0 && id.at < self.nodes.length() && self.nodes[id.at].live && self.nodes[id.at].gen == id.gen
 }
+
+///|
+/// (probe, not for merging) the layout pass under way in a frame, 0 outside one
+pub let probe_pass : Ref[Int] = Ref(0)
