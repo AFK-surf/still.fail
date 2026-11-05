@@ -18,7 +18,8 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSI
   SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
 import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_EXISTS, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS } from "../src/store/archive-mark-index.ts";
-import { WIDGET_SOURCE, WIDGET_SOURCE_POSITIONS_FIRST, WIDGET_SOURCE_POSITIONS_NEXT, widgetSourcesStep } from "../src/store/widget-sources.ts";
+import { WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_POSITIONS_FIRST, WIDGET_SOURCE_POSITIONS_NEXT,
+  WIDGET_SOURCE_UNUSUAL, widgetSourcesStep } from "../src/store/widget-sources.ts";
 import { SESSION_UP_JOB, SESSION_UP_JOBS, SESSION_UP_JOBS_CONFLICT, SESSION_UP_JOBS_DISPLACED, SESSION_UP_JOBS_END, SESSION_UP_JOBS_FIRST, SESSION_UP_JOBS_NEXT } from "../src/store/session-up-jobs.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
@@ -1604,7 +1605,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_BINDINGS_DELETE, ["a"]],
     [SESSION_UP_JOBS_DISPLACED, ["a", "token", 1]],
     [SESSION_UP_JOBS_CONFLICT, ["a", "token", 1]],
-    [WIDGET_SOURCE, ["a", "/w/item.html"]],
+    [WIDGET_SOURCE, ["a", "/w/item.html"]], [WIDGET_SOURCE_MISSING, ["a"]], [WIDGET_SOURCE_UNUSUAL, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
@@ -1648,6 +1649,9 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // The original lookup remains only for noncanonical attachment JSON, which older SQLite writers cannot validate.
   has(WIDGET_SOURCE, "thread_sessions_session (session=?)");
   has(WIDGET_SOURCE, "widget_source_by_path (thread=? AND path=?)");
+  for (const sql of [WIDGET_SOURCE_MISSING, WIDGET_SOURCE_UNUSUAL]) has(sql, "thread_sessions_session (session=?)");
+  has(WIDGET_SOURCE_MISSING, "s USING PRIMARY KEY (thread=?)");
+  has(WIDGET_SOURCE_UNUSUAL, "i USING PRIMARY KEY (thread=?)");
   has(read.SHARES_OF, "chat_shares USING INDEX sqlite_autoindex_chat_shares_1 (session=?)");
   has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");

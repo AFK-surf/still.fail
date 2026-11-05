@@ -9,6 +9,12 @@ export class WidgetSourcesUnavailable extends Error {
   constructor(threads: readonly number[]) { super("widget sources are still being prepared"); this.threads = threads; }
 }
 
+export const WIDGET_SOURCE_MISSING = `SELECT ts.thread FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
+  LEFT JOIN widget_source_scopes s ON s.thread=ts.thread
+  WHERE ts.session=? AND COALESCE(s.complete,0)=0`;
+export const WIDGET_SOURCE_UNUSUAL = `SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
+  CROSS JOIN widget_source_invalid i ON i.thread=ts.thread WHERE ts.session=? LIMIT 1`;
+
 // Within each thread, take only its newest matching attachment. The outer ordering compares those candidates in the
 // same order as the original thread_sessions/merged query when timestamps tie.
 export const WIDGET_SOURCE = `SELECT t.channel, t.thread_ts, i.name FROM thread_sessions ts
