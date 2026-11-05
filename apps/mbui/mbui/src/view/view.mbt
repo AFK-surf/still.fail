@@ -771,7 +771,7 @@ pub struct Tree {
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
   mut before_causes : Int
-  /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
+  /// measuring or placing the tree: its outputs belong to this layout, not a new change to settle inside it
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
   mut settle_asked : Bool
@@ -6063,6 +6063,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
+  // Geometry and pointer notifications are outputs of this layout. Any work they mark belongs to the same
+  // layout, not a new input to settle by rewinding the drawing clock to its cause's time.
+  let was_standing = self.standing
+  self.standing = true
+  defer { self.standing = was_standing }
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
   let mut i = 0
