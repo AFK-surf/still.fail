@@ -108,10 +108,23 @@ let attention_off_side : Double = 6.0
 
 ///|
 /// What is wrong with the workspace's stations, in words (the chats' `trouble`, useStationTrouble); "" none.
+/// Worked out of the chats' list as it changes, told only where the words are others (stations_at_glance's way): the
+/// bell's, built in the old frame, built again for what it shows, not for every turn of every chat.
 fn station_trouble_words(src : Source, w : Workspace) -> String {
-  let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
-  text(field(chats, "trouble"), "text")
+  trouble_words.read(
+    w.id,
+    fn(_) {
+      let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
+      text(field(chats, "trouble"), "text")
+    },
+    same=fn(a, b) { a == b },
+  )
 }
+
+///|
+/// station_trouble_words', by the workspace.
+// kept across runs: let go as no frame reads them (Kept), and with the kept as a run begins
+let trouble_words : @sfbase.Kept[String] = @sfbase.Kept::new()
 
 ///|
 /// What this device did with the stations' trouble (`seen`; `gone` from before it was no longer listed once seen): the
