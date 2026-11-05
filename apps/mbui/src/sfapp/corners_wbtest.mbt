@@ -78,9 +78,10 @@ let corner_modes : Array[String] = {
 }
 
 ///|
-/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; or
-/// (`press_room`, Chinese) a press's room and the light theme's contrast instead. Apart, a sweep each: the two together were
-/// one test of 92 s alone on CI against English's 49, the longest of the app part's runs on four runners (2026-10-27).
+/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; and
+/// (`press_room`, Chinese) a press's room and the light theme's contrast too, on the same screen opened once. (Apart, a
+/// sweep each, Chinese's screens were opened twice: of a sweep's 1939 screens, opening them was some seven tenths of
+/// its time, the checks the rest, none of them long (27 ms each at the median, 0.3 s the longest), 2026-11-05.)
 fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
   let wrong : Array[String] = []
   let gaps : Array[String] = []
@@ -104,7 +105,6 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
           Some(w) => wrong.push(w)
           None => ()
         }
-        continue
       }
       let faults = t.corner_faults()
       for f in t.gap_faults() {
@@ -147,10 +147,6 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       Some(w) => wrong.push(w)
       None => ()
     }
-    if wrong.length() > 0 {
-      fail(wrong.join("\n"))
-    }
-    return
   }
   match gaps_wrong(lang, gaps) {
     Some(w) => wrong.push(w)
@@ -170,8 +166,8 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
 }
 
 ///|
-test "corners and squeeze: every screen in every window keeps the corner rule and fits, in Chinese" {
-  corners_check("zh")
+test "corners and squeeze, a press's room and the light theme's contrast: every screen in every window, in Chinese" {
+  corners_check("zh", press_room=true)
 }
 
 ///|
@@ -212,9 +208,4 @@ test "each player failure reason fits without adding a spacing or corner fault" 
       }
     }
   }
-}
-
-///|
-test "a press's room and the light theme's contrast: every screen in every window, in Chinese" {
-  corners_check("zh", press_room=true)
 }
