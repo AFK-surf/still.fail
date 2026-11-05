@@ -18,6 +18,7 @@ import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
+import { SessionChatPreparation, sessionChatReady } from "../src/store/session-chat-index.ts";
 import { approval, exe, fakeLogin, machine as fakeMachine, provider, script, temp, until, upon } from "./accounts-fakes.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { settle, testClock } from "./hub-fakes.ts";
@@ -1125,10 +1126,20 @@ test("an overview names only the visible chats once when it makes the archive po
     const sessionChat = t.store.sessionChat.bind(t.store);
     const latest = t.store.latestDecisionsSince.bind(t.store);
     const archivePolicy = t.store.archivePolicy.bind(t.store);
-    t.store.sessionChat = (session) => { named.push(session); return sessionChat(session); };
+    t.store.sessionChat = (session) => {
+      assert.equal(sessionChatReady(t.store.db, session), true, "the name is read only after preparation");
+      named.push(session);
+      return sessionChat(session);
+    };
     t.store.latestDecisionsSince = (since) => { policies++; return latest(since); };
     t.store.archivePolicy = (ws) => { policyReads++; return archivePolicy(ws); };
-    const hub: any = { processes: () => new Map(), config: () => ({ dataDir: t.data }) };
+    const prepared: string[][] = [];
+    const hub: any = { processes: () => new Map(), config: () => ({ dataDir: t.data }),
+      prepareSessionChatNames: async (sessions: string[]) => {
+        prepared.push([...sessions]);
+        const work = new SessionChatPreparation();
+        for (const session of sessions) while (!work.step(t.store.db, session).done) {}
+      } };
     const cloud: any = { state: null };
     const of = async (as: typeof joined) => (await overview({ store: t.store, hub, cloud, config: () => t.config.raw(), accounts: t.accounts }, as, "en") as any).automaticDecisions;
     const joined = { ...owner, workspace: "B", home: false };
@@ -1140,6 +1151,7 @@ test("an overview names only the visible chats once when it makes the archive po
     assert.equal(policies, 1, "only the policy being returned is read");
     assert.equal(policyReads, 1, "the policy and its change come from one read");
     assert.deepEqual(named.sort(), ["b1", "b2"], "invisible chats are not named, and each visible chat is named once");
+    assert.deepEqual(prepared.map((sessions) => sessions.sort()), [["b1", "b2"]]);
     named.length = 0;
     policies = 0;
     policyReads = 0;
@@ -1152,6 +1164,7 @@ test("an overview names only the visible chats once when it makes the archive po
     assert.ok(homeView.recent.every((r: any) => r.session === "w" && r.title === "title-w"));
     assert.deepEqual([homeView.policy.checked, homeView.policy.failed], [1, 0]);
     assert.deepEqual([policies, named], [1, ["w"]], "the home workspace's checks use their own policy and names");
+    assert.deepEqual(prepared.map((sessions) => sessions.sort()), [["b1", "b2"], ["w"]]);
     assert.equal(policyReads, 1);
     named.length = 0;
     policies = 0;
