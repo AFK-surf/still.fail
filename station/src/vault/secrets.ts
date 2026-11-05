@@ -14,7 +14,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { LockState } from "../cloud/lock.ts";
+import { devicesFor, memberWithEmail, membersWithEmail, type LockState } from "../cloud/lock.ts";
 import type { To } from "../api/events.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
@@ -212,6 +212,9 @@ export class Secrets {
   readonly #unscopedSaves = new Set<string>();
   /// A save whose card is being posted has not been written yet; a device published meanwhile must get it too.
   readonly #postingSaves = new Map<string, Request>();
+  /// Carried saves to reconcile after the old process can no longer write their requests.
+  readonly #carriedSaves = new Set<string>();
+  #carriedSavesWaiting = false;
   /// Commands sent to other stations, by the id they say how they ended under (`vault.done`).
   readonly #away = new Map<string, Away>();
   readonly #incoming = new Map<string, { peer: string; revoked: boolean }>();
@@ -283,6 +286,7 @@ export class Secrets {
   #forgetSave(id: string) {
     this.#unsaved.delete(id);
     this.#unscopedSaves.delete(id);
+    this.#carriedSaves.delete(id);
     for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
       const owners = this.#savesByOwner.get(ws);
       const requests = owners?.get(owner);
@@ -309,6 +313,64 @@ export class Secrets {
       this.#unsaved.set(id, fields);
       for (const scope of scopes ?? []) if (typeof scope.ws === "string" && typeof scope.owner === "string") this.#scopeSave(id, scope.ws, scope.owner);
       if (!this.#saveScopes.has(id)) this.#unscopedSaves.add(id);
+      this.#carriedSaves.add(id);
+    }
+    if (this.#carriedSaves.size > 0) this.#waitForCarriedSaves();
+  }
+
+  /// Once the old process cannot write any more, reconcile each carried save with its owner's current certificates.
+  /// A device may have registered before the carry arrived, and a request may not have been written at that point.
+  #waitForCarriedSaves() {
+    if (this.#carriedSavesWaiting) return;
+    this.#carriedSavesWaiting = true;
+    const previous = this.#d.backfill?.previousGone ?? Promise.resolve();
+    void previous.then(() => {
+      this.#carriedSavesWaiting = false;
+      // Older handovers did not carry a workspace or owner; one compatibility scan recovers those scopes.
+      if (this.#unscopedSaves.size > 0) {
+        const rows = this.#d.db.prepare("SELECT ws, id FROM vault_requests WHERE status = 'pending'").all() as { ws: string; id: string }[];
+        for (const { ws, id } of rows) {
+          if (!this.#unscopedSaves.has(id)) continue;
+          const request = this.#kept(ws, id)?.request;
+          if (request?.save && request.owner !== undefined) this.#scopeSave(id, ws, request.owner);
+        }
+      }
+      // Match the order of the original device publication, even if the handover lists requests in another order.
+      for (const id of [...this.#carriedSaves].sort()) {
+        if (!this.#carriedSaves.delete(id)) continue;
+        this.#unscopedSaves.delete(id);
+        try {
+          this.#reconcileCarriedSave(id);
+        } catch (error) {
+          log.warn("vault", "a carried save could not be taken up", { error: (error as Error).message });
+        }
+      }
+    }).catch((error) => {
+      this.#carriedSavesWaiting = false;
+      log.warn("vault", "carried saves could not be taken up", { error: (error as Error).message });
+    });
+  }
+
+  #reconcileCarriedSave(id: string) {
+    let found = false;
+    for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
+      const kept = this.#kept(ws, id);
+      if (kept?.request.status !== "pending" || !kept.request.save || kept.request.owner !== owner) continue;
+      found = true;
+      const lock = this.#d.lock(ws);
+      if (lock === null || lock.ws !== ws) continue;
+      const certs = membersWithEmail(lock, owner).flatMap(({ sub }) => this.#certsOf(lock, sub).map((cert) => ({ cert, sub })));
+      certs.sort((a, b) => a.cert.device < b.cert.device ? -1 : a.cert.device > b.cert.device ? 1 : 0);
+      let changed = false;
+      for (const { cert, sub } of certs) changed = this.#sealSave(kept.request, lock, cert, sub, owner) || changed;
+      if (changed) {
+        this.#save(kept);
+        this.#told(kept.request);
+      }
+    }
+    if (!found && !this.#postingSaves.has(id)) {
+      this.#forgetSave(id);
+      this.keeper.discardBox(id);
     }
   }
 
@@ -397,7 +459,7 @@ export class Secrets {
     if (lock === null) {
       return this.#d.plain.items(ws, email).flatMap((i) => (!i.deleted && i.listing ? [{ vault: PLAIN, item: i.id, owner: i.owner, listing: i.listing }] : []));
     }
-    const sub = [...lock.members.values()].find((m) => m.email.toLowerCase() === email)?.sub;
+    const sub = memberWithEmail(lock, email)?.sub;
     if (sub === undefined) return [];
     return this.#d.vaults
       .vaults(lock.ws)
@@ -653,12 +715,16 @@ export class Secrets {
 
   /// The person a session works for, as the lock has them (their sub), where security mode is on.
   #memberOf(lock: LockState, email: string): string | null {
-    return [...lock.members.values()].find((m) => m.email.toLowerCase() === email)?.sub ?? null;
+    return memberWithEmail(lock, email)?.sub ?? null;
   }
 
   /// `sub`'s devices set up for the vault: their box certificates, checked against the lock.
   #certsOf(lock: LockState, sub: string): BoxCert[] {
-    return this.#d.vaults.boxes(lock.ws).filter((c) => certOk(lock, c) === null && lock.devices.get(c.device)?.sub === sub);
+    // Keep the store's device order, but read certificates only for this person's lock devices.
+    return [...devicesFor(lock, sub)].sort().flatMap((id) => {
+      const cert = this.#d.vaults.box(lock.ws, id);
+      return cert !== null && certOk(lock, cert) === null && lock.devices.get(cert.device)?.sub === sub ? [cert] : [];
+    });
   }
 
   /// The vault a secret kept for `sub` is meant for: one of theirs keyed to a device of theirs, their own first; empty
