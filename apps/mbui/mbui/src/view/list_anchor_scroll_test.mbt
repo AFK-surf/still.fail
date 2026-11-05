@@ -43,7 +43,7 @@ fn sighted_by(steps : Int, dy : Double) -> Array[Int] {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_anchored(scroll, fn() { Array::makei(3000, fn(i) { i }) }, est=80.0, ahead=0.0, sighted=fn(ks) { told.append(ks) }, fn(b, k) {
+      o.scrolls_anchored(scroll, fn() { Array::makei(3000, fn(i) { i }) }, est=80.0, ahead=0.0, sighted=fn(ks, _) { told.append(ks) }, fn(b, k) {
         b.height(Is(Some(if k % 2 == 0 { 40.0 } else { 80.0 }))) |> ignore
       })
       |> ignore
