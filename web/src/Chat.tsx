@@ -74,6 +74,7 @@ import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
 import { VaultAsk } from "./VaultAsk.tsx";
+import { isStationAuthor } from "../../client/core-ts/src/titles.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -1348,7 +1349,7 @@ export function MessageName({ children }: { children: ReactNode }) {
 
 function MessageAvatar({ message, name, agent }: { message: ChatMessage; name: string; agent: string | undefined }) {
   if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} agent={agent} />;
-  if ((message.authorKind === "ember" || message.authorKind === "stillfail")) return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
+  if (isStationAuthor(message.authorKind)) return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
   const picture = message.by.picture;
   return picture
     ? <img className={chatCss2.msgAvatar} src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />

@@ -12,6 +12,7 @@ import { encode } from "./ops.ts";
 import * as present from "./present.ts";
 import { arr as arrU, get as getU } from "./util.ts";
 import type { Workspace, Workspaces } from "./workspace.ts";
+import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -193,7 +194,7 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   const fresh = now.seq > then.seq;
   const kind = get(by, "kind");
   // A failure's first paragraph: what it means (what failed said, under it, is for the chat).
-  if (fresh && (kind === "ember" || kind === "stillfail") && text.startsWith("⚠️")) {
+  if (fresh && isStationAuthor(kind) && text.startsWith("⚠️")) {
     const first = format.cleanText(format.plainText(String(last.text).split("\n\n")[0]!));
     return ["failed", body("failed", "", first.slice("⚠️".length).trim())];
   }

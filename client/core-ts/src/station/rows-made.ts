@@ -11,8 +11,6 @@ import { type Own, rowFor } from "../chat-row.ts";
 
 type J = Record<string, any>;
 
-/// The connect of the station's own chats.
-const INTERNAL = "ember";
 /// How much of a chat's latest message its row says (views.ts LAST_CHARS).
 const LAST_CHARS = 200;
 
@@ -118,7 +116,7 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
     if (x.watch !== undefined) v.watch = x.watch;
     return v;
   };
-  const connectOf = (t: J): string | null => members(t).map((m) => str(m.connect)).find((c) => c !== null && c !== INTERNAL) ?? null;
+  const connectOf = (t: J): string | null => members(t).map((m) => str(m.connect)).find((c) => c !== null && !titles.isOwnSurface(c)) ?? null;
   const origin = (t: J): J => {
     const connect = connectOf(t);
     return { teamName: connect === null ? null : (marks.teams[connect] ?? null), channel: t.channel ?? null, channelName: t.channelName ?? null, threadTs: t.threadTs ?? null };
@@ -206,7 +204,7 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
       agents: [agent(key)], last: null, unread: false,
       mine: mine(starter) || spoke.has(key),
       lastActiveAt: num(x.lastActiveAt),
-      connect: x.connect === INTERNAL ? null : (x.connect ?? null),
+      connect: titles.isOwnSurface(x.connect) ? null : (x.connect ?? null),
       origin: origin_,
       people: starter === null ? [] : [starter],
       creator: starter,
