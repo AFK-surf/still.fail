@@ -129,49 +129,13 @@ fn imin(a : Int, b : Int) -> Int {
 
 // ── motion ─────────────────────────────────────────────────────────────
 // Motion as data (mbui's motion_data.mbt): each number is said once, as it sets out (where to, by what, from when),
-// and where it is at a frame is a function of that frame's time; what moves says so itself (Ctx::moving), so the
-// frames come until it is at rest and none after. The bar reads where its numbers are once a frame (BarModel::sample).
+// and where it is at a frame is a function of that frame's time: its nodes read it as each frame is painted, at the
+// tree's moment (bar_node.mbt: bar_moment), so the frames come until it is at rest and none after.
 
 ///|
-/// The bar's springs said to move as one (Ctx::set_out): handed each frame's time while any of them moves, the frame
-/// they are at rest too (Moving::sample), so the bar reads where they are from it, not the clock.
-priv struct BarClock {
-  mover : @ui.Mover
-  /// the time last handed to it, or of the frame it last set out in
-  mut now : Double
-}
-
-///|
-let bar_clock : BarClock = { mover: @ui.Mover::new(), now: 0.0 }
-
-///|
-impl @ui.Moving for BarClock with rest_at(self, now, frame) {
-  ignore(self)
-  ignore(now)
-  ignore(frame)
-  bar_springs_end()
-}
-
-///|
-/// When the bar's springs are all at rest (the frames' clock, ms; before now: they are).
-fn bar_springs_end() -> Double {
-  bar.rest()
-}
-
-///|
-impl @ui.Moving for BarClock with sample(self, now) {
-  self.now = now
-}
-
-///|
-/// A spring of the bar sets out: when (this frame's time; told between frames, the last frame's, where the bar last
-/// was), the bar's springs said to move from it on.
-fn bar_set_out() -> Double {
-  let at = @ui.current().set_out(bar_clock.mover, bar_clock as &@ui.Moving, what="the bar's springs")
-  if at != @double.infinity {
-    bar_clock.now = at
-  }
-  bar_clock.now
+/// The moment a way of the bar sets out told no other: the moment now (a frame's, or the clock's between frames).
+fn bar_now() -> Double {
+  @ui.current().moment()
 }
 
 ///|
@@ -224,16 +188,6 @@ fn spr(start : Double, tension : Double, friction : Double, what : String, rest?
 }
 
 ///|
-/// Where it is at `now`, read (once a frame, or at a moment ahead of the logic's): its way kept whole, a ride past its
-/// end too (at rest where it rode to), so that what is told it at an earlier moment after goes on from where it was
-/// then.
-fn Spr::sample(self : Spr, now : Double) -> Unit {
-  let (x, v) = self.at(now)
-  self.x = x
-  self.v = v
-}
-
-///|
 /// Where it is at `t` and how fast, by the way it is on (a ride, its spring's; none told: where it was put).
 fn Spr::at(self : Spr, t : Double) -> (Double, Double) {
   match (self.ride, self.path) {
@@ -258,11 +212,8 @@ fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double, at? : D
     _ => ()
   }
   let now = match at {
-    Some(a) => {
-      ignore(bar_set_out())
-      a
-    }
-    None => bar_set_out()
+    Some(a) => a
+    None => bar_now()
   }
   let rode = match self.ride {
     Some(r) => {
@@ -316,15 +267,6 @@ fn Spr::end(self : Spr) -> Double {
 /// where it is at the moment a cause tells it anew.
 fn Spr::value_at(self : Spr, t : Double) -> Double {
   self.at(t).0
-}
-
-///|
-/// Where it is as `c` paints and how fast: said to move while it goes (painted again each frame till its end, as
-/// Glide::painted is), its way read at the frame's moment.
-fn Spr::painted(self : Spr, c : @ui.Ctx) -> (Double, Double) {
-  let t = c.moment()
-  c.shows_motion(bar_clock.mover, t < self.end())
-  self.at(t)
 }
 
 ///|
@@ -493,11 +435,8 @@ fn Spr::ride_on(
     _ => ()
   }
   let now = match at {
-    Some(a) => {
-      ignore(bar_set_out())
-      a
-    }
-    None => bar_set_out()
+    Some(a) => a
+    None => bar_now()
   }
   let (x, v) = match (self.ride, self.path) {
     (Some(r), _) => r.at(now)
@@ -531,7 +470,7 @@ fn Spr::ride_on(
 ///|
 /// One number gliding to where it is sent over a time on a curve (Bar.kt Glide), its way said once as it sets out (where
 /// from, how fast, where to, by what, when): where it is at a moment a function of that moment alone (`value` and
-/// `target` as of the moment last sampled, BarModel::sample). `key`: what it is in the motion log.
+/// `target` where it was last put or sent; where it is, Glide::at). `key`: what it is in the motion log.
 priv struct Glide {
   key : String
   mut value : Double
@@ -578,13 +517,9 @@ fn Glide::go_by(self : Glide, target : Double, spec : @motion.Spec, at? : Double
   if target == self.target {
     return
   }
-  // (said to move with the bar's springs: frames until it is there)
   let at = match at {
-    Some(a) => {
-      ignore(bar_set_out())
-      a
-    }
-    None => bar_set_out()
+    Some(a) => a
+    None => bar_now()
   }
   let (x, v) = self.at(at)
   self.from = x
@@ -593,25 +528,6 @@ fn Glide::go_by(self : Glide, target : Double, spec : @motion.Spec, at? : Double
   self.spec = spec
   self.start = at
   self.dur = spec.duration(x, target, v)
-}
-
-///|
-/// Where it is at `now`.
-fn Glide::sample(self : Glide, now : Double) -> Unit {
-  self.value = self.at(now).0
-}
-
-///|
-/// Where it is as `c` paints: said to move while it goes (painted again each frame till its end, as a motion's value
-/// is: Anim::get), its way read at the frame's moment.
-fn Glide::painted(self : Glide, c : @ui.Ctx) -> Double {
-  let going = c.moment() < self.end()
-  c.shows_motion(bar_clock.mover, going)
-  if going {
-    self.at(c.moment()).0
-  } else {
-    self.target
-  }
 }
 
 ///|
@@ -814,7 +730,6 @@ fn bar_reset() -> Unit {
   bar.icon_was = ""
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
-  bar_clock.now = 0.0
   bar.told = None
   bar_told_now.set(None)
 }
@@ -827,21 +742,6 @@ fn BarModel::open_panel(self : BarModel, open : Bool, at? : Double) -> Unit {
     self.o.go(1.0, 260.0, 17.0, at?)
   } else {
     self.o.go(0.0, 320.0, 26.0, at?)
-  }
-}
-
-///|
-/// Where everything is this frame, by what it was told before (Bar.kt: told as it is composed, it moves from there).
-fn BarModel::sample(self : BarModel) -> Unit {
-  let now = bar_clock.now
-  for s in [self.o, self.k, self.held, self.up, self.ball_x, self.ball_y] {
-    s.sample(now)
-  }
-  for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
-    g.sample(now)
-  }
-  for _, g in self.tints {
-    g.sample(now)
   }
 }
 
@@ -876,7 +776,7 @@ pub fn bar_rest() -> Double {
 /// under it; -1 when none is landing. Until then a finger does not take the panel (a bar landing lands untouched): what
 /// a test runs to before it draws the panel up again.
 pub fn bar_landed() -> Double {
-  match bar.swap_at(bar_clock.now) {
+  match bar.swap_at(bar_now()) {
     Some(s) => s.ends
     None => -1.0
   }
@@ -1139,7 +1039,7 @@ fn bar_row_top(bars : Int) -> Double {
 ///|
 /// The bar told `told` at the moment `at` of what changed it (a page put on the stack or taken off, a place come in,
 /// what the notch offers, the bars' order, the window), whatever frames are drawn after: its ways set out from then,
-/// from where they are then; told the same again, nothing. A frame only reads where they are (BarModel::sample).
+/// from where they are then; told the same again, nothing. A frame only reads where they are (bar_node.mbt).
 /// (What a finger does on it is told so too, at each event's moment: bar_finger_at.)
 fn bar_tell(told : BarTold, at : Double) -> Unit {
   let m = bar
@@ -1435,15 +1335,6 @@ fn BarModel::k_end(self : BarModel) -> Double {
 /// Whether the notch as drawn (BarModel::k_now) is on its way at `now`.
 fn BarModel::k_going(self : BarModel, now : Double) -> Bool {
   dmax(self.up.end(), dmax(self.k.end(), self.o.end())) > now
-}
-
-///|
-/// The notch as `c` paints (BarModel::k_at the frame's moment): said to move while it goes (painted again each frame
-/// till its end, as Glide::painted is), nothing built or laid out for it.
-fn BarModel::k_painted(self : BarModel, c : @ui.Ctx) -> Double {
-  let t = c.moment()
-  c.shows_motion(bar_clock.mover, self.k_going(t))
-  self.k_at(t)
 }
 
 ///|

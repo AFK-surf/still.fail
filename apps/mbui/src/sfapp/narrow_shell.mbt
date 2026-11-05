@@ -449,7 +449,7 @@ fn narrow_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // taken)
   if narrow_bar_shown(src, w) && bar.mode.get() {
     c.on_back(fn() {
-      bar.open_panel(false)
+      bar.open_panel(false, at=@ui.current().moment())
       bar_retell(@ui.current().moment())
     })
   }
