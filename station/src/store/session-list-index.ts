@@ -11,10 +11,10 @@ export const SESSION_LIST_NEXT = `SELECT CAST(rowid AS TEXT) AS position, key FR
 
 // The scope contains one workspace, and at most one more for the home workspace's pre-workspace sessions. The index
 // first seeks both the workspace and archive state; a requested connect is also part of that seek.
-const scoped = (connect: boolean) => `WITH scope(ws) AS (SELECT ?1 UNION ALL SELECT NULL WHERE ?2)
-  SELECT s.* FROM scope w CROSS JOIN session_list_rows i INDEXED BY session_list_scope
+const scoped = (connect: boolean) => `WITH scope(kind, ws) AS (SELECT 1, ?1 UNION ALL SELECT 0, '' WHERE ?2)
+  SELECT s.* FROM scope w CROSS JOIN session_list_rows i
   CROSS JOIN sessions s ON s.key = i.session
-  WHERE i.ws IS w.ws AND i.archived = ?3${connect ? " AND i.connect = ?4" : ""}
+  WHERE i.kind = w.kind AND i.ws = w.ws AND i.archived = ?3${connect ? " AND i.connect = ?4" : ""}
   ORDER BY s.last_active_at DESC, s.rowid ASC`;
 export const SESSION_LIST_SCOPE = scoped(false);
 export const SESSION_LIST_SCOPE_CONNECT = scoped(true);
@@ -22,24 +22,30 @@ export const SESSION_LIST_CONNECT = `SELECT s.* FROM session_list_rows i INDEXED
   CROSS JOIN sessions s ON s.key = i.session WHERE i.archived = ?1 AND i.connect = ?2
   ORDER BY s.last_active_at DESC, s.rowid ASC`;
 
-const displaced = (key: string, token: string, rowid: string) => `SELECT key FROM sessions WHERE key = ${key}
-  UNION SELECT key FROM sessions WHERE token = ${token}
-  UNION SELECT key FROM sessions WHERE rowid = ${rowid}`;
+const kind = (row: string) => `CASE WHEN ${row}.ws IS NULL THEN 0 ELSE 1 END`;
+const scope = (row: string) => `COALESCE(${row}.ws, '')`;
+const archive = (row: string) => `(${row}.archived_at IS NOT NULL)`;
+const values = (row: string) => `${row}.key, ${kind(row)}, ${scope(row)}, ${archive(row)}, ${row}.connect`;
+const displaced = (key: string, token: string, rowid: string) => `SELECT ${values("s")} FROM sessions s WHERE s.key = ${key}
+  UNION SELECT ${values("s")} FROM sessions s WHERE s.token = ${token}
+  UNION SELECT ${values("s")} FROM sessions s WHERE s.rowid = ${rowid}`;
 export const SESSION_LIST_DISPLACED = displaced("?1", "?2", "?3");
 const stage = (old: boolean) => `DELETE FROM session_list_replaced;
-  INSERT INTO session_list_replaced (session) ${displaced("NEW.key", "NEW.token", "NEW.rowid")}
-    ${old ? "UNION SELECT OLD.key" : ""};`;
+  INSERT INTO session_list_replaced (session, kind, ws, archived, connect) ${displaced("NEW.key", "NEW.token", "NEW.rowid")}
+    ${old ? `UNION SELECT ${values("OLD")}` : ""};`;
+const matches = (index: string, row: string) => `${index}.kind = ${kind(row)} AND ${index}.ws = ${scope(row)}
+  AND ${index}.archived = ${archive(row)} AND ${index}.connect = ${row}.connect AND ${index}.session = ${row}.key`;
 // An outer OR REPLACE also changes conflict policies in a trigger; skip existing rows rather than INSERT OR IGNORE.
-const see = (key: string) => `INSERT INTO session_list_rows (session, ws, connect, archived)
-  SELECT s.key, s.ws, s.connect, s.archived_at IS NOT NULL FROM sessions s WHERE s.key = ${key}
-    AND NOT EXISTS (SELECT 1 FROM session_list_rows i WHERE i.session = s.key);`;
-const reconcile = `DELETE FROM session_list_rows WHERE session IN (SELECT session FROM session_list_replaced)
-  AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.key = session_list_rows.session AND s.ws IS session_list_rows.ws
-    AND s.connect = session_list_rows.connect AND (s.archived_at IS NOT NULL) = session_list_rows.archived);
-  INSERT INTO session_list_rows (session, ws, connect, archived)
-    SELECT s.key, s.ws, s.connect, s.archived_at IS NOT NULL FROM session_list_replaced r
+const see = (key: string) => `INSERT INTO session_list_rows (session, kind, ws, archived, connect)
+  SELECT ${values("s")} FROM sessions s WHERE s.key = ${key}
+    AND NOT EXISTS (SELECT 1 FROM session_list_rows i WHERE ${matches("i", "s")});`;
+const reconcile = `DELETE FROM session_list_rows WHERE (kind, ws, archived, connect, session) IN
+    (SELECT kind, ws, archived, connect, session FROM session_list_replaced)
+  AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.key = session_list_rows.session AND ${matches("session_list_rows", "s")});
+  INSERT INTO session_list_rows (session, kind, ws, archived, connect)
+    SELECT ${values("s")} FROM session_list_replaced r
     CROSS JOIN sessions s ON s.key = r.session
-    WHERE NOT EXISTS (SELECT 1 FROM session_list_rows i WHERE i.session = s.key);
+    WHERE NOT EXISTS (SELECT 1 FROM session_list_rows i WHERE ${matches("i", "s")});
   DELETE FROM session_list_replaced;`;
 
 export function installSessionListIndex(db: DatabaseSync): void {
@@ -53,10 +59,11 @@ export function installSessionListIndex(db: DatabaseSync): void {
       INSERT INTO session_list_meta (id, version, last_rowid, end_rowid, complete)
         SELECT 1, ${VERSION}, NULL, (SELECT rowid FROM sessions ORDER BY rowid DESC LIMIT 1),
           NOT EXISTS (SELECT 1 FROM sessions LIMIT 1);
-      CREATE TABLE session_list_rows (session TEXT PRIMARY KEY, ws TEXT, connect TEXT NOT NULL, archived INTEGER NOT NULL) WITHOUT ROWID;
-      CREATE INDEX session_list_scope ON session_list_rows (ws, archived, connect, session);
-      CREATE INDEX session_list_connect ON session_list_rows (archived, connect, session);
-      CREATE TABLE session_list_replaced (session TEXT PRIMARY KEY) WITHOUT ROWID;
+      CREATE TABLE session_list_rows (kind INTEGER NOT NULL, ws TEXT NOT NULL, archived INTEGER NOT NULL,
+        connect TEXT NOT NULL, session TEXT NOT NULL, PRIMARY KEY (kind, ws, archived, connect, session)) WITHOUT ROWID;
+      CREATE INDEX session_list_connect ON session_list_rows (archived, connect, kind, ws, session);
+      CREATE TABLE session_list_replaced (session TEXT PRIMARY KEY, kind INTEGER NOT NULL, ws TEXT NOT NULL,
+        archived INTEGER NOT NULL, connect TEXT NOT NULL) WITHOUT ROWID;
       CREATE TRIGGER session_list_before_add BEFORE INSERT ON sessions BEGIN ${stage(false)} END;
       CREATE TRIGGER session_list_add AFTER INSERT ON sessions BEGIN ${reconcile} ${see("NEW.key")} END;
       CREATE TRIGGER session_list_before_change BEFORE UPDATE ON sessions
@@ -68,7 +75,7 @@ export function installSessionListIndex(db: DatabaseSync): void {
           OR OLD.connect IS NOT NEW.connect OR OLD.ws IS NOT NEW.ws
           OR (OLD.archived_at IS NULL) IS NOT (NEW.archived_at IS NULL) BEGIN ${reconcile} ${see("NEW.key")} END;
       CREATE TRIGGER session_list_drop AFTER DELETE ON sessions BEGIN
-        DELETE FROM session_list_rows WHERE session = OLD.key;
+        DELETE FROM session_list_rows WHERE ${matches("session_list_rows", "OLD")};
       END;
     `);
     else sessionListReady(db);

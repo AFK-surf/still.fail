@@ -1390,8 +1390,8 @@ test("what the station asks again and again is planned by an index, never a scan
   assertRecentChatPlans();
   const store = memory();
   for (const [sql, args, index] of [
-    [SESSION_LIST_SCOPE, ["ws", 1, 0], "session_list_scope (ws=? AND archived=?)"],
-    [SESSION_LIST_SCOPE_CONNECT, ["ws", 1, 0, "a"], "session_list_scope (ws=? AND archived=? AND connect=?)"],
+    [SESSION_LIST_SCOPE, ["ws", 1, 0], "PRIMARY KEY (kind=? AND ws=? AND archived=?)"],
+    [SESSION_LIST_SCOPE_CONNECT, ["ws", 1, 0, "a"], "PRIMARY KEY (kind=? AND ws=? AND archived=? AND connect=?)"],
     [SESSION_LIST_CONNECT, [0, "a"], "session_list_connect (archived=? AND connect=?)"],
   ] as [string, unknown[], string][]) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -1576,7 +1576,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   const lacks = (sql: string, step: string) => assert.ok(!plans.get(sql)!.some((d) => d.includes(step)), `${step}\n  ${plans.get(sql)!.join(" | ")}`);
   assert.equal(plans.get(SESSION_COUNT_DISPLACED)!.filter((d) => d.startsWith("SEARCH sessions")).length, 3,
     "a replacing session finds at most one row by each unique identity");
-  assert.equal(plans.get(SESSION_LIST_DISPLACED)!.filter((d) => d.startsWith("SEARCH sessions")).length, 3,
+  assert.equal(plans.get(SESSION_LIST_DISPLACED)!.filter((d) => d.startsWith("SEARCH s ")).length, 3,
     "session list updates find displaced rows by unique identity");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");

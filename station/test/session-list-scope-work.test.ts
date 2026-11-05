@@ -54,7 +54,7 @@ for (const archived of [false, true]) for (const connect of [null, "client"]) {
       const after = read();
       assert.equal(after.visited, before.visited, `candidate visits grew from ${before.visited} to ${after.visited}`);
       assert.ok(!after.plan.some((line) => /^SCAN (sessions|s)\b/.test(line)), after.plan.join("\n"));
-      const seek = after.plan.find((line) => /SEARCH i USING (?:COVERING )?INDEX session_list_scope/.test(line));
+      const seek = after.plan.find((line) => /SEARCH i USING PRIMARY KEY \(kind=\? AND ws=\? AND archived=\?/.test(line));
       assert.ok(seek, after.plan.join("\n"));
       if (connect !== null) assert.match(seek, /connect=\?/);
     } finally { store.close(); }

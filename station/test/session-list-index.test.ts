@@ -64,7 +64,7 @@ for (const recursive of [false, true]) test(`session list candidates stay exact 
     });
     const actual = statements(db), before = statements(reference.db);
     const sessions = (source: typeof db) => source.prepare("SELECT rowid AS rowid,key,token,connect,ws,archived_at FROM sessions ORDER BY key").all();
-    const candidates = () => db.prepare("SELECT session,ws,connect,archived FROM session_list_rows ORDER BY session").all();
+    const candidates = () => db.prepare("SELECT session,CASE kind WHEN 0 THEN NULL ELSE ws END AS ws,connect,archived FROM session_list_rows ORDER BY session").all();
     const expected = () => db.prepare("SELECT key AS session,ws,connect,archived_at IS NOT NULL AS archived FROM sessions ORDER BY key").all();
     let seed = 0x12345678;
     const next = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
