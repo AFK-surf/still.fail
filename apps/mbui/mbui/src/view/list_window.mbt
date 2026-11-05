@@ -488,7 +488,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   // (what shows held where it is as what is over it changes height: the first block in sight as last laid out, its top
   // as counted then, the column moved by as far as that moved)
-  let held_still = fn() {
+  let held_by_anchor = fn() {
     match anchor.val {
       Some((k, was)) =>
         match place_of.val.get(k) {
@@ -641,7 +641,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (what came over what showed as it was last laid out, or what of that was laid out again: what showed moved with
     // it, where it is drawn)
     if held_at.val is None {
-      held_still()
+      held_by_anchor()
     }
     // (first laid out from its end: there before anything is made, nothing made at its top to be let go)
     if from_end && !laid_once.val && held_at.val is None && follows.get() {
@@ -655,7 +655,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       rounds = rounds + 1
       hold(vh)
       if held_at.val is None {
-        held_still()
+        held_by_anchor()
       }
       // (where it shows from, within how far it can go as it is counted now: where it is drawn from once it is put
       // there, Scroll's room)
