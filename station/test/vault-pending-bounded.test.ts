@@ -140,23 +140,25 @@ test("an unreadable old vault preserves the original request-list behavior until
   } finally { db.close(); }
 });
 
-test("preparing a pending list waits for the previous process to finish writing", async () => {
+test("pending lists remain available while the previous process is still writing", async () => {
   const db = new DatabaseSync(":memory:");
   let exited!: () => void;
   const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  let coming = true;
   try {
-    const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => null, backfill: { previousGone },
+    const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => null, backfill: { previousGone }, coming: () => coming,
       hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
       proxy: {} as never, vaults: {} as never, plain: {} as never });
-    let ready = false;
-    const preparing = secrets.preparePending("w").then(() => { ready = true; });
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    assert.equal(ready, false);
+    const preparing = secrets.preparePending("w");
+    assert.equal(await Promise.race([preparing.then(() => true), new Promise<boolean>((resolve) => setImmediate(() => resolve(false)))]), true);
     const request = { ws: "w", id: "lost", session: "s", vault: PLAIN, owner: "bob@example.test", at: 0,
       item: "i", mode: "env", status: "pending", save: { typed: false } };
     db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','lost','s','pending',?)").run(JSON.stringify(request));
+    assert.deepEqual(secrets.pending("w", null, { sub: "bob", email: "bob@example.test" }).map((r) => r.id), ["lost"]);
+    coming = false;
     exited();
-    await preparing;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await secrets.preparePending("w");
     secrets.pending("w", null, { sub: "alice", email: "alice@example.test" });
     assert.equal((db.prepare("SELECT status FROM vault_requests WHERE ws='w' AND id='lost'").get() as { status: string }).status, "expired");
   } finally { exited(); db.close(); }
