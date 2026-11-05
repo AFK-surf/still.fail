@@ -43,13 +43,19 @@ fn flight_target_window(f : SendFlight, v : @view.View) -> (Double, Double, Doub
 
 ///|
 /// A new chat's list comes up with its first sent words on the send's own path. `landing` is the bubble (or the
-/// first file for a send without words) as laid out, without this drawing offset. No layout target starts a motion.
-pub fn send_list_rise(node : @view.View, draft : String, landing : (SendFlight) -> @view.View?) -> Double {
+/// first file for a send without words) as laid out, without this drawing offset, as `laid` has it in the frame being
+/// painted (a Painted drawn_off's: read there and nowhere else). No layout target starts a motion.
+pub fn send_list_rise(
+  laid : @view.Laid,
+  node : @view.View,
+  draft : String,
+  landing : (SendFlight) -> @view.View?,
+) -> Double {
   match flight_of(draft) {
     Some(f) if f.carried => {
       let up = flight_up(f.way.shown(node), flies_desk(f))
       if f.placed {
-        landing(f).bind(fn(v) { v.laid_window_told() })
+        landing(f).bind(fn(v) { laid.rect(v) })
         .map(fn(r) { (f.from_top - r.1) * (1.0 - up) }).unwrap_or(0.0)
       } else { 0.0 }
     }
