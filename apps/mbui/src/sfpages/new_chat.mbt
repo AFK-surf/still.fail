@@ -50,18 +50,35 @@ fn new_chat_reset() -> Unit {
 }
 
 ///|
-/// One of the page's picks opened as it is next drawn narrow, as though its capsule were pressed: "station" where it
-/// runs, "model" what it runs on (a fixture's screen of it).
+/// One of the page's picks opened as though its capsule were pressed: "station" where it runs, "model" what it runs on
+/// (a fixture's screen of it), the presets' menu and dialogs (a menu's or a dialog's of the presets').
 pub fn new_chat_ask(what : String) -> Unit {
-  new_chat_state.asked = what
-  new_asked_told.set(@signals.untracked(fn() { new_asked_told.get() }) + 1)
+  // (the page's controls as nodes of the tree that said they open it: opened now, as it is asked; else the old view's,
+  // which takes it as it next builds)
+  match new_opens.get(what) {
+    Some(open) => open()
+    None => new_chat_state.asked = what
+  }
 }
 
 ///|
-/// Told each time one of the page's picks is asked open (new_chat_ask): what of the page's nodes opens it follows it
-/// (new_tools_node's), and takes it (take_asked).
-// kept across runs: only counted on, never read for its number (what follows it takes what was asked: take_asked)
-let new_asked_told : @signals.Signal[Int] = @signals.signal(0)
+/// What the page's controls as nodes open as they are asked (new_chat_ask), by its name ("preset", "preset-new", …,
+/// "station", "model"): said by each as it is made (new_tools_node), let go with it.
+// kept across runs: each let go with its node
+let new_opens : Map[String, () -> Unit] = {}
+
+///|
+/// That control's node `v` opens `what` with `open` as it is asked, while it is there.
+fn new_opens_said(v : @view.View, what : String, open : () -> Unit) -> Unit {
+  new_opens[what] = open
+  v.owns(fn() {
+    match new_opens.get(what) {
+      Some(f) if physical_equal(f, open) => new_opens.remove(what)
+      _ => ()
+    }
+  })
+  |> ignore
+}
 
 ///|
 /// A new chat in workspace `w` (NewChat, NewChatScreen): while its stations are read, the page as it will be on the
@@ -655,7 +672,8 @@ fn new_composer_place(
         placeholder: @sf.t("web-main.newChat.placeholder"),
         toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
         toolbar_node: if wide && !held {
-          Some(fn(row) { new_tools_node(row, src, fn() { Some(w) }, fn() { v }, fn() { station }) })
+          // (what a composer of the tree's shows of them as they leave: drawn only, opening nothing as it is asked)
+          Some(fn(row) { new_tools_node(row, src, fn() { Some(w) }, fn() { v }, fn() { station }, asks=false) })
         } else {
           None
         },

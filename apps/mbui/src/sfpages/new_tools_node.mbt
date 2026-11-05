@@ -2,9 +2,10 @@
 // tree, made once: what it is for (the presets' control), where it runs (the station's) and what it runs on (the
 // model's, model_triple's), each a capsule of the row as new_capsule has it, each what it says followed as the page's
 // view changes; short of room, each gives up its words in the order new_controls' do (View::drops), never its place.
-// Pressed, each opens what new_controls' opens, beside it (Beside::Node); asked from elsewhere (new_chat_ask), as
-// though pressed. `going`: the page on its way to its chat, pressed for nothing. The composer's copy of it as the page
-// becomes its chat is the same, turned off (composer_node's leaving toolbar).
+// Pressed, each opens what new_controls' opens, beside it (Beside::Node); asked from elsewhere (new_chat_ask), opened
+// then, as though pressed (`asks`: each says what it opens so, new_opens; not a copy of them that only shows).
+// `going`: the page on its way to its chat, pressed for nothing. The composer's copy of it as the page becomes its
+// chat is the same, drawn only (composer_node's leaving toolbar).
 
 ///|
 /// The choices in `row` (the composer's choices part), for workspace `w`'s new chat as `v` (the core's `newChat`
@@ -16,13 +17,14 @@ fn new_tools_node(
   v : () -> Json?,
   station : () -> Json?,
   going? : () -> Bool = fn() { false },
+  asks? : Bool = true,
 ) -> Unit {
   // (as the old row's `choices`: in a line, 4 apart, short of room each giving up its words: View::fits)
   row.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).grow(Is(1.0)).fits(Is(true)) |> ignore
   let address = fn() { text(station(), "station") }
-  new_preset_node(row, src, w, v, address, going)
-  row.show(fn() { text(station(), "name") != "" }, fn(s) { new_station_node(s, src, w, v, station, going) })
-  new_model_node(row, src, v, address, going)
+  new_preset_node(row, src, w, v, address, going, asks)
+  row.show(fn() { text(station(), "name") != "" }, fn(s) { new_station_node(s, src, w, v, station, going, asks) })
+  new_model_node(row, src, v, address, going, asks)
 }
 
 ///|
@@ -81,6 +83,7 @@ fn new_preset_node(
   v : () -> Json?,
   address : () -> String,
   going : () -> Bool,
+  asks : Bool,
 ) -> Unit {
   let picked = fn() { text(v(), "preset") }
   let name = fn() { if picked() == "" { "" } else { text(v(), "presetName") } }
@@ -117,25 +120,24 @@ fn new_preset_node(
       })
       |> ignore
     })
-    // (asked from elsewhere: the menu beside it, or a dialog of the presets')
-    slot.reacts(fn() { new_asked_told.get() }, fn(_) {
-      guard w() is Some(ws) else { return }
-      let stations = items(v(), "stations")
-      let first = text(items(v(), "presets").get(0), "id")
-      if take_asked("preset") {
-        menu(capsule)
-      } else if take_asked("preset-new") {
-        preset_dialog(src, ws, address(), "", stations)
-      } else if take_asked("preset-edit") {
-        preset_dialog(src, ws, address(), first, stations)
-      } else if take_asked("preset-add") {
-        preset_dialog(src, ws, address(), first, stations, adding=true)
-      } else if take_asked("preset-new-add") {
-        preset_dialog(src, ws, address(), "", stations, adding=true)
-      } else if take_asked("preset-new-browse") {
-        preset_dialog(src, ws, address(), "", stations, browsing=true)
+    // (asked from elsewhere: the menu beside it, or a dialog of the presets', as it is asked: new_chat_ask)
+    if asks {
+      let dialog = fn(id : () -> String, adding : Bool, browsing : Bool) {
+        fn() {
+          match w() {
+            Some(ws) => preset_dialog(src, ws, address(), id(), items(v(), "stations"), adding~, browsing~)
+            None => ()
+          }
+        }
       }
-    })
+      let first = fn() { text(items(v(), "presets").get(0), "id") }
+      new_opens_said(slot, "preset", fn() { menu(capsule) })
+      new_opens_said(slot, "preset-new", dialog(fn() { "" }, false, false))
+      new_opens_said(slot, "preset-edit", dialog(first, false, false))
+      new_opens_said(slot, "preset-add", dialog(first, true, false))
+      new_opens_said(slot, "preset-new-add", dialog(fn() { "" }, true, false))
+      new_opens_said(slot, "preset-new-browse", dialog(fn() { "" }, false, true))
+    }
   })
 }
 
@@ -149,6 +151,7 @@ fn new_station_node(
   v : () -> Json?,
   station : () -> Json?,
   going : () -> Bool,
+  asks : Bool,
 ) -> Unit {
   let open = fn(at : @view.View) {
     match w() {
@@ -170,14 +173,16 @@ fn new_station_node(
     |> ignore
     @sf.icon_node(b, "chevron-down", new_chevron, By(fn() { @sf.theme().p.muted })) |> ignore
   })
-  slot.reacts(fn() { new_asked_told.get() }, fn(_) { if !slot.in_bones() && take_asked("station") { open(capsule) } })
+  if asks {
+    new_opens_said(slot, "station", fn() { open(capsule) })
+  }
 }
 
 ///|
 /// What it runs on (new_controls' model part): while its profiles are read, a made-up model's control in its bones;
 /// with nothing to run it with, the way to where models are enabled; else the model's control (model_triple's, small,
 /// in a row: new_triple_node).
-fn new_model_node(row : @view.View, src : Source, v : () -> Json?, address : () -> String, going : () -> Bool) -> Unit {
+fn new_model_node(row : @view.View, src : Source, v : () -> Json?, address : () -> String, going : () -> Bool, asks : Bool) -> Unit {
   let pick = fn() { field(v(), "pick") }
   let none = fn() {
     let p = pick()
@@ -193,7 +198,7 @@ fn new_model_node(row : @view.View, src : Source, v : () -> Json?, address : () 
           let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
           1.0 - (1.0 - @sf.wait_low) * @ui.Ease::InOut.at(way)
         })) |> ignore
-        new_triple_node(slot, @sfbase.sample_source, fn() { "sample" }, fn() { field(Some(new_sample_view()), "pick") }, going)
+        new_triple_node(slot, @sfbase.sample_source, fn() { "sample" }, fn() { field(Some(new_sample_view()), "pick") }, going, false)
       }
       // nothing to run it with: the way to where models are enabled
       1 => {
@@ -203,7 +208,7 @@ fn new_model_node(row : @view.View, src : Source, v : () -> Json?, address : () 
         })
         |> ignore
       }
-      _ => new_triple_node(slot, src, address, pick, going)
+      _ => new_triple_node(slot, src, address, pick, going, asks)
     }
   })
 }
@@ -220,6 +225,7 @@ fn new_triple_node(
   station : () -> String,
   page : () -> Json?,
   going : () -> Bool,
+  asks : Bool,
 ) -> Unit {
   let me = fn() { station() + "\u{1}new" }
   let saving = fn() { doing("pick.save/" + station() + "/new") }
@@ -326,10 +332,7 @@ fn new_triple_node(
       @sf.icon_node(c, "chevron-down", 12.0, By(fn() { @sf.theme().p.muted })) |> ignore
     })
   })
-  parent.reacts(fn() { new_asked_told.get() }, fn(_) {
-    if !parent.in_bones() && take_asked("model") {
-      open_triple(station(), "new")
-      press(capsule)
-    }
-  })
+  if asks {
+    new_opens_said(parent, "model", fn() { press(capsule) })
+  }
 }
