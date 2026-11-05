@@ -1,6 +1,6 @@
 // A chat's web services and background jobs, as its pages show them. Jobs are mostly long-running watchers (a CI run
 // followed, a deploy kept an eye on): what matters is whether each is still alive and what it last said
-// (`ember-job notify`), not how long it took. Status is a small dot before the name and a word on the line under it;
+// (`stillfail-job notify`), not how long it took. Status is a small dot before the name and a word on the line under it;
 // the title bar's popover shows what matters now, the 任务 tab beside the chat shows everything.
 import { outsideScroll, scrollToEnd } from "./scrollBounds.ts";
 import { chatPage } from "./chatPage.ts";
