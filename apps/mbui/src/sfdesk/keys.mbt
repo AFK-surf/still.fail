@@ -128,3 +128,114 @@ pub fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
 pub fn tip_keys(src : Source) -> (String) -> String {
   fn(action) { @settings.keys_text((src.topic)("prefs", {}).value, action) }
 }
+
+///|
+/// The app's keys in node `v` of the window's tree (what holds the signed-in shells' nodes), each done at its moment as
+/// `keys` does them as a frame builds, while `ws` has a workspace: the keymap's (⌘K, a new chat, the sidebar, the
+/// settings, the shortcuts, back and forward, the chat before or after) as the tree asks them and as the Mac's menu bar
+/// chooses them (@settings.actions_node); a mouse's forward button and Esc to what the frame opened, which are no action
+/// of the keymap's, by `outer`, which holds `v`. What has the focus asks them on its way out, a field's too (Tree::key_at:
+/// what holds it). The shell's islands do them no more (sfapp's signed_in_frame).
+pub fn keys_node(v : @view.View, outer : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
+  let act = fn(action : String) -> () -> Bool {
+    fn() {
+      match ws() {
+        Some(w) => action_done(src, w, action)
+        None => false
+      }
+    }
+  }
+  @settings.actions_node(
+    v,
+    fn() { (src.topic)("prefs", {}).value },
+    [
+      ("chat.switch", act("chat.switch")),
+      ("chat.new", act("chat.new")),
+      ("sidebar.toggle", act("sidebar.toggle")),
+      ("settings", act("settings")),
+      ("shortcuts", act("shortcuts")),
+      ("nav.back", act("nav.back")),
+      ("nav.forward", act("nav.forward")),
+      ("chat.prev", act("chat.prev")),
+      ("chat.next", act("chat.next")),
+    ],
+  )
+  // (the chat before or after goes on in a field: its caret moved by the key as well, as `keys` read them in_field)
+  v.reacts(
+    fn() {
+      let prefs = (src.topic)("prefs", {}).value
+      @settings.action_keys(prefs, "chat.prev") + @settings.action_keys(prefs, "chat.next")
+    },
+    fn(keys) { v.keys_in_fields(keys) |> ignore },
+  )
+  outer.on_key(fn(key) {
+    if ws() is None {
+      return false
+    }
+    // (a mouse's forward button, the hosts' Alt+→)
+    if key.code == @ui.key_forward {
+      return act("nav.forward")()
+    }
+    if key.code == @ui.key_escape && key.mods == 0 {
+      let c = @ui.current()
+      let left = !frame_escape(c)
+      // Esc in the open chat (chat_layers.mbt)
+      return !left || (is_wide(c) && chat_escape(c, src, left))
+    }
+    false
+  })
+  |> ignore
+}
+
+///|
+/// What the app's key for `action` does (keys_node's, as `keys` does it): whether it did anything.
+fn action_done(src : Source, w : Workspace, action : String) -> Bool {
+  let c = @ui.current()
+  let framed = is_wide(c)
+  match action {
+    "chat.switch" => {
+      if framed {
+        switcher_toggle(c)
+        attention_set(false)
+      } else {
+        @sfpages.search_summon(c, switcher_offered(c, src, w), app.nav.top() != Home)
+      }
+      true
+    }
+    "chat.new" => {
+      new_chat()
+      true
+    }
+    "sidebar.toggle" =>
+      if framed {
+        sidebar_toggle()
+        true
+      } else {
+        false
+      }
+    "settings" => {
+      open_settings()
+      true
+    }
+    "shortcuts" => {
+      wide.keys_open.set(!wide.keys_open.get())
+      true
+    }
+    "nav.back" => {
+      c.back() |> ignore
+      true
+    }
+    "nav.forward" => {
+      @sfbase.go_forward(src) |> ignore
+      true
+    }
+    "chat.prev" | "chat.next" =>
+      if framed {
+        neighbour(src, w, if action == "chat.prev" { -1 } else { 1 })
+        true
+      } else {
+        false
+      }
+    _ => false
+  }
+}

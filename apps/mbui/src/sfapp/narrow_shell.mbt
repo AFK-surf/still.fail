@@ -254,8 +254,11 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = f
   if !reacted {
     share_in_frame(c)
   }
-  // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
-  @sfdesk.keys(c, src, w)
+  // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small;
+  // a shell of the window's tree's takes them as they come (app_state_tree's keys_node)
+  if !reacted {
+    @sfdesk.keys(c, src, w)
+  }
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later;
   // the narrow shell's its own node's (first_page_node)

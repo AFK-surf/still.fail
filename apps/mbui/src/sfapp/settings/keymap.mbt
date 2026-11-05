@@ -257,6 +257,13 @@ pub fn actions_node(v : @view.View, prefs : () -> Json?, actions : Array[(String
 }
 
 ///|
+/// The keys (a code, the modifiers held) of `action` as the core's prefs keep them: what a node says goes on in a
+/// field for it (View::keys_in_fields: ⌥↑ the chat before while a field has the focus).
+pub fn action_keys(prefs : Json?, action : String) -> Array[(Int, Int)] {
+  keys_of(prefs, action).filter_map(binding_key)
+}
+
+///|
 /// The frame that read it built: asked no more.
 pub fn action_asked_done() -> Unit {
   action_asked.val = ""

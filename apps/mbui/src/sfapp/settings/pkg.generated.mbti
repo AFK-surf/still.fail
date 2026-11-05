@@ -16,6 +16,8 @@ pub fn act(Core, String, String, @json.Json, done? : String, then? : (@json.Json
 
 pub fn action_asked_done() -> Unit
 
+pub fn action_keys(@json.Json?, String) -> Array[(Int32, Int32)]
+
 pub fn action_pressed(@ui.Ctx, @json.Json?, String, in_field? : Bool) -> Bool
 
 pub fn actions_node(@view.View, () -> @json.Json?, Array[(String, () -> Bool)]) -> Unit
