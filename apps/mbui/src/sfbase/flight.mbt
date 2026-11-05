@@ -636,7 +636,7 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
           let words = c.box(style=@sf.full_width, fn() {
             // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced), its marks
             // as it drew them
-            c.rich(refs_runs(f.text, f.marks, t.p.accent), key="flight/words", style=t.t.words, trim=true, w=Fill(1.0), words=true)
+            c.rich(person_runs(f.text, f.runs, t.p.accent), key="flight/words", style=t.t.words, link_color=t.p.blue, trim=true, w=Fill(1.0), words=true)
             |> ignore
           })
           c.look(words, @ui.look(dx=f.from_x - f.field_x, dy=f.from_y - f.field_y))
