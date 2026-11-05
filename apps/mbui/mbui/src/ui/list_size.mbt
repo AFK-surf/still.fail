@@ -52,6 +52,8 @@ priv struct RowSizing {
   /// the frame it was last laid out in, and how it stood as that frame found it (a frame laid out twice, built again
   /// from what it read, lays it out the same: from there each time)
   mut frame : Int
+  /// the set of causes read in that frame; another change at the same moment starts from the last settled way
+  mut revision : Int
   mut was : (RowSize, Double, Double, Double, Double, Double, (Double, Double, Double, Double, Double)?)
 }
 
@@ -202,6 +204,7 @@ fn RowCauses::height(
         k: 0.0,
         before: None,
         frame: -1,
+        revision: -1,
         was: (cause, from - to, to, c.start, c.end, 0.0, None),
       }
       sizes[key] = r
@@ -209,7 +212,7 @@ fn RowCauses::height(
       r
     }
   }
-  if r.frame == frame {
+  if r.frame == frame && r.revision == c.n {
     let (was_cause, a, was_to, start, end, rk, before) = r.was
     r.cause = was_cause
     r.a = a
@@ -220,6 +223,7 @@ fn RowCauses::height(
     r.before = before
   } else {
     r.frame = frame
+    r.revision = c.n
     r.was = (r.cause, r.a, r.to, r.start, r.end, r.k, r.before)
   }
   // (the way's speed as it set out, once every row on it has said what was off of it: the frame after)
