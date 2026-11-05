@@ -12,12 +12,14 @@ fn composer_keyboard_node(
   neighbour : ((Int) -> Unit)?,
 ) -> Unit {
   let entered = Ref(false)
+  // (at its cause: the chat come in or the field asked for, not once the field is laid out; a focus asked before the
+  // field's node holds it is kept and given as it comes to (Field::focus), so nothing here waits for layout)
   root.reacts(fn() {
-    (active(), spec().locked, field.takes_input(), field.laid_size_told() is Some(_), composing.wanted.get(), field.focused())
+    (active(), spec().locked, field.takes_input(), composing.wanted.get(), field.focused())
   }, fn(state) {
-    let (on, locked, input, laid, wanted, focused) = state
+    let (on, locked, input, wanted, focused) = state
     if !on { entered.val = false; return }
-    if locked || !laid { return }
+    if locked { return }
     let first = !entered.val
     entered.val = true
     // Entering under a modal still asks for the initial cursor. The field keeps that request for the modal to
