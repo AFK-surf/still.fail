@@ -122,8 +122,9 @@ pub fn ask_outcome_node(
             .lines_up(Is(Some(Start)))
             .says(By(fn() { Some(@view.said(Button, label=words().map(fn(r) { r.text }).join("") + " · " + @sf.t("web-main.history.details"))) }))
             |> ignore
+            // (beside where it is on screen as it is pressed)
             @sf.presses_node(h, fn() {
-              match h.laid_window_told() {
+              match h.shown_rect() {
                 Some((x, y, w, ht)) => open(At(x, y, w, ht))
                 None => open(Unanchored)
               }
