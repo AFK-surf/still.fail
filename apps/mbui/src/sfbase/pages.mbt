@@ -133,7 +133,7 @@ pub let app : App = {
 pub let left_pages : Array[Page] = []
 
 ///|
-/// Told as a page is left (left_pages): what tells where it was left (the frame's pages-left) built again for it.
+/// Told as a page is left (left_pages), so the app can tell where it was left after the frame's builds.
 // kept across runs: only counts on
 pub let left_said : @signals.Signal[Int] = @signals.signal(0)
 

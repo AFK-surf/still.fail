@@ -352,11 +352,6 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
-  // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
-  @sfbase.left_said.get() |> ignore
-  if left_pages.length() > 0 {
-    c.after_build("pages-left", fn() { pages_left(src) })
-  }
   // everything in still.fail's theme, as this frame's palette has it (light or dark, a phone's or a desktop's): the
   // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
   // beside what the system has at the window's sides (sides.mbt)
@@ -483,6 +478,12 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 /// theme, the window's sides, the layers over it).
 pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
+    // Tell where pages were left after a build, without making the old root read their departure on every frame.
+    root.reacts(fn() { @sfbase.left_said.get() }, fn(_) {
+      if left_pages.length() > 0 {
+        @ui.current().after_build("pages-left", fn() { pages_left(src) })
+      }
+    })
     // (the library's words, the app's catalog's, and their language as the core's prefs say it, said before any page of
     // nodes is made: what one says on its first frame is its words in that language, not their keys or the device's
     // laid out and then said again; the old frame tells them each build, the same)
