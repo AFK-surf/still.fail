@@ -1506,6 +1506,16 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
     }
     drawn.push((l, start, seg_from, inst, segs, owners, n, count, seg_count))
   }
+  if drawn.iter().any(fn(d) { d.6 != d.7 || d.4.length() / 4 != d.8 }) {
+    // (what is put together anew lies where the frame kept it: each where it was, none before the one before it ends,
+    // within the frame's instances and pieces; else said, naming the layer, before anything is put together: a
+    // test failing at it, a host told it before it goes on to trap (0.1.7336): what put it there is the cause, not this)
+    let spans = drawn.map(fn(d) { (d.0.id.at, d.1, d.7, d.2, d.8, d.6, d.4.length() / 4, d.3.length() / inst_size) })
+    match scene_spans_wrong(spans, scene.seg_tail, self.segs.length() / 4) {
+      Some(why) => @view.fault("scene: a frame put together round layers drawn again where they were not kept: " + why)
+      None => ()
+    }
+  }
   scene.trying = false
   scene.undo.clear()
   // (put where each was: into what the frame is shown from, the base the old frame's cycles are applied over where
@@ -2040,3 +2050,34 @@ fn scene_holds_all(o : SceneLayer, x : SceneLayer) -> Bool {
   o.start >= 0 && x.start >= o.start && x.start + x.count <= o.start + o.count
 }
 
+///|
+/// Where layers drawn again are not where the frame kept them, said, by each one's (node, where its instances began
+/// and how many there were, where its pieces began and how many, how many instances and pieces it drew now, how many
+/// it drew them into): one before 0, one with fewer than none, one begun before the one before it ends, one past the
+/// frame's `tail` instances or its `pieces`, one drawn into fewer than it says it drew; None where the frame can be put
+/// together round them (scene_spliced).
+fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], tail : Int, pieces : Int) -> String? {
+  let order = spans.copy()
+  order.sort_by(fn(a, b) { (a.1, a.2).compare((b.1, b.2)) })
+  let mut end = 0
+  let mut seg_end = 0
+  for s in order {
+    let (at, start, count, seg_from, seg_count, n, segs_now, room) = s
+    let what = "layer \{at} at \{start} for \{count} (now \{n}), pieces at \{seg_from} for \{seg_count} (now \{segs_now})"
+    if start < 0 || count < 0 || seg_from < 0 || seg_count < 0 || n < 0 {
+      return Some(what + ": less than none")
+    }
+    if start < end || seg_from < seg_end {
+      return Some(what + ": begun before the one before it ends, at \{end}, pieces at \{seg_end}")
+    }
+    if start + count > tail || seg_from + seg_count > pieces {
+      return Some(what + ": past the frame's \{tail} instances, \{pieces} pieces")
+    }
+    if room < n {
+      return Some(what + ": drawn into \{room} instances")
+    }
+    end = start + count
+    seg_end = seg_from + seg_count
+  }
+  None
+}
