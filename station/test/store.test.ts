@@ -55,7 +55,8 @@ import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "../src/vault/pending-index.ts";
-import { Secrets } from "../src/vault/secrets.ts";
+import { REBOX_BACKFILL_FIRST, REBOX_BACKFILL_NEXT, REBOX_READY } from "../src/vault/rebox-index.ts";
+import { CARRIED_SAVE_PENDING, Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
 
 const dirs: string[] = [];
@@ -113,6 +114,8 @@ function assertPendingVaultPlans() {
     [PENDING_SEED_FIRST, ["w", 32], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
     [PENDING_SEED, ["w", "r", 32], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
     [PENDING_BACKFILL_AFTER, ["w", "r", 32], ["SEARCH vault_requests USING COVERING INDEX"]],
+    [REBOX_BACKFILL_NEXT, ["w", "r", 32], ["SEARCH vault_requests USING COVERING INDEX"]],
+    [CARRIED_SAVE_PENDING, ["w", "r"], ["SEARCH vault_requests USING INDEX"]],
   ];
   for (const [sql, args, expected] of queries) {
     const steps = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((row) => row.detail);
@@ -120,6 +123,14 @@ function assertPendingVaultPlans() {
     assert.ok(steps.every((step) => !step.startsWith("SCAN ") && !step.includes("TEMP B-TREE")), detail);
     for (const part of expected) assert.ok(steps.some((step) => step.includes(part)), detail);
   }
+  assert.match(REBOX_BACKFILL_FIRST, /LIMIT \?$/);
+  assert.match(REBOX_BACKFILL_NEXT, /LIMIT \?$/);
+  const firstPlan = (db.prepare(`EXPLAIN QUERY PLAN ${REBOX_BACKFILL_FIRST}`).all(32) as { detail: string }[]).map((row) => row.detail);
+  assert.ok(firstPlan.some((step) => step.includes("SCAN vault_requests USING COVERING INDEX")), firstPlan.join(" | "));
+  const reboxPlan = (db.prepare(`EXPLAIN QUERY PLAN ${REBOX_READY}`).all() as { detail: string }[]).map((row) => row.detail);
+  assert.ok(reboxPlan.some((step) => step.startsWith("SCAN p")), reboxPlan.join(" | "));
+  assert.ok(reboxPlan.some((step) => step.startsWith("SEARCH r USING") && step.includes("(ws=? AND id=?)")), reboxPlan.join(" | "));
+  assert.ok(reboxPlan.every((step) => !step.startsWith("SCAN r")), reboxPlan.join(" | "));
 }
 
 function assertRecentChatPlans() {

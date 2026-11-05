@@ -5,6 +5,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
+import { backfillReboxIndex } from "./rebox-index.ts";
 import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type PendingPrepare, type UseAnswer, type UseRead } from "./use-index.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
@@ -12,6 +13,8 @@ db.exec("PRAGMA synchronous = NORMAL");
 const waiting: (UseRead | PendingPrepare)[] = [];
 const ready = new Set<string>();
 let backgroundComplete = false;
+let reboxComplete = false;
+let reboxTurn = true;
 let scheduled = false;
 let foregroundWaiting = false;
 const priority = workerData.priority instanceof SharedArrayBuffer ? new Int32Array(workerData.priority) : null;
@@ -33,14 +36,14 @@ function schedule(delay = 0) {
             ready.add(q.ws);
             parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
           }
-          if (waiting.length || !backgroundComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+          if (waiting.length || !backgroundComplete || !reboxComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
           return;
         }
       } catch (e) {
         const code = (e as { errcode?: number }).errcode;
         if (code !== undefined && ((code & 0xff) === 5 || (code & 0xff) === 6)) waiting.push(q);
         else parentPort!.postMessage({ id: q.id, error: (e as Error).message } satisfies UseAnswer);
-        if (waiting.length || !backgroundComplete) schedule(waiting.length > 1 ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+        if (waiting.length || !backgroundComplete || !reboxComplete) schedule(waiting.length > 1 ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
         return;
       }
     }
@@ -54,6 +57,7 @@ function schedule(delay = 0) {
       return;
     }
     foregroundWaiting = false;
+    let background: "uses" | "rebox" | null = null;
     try {
       if (q) {
         const pending = "kind" in q;
@@ -65,7 +69,15 @@ function schedule(delay = 0) {
             parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
           }
         } else waiting.push(q); // Give other workspaces a turn between this one's batches.
-      } else if (!backgroundComplete) backgroundComplete = backfillNextWorkspace(db);
+      } else if (!reboxComplete && (backgroundComplete || reboxTurn)) {
+        background = "rebox";
+        reboxComplete = backfillReboxIndex(db);
+        reboxTurn = false;
+      } else if (!backgroundComplete) {
+        background = "uses";
+        backgroundComplete = backfillNextWorkspace(db);
+        reboxTurn = true;
+      }
     } catch (e) {
       // Another process can be writing at handover. Give it the connection and resume the same batch later.
       const sqliteCode = (e as { errcode?: number }).errcode;
@@ -75,6 +87,10 @@ function schedule(delay = 0) {
         return;
       }
       if (q) parentPort!.postMessage({ id: q.id, error: (e as Error).message } satisfies UseAnswer);
+      else if (background === "rebox") {
+        log.error("vault", "the recovery index backfill stopped", { error: (e as Error).message });
+        reboxComplete = true;
+      }
       else {
         // A broken old request must not prevent a different workspace's indexed page from being read.
         log.error("vault", "the use history backfill stopped", { error: (e as Error).message });
@@ -83,7 +99,7 @@ function schedule(delay = 0) {
     } finally {
       giveBackfill(priority, threadId);
     }
-    if (waiting.length || !backgroundComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+    if (waiting.length || !backgroundComplete || !reboxComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
   };
   if (delay > 0) wall.after(delay, step);
   else setImmediate(step);
