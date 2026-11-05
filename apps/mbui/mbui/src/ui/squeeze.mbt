@@ -98,7 +98,8 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
     let p = b.parent
     if p >= 0 && p < n {
       let a = self.nodes[p]
-      cut[i] = cut[p] || a.squeeze_cuts()
+      // (a hosted old view may also be cut by the window tree, rather than by an old-frame box)
+      cut[i] = cut[p] || a.squeeze_cuts() || old_cuts.get(p) is Some(_)
       seen[i] = seen[p] && b.opacity > 0.01
       // (what scrolls sideways may run past its edges; a list or a scroll runs up and down, and cuts across as a box
       // that clips does)
