@@ -196,6 +196,26 @@ pub fn media_decode_stalled(c : @ui.Ctx, view : @ui.NativeView?) -> Bool {
 }
 
 ///|
+/// How long a frame asked of a player is waited for, its read and its seek together.
+pub let media_grab_wait_ms : Double = 10000.0
+
+///|
+/// Whether the frame asked of `n` has been waited for long enough. A system player may never end a seek, with nothing
+/// said; only the app's clock can tell a grab like that from one still on its way.
+pub fn media_grab_stalled(c : @ui.Ctx, n : @ui.NativeView) -> Bool {
+  if n.grab_since() < 0.0 {
+    return false
+  }
+  let left = n.grab_since() + media_grab_wait_ms - c.moment()
+  if left <= 0.0 {
+    true
+  } else {
+    c.wake_in(left)
+    false
+  }
+}
+
+///|
 /// A player with nothing in it yet. Its ways, as Player.kt's: the speeds a tap steps through, what a double tap on a
 /// side jumps, how long its controls stay left alone while it plays (0: they stay), a double tap's second tap's time,
 /// how long a note is said, how long its controls take to come and to go, how long it waits before it says it is

@@ -2424,7 +2424,7 @@ pub fn pdf_close(doc : Int) -> Unit {
 ///|
 /// What a video view says beyond its info: `what` 1 its frames' times (ms, comma between: view_control 20 asks them
 /// read), 2 how a frame grabbed stands (view_control 21 at a time in ms: "1" grabbing, "2" here, "-1" failed, "0"
-/// none); None while not known.
+/// none, view_control 23 ending one given up); None while not known.
 pub fn view_text(id : Int, what : Int) -> String? {
   current.val.view_text(id, what)
 }

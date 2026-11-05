@@ -171,6 +171,21 @@ static void webm_steps(NSString *file, NSString *mime) {
     check(state == 1 && fabs(info[1] - 2500) <= tolerance && info[2] == 0,
           [NSString stringWithFormat:@"%@: paused and sought to %.0f ms", tag, info[1]]);
     heldPosition = info[1];
+    mb_host_view_control(vid, 21, 2500);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); NSString *state = mb_ns_from_string(mb_host_view_text(vid, 2));
+    if ([state isEqualToString:@"1"] && t < 20 * 60) return NO;
+    check([state isEqualToString:@"2"], [NSString stringWithFormat:@"%@: the frame at the seek target grabbed (%@)", tag, state]);
+    if ([tag isEqualToString:@"test-vp9-aac.mp4"]) {
+      moonbit_bytes_t bytes = mb_host_view_still(vid);
+      NSString *path = [out_dir stringByAppendingPathComponent:[tag stringByAppendingString:@".target.png"]];
+      [[NSData dataWithBytes:bytes length:Moonbit_array_length(bytes)] writeToFile:path atomically:YES];
+      uint8_t px[4];
+      pixel(path, 160, 120, px);
+      check(near(px, 0, 0, 255, 40), [NSString stringWithFormat:@"%@: captured the frame at the seek target %@", tag, rgba(px)]);
+    }
     mb_host_view_control(vid, 22, 160);
     return YES;
   }];
@@ -192,10 +207,6 @@ static void webm_steps(NSString *file, NSString *mime) {
       if (px[3] == 255 && !near(px, 0, 0, 0, 8) && !near(px, 255, 255, 255, 8)) coloured++;
     }
     check(coloured >= 3, [NSString stringWithFormat:@"%@: captured the picture, not an empty frame", tag]);
-    if ([tag isEqualToString:@"test-vp9-aac.mp4"]) {
-      pixel(path, 80, 60, px);
-      check(near(px, 0, 0, 255, 40), [NSString stringWithFormat:@"%@: captured the frame at the seek target %@", tag, rgba(px)]);
-    }
     if (frame) CGImageRelease(frame);
     if (src) CFRelease(src);
     check(reads > 0 && maxRead <= (4 << 20), [NSString stringWithFormat:@"%@: bounded reads (%d)", tag, reads]);
@@ -239,6 +250,93 @@ static void webm_steps(NSString *file, NSString *mime) {
     if (state == 1 && (info[1] < 3500 || fabs(rate - 2) > 0.001) && t < 20 * 60) return NO;
     check(state == 1 && info[1] >= 3500 && fabs(rate - 2) <= 0.001,
           [NSString stringWithFormat:@"%@: played at a changed speed (%.2f)", tag, rate]);
+    mb_host_view_control(vid, 21, 500);
+    mb_host_view_control(vid, 23, 0);
+    check([mb_ns_from_string(mb_host_view_text(vid, 2)) isEqualToString:@"0"],
+          [NSString stringWithFormat:@"%@: a grab given up is over", tag]);
+    mb_host_view_close(vid);
+    return YES;
+  }];
+}
+
+// VP9 in MP4 through WebKit, sought as it plays: its frames are red before 2 s and blue after. What shows now can be
+// grabbed in the middle of a seek, however that seek goes.
+static void vp9_mp4_steps(NSString *file) {
+  NSData *data = [NSData dataWithContentsOfFile:file];
+  __block int32_t vid = 0;
+  __block int reads = 0;
+  double *info = calloc(10, sizeof(double));
+  NSString *tag = file.lastPathComponent;
+  NSString *path = [out_dir stringByAppendingPathComponent:[tag stringByAppendingString:@".jpg"]];
+  void (^pump)(void) = ^{
+    double o[2]; int32_t rid;
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) continue;
+      reads++;
+      long long off = (long long)o[0], n = MAX(0, MIN((long long)o[1], (long long)data.length - off));
+      n = MIN(n, 64 << 10);
+      mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes + MIN(off, (long long)data.length), n), data.length, 1);
+      mb_host_view_read_answer(vid, rid, mbytes(NULL, 0), data.length, 0);
+    }
+  };
+  // The grab of what shows, once answered: its middle's colour, as a check named `what`.
+  BOOL (^shown)(int, int, int, int, NSString *) = ^BOOL(int t, int r, int g, int b, NSString *what) {
+    pump(); NSString *state = mb_ns_from_string(mb_host_view_text(vid, 2));
+    if ([state isEqualToString:@"1"] && t < 20 * 60) return NO;
+    check([state isEqualToString:@"2"], [NSString stringWithFormat:@"%@: %@ grabbed (%@)", tag, what, state]);
+    moonbit_bytes_t bytes = mb_host_view_still(vid);
+    [[NSData dataWithBytes:bytes length:Moonbit_array_length(bytes)] writeToFile:path atomically:YES];
+    if (r >= 0) {
+      uint8_t px[4];
+      pixel(path, 80, 60, px);
+      check(near(px, r, g, b, 40), [NSString stringWithFormat:@"%@: %@ shows its frame %@", tag, what, rgba(px)]);
+    }
+    return YES;
+  };
+  [steps addObject:^BOOL(int t) {
+    vid = mb_host_view_open(1, mb_string_from_ns(@"video/mp4"));
+    mb_host_view_place(vid, 40, 30, 320, 240, 40, 30, 360, 270, 0, 0, 0, 0, 1);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if ((state == 0 || state == 2) && t < 20 * 60) return NO;
+    check(state == 1 && info[6] == 1, [NSString stringWithFormat:@"%@: ready (%d)", tag, state]);
+    check(fabs(info[0] - 5000) < 300 && info[3] == 320 && info[4] == 240,
+          [NSString stringWithFormat:@"%@: duration %.0f ms, size %.0fx%.0f", tag, info[0], info[3], info[4]]);
+    mb_host_view_control(vid, 1, 0);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && info[1] < 300 && t < 20 * 60) return NO;
+    check(state == 1 && info[1] >= 300 && info[2] == 1, [NSString stringWithFormat:@"%@: played to %.0f ms", tag, info[1]]);
+    mb_host_view_control(vid, 22, 160);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    if (!shown(t, 255, 0, 0, @"the first picture")) return NO;
+    mb_host_view_control(vid, 3, 3000);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && info[1] < 3300 && t < 20 * 60) return NO;
+    check(state == 1 && info[1] >= 3300 && info[2] == 1,
+          [NSString stringWithFormat:@"%@: played on from a seek, to %.0f ms", tag, info[1]]);
+    mb_host_view_control(vid, 22, 160);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    if (!shown(t, 0, 0, 255, @"the picture after a seek")) return NO;
+    mb_host_view_control(vid, 2, 0);
+    mb_host_view_control(vid, 3, 1000);
+    mb_host_view_control(vid, 22, 160);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    if (!shown(t, -1, 0, 0, @"what shows during a paused seek")) return NO;
+    check(reads > 0 && reads < 32, [NSString stringWithFormat:@"%@: nearby MP4 reads were reused (%d)", tag, reads]);
     mb_host_view_close(vid);
     return YES;
   }];
@@ -715,6 +813,7 @@ int main(int argc, char **argv) {
     webm_steps([out_dir stringByAppendingPathComponent:@"test-vp9.webm"], @"video/webm");
     webm_steps([out_dir stringByAppendingPathComponent:@"test-vp8.webm"], @"video/webm");
     webm_steps([out_dir stringByAppendingPathComponent:@"test-vp9-opus.webm"], @"video/webm");
+    vp9_mp4_steps([out_dir stringByAppendingPathComponent:@"test-vp9-aac.mp4"]);
     webm_steps([out_dir stringByAppendingPathComponent:@"test-vp9-aac.mp4"], @"video/mp4");
     webm_thumbnail_steps([out_dir stringByAppendingPathComponent:@"test-vp9.webm"], @"video/webm");
     webm_thumbnail_steps([out_dir stringByAppendingPathComponent:@"test-vp9-aac.mp4"], @"video/mp4");

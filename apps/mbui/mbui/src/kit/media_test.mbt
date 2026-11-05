@@ -89,3 +89,44 @@ test "a player waits for the decoder only after all bytes arrived, and retry sta
   t.run_for(margin * 2.0)
   assert_eq(last.val.unwrap().status.state, 1)
 }
+
+///|
+test "a frame asked of a player is waited for only so long, and another can be asked then" {
+  let m = @kit.Media::new()
+  let stalled = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      m.frame(c) |> ignore
+      if m.native() is Some(n) && @kit.media_grab_stalled(c, n) {
+        stalled.val = true
+      }
+    },
+    finish=false,
+  )
+  let wait = @kit.media_grab_wait_ms
+  let margin = wait / 40.0
+  let track : @kit.MediaTrack = {
+    name: "a.mp4",
+    mime: "video/mp4",
+    audio: false,
+    read: fn(_, _, _) { fn() {  } },
+    direct: "",
+  }
+  m.open(track)
+  let n = m.native().unwrap()
+  t.draw()
+  n.grab_frame(1000.0)
+  t.draw()
+  t.advance(wait - margin)
+  t.frame_at(t.time())
+  assert_false(stalled.val)
+  assert_true(n.grabbing())
+  t.advance(margin * 2.0)
+  t.frame_at(t.time())
+  assert_true(stalled.val)
+  n.give_up_grab()
+  assert_false(n.grabbing())
+  assert_eq(n.grab_since(), -1.0)
+  n.grab_frame(2000.0)
+  assert_true(n.grabbing())
+}

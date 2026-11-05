@@ -327,6 +327,27 @@ test "a desktop's on a narrow page with a finger: short of room for its keys a f
 }
 
 ///|
+test "a frame the host never gives is given up by the app's clock, told as failed, and can be asked again" {
+  let t = player_tester(false, "a.mp4", ["a.mp4"], [], [])
+  let said : Array[String] = []
+  set_viewer_host({ ..viewer_host_default(), say: fn(s) { said.push(s) } })
+  t.draw()
+  t.click(Button, label="android-chat.video.saveFrame")
+  t.draw()
+  assert_eq(said.length(), 0)
+  t.run_for(@kit.media_grab_wait_ms / 2.0)
+  assert_eq(said.length(), 0)
+  t.run_for(@kit.media_grab_wait_ms)
+  assert_eq(said, ["android-chat.video.saveFrame.failed"])
+  t.click(Button, label="android-chat.video.saveFrame")
+  t.draw()
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"89504e47\"}"))
+  t.draw()
+  t.run_for(@kit.media_grab_wait_ms * 2.0)
+  assert_eq(said.length(), 1)
+}
+
+///|
 test "the player's volume read out as a slider whose range is its least, where it is, its most, and told so to the host" {
   let p = @kit.Media::new()
   p.set_volume(0.4)

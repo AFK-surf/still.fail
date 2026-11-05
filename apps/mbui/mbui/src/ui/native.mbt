@@ -41,6 +41,8 @@ pub struct NativeView {
   priv state : @signals.Signal[Int]
   /// When the host said all file bytes had reached a player still awaiting its first frame; -1 otherwise.
   priv mut decode_since : Double
+  /// when the grab going was asked for, by the app's clock (-1: none going)
+  priv mut grab_since : Double
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it)
   priv mut painted : Int
   /// where in that frame's paint it was (how many instances were before it): the views are stacked so
@@ -236,6 +238,7 @@ fn NativeView::make(
     info: FixedArray::makei(10, fn(_) { @signals.signal(0.0, same=fn(a, b) { a == b }) }),
     state: @signals.signal(0, same=fn(a, b) { a == b }),
     decode_since: -1.0,
+    grab_since: -1.0,
     painted: -1,
     seq: 0,
     at: FixedArray::make(12, 0.0),
@@ -495,6 +498,7 @@ pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
       abort(s)
     }
     outside_start(outside_grab, self.id, "a frame of view \{self.id} grabbed")
+    self.grab_since = view_now()
     h_view_control(self.id, 21, ms)
   }
 }
@@ -512,6 +516,7 @@ pub fn NativeView::grab_shown(self : NativeView, side : Double) -> Unit {
       abort(s)
     }
     outside_start(outside_grab, self.id, "the frame view \{self.id} shows grabbed")
+    self.grab_since = view_now()
     h_view_control(self.id, 22, side)
   }
 }
@@ -543,10 +548,30 @@ pub fn NativeView::grabbed(self : NativeView) -> Bytes? {
     _ => None
   }
   if got is Some(_) {
+    self.grab_since = -1.0
     answer_taken(outside_grab, self.id)
     outside_end(outside_grab, self.id)
   }
   got
+}
+
+///|
+/// When the grab going was asked for, by the app's clock (-1: none going): what decides how long to wait for its answer
+/// reads it (@kit.media_grab_stalled).
+pub fn NativeView::grab_since(self : NativeView) -> Double {
+  self.grab_since
+}
+
+///|
+/// The grab going given up, its answer no longer waited on: another may be asked at once. A host that can end it stops
+/// looking for that frame; one that answers all the same is not read until the next grab has been answered.
+pub fn NativeView::give_up_grab(self : NativeView) -> Unit {
+  if self.id != 0 && !self.closed && self.grab_since >= 0.0 {
+    self.grab_since = -1.0
+    answer_taken(outside_grab, self.id)
+    outside_end(outside_grab, self.id)
+    h_view_control(self.id, 23, 0.0)
+  }
 }
 
 ///|
@@ -836,6 +861,17 @@ let views_stirred : Array[Int] = []
 let info_out : FixedArray[Double] = FixedArray::make(10, 0.0)
 
 ///|
+/// The moment a view's host said something, or the frames' clock where it says none.
+fn view_now() -> Double {
+  let at = view_moment()
+  if at >= 0.0 {
+    at
+  } else {
+    g().clock
+  }
+}
+
+///|
 /// How it stands, read of its host now into its signals: what reads them told where it changed.
 fn NativeView::stood(self : NativeView) -> Unit {
   if self.closed || self.id == 0 {
@@ -843,8 +879,7 @@ fn NativeView::stood(self : NativeView) -> Unit {
   }
   let state = h_view_info(self.id, info_out)
   if state == 2 && self.decode_since < 0.0 {
-    let at = view_moment()
-    self.decode_since = if at >= 0.0 { at } else { g().clock }
+    self.decode_since = view_now()
   } else if state != 2 {
     self.decode_since = -1.0
   }
@@ -860,10 +895,10 @@ fn NativeView::stood(self : NativeView) -> Unit {
 /// Its host said how view `id` stands changed (hostcall.mbt's outside_stood): a frame, which reads it as it begins.
 fn view_stood(id : Int, state : Int) -> Unit {
   if state == 2 {
-    let at = view_moment()
+    let at = view_now()
     for v in open_views {
       if v.id == id && v.decode_since < 0.0 {
-        v.decode_since = if at >= 0.0 { at } else { g().clock }
+        v.decode_since = at
       }
     }
   }

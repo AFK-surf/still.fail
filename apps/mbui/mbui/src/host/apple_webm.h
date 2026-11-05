@@ -76,7 +76,7 @@ static NSString *const kWebVideoHTML =
      "video{width:100%;height:100%;object-fit:fill;display:block}</style>"
      "<video id='v' playsinline preload='none'></video>"
      "<script>"
-     "const v=document.getElementById('v');let waiting=false,ticking=false,changes=0,grabRestore=null,pendingGrab=null;"
+     "const v=document.getElementById('v');let waiting=false,ticking=false,changes=0,grabRestore=null,pendingGrab=null,grabWait=null;"
      "const post=o=>window.webkit.messageHandlers.mbvideo.postMessage(o);"
      "const videoFrames=typeof v.requestVideoFrameCallback==='function'&&typeof v.cancelVideoFrameCallback==='function';"
      "let frameReady=!videoFrames,frameGeneration=0,frameRequest=null,seekTarget=null,lastFrame=null,frameStep=1;"
@@ -104,19 +104,19 @@ static NSString *const kWebVideoHTML =
      "v.addEventListener('playing',()=>{waiting=false;status();startTick()});"
      "v.addEventListener('canplay',()=>{waiting=false;status()});"
      "v.addEventListener('error',()=>{status();if(pendingGrab!==null){pendingGrab=null;post({type:'grabFailed'})}});"
-     "function grab(ms){"
+     "function grab(ms,atOnce){"
      "if(v.error){post({type:'grabFailed'});return}"
      "if(v.readyState<2){"
-     "const clear=()=>{for(const e of ['loadeddata','canplay','seeked'])v.removeEventListener(e,loaded);v.removeEventListener('error',failed)};"
-     "const loaded=()=>{clear();grab(ms)};"
+     "const clear=()=>{grabWait=null;for(const e of ['loadeddata','canplay','seeked'])v.removeEventListener(e,loaded);v.removeEventListener('error',failed)};"
+     "const loaded=()=>{clear();grab(ms,atOnce)};"
      "const failed=()=>{clear();post({type:'grabFailed'})};"
      "for(const e of ['loadeddata','canplay','seeked'])v.addEventListener(e,loaded,{once:true});"
-     "v.addEventListener('error',failed,{once:true});return;}"
+     "v.addEventListener('error',failed,{once:true});grabWait=clear;return;}"
      "if(ms>=0&&Math.abs(v.currentTime*1000-ms)>=1){"
      "grabRestore={time:v.currentTime,changes};"
      "pendingGrab=-1;seekTo(ms/1000);return;}"
-     "if(v.seeking||!frameReady){pendingGrab=ms;return;}post({type:'grabReady'});}"
-     "function endGrab(){if(grabRestore&&grabRestore.changes===changes&&!v.error)seekTo(grabRestore.time);grabRestore=null;}"
+     "if(!atOnce&&(v.seeking||!frameReady)){pendingGrab=ms;return;}post({type:'grabReady'});}"
+     "function endGrab(){pendingGrab=null;if(grabWait)grabWait();if(grabRestore&&grabRestore.changes===changes&&!v.error)seekTo(grabRestore.time);grabRestore=null;}"
      "window.mbPlayer={play(){changes++;if(v.ended)seekTo(0);v.play().catch(()=>status())},"
      "pause(){changes++;v.pause();status()},seek(ms){changes++;seekTo(Math.max(0,Math.min(Number.isFinite(v.duration)?v.duration:Infinity,ms/1000)));status()},"
      "rate(r){v.playbackRate=r;status()},volume(n){v.volume=n;status()},grab,endGrab};"
@@ -411,7 +411,14 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
     case 21: case 22:
       self.owner.still = nil; self.owner.stillState = 1;
       self.grabbing = YES; self.grabPNG = op == 21; self.grabSide = op == 22 ? MAX(1, value) : 0;
-      [self send:[NSString stringWithFormat:@"mbPlayer.grab(%.6f)", op == 21 ? MAX(0, value) : -1.0]];
+      // What shows now is taken as it is: a seek that does not end must not hold a viewer closing.
+      [self send:op == 21 ? [NSString stringWithFormat:@"mbPlayer.grab(%.6f)", MAX(0, value)] : @"mbPlayer.grab(-1,true)"];
+      break;
+    case 23:
+      if (self.grabbing) {
+        self.grabbing = NO; self.owner.stillState = 0;
+        [self send:@"mbPlayer.endGrab()"];
+      }
       break;
   }
 }

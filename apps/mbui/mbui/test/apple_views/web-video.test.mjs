@@ -130,6 +130,37 @@ test("a frame from before a seek cannot make that seek ready", () => {
   assert.equal(count("grabReady"), 1);
 });
 
+test("what shows now is grabbed without waiting for a seek", () => {
+  const { api, count, video } = player();
+  video.frame();
+  api.seek(2500);
+  assert.equal(video.seeking, true);
+  api.grab(-1);
+  assert.equal(count("grabReady"), 0);
+  api.endGrab();
+  api.grab(-1, true);
+  assert.equal(count("grabReady"), 1);
+});
+
+test("a grab given up is forgotten, whether it waited for a seek or for the file", () => {
+  const seeking = player();
+  seeking.video.frame();
+  seeking.api.seek(2500);
+  seeking.api.grab(-1);
+  seeking.api.endGrab();
+  seeking.video.finishSeek();
+  seeking.video.frame(2.5);
+  assert.equal(seeking.count("grabReady"), 0);
+  const loading = player();
+  loading.video.readyState = 0;
+  loading.api.grab(0);
+  loading.api.endGrab();
+  loading.video.readyState = 2;
+  loading.video.emit("loadeddata");
+  loading.video.frame();
+  assert.equal(loading.count("grabReady"), 0);
+});
+
 test("a frame captured elsewhere restores the playhead unless it changed", () => {
   const { video, api, count } = player();
   video.frame();
