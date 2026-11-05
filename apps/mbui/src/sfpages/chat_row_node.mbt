@@ -491,7 +491,7 @@ fn swipe_under_node(
 
 ///|
 /// A finger's row (mobile/Home.tsx SwipeArchive) swiped left in its slot `sw` to archive its chat (swipe_to_archive's):
-/// across and left first it is the swipe (the row's press and hold let go), else the list's (or what the row is on:
+/// left past the slop and plainly across first it is the swipe (swipe_claims: the row's press and hold let go), else the list's (or what the row is on:
 /// the tape's, to the right). The row follows the finger, `off` how far (points); let go past `archive_at_share` of
 /// its width or flung left it goes off to the left as fast as the finger let it go and, there, its chat is archived
 /// (refused, it comes back from there); else it springs back. One busy springs back; one keeping watch springs back
@@ -520,7 +520,7 @@ fn swipe_node(
   sw
   .claims(fn(dx, dy) {
     let i = @signals.untracked(item)
-    i.swipe_archive && !rows.swiped_off.contains(swiped_key(i)) && dx < 0.0 && dx.abs() > dy.abs()
+    i.swipe_archive && !rows.swiped_off.contains(swiped_key(i)) && swipe_claims(dx, dy)
   })
   .on_drag(fn(d) {
     let w = if d.w > 1.0 { d.w } else { 1.0 }
@@ -546,9 +546,8 @@ fn swipe_node(
       }
       Up => {
         let at = @signals.untracked(fn() { off.target() })
-        let fling = d.vx < -fling_speed && at < -fling_from
         past.set(false)
-        if at < -w * archive_at_share || fling {
+        if swipe_archives(at, w, d.vx) {
           if row_busy(src, i) {
             back(d.vx)
           } else if i.swipe_ask is Some(_) {

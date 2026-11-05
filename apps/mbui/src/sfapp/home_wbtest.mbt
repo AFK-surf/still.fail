@@ -476,6 +476,51 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
 }
 
 ///|
+/// A finger down at the first of `at`, moved through the rest a finger's step apart, let go at the last.
+fn finger_along(t : @ui.Tester, at : Array[(Double, Double)]) -> Unit {
+  t.touch(0, at[0].0, at[0].1)
+  for p in at[1:] {
+    t.run_for(@ui.input_step_ms)
+    t.touch(1, p.0, p.1)
+  }
+  t.touch(2, at[at.length() - 1].0, at[at.length() - 1].1)
+  t.draw()
+}
+
+///|
+test "a row flicked left a little, quickly, archives nothing; flicked from past half the line, it does" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  list_down(t, 12)
+  t.draw()
+  let (_, y) = t.find("把旧的截图都换成新的").unwrap()
+  // 50 across in two of a finger's steps: fast, short of half the line (390's: 68 of 136)
+  t.drag(300.0, y, 250.0, y, steps=2)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  // 90 across as fast: past half the line, flung, archived
+  t.drag(320.0, y, 230.0, y, steps=2)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+}
+
+///|
+test "a finger scrolling the list that sets off a little to the left scrolls it, archiving nothing" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  list_down(t, 12)
+  t.draw()
+  let (_, y) = t.find("把旧的截图都换成新的").unwrap()
+  // its first move more across than down, within the slop; then down, drifting left on
+  finger_along(t, [(300.0, y), (296.0, y + 1.0), (292.0, y + 40.0), (288.0, y + 80.0), (284.0, y + 120.0)])
+  t.run_for(@ui.move_most_ms)
+  let (_, y2) = t.find("把旧的截图都换成新的").unwrap()
+  assert_true(y2 > y + 60.0, msg="the list scrolled with the finger: \{y} -> \{y2}")
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  assert_eq(t.haptics(), [])
+}
+
+///|
 test "a finger swipes a waiting, failed or unread chat to archive it on both small and large screens" {
   for w in [390.0, 1100.0] {
     for (title, session) in [
