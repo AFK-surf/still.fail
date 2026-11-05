@@ -58,6 +58,10 @@ pub fn composer_node(
   let root = parent.box(fn(root) {
     let w = @sfbase.writing_in(root, src, draft)
     w_at.val = Some(w)
+    // An entering chat's first shape includes the cursor it will take on a keyboard-driven screen.
+    if active() && !spec().locked && !@sf.soft_keyboard() && !@ui.current().field_focused() {
+      w.field.focus()
+    }
     let ready = fn() { (w.ready.get() || (w.text.get().trim() != "" && !w.starting.get())) && !spec().locked }
     let no_files = fn() { spec().locked || spec().offline }
     let has_extras = fn() { !w.files.get().is_empty() || !w.quotes.get().is_empty() }
