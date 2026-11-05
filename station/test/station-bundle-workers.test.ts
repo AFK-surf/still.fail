@@ -40,6 +40,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.exec("UPDATE post_blocks_meta SET fresh = 0; DELETE FROM post_blocks");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
+      ["sessions/session-count-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
       ["read/said-worker.js", { session: "old-turn" }],

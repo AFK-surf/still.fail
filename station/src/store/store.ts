@@ -42,6 +42,8 @@ import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts"
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
+import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
+  SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
@@ -50,22 +52,7 @@ import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts"
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
 export { JOBS_RUNNING, SESSION_JOBS };
 export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
-export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
-// The existing index starts with connect. Seek each distinct connect, then count only the requested workspace's rows;
-// a home workspace also includes rows from before workspaces were kept (ws IS NULL).
-const sessionCountsVisible = (home: boolean) => `WITH RECURSIVE connects(connect) AS (
-  VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
-  UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
-    FROM connects c WHERE c.connect IS NOT NULL
-), workspaces(ws) AS (VALUES (?)${home ? ", (NULL)" : ""})
-SELECT c.connect, w.ws,
-  (SELECT COUNT(*) AS n FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws) AS n
-FROM connects c CROSS JOIN workspaces w
-WHERE c.connect IS NOT NULL AND EXISTS
-  (SELECT 1 FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws)
-ORDER BY c.connect, w.ws`;
-export const SESSION_COUNTS_VISIBLE = sessionCountsVisible(false);
-export const SESSION_COUNTS_HOME = sessionCountsVisible(true);
+export { SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME };
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 // Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
@@ -383,6 +370,7 @@ export class Store {
       addLetters(db);
       installPostBlocks(db);
       installWorkspaceActivity(db);
+      installSessionCounts(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);
@@ -580,9 +568,31 @@ export class Store {
   /// How many sessions each connect has, including archived ones. A viewer's count seeks only their workspace; null
   /// asks for the whole station (including the pre-workspace rows).
   sessionCounts(viewer: InWorkspace | null = null): { connect: string; ws: string | null; n: number }[] {
-    const rows = viewer === null ? this.#all(SESSION_COUNTS)
-      : this.#all(viewer.home === false ? SESSION_COUNTS_VISIBLE : SESSION_COUNTS_HOME, viewer.workspace);
-    return rows.map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+    this.db.exec("SAVEPOINT session_counts");
+    try {
+      if (!sessionCountsReady(this.db)) throw new Error("session counts are not ready");
+      const rows = viewer === null ? this.#all(SESSION_COUNTS)
+        : this.#all(viewer.home === false ? SESSION_COUNTS_VISIBLE : SESSION_COUNTS_HOME, viewer.workspace);
+      return rows.map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+    } finally { this.db.exec("RELEASE session_counts"); }
+  }
+
+  /// Only the totals an overview will show: one per visible workspace and one per displayed connection. The scope and
+  /// connection counts share one snapshot, even while another connection changes sessions.
+  overviewSessionCounts(viewer: InWorkspace, connects: readonly unknown[]): { total: number; byConnect: Map<string, number> } | null {
+    this.db.exec("SAVEPOINT overview_session_counts");
+    try {
+      if (!sessionCountsReady(this.db)) return null;
+      const scopes: [number, string][] = [[1, viewer.workspace]];
+      if (viewer.home !== false) scopes.push([0, ""]);
+      const total = scopes.reduce((n, [kind, ws]) => n + (this.#one(SESSION_COUNT_TOTAL, kind, ws)?.n ?? 0), 0);
+      const byConnect = new Map<string, number>();
+      for (const connect of connects) {
+        if (typeof connect !== "string" || byConnect.has(connect)) continue;
+        byConnect.set(connect, scopes.reduce((n, [kind, ws]) => n + (this.#one(SESSION_COUNT_CONNECT, kind, ws, connect)?.n ?? 0), 0));
+      }
+      return { total, byConnect };
+    } finally { this.db.exec("RELEASE overview_session_counts"); }
   }
 
   /// Whether any session runs a turn now.

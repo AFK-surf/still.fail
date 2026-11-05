@@ -165,6 +165,8 @@ export class Hub {
   readonly actors = new Map<string, SessionActor>();
   /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
   waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  /// An older store's session totals are built in bounded batches after handover.
+  waitForSessionCounts: (() => Promise<boolean>) | null = null;
   /// An old thread's requested message suffix is indexed off the station thread before delivery.
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
