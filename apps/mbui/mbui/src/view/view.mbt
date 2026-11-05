@@ -298,6 +298,9 @@ pub(all) struct Work {
   mut drawn_boxes : Int
   /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes)
   mut settles : Int
+  /// what what the layout told (what is in sight, under the pointer, left out) marked of layout, left to the next
+  /// frame: never laid out again in the same pass (Tree::laid_out); none where all of it is the tree's own
+  mut owed : Int
 } derive(Eq, Debug)
 
 ///|
@@ -388,16 +391,6 @@ struct Node {
   /// whether Tab's stop on it is said by View::tab_stop (the last saying of it), not by View::focusable's `tab`
   mut tab_by_stop : Bool
   mut focused_cell : @signals.Signal[Bool]?
-  /// how big it was laid out, told once all of the layout is done (View::laid_size_told: none till then); made as
-  /// first read
-  mut size_cell : @signals.Signal[(Double, Double)?]?
-  /// its placed rectangle in the window, without drawing transforms, told after placement to an attached overlay
-  mut rect_cell : @signals.Signal[(Double, Double, Double, Double)?]?
-  /// its rectangle where it is drawn, including its holders' drawing transforms, followed by a detached overlay
-  mut drawn_rect_cell : @signals.Signal[(Double, Double, Double, Double)?]?
-  /// the side it went on beside its anchor, told once all of the layout is done (View::went_told: none till then); made
-  /// as first read
-  mut went_cell : @signals.Signal[Side?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
   mut bounds_input : Bool
   /// what it and what it holds are drawn clear of the fading and stretching of (View::drawn_clear_of)
@@ -435,9 +428,14 @@ struct Node {
   /// what it is makes them: Tree::give_way_applied)
   mut shrink_said : Double?
   mut min_w_said : Double??
+  /// its least width said within what holds it (View::min_width_within: the points, or all of what holds it where that is
+  /// less)
+  mut min_w_within : Bool
   /// how wide it may be at most as said of it (View::max_width; None: not said, as what it is makes it:
   /// Tree::capped_applied)
   mut max_w_said : Double??
+  /// its most width said within what holds it (View::max_width_within)
+  mut max_w_within : Bool
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -631,11 +629,14 @@ pub struct Tree {
   outs_said : @signals.Signal[Int]
   /// what its rows left out changed in this layout, to be told as it is done
   mut outs_changed : Bool
-  /// the nodes whose size is followed (View::laid_size_told), told as all of the layout is done
-  sized : Array[Int]
-  /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
-  /// then; none: all of it)
+  /// what is to be brought into sight as the change asking it ends (Tree::show_in_sight): a node, and where in it (its
+  /// own terms, asked then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
+  /// whether what is to be brought into sight is to be told as the change asking it ends (Tree::show_in_sight)
+  mut shows_asked : Bool
+  /// whether the tree is being laid out now (Tree::laid_out): what is asked of where things are then is as it places
+  /// them, never laid out again for it
+  mut laying : Bool
   /// the nodes left out in this layout, what they held, their focus and their back to be let go of as it is done
   outs_gone : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
@@ -684,8 +685,6 @@ pub struct Tree {
   mut glides_gone : (Int) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
-  /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
-  laid_waits : Array[() -> Unit]
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
@@ -865,8 +864,9 @@ pub fn Tree::new(
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_changed: false,
-    sized: [],
     shows_due: [],
+    shows_asked: false,
+    laying: false,
     outs_gone: [],
     time,
     cause_at: -1.0,
@@ -919,7 +919,6 @@ pub fn Tree::new(
     glides: fn(_, _) {  },
     glides_gone: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
-    laid_waits: [],
     pressing: None,
     pointed: None,
     lit_every: false,
@@ -994,6 +993,7 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      owed: 0,
     },
   }
   let root = t.made(-1)
@@ -1032,6 +1032,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.shrink_said = None
       n.min_w_said = None
       n.max_w_said = None
+      n.min_w_within = false
+      n.max_w_within = false
       n.look.runs = []
       n.look.runs_look = runs_plain
       n.look.runs_pressed = -1
@@ -1115,10 +1117,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.beside_last = None
       n.beside_point = None
       n.focused_cell = None
-      n.size_cell = None
-      n.rect_cell = None
-      n.drawn_rect_cell = None
-      n.went_cell = None
       n.bounds_input = false
       n.drawn_clear = None
       n.bar_near = 0.0
@@ -1210,10 +1208,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         focus_tab: true,
         tab_by_stop: false,
         focused_cell: None,
-        size_cell: None,
-        rect_cell: None,
-        drawn_rect_cell: None,
-        went_cell: None,
         bounds_input: false,
         drawn_clear: None,
         bar_near: 0.0,
@@ -1231,6 +1225,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         shrink_said: None,
         min_w_said: None,
         max_w_said: None,
+        min_w_within: false,
+        max_w_within: false,
         shorter: [],
         claims_scroll: false,
         scroll_held: -1,
@@ -1632,7 +1628,6 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.free.shrink_to_fit()
   self.scrolls_at.clear()
   self.shows_due.clear()
-  self.laid_waits.clear()
   self.afters.clear()
   self.held_tracks.clear()
   self.thumbs.clear()
@@ -3091,9 +3086,6 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
     for l in self.lists.copy() {
       let n = self.nodes[l.holder]
       if n.live && n.gen == l.gen {
-        // (what holds its blocks laid out already in this pass: as big as it is told so before they are made, what
-        // they read of it as it is, not as it was last told)
-        self.sizes_told_up(l.holder)
         let marked = l.marked
         l.marked = false
         if (l.lay)(place, marked) {
@@ -3108,27 +3100,6 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
     }
   }
   placed
-}
-
-///|
-/// Node `at` and each that holds it, laid out in this pass: how big each is told now where it is followed (View::
-/// laid_size_told), what is laid out after them in the same pass reading them as they are (a windowed list's blocks,
-/// Tree::lists_laid); what is laid out nowhere keeping the size it had, as all is told (Tree::sizes_told).
-fn Tree::sizes_told_up(self : Tree, at : Int) -> Unit {
-  let mut i = at
-  while i >= 0 {
-    let n = self.nodes[i]
-    match n.size_cell {
-      Some(cell) if n.live && !self.out_at(i) => {
-        let size = Some((n.flex.width, n.flex.height))
-        if @signals.untracked(fn() { cell.get() }) != size {
-          cell.set(size)
-        }
-      }
-      _ => ()
-    }
-    i = n.parent
-  }
 }
 
 ///|
@@ -5363,10 +5334,6 @@ fn View::let_go(self : View) -> Unit {
   n.beside_point = None
   n.focused_cell = None
   n.focus_shown_cell = None
-  n.size_cell = None
-  n.rect_cell = None
-  n.drawn_rect_cell = None
-  n.went_cell = None
   n.shows = None
   n.shows_across = false
   n.claims = None
@@ -6426,52 +6393,103 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 
 ///|
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
-/// things are as an event finds them in the middle of its change: Tree::laid_now).
+/// things are as an event finds them in the middle of its change: Tree::laid_now). One way, once (docs/retained.md's
+/// rule 10): the bindings told worked out; what they marked laid out and placed, the windowed lists' blocks by their
+/// lists after all else; what goes beside another and what is placed by where things are laid out placed then
+/// (View::beside, View::offset_placed), what changed of its look made again; then what where things are tells (what
+/// rows left out, what is under the pointer) told, and what that marks of where things are drawn and how they look
+/// worked out with it (Tree::told_applied). Nothing is laid out again for what layout told: what that marks of layout
+/// is the next frame's, counted as owed (Work's `owed`).
 fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+  ignore(upto)
   let w = self.last_w
   let h = self.last_h
   if !self.due {
     return
   }
+  let was_laying = self.laying
+  self.laying = true
+  // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
+  // what they set again marks what it marks)
+  self.bindings_run()
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
-  let mut placing = false
-  let mut rounds = 0
-  while rounds == 0 || ((!self.bindings_due.is_empty() || self.layout_due) && rounds < 4) {
-    rounds = rounds + 1
-    // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own
-    // now, what they set again marks what it marks)
-    self.bindings_run()
-    if self.layout_due || !self.places_due.is_empty() {
-      placing = true
-    }
-    if self.layout_due {
-      self.layout_due = false
-      // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
-      // read before it and not placed by yet placed too, Tree::measured_now)
-      let gen = if self.measured_gen >= 0 {
-        if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
+  let mut placing = self.layout_due || !self.places_due.is_empty()
+  if self.layout_due {
+    self.layout_due = false
+    // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
+    // read before it and not placed by yet placed too, Tree::measured_now)
+    let gen = if self.measured_gen >= 0 {
+      if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
+    } else {
+      self.work.computes = self.work.computes + 1
+      let g = @flex.computes() + 1
+      @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
+      if self.walk_from >= 0 && self.walk_from < g {
+        self.walk_from
       } else {
-        self.work.computes = self.work.computes + 1
-        let g = @flex.computes() + 1
-        @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
-        if self.walk_from >= 0 && self.walk_from < g {
-          self.walk_from
-        } else {
-          g
-        }
+        g
       }
-      self.measured_gen = -1
-      self.walk_from = -1
-      self.walk(0, gen, true)
     }
-    // (the windowed lists' blocks, all else laid out and placed: each list as tall and wide as it came to, its blocks
-    // laid out by it, each a root of its own, and placed where it puts them; where it puts its column as it does
-    // (what came over what shows moving it with that), what follows that worked out in this same pass, again)
-    if self.lists_laid(true) {
-      placing = true
+    self.measured_gen = -1
+    self.walk_from = -1
+    self.walk(0, gen, true)
+  }
+  // (the windowed lists' blocks, all else laid out and placed: each list as tall and wide as it came to, its blocks
+  // laid out by it, each a root of its own, and placed where it puts them, its column where it scrolls to)
+  if self.lists_laid(true) {
+    placing = true
+  }
+  // (what the lists told as they laid out their blocks (which are in sight, whether one follows its end), worked out
+  // with what they mark of where things are drawn and how they look; of layout, the next frame's)
+  self.bindings_owed()
+  self.placed_now(placing)
+  // (what changed of its look alone: its content, nothing else)
+  self.looks_now()
+  // (the order changed: drawn again, nothing kept of it to make again: what is drawn is gone through down the tree,
+  // Tree::walk_drawn)
+  let ordered = self.order_due
+  if ordered {
+    self.order_due = false
+    self.work.orders = self.work.orders + 1
+  }
+  self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
+  self.due = false
+  // (what its rows left out told once all of it is laid out: where a finger is found, the focus and what is held in
+  // what was left out let go of, what reads which are left out)
+  if self.outs_changed {
+    self.outs_told()
+  }
+  // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed; which column's
+  // bar the pointer is along told anew as what is drawn or found there changes without anything placed: an order, what
+  // bounds input, what takes it)
+  if !self.withins_passing {
+    if placing {
+      self.withins_passing = true
+      self.withins_told() |> ignore
+      self.withins_passing = false
+    } else if self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
+      self.withins_passing = true
+      self.bars_near_told() |> ignore
+      self.withins_passing = false
     }
   }
-  // (placed or faded by its own: it alone composed again)
+  // (what that told, worked out with what it marks of where things are drawn and how they look)
+  self.told_applied()
+  if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
+    self.drawn_due = true
+  }
+  // (a windowed list's block marked again as the lists were laid out, past what they took then: for the next)
+  if self.lists_due && !self.due {
+    self.marked()
+  }
+  self.laying = was_laying
+}
+
+///|
+/// What was placed again of its own (its fading, its offset: Place's bindings) placed, alone composed again; where
+/// anything was laid out or placed (`placing`), what goes beside another placed by it (View::beside) and what is placed
+/// by where things are laid out (View::offset_placed), each from where all else is now.
+fn Tree::placed_now(self : Tree, placing : Bool) -> Unit {
   for at in self.places_due {
     let n = self.nodes[at]
     if n.live && n.place_due {
@@ -6490,8 +6508,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       }
     }
     self.besides_placed()
+    self.offsets_placed()
   }
-  // (what changed of its look alone: its content, nothing else)
+}
+
+///|
+/// What changed of its look alone made again (its content, nothing else).
+fn Tree::looks_now(self : Tree) -> Unit {
   for at in self.looks_due {
     let n = self.nodes[at]
     if n.live && n.look_due {
@@ -6500,72 +6523,39 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
   }
   self.looks_due.clear()
-  // (the order changed: drawn again, nothing kept of it to make again: what is drawn is gone through down the tree,
-  // Tree::walk_drawn)
-  let ordered = self.order_due
-  if ordered {
-    self.order_due = false
-    self.work.orders = self.work.orders + 1
+}
+
+///|
+/// The bindings told since the tree was laid out in this pass (by what its layout told: which of a list's blocks are in
+/// sight, whether it follows its end; Tree::laid_out) worked out, what they mark of where things are drawn and how
+/// they look applied with this pass's; what they mark of layout is the next frame's, counted as owed (Work's `owed`):
+/// nothing is laid out again for what layout told (docs/retained.md's rule 10).
+fn Tree::bindings_owed(self : Tree) -> Unit {
+  if self.bindings_due.is_empty() {
+    return
   }
-  self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
-  self.due = false
-  // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
-  // same pass: one result, the frame drawing all of it)
-  if self.outs_changed {
-    self.outs_told()
-    if self.due {
-      self.laid_out(upto)
-    }
+  let layout = self.layout_due
+  let lists = self.lists_due
+  self.bindings_run()
+  if (self.layout_due && !layout) || (self.lists_due && !lists) {
+    self.work.owed = self.work.owed + 1
   }
-  // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
-    self.laid_out(upto)
+}
+
+///|
+/// What where things are told (what rows left out, what is under the pointer: Tree::laid_out) worked out, and what it
+/// marks of where things are drawn and how they look applied now, as one with this pass; what it marks of layout is
+/// the next frame's, counted as owed (Work's `owed`).
+fn Tree::told_applied(self : Tree) -> Unit {
+  if self.bindings_due.is_empty() && self.places_due.is_empty() && self.looks_due.is_empty() {
+    return
   }
-  // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
-  // tells laid out in this same pass)
-  if self.laid_waits.length() > 0 {
-    let waits = self.laid_waits.copy()
-    self.laid_waits.clear()
-    for f in waits {
-      @signals.untracked(f)
-    }
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
-  // this same pass)
-  if self.shows_due.length() > 0 {
-    self.shown_now()
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
-    self.drawn_due = true
-  }
-  // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed, and what that
-  // told marked done in this same pass, again till nothing it tells is told otherwise: what it marked all done, as one
-  // change's whole)
-  if placing && !self.withins_passing {
-    self.withins_passing = true
-    while self.withins_told() && self.due {
-      self.laid_out(upto)
-    }
-    self.withins_passing = false
-  } else if !self.withins_passing && self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
-    // (which column's bar the pointer is along told anew as what is drawn or found there changes without anything
-    // placed: an order, what bounds input, what takes it; in this same pass)
-    self.withins_passing = true
-    while self.bars_near_told() && self.due {
-      self.laid_out(upto)
-    }
-    self.withins_passing = false
-  }
-  // (a windowed list's block marked again as the lists were laid out, past what they took then: for the next)
-  if self.lists_due && !self.due {
-    self.marked()
-  }
+  self.bindings_owed()
+  let placing = !self.places_due.is_empty()
+  self.placed_now(placing)
+  self.looks_now()
+  // (due still only for what is the next frame's: layout it marked, the order)
+  self.due = self.layout_due || self.lists_due || self.order_due || !self.bindings_due.is_empty()
 }
 
 ///|
@@ -6593,89 +6583,37 @@ fn Tree::bindings_run(self : Tree) -> Unit {
 }
 
 ///|
-/// The sizes followed (View::laid_size_told), all of it laid out, told as one change: whether any was told otherwise.
-fn Tree::sizes_told(self : Tree) -> Bool {
-  let keep = []
-  // (each once, however often it was asked: a set, not the array gone through for each)
-  let kept : Set[Int] = Set::new()
-  let told = Ref(false)
-  @signals.start_batch()
-  for at in self.sized {
-    let n = self.nodes[at]
-    guard n.live && (n.size_cell is Some(_) || n.rect_cell is Some(_) || n.drawn_rect_cell is Some(_) || n.went_cell is Some(_)) else { continue }
-    if !kept.contains(at) {
-      kept.add(at)
-      keep.push(at)
-      match n.rect_cell {
-        Some(cell) => {
-          let rect = if self.out_at(at) { None } else { Some(self.handle(at).placed_window_now()) }
-          if @signals.untracked(fn() { cell.get() }) != rect {
-            told.val = true
-            cell.set(rect)
-          }
-        }
-        None => ()
-      }
-      match n.drawn_rect_cell {
-        Some(cell) => {
-          let rect = if self.out_at(at) { None } else {
-            let (x, y, _, s) = self.projected(at, drawing=true)
-            Some((x, y, n.lw * s, n.lh * s))
-          }
-          if @signals.untracked(fn() { cell.get() }) != rect {
-            told.val = true
-            cell.set(rect)
-          }
-        }
-        None => ()
-      }
-      // (laid out nowhere, it or what holds it (View::laid_nowhere, left out of its row): no size of its own to tell
-      // this time, the one it had kept, still followed, till it is laid out somewhere again, as what reads it (how far a
-      // column scrolls) keeps its own)
-      if self.out_at(at) {
-        continue
-      }
-      match n.size_cell {
-        Some(cell) => {
-          let size = Some((n.flex.width, n.flex.height))
-          if @signals.untracked(fn() { cell.get() }) != size {
-            told.val = true
-            cell.set(size)
-          }
-        }
-        None => ()
-      }
-      // (and the side it went on beside its anchor, where that is followed: View::went_told)
-      match n.went_cell {
-        Some(cell) =>
-          if @signals.untracked(fn() { cell.get() }) != n.went {
-            told.val = true
-            cell.set(n.went)
-          }
-        None => ()
-      }
-    }
-  }
-  // (what was first asked as what was told was read: a node made as it was, its size followed from then on, told the
-  // next time all is laid out, not forgotten)
-  let n = self.sized.length()
-  @signals.end_batch()
-  let asked = self.sized[n:].to_array()
-  self.sized.clear()
-  self.sized.append(keep)
-  self.sized.append(asked)
-  told.val
-}
-
-///|
 /// Node `id` (`within`: that part of it, its top and its foot in its own terms, asked once all is laid out; none there,
-/// all of it) brought into sight by what holds it that shows what it holds (View::shows: a column that scrolls), once
-/// all of it is laid out as it is next, before that is drawn: the innermost first, each that holds it then told where
-/// it is as the ones inside it moved it. Once, at this cause (the focus come to it): nothing brings it back of itself
+/// all of it) brought into sight by what holds it that shows what it holds (View::shows: a column that scrolls), as
+/// of this cause's moment (the focus come to it): once the change that asks it is committed whole, the tree laid out
+/// and placed as of then as an event finds it (Tree::laid_now), each that holds it told where it is then, the innermost
+/// first, each told where it is as the ones inside it moved it; what that moves is drawn so by the next frame, nothing
+/// laid out again for it in one (docs/retained.md's rule 10). `now`: where it is placed already (an old view's part come
+/// to have the focus as its frame lays it out), told at once. Once, at this cause: nothing brings it back of itself
 /// after.
-pub fn Tree::show_in_sight(self : Tree, id : NodeId, within? : () -> (Double, Double)?) -> Unit {
+pub fn Tree::show_in_sight(
+  self : Tree,
+  id : NodeId,
+  within? : () -> (Double, Double)?,
+  now? : Bool = false,
+) -> Unit {
   self.shows_due.push((id, within.unwrap_or(fn() { None })))
-  self.marked()
+  if now {
+    self.shown_now()
+    return
+  }
+  guard !self.shows_asked else { return }
+  self.shows_asked = true
+  self.after_event(fn() {
+    @signals.after_all_flushed(fn() {
+      self.shows_asked = false
+      // (inside a layout of the tree's (what it marks done as it is laid out): where things are as it placed them)
+      if !self.laying {
+        self.laid_now()
+      }
+      self.shown_now()
+    })
+  })
 }
 
 ///|
@@ -6720,66 +6658,6 @@ fn Tree::shown_now(self : Tree) -> Unit {
     }
   }
   @signals.end_batch()
-}
-
-///|
-/// How big it was laid out (its own terms: View::laid_size's), followed: told once all of the layout is done, as one
-/// change of all those followed (what holds a column that scrolls in it, how far it can go: View::scrolls); none till
-/// the first layout after it is first asked has been done (not measured yet: no size of nothing). Never a motion's
-/// target.
-pub fn View::laid_size_told(self : View) -> (Double, Double)? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.size_cell {
-    Some(c) => c
-    None => {
-      let c : @signals.Signal[(Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
-      n.size_cell = Some(c)
-      self.tree.sized.push(self.at)
-      self.tree.marked()
-      c
-    }
-  }
-  cell.get()
-}
-
-///|
-/// Where it is placed in the window, followed by an overlay outside its scroll or clip. Told after all placement,
-/// including scrolling and anchoring, in the same layout pass. None before that first pass or while laid out nowhere.
-/// Drawing transforms are excluded, as in placed_window_now. This describes geometry; it never starts or retimes a
-/// motion. A flight declares its way once for the send and uses this only to locate its destination on that way.
-pub fn View::laid_window_told(self : View) -> (Double, Double, Double, Double)? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.rect_cell {
-    Some(c) => c
-    None => {
-      let c : @signals.Signal[(Double, Double, Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
-      n.rect_cell = Some(c)
-      self.tree.sized.push(self.at)
-      self.tree.marked()
-      c
-    }
-  }
-  cell.get()
-}
-
-///|
-/// Its whole rectangle where the window draws it, followed by an overlay outside its holders. Includes drawing
-/// offsets and scaling, even while its own opacity is zero; clipping does not shorten the rectangle. Told after
-/// placement in the same pass, or None before that pass and while laid out nowhere. Unlike laid_window_told, this
-/// follows a landing on its way; it must not be used to define that landing's own motion.
-pub fn View::drawn_window_told(self : View) -> (Double, Double, Double, Double)? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.drawn_rect_cell {
-    Some(c) => c
-    None => {
-      let c : @signals.Signal[(Double, Double, Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
-      n.drawn_rect_cell = Some(c)
-      self.tree.sized.push(self.at)
-      self.tree.marked()
-      c
-    }
-  }
-  cell.get()
 }
 
 ///|
@@ -6895,7 +6773,7 @@ fn Tree::capped_applied(self : Tree, at : Int) -> Unit {
     }
   } else {
     match said {
-      Some(w) => Pt(w)
+      Some(w) => if n.max_w_within { Within(w) } else { Pt(w) }
       None => Auto
     }
   }
@@ -6932,7 +6810,7 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
     }
   }
   let min : @flex.Dim = match n.min_w_said {
-    Some(Some(w)) => Pt(w)
+    Some(Some(w)) => if n.min_w_within { Within(w) } else { Pt(w) }
     Some(None) => Auto
     // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
     None =>
@@ -7880,15 +7758,6 @@ pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) 
 pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
   self.glides = glides
   self.glides_gone = gone
-}
-
-///|
-/// `f` done once all of it is laid out as it is next (sizes told: View::laid_size_told), as one with that layout, whether
-/// anything it follows came out otherwise or not: what waits on where a change it made leaves things (a page's list's
-/// fling toward its foot as what is above it grew, Scroll::grew_above).
-fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
-  self.laid_waits.push(f)
-  self.marked()
 }
 
 ///|

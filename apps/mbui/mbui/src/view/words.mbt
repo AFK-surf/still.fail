@@ -321,6 +321,7 @@ pub fn View::max_width(self : View, w : Live[Double?]) -> View {
   self.bind(MaxWidth, w, Layout, fn(w) {
     // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
     self.tree.nodes[self.at].max_w_said = Some(w)
+    self.tree.nodes[self.at].max_w_within = false
     self.tree.capped_applied(self.at)
   })
   self
@@ -553,6 +554,7 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
 pub fn View::min_width(self : View, w : Live[Double?]) -> View {
   self.bind(MinWidth, w, Layout, fn(w) {
     self.tree.nodes[self.at].min_w_said = Some(w)
+    self.tree.nodes[self.at].min_w_within = false
     self.tree.give_way_applied(self.at)
   })
   self
@@ -670,5 +672,33 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
         n.props[Points] = stop
       })
   }
+  self
+}
+
+///|
+/// How wide it is at least, within what holds it (the points, or all of the width what holds it lays it out in where
+/// that is less: CSS's `min(100%, 360px)`; None: as what it holds makes it), as it changes: worked out as it is laid
+/// out, by the room it is laid out in then (the same binding as View::min_width). Layout's.
+pub fn View::min_width_within(self : View, w : Live[Double?]) -> View {
+  self.bind(MinWidth, w, Layout, fn(w) {
+    let n = self.tree.nodes[self.at]
+    n.min_w_said = Some(w)
+    n.min_w_within = true
+    self.tree.give_way_applied(self.at)
+  })
+  self
+}
+
+///|
+/// How wide it may grow at most, within what holds it (the points, or all of the width what holds it lays it out in
+/// where that is less: CSS's `min(100%, 560px)`; None: as wide as its holder lets it), as it changes: worked out as it
+/// is laid out (the same binding as View::max_width). Layout's.
+pub fn View::max_width_within(self : View, w : Live[Double?]) -> View {
+  self.bind(MaxWidth, w, Layout, fn(w) {
+    let n = self.tree.nodes[self.at]
+    n.max_w_said = Some(w)
+    n.max_w_within = true
+    self.tree.capped_applied(self.at)
+  })
   self
 }

@@ -4897,9 +4897,9 @@ fn old_show_after_layout(c : Ctx) -> Unit {
   }
   guard c.island_of_id(id) is Some(island) && old_part_within(c, island, id) is Some(w) else { return }
   old_show_due.val = None
-  // (what holds it scrolled to it: the tree marked due by it, drawn so in this frame, what goes on asked for as the
-  // frame ends: view_frame_end; no old view built again for it)
-  tree.show_in_sight(island, within=fn() { Some(w) })
+  // (what holds it scrolled to it at once, where it is placed now: drawn so by the next frame, no old view built
+  // again for it)
+  tree.show_in_sight(island, within=fn() { Some(w) }, now=true)
 }
 
 ///|

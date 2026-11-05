@@ -122,11 +122,10 @@ pub fn ask_outcome_node(
             .lines_up(Is(Some(Start)))
             .says(By(fn() { Some(@view.said(Button, label=words().map(fn(r) { r.text }).join("") + " · " + @sf.t("web-main.history.details"))) }))
             |> ignore
+            // (from where it is as it is pressed)
             @sf.presses_node(h, fn() {
-              match h.laid_window_told() {
-                Some((x, y, w, ht)) => open(At(x, y, w, ht))
-                None => open(Unanchored)
-              }
+              let (x, y, w, ht) = h.placed_window_now()
+              open(At(x, y, w, ht))
             })
             h.box(fn(w) {
               w.words_runs(By(words)).words_look(By(fn() { @ui.style_words(ask_ended_words) })).ink(By(fn() { @ui.style_ink(ask_ended_words) })) |> ignore

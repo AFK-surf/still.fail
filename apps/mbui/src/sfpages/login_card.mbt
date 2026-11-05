@@ -706,9 +706,9 @@ pub fn login_card_node(parent : @view.View, core : Core, station : String, id : 
           .padding(Is((0.0, 8.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
           room.box(fn(card) {
             card
-            .min_width(By(fn() { Some(dmin(360.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(360.0))) }))
+            .min_width_within(Is(Some(360.0)))
             // (never wider than where it is: min(100%, 560px))
-            .max_width(By(fn() { Some(dmin(560.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(560.0))) }))
+            .max_width_within(Is(Some(560.0)))
             .padding(Is((@sf.corner_inset, @sf.corner_inset, @sf.corner_inset, @sf.corner_inset)))
             .gap(Is(2.0))
             .radius(Is(@sf.card_corner))
@@ -874,10 +874,9 @@ fn login_step_node(
       |> ignore
       // (the presenters' menu: from the foot on a small screen, beside it on the others)
       @sf.presses_node(m, fn() {
-        let at : @sf.Beside = match m.laid_window_told() {
-          Some((x, y, w, h)) => @sf.Beside::At(x, y, w, h)
-          None => @sf.at_point(0.0, 0.0)
-        }
+        // (from where it is as it is pressed)
+        let (x, y, w, h) = m.placed_window_now()
+        let at : @sf.Beside = @sf.Beside::At(x, y, w, h)
         @sf.menu(more().map(fn(w) { Some(@sf.menu_item_of(w.0, w.1)) }), from=at, along=End)
       })
       @sf.icon_node(m, "more", lc_icon, By(fn() { @sf.theme().p.text })) |> ignore
@@ -1193,8 +1192,8 @@ pub fn step_card_node(parent : @view.View, title : () -> String, line : () -> St
     room.padding(Is((0.0, 8.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
     room.box(fn(card) {
       card
-      .min_width(By(fn() { Some(dmin(360.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(360.0))) }))
-      .max_width(By(fn() { Some(dmin(560.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(560.0))) }))
+      .min_width_within(Is(Some(360.0)))
+      .max_width_within(Is(Some(560.0)))
       .padding(Is((@sf.corner_inset, @sf.corner_inset, @sf.corner_inset, @sf.corner_inset)))
       .gap(Is(2.0))
       .radius(Is(@sf.card_corner))

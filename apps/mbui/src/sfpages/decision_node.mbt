@@ -182,11 +182,10 @@ fn history_line_node(line : @view.View, words : () -> String, open : (@sf.Anchor
   .lines_up(Is(Some(Start)))
   .says(By(fn() { Some(@view.said(Button, label=words() + " · " + @sf.t("web-main.history.details"))) }))
   |> ignore
+  // (from where it is as it is pressed)
   @sf.presses_node(line, fn() {
-    match line.laid_window_told() {
-      Some((x, y, w, h)) => open(At(x, y, w, h))
-      None => open(Unanchored)
-    }
+    let (x, y, w, h) = line.placed_window_now()
+    open(At(x, y, w, h))
   })
   line.box(fn(t) { settled_words_node(t, words) }) |> ignore
   line.box(fn(mark) {
