@@ -22,7 +22,9 @@ for (const what of ["summary", "list"] as const) test(`a session ${what} does no
     const observed = new Proxy(db, { get(target, property) {
       if (property === "prepare") return (sql: string) => {
         const global = sql === "SELECT connect, session_key FROM bindings";
-        const statement = target.prepare(global ? sql.replace("SELECT connect", "SELECT visit_binding_candidate() AS visited, connect") : sql);
+        const observedSql = global ? sql.replace("SELECT connect", "SELECT visit_binding_candidate() AS visited, connect")
+          : sql.replace("SELECT i.session, i.connect", "SELECT visit_binding_candidate() AS visited, i.session, i.connect");
+        const statement = target.prepare(observedSql);
         if (!global && !sql.includes("session_binding_rows")) return statement;
         return new Proxy(statement, { get(t, p) {
           if (p === "all") return (...args: unknown[]) => {
