@@ -39,3 +39,27 @@ test("the overview prepares the names it needs together before reading them", as
     assert.equal(made, 1, "building the view is not repeated to find its names");
   } finally { store.close(); }
 });
+
+test("a session moved to another workspace while names are prepared is not shown", async () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "s", createdAt: 1, lastActiveAt: 1, ws: "mine" });
+    const thread = store.openThread("ember", "EMBER", "s", "Private title", null);
+    store.joinThread(thread.id, "s", "ember");
+    const hub: any = { processes: () => [], config: () => ({ dataDir: "/" }),
+      prepareSessionChatNames: async (sessions: string[]) => {
+        const preparation = new SessionChatPreparation();
+        for (const session of sessions) while (!preparation.step(store.db, session).done) {}
+        store.db.prepare("UPDATE sessions SET ws='elsewhere' WHERE key='s'").run();
+      } };
+    const accounts: any = { profilesView: () => [], loginsView: () => [], apiProviders: () => [], machineLogins: () => [],
+      decisionModels: () => [], automaticDecisionsView: (_viewer: unknown, options: any) => ({
+        recent: options.visible("s") ? [{ session: "s", title: options.title("s") }] : [],
+      }) };
+    const viewer = { sub: "s", email: "p@example.test", name: "P", role: "admin" as const,
+      workspace: "mine", device: "d", home: false };
+    const result: any = await overview({ store, hub, accounts, cloud: { state: null } as any, config: () => ({ connects: [] }) }, viewer, "en");
+    assert.deepEqual(result.automaticDecisions.recent, []);
+  } finally { store.close(); }
+});

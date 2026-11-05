@@ -258,22 +258,30 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
       }
       return placeholder as unknown as string;
     };
-    view = madeDecisionsView(d, viewer, pendingTitle);
+    const visible = new Map<string, boolean>();
+    view = madeDecisionsView(d, viewer, pendingTitle, visible);
     const names = new Map<string, string>();
+    let waited = false;
     for (;;) {
       const missing: string[] = [];
+      let moved = false;
       names.clear();
       // Read readiness and all names in one snapshot; a writer cannot make a name fall back to the old scan between
       // the readiness check and sessionChat(). Do not hold a database snapshot while waiting for the worker.
       d.store.db.exec("SAVEPOINT overview_chat_names");
       try {
-        for (const session of placeholders.keys()) {
+        if (waited) for (const [session, was] of visible) {
+          if (sees(viewer, d.store.getSession(session)?.ws ?? null) !== was) { moved = true; break; }
+        }
+        if (!moved) for (const session of placeholders.keys()) {
           if (!sessionChatReady(d.store.db, session)) missing.push(session);
           else names.set(session, chatTitleOf(d.store, session));
         }
       } finally { d.store.db.exec("RELEASE overview_chat_names"); }
+      if (moved) return decisionsView(d, viewer);
       if (missing.length === 0) break;
       await d.hub.prepareSessionChatNames(missing);
+      waited = true;
     }
     const fill = (value: any): any => {
       if (value === null || typeof value !== "object") return value;
@@ -297,8 +305,8 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
 const DECISIONS_KEPT_MS = 60_000;
 const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
 
-function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: string) => string): unknown {
-  const visible = new Map<string, boolean>();
+function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: string) => string,
+  visible = new Map<string, boolean>()): unknown {
   const mine = (session: unknown) => {
     if (typeof session !== "string") return false;
     let isMine = visible.get(session);
