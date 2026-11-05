@@ -2496,17 +2496,19 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
     }
     // a box whose layout was reused holds its absolute boxes as they were
     // (and one with no children has none to place)
-    if node.arrange is Some(_) {
-      // The container's plan already placed this child, including overlays.
-      // Its descendants still resolve their own containing blocks normally.
-      if c.line >= 0 && !kept(c) && c.children.length() > 0 {
-        layout_static_absolute(c, c, 0.0, 0.0)
-      }
-    } else if cs.position == Absolute {
-      place_absolute(cb, node, c, ox, oy)
+    if cs.position == Absolute {
+      // Explicit placements belong to the plan. Other overlays keep the same
+      // containing-block rules as those of a flex container. Test membership
+      // in the retained plan: a previous automatic placement also has a line.
+      let allocated = node.p_arranged is Some(plan) &&
+        plan.result.children.any(fn(p) { physical_equal(p.measured.child, c) })
+      if !allocated { place_absolute(cb, node, c, ox, oy) }
       if !kept(c) && c.children.length() > 0 {
         layout_static_absolute(c, c, 0.0, 0.0)
       }
+    } else if node.arrange is Some(_) && c.line < 0 {
+      // An unplaced in-flow child is absent from this arrangement.
+      ()
     } else if c.children.length() == 0 {
       ()
     } else if cs.position == Static {

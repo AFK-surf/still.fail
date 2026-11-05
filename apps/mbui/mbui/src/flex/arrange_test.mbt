@@ -45,6 +45,32 @@ test "a custom container uses its content constraints and places overlays once" 
 }
 
 ///|
+test "overlays added beside an arrangement follow the current container without replacing explicit placements" {
+  let root = @flex.Node::new()
+  root.style.position = Relative
+  let owned = @flex.Node::new()
+  owned.style.position = Absolute
+  owned.style.set_inset_right(Pt(0.0))
+  root.add(owned)
+  root.arrange = Some(fn(room) {
+    let child = room.measure(owned, width=40.0, height=20.0)
+    @flex.arrangement(room.width().unwrap(), 200.0, [child.at(13.0, 17.0)])
+  })
+  let overlay = @flex.Node::new()
+  overlay.style.position = Absolute
+  overlay.style.set_width(Pt(30.0))
+  overlay.style.set_height(Pt(16.0))
+  overlay.style.set_inset_right(Pt(10.0))
+  overlay.style.set_inset_bottom(Pt(12.0))
+  root.add(overlay)
+  for width in [300.0, 450.0, 300.0, 300.0] {
+    @flex.compute(root, width~, round=false, reuse=true)
+    assert_eq((owned.left, owned.top, owned.width, owned.height), (13.0, 17.0, 40.0, 20.0))
+    assert_eq((overlay.left, overlay.top, overlay.width, overlay.height), (width - 40.0, 172.0, 30.0, 16.0))
+  }
+}
+
+///|
 test "an intrinsic container measures children inside its maximum content width" {
   let root = @flex.Node::new()
   root.style.align_items = FlexStart

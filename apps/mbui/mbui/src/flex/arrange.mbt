@@ -175,7 +175,12 @@ fn arrange_node(
 
 ///|
 fn place_arrangement(node : Node, plan : Arranged) -> Unit {
-  for child in node.children { child.line = -1 }
+  for child in node.children {
+    child.line = -1
+    // A component may attach an overlay after installing this layout. An
+    // overlay not allocated by the plan still follows its containing block.
+    if child.style.position == Absolute { absolute_seen.val = true }
+  }
   for placed in plan.result.children {
     let m = placed.measured
     guard physical_equal(m.owner, node) else { abort("a measurement belongs to its parent layout") }

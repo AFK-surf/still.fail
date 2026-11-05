@@ -54,6 +54,25 @@ pub fn output_read() -> Unit {
 }
 
 ///|
+/// A dependency borrowed after a getter ran also belongs to its cached readers.
+/// Carry only that provenance: no getter or effect runs, and ownership links do
+/// not turn an effect's owner into a reader of its output.
+fn output_borrowed(node : ReactiveNode) -> Unit {
+  let pending = [node]
+  while pending.pop() is Some(source) {
+    let mut link = source.subs
+    while link is Some(l) {
+      let sub = l.sub
+      if sub.kind is ComputedNode && !sub.observes_output {
+        sub.observes_output = true
+        pending.push(sub)
+      }
+      link = l.next_sub
+    }
+  }
+}
+
+///|
 /// Imperative adapters use the same write boundary as Signal::set.
 pub fn require_mutable() -> Unit {
   guard read_only_depth.val == 0 else {

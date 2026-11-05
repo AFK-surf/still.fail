@@ -786,12 +786,15 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
 /// is built for it after it ran (a list's rows, laid out after the part they are in was built). Let go as the
 /// computed's run reads anew, as what it read is.
 pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
+  let had_output = self.0.observes_output
   let prev_sub = set_active_sub(Some(self.0))
   let prev_deriving = deriving.val
   deriving.val = Some(self.0)
   let v = f()
   deriving.val = prev_deriving
   run.active_sub = prev_sub
+  if !had_output && self.0.observes_output { output_borrowed(self.0) }
+  if self.0.observes_output { output_read() }
   v
 }
 
@@ -799,7 +802,10 @@ pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
 /// What the computed read read by `to` as well, as though `to`'s run had read it after what it read (as
 /// Computed::reading: a row's build, run by a computed of its own, read for the part it is in).
 pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
-  if self.0.observes_output { to.0.observes_output = true }
+  if self.0.observes_output && !to.0.observes_output {
+    to.0.observes_output = true
+    output_borrowed(to.0)
+  }
   let mut l = self.0.deps
   while true {
     match l {

@@ -469,8 +469,28 @@ measurement read the live theme; and attachment layout read the prior chat width
 through its corner calculation. The scroll measurement now supplies its own
 extent, text shaping captures its theme before measurement, and a pane supplies
 the composer's shape from its allocation inputs. A row-filling quote no longer
-reads an unused corner reach. The expanded app checks and before/after scenes
-for this boundary change are still in progress; it is not a validated release.
+reads an unused corner reach. The expanded composer, attachment and send checks
+passed 55 tests. The complete framework run exposed an omitted absolute overlay
+beside a custom arrangement; automatic overlays now follow their containing
+block while explicit placements remain owned by the plan. The corrected run
+passed 2665 signal, view, flex and UI checks.
+
+Late dependency borrowing exposed two further provenance holes: an already
+cached reader was not marked when its source later borrowed output dependencies,
+or when those dependencies were lent to another cached value. Both new cases
+failed first. Provenance now crosses existing computed-reader links without
+running getters or effects; fresh evaluation can still remove that provenance.
+The signal and isolated boundary checks then passed 195 tests.
+
+The full application run has five failures, not a green result: typing, scrolling
+and page changes still rebuild old frame content, a joined sent row jumps from
+620.5 to 642.5, and the leaving new-chat heading moves from 404 to 186. All five
+also fail on the pre-boundary revision `4f39726ad7`, with the same two position
+jumps (101 focused checks, 96 passing in each source state). They remain work
+for this redesign. The full script also reports 57 uncaptured core answers;
+56 occur in those focused checks in both states and still need the core's
+recording tool. Before/after pictures for this boundary batch are in progress.
+This is not a validated release.
 
 The experimental kernel does not yet demonstrate a general owner tree, full
 input/IME, stable-key history insertion/removal or recorded font/resource changes.
