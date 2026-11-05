@@ -198,6 +198,7 @@ fn Ctx::glass_inst(
 fn Ctx::glass_capture(self : Ctx, k : Int, liquid : Bool, shares : Bool) -> Unit {
   // (a capture's place among the frame's is the frame's: what draws it drawn as the old frame paints, scene_layers.mbt)
   scene_own_only()
+  perf_glass.val = perf_glass.val + 1
   let b = k * inst_size
   let a = self.inst
   let kind = a[b + 5]

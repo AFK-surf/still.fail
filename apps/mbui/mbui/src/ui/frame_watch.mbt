@@ -1023,7 +1023,11 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
       }
       view_changes_taken(tree)
       paint_phase.val = 1
-      c.scene_alone(tree)
+      let t1 = work_now()
+      perf_alone[0] = t1 - t0
+      let drawn = c.scene_alone(tree)
+      perf_alone[1] = work_now() - t1
+      drawn
     }
     None => false
   }
@@ -1033,6 +1037,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
     scene.old_due = false
     return paint_frame(c, t)
   }
+  let t2 = work_now()
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
@@ -1045,6 +1050,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
   c.anchors_after_paint()
   view_after_paint_taken()
   tree_told_host(c)
+  perf_alone[2] = work_now() - t2
   c.t_build = 0.0
   c.t_layout = 0.0
   c.t_paint = work_now() - t0
