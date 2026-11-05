@@ -154,6 +154,18 @@ jobs:
           restore-keys: mbui-linux-${{ matrix.arch }}-m-
       - if: github.ref != 'refs/heads/main'
         run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
+      # (and arch/next's newest, kept on main's ref by preview-arch.yml: a branch off it has most of its units there,
+      # few of main's; beside the branch's own, which come first)
+      - uses: actions/cache/restore@v4
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-linux-${{ matrix.arch }}-a-${{ github.sha }}
+          restore-keys: mbui-linux-${{ matrix.arch }}-a-
+      - if: github.ref != 'refs/heads/main'
+        run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-arch"
       - uses: actions/cache/restore@v4
         id: own
         if: github.ref != 'refs/heads/main'
@@ -165,7 +177,8 @@ jobs:
           restore-keys: mbui-linux-${{ matrix.arch }}-b-
       - if: github.ref != 'refs/heads/main'
         run: |
-          mkdir -p .ci && cp -a -n "$RUNNER_TEMP/ci-main/." .ci/ && rm -rf "$RUNNER_TEMP/ci-main"
+          mkdir -p .ci && cp -a -n "$RUNNER_TEMP/ci-arch/." .ci/ && cp -a -n "$RUNNER_TEMP/ci-main/." .ci/
+          rm -rf "$RUNNER_TEMP/ci-main" "$RUNNER_TEMP/ci-arch"
           echo "units: $(find .ci/mbc-store -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)"
       # (the Linux engine and shell in the native cache, as a run before fetched them, as the windows job keeps its own:
       # one download from the store took 84 s for 2.9 MB, main 9440b484, 40668393099)
@@ -441,6 +454,14 @@ jobs:
       # not): without, each push of a branch compiled all it changed against main again, presets' 277 of 480 units on
       # every push, ~55 s (2026-11-01, 41291664812). Its objects alone (some tens of MB), not the build's 160; main's
       # build is restored above for the rest. Pruned to what the run used and saved below, as the Linux jobs' are.
+      # (arch/next's newest first, kept on main's ref by preview-arch.yml, the branch's own over it: units by their
+      # content, either the same)
+      - uses: actions/cache/restore@v4
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: .ci/mbc-store
+          key: mbui-win-store-a-${{ github.sha }}
+          restore-keys: mbui-win-store-a-
       - uses: actions/cache/restore@v4
         id: own
         if: github.ref != 'refs/heads/main'
@@ -465,6 +486,14 @@ jobs:
       # core.hbc by its inputs (HBC_CACHE, scripts/core.sh hermes), as the other jobs keep it: the core's step was 12-17 s
       # of every run (~14 s of a CPU, beside cl), the core unchanged in most of them (restored on every run, saved by
       # main's when it made one: the names in it are their contents' keys)
+      # (arch/next's core bytecode, kept on main's ref by preview-arch.yml, for a branch's first push: its core is
+      # arch/next's, not main's)
+      - uses: actions/cache/restore@v4
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: .ci/hbc
+          key: mbui-win-hbc-a-${{ github.sha }}
+          restore-keys: mbui-win-hbc-a-
       - uses: actions/cache/restore@v4
         id: hbc
         with:
