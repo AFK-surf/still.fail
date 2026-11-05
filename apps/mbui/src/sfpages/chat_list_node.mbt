@@ -611,8 +611,6 @@ pub fn chat_list_node(
   v.box(fn(fl) {
     fl
     .over(Is(true))
-    .width(By(fn() { v.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { v.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     emit_flyer_node(fl, rk, view)
   })

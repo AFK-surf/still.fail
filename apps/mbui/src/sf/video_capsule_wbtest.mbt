@@ -134,3 +134,25 @@ test "a video capsule keeps its visible words whole while it changes between tim
     }
   }
 }
+
+///|
+test "a video capsule fills its tile by being over it, nothing of the tile's laid size told back to lay it out again" {
+  let tile_h : @signals.Signal[Double] = @signals.signal(160.0)
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=300.0, platform=2)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.box(fn(tile) {
+      tile.width(Is(Some(200.0))).height(By(fn() { Some(tile_h.get()) })) |> ignore
+      video_capsule_node(tile, fn() { 5500.0 })
+    }) |> ignore
+  })
+  t.draw()
+  let said = []
+  @view.laid_passes_traced.val = true
+  @view.laid_passes_trace.val = fn(s) { said.push(s) }
+  tile_h.set(120.0)
+  t.frame()
+  @view.laid_passes_traced.val = false
+  @view.laid_passes_trace.val = fn(s) { println(s) }
+  assert_eq(said, [])
+}
