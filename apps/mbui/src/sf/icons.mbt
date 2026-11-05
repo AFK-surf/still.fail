@@ -269,6 +269,17 @@ fn icon_traced(
   color? : Int64,
 ) -> Int {
   let color = color.unwrap_or(theme().p.text)
+  c.shapes(traced_shapes(name, trace, size, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+}
+
+///|
+/// Icon `name`'s shapes with its lines drawn as `trace` gives them (icon_traced's), `size` across, in `color`.
+fn traced_shapes(
+  name : String,
+  trace : (Int, Array[Double]) -> Array[Array[Double]],
+  size : Double,
+  color : Int64,
+) -> Array[@ui.Shape] {
   let data : Array[Double] = []
   match icon_numbers(name) {
     Some(d) => {
@@ -296,7 +307,7 @@ fn icon_traced(
     }
     None => ()
   }
-  c.shapes(icon_shapes(data, size / 24.0, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+  icon_shapes(data, size / 24.0, color)
 }
 
 ///|

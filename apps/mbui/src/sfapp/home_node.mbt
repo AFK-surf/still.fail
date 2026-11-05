@@ -64,7 +64,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
   |> ignore
   v.box(fn(bar) {
     bar.over(Is(true)).lies_along(Is(Start)).alpha(By(fn() { 1.0 - away() })) |> ignore
-    home_top_bar_node(bar, src, workspace, view)
+    home_top_bar_node(bar, src, tips, workspace, view)
   })
   |> ignore
   v.show(@sfpages.search_on_lists, fn(s) {
@@ -74,10 +74,12 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
 
 ///|
 /// Home's top bar (top_bar's) in `v`, on its glass, under the status bar: the filter at the left (with stations to
-/// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right.
+/// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right. Tips in
+/// `tips`.
 fn home_top_bar_node(
   v : @view.View,
   src : Source,
+  tips : @sf.TipLayer,
   workspace : () -> Workspace?,
   view : () -> ChatsView?,
 ) -> Unit {
@@ -127,27 +129,23 @@ fn home_top_bar_node(
         })
         |> ignore
       })
-      // catching up and transfers beside the filter (their old views, hosted)
+      // catching up and transfers beside the filter, 10 apart (nothing of either laid out while it is not there)
       row.box(fn(k) {
-        // (as wide as they are laid out, told by the old frame: what gives way is the workspace's name)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
-        @ui.old(k, fn(c) {
-          c.box(style=home_keys_row, fn() {
-            let (syncing, said) = match view() {
-              Some({ syncing: Some(y), .. }) => (true, y)
-              _ => (false, "")
+        k.row(Is(true)).shrink(Is(0.0)).gap(Is(@ui.Space::px(S2_5))).lines_up(Is(Some(Middle))) |> ignore
+        @sf.sync_key_node(
+          k,
+          tips,
+          34.0,
+          20.0,
+          fn() { view() is Some({ syncing: Some(_), .. }) },
+          fn() {
+            match view() {
+              Some({ syncing: Some(y), .. }) => y
+              _ => ""
             }
-            @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said)
-            match workspace() {
-              Some(w) => @sfdesk.transfers_key(c, src, w.id, 34.0, 20.0)
-              None => ()
-            }
-          })
-          |> ignore
-        }, natural=true, fits=(home_keys_most, wide))
-        |> @ui.old_takes_own
-        |> ignore
+          },
+        )
+        @sfdesk.transfers_key_node(k, src, fn() { workspace().map(fn(w) { w.id }) }, 34.0, 20.0)
       })
       |> ignore
       row.box(fn(end) {
@@ -213,12 +211,4 @@ fn home_top_bar_node(
   |> ignore
 }
 
-///|
-/// What is catching up and going up beside the filter, 10 apart.
-// kept across runs: a value (no field of it changes)
-let home_keys_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
-
-///|
-/// How wide what is catching up and going up beside the filter may be at most (two keys and the room between).
-let home_keys_most : Double = 120.0
 
