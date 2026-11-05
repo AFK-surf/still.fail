@@ -70,7 +70,10 @@ for (const recursive of [false, true]) test(`a shared chat's changing order is d
     const before = readPreparedRecentWorkspace(db, "unrelated", 5);
     const change = db.prepare("UPDATE entries SET at = ? WHERE thread = ? AND n = 1");
     change.run(10, thread);
-    assert.equal(readPreparedRecentWorkspace(db, "unrelated", 5), null, "the undistributed change currently holds every scope");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "unrelated", 5), before,
+      "an unrelated workspace remains readable while a shared chat is being distributed");
+    assert.equal(readPreparedRecentWorkspace(db, "w069", 5), null,
+      "an affected workspace cannot use the old order even before its marker is distributed");
     let done = false, steps = 0;
     while (!done && steps < 12) {
       const batch = dispatchRecentScopeOrderStep(db, 8);
