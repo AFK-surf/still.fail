@@ -304,7 +304,15 @@ fn moon_decl(d : Decl) -> String {
       ty if is_scalar(ty) => call
       ty => fail("no Wasm way to answer \{ty}: \{d.name}")
     }
-    out.write_string("fn \{d.name}(\{moon_params(d)}) -> \{d.ret} {\n\{keeps.to_string()}  \{body}\n}")
+    // (what was laid in the program's memory for the call let go of after it, and what the host wrote into an array
+    // given it carried back: wasmrt's mark and settle, nothing on classic Wasm, a copy on Wasm GC)
+    let laid = d.params.iter().any(fn(p) { !is_scalar(p.ty) && !is_func(p.ty) })
+    let wrapped = if laid {
+      "  let mbw_m = @wasmrt.mark()\n  let mbw_r = \{body}\n  @wasmrt.settle(mbw_m)\n  mbw_r"
+    } else {
+      "  \{body}"
+    }
+    out.write_string("fn \{d.name}(\{moon_params(d)}) -> \{d.ret} {\n\{keeps.to_string()}\{wrapped}\n}")
   }
   out.to_string()
 }

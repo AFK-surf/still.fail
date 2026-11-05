@@ -11,6 +11,9 @@ fn mbw_mb_stillfail_tell(what : Int, a : Int, b : Int, n : Int, m : Int) -> Int 
 
 ///|
 fn host_tell(what : String, a : String, b : String, n : Int, m : Int) -> Int {
-  mbw_mb_stillfail_tell(@wasmrt.string_addr(what), @wasmrt.string_addr(a), @wasmrt.string_addr(b), n, m)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_stillfail_tell(@wasmrt.string_addr(what), @wasmrt.string_addr(a), @wasmrt.string_addr(b), n, m)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 

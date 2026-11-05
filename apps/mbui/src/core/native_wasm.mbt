@@ -7,21 +7,30 @@ fn mbw_mbc_start(data_dir : Int, cloud : Int, beta : Int) -> Int = "mbhost" "mbc
 
 ///|
 fn ffi_start(data_dir : String, cloud : String, beta : Int) -> Int {
-  mbw_mbc_start(@wasmrt.string_addr(data_dir), @wasmrt.string_addr(cloud), beta)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mbc_start(@wasmrt.string_addr(data_dir), @wasmrt.string_addr(cloud), beta)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mbc_send(json : Int) = "mbhost" "mbc_send"
 
 ///|
 fn ffi_send(json : String) -> Unit {
-  mbw_mbc_send(@wasmrt.string_addr(json))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mbc_send(@wasmrt.string_addr(json))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mbc_send_bytes(json : Int, bytes : Int) = "mbhost" "mbc_send_bytes"
 
 ///|
 fn ffi_send_bytes(json : String, bytes : Bytes) -> Unit {
-  mbw_mbc_send_bytes(@wasmrt.string_addr(json), @wasmrt.bytes_addr(bytes))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mbc_send_bytes(@wasmrt.string_addr(json), @wasmrt.bytes_addr(bytes))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -33,7 +42,10 @@ fn mbw_mbc_web_auth(token : Int, url : Int, scheme : Int) -> Int = "mbhost" "mbc
 
 ///|
 fn ffi_web_auth(token : Int, url : String, scheme : String) -> Int {
-  mbw_mbc_web_auth(token, @wasmrt.string_addr(url), @wasmrt.string_addr(scheme))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mbc_web_auth(token, @wasmrt.string_addr(url), @wasmrt.string_addr(scheme))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_now() -> Double = "mbhost" "mbc_now_ms"

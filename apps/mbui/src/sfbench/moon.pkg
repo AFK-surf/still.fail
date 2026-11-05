@@ -4,12 +4,20 @@ import {
   "stillfail/sf",
   "stillfail/sfkept",
   "stillfail/sfapp",
+  "mbui/wasmrt",
 }
 
 options(
   "is-main": true,
+  targets: { "wasm_shell.mbt": [ "wasm" ], "wasm_shell_gc.mbt": [ "wasm-gc" ] },
   link: {
     "js": { "format": "iife" },
+    // (run by mbui's native shell, scripts/wasm-app.sh APP=sfbench: its work timed as a device's program does it)
+    "wasm": { "exports": ["mbw_string", "mbw_bytes", "film_text_length", "film_text_unit"], "export-memory-name": "memory" },
+    "wasm-gc": {
+      "exports": ["mbw_string", "mbw_bytes", "film_text_length", "film_text_unit"],
+      "import-memory": { "module": "env", "name": "memory" },
+    },
     "native": {
       "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
     },

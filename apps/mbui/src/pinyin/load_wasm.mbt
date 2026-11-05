@@ -5,7 +5,10 @@ fn mbw_stillfail_pinyin_read_file(path : Int) -> Int = "mbhost" "stillfail_pinyi
 
 ///|
 fn read_file(path : Bytes) -> Bytes {
-  @wasmrt.take_bytes(mbw_stillfail_pinyin_read_file(@wasmrt.bytes_addr(path)))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = @wasmrt.take_bytes(mbw_stillfail_pinyin_read_file(@wasmrt.bytes_addr(path)))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -13,7 +16,10 @@ fn mbw_stillfail_pinyin_write_file(path : Int, data : Int) -> Int = "mbhost" "st
 
 ///|
 fn write_file(path : Bytes, data : Bytes) -> Int {
-  mbw_stillfail_pinyin_write_file(@wasmrt.bytes_addr(path), @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_stillfail_pinyin_write_file(@wasmrt.bytes_addr(path), @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

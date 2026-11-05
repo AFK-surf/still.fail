@@ -63,3 +63,15 @@ pub fn string_at(at : Int) -> String = "(func (param $a i32) (result i32) (local
 
 ///|
 pub fn bytes_at(at : Int) -> Bytes = "(func (param $a i32) (result i32) (local.get $a))"
+
+///|
+/// A call's values laid in memory let go of after it (Wasm GC's wasmrt_gc.mbt): here they are the program's own
+/// objects, nothing to let go of.
+pub fn mark() -> Int {
+  0
+}
+
+///|
+pub fn settle(_m : Int) -> Unit {
+
+}

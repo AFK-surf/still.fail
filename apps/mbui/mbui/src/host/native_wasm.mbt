@@ -7,7 +7,10 @@ fn mbw_mb_host_native_call(name : Int, params : Int) -> Int = "mbhost" "mb_host_
 
 ///|
 fn ncall_call(name : String, params : String) -> Int {
-  mbw_mb_host_native_call(@wasmrt.string_addr(name), @wasmrt.string_addr(params))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_native_call(@wasmrt.string_addr(name), @wasmrt.string_addr(params))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

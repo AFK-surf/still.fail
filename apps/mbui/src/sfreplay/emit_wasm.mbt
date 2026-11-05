@@ -13,7 +13,10 @@ fn mbw_sfr_write_file(path : Int, text : Int) -> Int = "mbhost" "sfr_write_file"
 
 ///|
 fn write_bytes(path : Bytes, text : Bytes) -> Int {
-  mbw_sfr_write_file(@wasmrt.bytes_addr(path), @wasmrt.bytes_addr(text))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_sfr_write_file(@wasmrt.bytes_addr(path), @wasmrt.bytes_addr(text))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

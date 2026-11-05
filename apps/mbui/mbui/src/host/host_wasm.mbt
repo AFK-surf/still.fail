@@ -25,7 +25,10 @@ fn mbw_mb_host_run(title : Int, frame : FuncRef[(Double, Double, Double, Double)
 ///|
 fn ffi_run(title : String, frame : FuncRef[(Double, Double, Double, Double) -> Unit], pointer : FuncRef[(Int, Double, Double, Int) -> Unit], wheel : FuncRef[(Double, Double, Double, Double, Int) -> Unit], key : FuncRef[(Int, Int) -> Unit], text : FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit {
   mbw_cb_mb_host_run_5.val = Some(text)
-  mbw_mb_host_run(@wasmrt.string_addr(title), frame, pointer, wheel, key, fn(a0, a1, a2, a3) { mbw_cb_mb_host_run_5_in(a0, a1, a2, a3) })
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_run(@wasmrt.string_addr(title), frame, pointer, wheel, key, fn(a0, a1, a2, a3) { mbw_cb_mb_host_run_5_in(a0, a1, a2, a3) })
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_now() -> Double = "mbhost" "mb_host_now"
@@ -46,28 +49,40 @@ fn mbw_mb_host_font_metrics(size : Double, weight : Int, style : Int, out : Int)
 
 ///|
 fn ffi_font_metrics(size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Unit {
-  mbw_mb_host_font_metrics(size, weight, style, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_font_metrics(size, weight, style, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_shape(text : Int, size : Double, weight : Int, style : Int, out : Int) -> Int = "mbhost" "mb_host_shape"
 
 ///|
 fn ffi_shape(text : String, size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Int {
-  mbw_mb_host_shape(@wasmrt.string_addr(text), size, weight, style, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_shape(@wasmrt.string_addr(text), size, weight, style, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_text_key(text : Int, size : Double, weight : Int, style : Int) -> Int = "mbhost" "mb_host_text_key"
 
 ///|
 fn ffi_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
-  mbw_mb_host_text_key(@wasmrt.string_addr(text), size, weight, style)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_text_key(@wasmrt.string_addr(text), size, weight, style)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_glyph(key : Int, out : Int) = "mbhost" "mb_host_glyph"
 
 ///|
 fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit {
-  mbw_mb_host_glyph(key, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_glyph(key, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_glyph_put(key : Int, x : Int, y : Int) = "mbhost" "mb_host_glyph_put"
@@ -78,14 +93,20 @@ fn mbw_mb_host_glyphs_ahead(keys : Int, n : Int) = "mbhost" "mb_host_glyphs_ahea
 
 ///|
 fn ffi_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
-  mbw_mb_host_glyphs_ahead(@wasmrt.ints_addr(keys), n)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_glyphs_ahead(@wasmrt.ints_addr(keys), n)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_face_add(face : Int, path : Int, weight : Int) -> Int = "mbhost" "mb_host_face_add"
 
 ///|
 fn ffi_face_add(face : Int, path : String, weight : Int) -> Int {
-  mbw_mb_host_face_add(face, @wasmrt.string_addr(path), weight)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_face_add(face, @wasmrt.string_addr(path), weight)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_face_clear(face : Int) = "mbhost" "mb_host_face_clear"
@@ -94,7 +115,10 @@ fn mbw_mb_host_face_add_bytes(face : Int, data : Int, weight : Int) -> Int = "mb
 
 ///|
 fn ffi_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Int {
-  mbw_mb_host_face_add_bytes(face, @wasmrt.bytes_addr(data), weight)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_face_add_bytes(face, @wasmrt.bytes_addr(data), weight)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -102,7 +126,10 @@ fn mbw_mb_host_face_add_family(face : Int, family : Int) -> Int = "mbhost" "mb_h
 
 ///|
 fn ffi_face_add_family(face : Int, family : String) -> Int {
-  mbw_mb_host_face_add_family(face, @wasmrt.string_addr(family))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_face_add_family(face, @wasmrt.string_addr(family))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -119,7 +146,10 @@ fn mbw_mb_host_present(buf : Int, count : Int, r : Double, g : Double, b : Doubl
 
 ///|
 fn ffi_present(buf : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
-  mbw_mb_host_present(@wasmrt.doubles_addr(buf), count, r, g, b)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_present(@wasmrt.doubles_addr(buf), count, r, g, b)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -132,14 +162,20 @@ fn mbw_mb_host_set_ime(active : Int, x : Double, y : Double, w : Double, h : Dou
 
 ///|
 fn ffi_set_ime(active : Int, x : Double, y : Double, w : Double, h : Double, text : String, sel_start : Int, sel_end : Int) -> Unit {
-  mbw_mb_host_set_ime(active, x, y, w, h, @wasmrt.string_addr(text), sel_start, sel_end)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_set_ime(active, x, y, w, h, @wasmrt.string_addr(text), sel_start, sel_end)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_clipboard_set(s : Int) = "mbhost" "mb_host_clipboard_set"
 
 ///|
 fn ffi_clipboard_set(s : String) -> Unit {
-  mbw_mb_host_clipboard_set(@wasmrt.string_addr(s))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_clipboard_set(@wasmrt.string_addr(s))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -147,7 +183,10 @@ fn mbw_mb_host_clipboard_image(data : Int) = "mbhost" "mb_host_clipboard_image"
 
 ///|
 fn ffi_clipboard_image(data : Bytes) -> Unit {
-  mbw_mb_host_clipboard_image(@wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_clipboard_image(@wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -155,7 +194,10 @@ fn mbw_mb_host_clipboard_secret(s : Int, clear_ms : Double) = "mbhost" "mb_host_
 
 ///|
 fn ffi_clipboard_secret(s : String, clear_ms : Double) -> Unit {
-  mbw_mb_host_clipboard_secret(@wasmrt.string_addr(s), clear_ms)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_clipboard_secret(@wasmrt.string_addr(s), clear_ms)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -165,7 +207,10 @@ fn mbw_mb_host_log(s : Int) = "mbhost" "mb_host_log"
 
 ///|
 fn ffi_log(s : String) -> Unit {
-  mbw_mb_host_log(@wasmrt.string_addr(s))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_log(@wasmrt.string_addr(s))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_bench_mode() -> Int = "mbhost" "mb_host_bench_mode"
@@ -179,7 +224,10 @@ fn mbw_mb_host_frame_awaiting(awaiting : Int, what : Int) = "mbhost" "mb_host_fr
 
 ///|
 fn ffi_frame_awaiting(awaiting : Int, what : String) -> Unit {
-  mbw_mb_host_frame_awaiting(awaiting, @wasmrt.string_addr(what))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_frame_awaiting(awaiting, @wasmrt.string_addr(what))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -206,7 +254,10 @@ fn mbw_mb_host_perf_line(line : Int) = "mbhost" "mb_host_perf_line"
 
 ///|
 fn ffi_perf_line(line : String) -> Unit {
-  mbw_mb_host_perf_line(@wasmrt.string_addr(line))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_perf_line(@wasmrt.string_addr(line))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_perf_where() -> Int = "mbhost" "mb_host_perf_where"
@@ -236,14 +287,20 @@ fn mbw_mb_host_env(name : Int) -> Int = "mbhost" "mb_host_env"
 
 ///|
 fn ffi_env(name : String) -> String {
-  @wasmrt.take_string(mbw_mb_host_env(@wasmrt.string_addr(name)))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = @wasmrt.take_string(mbw_mb_host_env(@wasmrt.string_addr(name)))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_drive(kind : Int, text : Int) -> Int = "mbhost" "mb_host_drive"
 
 ///|
 fn ffi_drive(kind : Int, text : String) -> Int {
-  mbw_mb_host_drive(kind, @wasmrt.string_addr(text))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_drive(kind, @wasmrt.string_addr(text))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_set_app_state(f : FuncRef[(Int) -> Unit]) = "mbhost" "mb_host_set_app_state"
@@ -267,7 +324,10 @@ fn mbw_mb_host_a11y_tree(s : Int) = "mbhost" "mb_host_a11y_tree"
 
 ///|
 fn ffi_a11y_tree(s : String) -> Unit {
-  mbw_mb_host_a11y_tree(@wasmrt.string_addr(s))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_a11y_tree(@wasmrt.string_addr(s))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_set_dark(dark : Int) = "mbhost" "mb_host_set_dark"
@@ -284,7 +344,10 @@ fn mbw_mb_host_share(text : Int, name : Int, mime : Int, data : Int) -> Int = "m
 
 ///|
 fn ffi_share(text : String, name : String, mime : String, data : Bytes) -> Int {
-  mbw_mb_host_share(@wasmrt.string_addr(text), @wasmrt.string_addr(name), @wasmrt.string_addr(mime), @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_share(@wasmrt.string_addr(text), @wasmrt.string_addr(name), @wasmrt.string_addr(mime), @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -308,7 +371,10 @@ fn mbw_mb_host_word_at(text : Int, off : Int) -> Double = "mbhost" "mb_host_word
 
 ///|
 fn ffi_word_at(text : String, off : Int) -> Double {
-  mbw_mb_host_word_at(@wasmrt.string_addr(text), off)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_word_at(@wasmrt.string_addr(text), off)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -316,7 +382,10 @@ fn mbw_mb_host_open_url(url : Int) -> Int = "mbhost" "mb_host_open_url"
 
 ///|
 fn ffi_open_url(url : String) -> Int {
-  mbw_mb_host_open_url(@wasmrt.string_addr(url))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_open_url(@wasmrt.string_addr(url))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -324,7 +393,10 @@ fn mbw_mb_host_open_tab(url : Int) -> Int = "mbhost" "mb_host_open_tab"
 
 ///|
 fn ffi_open_tab(url : String) -> Int {
-  mbw_mb_host_open_tab(@wasmrt.string_addr(url))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_open_tab(@wasmrt.string_addr(url))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -335,7 +407,10 @@ fn mbw_mb_host_hold_words(channel : Int, title : Int, body : Int) = "mbhost" "mb
 
 ///|
 fn ffi_hold_words(channel : String, title : String, body : String) -> Unit {
-  mbw_mb_host_hold_words(@wasmrt.string_addr(channel), @wasmrt.string_addr(title), @wasmrt.string_addr(body))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_hold_words(@wasmrt.string_addr(channel), @wasmrt.string_addr(title), @wasmrt.string_addr(body))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -346,7 +421,10 @@ fn mbw_mb_host_update_fetch(url : Int, sha256 : Int, size : Double, name : Int, 
 
 ///|
 fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String, now : Int) -> Unit {
-  mbw_mb_host_update_fetch(@wasmrt.string_addr(url), @wasmrt.string_addr(sha256), size, @wasmrt.string_addr(name), now)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_update_fetch(@wasmrt.string_addr(url), @wasmrt.string_addr(sha256), size, @wasmrt.string_addr(name), now)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -354,7 +432,10 @@ fn mbw_mb_host_update_apply(said : Int) = "mbhost" "mb_host_update_apply"
 
 ///|
 fn ffi_update_apply(said : String) -> Unit {
-  mbw_mb_host_update_apply(@wasmrt.string_addr(said))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_update_apply(@wasmrt.string_addr(said))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -370,7 +451,10 @@ fn mbw_mb_host_install_package(name : Int, data : Int) = "mbhost" "mb_host_insta
 
 ///|
 fn ffi_install_package(name : String, data : Bytes) -> Unit {
-  mbw_mb_host_install_package(@wasmrt.string_addr(name), @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_install_package(@wasmrt.string_addr(name), @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -420,7 +504,10 @@ fn mbw_mb_host_window_open(what : Int) -> Int = "mbhost" "mb_host_window_open"
 
 ///|
 fn ffi_window_open(what : String) -> Int {
-  mbw_mb_host_window_open(@wasmrt.string_addr(what))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_window_open(@wasmrt.string_addr(what))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -428,7 +515,10 @@ fn mbw_mb_host_window_front(what : Int) -> Int = "mbhost" "mb_host_window_front"
 
 ///|
 fn ffi_window_front(what : String) -> Int {
-  mbw_mb_host_window_front(@wasmrt.string_addr(what))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_window_front(@wasmrt.string_addr(what))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -442,7 +532,10 @@ fn mbw_mb_host_menu_setup(json : Int) = "mbhost" "mb_host_menu_setup"
 
 ///|
 fn ffi_menu_setup(json : String) -> Unit {
-  mbw_mb_host_menu_setup(@wasmrt.string_addr(json))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_menu_setup(@wasmrt.string_addr(json))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -574,7 +667,10 @@ fn mbw_mb_host_local_station_act(a : Int) = "mbhost" "mb_host_local_station_act"
 
 ///|
 fn ffi_local_station_act(a : String) -> Unit {
-  mbw_mb_host_local_station_act(@wasmrt.string_addr(a))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_local_station_act(@wasmrt.string_addr(a))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1102,21 +1198,30 @@ fn mbw_mb_host_image_load(src : Int, max_px : Int) -> Int = "mbhost" "mb_host_im
 
 ///|
 fn ffi_image_load(src : String, max_px : Int) -> Int {
-  mbw_mb_host_image_load(@wasmrt.string_addr(src), max_px)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_image_load(@wasmrt.string_addr(src), max_px)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_image_load_bytes(data : Int, max_px : Int) -> Int = "mbhost" "mb_host_image_load_bytes"
 
 ///|
 fn ffi_image_load_bytes(data : Bytes, max_px : Int) -> Int {
-  mbw_mb_host_image_load_bytes(@wasmrt.bytes_addr(data), max_px)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_image_load_bytes(@wasmrt.bytes_addr(data), max_px)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn mbw_mb_host_image_info(id : Int, out : Int) -> Int = "mbhost" "mb_host_image_info"
 
 ///|
 fn ffi_image_info(id : Int, out : FixedArray[Double]) -> Int {
-  mbw_mb_host_image_info(id, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_image_info(id, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 fn ffi_image_free(id : Int) = "mbhost" "mb_host_image_free"
@@ -1125,7 +1230,10 @@ fn mbw_mb_host_image_pixels(id : Int, out : Int) -> Int = "mbhost" "mb_host_imag
 
 ///|
 fn ffi_image_pixels(id : Int, out : FixedArray[Byte]) -> Int {
-  mbw_mb_host_image_pixels(id, @wasmrt.byte_array_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_image_pixels(id, @wasmrt.byte_array_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1166,7 +1274,10 @@ fn mbw_mb_render_drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : Int) -> 
 
 ///|
 fn ffi_drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Int {
-  mbw_mb_render_drawn_pixels(x, y, w, h, @wasmrt.byte_array_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_render_drawn_pixels(x, y, w, h, @wasmrt.byte_array_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1183,7 +1294,10 @@ fn mbw_mb_render_pixels_of(inst : Int, count : Int, r : Double, g : Double, b : 
 
 ///|
 fn ffi_drawn_pixels_of(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double, scale : Double, w : Int, h : Int, out : FixedArray[Byte]) -> Int {
-  mbw_mb_render_pixels_of(@wasmrt.doubles_addr(inst), count, r, g, b, scale, w, h, @wasmrt.byte_array_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_render_pixels_of(@wasmrt.doubles_addr(inst), count, r, g, b, scale, w, h, @wasmrt.byte_array_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1211,7 +1325,10 @@ fn mbw_mb_host_browser_login_start(path : Int, done : Int) -> Int = "mbhost" "mb
 
 ///|
 fn bl_start(path : String, done : String) -> Int {
-  mbw_mb_host_browser_login_start(@wasmrt.string_addr(path), @wasmrt.string_addr(done))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_browser_login_start(@wasmrt.string_addr(path), @wasmrt.string_addr(done))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1222,7 +1339,10 @@ fn mbw_mb_host_browser_login_open(id : Int, url : Int) -> Int = "mbhost" "mb_hos
 
 ///|
 fn bl_open(id : Int, url : String) -> Int {
-  mbw_mb_host_browser_login_open(id, @wasmrt.string_addr(url))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_browser_login_open(id, @wasmrt.string_addr(url))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1247,7 +1367,10 @@ fn mbw_mb_host_passwords_run(args : Int) -> Int = "mbhost" "mb_host_passwords_ru
 
 ///|
 fn pw_run(args : String) -> Int {
-  mbw_mb_host_passwords_run(@wasmrt.string_addr(args))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_passwords_run(@wasmrt.string_addr(args))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1271,7 +1394,10 @@ fn mbw_mb_host_autofill_ask(host : Int) -> Int = "mbhost" "mb_host_autofill_ask"
 
 ///|
 fn af_ask(host : String) -> Int {
-  mbw_mb_host_autofill_ask(@wasmrt.string_addr(host))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_autofill_ask(@wasmrt.string_addr(host))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1296,7 +1422,10 @@ fn mbw_mb_host_passkeys_get(ask : Int) -> Int = "mbhost" "mb_host_passkeys_get"
 
 ///|
 fn wa_get(ask : String) -> Int {
-  mbw_mb_host_passkeys_get(@wasmrt.string_addr(ask))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_passkeys_get(@wasmrt.string_addr(ask))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1355,7 +1484,10 @@ fn mbw_mb_host_keep_begin(name : Int, mime : Int, way : Int) -> Int = "mbhost" "
 
 ///|
 fn kp_begin(name : String, mime : String, way : Int) -> Int {
-  mbw_mb_host_keep_begin(@wasmrt.string_addr(name), @wasmrt.string_addr(mime), way)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_keep_begin(@wasmrt.string_addr(name), @wasmrt.string_addr(mime), way)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1363,7 +1495,10 @@ fn mbw_mb_host_keep_append(id : Int, data : Int) -> Int = "mbhost" "mb_host_keep
 
 ///|
 fn kp_append(id : Int, data : Bytes) -> Int {
-  mbw_mb_host_keep_append(id, @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_keep_append(id, @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1416,7 +1551,10 @@ fn mbw_mb_host_pick_photo(src : Int) -> Int = "mbhost" "mb_host_pick_photo"
 
 ///|
 fn pk_photo(src : String) -> Int {
-  mbw_mb_host_pick_photo(@wasmrt.string_addr(src))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_pick_photo(@wasmrt.string_addr(src))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 // Text in a legacy encoding (charset.mbt).
@@ -1426,7 +1564,10 @@ fn mbw_mb_host_charset_known(charset : Int) -> Int = "mbhost" "mb_host_charset_k
 
 ///|
 fn cs_known(charset : String) -> Int {
-  mbw_mb_host_charset_known(@wasmrt.string_addr(charset))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_charset_known(@wasmrt.string_addr(charset))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1434,7 +1575,10 @@ fn mbw_mb_host_charset_decode(data : Int, charset : Int) -> Int = "mbhost" "mb_h
 
 ///|
 fn cs_decode(data : Bytes, charset : String) -> String {
-  @wasmrt.take_string(mbw_mb_host_charset_decode(@wasmrt.bytes_addr(data), @wasmrt.string_addr(charset)))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = @wasmrt.take_string(mbw_mb_host_charset_decode(@wasmrt.bytes_addr(data), @wasmrt.string_addr(charset)))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 // Marks drawn onto an image (marks.mbt): Marks.java on Android, apple_views.m on macOS and iOS.
@@ -1444,7 +1588,10 @@ fn mbw_mb_host_marks_start(image : Int, marks : Int) -> Int = "mbhost" "mb_host_
 
 ///|
 fn mk_start(image : Bytes, marks : String) -> Int {
-  mbw_mb_host_marks_start(@wasmrt.bytes_addr(image), @wasmrt.string_addr(marks))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_marks_start(@wasmrt.bytes_addr(image), @wasmrt.string_addr(marks))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1465,7 +1612,10 @@ fn mbw_mb_host_notice_show(channel : Int, tag : Int, title : Int, body : Int, op
 
 ///|
 fn nt_show(channel : String, tag : String, title : String, body : String, opens : String) -> Unit {
-  mbw_mb_host_notice_show(@wasmrt.string_addr(channel), @wasmrt.string_addr(tag), @wasmrt.string_addr(title), @wasmrt.string_addr(body), @wasmrt.string_addr(opens))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_notice_show(@wasmrt.string_addr(channel), @wasmrt.string_addr(tag), @wasmrt.string_addr(title), @wasmrt.string_addr(body), @wasmrt.string_addr(opens))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1473,7 +1623,10 @@ fn mbw_mb_host_notice_cancel(tag : Int) = "mbhost" "mb_host_notice_cancel"
 
 ///|
 fn nt_cancel(tag : String) -> Unit {
-  mbw_mb_host_notice_cancel(@wasmrt.string_addr(tag))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_notice_cancel(@wasmrt.string_addr(tag))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 // The system's own bars (nav.mbt): iOS's tab bar and navigation bar (ios_app.m); none elsewhere.
@@ -1483,7 +1636,10 @@ fn mbw_mb_host_nav_bar(spec : Int) -> Int = "mbhost" "mb_host_nav_bar"
 
 ///|
 fn nv_bar(spec : String) -> Int {
-  mbw_mb_host_nav_bar(@wasmrt.string_addr(spec))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_nav_bar(@wasmrt.string_addr(spec))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1518,7 +1674,10 @@ fn mbw_mb_host_view_open(kind : Int, arg : Int) -> Int = "mbhost" "mb_host_view_
 
 ///|
 fn ffi_view_open(kind : Int, arg : String) -> Int {
-  mbw_mb_host_view_open(kind, @wasmrt.string_addr(arg))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_open(kind, @wasmrt.string_addr(arg))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1535,7 +1694,10 @@ fn mbw_mb_host_view_info(id : Int, out : Int) -> Int = "mbhost" "mb_host_view_in
 
 ///|
 fn ffi_view_info(id : Int, out : FixedArray[Double]) -> Int {
-  mbw_mb_host_view_info(id, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_info(id, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1543,7 +1705,10 @@ fn mbw_mb_host_view_read_next(id : Int, out : Int) -> Int = "mbhost" "mb_host_vi
 
 ///|
 fn ffi_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
-  mbw_mb_host_view_read_next(id, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_read_next(id, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1551,7 +1716,10 @@ fn mbw_mb_host_view_read_answer(id : Int, req : Int, data : Int, total : Double,
 
 ///|
 fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Int) -> Unit {
-  mbw_mb_host_view_read_answer(id, req, @wasmrt.bytes_addr(data), total, more)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_read_answer(id, req, @wasmrt.bytes_addr(data), total, more)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1575,7 +1743,10 @@ fn mbw_mb_host_view_site_head(id : Int, req : Int, status : Int, headers : Int) 
 
 ///|
 fn ffi_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  mbw_mb_host_view_site_head(id, req, status, @wasmrt.string_addr(headers))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_site_head(id, req, status, @wasmrt.string_addr(headers))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1583,7 +1754,10 @@ fn mbw_mb_host_view_site_chunk(id : Int, req : Int, data : Int) = "mbhost" "mb_h
 
 ///|
 fn ffi_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  mbw_mb_host_view_site_chunk(id, req, @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_site_chunk(id, req, @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1591,7 +1765,10 @@ fn mbw_mb_host_view_site_end(id : Int, req : Int, error : Int) = "mbhost" "mb_ho
 
 ///|
 fn ffi_view_site_end(id : Int, req : Int, error : String) -> Unit {
-  mbw_mb_host_view_site_end(id, req, @wasmrt.string_addr(error))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_site_end(id, req, @wasmrt.string_addr(error))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1607,7 +1784,10 @@ fn mbw_mb_host_view_site_load(id : Int, path : Int) = "mbhost" "mb_host_view_sit
 
 ///|
 fn ffi_view_site_load(id : Int, path : String) -> Unit {
-  mbw_mb_host_view_site_load(id, @wasmrt.string_addr(path))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_site_load(id, @wasmrt.string_addr(path))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1663,7 +1843,10 @@ fn mbw_mb_host_view_tell(id : Int, what : Int, text : Int) = "mbhost" "mb_host_v
 
 ///|
 fn ffi_view_tell(id : Int, what : Int, text : String) -> Unit {
-  mbw_mb_host_view_tell(id, what, @wasmrt.string_addr(text))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_view_tell(id, what, @wasmrt.string_addr(text))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1757,7 +1940,10 @@ fn mbw_mb_host_pdf_open(data : Int) -> Int = "mbhost" "mb_host_pdf_open"
 
 ///|
 fn ffi_pdf_open(data : Bytes) -> Int {
-  mbw_mb_host_pdf_open(@wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_pdf_open(@wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1768,7 +1954,10 @@ fn mbw_mb_host_pdf_page_size(doc : Int, page : Int, out : Int) = "mbhost" "mb_ho
 
 ///|
 fn ffi_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
-  mbw_mb_host_pdf_page_size(doc, page, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_pdf_page_size(doc, page, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -1849,7 +2038,10 @@ fn mbw_mb_host_save_file(name : Int, data : Int) -> Int = "mbhost" "mb_host_save
 
 ///|
 fn ffi_save_file(name : String, data : Bytes) -> Int {
-  mbw_mb_host_save_file(@wasmrt.string_addr(name), @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_save_file(@wasmrt.string_addr(name), @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

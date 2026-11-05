@@ -54,7 +54,10 @@ fn mbw_mb_host_clip_set(text : Int, png : Int, label : Int) = "mbhost" "mb_host_
 
 ///|
 fn cl_set(text : String, png : Bytes, label : String) -> Unit {
-  mbw_mb_host_clip_set(@wasmrt.string_addr(text), @wasmrt.bytes_addr(png), @wasmrt.string_addr(label))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_clip_set(@wasmrt.string_addr(text), @wasmrt.bytes_addr(png), @wasmrt.string_addr(label))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

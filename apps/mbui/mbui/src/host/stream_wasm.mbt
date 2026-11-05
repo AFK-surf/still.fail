@@ -11,7 +11,10 @@ fn mbw_mb_host_stream_h264(id : Int, avcc : Int, w : Int, h : Int) = "mbhost" "m
 
 ///|
 fn st_h264(id : Int, avcc : Bytes, w : Int, h : Int) -> Unit {
-  mbw_mb_host_stream_h264(id, @wasmrt.bytes_addr(avcc), w, h)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_h264(id, @wasmrt.bytes_addr(avcc), w, h)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -19,7 +22,10 @@ fn mbw_mb_host_stream_frame(id : Int, data : Int, key : Int, ts : Double) = "mbh
 
 ///|
 fn st_frame(id : Int, data : Bytes, key : Int, ts : Double) -> Unit {
-  mbw_mb_host_stream_frame(id, @wasmrt.bytes_addr(data), key, ts)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_frame(id, @wasmrt.bytes_addr(data), key, ts)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -27,7 +33,10 @@ fn mbw_mb_host_stream_jpeg(id : Int, data : Int, ts : Double) = "mbhost" "mb_hos
 
 ///|
 fn st_jpeg(id : Int, data : Bytes, ts : Double) -> Unit {
-  mbw_mb_host_stream_jpeg(id, @wasmrt.bytes_addr(data), ts)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_jpeg(id, @wasmrt.bytes_addr(data), ts)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -55,7 +64,10 @@ fn mbw_mb_host_stream_codec(id : Int, cmd : Int, data : Int) = "mbhost" "mb_host
 
 ///|
 fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit {
-  mbw_mb_host_stream_codec(id, @wasmrt.string_addr(cmd), @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_codec(id, @wasmrt.string_addr(cmd), @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -69,7 +81,10 @@ fn mbw_mb_host_stream_hevc(id : Int, hvcc : Int, w : Int, h : Int) = "mbhost" "m
 
 ///|
 fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit {
-  mbw_mb_host_stream_hevc(id, @wasmrt.bytes_addr(hvcc), w, h)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_hevc(id, @wasmrt.bytes_addr(hvcc), w, h)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -77,7 +92,10 @@ fn mbw_mb_host_stream_audio(id : Int, data : Int) = "mbhost" "mb_host_stream_aud
 
 ///|
 fn st_audio(id : Int, data : Bytes) -> Unit {
-  mbw_mb_host_stream_audio(id, @wasmrt.bytes_addr(data))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_audio(id, @wasmrt.bytes_addr(data))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -88,7 +106,10 @@ fn mbw_mb_host_stream_pointer(id : Int, png : Int, w : Double, h : Double, hx : 
 
 ///|
 fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit {
-  mbw_mb_host_stream_pointer(id, @wasmrt.bytes_addr(png), w, h, hx, hy)
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_stream_pointer(id, @wasmrt.bytes_addr(png), w, h, hx, hy)
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

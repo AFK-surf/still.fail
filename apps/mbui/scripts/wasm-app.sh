@@ -35,16 +35,19 @@ esac
 APP=${APP:-stillfail}
 t0=$SECONDS
 log=$O/moon.log
-if ! moon build --target wasm --release src/$APP > "$log" 2>&1; then
+# (WASM_TARGET=wasm: the classic build, its objects counted by reference in the program's own memory; Wasm GC's by
+# default, its objects the engine's: mbui/wasmrt's wasmrt_gc.mbt says how values cross)
+WASM_TARGET=${WASM_TARGET:-wasm-gc}
+if ! moon build --target $WASM_TARGET --release ${MBUI_WASM_NAMES:+--no-strip} src/$APP > "$log" 2>&1; then
   awk '/^Error/ { n=9 } n>0 { print substr($0,1,300); n-- }' "$log" >&2
   exit 1
 fi
 echo "wasm-app: the app in $((SECONDS - t0)) s"
-program=$A/$(pkg_build $APP wasm release)/$APP.wasm
+program=$A/$(pkg_build $APP $WASM_TARGET release)/$APP.wasm
 # wasmtime's command line (its release for this machine, fetched once by its checksum), which compiles a program ahead
 # for a device's shell: WT_CLI; WT_SAME, what makes its compilation the C API's default engine's (the command line's own
 # collector is another: a program compiled without it the shell refuses)
-WT_SAME="-C collector=drc"
+WT_SAME="-C collector=drc -W gc=y,function-references=y"
 wasmtime_cli() {
   local host sha
   case "$(uname -s)-$(uname -m)" in

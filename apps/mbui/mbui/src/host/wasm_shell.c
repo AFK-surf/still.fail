@@ -144,6 +144,14 @@ int32_t mbw_keep_bytes(moonbit_bytes_t b) {
   return b ? Moonbit_array_length(b) : 0;
 }
 
+static wasm_trap_t *print_char(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                               wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)na; (void)r; (void)nr;
+  char c = (char)a[0].of.i32;
+  fwrite(&c, 1, 1, stdout);
+  return NULL;
+}
+
 // mbui/wasmrt's take_string, take_bytes: what was kept copied where the program made room for it
 static wasm_trap_t *take_string(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
                                 wasmtime_val_t *r, size_t nr) {
@@ -279,6 +287,59 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
   return NULL;
 }
 
+// A film's bench run here (mbui/src/film/bench.mbt, still.fail's src/sfbench): the file it reads (its script), the
+// clock its work is timed by; what it draws not drawn (its frames' work the program's own, timed by it: no renderer
+// here), each step answered done.
+static wasm_trap_t *film_read(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                              wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na; (void)r; (void)nr;
+  char *path = film_text();
+  FILE *f = fopen(path, "rb");
+  free(path);
+  free(film_got);
+  film_got = NULL;
+  film_got_n = 0;
+  if (!f) return NULL;
+  fseek(f, 0, SEEK_END);
+  long n = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  unsigned char *v = malloc((size_t)n + 1);
+  size_t got = fread(v, 1, (size_t)n, f);
+  fclose(f);
+  film_got = malloc((got + 1) * 2);
+  for (size_t i = 0; i < got;) {
+    unsigned char c = v[i];
+    uint32_t u;
+    if (c < 0x80) { u = c; i += 1; }
+    else if (c < 0xe0 && i + 1 < got) { u = (uint32_t)(c & 31) << 6 | (v[i + 1] & 63); i += 2; }
+    else if (c < 0xf0 && i + 2 < got) { u = (uint32_t)(c & 15) << 12 | (uint32_t)(v[i + 1] & 63) << 6 | (v[i + 2] & 63); i += 3; }
+    else { u = 0xfffd; i += 1; }
+    film_got[film_got_n++] = (uint16_t)u;
+  }
+  free(v);
+  return NULL;
+}
+
+static wasm_trap_t *film_now(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                             wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na; (void)nr;
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  r[0].kind = WASMTIME_F64;
+  r[0].of.f64 = (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
+  return NULL;
+}
+
+static wasm_trap_t *film_done(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                              wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na;
+  if (nr > 0) {
+    r[0].kind = WASMTIME_I32;
+    r[0].of.i32 = 1;
+  }
+  return NULL;
+}
+
 // An import the shell has not: the program runs until it is called, then ends saying which.
 static wasm_trap_t *missing(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
                             wasmtime_val_t *r, size_t nr) {
@@ -388,6 +449,15 @@ int main(int argc, char **argv) {
     wasmtime_error_t *target_err = wasmtime_config_target_set(config, "pulley64");
     if (target_err) die("no Pulley", target_err, NULL);
   }
+  // (MBUI_WASM_STACK: how deep the program's own stack may go, in bytes, wasmtime's default 512 KiB otherwise: what a
+  // run measures the stack a step takes by)
+  if (getenv("MBUI_WASM_STACK") && *getenv("MBUI_WASM_STACK")) {
+    wasmtime_config_max_wasm_stack_set(config, (size_t)strtoull(getenv("MBUI_WASM_STACK"), NULL, 10));
+  }
+  // (a program built for Wasm GC as well as a classic one: its objects the engine's, its values crossing in a memory the
+  // shell gives it, mbui/wasmrt's wasmrt_gc.mbt)
+  wasmtime_config_wasm_gc_set(config, true);
+  wasmtime_config_wasm_function_references_set(config, true);
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   ctx = wasmtime_store_context(store);
@@ -405,25 +475,70 @@ int main(int argc, char **argv) {
     if (err) die("the program is not a module", err, NULL);
   }
   wasmtime_linker_t *linker = wasmtime_linker_new(engine);
-  for (const mbw_import *i = mbw_imports; i->name; i++)
-    define(linker, "mbhost", i->name, i->fn, NULL, functype(i->np, i->p, i->nr, i->r));
+  // (each by the type the program asks it as: a Wasm GC program's function references are typed, (ref $f), which a
+  // function of the shell's own type, funcref, does not match)
+  wasm_importtype_vec_t asked;
+  wasmtime_module_imports(module, &asked);
+  for (const mbw_import *i = mbw_imports; i->name; i++) {
+    wasm_functype_t *ty = NULL;
+    for (size_t k = 0; k < asked.size && !ty; k++) {
+      const wasm_name_t *m = wasm_importtype_module(asked.data[k]);
+      const wasm_name_t *n = wasm_importtype_name(asked.data[k]);
+      const wasm_functype_t *f = wasm_externtype_as_functype_const(wasm_importtype_type(asked.data[k]));
+      if (f && m->size == 6 && memcmp(m->data, "mbhost", 6) == 0 && n->size == strlen(i->name) &&
+          memcmp(n->data, i->name, n->size) == 0)
+        ty = wasm_functype_copy(f);
+    }
+    define(linker, "mbhost", i->name, i->fn, NULL, ty ? ty : functype(i->np, i->p, i->nr, i->r));
+  }
+  wasm_importtype_vec_delete(&asked);
   wasm_valkind_t i32[4] = {WASM_I32, WASM_I32, WASM_I32, WASM_I32};
   define(linker, "mbhost", "mbw_take_string", take_string, NULL, functype(1, i32, 0, NULL));
   define(linker, "mbhost", "mbw_take_bytes", take_bytes, NULL, functype(1, i32, 0, NULL));
   define(linker, "wasi_snapshot_preview1", "fd_write", fd_write, NULL, functype(4, i32, 1, i32));
+  // (a Wasm GC program's print: a character a call)
+  define(linker, "spectest", "print_char", print_char, NULL, functype(1, i32, 0, NULL));
   define(linker, "wasi_snapshot_preview1", "proc_exit", proc_exit, NULL, functype(1, i32, 0, NULL));
   define(linker, "film", "arg", film_arg, NULL, functype(0, NULL, 0, NULL));
   define(linker, "film", "gotLength", film_got_length, NULL, functype(0, NULL, 1, i32));
   define(linker, "film", "gotUnit", film_got_unit, NULL, functype(1, i32, 1, i32));
   define(linker, "film", "say", film_say, NULL, functype(0, NULL, 0, NULL));
   define(linker, "film", "exit", proc_exit, NULL, functype(1, i32, 0, NULL));
-  // what else the program imports, a function that ends it saying which as it is called
+  {
+    wasm_valkind_t f64[3] = {WASM_F64, WASM_F64, WASM_F64};
+    wasm_valkind_t dddd[4] = {WASM_I32, WASM_F64, WASM_F64, WASM_F64};
+    define(linker, "film", "read", film_read, NULL, functype(0, NULL, 0, NULL));
+    define(linker, "film", "now", film_now, NULL, functype(0, NULL, 1, f64));
+    define(linker, "film", "hold", film_done, NULL, functype(0, NULL, 0, NULL));
+    define(linker, "film", "write", film_done, NULL, functype(0, NULL, 1, i32));
+    define(linker, "film", "init", film_done, NULL, functype(3, f64, 0, NULL));
+    define(linker, "film", "view", film_done, NULL, functype(3, f64, 0, NULL));
+    define(linker, "film", "open", film_done, NULL, functype(3, i32, 1, i32));
+    define(linker, "film", "draw", film_done, NULL, functype(4, dddd, 1, i32));
+    define(linker, "film", "put", film_done, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "close", film_done, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "finish", film_done, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "snapshot", film_done, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "spin", film_done, NULL, functype(1, f64, 0, NULL));
+  }
+  // what else the program imports, a function that ends it saying which as it is called; the memory a Wasm GC program
+  // asks for (env.memory), the shell's
   wasm_importtype_vec_t imports;
   wasmtime_module_imports(module, &imports);
   for (size_t k = 0; k < imports.size; k++) {
     const wasm_name_t *mod = wasm_importtype_module(imports.data[k]);
     const wasm_name_t *name = wasm_importtype_name(imports.data[k]);
     const wasm_externtype_t *ty = wasm_importtype_type(imports.data[k]);
+    const wasm_memorytype_t *mty = wasm_externtype_as_memorytype_const(ty);
+    if (mty && !has_memory) {
+      wasmtime_error_t *merr = wasmtime_memory_new(ctx, mty, &memory);
+      if (merr) die("no memory for the program", merr, NULL);
+      wasmtime_extern_t given = {.kind = WASMTIME_EXTERN_MEMORY, .of.memory = memory};
+      merr = wasmtime_linker_define(linker, ctx, mod->data, mod->size, name->data, name->size, &given);
+      if (merr) die("the program's memory", merr, NULL);
+      has_memory = 1;
+      continue;
+    }
     wasmtime_extern_t found;
     if (wasmtime_linker_get(linker, ctx, mod->data, mod->size, name->data, name->size, &found)) continue;
     const wasm_functype_t *fty = wasm_externtype_as_functype_const(ty);
@@ -441,10 +556,12 @@ int main(int argc, char **argv) {
   err = wasmtime_linker_instantiate(linker, ctx, module, &instance, &trap);
   if (err || trap) die("the program could not start", err, trap);
   wasmtime_extern_t item;
-  if (!wasmtime_instance_export_get(ctx, &instance, "memory", 6, &item) || item.kind != WASMTIME_EXTERN_MEMORY)
-    die("the program exports no memory", NULL, NULL);
-  memory = item.of.memory;
-  has_memory = 1;
+  if (!has_memory) {
+    if (!wasmtime_instance_export_get(ctx, &instance, "memory", 6, &item) || item.kind != WASMTIME_EXTERN_MEMORY)
+      die("the program exports no memory", NULL, NULL);
+    memory = item.of.memory;
+    has_memory = 1;
+  }
   if (wasmtime_instance_export_get(ctx, &instance, "mbw_string", 10, &item) && item.kind == WASMTIME_EXTERN_FUNC) {
     export_string = item.of.func;
     has_string = 1;

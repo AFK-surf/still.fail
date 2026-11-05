@@ -5,7 +5,10 @@ fn mbw_sfr_trace_read(name : Int) -> Int = "mbhost" "sfr_trace_read"
 
 ///|
 fn trace_bytes(name : Bytes) -> Bytes {
-  @wasmrt.take_bytes(mbw_sfr_trace_read(@wasmrt.bytes_addr(name)))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = @wasmrt.take_bytes(mbw_sfr_trace_read(@wasmrt.bytes_addr(name)))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|

@@ -14,7 +14,10 @@ fn mbw_mb_host_ref_text(text : Int, size : Double, weight : Int, style : Int, x 
 
 ///|
 fn ffi_ref_text(text : String, size : Double, weight : Int, style : Int, x : Double, base : Double, color : Int, out : FixedArray[Double]) -> Unit {
-  mbw_mb_host_ref_text(@wasmrt.string_addr(text), size, weight, style, x, base, color, @wasmrt.doubles_addr(out))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_ref_text(@wasmrt.string_addr(text), size, weight, style, x, base, color, @wasmrt.doubles_addr(out))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -22,7 +25,10 @@ fn mbw_mb_host_ref_end(name : Int) -> Int = "mbhost" "mb_host_ref_end"
 
 ///|
 fn ffi_ref_end(name : String) -> Int {
-  mbw_mb_host_ref_end(@wasmrt.string_addr(name))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_ref_end(@wasmrt.string_addr(name))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
@@ -30,7 +36,10 @@ fn mbw_mb_host_ref_frame(name : Int) -> Int = "mbhost" "mb_host_ref_frame"
 
 ///|
 fn ffi_ref_frame(name : String) -> Int {
-  mbw_mb_host_ref_frame(@wasmrt.string_addr(name))
+  let mbw_m = @wasmrt.mark()
+  let mbw_r = mbw_mb_host_ref_frame(@wasmrt.string_addr(name))
+  @wasmrt.settle(mbw_m)
+  mbw_r
 }
 
 ///|
