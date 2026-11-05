@@ -1,7 +1,8 @@
 // What agents asked of the vault (docs/vault.md, agent 用密钥): GET vault/requests, those still waiting that the viewer
 // may decide (they are a member of the request's vault, or own the plain library's item); POST vault/grants and
 // vault/denials, the decision as the viewer's app signed it. The grant's secret is sealed to the request's box and opened
-// only by the keeper; a refused one says why. GET vault/uses: the requests decided, as a vault's uses.
+// only by the keeper; a refused one says why. GET vault/uses: the requests decided, as a vault's uses. GET vault/held:
+// the grants still held that the viewer may take back (never a value); POST vault/revoke `{request}`, one taken back now.
 //
 // The plain library (vault/plain.ts, docs/vault.md 不加锁的库), a workspace's without security mode: GET vault/plain (the
 // viewer's items, without their fields, and their longest grant), GET vault/plain/item?id= (one, with them), PUT
@@ -53,7 +54,8 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
     {
       method: "GET",
       pattern: /^\/vault\/requests$/,
-      handle: async (r) => json(200, JSON.stringify({ requests: secrets.pending(r.viewer.workspace, locked(r), r.viewer) })),
+      // (each with its chat's title, what the pages name it by)
+      handle: async (r) => json(200, JSON.stringify({ requests: secrets.pending(r.viewer.workspace, locked(r), r.viewer).map((q) => ({ ...q, chatTitle: secrets.titleOf(q.session) ?? null })) })),
     },
     {
       method: "POST",
@@ -84,6 +86,16 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       method: "GET",
       pattern: /^\/vault\/uses$/,
       handle: async (r) => json(200, JSON.stringify({ uses: await secrets.uses(r.viewer.workspace, locked(r), param(r, "vault") ?? "", r.viewer) })),
+    },
+    {
+      method: "GET",
+      pattern: /^\/vault\/held$/,
+      handle: async (r) => json(200, JSON.stringify({ held: secrets.heldBy(r.viewer.workspace, locked(r), r.viewer) })),
+    },
+    {
+      method: "POST",
+      pattern: /^\/vault\/revoke$/,
+      handle: async (r) => decide(r, (o) => secrets.revoke(r.viewer.workspace, locked(r), r.viewer, o.request)),
     },
     {
       method: "GET",

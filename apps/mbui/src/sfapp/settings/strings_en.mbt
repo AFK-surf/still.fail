@@ -693,7 +693,7 @@ let en : Map[String, String] = {
   "android-settings.slack.group.extras": "Links, reminders, status",
   "android-settings.slack.group.files": "Files",
   "android-settings.slack.group.lists": "Lists",
-  "android-settings.slack.group.more": "Status, metadata, commands",
+  "android-settings.slack.group.more": "Status, metadata",
   "android-settings.slack.group.people": "View profiles",
   "android-settings.slack.group.public": "Post in any public channel",
   "android-settings.slack.group.reactions": "Reactions, pins, bookmarks",

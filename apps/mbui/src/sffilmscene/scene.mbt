@@ -24,7 +24,13 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
             })
           _ => ()
         }
-        let s = @sfapp.fixture_app(mode)
+        // (the vault client, MBUI_APP=vault: over the settings' made-up vault)
+        let s = @sfapp.fixture_app(if mode == "vault-app" { "settings-vault-items" } else { mode })
+        // (said once the app is put back as at its start: the run is the vault client's)
+        if mode == "vault-app" {
+          @sfbase.vault_app.val = true
+          @settings.fx_vault_app.val = true
+        }
         if arg("MBUI_WINDOW") != "" { @sfbase.lone_page.val = @sfbase.window_page(arg("MBUI_WINDOW")) }
         if arg("MBUI_UPDATES_MS") != "" { @sffixture.fixture_updates(ms=whole_ms(arg("MBUI_UPDATES_MS"))) }
         if arg("MBUI_UPDATE") != "" { @sffixture.fixture_update(arg("MBUI_UPDATE")) }

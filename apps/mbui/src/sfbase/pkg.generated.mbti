@@ -1740,6 +1740,8 @@ pub fn use_core_markdown(Source) -> Unit
 
 pub fn utf8_whole(Bytes) -> Int32
 
+pub let vault_app : @ref.Ref[Bool]
+
 pub fn vector_faces(Bytes) -> Array[Bytes]
 
 pub fn vf_kind_label(PKind?) -> String

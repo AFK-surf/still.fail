@@ -267,6 +267,7 @@
   "core-misc.vault.scopeTooLong": "This secret is not granted for that long",
   "core-misc.vault.untrusted": "This item is not signed by a member of its vault",
   "core-misc.vault.noRequest": "That request is not waiting any more",
+  "core-misc.vault.noGrant": "That grant has already ended",
   "core-misc.vault.reason.open": "Open “{name}”",
   "core-misc.vault.reason.unlock": "Unlock the vault “{name}”",
   "core-misc.vault.reason.approve": "Let an agent use “{name}”",

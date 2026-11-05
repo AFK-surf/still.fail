@@ -349,6 +349,7 @@ pub fn reset() -> Unit {
   shell.val = bare_shell()
   // the page shown alone in a window of its own (window.mbt)
   lone_page.val = None
+  vault_app.val = false
   windows_open.clear()
 }
 

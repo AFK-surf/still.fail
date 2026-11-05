@@ -537,7 +537,12 @@ test("routes: the plain library (no security mode) is each person's own, version
   const viewers = ["alice", "bob"].map((sub) => viewer(sub));
   const events = { tell: (event: string, data: unknown, _of: string, to: To) => told.push({ event, data, to: viewers.filter((viewer) => isFor(to, { viewer, lang: "en" })).map((v) => v.sub) }) };
   const granted: unknown[] = [];
-  const secrets = { pending: () => [], uses: () => [], grantPlain: (...a: unknown[]) => (granted.push(a), null), denyPlain: () => null };
+  const revoked: unknown[] = [];
+  const secrets = {
+    pending: () => [], uses: () => [], grantPlain: (...a: unknown[]) => (granted.push(a), null), denyPlain: () => null,
+    heldBy: (_ws: string, _l: unknown, v: { sub: string }) => (v.sub === "alice" ? [{ request: "r_1" }] : []),
+    revoke: (_ws: string, _l: unknown, v: { email: string }, id: unknown) => (revoked.push([v.email, id]), id === "r_1" ? null : "no such grant held here"),
+  };
   const all = requestRoutes({ secrets: secrets as never, plain: new PlainStore(new DatabaseSync(":memory:")), lock: (ws) => (w !== null && ws === WS ? w.state : null), events: events as any });
   const ask = async (method: string, path: string, sub: string, body?: unknown) => {
     const [p, q] = path.split("?");
@@ -570,6 +575,13 @@ test("routes: the plain library (no security mode) is each person's own, version
   // Decided by its owner (the secrets' check), not signed.
   assert.equal((await ask("POST", "/vault/plain/grants", "alice", { request: "r_1", scope: "once" })).status, 200);
   assert.equal(granted.length, 1);
+  // The grants held, each viewer's own; one taken back as the secrets decide, a refusal said why.
+  assert.deepEqual((await ask("GET", "/vault/held", "alice")).body.held, [{ request: "r_1" }]);
+  assert.deepEqual((await ask("GET", "/vault/held", "bob")).body.held, []);
+  assert.equal((await ask("POST", "/vault/revoke", "alice", { request: "r_1" })).status, 200);
+  const no = await ask("POST", "/vault/revoke", "alice", { request: "r_2" });
+  assert.deepEqual([no.status, no.body.code], [409, "vault_refused"]);
+  assert.deepEqual(revoked, [["alice@x", "r_1"], ["alice@x", "r_2"]]);
   // Security mode on: nothing new, only deleted (moved into the vault), and then nothing of it kept.
   w = lock();
   assert.equal((await ask("PUT", "/vault/plain", "alice", { ...item, version: 2 })).body.code, "vault_locked");

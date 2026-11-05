@@ -10,6 +10,11 @@
 pub let lone_page : Ref[Page?] = Ref(None)
 
 ///|
+/// Started as the vault client (MBUI_APP=vault: src/sfvault, docs/vault.md): signed in, the vault of the workspace in
+/// view in the place of the shell; signing in and starting as ever.
+pub let vault_app : Ref[Bool] = Ref(false)
+
+///|
 /// What a window of its own is started with to show `p` (window_page reads it back): a station's screen; None for a
 /// page that goes in none.
 pub fn window_text(p : Page) -> String? {

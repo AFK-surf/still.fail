@@ -26,7 +26,8 @@ export type Carried = { boxes: [string, string][]; held: Held[] };
 
 /// What a keeper is told of: whether a session's chat is over (archived or gone), and where its grants are kept
 /// across restarts (`save` each grant taken or used, `forget` each one gone).
-export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(id: string): void } };
+/// `changed`: told of each grant taken, used, renewed or gone (`gone`), for the people who may see it (vault/held).
+export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(id: string): void }; changed?(h: Held, gone: boolean): void };
 
 /// Whether `host` is one of `patterns`: the same name, or under a `*.` pattern's domain (not the domain itself).
 export function hostAllowed(host: string, patterns: string[]): boolean {
@@ -65,6 +66,7 @@ export class Keeper {
     this.#held.set(h.request.id, h);
     this.#schedule(h);
     this.#d.kept?.save(h);
+    this.#d.changed?.(h, false);
   }
 
   #schedule(h: Held) {
@@ -85,7 +87,11 @@ export class Keeper {
     const timer = this.#timers.get(id);
     if (timer !== undefined) timer();
     this.#timers.delete(id);
-    if (this.#held.delete(id)) this.#d.kept?.forget(id);
+    const h = this.#held.get(id);
+    if (h !== undefined && this.#held.delete(id)) {
+      this.#d.kept?.forget(id);
+      this.#d.changed?.(h, true);
+    }
   }
 
   /// A box for request `id`'s secret: its public half, to be sealed to; the private half stays here.
@@ -200,6 +206,7 @@ export class Keeper {
     if (h === undefined) return;
     h.uses++;
     this.#d.kept?.save(h);
+    this.#d.changed?.(h, false);
   }
 
   /// A successful use extends an idle grant, provided it has not ended in the meantime.
@@ -209,12 +216,24 @@ export class Keeper {
     h.until = this.#now() + h.grant.timeout.seconds;
     this.#schedule(h);
     this.#d.kept?.save(h);
+    this.#d.changed?.(h, false);
   }
 
   /// A request decided otherwise (denied, expired): its box is dropped.
   drop(id: string) {
     this.#boxes.delete(id);
     this.#forget(id);
+  }
+
+  /// Every grant held that has not run out (any session's, used up or not): what people may see of them (vault/held).
+  all(): Held[] {
+    const now = this.#now();
+    return [...this.#held.values()].filter((h) => (h.until ?? h.grant.exp) > now);
+  }
+
+  /// Grant `id` as held now (run out or not), or undefined.
+  get(id: string): Held | undefined {
+    return this.#held.get(id);
   }
 
   /// Whether `session` holds a grant here (used up or not).

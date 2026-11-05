@@ -194,6 +194,14 @@ chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）
 - **传法**：走 station 之间的连接（iroh，端到端加密），请求 `vault.run` / `vault.capture`，带 `secret`（这条的 fields）、方式、域名、命令；对方立刻回 `{started: true}`，跑完再反过来问一次 `vault.done {id, result}`（连接上一次请求只等 30 秒，命令可能跑几分钟）。对方用自己的代理、ssh-agent 或环境变量跑，输出照样按原值遮掉；值只在那条命令跑着的时候在对方进程里，不写盘。
 - **信任**：对方是同一个 workspace 的 station，本来就能替这个 chat 跑任意命令（station_task），多给的只是这一次的值，卡片上写明了是哪台。旧 station 不认 `vault.*`，回错，agent 被告知要先更新那台。
 
+## 在用的授权和收回（2026-11-04）
+
+chat EMBER/1793799120.942000（独立密钥库客户端，第一档）。人能看到 agent 现在手上有哪些授权，并能在到期前收回：
+
+- station：`GET vault/held` 列出这个人能决定其申请的、还没到期的授权（哪个 chat、哪条、方式、域名或命令、批准时限、`until`（闲置的按最近一次续期）、用了几次、在哪台 station 跑），不含值；一次性授权用过就不列。`POST vault/revoke {request}` 立即收回：keeper 丢掉它，之后的 `secret_run` 被拒；正在别的 station 上跑的命令经 `vault.revoke` 停止再用；登录态当场从 chat 的浏览器取出（和到期一样把那时的 cookie 存回）；记一条 `revoked` 审计，并告诉那个 session。授权被拿到、用、续期、结束（收回、到期、chat 归档）时推 `vault-held`（结束的只带 `{request, gone: true}`），发给和申请一样的人。`GET vault/requests` 的每条带 `chatTitle`。
+- core：topic `vaultHeld {workspace}`（按批准时间倒序，带条目名、库名、`until` 的时间戳），调用 `vault.revoke {request}`；`vaultUses` 的 `item` 为空时给整个库的记录，每条带 `item`、`itemName`。
+- 客户端：still.fail app 以 `MBUI_APP=vault` 启动就是密钥库客户端（`apps/mbui/src/sfvault`），登录和工作区照旧，签入后整窗是密钥库：首页「现在」（待批准、在用的授权、最近使用），侧栏按类型和库，条目页（字段、agent 怎么用、使用记录），新建、编辑、删除。
+
 ## 人用的密码库（第二期以后）
 
 - app 里加一个「密钥」页：库、条目、搜索、复制（30 秒后清剪贴板）、生成密码、TOTP。网页版只列名字。

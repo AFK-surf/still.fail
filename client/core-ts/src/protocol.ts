@@ -151,6 +151,7 @@ export const TOPICS: Record<string, Spec> = {
   filesTabs: { workspace: S },
   downloads: {},
   vaultUses: { workspace: S, vault: S, item: S },
+  vaultHeld: { workspace: S },
 };
 
 const LIMITS: Record<string, number> = { u64: 2 ** 64, u32: 2 ** 32 - 1, u16: 65535 };

@@ -175,7 +175,7 @@ export type SignIns = {
 export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string, string>][] };
 
 /// A command sent to another station to run, or one it sent here, waiting for how it ended.
-type Away = { station: string; session?: string; workspace?: string; done(result: Json): void; used?(): number | null };
+type Away = { station: string; session?: string; workspace?: string; grant?: string; done(result: Json): void; used?(): number | null };
 
 /// A request as the station keeps it: the contract's, and where its card is.
 type Kept = { request: Request; thread: number | null; cardTs: string | null };
@@ -185,6 +185,13 @@ class Refused extends Error {}
 
 /// An item an agent may ask for: of a vault (its id) or of the plain library (`plain`), whose owner (email) decides.
 export type Listed = { vault: string; item: string; owner: string | null; listing: Listing };
+
+/// A grant still held, as the pages list it (never its value): the request it answers, how long it lasts (`until`,
+/// unix seconds: an idle one's as last renewed), how often it was used, and the chat that holds it.
+export type HeldRow = {
+  request: string; vault: string; item: string; session: string; chatTitle: string | null; mode: Mode; hosts: string[]; command: string | null;
+  scope: Scope; timeout: { kind: "idle" | "fixed"; seconds: number } | null; at: number; until: number; uses: number; runOn: string | null;
+};
 
 /// A use of a secret, as the pages list them: a request decided, in the chat that asked.
 export type Use = { item: string; at: number; session: string; chatTitle: string | null; mode: Mode; command: string | null; hosts: string[]; denied: boolean };
@@ -197,6 +204,8 @@ export class Secrets {
   readonly #d: SecretsDeps;
   readonly #uses: UseIndex;
   readonly #listeners: ((r: Request) => void)[] = [];
+  /// Who hears of a grant taken, used, renewed or gone (`gone`): the event streams (module.ts `vault-held`).
+  readonly #heldListeners: ((h: Held, gone: boolean) => void)[] = [];
   /// Who hears of an item of the plain library written here (a sign-in's new cookies).
   #plainWritten: (i: PlainItem) => void = () => {};
   /// The secrets agents asked to keep, by request, until decided: only in memory (a restart forgets them). The plain
@@ -225,6 +234,9 @@ export class Secrets {
             .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses, ...(h.until === undefined ? {} : { until: h.until }) }));
         },
         forget: (id) => d.db.prepare("DELETE FROM vault_grants WHERE id = ?").run(id),
+      },
+      changed: (h, gone) => {
+        for (const f of this.#heldListeners) f(h, gone);
       },
     });
     this.plain = d.plain;
@@ -289,6 +301,52 @@ export class Secrets {
   /// Tells `f` of each item of the plain library this writes itself (`renewed`).
   onPlainWritten(f: (i: PlainItem) => void) {
     this.#plainWritten = f;
+  }
+
+  /// Hears each grant taken, used, renewed or gone.
+  listenHeld(f: (h: Held, gone: boolean) => void) {
+    this.#heldListeners.push(f);
+  }
+
+  /// Grant `h` as the pages list it.
+  heldRow(h: Held): HeldRow {
+    const r = h.request;
+    return {
+      request: r.id, vault: r.vault, item: r.item, session: r.session, chatTitle: this.#title(r.session), mode: h.grant.mode, hosts: h.grant.hosts ?? [], command: r.command ?? null,
+      scope: h.grant.scope, timeout: h.grant.timeout ?? null, at: h.grant.at, until: h.until ?? h.grant.exp, uses: h.uses, runOn: r.runOn?.name ?? null,
+    };
+  }
+
+  /// The grants held in workspace `ws` that `viewer` may take back: those whose request they could have decided (a
+  /// member of its vault; the plain library's item's owner), the latest first. A one-use grant used is over: not listed.
+  heldBy(ws: string, lock: LockState | null, viewer: { sub: string; email: string }): HeldRow[] {
+    return this.keeper.all()
+      .filter((h) => h.request.ws === ws && !(h.grant.scope === "once" && h.uses > 0) && this.#decides(h.request, viewer, lock))
+      .sort((a, b) => b.grant.at - a.grant.at)
+      .map((h) => this.heldRow(h));
+  }
+
+  /// Grant `id` taken back by `viewer` before it runs out (vault/revoke): no command runs with it any more, one running
+  /// on another station is stopped from using it, a sign-in is taken out of its chat's browser now (its cookies kept as
+  /// at its end). Why not, or null.
+  revoke(ws: string, lock: LockState | null, viewer: { sub: string; email: string }, id: unknown): string | null {
+    if (typeof id !== "string") return "which grant: {request}";
+    const h = this.keeper.get(id);
+    if (h === undefined || h.request.ws !== ws) return "no such grant held here (it ran out, or its chat ended)";
+    if (!this.#decides(h.request, viewer, lock)) return "only who may decide its requests takes a grant back";
+    if (h.grant.mode === "browser") this.#d.browsers?.extendSignIn?.(h.request.session, id, Math.floor(this.#d.now() / 1000));
+    for (const [command, away] of this.#away) {
+      if (away.grant === id && away.workspace) void this.#d.ask?.(away.station, { method: "vault.revoke", workspace: away.workspace, id: command }).catch(() => {});
+    }
+    this.keeper.drop(id);
+    this.#audit(h.request, "revoked", "");
+    const l = this.#listingOf(h.request);
+    try {
+      this.#d.hub.notify(h.request.session, `The grant ${id}${l ? ` of 「${l.name}」` : ""} was taken back by ${viewer.email}: it can no longer be used. Ask again (secret_use) only if the task still needs it.`);
+    } catch {
+      // The session is gone: nobody to tell.
+    }
+    return null;
   }
 
   #told(r: Request) {
@@ -397,6 +455,11 @@ export class Secrets {
     return bodies
       .map((body) => JSON.parse(body) as Request)
       .map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: this.#title(r.session), mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
+  }
+
+  /// The title of `session`'s chat, where it has one (what the pages name a request or a grant by).
+  titleOf(session: string): string | null {
+    return this.#title(session);
   }
 
   #title(session: string): string | null {
@@ -1057,7 +1120,7 @@ export class Secrets {
       const stop = wall.after(ms + 120_000, () => {
         if (this.#away.delete(id)) reject(new Refused(`${on.name} did not say how the command ended; it may still have run`));
       });
-      this.#away.set(id, { station: on.id, done: (result) => (stop(), resolve(result)), ...(used ? { used } : {}), ...(typeof request.session === "string" ? { session: request.session } : {}), ...(typeof request.workspace === "string" ? { workspace: request.workspace } : {}) });
+      this.#away.set(id, { station: on.id, done: (result) => (stop(), resolve(result)), ...(used ? { used } : {}), ...(typeof request.grant === "string" ? { grant: request.grant } : {}), ...(typeof request.session === "string" ? { session: request.session } : {}), ...(typeof request.workspace === "string" ? { workspace: request.workspace } : {}) });
       ask(on.id, { ...request, id }).then(
         (answer) => {
           if ((answer as { started?: unknown } | null)?.started === true || !this.#away.delete(id)) return;
