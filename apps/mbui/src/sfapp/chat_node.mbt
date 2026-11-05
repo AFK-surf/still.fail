@@ -36,8 +36,8 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       l
       .grow(Is(1.0))
       .min_height(Is(Some(0.0)))
-      .drawn_off(By(fn() {
-        (0.0, @sfbase.send_list_rise(l, r.station + ":" + r.session, fn(f) {
+      .drawn_off(Painted(fn(laid) {
+        (0.0, @sfbase.send_list_rise(laid, l, r.station + ":" + r.session, fn(f) {
           (landing.val)(f.key).map(fn(m) { m.anchor })
         }))
       }))

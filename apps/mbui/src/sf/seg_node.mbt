@@ -43,51 +43,11 @@ pub fn seg_node(
   parent.box(fn(line) {
     line.row(Is(true)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     line.box(fn(track) {
-      // how its options fit the room its track was laid out in (none: their columns whole), as segmented's
-      let fit : () -> Fitted? = fn() {
-        match track.laid_size_told() {
-          Some((w, _)) if w < whole() - 0.5 => {
-            track.words_redone() |> ignore
-
-            Some(
-              fitted(@ui.current(), labels(), w - 2.0 * segmented_pad - gaps(), theme().t.ui, 500, segmented_in, segmented_least, tree=true),
-            )
-          }
-          _ => None
-        }
-      }
-      let menu = fn() { fit() is Some({ fit: Menu, .. }) }
-      // (each option's width: its column, or its share of the room as fitted; its words that much smaller)
-      let widths = fn() {
-        match fit() {
-          Some({ widths, fit: Whole | Smaller(_) }) => widths
-          _ => Array::make(labels().length(), col())
-        }
-      }
-      let smaller = fn() {
-        match fit() {
-          Some({ fit: Smaller(k), .. }) => k
-          _ => 1.0
-        }
-      }
-      let x_of = fn(k : Int) {
-        let ws = widths()
-        let mut x = segmented_pad
-        for i in 0..<k {
-          x = x + ws.get(i).unwrap_or(0.0) + segmented_gap
-        }
-        x
-      }
-      let w_of = fn(k : Int) { widths().get(k).unwrap_or(0.0) }
-      // (where its thumb is along the track, as its way has it: off to the chosen one's place as that changes, from where
-      // it is then)
-      let way = @motion.Way::new(@signals.untracked(fn() { x_of(chosen()) }))
       // (its options' nodes, for the focus the arrows move)
       let options : Array[@view.View] = []
       let ink = fn() { theme().p.text }
       track
       .row(Is(true))
-      .padding(Is((segmented_pad, segmented_pad, segmented_pad, segmented_pad)))
       .radius(Is(segmented_corner + segmented_pad))
       .ground(By(fn() { alpha(ink(), 0.06) }))
       // (as wide as its columns where its line has the room, giving way to what it has: down to nothing, its options
@@ -97,7 +57,6 @@ pub fn seg_node(
       .height(Is(Some(segmented_h + 2.0 * segmented_pad)))
       .shrink(Is(1.0))
       .min_width(Is(Some(0.0)))
-      .says(By(fn() { if menu() { None } else { Some(@view.said(RadioGroup, label=said)) } }))
       // (a roving group, as @kit.toggle_group's: Tab stops at the chosen one alone; ← and → go to the one before and after,
       // round from the ends, Home and End to the first and the last, each chosen and its focus as it is)
       .on_key(fn(k) {
@@ -133,145 +92,208 @@ pub fn seg_node(
         }
       })
       |> ignore
-      // side by side: the thumb, under the options' words, and the options
-      track.show(fn() { !menu() }, fn(strip) {
-        options.clear()
-        strip.row(Is(true)).gap(Is(segmented_gap)) |> ignore
-        // (the thumb's way said at the moment the chosen one changes, from where it is then; where only where it is
-        // changes, its columns another width (the words' size, their language, the room), there at once)
-        let last = Ref(@signals.untracked(chosen))
-        strip.reacts(fn() { (chosen(), x_of(chosen())) }, fn(at) {
-          let (k, x) = at
-          if k == last.val {
-            way.put(x)
-          } else {
-            way.go(x, @motion.move_spring, at=strip.cause_at())
-          }
-          last.val = k
-        })
-        // the thumb: where its way has it, as each frame draws it while it goes, as wide as the chosen one
-        strip.box(fn(th) {
-          let x = fn() {
-            way.said()
-            let now = th.logic_at()
-            way.value_at(if way.goes_at(now) { th.drawn_at() } else { @double.infinity })
-          }
-          th
-          .over(Is(true))
-          .offset(By(fn() { (x() - segmented_pad, 0.0) }))
-          .width(By(fn() { Some(w_of(chosen())) }))
-          .height(Is(Some(segmented_h)))
-          .radius(Is(segmented_corner))
-          .ground(By(fn() { @ui.tree_theme().lifted }))
-          .edge(By(fn() { (0.5, theme().p.line) }))
-          .shadow(By(fn() { (1.0, 0.0, theme().p.shadow) }))
-          |> ignore
-        })
-        |> ignore
-        // its options (as many as there are as it is made; their words as they are said, in the language as it is): their
-        // words in their middle, in the chosen weight and ink where chosen or pointed at, smaller as fitted
-        for k in 0..<@signals.untracked(labels).length() {
-          let label = fn() { labels().get(k).unwrap_or("") }
-          let on = fn() { chosen() == k }
-          strip.box(fn(o) {
-            o
-            .width(By(fn() { Some(w_of(k)) }))
-            .height(Is(Some(segmented_h)))
-            // (its words in its middle both ways, as the old view's option is: align and justify centre)
-            .lines_up(Is(Some(Middle)))
-            .lies_along(Is(Middle))
-            .presses(Is(true))
-            .focusable(Is(true))
-            .tab_stop(By(on))
-            .says(By(fn() { Some(@view.said(Radio, label=label(), check=if on() { On } else { Off })) }))
-            .on_press(fn() {
-              if !@signals.untracked(on) {
-                choose(k)
+      // what it holds as the room its track is laid out in calls for (View::by_room, in the same layout: nothing of the
+      // track's size read back): its columns whole where they fit, else fitted to it as segmented's (fitted), each way
+      // its own child
+      let fits : Map[String, Fitted?] = {}
+      track.by_room(
+          // (what the choice reads but the room: its words, their columns and gaps, the size of its words as the theme
+          // and the system's size of words have it; taken before the layout, followed)
+          By(fn() {
+            track.words_redone() |> ignore
+            (labels(), col(), gaps(), theme().t.ui)
+          }),
+          fn(at, room, _) {
+            let (words, col, gaps, size) = at
+            // (what its options have of the track's room: its pad round them, made by the child it picks)
+            let w = room - 2.0 * segmented_pad
+            if w < col * words.length().to_double() + gaps - 0.5 {
+              let f = fitted(@ui.current(), words, w - gaps, size, 500, segmented_in, segmented_least, tree=true)
+              let key = "\{f.fit} \{f.widths}"
+              fits[key] = Some(f)
+              key
+            } else {
+              fits["whole"] = None
+              "whole"
+            }
+          },
+          fn(v, key) {
+            let f = fits.get(key).unwrap_or(None)
+            // (each option's width: its column, or its share of the room as fitted; its words that much smaller)
+            let widths = fn() {
+              match f {
+                Some({ widths, fit: Whole | Smaller(_) }) => widths
+                _ => Array::make(labels().length(), col())
               }
-            })
-            |> ignore
-            options.push(o)
-            o.box(fn(w) {
-              w
-              .words(By(label))
-              .words_look(By(fn() {
-                let size = theme().t.ui * smaller()
-                // (its line so many times its size as drawn, at the system's size of words: an old view's words' as
-                // Ctx::text has them, where none is said (a negative line: view_line's))
-                { size, weight: if on() { 500 } else { 400 }, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
+            }
+            let smaller = fn() {
+              match f {
+                Some({ fit: Smaller(k), .. }) => k
+                _ => 1.0
+              }
+            }
+            let x_of = fn(k : Int) {
+              let ws = widths()
+              let mut x = segmented_pad
+              for i in 0..<k {
+                x = x + ws.get(i).unwrap_or(0.0) + segmented_gap
+              }
+              x
+            }
+            let w_of = fn(k : Int) { widths().get(k).unwrap_or(0.0) }
+            // not side by side: the chosen one's words as its option has them (cut short where they must be), a chevron at
+            // its end; pressed, a pick of them all beside it, the chosen one marked (search none: a few short words)
+            // (its pad round what it holds: the track's, laid out by its room and filled by it)
+            v.padding(Is((segmented_pad, segmented_pad, segmented_pad, segmented_pad))) |> ignore
+            if f is Some({ fit: Menu, .. }) {
+              v.box(fn(m) {
+              let words = fn() { labels().get(chosen()).unwrap_or("") }
+              // (the pick it opened, as presented: 0, none yet; open while it is drawn, presented_drawn_of)
+              let opened : @signals.Signal[Int] = @signals.signal(0)
+              let open = fn() {
+                let s = opened.get()
+                s != 0 && presented_drawn_of(s)
+              }
+              m
+              .row(Is(true))
+              .grow(Is(1.0))
+              .height(Is(Some(segmented_h)))
+              .lines_up(Is(Some(Middle)))
+              .padding(Is((segmented_least, 0.0, segmented_least, 0.0)))
+              .gap(Is(segmented_least))
+              .presses(Is(true))
+              .focusable(Is(true))
+              .says(By(fn() {
+                Some(@view.said(Button, label=if said == "" { words() } else { said + " " + words() }, expanded=open()))
               }))
-              .ink(By(fn() {
-                if on() || o.pointed() {
-                  ink()
-                } else {
-                  theme().p.muted
-                }
-              }))
+              .on_press(fn() {
+                let (x, y, w, h) = m.rect()
+                let all = @signals.untracked(labels)
+                let now = @signals.untracked(chosen)
+                pick(
+                  "",
+                  all.mapi(fn(i, l) { choice(i.to_string(), l) }),
+                  now.to_string(),
+                  fn(k) {
+                    let i = labels_at(all, k, now)
+                    if i != now {
+                      choose(i)
+                    }
+                  },
+                  from=At(x, y, w, h),
+                  search=false,
+                )
+                opened.set(last_presented())
+              })
               |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      // not side by side: the chosen one's words as its option has them (cut short where they must be), a chevron at its
-      // end; pressed, a pick of them all beside it, the chosen one marked (search none: a few short words)
-      track.show(menu, fn(m) {
-        let words = fn() { labels().get(chosen()).unwrap_or("") }
-        // (the pick it opened, as presented: 0, none yet; open while it is drawn, presented_drawn_of)
-        let opened : @signals.Signal[Int] = @signals.signal(0)
-        let open = fn() {
-          let s = opened.get()
-          s != 0 && presented_drawn_of(s)
-        }
-        m
-        .row(Is(true))
-        .grow(Is(1.0))
-        .height(Is(Some(segmented_h)))
-        .lines_up(Is(Some(Middle)))
-        .padding(Is((segmented_least, 0.0, segmented_least, 0.0)))
-        .gap(Is(segmented_least))
-        .presses(Is(true))
-        .focusable(Is(true))
-        .says(By(fn() {
-          Some(@view.said(Button, label=if said == "" { words() } else { said + " " + words() }, expanded=open()))
-        }))
-        .on_press(fn() {
-          let (x, y, w, h) = m.rect()
-          let all = @signals.untracked(labels)
-          let now = @signals.untracked(chosen)
-          pick(
-            "",
-            all.mapi(fn(i, l) { choice(i.to_string(), l) }),
-            now.to_string(),
-            fn(k) {
-              let i = labels_at(all, k, now)
-              if i != now {
-                choose(i)
+              m.box(fn(w) {
+                w
+                .grow(Is(1.0))
+                .shrink(Is(1.0))
+                .min_width(Is(Some(0.0)))
+                .words(By(words))
+                .words_look(By(fn() {
+                  let size = theme().t.ui
+                  { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
+                }))
+                .ink(By(ink))
+                |> ignore
+              })
+              |> ignore
+              icon_node(m, "chevron-down", segmented_chevron, By(fn() { theme().p.muted })) |> ignore
+              })
+              |> ignore
+            } else {
+              // side by side: the thumb, under the options' words, and the options; read out as a group, the whole of
+              // the track
+              v.says(Is(Some(@view.said(RadioGroup, label=said)))) |> ignore
+              v.box(fn(strip) {
+              options.clear()
+              // (the thumb's way from where the chosen one is in this arrangement)
+              let way = @motion.Way::new(@signals.untracked(fn() { x_of(chosen()) }))
+              strip.row(Is(true)).gap(Is(segmented_gap)) |> ignore
+              // (the thumb's way said at the moment the chosen one changes, from where it is then; where only where it is
+              // changes, its columns another width (the words' size, their language, the room), there at once)
+              let last = Ref(@signals.untracked(chosen))
+              strip.reacts(fn() { (chosen(), x_of(chosen())) }, fn(at) {
+                let (k, x) = at
+                if k == last.val {
+                  way.put(x)
+                } else {
+                  way.go(x, @motion.move_spring, at=strip.cause_at())
+                }
+                last.val = k
+              })
+              // the thumb: where its way has it, as each frame draws it while it goes, as wide as the chosen one
+              strip.box(fn(th) {
+                let x = fn() {
+                  way.said()
+                  let now = th.logic_at()
+                  way.value_at(if way.goes_at(now) { th.drawn_at() } else { @double.infinity })
+                }
+                th
+                .over(Is(true))
+                .offset(By(fn() { (x() - segmented_pad, 0.0) }))
+                .width(By(fn() { Some(w_of(chosen())) }))
+                .height(Is(Some(segmented_h)))
+                .radius(Is(segmented_corner))
+                .ground(By(fn() { @ui.tree_theme().lifted }))
+                .edge(By(fn() { (0.5, theme().p.line) }))
+                .shadow(By(fn() { (1.0, 0.0, theme().p.shadow) }))
+                |> ignore
+              })
+              |> ignore
+              // its options (as many as there are as it is made; their words as they are said, in the language as it is): their
+              // words in their middle, in the chosen weight and ink where chosen or pointed at, smaller as fitted
+              for k in 0..<@signals.untracked(labels).length() {
+                let label = fn() { labels().get(k).unwrap_or("") }
+                let on = fn() { chosen() == k }
+                strip.box(fn(o) {
+                  o
+                  .width(By(fn() { Some(w_of(k)) }))
+                  .height(Is(Some(segmented_h)))
+                  // (its words in its middle both ways, as the old view's option is: align and justify centre)
+                  .lines_up(Is(Some(Middle)))
+                  .lies_along(Is(Middle))
+                  .presses(Is(true))
+                  .focusable(Is(true))
+                  .tab_stop(By(on))
+                  .says(By(fn() { Some(@view.said(Radio, label=label(), check=if on() { On } else { Off })) }))
+                  .on_press(fn() {
+                    if !@signals.untracked(on) {
+                      choose(k)
+                    }
+                  })
+                  |> ignore
+                  options.push(o)
+                  o.box(fn(w) {
+                    w
+                    .words(By(label))
+                    .words_look(By(fn() {
+                      let size = theme().t.ui * smaller()
+                      // (its line so many times its size as drawn, at the system's size of words: an old view's words' as
+                      // Ctx::text has them, where none is said (a negative line: view_line's))
+                      { size, weight: if on() { 500 } else { 400 }, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
+                    }))
+                    .ink(By(fn() {
+                      if on() || o.pointed() {
+                        ink()
+                      } else {
+                        theme().p.muted
+                      }
+                    }))
+                    |> ignore
+                  })
+                  |> ignore
+                })
+                |> ignore
               }
-            },
-            from=At(x, y, w, h),
-            search=false,
-          )
-          opened.set(last_presented())
-        })
+              })
+              |> ignore
+            }
+          },
+        )
         |> ignore
-        m.box(fn(w) {
-          w
-          .grow(Is(1.0))
-          .shrink(Is(1.0))
-          .min_width(Is(Some(0.0)))
-          .words(By(words))
-          .words_look(By(fn() {
-            let size = theme().t.ui
-            { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
-          }))
-          .ink(By(ink))
-          |> ignore
-        })
-        |> ignore
-        icon_node(m, "chevron-down", segmented_chevron, By(fn() { theme().p.muted })) |> ignore
-      })
     })
     |> ignore
   })

@@ -415,7 +415,6 @@
       "src/sfdesk/tape_view.mbt": 1
     },
     "layout-read-back": {
-      "src/sf/ask_card_node.mbt": 2,
       "src/sf/markdown.mbt": 1,
       "src/sf/markdown_node.mbt": 1,
       "src/sf/parts.mbt": 5,
@@ -423,7 +422,7 @@
       "src/sf/presenters.mbt": 9,
       "src/sf/quote_node.mbt": 1,
       "src/sf/seg.mbt": 1,
-      "src/sf/seg_node.mbt": 4,
+      "src/sf/seg_node.mbt": 3,
       "src/sf/stage_node.mbt": 1,
       "src/sf/submenu.mbt": 1,
       "src/sf/table_node.mbt": 2,
@@ -433,7 +432,7 @@
       "src/sfapp/drive_parts.mbt": 1,
       "src/sfapp/pick.mbt": 1,
       "src/sfapp/settings/vault_ask.mbt": 3,
-      "src/sfbase/flight_node.mbt": 6,
+      "src/sfbase/flight_node.mbt": 5,
       "src/sfbase/pick.mbt": 5,
       "src/sfbase/screen_links.mbt": 1,
       "src/sfbase/viewer.mbt": 1,
