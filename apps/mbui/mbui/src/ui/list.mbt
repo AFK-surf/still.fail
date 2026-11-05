@@ -413,6 +413,11 @@ pub fn Ctx::list(
   loc~ : SourceLoc,
 ) -> Int {
   let id = self.id(key)
+  // (which rows it builds is worked out of how tall each was laid out and where it was scrolled to: a read of the
+  // layout, frame_watch.mbt layout_read)
+  if building.val {
+    layout_read("list \"\{key}\"'s rows, by their heights as laid out, at \{loc}")
+  }
   let st = match self.lists.get(id) {
     Some(s) => s
     None => {
