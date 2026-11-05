@@ -203,25 +203,27 @@ test("a changed thread does not inspect memberships of unprepared sessions", () 
       db.exec("BEGIN");
       for (let n = 0; n < others; n++) store.joinThread(thread.id, `other-${n}`, "slack");
       db.exec("COMMIT");
-      let visited = 0, instrumented = false;
+      let visited = 0, instrumented = 0;
       db.function("latest_thread_member_visited", (session) => { visited++; return session; });
       const tables = ["thread_sessions", "latest_thread_members"];
-      const proxy = new Proxy(db, {
-        get(target, property) {
-          if (property === "exec") return (sql: string) => {
-            for (const table of tables) {
-              const from = `SELECT m.session,m.thread FROM ${table} m WHERE m.thread IN (`;
-              const into = `SELECT m.session,m.thread FROM ${table} m WHERE latest_thread_member_visited(m.session)=m.session AND m.thread IN (`;
-              if (sql.includes(from)) { instrumented = true; sql = sql.replaceAll(from, into); }
-            }
-            return target.exec(sql);
-          };
-          const value = Reflect.get(target, property, target);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
-      installLatestThreadIndex(proxy);
-      assert.equal(instrumented, true);
+      // Store.open installs the real triggers. Recreate their thread-membership selects with the counter, preserving
+      // their query plan, rather than relying on a second installation that now correctly does nothing.
+      const triggers = db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'latest_thread_%'").all() as { name: string; sql: string }[];
+      for (const trigger of triggers) {
+        let sql = trigger.sql;
+        for (const table of tables) {
+          const from = `SELECT m.session,m.thread FROM ${table} m WHERE m.thread IN (`;
+          const into = `SELECT m.session,m.thread FROM ${table} m WHERE latest_thread_member_visited(m.session)=m.session AND m.thread IN (`;
+          if (sql.includes(from)) sql = sql.replaceAll(from, into);
+        }
+        if (sql !== trigger.sql) {
+          assert.match(trigger.name, /^latest_thread_[a-z_]+$/);
+          db.exec(`DROP TRIGGER "${trigger.name}"`);
+          db.exec(sql);
+          instrumented++;
+        }
+      }
+      assert.ok(instrumented > 0);
       prepare(store, "tracked");
       const table = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='latest_thread_members'").get()
         ? "latest_thread_members" : "thread_sessions";
