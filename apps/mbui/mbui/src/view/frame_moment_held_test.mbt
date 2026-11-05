@@ -87,3 +87,29 @@ test "what comes after a change is told whole is of its own moment, nothing writ
   assert_true(tree.press(20.0, 20.0))
   assert_eq(pressed_at.val, 500.0)
 }
+
+///|
+test "a structure told of a change is of that change's moment, not of one before it that marked it and changed nothing it reads" {
+  let host = Ref(0.0)
+  let n = @signals.signal(1)
+  // (what it reads: whether n is past 2, worked out again as n changes, the same for 1 and 2)
+  let past = @signals.computed(fn(_) { n.get() > 2 }, same=fn(a, b) { a == b })
+  let told_at : Array[Double] = []
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(col) {
+        col.width(Is(Some(300.0))).height(Is(Some(600.0))) |> ignore
+        col.reacts(fn() { past.get() }, fn(p) { if p { told_at.push(col.cause_at()) } })
+      })
+      |> ignore
+    },
+    time=fn() { host.val },
+  )
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  // (at 100, a change that marks it and changes nothing it reads; at 300, one that does)
+  host.val = 100.0
+  n.set(2)
+  host.val = 300.0
+  n.set(3)
+  assert_eq(told_at, [300.0])
+}

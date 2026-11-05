@@ -12,8 +12,13 @@ priv struct WindowCase {
 }
 
 ///|
-fn window_case() -> WindowCase {
+/// `put`: the column put that far down before it is first laid out (a list made again where it was left).
+fn window_case(put? : Double) -> WindowCase {
   let scroll = @view.Scroll::list()
+  match put {
+    Some(x) => scroll.put(x)
+    None => ()
+  }
   let keys = @signals.signal(Array::makei(10, fn(i) { i }), same=fn(a, b) { a == b })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
   let made = []
@@ -65,6 +70,15 @@ test "scrolls_window: what does not show is not made; scrolled, what comes into 
   k.tree.frame(390.0, 844.0) |> ignore
   // (at 100: block 2 from 80, 3 from 120, 4 from 160; 3 counted 80 till laid out, then 4 shows as well)
   assert_eq((first, k.scroll.at(k.tree), k.shown()), (([0, 1, 2], [0, 1, 2]), 100.0, [2, 3, 4]))
+}
+
+///|
+test "scrolls_window: the column put down it before it is first laid out (made again where it was left): drawn there from its first frame, what shows of it from its top" {
+  let k = window_case(put=100.0)
+  let tops = k.shown().map(fn(i) { k.live[i].rect().1 })
+  // (100 down, block 1 from 80 as it is counted: what shows covered from the column's top, not drawn as at its top)
+  assert_eq(k.scroll.at(k.tree), 100.0)
+  assert_true(tops.length() > 0 && tops[0] <= 0.0 && tops[0] > -40.0, msg="\{k.shown()} \{tops}")
 }
 
 ///|

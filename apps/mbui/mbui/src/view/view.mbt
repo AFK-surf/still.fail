@@ -1826,16 +1826,21 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
       told_at.val = -1.0
     }
   }
+  // (marked by what changed nothing it read, found so as it is told or pulled: no change's, its moment none)
+  w.on_unchanged(fn() { (b.unmarked)() })
   b.run = fn() {
     b.queued = false
     b.marked = false
     if !b.live {
       return
     }
+    // (of the change that marked it first since it last ran, all of which this read reads: what marks it as it reads,
+    // the next run's)
+    let at = told_at.val
+    told_at.val = -1.0
     let v = w.read(read)
     let was = self.cause_at
-    self.cause_at = told_at.val
-    told_at.val = -1.0
+    self.cause_at = at
     @signals.untracked(fn() { then(v) })
     self.cause_at = was
   }
@@ -1903,6 +1908,9 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
       let v = w.read(read)
+      // (what marked it before this read is read by it, however long after it was told the read is (one waiting for
+      // its change to be told whole): no moment of it left for the next change)
+      told_at.val = -1.0
       if last.val != Some(v) {
         last.val = Some(v)
         if live.val {
@@ -1919,8 +1927,11 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
       told_at.val = self.now_of_change()
     }
   })
+  // (marked by what changed nothing it read: no change's, its moment none)
+  w.on_unchanged(fn() { told_at.val = -1.0 })
   watch.val = Some(w)
   let v = w.read(read)
+  told_at.val = -1.0
   last.val = Some(v)
   // (one change, as each after it is: Tree::at_cause)
   self.committing += 1

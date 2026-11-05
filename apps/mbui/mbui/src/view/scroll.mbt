@@ -648,11 +648,15 @@ pub fn View::scrolls(
     match content_extent {
       // (counted by what lays it out, in the same pass as it is laid out: as tall as it is laid out now, told with that
       // count where it is another)
-      Some(extent) =>
+      Some(extent) => {
+        // (the count followed whether it is laid out yet or not: what asks before it is told again as it is, the count
+        // told as it is first laid out, as what it holds' size is told)
+        let e = extent()
         return match self.live() {
-          Some(n) if n.placed => Some(extent() - (if across { n.flex.width } else { n.flex.height }))
+          Some(n) if n.placed => Some(e - (if across { n.flex.width } else { n.flex.height }))
           _ => None
         }
+      }
       None => ()
     }
     match inner.val {
