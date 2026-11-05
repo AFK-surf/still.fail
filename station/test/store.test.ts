@@ -867,7 +867,7 @@ test("a database made before archiving gains its columns and each session's firs
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   db.exec(`INSERT INTO sessions (key, connect, scope, runtime, profile, workspace, token, created_at, last_active_at, archived_at)
              VALUES ('a', 'ember', 'all', 'claude', 'cc', '/w/a', 'a', 1, 1, 5);
-           INSERT INTO threads (id, surface, channel, thread_ts, created_at) VALUES (1, 'ember', 'EMBER', '1.1', 1), (2, 'ember', 'EMBER', '2.1', 2);
+           INSERT INTO threads (id, surface, channel, thread_ts, created_at) VALUES (1, 'ember', 'CHAT', '1.1', 1), (2, 'ember', 'CHAT', '2.1', 2);
            INSERT INTO thread_sessions (thread, session, connect, joined_at) VALUES (1, 'a', 'ember', 1), (2, 'a', 'ember', 2);`);
   db.close();
   const store = open(path);

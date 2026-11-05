@@ -19,7 +19,7 @@ test("old default-home chats are built in bounded steps while new chats arrive b
     }
     installRecentHomeIndex(db);
     assert.equal(scanRecentHomeChatsStep(db, 2).visited, 2);
-    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (0,'ember','EMBER','behind',99,'missing')").run();
+    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (0,'ember','CHAT','behind',99,'missing')").run();
     let scanned = false;
     for (let i = 0; i < 20 && !scanned; i++) {
       const batch = scanRecentHomeChatsStep(db, 2);

@@ -56,7 +56,7 @@ for (const arrival of ["old", "new"] as const) test(`an undisplayed ${arrival} c
     const visible = store.openThread("ember", "CHAT", "visible", "Visible", null).id;
     db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(visible);
     const insert = () => db.prepare(`INSERT INTO threads(id,surface,channel,thread_ts,title,created_at)
-      VALUES (?,'ember','EMBER','hidden','Hidden',0)`).run(9_007_199_254_740_993n);
+      VALUES (?,'ember','CHAT','hidden','Hidden',0)`).run(9_007_199_254_740_993n);
     if (arrival === "old") insert();
     installRecentChatIndex(db);
     if (arrival === "new") insert();
@@ -233,7 +233,7 @@ for (const recursive of [false, true]) for (const what of ["thread", "thread upd
       installRecentChatIndex(db);
       while (!stepRecentChatIndex(db, 3).done) { /* Prepare before an older writer replaces a row. */ }
       if (what === "thread")
-        db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','chat',200)").run();
+        db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','CHAT','chat',200)").run();
       else if (what === "thread update") db.prepare("UPDATE OR REPLACE threads SET thread_ts = 'chat' WHERE id = ?").run(other);
       else db.prepare("INSERT OR REPLACE INTO thread_state(thread,last_n,said_n,person_n,letters) VALUES (?,1,NULL,NULL,0)").run(id);
       assert.equal(readGlobalRecentChatIndex(db, 5), null, "a replaced row must not leave a stale page");
@@ -287,7 +287,7 @@ for (const recursive of [false, true]) test(`recent ordering matches the origina
           insert.run(id, n, pick(2) ? "message" : "edit", null, pick(100));
         } else if (action === 6) db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(100), id);
         else if (action === 7) db.prepare("DELETE FROM threads WHERE id = ?").run(id);
-        else if (action === 8) db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES (?,'ember','EMBER',?,?)")
+        else if (action === 8) db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES (?,'ember','CHAT',?,?)")
           .run(100_000 + i, thread_ts, pick(100));
       }
       check(i);

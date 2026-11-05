@@ -538,7 +538,7 @@ for (const recursive of [false, true]) test(`a new chat with an existing member 
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* The referenced chat is not there yet. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
-    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','late',1)").run();
+    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES (999,'ember','CHAT','late',1)").run();
     assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "existing members still require a visibility pass");
     while (!settleRecentScopeVisibilityStep(db, 2).visibilityDone) { /* Account the existing membership. */ }
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
@@ -646,7 +646,7 @@ for (const recursive of [false, true]) for (const how of ["insert", "update"] as
       }
       db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
       if (how === "insert")
-        db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (999,'ember','EMBER','first',10,'two')").run();
+        db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (999,'ember','CHAT','first',10,'two')").run();
       else db.prepare("UPDATE OR REPLACE threads SET thread_ts = 'first' WHERE id = ?").run(second);
       assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
       let done = false;
@@ -695,7 +695,7 @@ for (const recursive of [false, true]) test(`a new member keeps its workspace pe
     const thread = store.openThread("ember", "CHAT", "new-member", "New", null).id;
     db.prepare("UPDATE threads SET home = 'missing' WHERE id = ?").run(thread);
     db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(thread);
-    db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (?,'ember','EMBER','new-member',1,NULL)").run(thread);
+    db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (?,'ember','CHAT','new-member',1,NULL)").run(thread);
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
     store.joinThread(thread, "one", "ember");
     assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);

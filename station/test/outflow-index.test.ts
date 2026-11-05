@@ -96,7 +96,7 @@ for (const recursive of [false, true]) test(`outflow chat order follows replacem
     assert.equal(outflowChatIndexReady(db, viewers[0]!), false);
     settle();
     // A new thread can likewise evict a different id by the surface/channel/thread address.
-    db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','shared',5)").run();
+    db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','CHAT','shared',5)").run();
     assert.equal(outflowChatIndexReady(db, viewers[0]!), false);
     settle();
     const source = addThread("source", ["a"]), target = addThread("target", ["a"]);
