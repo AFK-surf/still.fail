@@ -34,14 +34,11 @@ pub fn words_runs(parts : Array[Json], accent : Int64, chat_title? : (String) ->
 
 ///|
 /// What a person wrote as every place draws it, in a message, on its way there: the core's runs of it (`runs`, words_runs),
-/// else the runs kept as it was sent, else the words as they are.
+/// else the words as they are. Nothing makes up runs the core did not give: a row without them draws its words as
+/// written in a test as on a device (a fixture's rows carry them as the core's do).
 pub fn person_runs(words : String, runs : Json?, accent : Int64, chat_title? : (String) -> String? = fn(_) { None }) -> Array[@ui.Run] {
   match runs {
     Some(Array(parts)) => words_runs(parts, accent, chat_title~)
-    _ =>
-      match @sf.kept_words(words) {
-        Some(Array(parts)) => words_runs(parts, accent, chat_title~)
-        _ => [@ui.plain(words)]
-      }
+    _ => [@ui.plain(words)]
   }
 }

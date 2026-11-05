@@ -56,6 +56,13 @@ pub fn msg(
     "waiting": false,
     "time": ago(when, "10/19 0\{seq % 10}:12:0\{seq % 6}"),
   }
+  // a person's words in runs, as the core gives them (views.ts drawn: personWords)
+  if kind == "person" {
+    match @sf.kept_words(text) {
+      Some(w) => m["words"] = w
+      None => ()
+    }
+  }
   for k, v in more {
     m[k] = v
   }
@@ -893,6 +900,11 @@ pub fn outgoing_json(id : String, params : Json, state : String, error : String)
     "quotes": Json::array(items(p, "quotes")),
     "createdAt": 0,
     "state": Json::string(state),
+  }
+  // its words in runs, as its message will draw them (views.ts drawn: personWords)
+  match @sf.kept_words(text(p, "text")) {
+    Some(w) => o["words"] = w
+    None => ()
   }
   if error != "" {
     o["error"] = Json::string(error)

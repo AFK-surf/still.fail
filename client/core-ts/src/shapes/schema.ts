@@ -3279,6 +3279,7 @@ export const SHAPES: Record<string, Shape> = {
     ["uploads", opt(vec("ComposerFile")), { doc: "Its files still going up before it goes, but its images: each drawn as a card saying how far. Absent\nwhen there are none." }],
     ["id", "String"],
     ["text", "String"],
+    ["words", opt("Value"), { doc: "Its words in runs, as its message will draw them (refLinks.ts personWords: a reference to a chat `ref`, a\nbare web address `link`). Absent when it has none." }],
     ["attachments", vec("Attachment"), { doc: "Its files as its message will draw them, an image still going up among them already (its `upload`; its\n`path` `upload:<id>` until it is up, no station having it yet)." }],
     ["quotes", vec("Quote")],
     ["createdAt", "i64", { client: "I54" }],
