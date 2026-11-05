@@ -5,7 +5,7 @@ import { PhoneGrants } from "../src/adb/grants.ts";
 
 function world() {
   const db = new DatabaseSync(":memory:");
-  let fetched = 0;
+  let fetched = 0, memberReads = 0;
   const queries: { sql: string; args: any[] }[] = [];
   const traced = new Proxy(db, {
     get(target, property) {
@@ -31,7 +31,7 @@ function world() {
   const named: string[] = [], told: string[] = [];
   const hub = { store: {
     subscribe: (f: typeof changed) => { changed = f; },
-    threadSessions: () => [{ session: "s" }],
+    threadSessions: () => { memberReads++; return [{ session: "s" }]; },
     getSession: () => ({ ws: "w", archivedAt: null }),
   } } as any;
   const grants = new PhoneGrants({ db: traced, hub, home: () => "w", now: () => 1_800_000_000_000,
@@ -43,8 +43,8 @@ function world() {
     put.run(id, r.session, r.owner, status, JSON.stringify(r));
     return r;
   };
-  return { db, grants, add, named, told, queries, fetched: () => fetched,
-    reset: () => { fetched = 0; queries.length = 0; named.length = 0; },
+  return { db, grants, add, named, told, queries, fetched: () => fetched, memberReads: () => memberReads,
+    reset: () => { fetched = 0; memberReads = 0; queries.length = 0; named.length = 0; },
     rename: (next: string) => { title = next; changed!({ type: "thread", id: 1 }); } };
 }
 
@@ -76,6 +76,17 @@ test("a changed chat reads only the phone request titles already shown", () => {
   for (const plan of plans) assert.match(plan, /SEARCH .* USING INDEX sqlite_autoindex_adb_requests_1 \(id=\?\)/);
 });
 
+test("a chat change needs no membership lookup when no request title is shown", () => {
+  const w = world();
+  try {
+    w.add("unseen");
+    w.rename("After");
+    assert.equal(w.memberReads(), 0);
+    assert.equal(w.fetched(), 0);
+    assert.deepEqual(w.told, []);
+  } finally { w.db.close(); }
+});
+
 test("changed titles keep the order of the existing requests", () => {
   const w = world();
   try {
@@ -84,5 +95,32 @@ test("changed titles keep the order of the existing requests", () => {
     w.reset();
     w.rename("After");
     assert.deepEqual(w.told, ["g1", "g2", "p1", "p2"]);
+  } finally { w.db.close(); }
+});
+
+test("a request changed elsewhere is checked again when it becomes active", () => {
+  const w = world();
+  try {
+    w.grants.shown(w.add("p"));
+    const update = w.db.prepare("UPDATE adb_requests SET status=?,body=json_set(body,'$.status',?) WHERE id='p'");
+    update.run("denied", "denied");
+    w.rename("After");
+    assert.deepEqual(w.told, []);
+    update.run("pending", "pending");
+    w.rename("After");
+    assert.deepEqual(w.told, ["p"]);
+  } finally { w.db.close(); }
+});
+
+test("ending the last shown request removes its title listener", () => {
+  const w = world();
+  try {
+    w.grants.shown(w.add("p"));
+    assert.equal(w.grants.revoke("p@example.test", "p", "w"), null);
+    w.reset();
+    w.rename("After");
+    assert.equal(w.memberReads(), 0);
+    assert.equal(w.fetched(), 0);
+    assert.deepEqual(w.told, []);
   } finally { w.db.close(); }
 });
