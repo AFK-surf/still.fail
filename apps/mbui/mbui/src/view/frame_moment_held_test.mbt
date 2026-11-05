@@ -52,3 +52,38 @@ test "a frame and what its layout tells are of the frame's moment, however the h
   assert_eq(shown_tall.val, 1)
   assert_eq(tall_h.val, 30.0)
 }
+
+///|
+test "what comes after a change is told whole is of its own moment, nothing written before it" {
+  let host = Ref(0.0)
+  let open = @signals.signal(false)
+  let pressed_at : Ref[Double] = Ref(-1.0)
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(col) {
+        col.width(Is(Some(300.0))).height(Is(Some(600.0))) |> ignore
+        col.box(fn(b) {
+          b
+          .width(Is(Some(100.0)))
+          .height(Is(Some(40.0)))
+          .shrink(Is(0.0))
+          // (what it reads marked with the change that sets it, of that change's moment)
+          .alpha(By(fn() { if open.get() { 1.0 } else { 0.5 } }))
+          .on_press(fn() { pressed_at.val = b.cause_at() })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { host.val },
+  )
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  // (a change from outside at 100: its moment taken as it marks what reads it)
+  host.val = 100.0
+  open.set(true)
+  // (a press at 500, nothing written since that change was told whole: of 500, not of the change before it)
+  host.val = 500.0
+  assert_true(tree.press(20.0, 20.0))
+  assert_eq(pressed_at.val, 500.0)
+}

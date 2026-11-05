@@ -241,9 +241,10 @@ fn change_begun() -> Unit {
 }
 
 ///|
-/// Which change is under way, or was last: the same number from a write or batch begun where none was under way till
-/// all it set going is told whole (its effects, what they set, what waits for it all), the next one another. Not
-/// alien-signals': for what gives one change one of something of its own (a window's tree, one moment).
+/// Which change is under way: the same number from a write or batch begun where none was under way till all it set
+/// going is told whole (its effects, what they set, what waits for it all), another once it is (what is asked after it
+/// with nothing written yet included), the next change another again. Not alien-signals': for what gives one change one
+/// of something of its own (a window's tree, one moment).
 pub fn change_now() -> Int {
   run.change
 }
@@ -532,6 +533,8 @@ fn flush() -> Unit {
     run.afters.clear()
     run.lasts.clear()
     run.draining = false
+    // (the change over: what is asked after it, a write or not, of another (change_now))
+    run.change += 1
   }
 }
 
