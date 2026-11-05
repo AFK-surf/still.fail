@@ -7,16 +7,21 @@ test "a fiber's timer come: the old frame built for none of what nothing read, b
   let read = @signals.signal(0)
   let t = Tester::new(fn(c) { c.text("n \{read.get()}", size=12.0) |> ignore })
   t.draw()
-  t.run_for(100.0)
-  runtime().after(500, fn() { unread.set(1) })
-  runtime().after(1000, fn() { read.set(1) })
+  // (the timers' lengths: the first, what nothing reads set; the second, what the build reads)
+  let unread_after = 500
+  let read_after = 1000
+  runtime().after(unread_after, fn() { unread.set(1) })
+  runtime().after(read_after, fn() { read.set(1) })
   t.record_host()
-  t.run_as_host(700.0)
+  // (past the first, short of the second: half way between)
+  let between = (unread_after + read_after) / 2
+  t.run_as_host(between.to_double())
   assert_eq(unread.get(), 1)
   let built = t.host_frames().filter(fn(f) { f.old_built }).map(fn(f) { "\{f.at}: \{f.why}" })
   assert_eq(built, [])
   t.record_host()
-  t.run_as_host(500.0)
+  // (past the second)
+  t.run_as_host((read_after - between).to_double())
   assert_true(t.host_frames().any(fn(f) { f.old_built }))
   assert_true(t.find("n 1") is Some(_))
 }
