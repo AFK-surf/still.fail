@@ -8,5 +8,11 @@ test "zz dbg floor" {
     at += 100.0
     let rd = readings.get("ws1/st1\u{1}s-c1")
     println("DBG t=\{at}/\{total} working=\{t.find(tr("android-chat.chat.working")) is Some(_)} linger=\{rd.map(fn(r) { r.linger.length() })} running=\{rd.map(fn(r) { r.running.length() })} rows=\{t.rows().length()} last=\{t.rows().last()}")
+    if at >= 3800.0 && at <= 4000.0 {
+      for w in t.words() {
+        if w.2 > 450.0 { println("DBGW t=\{at} y=\{w.2} h=\{w.4} a=\{w.5} \{w.0}") }
+      }
+      println("DBGR t=\{at} \{t.rows()}")
+    }
   }
 }

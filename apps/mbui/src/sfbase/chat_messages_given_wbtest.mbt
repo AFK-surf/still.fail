@@ -18,9 +18,10 @@ fn given_chat(followed : Bool) -> Json {
 test "a made-up core's chat given whole again: a message set otherwise is its row's version one more, one the same is not" {
   let was = ChatMessages::of_value(Some(given_chat(false)))
   let (one, two) = (was.row(0).version, was.row(1).version)
+  let sign = shown_sign(Said(was.row(0)))
   // (the message before the one joined to it followed now: what its row shows (its time line gone) changed)
   let now = ChatMessages::of_value(Some(given_chat(true)), was~)
   assert_true(now.row(0).version != one, msg="the followed message's row told it changed")
-  assert_true(shown_sign(Said(now.row(0))) != shown_sign(Said(was.row(0))) || !physical_equal(now, was))
+  assert_true(shown_sign(Said(now.row(0))) != sign, msg="its sign another: its room worked out again")
   assert_eq(now.row(1).version, two)
 }
