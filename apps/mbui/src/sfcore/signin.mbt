@@ -179,7 +179,7 @@ fn tell_device() -> Unit {
 /// come back.
 pub fn frame(accounts : @core.Sub) -> Unit {
   // (by the accounts the core says and the environment's: the same in each build of the frame)
-  if accounts.value() is Some(list) {
+  if accounts.value is Some(list) {
     if state.account != "" {
       let account = state.account
       state.account = ""

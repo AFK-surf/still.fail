@@ -379,11 +379,7 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
 /// Chat `r`'s view (chat_view), its list's entries and its topic's error: worked out once for each version of it,
 /// whoever reads it in a frame (the page, its side panel, the frame round it, the chats kept: linger_tick).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
-  let params = chat_params(r)
-  // (the topic read here first: what reads the view follows the topic itself too, so a page left is told it changed
-  // by the topic's end, not by working the view out again: that would ask for the topic anew)
-  let topic = (src.topic)("chat", params)
-  let read = chat_reads.read(chat_key(r), fn(was) { chat_read(src, params, was) })
+  let (read, topic) = chat_read.read(src, chat_params(r))
   match (read, topic.value, fresh_view(r)) {
     // (the chat a new chat became is never said to be empty: its first message is in it from the frame it was sent,
     // sent_local, while the core has it made and not yet sent to)
@@ -401,53 +397,38 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 /// Chat `r`'s view as a frame read it last (view_of_chat), if one did since the last: its topic not asked for (a chat
 /// whose page was never drawn, or is left, asks nothing of the core for it).
 pub fn chat_kept(r : ChatRef) -> ChatView? {
-  match chat_reads.peek(chat_key(r)) {
-    Some(Some(c)) => Some(c.view)
-    _ => None
+  match chat_read.kept(chat_params(r)) {
+    Some(c) => Some(c.view)
+    None => None
   }
 }
 
 ///|
-/// Chat `r`'s key among the chats read (chat_reads): its params', each chat's own.
-fn chat_key(r : ChatRef) -> String {
-  r.station + "\n" + r.session
-}
-
-///|
-/// A chat as chat_read made it: its view and its list's entries.
+/// A chat as chat_read made it: its view, its list's entries, and each message with the JSON it was read from (the
+/// next version's same JSON, a message that did not change, not read again: made_again).
 priv struct ChatRead {
   view : ChatView
   list : Array[Entry]
+  read : Array[(Json, Message)]
 }
 
 ///|
+/// A chat's view and its list's entries, as the core's `chat` topic gives them: its messages read again only as they
+/// changed (one came: that one read).
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
-let chat_reads : Kept[ChatRead?] = Kept::new()
-
-///|
-/// A chat's view and its list's entries, as the core's `chat` topic gives them (its value but its messages) and its
-/// messages as their list has them (Source.list: each made as it is read, the same ones as before where that is the
-/// same list); worked out again as either changes. A made-up core's: its messages made of the topic's value.
-fn chat_read(src : Source, params : Map[String, Json], was : ChatRead??) -> ChatRead? {
-  let topic = (src.topic)("chat", params)
-  guard topic.value is Some(Object(_) as v) else { return None }
-  let messages = match (src.list)("chat", params, ["messages"], message_fields()) {
-    Some(rows) =>
-      match was {
-        Some(Some(w)) if physical_equal(w.view.messages.rows, rows) => w.view.messages
-        _ => ChatMessages::of(rows)
-      }
-    None =>
-      match was {
-        Some(Some(w)) => ChatMessages::of_value(topic.value, was=w.view.messages)
-        _ => ChatMessages::of_value(topic.value)
-      }
-  }
-  // (followed: worked out again as one comes, goes or is set; what is made of one gone let go of)
-  messages.read_changes() |> ignore
-  let view = chat_view_of(v, messages)
-  Some({ view, list: entries_of(view) })
-}
+let chat_read : Derived[ChatRead] = Derived::new("chat", fn(v, was) {
+  let read = made_again(
+    items(Some(v), "messages"),
+    match was {
+      Some(w) => w.read
+      None => []
+    },
+    message_key,
+    message_of,
+  )
+  let view = chat_view_of(v, read.map(fn(p) { p.1 }))
+  { view, list: entries_of(view), read }
+})
 
 ///|
 /// A message's key in its chat, as the core keys them (client/core-ts collections.ts: `seq` and `outgoing`).

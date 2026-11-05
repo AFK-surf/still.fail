@@ -62,7 +62,7 @@ fn report_signed_in(c : @ui.Ctx, accounts : @core.Sub) -> Unit {
   if reported.val {
     return
   }
-  let sub = match accounts.value() {
+  let sub = match accounts.value {
     Some(Array(a)) if a.length() > 0 =>
       match a[0] {
         Object(m) =>

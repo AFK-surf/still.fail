@@ -13,7 +13,6 @@ import {
   "mbui/pixels",
   "mbui/dmath",
   "mbui/signals",
-  "stillfail/rows",
   "mbui/view",
   "stillfail/sf",
   "stillfail/gallery",

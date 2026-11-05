@@ -14,7 +14,6 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/ref",
-  "stillfail/rows",
   "stillfail/sf",
   "stillfail/sfapp/settings",
 }
@@ -602,10 +601,9 @@ pub fn flight_quote_landing(@ui.Ctx, SendFlight, Int32, String, (Double, Double)
 
 pub fn flight_quote_words(@ui.Ctx, SendFlight, String) -> (String, Double?)
 
-pub fn flight_said(SendFlight) -> String
-
 pub let flight_settle : Double
 
+pub fn flight_said(SendFlight) -> String
 pub fn flight_settled(Double, Bool) -> Double
 
 pub fn flight_settled_of(@ui.Ctx, SendFlight) -> Double
@@ -954,8 +952,6 @@ pub let menu_bar_given : @ref.Ref[String]
 
 pub fn menu_bar_json(@json.Json?, Bool) -> String
 
-pub fn message_fields() -> Array[String]
-
 pub fn message_link(String, String, Double) -> String
 
 pub let message_menu : @signals.Signal[String]
@@ -965,8 +961,6 @@ pub fn message_menu_items(String, String, () -> Unit) -> Array[@sf.MenuItem?]
 pub fn message_menu_on(String) -> Bool
 
 pub fn message_of(@json.Json) -> Message
-
-pub fn messages_made() -> Int32
 
 pub let monitor_mark : LinkMark
 
@@ -1216,10 +1210,9 @@ pub let peeks_told : @signals.Signal[Int32]
 
 pub fn person_of(@json.Json) -> Person
 
-pub fn person_runs(String, @json.Json?, Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
-
 pub let pick_bar_in_ms : Double
 
+pub fn person_runs(String, @json.Json?, Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
 pub fn pick_clear() -> Unit
 
 pub fn pick_layer(@ui.Ctx, String, Double, Double, Bool, (String, String, String, String) -> Unit) -> Unit
@@ -1365,6 +1358,7 @@ pub fn refs_pick_now(Source, String, @ui.Field, String, String, String, String, 
 pub fn refs_put(String, @ui.Field, String, caret? : Int32) -> Unit
 
 pub fn refs_reset() -> Unit
+
 
 pub fn refs_search(Source, String, Map[String, @json.Json]) -> Topic
 
@@ -2130,22 +2124,6 @@ pub(all) struct ChatItem {
   opener : Opener?
 }
 
-pub struct ChatMessages {
-  rows : @rows.TopicList
-  // private fields
-}
-pub fn[A] ChatMessages::fold(Self, init~ : A, (A, Message) -> A) -> A
-pub fn ChatMessages::get(Self, Int32) -> Message?
-pub fn ChatMessages::is_empty(Self) -> Bool
-pub fn ChatMessages::iter(Self) -> Iter[Message]
-pub fn ChatMessages::last(Self) -> Message?
-pub fn ChatMessages::length(Self) -> Int32
-pub fn ChatMessages::of(@rows.TopicList) -> Self
-pub fn ChatMessages::of_value(@json.Json?, was? : Self) -> Self
-pub fn ChatMessages::op_get(Self, Int32) -> Message
-pub fn ChatMessages::read_changes(Self) -> Array[@rows.ListChange]
-pub fn ChatMessages::to_array(Self) -> Array[Message]
-
 pub(all) struct ChatPick {
   mut ts : String
   mut source_ts : String?
@@ -2164,20 +2142,6 @@ pub(all) struct ChatRef {
   title : String
   station_name : String
 }
-
-pub struct ChatRows {
-  messages : ChatMessages
-  // private fields
-}
-pub fn ChatRows::changed(Self) -> Int32
-pub fn ChatRows::entry(Self, Int32) -> Entry
-pub fn ChatRows::find(Self, String, Int32) -> Int32?
-pub fn ChatRows::key(Self, Int32) -> String
-pub fn ChatRows::length(Self) -> Int32
-pub fn ChatRows::new(ChatMessages, (Message) -> String) -> Self
-pub fn ChatRows::take(Self, ChatView, Array[Entry]) -> Unit
-pub fn ChatRows::version_of(Self, String) -> Int32?
-pub fn ChatRows::work(Self) -> Int32
 
 pub(all) struct ChatScreen {
   id : String
@@ -2199,7 +2163,7 @@ pub(all) struct ChatView {
   unread : Double
   people : Array[Person]
   agents : Array[Agent]
-  messages : ChatMessages
+  messages : Array[Message]
   elsewhere : Array[Elsewhere]
   more : Bool
   newer : Bool
@@ -2381,7 +2345,7 @@ pub(all) struct Elsewhere {
 pub(all) struct Emits {
   decided : Map[String, Bool]
   done : Map[String, Bool]
-  queue : Array[(Double, String, String, @motion.Anim)]
+  queue : Array[(Double, String, @motion.Anim)]
   mut current : Turn?
   mut aimed : (Double, Double)?
   mut aimed_at : Double
@@ -2393,7 +2357,7 @@ pub(all) struct Emits {
   mover : @ui.Mover
   mut held_until : Double
   mut out_key : String
-  mut taken : (@rows.TopicList, @rows.ListReader)?
+  mut taken : Array[Message]
   out_at : Map[String, @motion.Anim]
   said : @signals.Signal[Int32]
 }
@@ -3319,7 +3283,6 @@ pub(all) struct Sink {
 
 pub(all) struct Source {
   topic : (String, Map[String, @json.Json]) -> Topic
-  list : (String, Map[String, @json.Json], Array[String], Array[String]) -> @rows.TopicList?
   waits : (String, Map[String, @json.Json]) -> Bool
   call : (String, @json.Json, (Result[@json.Json, @json.Json]) -> Unit) -> Unit
   call_bytes : (String, @json.Json, Bytes, (Result[@json.Json, @json.Json]) -> Unit) -> Unit
@@ -3423,7 +3386,6 @@ pub(all) struct Topic {
 
 pub(all) struct Turn {
   seq : Double
-  ts : String
   agent : String
   pose : Pose
   from : (Double, Double)?

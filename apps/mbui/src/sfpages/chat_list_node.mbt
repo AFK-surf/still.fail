@@ -106,15 +106,6 @@ pub fn chat_list_node(
     }
     rd0.sent_as.get(k).unwrap_or(k)
   }
-  // (the row of the message `seq` whose ts is `ts`: id_of its Said, without finding it in the list)
-  let said_id = fn(seq : Double, ts : String) -> String {
-    rd0.sent_as_told.get() |> ignore
-    let k = match rd0.sent.get(seq) {
-      Some(o) => "o:" + o
-      None => "m:" + ts
-    }
-    rd0.sent_as.get(k).unwrap_or(k)
-  }
   let entries_now = fn() -> Array[Entry] {
     let items = listed
     .get()
@@ -202,7 +193,10 @@ pub fn chat_list_node(
           em.read()
           match em.current {
             Some(t) if t.pose == @sfbase.Pose::Float => {
-              if said_id(t.seq, t.ts) == k {
+              let row = listed.get().iter().find_first(fn(e) {
+                match e { Said(m) => m.seq == t.seq; _ => false }
+              })
+              if row.map_or(false, fn(e) { id_of(e) == k }) {
                 Some(@sfbase.pose_ms(t.pose, t.from))
               } else {
                 None
