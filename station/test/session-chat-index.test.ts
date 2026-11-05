@@ -207,7 +207,7 @@ test("a single-chat answer keeps its snapshot while a second chat joins", () => 
   } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("the two orders keep SQLite's tie breaking and old non-integer times", () => {
+test("the chat order keeps SQLite's tie breaking and old non-integer times", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     installSessionChatIndex(db);
