@@ -90,7 +90,16 @@ fn option_row_node(
   .radius(Is(option_row_corner))
   .ground(By(fn() { if @ui.pointing() is Mouse && free() && row.pointed() { theme().p.hover } else { 0L } }))
   .alpha(By(fn() { there.shown(row) }))
-  .says(By(fn() { Some(@view.said(Button, label=o().0)) }))
+  // (read out by the words in it, in order, as main's options_card's button is: its number where it is words, past
+  // the sixth; its name; its line under it; why it waits, where it does)
+  .says(By(fn() {
+    let (label, detail, _) = o()
+    let words = if i < 6 { [] } else { ["\{i + 1}"] }
+    words.push(label)
+    if detail != "" { words.push(detail) }
+    if waiting() { words.push(waits_why()) }
+    Some(@view.said(Button, label=words.join(" ")))
+  }))
   |> ignore
   presses_node(row, fn() { if free() { pick(i) } }, on=free)
   // (its number in a disc, the one recommended in the accent; picked, a check in its place)

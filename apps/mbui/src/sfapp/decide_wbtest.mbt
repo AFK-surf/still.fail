@@ -38,7 +38,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
 ///|
 test "dismiss keeps the space below its options card as well as its own inset" {
   let t = decide_core([], "chat")
-  let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "一起换" }).unwrap()
+  let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "一起换 把首页和聊天页的截图都更新" }).unwrap()
   let (x, y, w, h) = option.rect
   let card = t.boxes_held().iter().find_first(fn(b) {
     b.radii.0 > 20.0 && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h && b.h < 300.0
@@ -78,7 +78,7 @@ test "a chat's options use the column's room up to their wide card width, with s
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0,
       platform=if width == 390.0 { 2 } else { 0 })
     t.run_for(@ui.move_most_ms)
-    let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "先不换" }).unwrap()
+    let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "先不换 这次只改列表，截图下次再说" }).unwrap()
     let (x, y, w, h) = option.rect
     let cards = t.boxes_held().filter(fn(b) {
       b.radii.0 > 20.0 && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h && b.h < 300.0
