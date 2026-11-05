@@ -53,6 +53,7 @@ export type SignInDeps = {
       getSession(key: string): { archivedAt?: number | null } | null;
       starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
+      latestThreadIfReady?(session: string): SessionThread | null | undefined;
       sessionThreadById(session: string, thread: number): SessionThread | null;
       pendingCard(thread: number): [{ ts: string }, unknown] | null;
       insertMessage(m: Record<string, unknown>): readonly unknown[];
@@ -60,6 +61,7 @@ export type SignInDeps = {
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
       subscribe(f: (c: { type: string; key?: string }) => void): void;
     };
+    prepareLatestThreads?: ((sessions: readonly string[]) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: never[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -228,13 +230,31 @@ export class SignIns {
     }
     const owner = this.#starter(session);
     if (owner === null) throw new Refused("No one started this chat: there is nobody to sign in.");
-    const thread = this.#d.hub.store.latestThread(session);
+    const prepare = this.#d.hub.prepareLatestThreads;
+    const ready = this.#d.hub.store.latestThreadIfReady;
+    let thread: SessionThread | null;
+    if (prepare && ready) {
+      const found = ready.call(this.#d.hub.store, session);
+      if (found === undefined) {
+        await prepare([session]);
+        const current = this.#d.hub.store.getSession(session);
+        if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+        // A sign-in, a vault grant or another delivery may have arrived during preparation.
+        return this.ask(session, a);
+      }
+      thread = found;
+    } else thread = this.#d.hub.store.latestThread(session);
     if (thread === null) throw new Refused("This session has no chat to ask in.");
     const tabs = this.#d.browser.tabs(session);
     const tab = a.tab !== undefined ? tabs.find((t) => t.id === a.tab) : tabs.filter((t) => onSite(hostOf(t.url), site)).at(-1);
     if (tab === undefined) throw new Refused(a.tab !== undefined ? `This chat's browser has no tab ${a.tab}.` : `This chat's browser has no tab on ${site}: open its sign-in page there first (the \`browser\` tool), then call sign_in.`);
     if (!onSite(hostOf(tab.url), site)) throw new Refused(`Tab ${tab.id} is on ${hostOf(tab.url) || tab.url}, not ${site}.`);
     const form = await this.#d.browser.look(session, tab.id);
+    const current = this.#d.hub.store.getSession(session);
+    if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+    // A concurrent call can have created the sign-in while this browser inspection was in flight.
+    if (this.#starter(session) !== owner || this.#bySession(session).some((x) => x.site === site && OPEN.includes(x.status)))
+      return this.ask(session, a);
     if (!form.username && !form.password && !form.code) throw new Refused(`Tab ${tab.id} (${tab.url}) shows no sign-in form: go to ${site}'s sign-in page there (its "Sign in" link), then call sign_in.`);
     const x: SignInAsk = {
       id: this.#d.id?.() ?? `g_${this.#d.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
