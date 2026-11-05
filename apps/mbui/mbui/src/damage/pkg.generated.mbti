@@ -30,6 +30,7 @@ pub fn Parts::whole(Self, Int32) -> Unit
 pub fn Parts::whole_said(Self) -> Bool
 pub fn Parts::why(Self) -> Int32
 pub fn Parts::work(Self) -> Int32
+pub fn Parts::work_back(Self, Int32) -> Unit
 
 // Type aliases
 

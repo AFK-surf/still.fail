@@ -29,7 +29,8 @@ test "a chat's messages of words alone, as nodes, where an old view's message_ro
       core: None,
     }
     for e in entries {
-      guard e is Said(m) && @sfpages.message_made_whole_now(m) > 0 else { continue }
+      guard e is Said(r) && @sfpages.message_made_whole_now(r.message()) > 0 else { continue }
+      let m = r.message()
       let old = @ui.Tester::new(
         fn(c) {
           @sf.begin(c) |> ignore

@@ -412,7 +412,7 @@ pub fn chat_list_node(
         }
         slot.pick(fn() {
           match row_of(k) {
-            Some((Said(m), _)) => message_made_whole(m)
+            Some((Said(m), _)) => message_made_whole(m.message())
             Some((Out(_), _)) => 3
             Some((Working(_), _)) => 4
             Some((Line, _)) => 6
@@ -432,7 +432,8 @@ pub fn chat_list_node(
             let last : Ref[Message?] = Ref(None)
             let m = fn() {
               match row_of(k) {
-                Some((Said(m), _)) => {
+                Some((Said(r), _)) => {
+                  let m = r.message()
                   last.val = Some(m)
                   m
                 }
@@ -701,7 +702,7 @@ pub fn chat_list_node(
             first = m.seq
           }
           if m.seq == target && found is None {
-            found = Some((id_of(e), m))
+            found = Some((id_of(e), m.message()))
           }
         }
         _ => ()
@@ -939,7 +940,7 @@ pub fn chat_list_node(
     // (by its row as the list has it: its message's place, or its outbox entry's)
     landing_of: fn(k) {
       match row_of(k) {
-        Some((Said(m), _)) => mine_landing(message_place(m))
+        Some((Said(m), _)) => mine_landing(message_place(m.message()))
         Some((Out(o), _)) => mine_landing("o:" + o.id)
         _ => None
       }

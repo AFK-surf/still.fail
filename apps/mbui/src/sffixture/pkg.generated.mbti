@@ -464,6 +464,8 @@ pub fn login_search(String) -> @json.Json
 
 pub fn long_chat(Int32) -> @json.Json
 
+pub fn long_chat_last(Int32, Int32) -> @json.Json
+
 pub fn long_job() -> @json.Json
 
 pub let long_reply : String
@@ -551,6 +553,8 @@ pub fn with_cache_cold(@json.Json) -> @json.Json
 pub fn with_cards(Fixture, @json.Json, String) -> @json.Json
 
 pub fn with_cc(@json.Json) -> @json.Json
+
+pub fn with_cc_long(@json.Json) -> @json.Json
 
 pub fn with_chat_screens(@json.Json, Bool) -> @json.Json
 

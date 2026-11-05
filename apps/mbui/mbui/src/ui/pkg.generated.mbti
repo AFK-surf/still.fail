@@ -524,6 +524,8 @@ pub fn runtime() -> @effect.Runtime
 
 pub let same_moment_ms : Double
 
+pub fn scene_alone_why() -> String
+
 pub fn scene_done() -> SceneWork
 
 pub fn scene_parts() -> Array[(Double, Double, Double, Double)]
@@ -1683,6 +1685,23 @@ pub(all) enum Haptic {
   KeyboardTap
 }
 
+#derive(Show)
+pub(all) struct HostFrame {
+  at : Double
+  asked : Bool
+  changed : Bool
+  old_built : Bool
+  why : String
+  parts_built : Int32
+  damage : Array[(Double, Double, Double, Double)]
+  damage_share : Double
+  whole_why : Int32
+  glass : Double
+  laid : Int32
+  passes : Int32
+  between : Array[(String, Int32)]
+}
+
 type HostRec
 
 #derive(Eq)
@@ -2285,7 +2304,10 @@ pub(all) struct SceneWork {
   mut copied : Int32
   mut copied_insts : Int32
   mut alone : Int32
+  mut full : Int32
   mut parts : Int32
+  mut alone_recorded : Int32
+  mut alone_parts : Int32
 }
 
 type Sem
@@ -2527,6 +2549,7 @@ pub fn Tester::awake(Self) -> Bool
 pub fn Tester::back(Self) -> Unit
 pub fn Tester::back_gesture(Self, Double, Bool, steps? : Int32) -> Unit
 pub fn Tester::back_raw(Self, Int32, Double, Double) -> Unit
+pub fn Tester::back_told(Self, Double) -> Unit
 pub fn Tester::backspace(Self) -> Unit
 pub fn Tester::badge(Self) -> Int32
 pub fn Tester::bench(Self, String, fps? : Double, max? : Int32, each~ : (Self, Bool) -> Unit) -> Array[String]
@@ -2557,6 +2580,7 @@ pub fn Tester::compose(Self, String) -> Unit
 pub fn Tester::contrast_faults(Self, marks? : Double) -> Array[String]
 pub fn Tester::corner_faults(Self) -> Array[String]
 pub fn Tester::corner_pairs(Self) -> Array[String]
+pub fn Tester::count_between(Self, String, () -> Int32) -> Unit
 pub fn Tester::ctx(Self) -> Ctx
 pub fn Tester::cursor(Self) -> @view.Cursor
 pub fn Tester::cycles(Self) -> Array[String]
@@ -2638,6 +2662,7 @@ pub fn Tester::hole_corners(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::hole_parts(Self) -> Array[(Int32, Double, Double, Double, Double)]
 pub fn Tester::hole_radii(Self) -> Array[Double]
 pub fn Tester::holes(Self) -> Array[(Double, Double, Double, Double)]
+pub fn Tester::host_frames(Self) -> Array[HostFrame]
 pub fn Tester::host_says_finger(Self, Bool?) -> Unit
 pub fn Tester::hover_only_faults(Self) -> Array[String]
 pub fn Tester::image_loads(Self) -> Array[(String, Int32)]
@@ -2711,6 +2736,7 @@ pub fn Tester::press_at(Self, Double, Double) -> Unit
 pub fn Tester::press_target_at(Self, Double, Double) -> SemNode?
 pub fn Tester::query(Self, @view.Role, label? : String) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]
+pub fn Tester::record_host(Self) -> Unit
 pub fn Tester::rect_of(Self, String) -> (Double, Double, Double, Double)?
 pub fn Tester::refuse_native(Self, Int32, String) -> Unit
 pub fn Tester::release(Self, Double, Double) -> Unit
@@ -2727,6 +2753,7 @@ pub fn Tester::rows(Self) -> Array[(Int32, Double, Double)]
 pub fn Tester::rows_as_nodes(Self) -> (Int32, Int32)
 pub fn Tester::rows_kept(Self) -> Int32
 pub fn Tester::rows_read_built(Self) -> Int32
+pub fn Tester::run_as_host(Self, Double) -> Unit
 pub fn Tester::run_for(Self, Double) -> Unit
 pub fn Tester::run_for_exact(Self, Double) -> Unit
 pub fn Tester::run_rects(Self, String) -> Array[(Double, Double, Double, Double)]
@@ -2808,6 +2835,7 @@ pub fn Tester::tree_runs_of(Self, String) -> Array[@text.Run]?
 pub fn Tester::turn_of(Self, String) -> Double?
 pub fn Tester::type_text(Self, String) -> Unit
 pub fn Tester::ui_face_wider(Self, Double) -> Unit
+pub fn Tester::unasked_changes(Self, Double) -> Array[Double]
 pub fn Tester::update_asked(Self) -> Array[String]
 pub fn Tester::view_answers(Self, Int32) -> Array[(Int32, Int32, Double)]
 pub fn Tester::view_given(Self, Int32, Int32) -> (Int32, Bool)

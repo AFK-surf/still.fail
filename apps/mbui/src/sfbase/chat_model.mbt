@@ -855,6 +855,8 @@ pub struct ChatMessages {
   rows : @rows.TopicList
   /// each made, by its key: the version and the JSON it was made of
   priv made : Map[String, (Int, Json, Message)]
+  /// each as its list's row knows it (ChatMessages::row), by its key: the version and the JSON it was read off
+  priv heads : Map[String, (Int, Json, SaidRow)]
   /// the list's changes, read as it is worked out again (read_changes): what is made of one gone let go of
   priv reader : @rows.ListReader
 }
@@ -862,7 +864,7 @@ pub struct ChatMessages {
 ///|
 /// A chat's messages as the list `rows` holds them.
 pub fn ChatMessages::of(rows : @rows.TopicList) -> ChatMessages {
-  { rows, made: {}, reader: rows.reader() }
+  { rows, made: {}, heads: {}, reader: rows.reader() }
 }
 
 ///|
@@ -924,6 +926,72 @@ pub fn ChatMessages::op_get(self : ChatMessages, i : Int) -> Message {
 }
 
 ///|
+/// Message `i` as its list's row knows it (Entry::Said): read off its JSON once for each version of it, the whole Message
+/// not made (SaidRow::message makes it, for a row that shows). What goes through all of a long chat's messages goes
+/// through these.
+pub fn ChatMessages::row(self : ChatMessages, i : Int) -> SaidRow {
+  let k = self.rows.key(i)
+  let version = self.rows.version(i)
+  let json = self.rows.value(i)
+  match self.heads.get(k) {
+    Some((v, j, r)) if v == version && physical_equal(j, json) => r
+    _ => {
+      let s = Some(json)
+      let r : SaidRow = {
+        seq: number(s, "seq"),
+        ts: text(s, "ts"),
+        outgoing: text(s, "outgoing"),
+        said: flag(s, "said"),
+        mine: flag(s, "mine"),
+        system: flag(s, "system"),
+        joined: flag(s, "joined"),
+        elsewhere: items(s, "elsewhere").map(elsewhere_of),
+        version,
+        of: self,
+        key: k,
+        json,
+      }
+      self.heads[k] = (version, json, r)
+      r
+    }
+  }
+}
+
+///|
+/// The message a row is (made once for each version of it, as ChatMessages' own are): what a row that shows draws.
+pub fn SaidRow::message(self : SaidRow) -> Message {
+  match self.of.made.get(self.key) {
+    Some((v, j, m)) if v == self.version && physical_equal(j, self.json) => m
+    _ => {
+      let m = message_of(self.json)
+      made_count.val += 1
+      self.of.made[self.key] = (self.version, self.json, m)
+      m
+    }
+  }
+}
+
+///|
+/// A chat's message as its list's row knows it: where it is in the chat (seq, ts), how it came (said while the chat
+/// showed, sent from here as `outgoing`, the viewer's own, the system's, joined to the one before) and what went
+/// elsewhere after it, read off its JSON alone; the whole of it made only as its row shows (SaidRow::message), so a long
+/// chat entered makes only the messages it shows. `version`: its list's version of it, the row's to tell it changed.
+pub(all) struct SaidRow {
+  seq : Double
+  ts : String
+  outgoing : String
+  said : Bool
+  mine : Bool
+  system : Bool
+  joined : Bool
+  elsewhere : Array[Elsewhere]
+  version : Int
+  priv of : ChatMessages
+  priv key : String
+  priv json : Json
+}
+
+///|
 /// Message `i`, None past its ends.
 pub fn ChatMessages::get(self : ChatMessages, i : Int) -> Message? {
   if i >= 0 && i < self.length() {
@@ -971,8 +1039,12 @@ pub fn ChatMessages::read_changes(self : ChatMessages) -> Array[@rows.ListChange
       Removed(_, keys, _) =>
         for k in keys {
           self.made.remove(k)
+          self.heads.remove(k)
         }
-      Whole(_) => self.made.clear()
+      Whole(_) => {
+        self.made.clear()
+        self.heads.clear()
+      }
       _ => ()
     }
   }

@@ -327,6 +327,11 @@ fn host_between(s : HostStep) -> Map[String, Int] {
 }
 
 ///|
+/// The entries a long chat's list is made of as it is entered, left or chosen (3000 messages, the rows round them):
+/// owed till the list reads its rows by their index (the anchored list), never more.
+let entries_owed : Int = 3002
+
+///|
 /// Entering a chat, leaving it and choosing another do outside their frames (the events taken as they come, the
 /// changes they make settled then: what a phone's PERF does not see, 300–400 ms of it as a long chat is entered or left
 /// on 2026-11-05) what they do for a chat of its last 30 alone: no more nodes made, bindings run, nodes laid out, list
@@ -343,12 +348,38 @@ test "entering, leaving or choosing a long chat does no more outside its frames 
       match short.search_by(fn(o) { o.what == s.what }) {
         Some(j) => {
           let (a, b) = (host_between(s), host_between(short[j]))
-          let more = a.iter().filter(fn(c) { c.1 > b.get(c.0).unwrap_or(0) }).map(fn(c) { "\{c.0} \{c.1} (30: \{b.get(c.0).unwrap_or(0)})" }).collect()
+          // (its list's entries owed: the list takes them whole, all of a chat's rows, till the anchored list reads them by
+          // their index; never more than that, the debt only to fall)
+          let more = a.iter().filter(fn(c) {
+            if c.0 == "entries" { c.1 > entries_owed } else { c.1 > b.get(c.0).unwrap_or(0) }
+          }).map(fn(c) { "\{c.0} \{c.1} (30: \{b.get(c.0).unwrap_or(0)})" }).collect()
           if !more.is_empty() {
             out.push("\{s.what} at \{w}: " + more.join(", "))
           }
         }
         None => out.push("\{s.what} at \{w}: none at 30")
+      }
+    }
+  }
+  assert_eq(out, [])
+}
+
+///|
+/// A key typed in a long chat's composer makes none of its list's entries and none of its messages, outside its frames
+/// or in them: the draft and the composer change the chat's value, none of what its rows are made of (chat_read keeps
+/// them; 3002 entries a key before, 2026-11-05).
+test "a key in a long chat's composer makes no entries and no messages, on a phone and a desktop" {
+  let out : Array[String] = []
+  for w in [390.0, 1280.0] {
+    let (long, _) = host_walk_of("chat-long", w)
+    for s in long {
+      guard s.what.has_prefix("typed") || s.what.has_prefix("erased") else { continue }
+      let made = host_between(s)
+      for k in ["entries", "messages"] {
+        let n = made.get(k).unwrap_or(0)
+        if n > 0 {
+          out.push("\{s.what} at \{w}: \{k} \{n}")
+        }
       }
     }
   }

@@ -98,9 +98,9 @@ test "one message come costs the chat page the same with 30 messages and with 30
   let (made3000, work3000, _, rows3000) = one_come_costs(3000)
   // (its rows: the one come taken, the ends compared, none of the messages gone through)
   assert_eq(rows3000, rows30)
-  // (the one come made, none else: the others as they were made)
+  // (none made of it here: a message is made as its row shows, none drawn here; the others as they were)
   assert_eq(made3000, made30)
-  assert_eq(made30, 1)
+  assert_eq(made30, 0)
   // (the list: the one put in, nothing gone through, nothing put together whole)
   assert_eq(work3000, work30)
 }
