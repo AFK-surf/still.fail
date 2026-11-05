@@ -255,6 +255,8 @@ test("a later session's failed source rolls back the earlier sessions in its bat
         token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
       store.openThreadOf("ember", "EMBER", `chat-${key}`, "Chat", null, key);
     }
+    const hidden = store.openThreadOf("ember", "EMBER", "hidden-membership", "Hidden", null, "outside").id;
+    store.joinThread(hidden, "first", "ember");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     const progress = () => db.prepare("SELECT * FROM recent_scope_tracked WHERE kind = 1 AND ws = 'here'").get();
@@ -265,8 +267,10 @@ test("a later session's failed source rolls back the earlier sessions in its bat
     assert.deepEqual(progress(), before);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM recent_scope_sources").get()?.n, 0);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM recent_scope_rows").get()?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM recent_scope_candidates").get()?.n, 0);
     db.exec("DROP TRIGGER fail_second_source");
     assert.equal(scanRecentWorkspaceStep(db, "here", 64).sourceDone, true);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM recent_scope_candidates").get()?.n, 1);
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
     assert.equal(readPreparedRecentWorkspace(db, "here", 5)?.total, 2);
   } finally { store.close(); }

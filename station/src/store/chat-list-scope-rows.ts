@@ -15,11 +15,9 @@ export const RECENT_SCOPE_VISIBILITY_PENDING = `SELECT COUNT(*) AS n,
   MAX(COALESCE(d.home_ws = ?1, 0) OR
     EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
   FROM (SELECT thread, home_ws, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d`;
-// Only ambiguous jobs need membership lookups. A normal prepared page never touches the old membership table.
-export const RECENT_SCOPE_VISIBILITY_SESSION_LIMIT = "SELECT 1 FROM recent_scope_sessions WHERE ws = ? LIMIT 1 OFFSET 64";
+// Only ambiguous jobs need candidate lookups. The input is bounded before each workspace/thread primary-key seek.
 export const RECENT_SCOPE_VISIBILITY_AMBIGUOUS = `SELECT MAX(EXISTS (
-  SELECT 1 FROM (SELECT session FROM recent_scope_sessions WHERE ws = ?1 ORDER BY session LIMIT 64) s
-    WHERE EXISTS (SELECT 1 FROM thread_sessions m WHERE m.thread = d.thread AND m.session = s.session))) AS affects
+  SELECT 1 FROM recent_scope_candidates c WHERE c.ws = ?1 AND c.thread = d.thread)) AS affects
   FROM (SELECT thread, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d WHERE d.ambiguous`;
 export const RECENT_WORKSPACE_PAGE = `SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?
   ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`;
@@ -74,8 +72,7 @@ export function preparedRecentWorkspaceTotal(db: DatabaseSync, ws: string): numb
   const visibility = db.prepare(RECENT_SCOPE_VISIBILITY_PENDING).get(ws) as { n: number; ambiguous: number | null; affects: number | null };
   if (visibility.n > 64 || visibility.affects === 1) return null;
   if (visibility.ambiguous === 1) {
-    if (meta.scan_done !== 1 || meta.scan_session !== null ||
-        db.prepare(RECENT_SCOPE_VISIBILITY_SESSION_LIMIT).get(ws) !== undefined) return null;
+    if (meta.scan_done !== 1 || meta.scan_session !== null) return null;
     if ((db.prepare(RECENT_SCOPE_VISIBILITY_AMBIGUOUS).get(ws) as { affects: number | null }).affects === 1) return null;
   }
   const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get(ws) as { n: number; affects: number | null };

@@ -83,7 +83,7 @@ test("a session's home and member chats are found in bounded source batches", ()
     }
     assert.equal(cursor.phase, "done");
     assert.deepEqual(found.sort((a, b) => a < b ? -1 : a > b ? 1 : 0), expected);
-    assert.deepEqual(recentScopeSessionThreadsStep(db, "ours", cursor, 3), { threads: [], visited: 0, cursor });
+    assert.deepEqual(recentScopeSessionThreadsStep(db, "ours", cursor, 3), { threads: [], members: [], visited: 0, cursor });
     assert.throws(() => recentScopeSessionThreadsStep(db, "ours", cursor, 0), RangeError);
   } finally { store.close(); }
 });

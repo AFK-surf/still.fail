@@ -14,12 +14,22 @@ type Progress = { scan_connect: string | null; scan_after: bigint | null; scan_d
 // arriving while this scan runs, switch to a finite rowid walk of the sessions that existed when tracking began.
 const MAX_SCAN_CONNECTIONS = 64n;
 
-// While a session's journal entry is pending, the workspace cannot be read. Refreshing this small per-session
-// membership at the end of reconciliation lets the reader test a shared chat without walking its entire member list.
-function syncRecentScopeSession(db: DatabaseSync, ws: string, session: string): void {
-  db.prepare("DELETE FROM recent_scope_sessions WHERE ws = ? AND session = ?").run(ws, session);
-  db.prepare(`INSERT INTO recent_scope_sessions(ws, session) SELECT ?1, key FROM sessions WHERE key = ?2 AND ws = ?1`)
-    .run(ws, session);
+export const FIRST_SCOPE_CANDIDATE_SESSION = `SELECT thread FROM recent_scope_candidates INDEXED BY recent_scope_candidates_session
+  WHERE ws = ?1 AND session = ?2 ORDER BY thread LIMIT ?3`;
+export const NEXT_SCOPE_CANDIDATE_SESSION = `SELECT thread FROM recent_scope_candidates INDEXED BY recent_scope_candidates_session
+  WHERE ws = ?1 AND session = ?2 AND thread > ?3 ORDER BY thread LIMIT ?4`;
+export const PUT_SCOPE_CANDIDATE = `INSERT INTO recent_scope_candidates(ws, thread, session) SELECT ?1, ?2, ?3 WHERE NOT EXISTS
+  (SELECT 1 FROM recent_scope_candidates WHERE ws = ?1 AND thread = ?2 AND session = ?3)`;
+export const REMOVE_SCOPE_CANDIDATE = "DELETE FROM recent_scope_candidates WHERE ws = ? AND thread = ? AND session = ?";
+export const RECENT_SCOPE_MEMBER_EXISTS = `SELECT 1 FROM sessions s JOIN thread_sessions m ON m.session = s.key
+  WHERE m.thread = ?1 AND s.key = ?2 AND s.ws = ?3`;
+
+function putCandidate(db: DatabaseSync, ws: string, thread: bigint, session: string): void {
+  db.prepare(PUT_SCOPE_CANDIDATE).run(ws, thread, session);
+}
+
+function removeCandidate(db: DatabaseSync, ws: string, thread: bigint, session: string): void {
+  db.prepare(REMOVE_SCOPE_CANDIDATE).run(ws, thread, session);
 }
 
 /// One transaction advances at most `limit` source units. An empty session phase or connection also costs one unit,
@@ -41,6 +51,7 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
       if (progress.scan_session !== null) {
         const cursor: RecentScopeThreadCursor = { phase: progress.scan_phase ?? "home", after: progress.scan_thread_after };
         const batch = recentScopeSessionThreadsStep(db, progress.scan_session, cursor, limit - visited);
+        for (const thread of batch.members) putCandidate(db, ws, thread, progress.scan_session);
         for (const thread of batch.threads) putRecentScopeSource(db, ws, thread, progress.scan_session);
         visited += Math.max(1, batch.visited);
         if (batch.cursor.phase === "done") {
@@ -76,10 +87,6 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
             progress.scan_after = null;
           }
         }
-        if (progress.scan_session !== null) {
-          db.prepare(`INSERT INTO recent_scope_sessions(ws, session) SELECT ?1, ?2 WHERE NOT EXISTS
-            (SELECT 1 FROM recent_scope_sessions WHERE ws = ?1 AND session = ?2)`).run(ws, progress.scan_session);
-        }
         progress.scan_phase = progress.scan_session === null ? null : "home";
         progress.scan_thread_after = null;
         visited++;
@@ -94,7 +101,7 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-type SessionWork = { revision: bigint; phase: "remove" | "home" | "members"; after: bigint | null };
+type SessionWork = { revision: bigint; phase: "remove" | "candidates" | "home" | "members"; after: bigint | null };
 
 /// Reconcile one changed session after the initial scan, without losing changes made between batches. This still
 /// cannot certify a whole workspace: membership, thread and ordering changes need their own journals first.
@@ -129,25 +136,38 @@ export function settleRecentWorkspaceSessionStep(db: DatabaseSync, ws: string, l
       for (const row of rows) removeRecentScopeSource(db, ws, row.thread, pending.session);
       if (rows.length === limit) db.prepare("UPDATE recent_scope_session_work SET after = ? WHERE ws = ? AND session = ?")
         .run(rows.at(-1)!.thread, ws, pending.session);
+      else db.prepare("UPDATE recent_scope_session_work SET phase = 'candidates', after = NULL WHERE ws = ? AND session = ?")
+        .run(ws, pending.session);
+      if (rows.length !== 0) { db.exec("COMMIT"); return { sessionsDone: false, visited: rows.length }; }
+      work = { ...work, phase: "candidates", after: null };
+    }
+    if (work.phase === "candidates") {
+      const query = db.prepare(work.after === null ? FIRST_SCOPE_CANDIDATE_SESSION : NEXT_SCOPE_CANDIDATE_SESSION);
+      query.setReadBigInts(true);
+      const rows = (work.after === null ? query.all(ws, pending.session, limit)
+        : query.all(ws, pending.session, work.after, limit)) as { thread: bigint }[];
+      for (const row of rows) removeCandidate(db, ws, row.thread, pending.session);
+      if (rows.length === limit) db.prepare("UPDATE recent_scope_session_work SET after = ? WHERE ws = ? AND session = ?")
+        .run(rows.at(-1)!.thread, ws, pending.session);
       else db.prepare("UPDATE recent_scope_session_work SET phase = 'home', after = NULL WHERE ws = ? AND session = ?")
         .run(ws, pending.session);
-      db.exec("COMMIT");
-      return { sessionsDone: false, visited: rows.length };
+      if (rows.length !== 0) { db.exec("COMMIT"); return { sessionsDone: false, visited: rows.length }; }
+      work = { ...work, phase: "home", after: null };
     }
     const current = db.prepare("SELECT ws FROM sessions WHERE key = ?").get(pending.session) as { ws: string | null } | undefined;
     if (current?.ws !== ws) {
       db.prepare("DELETE FROM recent_scope_session_work WHERE ws = ? AND session = ?").run(ws, pending.session);
-      syncRecentScopeSession(db, ws, pending.session);
       acknowledgeRecentScopeSession(db, { kind: "workspace", workspace: ws }, pending.session, pending.revision);
       const done = db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) === undefined;
       db.exec("COMMIT");
       return { sessionsDone: done, visited: 0 };
     }
+    if (work.phase === "remove" || work.phase === "candidates") throw new Error("recent workspace session cleanup is unfinished");
     const batch = recentScopeSessionThreadsStep(db, pending.session, { phase: work.phase, after: work.after }, limit);
+    for (const thread of batch.members) putCandidate(db, ws, thread, pending.session);
     for (const thread of batch.threads) putRecentScopeSource(db, ws, thread, pending.session);
     if (batch.cursor.phase === "done") {
       db.prepare("DELETE FROM recent_scope_session_work WHERE ws = ? AND session = ?").run(ws, pending.session);
-      syncRecentScopeSession(db, ws, pending.session);
       acknowledgeRecentScopeSession(db, { kind: "workspace", workspace: ws }, pending.session, pending.revision);
     } else db.prepare("UPDATE recent_scope_session_work SET phase = ?, after = ? WHERE ws = ? AND session = ?")
       .run(batch.cursor.phase, batch.cursor.after, ws, pending.session);
@@ -173,8 +193,11 @@ export function settleRecentWorkspaceMemberStep(db: DatabaseSync, ws: string, li
     const eligible = db.prepare(`SELECT 1 FROM threads t JOIN sessions s ON s.key = ?2
       WHERE t.id = ?1 AND s.ws = ?3 AND (t.home = s.key OR (t.home IS NULL AND EXISTS
         (SELECT 1 FROM thread_sessions m WHERE m.thread = t.id AND m.session = s.key)))`);
+    const member = db.prepare(RECENT_SCOPE_MEMBER_EXISTS);
     const clean = db.prepare("DELETE FROM recent_scope_member_dirty WHERE ws = ? AND thread = ? AND session = ? AND revision = ?");
     for (const row of rows) {
+      if (member.get(row.thread, row.session, ws) !== undefined) putCandidate(db, ws, row.thread, row.session);
+      else removeCandidate(db, ws, row.thread, row.session);
       if (eligible.get(row.thread, row.session, ws) !== undefined) putRecentScopeSource(db, ws, row.thread, row.session);
       else removeRecentScopeSource(db, ws, row.thread, row.session);
       clean.run(ws, row.thread, row.session, row.revision);

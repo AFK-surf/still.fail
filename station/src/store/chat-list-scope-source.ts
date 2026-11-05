@@ -51,16 +51,17 @@ export const SCOPE_MEMBER_WITHOUT_HOME = "SELECT 1 FROM threads WHERE id = ? AND
 
 /// For a session already found in this workspace, find its home chats and then its member chats without a home.
 /// Apply the home check after limiting source memberships: otherwise a long run of ineligible members could make a
-/// SQL LIMIT read an unbounded number of rows. `visited` is the number of source rows, not just the matches.
+/// SQL LIMIT read an unbounded number of rows. `visited` is the number of source rows, not just the matches;
+/// `members` includes hidden memberships so the workspace can seek them if a chat's home changes later.
 export function recentScopeSessionThreadsStep(db: DatabaseSync, session: string, cursor: RecentScopeThreadCursor,
-  limit: number): { threads: bigint[]; visited: number; cursor: RecentScopeThreadCursor } {
+  limit: number): { threads: bigint[]; members: bigint[]; visited: number; cursor: RecentScopeThreadCursor } {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent scope thread batch must be positive");
-  if (cursor.phase === "done") return { threads: [], visited: 0, cursor };
+  if (cursor.phase === "done") return { threads: [], members: [], visited: 0, cursor };
   if (cursor.phase === "home") {
     const query = db.prepare(cursor.after === null ? FIRST_SCOPE_HOME_THREADS : SCOPE_HOME_THREADS);
     query.setReadBigInts(true);
     const rows = (cursor.after === null ? query.all(session, limit) : query.all(session, cursor.after, limit)) as { thread: bigint }[];
-    return { threads: rows.map((row) => row.thread), visited: rows.length,
+    return { threads: rows.map((row) => row.thread), members: [], visited: rows.length,
       cursor: rows.length === limit ? { phase: "home", after: rows.at(-1)!.thread } : { phase: "members", after: null } };
   }
   const query = db.prepare(cursor.after === null ? FIRST_SCOPE_MEMBER_THREADS : SCOPE_MEMBER_THREADS);
@@ -68,6 +69,6 @@ export function recentScopeSessionThreadsStep(db: DatabaseSync, session: string,
   const rows = (cursor.after === null ? query.all(session, limit) : query.all(session, cursor.after, limit)) as { rowid: bigint; thread: bigint }[];
   const eligible = db.prepare(SCOPE_MEMBER_WITHOUT_HOME);
   const threads = rows.filter((row) => eligible.get(row.thread) !== undefined).map((row) => row.thread);
-  return { threads, visited: rows.length,
+  return { threads, members: rows.map((row) => row.thread), visited: rows.length,
     cursor: rows.length === limit ? { phase: "members", after: rows.at(-1)!.rowid } : { phase: "done", after: null } };
 }

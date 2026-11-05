@@ -27,9 +27,11 @@ import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTOR
 import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
 import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
-import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_SCOPE_VISIBILITY_SESSION_LIMIT,
+import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_PENDING,
   RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
 import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
+import { FIRST_SCOPE_CANDIDATE_SESSION, NEXT_SCOPE_CANDIDATE_SESSION, PUT_SCOPE_CANDIDATE, RECENT_SCOPE_MEMBER_EXISTS,
+  REMOVE_SCOPE_CANDIDATE } from "../src/store/chat-list-scope-build.ts";
 import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
   FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
   SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, SCOPE_SESSIONS_THROUGH } from "../src/store/chat-list-scope-source.ts";
@@ -91,11 +93,16 @@ function assertRecentChatPlans() {
     assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
   }
   const visibilitySteps = plan(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, ["ws"]);
-  assert.match(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, /WHERE ws = \?1 ORDER BY session LIMIT 64/);
-  assert.match(RECENT_SCOPE_VISIBILITY_SESSION_LIMIT, /WHERE ws = \? LIMIT 1 OFFSET 64/);
-  assert.ok(plan(RECENT_SCOPE_VISIBILITY_SESSION_LIMIT, ["ws"]).some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")));
-  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")), visibilitySteps.join(" | "));
-  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH m ") && s.includes("thread=? AND session=?")), visibilitySteps.join(" | "));
+  assert.match(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, /ORDER BY thread LIMIT 65/);
+  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH c ") && s.includes("PRIMARY KEY (ws=? AND thread=?)")), visibilitySteps.join(" | "));
+  for (const sql of [PUT_SCOPE_CANDIDATE, REMOVE_SCOPE_CANDIDATE]) {
+    const steps = plan(sql, ["ws", 1, "a"]);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH recent_scope_candidates ") && s.includes("PRIMARY KEY (ws=? AND thread=? AND session=?)")),
+      `${sql}\n  ${steps.join(" | ")}`);
+  }
+  const memberSteps = plan(RECENT_SCOPE_MEMBER_EXISTS, [1, "a", "ws"]);
+  assert.ok(memberSteps.some((s) => s.startsWith("SEARCH m ") && s.includes("thread=? AND session=?")), memberSteps.join(" | "));
+  assert.ok(memberSteps.some((s) => s.startsWith("SEARCH s ") && s.includes("key=?")), memberSteps.join(" | "));
   const memberWrites = recentScopeHomeMemberQueries("?1");
   for (const sql of [memberWrites.update, memberWrites.insert]) {
     const steps = plan(sql, [1]), detail = `${sql}\n  ${steps.join(" | ")}`;
@@ -111,6 +118,8 @@ function assertRecentChatPlans() {
     [FIRST_SCOPE_SESSIONS_THROUGH, ["a", "ws", 10n, 5], "sessions_by_connect", true],
     [SCOPE_SESSIONS_THROUGH, ["a", "ws", 0n, 10n, 5], "sessions_by_connect", true],
     [FIRST_SCOPE_OLD_SESSION, [10n], "INTEGER PRIMARY KEY", true], [NEXT_SCOPE_OLD_SESSION, [0n, 10n], "INTEGER PRIMARY KEY", true],
+    [FIRST_SCOPE_CANDIDATE_SESSION, ["ws", "a", 5], "recent_scope_candidates_session", true],
+    [NEXT_SCOPE_CANDIDATE_SESSION, ["ws", "a", 0n, 5], "recent_scope_candidates_session", true],
     [FIRST_SCOPE_HOME_THREADS, ["a", 5], "threads_home", true], [SCOPE_HOME_THREADS, ["a", 0n, 5], "threads_home", true],
     [FIRST_SCOPE_MEMBER_THREADS, ["a", 5], "thread_sessions_session", true], [SCOPE_MEMBER_THREADS, ["a", 0n, 5], "thread_sessions_session", true],
     [SCOPE_MEMBER_WITHOUT_HOME, [1], "INTEGER PRIMARY KEY", true],

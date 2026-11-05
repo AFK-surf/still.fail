@@ -42,6 +42,15 @@ const markMember = (thread: string, session: string, home = false) => {
 };
 const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
+// Keep even memberships hidden by a named home: if that home changes, a workspace can check this key directly.
+const addCandidate = (thread: string, session: string) => `
+  INSERT INTO recent_scope_candidates(ws, thread, session)
+    SELECT s.ws, ${thread}, ${session} FROM sessions s JOIN recent_scope_tracked t ON t.kind = 1 AND t.ws = s.ws
+    WHERE s.key = ${session} AND ${thread} IS NOT NULL AND NOT EXISTS
+      (SELECT 1 FROM recent_scope_candidates c WHERE c.ws = s.ws AND c.thread = ${thread} AND c.session = ${session});`;
+const removeCandidate = (thread: string, session: string) => `
+  DELETE FROM recent_scope_candidates WHERE ws = (SELECT ws FROM sessions WHERE key = ${session})
+    AND thread = ${thread} AND session = ${session};`;
 // Limit raw memberships before looking up their sessions or tracked workspaces. The tuple IN lets SQLite seek each
 // dirty key, rather than scanning a workspace's or the whole station's existing journal.
 export function recentScopeHomeMemberQueries(thread: string): { update: string; insert: string } {
@@ -114,7 +123,9 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         revision INTEGER NOT NULL, PRIMARY KEY(kind, ws, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_session_work (ws TEXT NOT NULL, session TEXT NOT NULL, revision INTEGER NOT NULL,
         phase TEXT NOT NULL, after INTEGER, PRIMARY KEY(ws, session)) WITHOUT ROWID;
-      CREATE TABLE recent_scope_sessions (ws TEXT NOT NULL, session TEXT NOT NULL, PRIMARY KEY(ws, session)) WITHOUT ROWID;
+      CREATE TABLE recent_scope_candidates (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
+        PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
+      CREATE INDEX recent_scope_candidates_session ON recent_scope_candidates(ws, session, thread);
       CREATE TABLE recent_scope_member_dirty (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dirty (ws TEXT NOT NULL, thread INTEGER NOT NULL, PRIMARY KEY(ws, thread)) WITHOUT ROWID;
@@ -163,22 +174,26 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_session_drop BEFORE DELETE ON sessions BEGIN ${markSession("OLD.key", "OLD.ws")} END;
       -- A rowid REPLACE can evict a different membership without firing its DELETE trigger.
       CREATE TRIGGER recent_scope_member_before_add BEFORE INSERT ON thread_sessions BEGIN
-        ${markMember(memberConflictThread(""), memberConflictSession(""))}
+        ${markMember(memberConflictThread(""), memberConflictSession(""), true)}
       END;
       CREATE TRIGGER recent_scope_member_add AFTER INSERT ON thread_sessions BEGIN
+        ${addCandidate("NEW.thread", "NEW.session")}
         ${markMember("NEW.thread", "NEW.session")} ${memberMakesVisibilityAmbiguous("NEW.thread")}
       END;
-      CREATE TRIGGER recent_scope_member_before_change BEFORE UPDATE OF thread, session, rowid ON thread_sessions
+      CREATE TRIGGER recent_scope_member_before_change BEFORE UPDATE ON thread_sessions
         WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
-          ${markMember("OLD.thread", "OLD.session")}
-          ${markMember(memberConflictThread("AND rowid IS NOT OLD.rowid"), memberConflictSession("AND rowid IS NOT OLD.rowid"))}
+          ${markMember("OLD.thread", "OLD.session", true)}
+          ${markMember(memberConflictThread("AND rowid IS NOT OLD.rowid"), memberConflictSession("AND rowid IS NOT OLD.rowid"), true)}
       END;
-      CREATE TRIGGER recent_scope_member_change AFTER UPDATE OF thread, session, rowid ON thread_sessions
+      CREATE TRIGGER recent_scope_member_change AFTER UPDATE ON thread_sessions
         WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
+          ${removeCandidate("OLD.thread", "OLD.session")} ${addCandidate("NEW.thread", "NEW.session")}
           ${markMember("NEW.thread", "NEW.session")}
           ${memberMakesVisibilityAmbiguous("NEW.thread")}
       END;
-      CREATE TRIGGER recent_scope_member_drop BEFORE DELETE ON thread_sessions BEGIN ${markMember("OLD.thread", "OLD.session")} END;
+      CREATE TRIGGER recent_scope_member_drop BEFORE DELETE ON thread_sessions BEGIN
+        ${markMember("OLD.thread", "OLD.session")} ${removeCandidate("OLD.thread", "OLD.session")}
+      END;
       -- Rows inserted behind a running distributor's cursor must also be marked. Existing dirty rows remain
       -- pending until this thread's distribution finishes, so another message need not restart the scan.
       CREATE TRIGGER recent_scope_order_row_add AFTER INSERT ON recent_scope_rows

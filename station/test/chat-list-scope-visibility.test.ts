@@ -142,13 +142,11 @@ for (const count of [64, 65]) test(`a workspace with ${count} sessions checks a 
     while (!scanRecentWorkspaceStep(db, "here", 32).sourceDone) { /* Prepare the old sessions. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
     db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
-    if (count === 64) {
-      assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
-      store.joinThread(shared, "here-00", "ember");
-      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a new member must keep the workspace pending");
-      while (!settleRecentWorkspaceMemberStep(db, "here", 8).membersDone) { /* Reconcile the new member. */ }
-      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the global visibility pass is still in progress");
-    } else assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a larger session set waits rather than scanning it all");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+    store.joinThread(shared, "here-00", "ember");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a new member must keep the workspace pending");
+    while (!settleRecentWorkspaceMemberStep(db, "here", 8).membersDone) { /* Reconcile the new member. */ }
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the global visibility pass is still in progress");
     while (!settleRecentScopeVisibilityStep(db, 8).visibilityDone) { /* Finish the bounded pass. */ }
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
   } finally { store.close(); }
@@ -192,7 +190,7 @@ for (const recursive of [false, true]) test(`a session moving while a shared cha
   } finally { store.close(); }
 });
 
-test("checking an unrelated large shared chat visits only the bounded workspace sessions", () => {
+test("checking an unrelated large shared chat does not read historical memberships", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     store.insertSession({ key: "owner", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
@@ -210,25 +208,69 @@ test("checking an unrelated large shared chat visits only the bounded workspace 
     while (!scanRecentWorkspaceStep(db, "here", 64).sourceDone) { /* Prepare the workspace. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
     db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
-    let visited = 0;
-    db.function("visit_scope_session", (_session) => { visited++; return 1; });
-    const instrumented = new Proxy(db, {
-      get(target, property) {
-        if (property === "prepare") return (sql: string) => target.prepare(sql.replace(
-          "WHERE ws = ?1 ORDER BY session LIMIT 64", "WHERE ws = ?1 AND visit_scope_session(session) ORDER BY session LIMIT 64"));
-        const value = Reflect.get(target, property, target);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
     const check = () => {
-      visited = 0;
-      assert.deepEqual(readPreparedRecentWorkspace(instrumented, "here", 5), { ids: [target], total: 1 });
-      return visited;
+      db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "thread_sessions"
+        ? constants.SQLITE_DENY : constants.SQLITE_OK);
+      try { assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 }); }
+      finally { db.setAuthorizer(null); }
     };
-    const before = check();
+    check();
     for (let i = 65; i < 1000; i++) store.joinThread(shared, `unknown-${i}`, "ember");
-    assert.equal(before, 64);
-    assert.equal(check(), before, "more shared members cannot increase the work of this workspace's read");
+    check();
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a named chat's members are tracked before it becomes shared (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["owner", "away"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "candidate-target", "Target", null, "here").id;
+    const shared = store.openThreadOf("ember", "EMBER", "candidate-shared", "Shared", null, "owner").id;
+    for (let i = 0; i < 65; i++) store.joinThread(shared, `unknown-${i}`, "ember");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 8).sourceDone) { /* Prepare the workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    store.joinThread(shared, "here", "ember");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "joining another named home does not change this workspace's visible chats");
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the newly shared membership must not be missed");
+    db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'here'").run(shared);
+    while (!settleRecentWorkspaceMemberStep(db, "here", 8).membersDone) { /* Reconcile the departure. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "the departed member no longer affects the pending visibility change");
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) for (const operation of ["insert", "update"]) test(`a ${operation} replacing a hidden member is accounted before a later shared change (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["owner", "away"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "replace-candidate-target", "Target", null, "here").id;
+    const shared = store.openThreadOf("ember", "EMBER", "replace-candidate-shared", "Shared", null, "owner").id;
+    const other = store.openThreadOf("ember", "EMBER", "replace-candidate-other", "Other", null, "owner").id;
+    store.joinThread(shared, "here", "ember");
+    if (operation === "update") store.joinThread(other, "owner", "ember");
+    for (let i = 0; i < 65; i++) store.joinThread(shared, `unknown-${i}`, "ember");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 8).sourceDone) { /* Prepare the old member. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    const rowid = (db.prepare("SELECT rowid FROM thread_sessions WHERE thread = ? AND session = 'here'").get(shared) as { rowid: number }).rowid;
+    if (operation === "insert") db.prepare("INSERT OR REPLACE INTO thread_sessions(rowid,thread,session,connect,joined_at) VALUES (?,?, 'owner','ember',1)")
+      .run(rowid, other);
+    else db.prepare("UPDATE OR REPLACE thread_sessions SET rowid = ? WHERE thread = ? AND session = 'owner'").run(rowid, other);
+    while (!settleRecentWorkspaceMemberStep(db, "here", 8).membersDone) { /* Reconcile a displaced row. */ }
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "a replaced member must not make the unrelated workspace wait");
   } finally { store.close(); }
 });
 
