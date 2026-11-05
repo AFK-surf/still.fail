@@ -998,6 +998,16 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("an Anthropic key on Claude Code has a Fast default too; a Claude Code profile on its own variables does not", async () => {
+    const t = await rig();
+    assert.equal(t.view("cc")!.fast, null);
+    assert.equal((await t.call("PUT", "/profiles/cc", { fast: true, access: { kind: "anthropic-api", key: "sk-ant-1" } }))[0], 200);
+    assert.equal(t.view("cc")!.fast, true);
+    await t.call("PUT", "/profiles/cc", { fast: false });
+    assert.equal(t.view("cc")!.fast, false);
+    await t.close();
+  });
+
   test("the automatic decisions use a model a profile verified, set by a workspace manager", async () => {
     const t = await rig({
       discover: async (profile) =>

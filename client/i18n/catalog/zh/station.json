@@ -353,7 +353,7 @@
   "station.place.timeout": "无法在 {seconds} 秒内检查 {cwd}。该文件夹受 macOS 保护，{machine} 上可能正在询问是否允许 station 访问：请在那里允许，然后重试。",
   "station.session.badContext": "上下文上限必须是不少于 {least} 的整数 token 数，或 null 表示用满模型窗口",
   "station.session.contextRuntimes": "只有 Claude Code 和 Codex 能限制上下文长度",
-  "station.session.fastOpenAiOnly": "Fast 只适用于 OpenAI 订阅",
+  "station.session.fastOpenAiOnly": "Fast 只适用于 OpenAI 订阅和 Anthropic API key",
   "station.session.from": "来自 {from}：",
   "station.session.to": "发给 {to}：",
   "station.session.openerNotTold": "无法将本轮结果告知创建此对话的 agent：{error}",

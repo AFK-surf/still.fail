@@ -22,7 +22,7 @@ import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
 import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
-import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileModel } from "./profiles.ts";
+import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
@@ -40,6 +40,20 @@ const flagOf = (args: string[], flag: string) => {
   const at = args.indexOf(flag);
   return at >= 0 ? args[at + 1] : undefined;
 };
+
+/// Whether a process runs Fast (Claude Code's `fastMode` setting), for an account that takes it (an Anthropic key):
+/// as the session is set, else as its profile is. Fixed for the process, as its effort is.
+const fastFor = (options: OpenOptions): boolean | undefined => (takesFast(options.profile) ? (options.fast ?? profileFast(options.profile)) : undefined);
+
+/// The Fast a process was started with (its --settings' `fastMode`).
+function fastOf(args: string[]): boolean | undefined {
+  try {
+    const fast = JSON.parse(flagOf(args, "--settings") ?? "")?.fastMode;
+    return typeof fast === "boolean" ? fast : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /// The address of the station's tools a process was started with (its --mcp-config); null when it does not say.
 export function mcpUrlOf(args: string[]): string | null {
@@ -302,11 +316,14 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
     // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
     const file = keyFile(options.profile);
+    const fast = fastFor(options);
     const settings = {
       ...(ours ? SETTINGS : {}),
       ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }),
       // The most context it runs with: it compacts on its own at it (its window for the model, clamped to the model's).
       ...(options.context === undefined ? {} : { autoCompactWindow: options.context }),
+      // Said either way: one turned on by hand in its home (/fast) would otherwise stay on.
+      ...(fast === undefined ? {} : { fastMode: fast }),
     };
     if (Object.keys(settings).length > 0) args.push("--settings", JSON.stringify(settings));
 
@@ -341,6 +358,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     // stopped at the first.
     const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
     session.toolsUrl = options.mcpUrl;
+    session.fast = fast;
     await this.start(session, options, this.command, args, env);
     return session;
   }
@@ -358,6 +376,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"), this.renewer(options.profile), null);
     // The address it was told is in its arguments: the station's may have moved since (hub.ts `toolsAt`).
     session.toolsUrl = mcpUrlOf(info.args);
+    session.fast = fastOf(info.args);
     return session;
   }
 
@@ -378,6 +397,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const renew = this.renewer(options.profile);
     const session = new ClaudeSession(this, sessionId, turn, renew ? wall.now() : null, live, events, flagOf(info.args, "--effort"), renew, null);
     session.toolsUrl = mcpUrlOf(info.args);
+    session.fast = fastOf(info.args);
     return session;
   }
 }
@@ -391,6 +411,8 @@ export class ClaudeSession extends OwnProcessSession<Turn> {
   private live: LiveFromClaude;
   /// The effort it was started with: fixed for the process (`--effort` has no switch while it runs).
   private effort: string | undefined;
+  /// The Fast it was started with (fastFor; none: an account that does not take it), fixed for the process too.
+  fast: boolean | undefined;
   /// Its calls to the station's tools not answered yet (toolsLostIn).
   private calls = new Set<string>();
   /// Where it gets a new token when it asks (RENEWED), and the one it was given last (null when not known here).
@@ -481,11 +503,11 @@ export class ClaudeSession extends OwnProcessSession<Turn> {
     this.proc.write(interruptRequest());
   }
 
-  /// Another model is set in the process (set_model, read before the next prompt written after it); another effort needs
-  /// a new one.
+  /// Another model is set in the process (set_model, read before the next prompt written after it); another effort or
+  /// Fast needs a new one.
   retune(options: OpenOptions) {
     const model = options.model ?? profileModel(options.profile);
-    if (this.turn.closed || this.turn.busy || model === undefined || options.effort !== this.effort) return false;
+    if (this.turn.closed || this.turn.busy || model === undefined || options.effort !== this.effort || fastFor(options) !== this.fast) return false;
     this.proc.write(JSON.stringify({ type: "control_request", request_id: `model-${uuid()}`, request: { subtype: "set_model", model } }));
     return true;
   }
