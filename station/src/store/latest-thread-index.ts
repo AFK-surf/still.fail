@@ -24,13 +24,15 @@ const stage = (keys: string, table = "latest_thread_changed") => `DELETE FROM ${
 // An UPDATE OR REPLACE can fire DELETE triggers for displaced rows before its own AFTER trigger. Keep its snapshot
 // apart from their staging, and advance affected snapshots after each nested reconciliation to the rank now stored.
 // An ignored write may leave a snapshot, but changes neither the source nor the order; the next same kind clears it.
-const refreshUpdating = `UPDATE latest_thread_updating AS u
+const refreshUpdating = `UPDATE latest_thread_updating
     SET (old_valid,old_has,old_last,old_joined,old_member) =
       (SELECT m.rowid IS NOT NULL AND t.id IS NOT NULL,
         ${lastDelivery("x.session", "x.thread")} IS NOT NULL,COALESCE(${lastDelivery("x.session", "x.thread")},0),m.joined_at,m.rowid
         FROM latest_thread_changed x LEFT JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
-          LEFT JOIN threads t ON t.id=x.thread WHERE x.session=u.session AND x.thread=u.thread)
-    WHERE EXISTS (SELECT 1 FROM latest_thread_changed x WHERE x.session=u.session AND x.thread=u.thread);`;
+          LEFT JOIN threads t ON t.id=x.thread
+        WHERE x.session=latest_thread_updating.session AND x.thread=latest_thread_updating.thread)
+    WHERE EXISTS (SELECT 1 FROM latest_thread_changed x
+      WHERE x.session=latest_thread_updating.session AND x.thread=latest_thread_updating.thread);`;
 const reconcile = (table = "latest_thread_changed") => `DELETE FROM latest_thread_rows WHERE (session,has_last,last_delivery,joined_at,member_rowid) IN
     (SELECT session,old_has,old_last,old_joined,old_member FROM ${table} WHERE old_valid=1);
   DELETE FROM latest_thread_members WHERE (thread,session) IN
