@@ -2364,7 +2364,7 @@ pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
 
 ///|
 /// How the view stands: -1 failed, -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
-/// damaged, 0 opening, 1 ready.
+/// damaged, 0 opening, 1 ready, 2 all file bytes delivered but still waiting for its first frame.
 /// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
 /// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
 /// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek
@@ -2424,7 +2424,7 @@ pub fn pdf_close(doc : Int) -> Unit {
 ///|
 /// What a video view says beyond its info: `what` 1 its frames' times (ms, comma between: view_control 20 asks them
 /// read), 2 how a frame grabbed stands (view_control 21 at a time in ms: "1" grabbing, "2" here, "-1" failed, "0"
-/// none); None while not known.
+/// none, view_control 23 ending one given up); None while not known.
 pub fn view_text(id : Int, what : Int) -> String? {
   current.val.view_text(id, what)
 }

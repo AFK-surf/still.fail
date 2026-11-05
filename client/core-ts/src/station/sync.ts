@@ -78,7 +78,8 @@ const JOBS = "/jobs?chats=0";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
+const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept"]);
+const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
@@ -283,6 +284,7 @@ export class StationsSync {
       this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#historyStart(address)))),
       this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#historyStart(address)))),
       this.#enqueue(address, "chats", p, Effect.andThen(this.#chats(address, ctx, unread), Effect.sync(() => this.openEvents(address, false)))),
+      ...(link?.shared ? [this.#enqueue(address, "shared", p, this.#sharedWhole(address, ctx, unread))] : []),
       ...this.#archivedChanged(address, ctx),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, JOBS)),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
@@ -1446,8 +1448,6 @@ export class StationsSync {
       case "made":
       case "chat-mark":
       case "chat-changed":
-      case "chat-shared":
-      case "chat-shared-removed":
         return this.#held(address, name, data);
       // The stream that took over could not be told all that came since the last its predecessor gave: read again.
       case "missed":
@@ -1714,8 +1714,10 @@ export class StationsSync {
   }
 
   /// What `address`'s stream told since `read` was asked, on top of what it brought (retold.ts).
-  #retell(address: string, read: number): void {
-    for (const { name, data } of this.#retold.since(read, address)) this.#held(address, name, data);
+  #retell(address: string, read: number, shared = false): void {
+    // Only a shared-list read replaces sharedRows. Replaying its events after an unrelated, slower read could put an
+    // older row back over a newer shared-list answer.
+    for (const { name, data } of this.#retold.since(read, address)) if (SHARED_RETOLD.has(name) === shared) this.#held(address, name, data);
   }
 
   /// A session's summary changed: in place among the listed (and in its detail); its detail is read again when its
@@ -1804,15 +1806,25 @@ export class StationsSync {
 
   /// The chat list as the station makes it for everyone (GET /chats?shared=1), what the viewer sees of it; the sidebar
   /// made of it.
-  #sharedWhole(address: string): Effect.Effect<void, CoreError> {
+  #sharedWhole(address: string, ctx: SpanContext | null = null, unread?: () => void, attempt = 0): Effect.Effect<void, CoreError> {
     return this.#asked((asked) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const rows = yield* this.requests.call(link.addr, "GET", "/chats?shared=1", null, { quiet: true });
-      if (!Array.isArray(rows)) return;
-      link.sharedRows = new Map(rows.flatMap((r) => (isObject(r) && typeof get(r, "id") === "string" ? [[get(r, "id") as string, r as Record<string, any>]] : [])));
+      if (!link || !this.reachable(address)) return unread?.();
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/chats?shared=1", null, { quiet: true, ctx }));
+      if (answer._tag === "Failure") {
+        unread?.();
+        if ((answer.failure.status === undefined || answer.failure.status >= 500) && attempt < READ_RETRIES) {
+          const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(
+            Effect.andThen(Effect.sync(() => void this.#enqueue(address, "shared", Priority.background, this.#sharedWhole(address, null, undefined, attempt + 1)))),
+          );
+          this.#core.runner.fork(again, link.scoped);
+        }
+        return;
+      }
+      if (!Array.isArray(answer.success)) return unread?.();
+      link.sharedRows = new Map(answer.success.flatMap((r) => (isObject(r) && typeof get(r, "id") === "string" ? [[get(r, "id") as string, r as Record<string, any>]] : [])));
+      this.#retell(address, asked, true);
       this.#made(address);
-      this.#retell(address, asked);
     }));
   }
 

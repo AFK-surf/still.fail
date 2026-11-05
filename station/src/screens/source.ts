@@ -4,6 +4,7 @@
 // sources know nothing of it.
 
 import type { Panel } from "./sim-mask.ts";
+import type { ChromeSource } from "./sim-chrome.ts";
 import type { SimDebug } from "./sim-debug.ts";
 
 export type Codec = "h265" | "h264" | "jpeg";
@@ -31,7 +32,9 @@ export type ScreenInput =
   /// A foldable simulator's hinge (`ScreenSource.poses`).
   | { t: "pose"; name: "closed" | "book" | "open" }
   // What Device Hub does of a device besides its keys and a finger
-  | { t: "device"; name: "volume_up" | "volume_down" | "memory_warning" | "rotate" };
+  | { t: "device"; name: "volume_up" | "volume_down" | "memory_warning" | "rotate" }
+  /// A button of a simulator's device, held as long as it is here (`ScreenSource.chrome`: its HID usage).
+  | { t: "button"; page: number; usage: number; down: boolean };
 
 /// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
 /// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
@@ -103,6 +106,9 @@ export interface ScreenView {
   /// changes, until the returned function: a source whose pictures leave the pointer out (a video of the desktop) says
   /// it so; one without it draws it in its pictures, or has none.
   watchCursor?(heard: (cursor: ScreenCursor) => void): () => void;
+  /// Hears how far a device's picture is turned clockwise, in quarter turns, as it changes and at once, until the returned
+  /// function: a simulator's, whose case is drawn turned with it.
+  watchTurn?(heard: (turn: number) => void): () => void;
   /// Shows a file in the machine's file manager (a file dropped into the view, put on the machine): the source's
   /// `reveal` says it can.
   reveal?(path: string): Promise<void>;
@@ -200,6 +206,8 @@ export interface ScreenSource {
   readonly debug?: SimDebug;
   /// It folds (an iPhone Duo): its input takes `pose`.
   readonly poses?: boolean;
+  /// A simulator's case and buttons as Xcode has them, each panel's (sim-chrome.ts); none: as `panels` says.
+  readonly chrome?: readonly ChromeSource[];
   /// A simulator's panels and their corners (sim-mask.ts).
   readonly panels?: readonly Panel[];
 }

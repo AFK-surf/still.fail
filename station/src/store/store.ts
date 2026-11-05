@@ -44,6 +44,8 @@ import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiv
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
+import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
+import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsReady } from "./session-up-jobs.ts";
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
@@ -375,6 +377,8 @@ export class Store {
       installSessionCounts(db);
       installSessionListIndex(db);
       installSessionBindingsIndex(db);
+      installArchiveMarkIndex(db);
+      installSessionUpJobs(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);
@@ -1118,6 +1122,7 @@ export class Store {
         this.#run(sessionBindingsReady(this.db) ? SESSION_BINDINGS_DELETE : "DELETE FROM bindings WHERE session_key = ?", key);
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
+        this.#run("DELETE FROM session_up_job_scopes WHERE session = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
         this.#deleteMarks(PIN_MARKS, key);
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
@@ -1819,55 +1824,11 @@ export class Store {
     return new Set(this.#all("SELECT DISTINCT session FROM pins").map((r) => r.session));
   }
 
-  /// The marks needed by one automatic archive pass. A large history is sought by viewer for each candidate; a small
-  /// table, many viewers, or many candidates is read once instead. Neither choice needs an index of its own.
+  /// The marks needed by one automatic archive pass. Until old marks are prepared, keep every candidate safely.
   archiveMarks(): { pinned: (session: string) => boolean; kept: (thread: number) => boolean } {
-    return {
-      pinned: this.#archiveMark("pins", "session", () => this.pinnedSessions()),
-      kept: this.#archiveMark("kept_chats", "thread", () => this.keptChats(null)),
-    };
-  }
-
-  #archiveMark<K extends string | number>(table: "pins" | "kept_chats", key: "session" | "thread", all: () => Set<K>): (key: K) => boolean {
-    let initialized = false;
-    let complete: Set<K> | null = null;
-    let viewers = "[]";
-    let viewerCount = 0;
-    let remaining = 0;
-    const answers = new Map<K, boolean>();
-    const collect = () => { complete = all(); };
-    return (value) => {
-      const answer = answers.get(value);
-      if (answer !== undefined) return answer;
-      if (!initialized) {
-        initialized = true;
-        // A rowid span bounds the number of rows, even if old rows were deleted or explicit rowids were used. Cap the
-        // budget in SQL so very large rowids never have to be represented as a JavaScript integer.
-        remaining = this.#one(`WITH bounds(span) AS (
-          SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table})
-        ) SELECT CASE WHEN COALESCE(span, 0) < 512 THEN 0
-          WHEN span >= 2097152 THEN 32768 ELSE CAST(span / 64 AS INTEGER) END AS budget FROM bounds`)!.budget;
-        if (remaining > 0) {
-          const rows = this.#all(`WITH RECURSIVE viewers(viewer, n) AS (
-            SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
-            UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.n + 1
-              FROM viewers v WHERE v.viewer IS NOT NULL AND v.n < ?1
-          ) SELECT viewer FROM viewers WHERE viewer IS NOT NULL`, remaining + 1);
-          viewerCount = rows.length;
-          if (viewerCount > remaining) remaining = 0;
-          else viewers = JSON.stringify(rows.map((row) => row.viewer));
-        }
-      }
-      if (complete === null && remaining < viewerCount) collect();
-      if (complete === null && remaining === 0) collect();
-      if (complete !== null) return complete.has(value);
-      const found = this.#one(
-        `SELECT 1 FROM ${table} WHERE viewer IN (SELECT value FROM json_each(?2)) AND ${key} = ?1 LIMIT 1`, value, viewers,
-      ) !== undefined;
-      remaining -= viewerCount;
-      answers.set(value, found);
-      return found;
-    };
+    if (!archiveMarksReady(this.db)) return { pinned: () => true, kept: () => true };
+    return { pinned: (key) => this.#one(ARCHIVE_PIN_EXISTS, key) !== undefined,
+      kept: (id) => this.#one(ARCHIVE_KEEP_EXISTS, id) !== undefined };
   }
 
   /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.
@@ -2497,8 +2458,13 @@ export class Store {
   }
 
   /// Its running jobs and services waiting to restart: what must stop when it is archived.
-  upJobIds(session: string): string[] {
-    return this.#all(UP_JOBS_OF_SESSION, session).map((r) => r.id);
+  upJobIds(session: string, old = false): string[] {
+    return this.#all(!old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION, session).map((r) => r.id);
+  }
+
+  /// Null means this old session's jobs have not been prepared yet.
+  sessionHasUpJob(session: string): boolean | null {
+    return sessionUpJobsReady(this.db, session) ? this.#one(SESSION_UP_JOB, session) !== undefined : null;
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and

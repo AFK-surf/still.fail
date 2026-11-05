@@ -24,8 +24,8 @@ export type ThingDay = { day: string; groups: ThingGroup[] };
 /// The pictures and videos a message was sent with, in the order it has them: when (`clock`, 14:05), by whom, what it says.
 export type ThingGroup = { seq: number; clock: string; by: string; words: string; items: Thing[] };
 
-const MEDIA = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|heic|mp4|m4v|webm|mov|ogv)$/i;
-const VIDEO = /\.(mp4|m4v|webm|mov|ogv)$/i;
+const MEDIA = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|heic|mp4|m4v|webm|mov|ogv|3gp|3g2)$/i;
+const VIDEO = /\.(mp4|m4v|webm|mov|ogv|3gp|3g2)$/i;
 
 /// A file the page shows among the pictures and videos (as a message draws it: a picture, a video's still).
 export const isMedia = (name: string): boolean => MEDIA.test(name);

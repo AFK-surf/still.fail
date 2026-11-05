@@ -26,7 +26,12 @@ let screen_over_blur : Double = 28.0 * 0.57735 + 0.5
 /// The stage's view of a frame: where it is fitted, and drawn (zoomed).
 fn ScreenUi::fit(self : ScreenUi) -> SRect {
   match self.fit_for {
-    Some((w, h)) => fit_in(self.box_w, self.box_h, w.to_double(), h.to_double())
+    Some((w, h)) =>
+      cased_in(
+        fit_in(self.box_w, self.box_h, w.to_double() * (1.0 + 2.0 * self.case_x), h.to_double() * (1.0 + 2.0 * self.case_y)),
+        self.case_x,
+        self.case_y,
+      )
     None => srect_zero
   }
 }
@@ -155,13 +160,21 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     _ => ()
   }
   u.fit_for = size
+  // a device's case round its picture, as much as it has at its widest on each side (what the zoom fits is the picture and that)
+  let cased = device_case(c, s, size)
+  let (case_x, case_y) = match cased {
+    Some(k) => k.around()
+    None => (0.0, 0.0)
+  }
+  u.case_x = case_x
+  u.case_y = case_y
   // the zoom's frame and stage as they are now (fitted, fitted to them)
   match size {
-    Some((w, h)) => u.zoom.natural(w.to_double(), h.to_double())
+    Some((w, h)) => u.zoom.natural(w.to_double() * (1.0 + 2.0 * case_x), h.to_double() * (1.0 + 2.0 * case_y))
     None => u.zoom.natural(0.0, 0.0)
   }
   // (a device's page keeps some of it for what the device has itself: debug_room)
-  let (room_w, room_h) = debug_room(u, size)
+  let (room_w, room_h) = debug_room(u, size, cased)
   u.zoom.boxed(dmax(0.0, u.box_w - room_w), dmax(0.0, u.box_h - room_h))
   // where a double tap's glide has got to
   u.zoom.step()
@@ -236,8 +249,11 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         |> ignore
       })
       |> ignore
-      device_round(c, s, u, shown)
-      debug_by_device(c, s, u, shown, size)
+      match cased {
+        Some(k) => if !u.zoom.zoomed() { device_cased(c, s, u, k, shown) }
+        None => device_round(c, s, u, shown)
+      }
+      debug_by_device(c, s, u, shown, size, cased)
       if over {
         // the screen gone dark in its place (its last frame showing through, blurred), what happened said there
         c.layer(fn() {

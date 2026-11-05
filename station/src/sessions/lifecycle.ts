@@ -17,10 +17,12 @@ import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } fro
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import { sessionBindingsReady } from "../store/session-bindings-index.ts";
+import { archiveMarksReady } from "../store/archive-mark-index.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
+import { FAST_RUNTIMES } from "../agents/profiles.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT } from "./internal.ts";
 
@@ -180,7 +182,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     profilePinned: pinned !== null,
     model: model ?? profile.model ?? null,
     effort,
-    fast: runtime === "codex" ? (options.fast ?? null) : null,
+    fast: FAST_RUNTIMES.includes(runtime) ? (options.fast ?? null) : null,
     context: options.context ?? null,
     workspace,
     cwd: null,
@@ -333,7 +335,8 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 /// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
-export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void): number | null {
+export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void,
+  prepareJobs?: (session: string) => void, prepareMarks?: () => void): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -354,6 +357,8 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
   if (live.length === 0 && own.length === 0) return null;
+  // An old station's reverse mark lookup may be incomplete. Never guess that a chat is unpinned or not kept.
+  if (!archiveMarksReady(store.db)) { prepareMarks?.(); return null; }
   const bindingsReady = live.length === 0 || sessionBindingsReady(store.db);
   const waitingForBindings = !bindingsReady && prepareBindings !== undefined;
   if (waitingForBindings) prepareBindings?.();
@@ -366,13 +371,23 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     if (!statsRead.has(key)) statsRead.set(key, store.workOf(key));
     return statsRead.get(key);
   };
-  const jobs = new Set(store.jobsUp().map((j) => j.sessionKey));
+  let oldJobs: Set<string> | null = null;
+  const jobsRead = new Map<string, boolean>();
+  const hasUpJob = (key: string) => {
+    if (jobsRead.has(key)) return jobsRead.get(key)!;
+    const found = store.sessionHasUpJob(key);
+    let answer = found;
+    if (answer === null && prepareJobs !== undefined) { prepareJobs(key); answer = true; }
+    if (answer === null) { oldJobs ??= new Set(store.jobsUp().map((j) => j.sessionKey)); answer = oldJobs.has(key); }
+    jobsRead.set(key, answer);
+    return answer;
+  };
   const working = (key: string) => {
     const row = store.getSession(key);
     if (!row) return true;
     const stat = statOf(key);
     const last = stat?.lastTurn ?? null;
-    return row.running || jobs.has(key) || hub.processState(key) === "running" || stat?.pending === true || (last !== null && last.endedAt === null);
+    return row.running || hub.processState(key) === "running" || stat?.pending === true || (last !== null && last.endedAt === null) || hasUpJob(key);
   };
   const busy = (key: string) => working(key) || statOf(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
@@ -407,11 +422,14 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
 
 /// Check on the usual schedule, and try again when an old chat's missing unread boundary is ready.
 export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
-  readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void>; prepareSessionBindings(signal?: AbortSignal): Promise<void> }): () => void {
+  readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void>; prepareSessionBindings(signal?: AbortSignal): Promise<void>;
+    prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void>; prepareArchiveMarks?(signal?: AbortSignal): Promise<void> }): () => void {
   const cancel = new AbortController();
   let timer: (() => void) | null = null;
   let preparing = false;
   let preparingBindings = false;
+  let preparingJobs = false;
+  let preparingMarks = false;
   const schedule = (ms: number) => {
     timer?.();
     timer = time.after(ms, check);
@@ -420,13 +438,25 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
     timer = null;
     let next: number | null = null;
     const missing = new Set<number>();
+    const missingJobs = new Set<string>();
     let missingBindings = false;
+    let missingMarks = false;
     try {
-      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; });
+      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; }, (session) => missingJobs.add(session), () => { missingMarks = true; });
     } catch (error) {
       log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
     }
     schedule(Math.min(600_000, next === null ? Infinity : next - hub.now()));
+    if (!preparingMarks && missingMarks && readers.prepareArchiveMarks) {
+      preparingMarks = true;
+      void readers.prepareArchiveMarks(cancel.signal).then(() => {
+        preparingMarks = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparingMarks = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing archive marks failed", { error: (error as Error).message });
+      });
+    }
     if (!preparing && missing.size) {
       preparing = true;
       void readers.prepareSaid([...missing], cancel.signal).then(() => {
@@ -445,6 +475,18 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
       }, (error) => {
         preparingBindings = false;
         if (!cancel.signal.aborted) log.warn("hub", "preparing bindings for auto-archiving failed", { error: (error as Error).message });
+      });
+    }
+    if (!preparingJobs && missingJobs.size) {
+      // Retry one archive pass when the requested batch is done, not one full pass per session. The regular timer
+      // still checks sessions whose preparation finished while another has a longer old history.
+      preparingJobs = true;
+      void readers.prepareSessionUpJobs([...missingJobs], cancel.signal).then(() => {
+        preparingJobs = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparingJobs = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing jobs for auto-archiving failed", { error: (error as Error).message });
       });
     }
   };

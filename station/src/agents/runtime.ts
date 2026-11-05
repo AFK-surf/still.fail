@@ -67,6 +67,8 @@ export type OpenOptions = {
   /// The most context it runs with, in tokens: it compacts on its own at it (sessions/context-cap.ts); none, the
   /// model's whole window. Taken by Claude Code and Codex alone, as they start.
   context?: number;
+  /// Fast as the session is set (none: as its profile is), for a runtime that takes it as it starts (Claude Code).
+  fast?: boolean;
   /// Appended to the runtime's own system prompt.
   instructions: string;
   /// The skills of the session's workspace (its agent home's skills/, sessions/agent-home.ts), for a runtime that

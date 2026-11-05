@@ -33,6 +33,8 @@ the same.
     hinge. HIDInjector and DuoHIDBridge run CoreSimulator's own simctl, and what the helper calls is public.
   - DTUHIDKeys.swift is ours (the wire format Meta idb's, MIT): keys and the home and lock buttons through the guest's
     `dtuhidd` from CoreSimulator 1155.4, where it drops Indigo's; HIDInjector tries it first.
+  - HIDInjector's `sendHardwareButton`: a button by its usage (DeviceKit's chrome.json), held as long as a person holds it. `station/src/screens/sim-chrome.ts` is ported from upstream's
+    TypeScript (`devicekit-chrome.ts`, `device-displays.ts`), laid out for one picture a client draws; where it differs, it says.
   - FrameCapture re-emits a still screen's picture at its 5 fps idle floor only when asked (`setReemitsIdle`): the
     helper encodes a picture only when it is new.
 

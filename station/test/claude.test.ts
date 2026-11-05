@@ -245,6 +245,42 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
+  test("Fast on an Anthropic key or a Claude subscription is Claude Code's fastMode, as the session is set else as its profile is, and needs a new process", async () => {
+    const d = driver();
+    const fastMode = async (o: OpenOptions & { dump: string }) => {
+      const { push, until } = listen();
+      const session = await d.open(o, push);
+      await session.prompt("say:hi");
+      await until(ended(1));
+      const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+      const at = started.argv.indexOf("--settings");
+      return [session, at < 0 ? undefined : JSON.parse(started.argv[at + 1]).fastMode] as const;
+    };
+    const keyed = (extra: Partial<OpenOptions> = {}, fast?: boolean) => {
+      const base = options(extra);
+      return { ...base, profile: { ...base.profile, access: { kind: "anthropic-api", key: "sk-ant-1" }, ...(fast === undefined ? {} : { fast }) } };
+    };
+    const [onProfile, profileFast] = await fastMode(keyed({}, true));
+    assert.equal(profileFast, true, "its profile's default");
+    const [standard, sessionOff] = await fastMode(keyed({ fast: false }, true));
+    assert.equal(sessionOff, false, "the session's own over its profile's, said so a /fast in its home does not stay on");
+    const [, off] = await fastMode(keyed());
+    assert.equal(off, false);
+    // A Claude subscription's goes to Claude Code too: it runs Fast while the account's usage credits are on.
+    const sub = options({ fast: true });
+    const [onSubscription, subscriptionFast] = await fastMode({ ...sub, profile: { ...sub.profile, access: { kind: "subscription" } } });
+    assert.equal(subscriptionFast, true);
+    const [notKeyed, other] = await fastMode(options({ fast: true }));
+    assert.equal(other, undefined, "not an account that takes it");
+    // Another Fast is not taken in place; the same is, with another model.
+    const o = keyed({ fast: false }, true);
+    assert.equal(standard.retune?.({ ...o, model: "m2" }), true);
+    assert.equal(standard.retune?.({ ...o, model: "m2", fast: true }), false);
+    assert.equal(standard.retune?.({ ...o, model: "m2", fast: undefined }), false, "back to its profile's, which is on");
+    assert.equal(notKeyed.retune?.({ ...options({ fast: false }), model: "m2" }), true);
+    await Promise.all([onProfile, standard, onSubscription, notKeyed].map((s) => s.dispose()));
+  });
+
   test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {
     const d = driver();
     const base = options();

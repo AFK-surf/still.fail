@@ -119,7 +119,8 @@ fn chat_talk_node(
   })
   talk.box(fn(l) {
     l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
+    let list = @sfpages.chat_list_node(l, src, r, view, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w),
+      foot_gap=list_foot_gap, composer_across=fn() { geometry().0 })
     latest.val = list.to_latest
     landing.val = list.landing_of
   })

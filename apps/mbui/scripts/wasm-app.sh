@@ -76,8 +76,17 @@ if [ "${PLATFORM:-mac}" = android ]; then
   wasmtime_cli
   case "${ABI:-arm64-v8a}" in x86_64) target=x86_64-linux-android ;; *) target=aarch64-linux-android ;; esac
   t0=$SECONDS
-  # (its traps checked in its code, not by a signal: the Android shell's, wasm_shell.c)
-  "$WT_CLI" compile $WT_SAME -O signals-based-traps=n --target $target "$program" -o "$O/app-android.cwasm"
+  # (how its traps are taken, MBUI_WASM_TRAPS: "signals", a phone's development build, as ever (a trap ends the process,
+  # nothing said); "checked", in its code, each said with its stack (an emulator's, hunting a crash: its CPU +15% to
+  # +62%, #4008). Said beside it, app.traps, for the shell to take the same: wasm_shell.c)
+  traps=${MBUI_WASM_TRAPS:-signals}
+  case $traps in
+    signals) sbt=y ;;
+    checked) sbt=n ;;
+    *) echo "wasm-app: MBUI_WASM_TRAPS is signals or checked, not $traps" >&2; exit 2 ;;
+  esac
+  "$WT_CLI" compile $WT_SAME -O signals-based-traps=$sbt --target $target "$program" -o "$O/app-android.cwasm"
+  printf '%s' "$traps" > "$O/app-android.traps"
   echo "wasm-app: compiled for $target in $((SECONDS - t0)) s"
   if [ "${1:-build}" = run ]; then
     shift
@@ -87,6 +96,7 @@ if [ "${PLATFORM:-mac}" = android ]; then
       bash "$D/android.sh" install
       echo "$sum" > "$O/android.installed"
     fi
+    bash "$D/android.sh" put "$O/app-android.traps" app.traps
     bash "$D/android.sh" put "$O/app-android.cwasm" app.cwasm
     INSTALL=0 bash "$D/android.sh" run "$@"
   fi

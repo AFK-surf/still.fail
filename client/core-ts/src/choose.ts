@@ -67,6 +67,10 @@ function optionOf(options: J[], m: string | null): J {
   return options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
 }
 
+/// The runtimes a chat can be set to Fast on (Codex on an OpenAI subscription, Claude Code on an Anthropic key: the
+/// station's takesFast); the accounts that take it say so with their overview's `fast`.
+const fastRuntime = (runtime: unknown): boolean => runtime === "codex" || runtime === "claude";
+
 /// A choice as the station has it now.
 export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; efforts: J[]; contexts: number[]; accounts: J[] };
 
@@ -84,7 +88,7 @@ export function resolve(options: J[], choice: J): Resolved {
   if (Array.isArray(levels)) efforts = levels;
   const e = text(get(choice, "effort"));
   const effort = e !== null && efforts.some((x) => x === e) ? e : null;
-  const fast = typeof get(choice, "fast") === "boolean" && runtime === "codex" ? choice.fast : null;
+  const fast = typeof get(choice, "fast") === "boolean" && fastRuntime(runtime) ? choice.fast : null;
   const contexts = at("contexts").filter((n): n is number => typeof n === "number");
   const c = contextOf(get(choice, "context"));
   const context = c !== null && contexts.includes(c) ? c : null;
@@ -95,7 +99,7 @@ function picked(r: Resolved): J {
   return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, context: r.context, profile: r.profile };
 }
 
-const comboFast = (v: J): boolean | null => get(v, "runtime") === "codex" && typeof get(v, "fast") === "boolean" ? v.fast : null;
+const comboFast = (v: J): boolean | null => fastRuntime(get(v, "runtime")) && typeof get(v, "fast") === "boolean" ? v.fast : null;
 
 /// Usage stays bounded on the device; ties favour the most recently started chat.
 export function recordCombo(history: J[], choice: J, now: number): J[] {
@@ -621,7 +625,7 @@ export class Choose implements Owner {
     const nextModel = option !== undefined && (valueOption === undefined || valueOption.model !== option.model) ? option.model : (value.model ?? null);
     const overview = this.#env.store.get({ topic: "overview", station });
     const fastAvailable =
-      onName === "codex" &&
+      fastRuntime(onName) &&
       (o.kind === "new" || o.kind === "session") &&
       arr(get(overview, "profiles")).some((p) => typeof p.fast === "boolean" && (profile === null || p.id === profile) && accounts.some((a) => a.id === p.id));
     // How fast it runs where none is picked: its account's own (the one drafted, else the one it is on), said as what
@@ -629,7 +633,7 @@ export class Choose implements Owner {
     const planFastOf = profile ?? (typeof get(current, "id") === "string" ? current.id : null);
     const fastPlan = arr(get(overview, "profiles")).some((p) => planFastOf !== null && p.id === planFastOf && p.fast === true);
     const fastRaw = "fast" in draft ? draft.fast : get(value, "fast");
-    const fast = typeof fastRaw === "boolean" && onName === "codex" ? fastRaw : null;
+    const fast = typeof fastRaw === "boolean" && fastRuntime(onName) ? fastRaw : null;
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
     const next = { model: nextModel, runtime: on ?? null, effort, profile, fast, context };
     const changed = FIELDS.some((f) => !equal((next as J)[f], value[f] ?? null));
@@ -638,7 +642,7 @@ export class Choose implements Owner {
     if (kept !== null && valueOption !== undefined) shown = arr(get(get(valueOption, "accounts"), typeof value.runtime === "string" ? value.runtime : "")).find((a) => a.id === kept) ?? null;
     if (shown === null) shown = current;
     const effectiveFast =
-      value.runtime === "codex" &&
+      fastRuntime(value.runtime) &&
       (o.kind === "new" || o.kind === "session") &&
       (typeof value.fast === "boolean"
         ? value.fast

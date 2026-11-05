@@ -108,6 +108,9 @@ priv struct Moving {
   /// grown for its cause: what it holds cut to as tall as it shows (its words a line more); false where what comes
   /// into it grows with it of itself, drawn whole (`grown_shown`)
   mut cut : Bool
+  /// drawn whole while what moves with it goes over it (makes_room cuts it nowhere): a button on its way beside words
+  /// moving past it, the ＋ and send of a composer as its field goes up over them
+  mut whole : Bool
   mut spec : Spec
   mut by : String
   mut drive : Double
@@ -494,6 +497,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     key: 0,
     flip: false,
     cut: true,
+    whole: false,
     spec: row_spring,
     by: "",
     drive: -1.0,
@@ -559,7 +563,9 @@ fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
 /// own going on as it was: no difference found between frames moves anything (docs/motion.md of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
 /// `drive` (0 → 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by
 /// where it shows in the list's view. `cut`: grown for its cause, what it holds is cut to as tall as it shows; false
-/// where what is new in it grows with its room of itself (`grown_shown`): drawn whole, never cut through.
+/// where what is new in it grows with its room of itself (`grown_shown`): drawn whole, never cut through. `whole`: not
+/// cut back for another of its list moving over it (makes_room), drawn whole on its way (a composer's ＋ and send, its
+/// field going up past them as it opens: what is over them there is the field's own room, not words).
 pub fn layout(
   c : @ui.Ctx,
   i : Int,
@@ -572,12 +578,14 @@ pub fn layout(
   screen? : Bool = false,
   cut? : Bool = true,
   from? : (Double, Double, Double, Double),
+  whole? : Bool = false,
 ) -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
   e.flip = true
   e.cut = cut
+  e.whole = whole
   e.screen = screen
   e.spec = spec
   e.from = from
@@ -1524,7 +1532,7 @@ fn makes_room(c : @ui.Ctx) -> Unit {
     return
   }
   for e in mo.entries {
-    if e.key == 0 || e.reshape {
+    if e.key == 0 || e.reshape || e.whole {
       continue
     }
     guard mo.recs.get(e.key) is Some(r) && r.list != 0 else { continue }

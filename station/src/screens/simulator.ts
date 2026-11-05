@@ -17,6 +17,7 @@ import { HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
 import { SimDebug } from "./sim-debug.ts";
 import { SimInput } from "./sim-input.ts";
+import { type ChromeSource, chromeOf, displaysOf } from "./sim-chrome.ts";
 import { type Panel, panelOf } from "./sim-mask.ts";
 import type { Codec, ScreenSource, ScreenView, Screens, ViewOptions } from "./source.ts";
 
@@ -40,7 +41,8 @@ export function bootedOf(listed: unknown): Booted[] {
 
 /// "com.apple.CoreSimulator.SimRuntime.iOS-26-2" → "iOS 26.2".
 export function runtimeName(id: string): string {
-  const m = /SimRuntime\.([A-Za-z]+)-([\d-]+)$/.exec(id);
+  // (one made for one device has that after it: iOS-27-2-iPhone19-4)
+  const m = /SimRuntime\.([A-Za-z]+)-(\d+(?:-\d+)*)(?:-[A-Za-z].*)?$/.exec(id);
   if (m === null) return id;
   const os = m[1] === "xrOS" ? "visionOS" : m[1]!;
   return `${os} ${m[2]!.replaceAll("-", ".")}`;
@@ -65,6 +67,9 @@ const run: Run = (file, args) =>
     execFile(file, args, { timeout: 60_000, maxBuffer: 16 << 20 }, (error, out, err) => (error ? reject(new Error(`${file} ${args.join(" ")}: ${error.signal ?? error.code ?? ""} ${String(err).trim()}`.slice(0, 500))) : resolve(out))),
   );
 
+/// A device type as its bundle says it: `#typed`.
+type Typed = { size: { width: number; height: number }; panels: Panel[]; chrome: ChromeSource[] };
+
 export type SimulatorsOptions = {
   screens: Screens;
   /// still.fail Helper; none: no simulator is listed.
@@ -81,7 +86,7 @@ export class Simulators {
   readonly #devices: string;
   readonly #listed = new Map<string, { source: Simulator; remove: () => void }>();
   /// A device type's screen and panels (`#typed`), by its identifier.
-  readonly #types = new Map<string, { size: { width: number; height: number }; panels: Panel[] }>();
+  readonly #types = new Map<string, Typed>();
   readonly #watchers = new Map<string, FSWatcher>();
   #looking: Promise<void> | null = null;
   #again = false;
@@ -140,29 +145,34 @@ export class Simulators {
     }
     for (const b of booted) {
       if (this.#listed.has(b.udid)) continue;
-      const { size, panels } = await this.#typed(b.type);
-      const source = new Simulator(b, this.#o.helper!, size, this.#run, panels);
+      const { size, panels, chrome } = await this.#typed(b.type);
+      const source = new Simulator(b, this.#o.helper!, size, this.#run, panels, chrome);
       if (this.#closed || this.#listed.has(b.udid)) continue;
       this.#listed.set(b.udid, { source, remove: this.#o.screens.add(source) });
     }
     this.#follow();
   }
 
-  /// A device type's screen in pixels (its capabilities.plist; 0×0 when it cannot be read) and panels (as its masks say
-  /// them; none: no corners drawn), read from its bundle once.
-  async #typed(type: string): Promise<{ size: { width: number; height: number }; panels: Panel[] }> {
+  /// A device type's screen in pixels (its capabilities.plist; 0×0 when it cannot be read), panels (as its masks say
+  /// them; none: no corners drawn) and case (as Xcode has it: sim-chrome.ts), read from its bundle once.
+  async #typed(type: string): Promise<Typed> {
     const known = this.#types.get(type);
     if (known) return known;
-    const typed = { size: { width: 0, height: 0 }, panels: [] as Panel[] };
+    const typed: Typed = { size: { width: 0, height: 0 }, panels: [], chrome: [] };
     try {
       const types = JSON.parse(await this.#run(SIMCTL, ["list", "-j", "devicetypes"])).devicetypes as { identifier?: string; bundlePath?: string }[];
       const bundle = types.find((t) => t.identifier === type)?.bundlePath;
       if (bundle) {
-        typed.size = screenOf(JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")])));
+        const capabilities = JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")]));
+        typed.size = screenOf(capabilities);
         const dir = join(bundle, "Contents/Resources");
         typed.panels = readdirSync(dir)
           .filter((f) => f.endsWith(".pdf") && !f.startsWith("sensor_bar"))
           .flatMap((f) => panelOf(readFileSync(join(dir, f))) ?? []);
+        const profile = JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(dir, "profile.plist")]));
+        const sensor = typeof profile?.sensorBarImage === "string" ? profile.sensorBarImage : null;
+        const cases = await Promise.all(displaysOf(capabilities, profile).map((d) => chromeOf(d, dir, sensor)));
+        typed.chrome = cases.flatMap((c) => c ?? []);
       }
     } catch {}
     this.#types.set(type, typed);
@@ -231,16 +241,18 @@ export class Simulator implements ScreenSource {
   readonly debug: SimDebug;
   readonly poses: boolean;
   readonly panels: Panel[];
+  readonly chrome: ChromeSource[];
   readonly #device: Booted;
   readonly #helper: HelperApp;
   #size: { width: number; height: number };
   readonly #views = new Set<HelperView>();
 
-  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }, simctl: Run = run, panels: Panel[] = []) {
+  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }, simctl: Run = run, panels: Panel[] = [], chrome: ChromeSource[] = []) {
     this.id = `simulator:${device.udid}`;
     this.debug = new SimDebug(SIMCTL, device.udid, simctl, () => this.#picture());
     this.poses = device.type.endsWith(".iPhone-Duo");
     this.panels = panels;
+    this.chrome = chrome;
     this.#device = device;
     this.#helper = helper;
     this.#size = size;

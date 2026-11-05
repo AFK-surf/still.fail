@@ -56,7 +56,7 @@ while :; do
 done
 
 group_id() {
-  asc_get "apps/$APP/betaGroups?filter[name]=$(jq -rn --arg n "$1" '$n | @uri')&limit=2" > "$T/group.json"
+  asc_get "betaGroups?filter[app]=$APP&filter[name]=$(jq -rn --arg n "$1" '$n | @uri')&limit=2" > "$T/group.json"
   jq -e --argjson internal "$2" '(.data | length) == 1 and .data[0].attributes.isInternalGroup == $internal' "$T/group.json" >/dev/null ||
     fail "no single $([ "$2" = true ] && echo internal || echo external) group named \"$1\""
   jq -r '.data[0].id' "$T/group.json"
