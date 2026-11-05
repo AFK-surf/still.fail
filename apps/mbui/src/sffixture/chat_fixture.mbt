@@ -468,8 +468,6 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_none_shown(rich_chat(f.older))
           } else if f.mode == "chat-cc" {
             with_cc(rich_chat(f.older))
-          } else if f.mode == "chat-cc-long" {
-            with_cc_long(rich_chat(f.older))
           } else if f.mode == "chat-need" {
             with_need(rich_chat(f.older))
           } else if f.mode == "chat-working" {
@@ -1995,22 +1993,6 @@ pub fn with_none_shown(v : Json) -> Json {
       o["more"] = Json::boolean(true)
       // (its first entry the page's, a letter: paged back by it, as the core's cursor, views.ts firstEntry)
       o["firstEntry"] = Json::number(201.0)
-      Json::object(o)
-    }
-    _ => v
-  }
-}
-
-///|
-/// chat-cc-long: chat-cc's threads both ticked, their names long (what send's row has not the room for on a phone).
-pub fn with_cc_long(v : Json) -> Json {
-  match v {
-    Object(m) => {
-      let o = m.copy()
-      o["cc"] = [
-        { "thread": 21, "place": "#still-fail-release-notes", "via": "slack", "on": true },
-        { "thread": 22, "place": "产品讨论 · 发布清单", "via": "feishu", "on": true },
-      ]
       Json::object(o)
     }
     _ => v
