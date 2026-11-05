@@ -570,7 +570,9 @@ fn swipe_node(
             // sight); refused, it comes back from there
             rows.swiped_off[key] = true
             off.go_by(sw, -w, @motion.move(), velocity=d.vx * 1000.0)
-            sw.at_moment(off.end(), fn() {
+            // (archived as it is off: as its way there ends, or now, where the finger took it all the way already and
+            // it goes no further (no way said: its end none of this one's))
+            sw.at_moment(dmax(off.end(), sw.cause_at()), fn() {
               archive_row(src, i, failed=fn() {
                 rows.swiped_off.remove(key)
                 off.go_from(sw, -w, 0.0, @motion.move_spring)
