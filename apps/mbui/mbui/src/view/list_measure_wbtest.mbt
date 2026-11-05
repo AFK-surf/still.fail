@@ -1,4 +1,29 @@
 ///|
+test "row heights discovered inside an input batch reach their slots before presentation" {
+  let height = @signals.signal(40.0)
+  let rows : Map[Int, View] = {}
+  let tree = Tree::new(fn(root) {
+    root.box(fn(list) {
+      list.width(Is(Some(300.0))).height(Is(Some(400.0)))
+      .scrolls_window(Scroll::list(), fn() { [0, 1] }, fn(row, key) {
+        rows[key] = row
+        row.height(By(fn() { Some(height.get()) })) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  defer { tree.dispose() }
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  tree.work.computes = 0
+  @signals.start_batch()
+  height.set(80.0)
+  tree.bring_to(10.0)
+  assert_eq(rows[1].rect(), (0.0, 80.0, 300.0, 80.0))
+  assert_false(tree.layout_pending())
+  assert_eq(tree.work.computes, 1)
+  @signals.end_batch()
+}
+
+///|
 test "filling a list measures its rows without placing the whole tree between them" {
   for count in [30, 3000] {
     let keys = Array::makei(count, fn(i) { i })

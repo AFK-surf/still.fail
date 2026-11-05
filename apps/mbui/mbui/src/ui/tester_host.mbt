@@ -28,6 +28,9 @@ pub(all) struct HostFrame {
   /// nodes laid out anew in it (the old frame's and the window's tree's) and the old frame's builds
   laid : Int
   passes : Int
+  /// whole-tree layout computations in this frame, and whether layout was left for a later frame
+  computes : Int
+  layout_pending : Bool
   /// what was done between the frame before and this one, outside any frame (the events taken then: Tree::event_said,
   /// at_cause, settle_now; what a host's PERF and a frame's counts do not see): the window's tree's nodes made,
   /// bindings run, structure bindings run (show, pick, each), nodes laid out, settles; and each count a test said
@@ -55,6 +58,10 @@ let host_parts_last : Ref[(Array[(Double, Double, Double, Double)], Double)] = R
 /// The tree's nodes laid out so far, as the last frame recorded left them.
 // kept across runs: written by each frame recorded
 let host_tree_laid : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: sampled as each recorded frame begins
+let host_tree_computes : Ref[Int] = Ref(0)
 
 ///|
 /// The hash of the frame recorded last.
@@ -100,7 +107,8 @@ fn host_work_now() -> Array[(String, Int)] {
   let out : Array[(String, Int)] = match view_tree() {
     Some(t) => {
       let w = t.work()
-      [("made", w.made), ("bound", w.bound), ("structure", w.structure), ("laid", w.laid), ("settles", w.settles)]
+      [("made", w.made), ("bound", w.bound), ("structure", w.structure), ("laid", w.laid), ("settles", w.settles),
+        ("computes", w.computes)]
     }
     None => []
   }
@@ -127,6 +135,10 @@ fn host_frame_begin() -> Unit {
   host_tree_laid.val = match view_tree() {
     Some(t) => t.work().laid
     None => host_tree_laid.val
+  }
+  host_tree_computes.val = match view_tree() {
+    Some(t) => t.work().computes
+    None => 0
   }
 }
 
@@ -169,6 +181,10 @@ fn host_frame_drawn(at : Double) -> Unit {
     Some(t) => t.work().laid
     None => 0
   }
+  let (tree_computes, layout_pending) = match view_tree() {
+    Some(t) => (t.work().computes, t.layout_pending())
+    None => (0, false)
+  }
   let hash = drawn_hash()
   let (parts, glass) = host_parts_last.val
   let c = g()
@@ -194,6 +210,8 @@ fn host_frame_drawn(at : Double) -> Unit {
     glass,
     laid: p.laid + tree_laid - host_tree_laid.val,
     passes: p.passes,
+    computes: tree_computes - host_tree_computes.val,
+    layout_pending,
     between: host_between_now.val,
   })
   host_between_now.val = []

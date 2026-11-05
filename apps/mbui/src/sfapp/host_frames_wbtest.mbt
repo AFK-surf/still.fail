@@ -202,7 +202,26 @@ fn host_said(f : @ui.HostFrame) -> String {
     "\{f.damage}"
   }
   "at \{f.at}: " + (if f.old_built { "the old frame built whole (\{f.why}), " } else { "" }) +
-  "\{f.parts_built} parts built, drew again \{drawn}, glass copied \{f.glass}, laid \{f.laid} in \{f.passes} passes"
+  "\{f.parts_built} parts built, drew again \{drawn}, glass copied \{f.glass}, laid \{f.laid} in \{f.passes} passes, " +
+  "\{f.computes} root layouts, pending \{f.layout_pending}"
+}
+
+///|
+test "every host frame of a chat computes the root at most once and leaves no layout pending" {
+  let out : Array[String] = []
+  for w in [390.0, 1280.0] {
+    for mode in ["chat-long", "chat-long-30"] {
+      let (steps, _) = host_walk_of(mode, w)
+      for s in steps {
+        for f in s.frames {
+          if f.computes > 1 || f.layout_pending {
+            out.push("\{mode}, \{s.what} at \{w}: " + host_said(f))
+          }
+        }
+      }
+    }
+  }
+  assert_eq(out, [])
 }
 
 ///|

@@ -23,7 +23,7 @@ fn link_peeks_node(
   guard @signals.untracked(runs).iter().any(fn(r) { r.link != "" }) else { return }
   // (the link the pointer is on, by its first run's way: its href and words; "" none)
   let on_link = fn() -> (String, String) {
-    let k = links.pointed.get()
+    let k = links.pointed_on_input.get()
     let rs = runs()
     guard k >= 0 && k < rs.length() else { return ("", "") }
     let href = rs[k].link
@@ -39,12 +39,14 @@ fn link_peeks_node(
   let open : @signals.Signal[(String, String, (Double, Double, Double, Double))?] = @signals.signal(None, same=fn(a, b) {
     a == b
   })
-  let card_on : Ref[@view.View?] = Ref(None)
+  let card_on : @signals.Signal[@view.View?] = @signals.signal(None,
+    same=fn(a, b) { a.map(fn(v) { v.id() }) == b.map(fn(v) { v.id() }) })
   let due : Ref[() -> Unit] = Ref(fn() {  })
   let on_it = fn() {
+    let over_card = card_on.get().map(pointer_over).unwrap_or(false)
     let (href, _) = on_link()
     @sf.pointer_rests() &&
-    (href != "" || card_on.val.map(pointer_over).unwrap_or(false))
+    (href != "" || over_card)
   }
   // (rested on a link, its card; onto another, that one's; left, both the link and the card, closed: each from the
   // moment the pointer came or went)
@@ -58,7 +60,7 @@ fn link_peeks_node(
         _ => ()
       }
       let words = @signals.untracked(on_link).1
-      let at = @signals.untracked(fn() { links.pointed_at.get() })
+      let at = @signals.untracked(fn() { links.pointed_at_on_input.get() })
       // (read as the pointer comes onto it: the card's words there as it opens)
       warm_peek(src, here, href, @signals.untracked(agent), @signals.untracked(chats), @signals.untracked(link_to))
       match at {
@@ -87,7 +89,7 @@ fn link_peeks_node(
     l.box(fn(card) {
       let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       card.owns(fn() {
-        card_on.val = None
+        card_on.set(None)
         @sfbase.let_go(src, scope)
       })
       |> ignore
@@ -119,7 +121,7 @@ fn link_peeks_node(
       }, natural=true, fits=(if tile { link_peek_tile_most } else { link_peek_card_w }, card_w))
       // (as wide as the old frame lays what it holds out: it takes the pointer there, its own lighting by it)
       .width(By(fn() { card_w.get() }))
-      |> fn(island) { card_on.val = Some(island) }
+      |> fn(island) { card_on.set(Some(island)) }
     })
     .lives_with(anchor)
     |> ignore

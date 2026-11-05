@@ -7,6 +7,10 @@
 ///|
 fn Tree::layout_inputs(self : Tree) -> Unit {
   while true {
+    // A measurement may mark a slot while its input batch is still open. Its
+    // notification has not queued the binding yet; pull that new height before
+    // measuring again or placing the tree, just as bring_to pulls input writes.
+    self.pull()
     self.bindings_applied()
     self.heights_resolved()
     if self.list_measures.is_empty() { break }
@@ -27,7 +31,7 @@ fn Tree::layout_inputs(self : Tree) -> Unit {
       })
     })
     self.measuring_lists = false
-    if !changed && self.bindings_due.is_empty() && self.heights_due.is_empty() { break }
+    if !changed && self.bindings_due.is_empty() && self.pulls_marked.is_empty() && self.heights_due.is_empty() { break }
   }
 }
 

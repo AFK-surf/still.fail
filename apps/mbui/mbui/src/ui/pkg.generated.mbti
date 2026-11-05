@@ -1695,6 +1695,8 @@ pub(all) struct HostFrame {
   glass : Double
   laid : Int32
   passes : Int32
+  computes : Int32
+  layout_pending : Bool
   between : Array[(String, Int32)]
 }
 
@@ -2291,6 +2293,8 @@ pub(all) enum RowSize {
 pub struct RunsLinks {
   pointed : @signals.Signal[Int32]
   pointed_at : @signals.Signal[(Double, Double, Double, Double)?]
+  pointed_on_input : @signals.Signal[Int32]
+  pointed_at_on_input : @signals.Signal[(Double, Double, Double, Double)?]
 }
 
 #derive(Eq, Show, @debug.Debug)

@@ -1544,6 +1544,12 @@ pub fn Tree::work(self : Tree) -> Work {
 }
 
 ///|
+/// Whether layout work is still pending after a frame (diagnostics only).
+pub fn Tree::layout_pending(self : Tree) -> Bool {
+  self.layout_due || !self.heights_due.is_empty()
+}
+
+///|
 /// How many nodes live.
 pub fn Tree::alive(self : Tree) -> Int {
   // (let go: none, its root kept to answer none)

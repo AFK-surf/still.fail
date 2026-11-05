@@ -263,6 +263,18 @@ fn two_links(dx : @signals.Signal[Double], size : @signals.Signal[Double]) -> (T
 }
 
 ///|
+test "link cards follow the input hit while link paint follows movement under a still pointer" {
+  let dx = @signals.signal(0.0)
+  let (t, _, links) = two_links(dx, @signals.signal(15.0))
+  t.move(80.0, 10.0)
+  assert_eq((links.pointed.get(), links.pointed_on_input.get()), (2, 2))
+  view_app.val.unwrap().event(t.time(), fn() { dx.set(60.0) })
+  assert_eq((links.pointed.get(), links.pointed_on_input.get()), (0, 2))
+  t.move(81.0, 10.0)
+  assert_eq((links.pointed.get(), links.pointed_on_input.get()), (0, 0))
+}
+
+///|
 test "a node's link under a pointer that stays where it is, what holds the node moved under it (the node as big): the other link of the same node pointed at now" {
   let dx = @signals.signal(0.0)
   let (t, _, links) = two_links(dx, @signals.signal(15.0))

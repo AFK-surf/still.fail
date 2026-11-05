@@ -12,6 +12,9 @@ pub struct RunsLinks {
   pointed : @signals.Signal[Int]
   /// where the piece of line the pointer is on is drawn (in the window: x, y, w, h), as it moves onto one; None off them
   pointed_at : @signals.Signal[(Double, Double, Double, Double)?]
+  /// The same hit sampled at pointer inputs, for cards and other structural responses.
+  pointed_on_input : @signals.Signal[Int]
+  pointed_at_on_input : @signals.Signal[(Double, Double, Double, Double)?]
 }
 
 ///|
@@ -29,17 +32,19 @@ pub fn runs_links(
   let pointed = @signals.signal(-1)
   let pointed_at : @signals.Signal[(Double, Double, Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
   let held = @signals.signal(-1)
+  let pointed_on_input = @signals.signal(-1)
+  let pointed_at_on_input : @signals.Signal[(Double, Double, Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
   v.runs_pressed(By(fn() { held.get() })) |> ignore
   // (where its links' pieces are as it is laid out now, in its own terms: its words and how they are set as it holds
   // them now (View::runs_set_now: what it is laid out and drawn from, not what the frame before drew), laid out as wide
   // as it is in them as of the moment (View::laid_size, laying out what was said before it), not as big as it is drawn)
-  let pieces = fn() -> Array[(Int, Double, Double, Double, Double)] {
-    let w = v.laid_size().0
+  let pieces_at = fn(w : Double) -> Array[(Int, Double, Double, Double, Double)] {
     let (rs, look, set) = v.runs_set_now()
     guard !rs.is_empty() else { return [] }
     let (r, lay, _) = view_runs_laid(rs, look, set, w)
     rich_link_pieces(r, lay, 0.0, 0.0, center_in=if v.words_centered_now() { w } else { -1.0 })
   }
+  let pieces = fn() { pieces_at(v.laid_size().0) }
   let piece_at = fn(x : Double, y : Double) -> (Int, Double, Double, Double, Double)? {
     pieces().iter().find_first(fn(p) { x >= p.1 && x < p.3 && y >= p.2 && y < p.4 })
   }
@@ -52,14 +57,14 @@ pub fn runs_links(
     }
   }
   // (the piece in the window: where it is drawn, as big as it is drawn there)
-  let in_window = fn(p : (Int, Double, Double, Double, Double)) {
+  let window_at = fn(p : (Int, Double, Double, Double, Double), lw : Double) {
     let (x, y, w, _) = v.rect()
-    let lw = v.laid_size().0
     let s = if lw > 0.0 { w / lw } else { 1.0 }
     (x + p.1 * s, y + p.2 * s, (p.3 - p.1) * s, (p.4 - p.2) * s)
   }
+  let in_window = fn(p : (Int, Double, Double, Double, Double)) { window_at(p, v.laid_size().0) }
   // (a finger taken where its links' pieces are alone)
-  v.takes(fn(_, _, _) { pieces().map(fn(p) { (p.1, p.2, p.3, p.4) }) }) |> ignore
+  v.takes(fn(w, _, _) { pieces_at(w).map(fn(p) { (p.1, p.2, p.3, p.4) }) }) |> ignore
   // (held: no tap of it as it is let go)
   let was_held = Ref(false)
   let told = fn(d : @view.Drag, f : (Int, (Double, Double, Double, Double)) -> Unit) {
@@ -132,20 +137,30 @@ pub fn runs_links(
       |> ignore
     None => ()
   }
-  // (the pointer onto a link and off it, as it moves)
-  let point = fn() {
-    let (k, at) = match v.pointer_here() {
+  // Both kinds of hover use geometry already brought to their moment. Reading
+  // a presentation hit must never pull layout bindings back into its reply.
+  let hit = fn(here : (Double, Double)?) {
+    let width = v.placed_window_now().2
+    match here {
       Some((x, y)) =>
-        match piece_at(x, y) {
-          Some(p) => (p.0, Some(in_window(p)))
+        match pieces_at(width).iter().find_first(fn(p) { x >= p.1 && x < p.3 && y >= p.2 && y < p.4 }) {
+          Some(p) => (p.0, Some(window_at(p, width)))
           None => (-1, None)
         }
       None => (-1, None)
     }
+  }
+  let point = fn() {
+    let (k, at) = hit(v.pointer_here())
     pointed.set(k)
     pointed_at.set(at)
   }
   v.on_pointer_moved(point) |> ignore
+  v.reacts(fn() { (v.pointed_on_input(), v.pointer_here_on_input()) }, fn(now) {
+    let (k, at) = hit(if now.0 { now.1 } else { None })
+    pointed_on_input.set(k)
+    pointed_at_on_input.set(at)
+  })
   // (the pointer's shape over it: the hand over a link, the I-beam over the rest of its words where they are picked with
   // the pointer (words_picked), as an old view's paragraph's (Ctx::rich))
   v.cursor(By(fn() {
@@ -205,5 +220,5 @@ pub fn runs_links(
       )
     None => ()
   }
-  { pointed, pointed_at }
+  { pointed, pointed_at, pointed_on_input, pointed_at_on_input }
 }
