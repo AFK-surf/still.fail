@@ -10,7 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { type Entry, apply as applyLock, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { routes as requestRoutes } from "../src/api/routes/vault-requests.ts";
 import { type BoxCert, type Deny, type Grant, type Item, type Request, type Sig, type Vault, TAG, encryptWith, grantContext, itemContext, keyContext, newBoxPair, openSeal, saveContext, seal, signedBytes } from "../src/vault/crypto.ts";
 import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
@@ -115,6 +116,21 @@ const decided = async (h: { notified: [string, string][] }, asked: Promise<strin
 };
 const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
 const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
+
+test("a pending-request read refused if its viewer is removed while old requests are prepared", async () => {
+  const w = world();
+  let current = w.state;
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const secrets = { preparePending: () => preparing, pending: () => [{ id: "private" }] };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never);
+  const entry = { v: 1 as const, ws: WS, seq: current.seq + 1, prev: current.head, at: 1001, kind: "member.remove", body: { sub: "bob" } };
+  current = applyLock(current, { ...entry, sig: { key: w.alice.signer.id, alg: "Ed25519", sig: w.alice.signer.sign(lockBytes(entryHash(entry as Entry))) } }, 1001);
+  ready();
+  assert.equal((await answer).status, 403);
+});
 
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
   const h = harness(() => null);
