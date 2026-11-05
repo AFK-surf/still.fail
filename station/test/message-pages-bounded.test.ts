@@ -79,3 +79,36 @@ test("message pages seek both message indexes and fetch only their candidates", 
     assert.match(plan, /SEARCH m USING INDEX sqlite_autoindex_entries_1 \(thread=\? AND n=\?\)/);
   } finally { store.close(); }
 });
+
+test("message pages take only a page from the two ordered message indexes", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const short = store.openThread("ember", "EMBER", "short-page", null, null).id;
+    const long = store.openThread("ember", "EMBER", "long-page", null, null).id;
+    const insert = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter)
+      VALUES(?,?,'message','person','viewer','words',?,?)`);
+    const letter = JSON.stringify({ way: "in", title: "old", link: null });
+    db.exec("BEGIN");
+    for (let n = 1; n <= 400; n++) {
+      if (n <= 40) insert.run(short, n, n, n % 9 === 0 ? letter : null);
+      insert.run(long, n, n, n % 9 === 0 ? letter : null);
+    }
+    db.exec("COMMIT");
+    let ordinary = 0, letters = 0;
+    db.function("count_page_message", (n) => { ordinary++; return 1; });
+    db.function("count_page_letter", (n) => { letters++; return 1; });
+    const counted = MESSAGES_BEFORE.replace("AND letter IS NULL\n", "AND letter IS NULL AND count_page_message(n)\n")
+      .replace("AND letter IS NOT NULL\n", "AND letter IS NOT NULL AND count_page_letter(n)\n");
+    const query = db.prepare(counted);
+    const read = (thread: number) => {
+      ordinary = 0; letters = 0;
+      const rows = query.all(thread, I64_MAX, 3);
+      assert.equal(rows.length, 3);
+      return { ordinary, letters };
+    };
+    const before = read(short), after = read(long);
+    assert.deepEqual(after, before, "older messages do not add candidates for the same page");
+    assert.ok(before.ordinary > 0 && before.letters > 0, "both indexes were observed");
+    assert.ok(before.ordinary + before.letters <= 6, "the merge stopped after the page");
+  } finally { store.close(); }
+});
