@@ -1324,7 +1324,7 @@ fn Ctx::tree_visit(
     return false
   }
   let k0 = self.ninst
-  scene_node_drawn(c.id)
+  scene_node_drawn(c.id, (x, y, c.w * s, c.h * s, a, tree.turn_of(c.id).0))
   self.tree_draw_node(p, c, x, y, a, s, ux, uy)
   // (how far what it drew itself reaches; what it holds adds to it as it is closed)
   p.open.push((c.id, Ref(scene.parts.reach_of(self.inst, k0, self.ninst)), scene.moved.contains(c.id)))
@@ -1399,6 +1399,8 @@ fn Ctx::tree_draw_node(
   // is built whatever is seen of it: decoded by the time it shows, View::image)
   // (for the room it is judged ready for where it is said: View::image_for)
   let unseen = fn() {
+    // (drawn nowhere for where it is: what holds it is never copied moved, scene_shiftable)
+    scene_culled()
     match c.image {
       // (none in its bones: nothing it would show asked for, View::bones)
       Some((src, _, most)) if c.bones == 0L => {
@@ -2150,6 +2152,10 @@ fn Ctx::view_blit(
   }
   let at = self.ninst * inst_size
   block.blit_to(self.inst, len=block.length(), dst_offset=at)
+  // (some of it cut to its own box: a cut of its own, scene_shiftable)
+  if made.cut.1 > made.cut.0 {
+    scene_clipped_in()
+  }
   let s = self.inst
   let k = clip_top()
   for i in 0..<n {

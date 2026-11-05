@@ -26,6 +26,16 @@ priv struct SceneLayer {
   mut anchors : Array[(Int, Int)]
   /// the layers it holds, at once below it: moved with it where it is copied; and the layer it is in at once
   mut inner : Array[@view.NodeId]
+  /// the nodes drawn in it itself, not in the layers it holds: where each reaches moved with it where it is copied
+  /// moved (Ctx::scene_copied's shift)
+  mut nodes : Array[@view.NodeId]
+  /// where each of them was drawn, as `nodes` has them: its box in the window, how opaque and how far turned (x, y, w, h,
+  /// alpha, turn)
+  mut boxes : Array[(Double, Double, Double, Double, Double, Double)]
+  /// something in it drawn nowhere for where it was (out of the window and of its cut): copied moved, it may come in
+  mut culled : Bool
+  /// something in it cut by a cut of its own, pushed in it: its instances' cuts are not all what it began in
+  mut clips_in : Bool
   mut outer : @view.NodeId?
   /// what it was drawn in as it began: the clip it was cut by (clip_stack's level, whether it is the window's, its
   /// outer apart from it), the fades, stretches and glyph looks of what holds it, and where what holds it is drawn
@@ -539,9 +549,13 @@ fn scene_watch(id : @view.NodeId) -> @signals.Watch {
 
 ///|
 /// Node `id` drawn now: in the layer being drawn (scene_told marks it where `id` is let go).
-fn scene_node_drawn(id : @view.NodeId) -> Unit {
+fn scene_node_drawn(id : @view.NodeId, box : (Double, Double, Double, Double, Double, Double)) -> Unit {
   match scene.drawing {
-    Some(l) => scene.drawn_in[id] = l.id
+    Some(l) => {
+      scene.drawn_in[id] = l.id
+      l.nodes.push(id)
+      l.boxes.push(box)
+    }
     None => ()
   }
 }
@@ -915,8 +929,18 @@ fn Ctx::scene_copied(
     false
   }
   guard !scene.fresh else { return not("nothing kept") }
-  guard !forced else { return not("what holds it drawn whole") }
   guard scene.layers.get(id) is Some(l) else { return not("not kept") }
+  // (what holds it drawn again whole, as it moved by `d` alone (a list's rows as it is scrolled): copied moved by `d`
+  // where that can be told, scene_shiftable; moved otherwise (grown, turned, faded), drawn anew)
+  let d = if !forced {
+    (0.0, 0.0)
+  } else {
+    match scene_shift_of(l.held, held) {
+      Some(d) if d.0 != 0.0 || d.1 != 0.0 => d
+      _ => return not("what holds it drawn whole")
+    }
+  }
+  let shifting = d.0 != 0.0 || d.1 != 0.0
   guard l.seen == scene.src_seen else { return not("seen \{l.seen}, kept of \{scene.src_seen}") }
   guard l.start >= 0 && l.start + l.count <= scene.src_n else {
     return not("at \{l.start} for \{l.count} of \{scene.src_n}")
@@ -929,7 +953,11 @@ fn Ctx::scene_copied(
   guard !l.told && !scene.marked.contains(id) else { return not("marked, told \{l.told}") }
   guard !scene.holding.contains(id) else { return not("holds one marked") }
   // (what it was drawn in, as it is drawn in now: its key; another, drawn anew)
-  guard scene_began_same(l, held, fading, stretching, glyphing) else { return not("drawn in otherwise") }
+  guard scene_began_same(l, if shifting { l.held } else { held }, fading, stretching, glyphing) else {
+    return not("drawn in otherwise")
+  }
+  guard !shifting || scene_shiftable(l, d, self.width, self.height) else { return not("moved where its cut's edge is: \{d}") }
+  println("PROBE COPY \{id.at}.\{id.gen} forced=\{forced} d=\{d} n=\{l.count} inner=\{l.inner.map(fn(i) { i.at })} start=\{l.start}")
   let n = l.count
   while (self.ninst + n + 1) * inst_size > self.inst.length() {
     self.grow()
@@ -961,6 +989,13 @@ fn Ctx::scene_copied(
     _ => ()
   }
   scene_moved_to(l, at, seg0)
+  // (what holds it moved: its instances moved with it, what it and they were drawn in and reach; kept to be put back
+  // where the frame tried alone does not come to be, as scene_moved_to keeps them)
+  if shifting {
+    println("PROBE SHIFT \{id.at}.\{id.gen} d=\{d} n=\{n} own=\{scene_clips_in(l)} clip=\{l.clip[0:4]}")
+    scene_shift_insts(self.inst, at, n, d, l.clip, scene_clips_in(l))
+    scene_carried(l, d, held)
+  }
   // (its pictures kept as shown this frame: asked again, decoded as they were)
   for i in l.images {
     @signals.untracked(fn() { self.image_for(i.0, i.1) |> ignore })
@@ -992,6 +1027,10 @@ fn scene_undo() -> Unit {
     l.bands = was.bands
     l.anchors = was.anchors
     l.inner = was.inner
+    l.nodes = was.nodes
+    l.boxes = was.boxes
+    l.culled = was.culled
+    l.clips_in = was.clips_in
     l.outer = was.outer
     l.clip = was.clip
     l.clip_window = was.clip_window
@@ -1106,6 +1145,10 @@ fn Ctx::scene_drawn(
         bands: [],
         anchors: [],
         inner: [],
+        nodes: [],
+        boxes: [],
+        culled: false,
+        clips_in: false,
         outer: None,
         clip,
         clip_window: window,
@@ -1141,16 +1184,22 @@ fn Ctx::scene_drawn(
   l.own_only = false
   l.each = false
   l.told = false
+  l.culled = false
+  l.clips_in = false
   // (drawn again into new tables while the frame is tried alone: those it had kept as they were, put back where the try
   // does not come to be, scene_keep_undo)
   if scene.trying {
     l.inner = []
+    l.nodes = []
+    l.boxes = []
     l.images = []
     l.plots = []
     l.bands = []
     l.anchors = []
   } else {
     l.inner.clear()
+    l.nodes.clear()
+    l.boxes.clear()
     l.anchors.clear()
   }
   // (drawn again alone, from what it began in: what holds it as it was)
@@ -1910,7 +1959,7 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
     let mut at = -1
     for q in 0..<(least * inst_size) {
       let (a, b) = (kept[q], self.inst[q])
-      if a != b && !(a != a && b != b) && !theirs[q / inst_size] {
+      if !scene_slot_same(q % inst_size, a, b) && !theirs[q / inst_size] {
         at = q / inst_size
         break
       }
@@ -1933,7 +1982,7 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
       if at < least {
         for j in 0..<inst_size {
           let (a, b) = (kept[at * inst_size + j], self.inst[at * inst_size + j])
-          if a != b && !(a != a && b != b) {
+          if !scene_slot_same(j, a, b) {
             slots.push("\{j}: \{a} kept, \{b} anew")
           }
         }
@@ -2080,4 +2129,246 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
     seg_end = seg_from + seg_count
   }
   None
+}
+
+///|
+/// How far what holds a layer moved, where it moved and did nothing else (as opaque, as big as it was: `held`'s all but
+/// its place, drawn and as it were grown or shrunk by nothing, `ux` `uy`): None where it did more.
+fn scene_shift_of(
+  was : (Double, Double, Double, Double, Double, Double),
+  now : (Double, Double, Double, Double, Double, Double),
+) -> (Double, Double)? {
+  if was.2 == now.2 && was.3 == now.3 {
+    Some((now.0 - was.0, now.1 - was.1))
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether layer `l`'s instances as kept can be moved by `d` and come out as drawing them there would: each one's place
+/// moved by `d`, its cut the cut it was drawn in (`l.clip`, which does not move: the window's, a list's) met with its
+/// own cut moved by `d`. Not where one's cut lies on the edge of the cut it was drawn in on the side `d` moves it from
+/// (what was cut there may come in: its own cut is not told apart from that one's), nor where one is cut by a rounded
+/// clip outside its own or fades towards a cut softly (those are where the cut it was drawn in is, not moved with it).
+/// What is kept wrong is found by every Tester's scene_check, the frame painted again with nothing kept.
+fn scene_shiftable(l : SceneLayer, d : (Double, Double), w : Double, h : Double) -> Bool {
+  let a = scene.src
+  // (nothing that holds it turned now: what is turned is drawn anew)
+  match view_tree() {
+    Some(tree) => {
+      let mut h = tree.holder_of(l.id)
+      while h is Some(o) {
+        if tree.turn_of(o).0 != 0.0 {
+          return false
+        }
+        h = tree.holder_of(o)
+      }
+    }
+    None => return false
+  }
+  // (what is drawn of it and of those it holds as it is drawn there: nothing of it left out for where it was, nothing
+  // empty, each node drawn somewhere in the window and its cut once moved, as tree_draw_node draws only what is)
+  let (vx0, vy0) = (dmax(l.clip[0], 0.0), dmax(l.clip[1], 0.0))
+  let (vx1, vy1) = (dmin(l.clip[2], w), dmin(l.clip[3], h))
+  let todo = [l]
+  while todo.pop() is Some(x) {
+    // (and what is drawn of it by the clock as it reads it: drawn again as the clock goes, never carried)
+    if x.culled || x.count == 0 || x.reads_clock {
+      return false
+    }
+    // (where each is drawn now, as tree_draw_node finds it left out: its box wholly out of the window and its cut)
+    match view_tree() {
+      Some(tree) =>
+        for i, id in x.nodes {
+          match tree.drawn_of(id) {
+            Some(b) => {
+              if b.x > vx1 || b.y > vy1 || b.x + b.w < vx0 || b.y + b.h < vy0 {
+                return false
+              }
+              // (each drawn where it was moved by `d` alone, as big and as opaque: nothing else of it changed)
+              let o = x.boxes[i]
+              let near = fn(p : Double, q : Double) { (p - q).abs() <= 1.0e-6 }
+              if !near(b.x, o.0 + d.0) || !near(b.y, o.1 + d.1) || !near(b.w, o.2) || !near(b.h, o.3) || b.alpha != o.4 || tree.turn_of(id).0 != o.5 {
+                return false
+              }
+            }
+            None => return false
+          }
+        }
+      None => return false
+    }
+    for i in x.inner {
+      match scene.layers.get(i) {
+        Some(y) => todo.push(y)
+        None => ()
+      }
+    }
+  }
+  let (ox0, oy0, ox1, oy1) = (l.clip[0], l.clip[1], l.clip[2], l.clip[3])
+  let far = 1.0e8
+  let eps = 0.01
+  // (cut by nothing of its own: every cut is what it began in, which stays, exactly; else where its own cut is told
+  // apart from that one only off its edges)
+  let own_cuts = scene_clips_in(l)
+  // (cut by a cut of its own: what of it that cut moved with and what stayed is not told apart here; drawn anew)
+  if own_cuts {
+    return false
+  }
+  let rounded = l.clip[4] != 0.0 || l.clip[5] != 0.0 || l.clip[6] != 0.0 || l.clip[7] != 0.0
+  for k in l.start..<(l.start + l.count) {
+    let b = k * inst_size
+    // (turned as it was drawn: what turned it may turn otherwise now, which nothing here says)
+    if a[b + 32] != 0.0 {
+      return false
+    }
+    let kind = a[b + 5]
+    // (words: set on the pixels where they are drawn, by a sum this does not do again; drawn anew)
+    if kind == 1.0 || kind == 3.0 || kind == 7.0 {
+      return false
+    }
+    if a[b + 44] != 0.0 || a[b + 45] != 0.0 || a[b + 46] != 0.0 || a[b + 47] != 0.0 {
+      return false
+    }
+    if a[b + 53] != 0.0 || a[b + 55] != 0.0 || a[b + 57] != 0.0 || a[b + 59] != 0.0 {
+      return false
+    }
+    // (moved up, what was under the cut's foot comes in; down, over its top; and so across)
+    if !own_cuts {
+      continue
+    }
+    // (its own cut met with a rounded one: where the corners fall depends on where it is)
+    if a[b + 24] != 0.0 || a[b + 25] != 0.0 || a[b + 26] != 0.0 || a[b + 27] != 0.0 || rounded {
+      return false
+    }
+    if d.1 < 0.0 && oy1.abs() < far && a[b + 19] >= oy1 - eps {
+      return false
+    }
+    if d.1 > 0.0 && oy0.abs() < far && a[b + 17] <= oy0 + eps {
+      return false
+    }
+    if d.0 < 0.0 && ox1.abs() < far && a[b + 18] >= ox1 - eps {
+      return false
+    }
+    if d.0 > 0.0 && ox0.abs() < far && a[b + 16] <= ox0 + eps {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// The `n` instances of `a` from `at`, copied from a layer drawn in `clip`, moved by `d`: each one's place, and its cut
+/// its own moved met with `clip` (scene_shiftable).
+fn scene_shift_insts(
+  a : FixedArray[Double],
+  at : Int,
+  n : Int,
+  d : (Double, Double),
+  clip : FixedArray[Double],
+  own_cuts : Bool,
+) -> Unit {
+  for k in at..<(at + n) {
+    let b = k * inst_size
+    a[b] = a[b] + d.0
+    a[b + 1] = a[b + 1] + d.1
+    // (cut by what it began in alone: that cut, where it stays)
+    if !own_cuts {
+      continue
+    }
+    // (an edge cut by nothing, the base clip's far one, stays where it is)
+    let far = 1.0e8
+    let edge = fn(v : Double, by : Double) { if v.abs() < far { v + by } else { v } }
+    a[b + 16] = dmax(edge(a[b + 16], d.0), clip[0])
+    a[b + 17] = dmax(edge(a[b + 17], d.1), clip[1])
+    a[b + 18] = dmin(edge(a[b + 18], d.0), clip[2])
+    a[b + 19] = dmin(edge(a[b + 19], d.1), clip[3])
+  }
+}
+
+///|
+/// Layer `l` and those it holds copied moved by `d`: where what holds each is drawn, where it and each node drawn in it
+/// reach, moved with it, as drawing them there would have kept them.
+fn scene_carried(l : SceneLayer, d : (Double, Double), now : (Double, Double, Double, Double, Double, Double)) -> Unit {
+  let moved = fn(r : (Double, Double, Double, Double)) {
+    if r == @damage.nowhere { r } else { (r.0 + d.0, r.1 + d.1, r.2 + d.0, r.3 + d.1) }
+  }
+  // (where they are as were nothing grown or shrunk moved as far, as what holds them is drawn at its own size)
+  let du = (now.4 - l.held.4, now.5 - l.held.5)
+  let todo = [l]
+  while todo.pop() is Some(x) {
+    let h = x.held
+    x.held = (h.0 + d.0, h.1 + d.1, h.2, h.3, h.4 + du.0, h.5 + du.1)
+    x.reach = moved(x.reach)
+    // (its own node among those drawn in it, where it was drawn by a walk of its own: moved once)
+    if !x.nodes.contains(x.id) {
+      match scene.reach.get(x.id) {
+        Some(r) => scene.reach[x.id] = moved(r)
+        None => ()
+      }
+    }
+    for id in x.nodes {
+      match scene.reach.get(id) {
+        Some(r) => scene.reach[id] = moved(r)
+        None => ()
+      }
+    }
+    // (a table of its own: what puts the layer back where a frame tried alone does not come to be keeps the one before)
+    x.boxes = x.boxes.map(fn(o) { (o.0 + d.0, o.1 + d.1, o.2, o.3, o.4, o.5) })
+    for i in x.inner {
+      match scene.layers.get(i) {
+        Some(y) => todo.push(y)
+        None => ()
+      }
+    }
+  }
+}
+
+///|
+/// Something drawn now drawn nowhere for where it is (out of the window and of its cut, view_host's tree_draw_node).
+fn scene_culled() -> Unit {
+  match scene.drawing {
+    Some(l) => l.culled = true
+    None => ()
+  }
+}
+
+///|
+/// A cut pushed now, in the layer drawn: its own (push_clip_r, push_unclipped).
+fn scene_clipped_in() -> Unit {
+  match scene.drawing {
+    Some(l) => l.clips_in = true
+    None => ()
+  }
+}
+
+///|
+/// Whether anything in layer `l` or those it holds was cut by a cut of its own (clips_in): else every instance of it is
+/// cut by what it began in alone, exactly.
+fn scene_clips_in(l : SceneLayer) -> Bool {
+  let todo = [l]
+  while todo.pop() is Some(x) {
+    if x.clips_in {
+      return true
+    }
+    for i in x.inner {
+      match scene.layers.get(i) {
+        Some(y) => todo.push(y)
+        None => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Whether slot `j` of an instance kept and of the same drawn anew is the same: the same number (or both none); a place
+/// (where it is, where it is cut) the same to a millionth of a point, as a layer copied moved by how far what holds it
+/// moved comes to it by another sum than drawing it there does (scene_shift_insts): a millionth of a point is no pixel's
+/// difference on any screen, and no layer kept wrong moves by less.
+fn scene_slot_same(j : Int, a : Double, b : Double) -> Bool {
+  if a == b || (a != a && b != b) {
+    return true
+  }
+  (j == 0 || j == 1 || (j >= 16 && j <= 19) ) && (a - b).abs() <= 1.0e-6
 }
