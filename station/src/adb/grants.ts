@@ -85,7 +85,8 @@ export class Refused extends Error {}
 
 export class PhoneGrants {
   readonly #d: GrantsDeps;
-  readonly #titles = new Map<string, string | null>();
+  readonly #titles = new Map<string, { session: string; title: string | null }>();
+  readonly #shownBySession = new Map<string, Set<string>>();
   readonly #used = new Map<string, number>();
 
   constructor(d: GrantsDeps) {
@@ -96,11 +97,20 @@ export class PhoneGrants {
         // A removed session's row is already gone; the change carries its workspace.
         const workspace = c.type === "sessionRemoved" ? (c.ws ?? this.#d.home()) : undefined;
         for (const r of this.#bySession(c.key)) this.#end(r, "对话已归档", workspace);
-      } else if (c.type === "thread" && typeof c.id === "number") {
+      } else if (c.type === "thread" && typeof c.id === "number" && this.#titles.size > 0) {
         // A renamed chat changes its list entry even when no adb command is run.
-        for (const { session } of this.#d.hub.store.threadSessions(c.id)) for (const r of this.#bySession(session)) {
-          const title = this.#d.title(r);
-          if (this.#titles.has(r.id) && this.#titles.get(r.id) !== title) this.#tell(r, "title");
+        // Only requests whose titles have been shown can need an update. Seek those ids rather than reading every
+        // old active request of each participant. Preserve the session/status/rowid order of #bySession.
+        for (const { session } of this.#d.hub.store.threadSessions(c.id)) {
+          const shown = this.#shownBySession.get(session);
+          if (!shown || shown.size === 0) continue;
+          const requests = this.#load(`SELECT r.body FROM json_each(?1) j CROSS JOIN adb_requests r ON r.id=j.value
+            WHERE r.session=?2 AND r.status IN ('pending', 'granted') ORDER BY r.status,r.rowid`, JSON.stringify([...shown]), session);
+          for (const r of requests) {
+            const title = this.#d.title(r);
+            const before = this.#titles.get(r.id);
+            if (before !== undefined && before.title !== title) this.#tell(r, "title");
+          }
         }
       }
     });
@@ -123,8 +133,22 @@ export class PhoneGrants {
   /// A title is read from the chat, so it follows renames and is never a stale copy in the grant record.
   shown(r: PhoneRequest): PhoneRequest & { chatTitle: string | null } {
     const chatTitle = this.#d.title(r);
-    this.#titles.set(r.id, chatTitle);
+    const previous = this.#titles.get(r.id);
+    if (previous !== undefined && previous.session !== r.session) this.#forgetTitle(r.id);
+    this.#titles.set(r.id, { session: r.session, title: chatTitle });
+    let shown = this.#shownBySession.get(r.session);
+    if (!shown) { shown = new Set(); this.#shownBySession.set(r.session, shown); }
+    shown.add(r.id);
     return { ...r, chatTitle };
+  }
+
+  #forgetTitle(id: string): void {
+    const previous = this.#titles.get(id);
+    if (previous === undefined) return;
+    this.#titles.delete(id);
+    const shown = this.#shownBySession.get(previous.session);
+    shown?.delete(id);
+    if (shown?.size === 0) this.#shownBySession.delete(previous.session);
   }
 
   #tell(r: PhoneRequest, change: "grant" | "used" | "title", workspace?: string | null): void {
@@ -379,7 +403,7 @@ export class PhoneGrants {
     }
     this.#tell(r, "grant", workspace);
     if (status === "ended" || status === "denied") {
-      this.#titles.delete(r.id);
+      this.#forgetTitle(r.id);
       this.#used.delete(r.id);
     }
   }
