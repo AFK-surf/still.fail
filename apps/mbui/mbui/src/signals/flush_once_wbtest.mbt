@@ -55,10 +55,18 @@ test "a batch that writes inside an effect runs what it queued after that effect
 }
 
 ///|
-test "panic two effects setting each other round end the program, said with the sets that queued them" {
+test "two effects setting each other round are said, with the sets that queued them, at the 65th run of one" {
+  let said : Array[String] = []
+  effect_cycle_said.val = Some(fn(s) { said.push(s) })
   let a = signal(0)
   let b = signal(0)
-  let _ = effect(fn() { b.set(a.get() + 1) })
-  let _ = effect(fn() { a.set(b.get() + 1) })
+  let stop_b = effect(fn() { b.set(a.get() + 1) })
+  let stop_a = effect(fn() { a.set(b.get() + 1) })
   a.set(1)
+  effect_cycle_said.val = None
+  stop_a()
+  stop_b()
+  assert_eq(said.length(), 1)
+  assert_true(said[0].contains("ran 64 times in one flush"))
+  assert_true(said[0].contains("flush_once_wbtest.mbt"))
 }

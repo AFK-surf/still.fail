@@ -414,6 +414,10 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
 pub let effect_runs_most : Int = 64
 
 ///|
+/// Where a cycle of effects is said instead of ending the program (a test's; none: abort).
+pub let effect_cycle_said : Ref[((String) -> Unit)?] = Ref(None)
+
+///|
 /// From how many runs in one flush an effect's queuing sets are noted, for what the cycle is said with.
 let effect_runs_noted : Int = 56
 
@@ -439,9 +443,19 @@ fn run_effect(e : ReactiveNode) -> Unit {
   if e.ran > effect_runs_most {
     let from = if run.trail.length() > 8 { run.trail.length() - 8 } else { 0 }
     let last = Array::makei(run.trail.length() - from, fn(i) { run.trail[from + i] })
-    abort(
-      "signals: an effect ran \{e.ran - 1} times in one flush, effects setting each other round; it was queued by the sets at \{last}",
-    )
+    let said = "signals: an effect ran \{e.ran - 1} times in one flush, effects setting each other round; it was queued by the sets at \{last}"
+    match effect_cycle_said.val {
+      // (a test's: said, and the flush's queue let go of, nothing more of the cycle run)
+      Some(f) => {
+        f(said)
+        for i in run.notify_index..<run.queued_length {
+          run.queued[i] = None
+        }
+        run.notify_index = run.queued_length
+        return
+      }
+      None => abort(said)
+    }
   }
   run.effect_nesting += 1
   if run.effect_nesting > run.effect_nesting_most {
