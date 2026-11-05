@@ -29,6 +29,12 @@ pub fn chat_list_node(
   let clear_foot = fn() {
     foot() + (if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 })
   }
+  let measured_foot = fn() {
+    match foot_height {
+      Some(measure) => measure()
+      None => @view.height(foot())
+    }
+  }
   // (a card's field with the focus kept in view with the keyboard up, as the window grows shorter under it: out from
   // under the bar and the composer, 16 clear of each, its foot giving way to its top where it does not fit between
   // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field))
@@ -297,12 +303,9 @@ pub fn chat_list_node(
         match @signals.untracked(fn() { row_of(k) }) {
           Some((Top, _)) => { slot.height(By(fn() { Some(top()) })) |> ignore; return }
           Some((Foot, _)) => {
-            match foot_height {
-              Some(measure) => slot.height_measured(By(fn() {
-                measure().plus(@view.height(foot_gap + (if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 })))
-              })) |> ignore
-              None => slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore
-            }
+            slot.height_measured(By(fn() {
+              measured_foot().plus(@view.height(foot_gap + (if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 })))
+            })) |> ignore
             return
           }
           _ => ()
@@ -839,17 +842,10 @@ pub fn chat_list_node(
     })
   }
   v.reacts(fn() { asking() }, fn(a) { rd0.ask = a })
-  v.box(fn(f) {
-    f
-    .over(Is(true))
-    .lies_along(Is(End))
-    .lines_up(Is(Some(End)))
-    .padding(By(fn() {
-      let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-      let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift + (if above { float_above } else { 0.0 }))
-    }))
-    |> ignore
+  chat_float_node(v, measured_foot, fn() {
+    let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
+    float_lift + (if above { float_above } else { 0.0 })
+  }, fn(f) {
     f.show(asking, fn(b) {
       b
       .width(Is(Some(float_side)))
@@ -888,16 +884,7 @@ pub fn chat_list_node(
   // the way to the newest (ToLatest): over the list right over the send button, the composer's room under it, a round
   // button with ↓ (and, short of the chat's end, how many new messages wait there); pressed, the list to its end, or,
   // short of the chat's end, the chat's latest page asked for
-  v.box(fn(f) {
-    f
-    .over(Is(true))
-    .lies_along(Is(End))
-    .lines_up(Is(Some(End)))
-    .padding(By(fn() {
-      let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift)
-    }))
-    |> ignore
+  chat_float_node(v, measured_foot, fn() { float_lift }, fn(f) {
     f.show(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }, fn(b) {
       b
       .row(Is(true))

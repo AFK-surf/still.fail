@@ -359,7 +359,12 @@ pub fn composer_width(pane : Double) -> Double {
 
 ///|
 fn composer_width_in(pane : Double, side : Double) -> Double {
-  if @sf.native_on() {
+  composer_width_for(pane, side, @sf.native_on())
+}
+
+///|
+fn composer_width_for(pane : Double, side : Double, native : Bool) -> Double {
+  if native {
     return pane - 2.0 * side
   }
   dmin(pane - 2.0 * side, composer_most)

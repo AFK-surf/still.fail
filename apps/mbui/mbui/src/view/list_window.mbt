@@ -522,7 +522,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (shorter than the column: at its foot)
     if from_end {
       held
-      .min_height(By(fn() { self.laid_size_told().map(fn(z) { z.1 }) }))
+      .min_height_share(Is(Some(1.0)))
       .lies_along(Is(End))
       |> ignore
     }

@@ -429,6 +429,32 @@ or an Android memory measurement.
 
 ## Remaining adoption evidence
 
+The parent-allocation migration now includes media, attachment rows, scroll
+content and thumb sizing, short end-aligned lists and the chat's floating actions.
+The short-list resize counterexample first failed because publishing the
+viewport height scheduled a second whole-tree computation. A percentage minimum
+height now consumes the current parent's constraint; the same check passes with
+one computation. Floating actions measure the composer's height expression and
+their own content in the same parent arrangement, without deriving padding from
+the last placed pane width. The focused list/scroll checks passed 16 tests and
+the actual composer/send/flight checks plus floating-action allocation passed 36.
+
+The previous scroll allocation change passed 867 view/flex tests and 35 app tests.
+Its 78-frame scroll film is byte-identical after decoding, as are the attachment
+stills. The next chat-layout build preserves the small and large screen pictures,
+including the visible return-to-latest action, pixel for pixel; the matching
+720-by-900 picture also matches, but did not expose that action and is not evidence
+for its placement there. These are actual app scenes rendered from distinct Wasm
+programs (baseline `1188c0ad1461df1f83d1beeed96a29d3027ffbc20ec6f79432b9a1937fe6dbee`,
+chat allocation `0cb2631496fa4f430f942d52776e1dce8a204d745fc7cfc4fed74be3077988f4`).
+They establish presentation preservation for these scenes, not a speedup.
+
+The scroll range still writes scroll state from layout notifications; the list's
+row selection, anchor and responsive row bindings still use layout results.
+These are unresolved violations of the forward frame contract. The layout
+primitive's state-write guard alone does not forbid hidden geometry reads or
+imperative view mutations, so it is not yet a sufficient boundary for adoption.
+
 The experimental kernel does not yet demonstrate a general owner tree, full
 input/IME, stable-key history insertion/removal or recorded font/resource changes.
 Production integration has exercised actual chat input and scrolling, including
