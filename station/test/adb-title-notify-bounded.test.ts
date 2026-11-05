@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { PhoneGrants } from "../src/adb/grants.ts";
+import { PhoneGrants, TITLE_MEMBER_PROBE, TITLE_ONE_MEMBER, TITLE_SHOWN_MEMBERS } from "../src/adb/grants.ts";
 
 function world(extraMembers = 0) {
   const db = new DatabaseSync(":memory:");
@@ -19,6 +19,9 @@ function world(extraMembers = 0) {
         if (!requests && !memberships) return statement;
         return new Proxy(statement, {
           get(s, p) {
+            if (p === "get" && memberships) return (...args: any[]) => {
+              const row = s.get(...args); if (row !== undefined) memberRows++; return row;
+            };
             if (p === "all") return (...args: any[]) => {
               const rows = s.all(...args);
               if (requests) { fetched += rows.length; queries.push({ sql, args }); }
@@ -83,6 +86,27 @@ test("shown requests from unrelated sessions do not increase a short chat's memb
     } finally { w.db.close(); }
   }
   assert.equal(reads[0], reads[1], `the change read ${reads[0]}, then ${reads[1]}, memberships`);
+});
+
+test("shown members are told in membership order even when the shown set is smaller", () => {
+  const w = world(5);
+  try {
+    for (const [id, session] of [["last", "other-3"], ["first", "s"], ["middle", "other-1"]] as const)
+      w.grants.shown(w.add(id, "pending", session));
+    w.reset(); w.rename("After");
+    assert.deepEqual(w.told, ["first", "middle", "last"]);
+  } finally { w.db.close(); }
+});
+
+test("phone title membership selection seeks the thread and its shown members", () => {
+  const w = world();
+  try {
+    const plan = (sql: string, ...args: any[]) => w.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map((row) => String(row.detail)).join(" | ");
+    assert.match(plan(TITLE_MEMBER_PROBE, 1, 2), /SEARCH thread_sessions USING INDEX sqlite_autoindex_thread_sessions_1 \(thread=\?\)/);
+    assert.match(plan(TITLE_SHOWN_MEMBERS, 1, '["s"]'), /SEARCH m USING INDEX sqlite_autoindex_thread_sessions_1 \(thread=\? AND session=\?\)/);
+    assert.match(plan(TITLE_ONE_MEMBER, 1, "s"), /SEARCH thread_sessions USING COVERING INDEX sqlite_autoindex_thread_sessions_1 \(thread=\? AND session=\?\)/);
+    assert.match(TITLE_MEMBER_PROBE, /candidates AS MATERIALIZED/);
+  } finally { w.db.close(); }
 });
 
 test("a changed chat reads only the phone request titles already shown", () => {
