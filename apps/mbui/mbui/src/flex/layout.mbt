@@ -552,7 +552,11 @@ fn size_node(
       same(node.p_kh, kh) &&
       same(node.p_cbw, cb_w) &&
       same(node.p_cbh, cb_h) {
-      node.skip_gen = generation.val
+      // (laid out before this compute and found so: reused; laid out in this one already, its absolute boxes are
+      // still to be placed with the rest)
+      if node.p_gen != generation.val {
+        node.skip_gen = generation.val
+      }
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
       return node.p_w
@@ -598,6 +602,7 @@ fn size_node(
   let h = out_h.val
   if perform {
     node.p_ok = true
+    node.p_gen = generation.val
     node.p_kw = kw
     node.p_kh = kh
     node.p_cbw = cb_w
@@ -1741,6 +1746,7 @@ fn layout_flex(
         let rh = fmax(h - ipbh, 0.0) + ipbh
         counters[0] = counters[0] + 1
         n.p_ok = true
+        n.p_gen = generation.val
         n.p_kw = iw
         n.p_kh = ih
         n.p_cbw = cb_w

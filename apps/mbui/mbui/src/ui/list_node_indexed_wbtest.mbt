@@ -213,3 +213,47 @@ test "a list opened works out the rooms of and measures the rows in sight and ah
   // (300 in sight and 160 ahead under it, rows 60 tall: 8 of them, each worked out a few times over as it opens)
   assert_true(rooms <= 8 * 4, msg="\{rooms} rooms worked out")
 }
+
+///|
+/// (a row measured twice in one layout as it opens, at its own height and at its room's: found laid out the second
+/// time, no box whose layout was kept from before, what lies over its parts laid out with it: flex's p_gen)
+test "an indexed list's row made otherwise as it opens: what lies over a part of it laid out at its size, as in a row at rest" {
+  let kind = @signals.signal(0, same=fn(a, b) { a == b })
+  let over : Ref[@view.View?] = Ref(None)
+  let src = IndexedRows::new(3)
+  let t = Tester::new(fn(_) { }, w=300.0, h=300.0, stable=false)
+  set_view_app(fn(root) {
+    let rows = ListRows::new().in_node_indexed(root, src.source(), fn(i) { src.item(i) }, fn() {
+      let all = src.pending.copy()
+      src.pending.clear()
+      all
+    }, fn(k) { src.at.get(k).map(fn(_) { 0 }) })
+    root.height(Is(Some(300.0))).scrolls_anchored(@view.Scroll::list(), fn() { [] }, est=60.0, indexed=rows.source,
+      rooms=rows.room_now, fn(row, _k) {
+        row.pick(fn() { kind.get() }, fn(b, k) {
+          b.height(Is(Some(60.0))) |> ignore
+          if k == 1 {
+            b.box(fn(m) {
+              m.width(Is(Some(80.0))).height(Is(Some(50.0))).clips(Is(true)) |> ignore
+              m.box(fn(o) {
+                over.val = Some(o)
+                o.over(Is(true)).width(Is(Some(80.0))).height(Is(Some(50.0))).ground(Is(0xFF0000FFL)) |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          }
+        })
+      }) |> ignore
+  })
+  t.draw()
+  t.run_for(row_size_ms)
+  src.came("new")
+  t.draw()
+  t.run_for(row_size_ms / 3.0)
+  kind.set(1)
+  t.draw()
+  t.run_for(row_size_ms)
+  let (_, _, w, h) = over.val.unwrap().laid_window_now()
+  assert_eq((w, h), (80.0, 50.0))
+}

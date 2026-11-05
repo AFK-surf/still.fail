@@ -1044,6 +1044,9 @@ pub(all) struct Node {
   // its last layout (perform), while not dirty: what it was asked (known
   // size, containing block) and what it came to
   mut p_ok : Bool
+  // the compute that last laid it out (performed it, not found it laid out before): one laid out again in the same
+  // compute (a custom container measuring a child twice) is no box whose layout was reused (kept)
+  mut p_gen : Int
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -1088,6 +1091,7 @@ pub fn Node::new() -> Node {
     box_ver: -1,
     dirty: true,
     p_ok: false,
+    p_gen: -1,
     p_kw: 0.0,
     p_kh: 0.0,
     p_cbw: 0.0,
