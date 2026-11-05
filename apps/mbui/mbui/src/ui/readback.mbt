@@ -17,6 +17,7 @@
 pub fn Ctx::laid_rect(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double, Double, Double)? {
   let v = self.laid_rects.get(id)
   if building.val {
+    layout_read("laid_rect at \{loc}")
     self.laid_watch[id] = self.frame_no
     if !self.laid_reads.contains(id) {
       self.laid_reads[id] = (v, loc)
@@ -37,6 +38,7 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
     None => None
   }
   if building.val {
+    layout_read("laid_size at \{loc}")
     self.laid_watch[id] = self.frame_no
     if !self.size_reads.contains(id) {
       self.size_reads[id] = (v, loc)
@@ -54,6 +56,7 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
 pub fn Ctx::left_out(self : Ctx, id : Int, loc~ : SourceLoc) -> Bool {
   let v = self.left_ids.contains(id)
   if building.val {
+    layout_read("left_out at \{loc}")
     if !self.left_reads.contains(id) {
       self.left_reads[id] = (v, loc)
     }
@@ -95,6 +98,9 @@ fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
 /// not the room, said one of their shorter ways, lines left off after their last. For what is said over the box (a
 /// tip saying its words whole, wanted only where they do not show whole), not for what is built by it: not read back.
 pub fn Ctx::shows_cut(self : Ctx, id : Int) -> Bool {
+  if building.val {
+    layout_read("shows_cut of box \{id}")
+  }
   self.cut_ids.contains(id)
 }
 
@@ -137,6 +143,7 @@ fn Ctx::cut_after_layout(self : Ctx) -> Unit {
 /// frame that does not ask it lets it go.
 pub fn Ctx::shown_across(self : Ctx, id : Int, but? : String = "") -> (Double, Double)? {
   if building.val {
+    layout_read("shown_across of box \{id}")
     self.shown_watch[id] = (self.frame_no, but)
   }
   self.shown_spans.get(id)

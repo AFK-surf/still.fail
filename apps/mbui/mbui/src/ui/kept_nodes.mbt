@@ -1044,6 +1044,7 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
     }
   }
   for r in rn.info {
+    layout_read("list_info \"\{r.0}\", a row kept")
     self.info_reads.push(r)
   }
   self.moves_said_again(rn.base, rn.base + rn.n)
@@ -1514,6 +1515,7 @@ fn row_read_laid(r : LaidRead) -> Unit {
 /// What a row kept read of the layout as it was built, read again as it read it: read back once the frame is laid out,
 /// laid out otherwise, the frame is built again (readback.mbt).
 fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
+  layout_read("a row kept, as it read it")
   match r {
     Rect(id, v, loc) => {
       self.laid_watch[id] = self.frame_no
