@@ -37,7 +37,7 @@ pub fn composer_node(
     _ => Map([])
   }
   let leaving_toolbar = match origin {
-    Some(o) if !from.is_empty() && spec().toolbar is None => o.toolbar
+    Some(o) if !from.is_empty() && spec().toolbar is None => o.toolbar_node
     _ => None
   }
   let positions : Ref[(Double) -> Map[String, (Double, Double, Double, Double)]] = Ref(fn(_) { Map([]) })
@@ -128,13 +128,21 @@ pub fn composer_node(
             let before = from["choices"]
             let box = from["box"]
             let fade = @sfbase.new_fade(@ui.current())
+            // (the same choices' nodes as the page had them, drawn only: read out by nothing, a press going through to what
+            // is under them, as the old frame's draw_only)
             p.over(Is(true)).width(Is(Some(before.2))).height(Is(Some(before.3)))
             .offset(Is((before.0 - box.0, before.1 - box.1)))
             .laid_nowhere(By(fn() { p.drawn_past(fade.ends()) })) |> ignore
-            @ui.old(p, fn(c) {
-              let n = c.box(style=choices, fn() { c.hidden_from_semantics(f) })
-              c.look(n, @ui.look(alpha=1.0 - fade.get()))
-              c.draw_only(n)
+            p.box(fn(row) {
+              // (the fade as it was told (became_starts: new_fade_ms, Leave, to its declared end), where it is at the
+              // moment each frame is drawn, as composer_hint_node's: what reads it painted again, nothing laid out)
+              let ends = fade.ends()
+              row.grow(Is(1.0)).presses(Is(false)).hides(Is(true)).alpha(By(fn() {
+                let t = if row.drawn_past(ends) { ends } else { row.drawn_at() }
+                let f = clamp01((t - (ends - @sfbase.new_fade_ms)) / @sfbase.new_fade_ms)
+                1.0 - @ui.Ease::Leave.at(f)
+              })) |> ignore
+              f(row)
             }).grow(Is(1.0)) |> ignore
           }
           None => ()
@@ -199,7 +207,7 @@ pub fn composer_node(
   composer_keyboard_node(root, src, spec, w_at.val.unwrap(), field_at.val.unwrap(), active, neighbour)
   root.reacts(active, fn(on) {
     if on {
-      composing.origin = Some({ old: false, roomy: spec().roomy, toolbar: spec().toolbar, places: positions.val })
+      composing.origin = Some({ old: false, roomy: spec().roomy, toolbar: spec().toolbar, toolbar_node: spec().toolbar_node, places: positions.val })
       composing.roomy = Some(spec().roomy)
     }
   })

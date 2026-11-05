@@ -54,7 +54,13 @@ fn new_chat_reset() -> Unit {
 /// runs, "model" what it runs on (a fixture's screen of it).
 pub fn new_chat_ask(what : String) -> Unit {
   new_chat_state.asked = what
+  new_asked_told.set(@signals.untracked(fn() { new_asked_told.get() }) + 1)
 }
+
+///|
+/// Told each time one of the page's picks is asked open (new_chat_ask): what of the page's nodes opens it follows it
+/// (new_tools_node's), and takes it (take_asked).
+let new_asked_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// A new chat in workspace `w` (NewChat, NewChatScreen): while its stations are read, the page as it will be on the
@@ -647,6 +653,11 @@ fn new_composer_place(
         session: "",
         placeholder: @sf.t("web-main.newChat.placeholder"),
         toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
+        toolbar_node: if wide && !held {
+          Some(fn(row) { new_tools_node(row, src, fn() { Some(w) }, fn() { v }, fn() { station }) })
+        } else {
+          None
+        },
         note: [],
         tail: None,
         roomy: wide,

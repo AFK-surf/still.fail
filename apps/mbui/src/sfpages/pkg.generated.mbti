@@ -62,7 +62,7 @@ pub let body_size : Double
 
 pub fn cd_mode_dialog(@settings.Core, String, @json.Json?) -> Unit
 
-pub fn changelog_news(@ui.Ctx, @sfbase.Source) -> Unit
+pub fn changelog_news_node(@view.View, @sfbase.Source, @sf.TipLayer) -> Unit
 
 pub fn changelog_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
@@ -85,8 +85,6 @@ pub fn chat_mark(@ui.Ctx, String) -> Int32
 pub fn chat_mark_node(@view.View, () -> String) -> Unit
 
 pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?]
-
-pub fn chat_menus_frame(@ui.Ctx) -> Unit
 
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
@@ -141,6 +139,8 @@ pub fn composer_place(Double) -> ComposerPlace
 pub fn composer_room(@ui.Ctx, String, settled? : Bool, held? : Bool) -> Double
 
 pub fn composer_side() -> Double
+
+pub fn composer_side_in(FixedArray[Double]?) -> Double
 
 pub fn composer_take_focus() -> Unit
 
@@ -211,6 +211,8 @@ pub fn find_k() -> Int32
 pub let find_key : String
 
 pub fn find_open(@ui.Ctx, String) -> Unit
+
+pub fn find_open_now(String) -> Unit
 
 pub fn find_position() -> (Int32, Int32)
 
@@ -428,7 +430,7 @@ pub fn open_triple(String, String) -> Unit
 
 pub fn open_triple_accounts(String, String) -> Unit
 
-pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @view.Side) -> Unit
+pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @view.Side, page? : @json.Json?) -> Unit
 
 pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
@@ -694,7 +696,7 @@ pub fn turn_off_dialog(@settings.Core, String, String) -> Unit
 
 pub fn unpremultiplied(FixedArray[Byte]) -> FixedArray[Byte]
 
-pub fn update_card(@ui.Ctx, @sfbase.Source) -> Unit
+pub fn update_card_node(@view.View, @sfbase.Source) -> Unit
 
 pub fn update_card_shown() -> Bool
 
@@ -777,6 +779,7 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
+  toolbar_node : ((@view.View) -> Unit)?
   note : Array[(String, String)]
   tail : (() -> Unit)?
   roomy : Bool

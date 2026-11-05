@@ -67,7 +67,7 @@ pub fn chat_composer_node(
       body.width_share(Is(1.0)).max_width(By(composer_widest)) |> ignore
       node.val = Some(composer_node(body, src, draft, fn() {
         let v = view()
-        { station: r.station, draft, session: r.session, placeholder: @sf.t("web-main.composer.placeholder"), toolbar: None,
+        { station: r.station, draft, session: r.session, placeholder: @sf.t("web-main.composer.placeholder"), toolbar: None, toolbar_node: None,
           note: v.map(fn(v) { v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) }) }).unwrap_or([]), tail: None,
           roomy: false, locked: false, offline: v.map(fn(v) { v.offline }).unwrap_or(false),
           warm_agent: !v.map(fn(v) { v.archived }).unwrap_or(false) }
