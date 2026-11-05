@@ -1585,6 +1585,15 @@ fn Ctx::tree_draw_node(
         None => ()
       }
     }
+    // (and to the rect it says, as it is painted, whether or not it clips to itself: View::clip_drawn)
+    match c.clip_drawn {
+      Some((cx, cy, cw, ch)) => {
+        push_clip(x + cx * s, y + cy * s, x + (cx + dmax(0.0, cw)) * s, y + (cy + dmax(0.0, ch)) * s)
+        p.clipping.push(c.id)
+        p.clip_depth.push(depth)
+      }
+      None => ()
+    }
   }
   // (a hosted old view is what the node holds, so it is cut before it is painted; a tree node's own ground and shadow
   // are painted first, then the same clip is opened for what it holds)

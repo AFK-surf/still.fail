@@ -95,7 +95,12 @@ pub fn Tree::holder_of(self : Tree, id : NodeId) -> NodeId? {
 pub fn Tree::draws_round(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
   let l = self.nodes[id.at].look
-  l.clips || l.glyphs_at is Some(_) || l.stretch != 0.0 || l.cut_soft || l.fades != (0.0, 0.0, 0.0, 0.0)
+  l.clips ||
+  l.clip_drawn is Some(_) ||
+  l.glyphs_at is Some(_) ||
+  l.stretch != 0.0 ||
+  l.cut_soft ||
+  l.fades != (0.0, 0.0, 0.0, 0.0)
 }
 
 ///|
