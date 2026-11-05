@@ -303,9 +303,63 @@ pub fn chat_list_node(
     rows_now.get().lead() |> ignore
     (sized.item_of)(k)
   }
-  // (the rows made now, by their keys: where each is, what is read)
+  // (the rows made now, by their keys: where each is)
   let row_views : Map[String, @view.View] = {}
-  let row_rects : @sf.LiveMap[String, (Double, Double, Double, Double)] = @sf.LiveMap::new()
+  // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
+  // become an input to another layout. Non-layout changes can still report the last drawn place.
+  let last_sighted : Ref[@view.Sighted[String]?] = Ref(None)
+  // Follow the data of the rows in that observation separately. A message can replace an outgoing row without
+  // changing its geometry; that is a data change, not a new layout observation.
+  let reading_data = @signals.signal(0)
+  let reading_rows = @signals.watch(fn() {
+    reading_data.set(@signals.untracked(fn() { reading_data.get() }) + 1)
+  })
+  v.owns(fn() { reading_rows.stop() }) |> ignore
+  let read_sighted = fn(s : @view.Sighted[String]) {
+    guard !v.shown_nowhere() && @signals.untracked(view) is Some(cv) else { return }
+    let rows = reading_rows.read(fn() {
+      s.rows.map(fn(row) { (row_of(row.0).map(fn(r) { r.0 }), row.1, row.2) })
+    })
+    let rd = rd0
+    let room_top = s.cover.0
+    let room_foot = s.height - s.cover.1
+    let opening = @signals.untracked(sized.opening)
+    let moving = @signals.untracked(fn() { scroll.glides_till_told() })
+    let at_end = @signals.untracked(fn() { follows.get() })
+    let mut top_seq = -1.0
+    let mut top_off = 0.0
+    let mut bottom_seq = -1.0
+    let mut state_seen = false
+    for (e, y, h) in rows {
+      if y + h > 0.0 && y < s.height {
+        match e {
+          Some(Said(m)) if m.seq >= 0.0 => {
+            if top_seq < 0.0 {
+              top_seq = m.seq
+              top_off = y
+            }
+            bottom_seq = m.seq
+            if !cv.newer && !opening && y >= room_top - 0.5 && y + h <= room_foot + 0.5 && m.seq > rd.seen_whole {
+              rd.seen_whole = m.seq
+            }
+          }
+          Some(State(_, _, _)) => state_seen = true
+          _ => ()
+        }
+      }
+    }
+    rd.state_seen = state_seen
+    rd.top_seq = top_seq
+    rd.top_off = top_off
+    rd.bottom_seq = bottom_seq
+    let seen = !cv.newer && at_end && moving is None && !opening
+    rd.at_end = seen
+    rd.scale = @ui.current().scale
+    if rd.placed && moving is None {
+      @sfbase.tell_place(src, r, cv, rd)
+    }
+    @sfbase.tell_focus(src, r, cv, rd, seen, rd.seen_whole)
+  }
   // (where it is put once, by a row's key and how far under the list's top its top stands)
   let put : @signals.Signal[(String, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
   // (the message gone to and when it was: its row lit whole as it flashes, flash_start's curve from then)
@@ -326,12 +380,19 @@ pub fn chat_list_node(
       follows~,
       shown~,
       put~,
+      sighted=fn(s) {
+        last_sighted.val = Some(s)
+        read_sighted(s)
+      },
       rooms=sized.room_now,
       // The flying copy needs its real landing before the glide brings the row into sight.
       kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
       // (new to it: said while it shows, an agent starting, sent from here; not what is caught up on, at once)
       // (the bar over its top: what comes taller than what shows is read from its top under it)
       cover=top,
+      // The composer covers the list without moving its rows. Report its cover with the drawn rows, so what is read
+      // is updated when a message is uncovered even if its place does not change.
+      foot_cover=clear_foot,
       fresh=fn(k) {
         match row_of(k) {
           Some((Said(m), _)) => m.said
@@ -354,21 +415,15 @@ pub fn chat_list_node(
           Some((Foot, _)) => { slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }
           _ => ()
         }
-        // (its node while it is made, what is read of where it is: the reading's)
+        // (its node while it is made, for an event that needs its place)
         row_views[k] = slot
         slot.owns(fn() {
           match row_views.get(k) {
-            Some(x) if physical_equal(x, slot) => { row_views.remove(k); row_rects.remove(k) }
+            Some(x) if physical_equal(x, slot) => row_views.remove(k)
             _ => ()
           }
         })
         |> ignore
-        slot.reacts(fn() { slot.laid_window_told() }, fn(rect) {
-          match rect {
-            Some(rect) => row_rects.set(k, rect)
-            None => row_rects.remove(k)
-          }
-        })
         // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
         // composer under the last)
         slot
@@ -853,60 +908,13 @@ pub fn chat_list_node(
         }
     }
   })
-  // where the reader is (read_place's, as the list lays its rows out, never read back into what it draws): what of the
-  // messages is seen whole between the bar's foot and the composer's room, the message at its top and how far below
-  // the list's top its top is, the message at its foot; told the core as the list comes to rest (tell_place) and what
-  // is read (tell_focus)
+  // A glide ending or the chat's data changing can change what is told even when no row moves. Observe only those
+  // inputs here; the geometry comes from the list's last painted sighting, never from a followed layout result.
   @ui.read_drawn(v, fn() {
-    let in_sight = shown.get().map(fn(k) {
-      let e = row_of(k).map(fn(r) { r.0 })
-      let seq = match e { Some(Said(m)) => m.seq; _ => -1.0 }
-      (seq, row_rects.get(k), e is Some(State(_, _, _)))
-    })
-    (v.laid_window_told(), top(), clear_foot(), in_sight, scroll.glides_till_told(), follows.get(),
-      view().map(fn(cv) { cv.newer }), (sized.opening)(), v.shown_nowhere())
-  }, fn(now) {
-    let (rect, bar, foot, in_sight, moving, at_end, _, opening, hidden) = now
-    guard !hidden && rect is Some((_, list_y, _, list_h)) else { return }
-    guard @signals.untracked(view) is Some(cv) else { return }
-    let rd = rd0
-    let room_top = list_y + bar
-    let room_foot = list_y + list_h - foot
-    let mut top_seq = -1.0
-    let mut top_off = 0.0
-    let mut bottom_seq = -1.0
-    let mut state_seen = false
-    for (seq, row_rect, state) in in_sight {
-      match row_rect {
-        // (in view: the rows the list holds past its edges, made to come in, none of what is read: read_place's
-        // first and last in view)
-        Some((_, y, _, h)) if y + h > list_y && y < list_y + list_h => {
-          if seq >= 0.0 {
-            if top_seq < 0.0 {
-              top_seq = seq
-              top_off = y - list_y
-            }
-            bottom_seq = seq
-            if !cv.newer && !opening && y >= room_top - 0.5 && y + h <= room_foot + 0.5 && seq > rd.seen_whole {
-              rd.seen_whole = seq
-            }
-          }
-          if state { state_seen = true }
-        }
-        _ => ()
-      }
-    }
-    rd.state_seen = state_seen
-    rd.top_seq = top_seq
-    rd.top_off = top_off
-    rd.bottom_seq = bottom_seq
-    let seen = !cv.newer && at_end && moving is None && !opening
-    rd.at_end = seen
-    rd.scale = @ui.current().scale
-    if rd.placed && moving is None {
-      @sfbase.tell_place(src, r, cv, rd)
-    }
-    @sfbase.tell_focus(src, r, cv, rd, seen, rd.seen_whole)
+    (reading_data.get(), rows_now.get().changed(), scroll.glides_till_told(), follows.get(),
+      view().map(fn(cv) { cv.newer }), (sized.opening)())
+  }, fn(_) {
+    match last_sighted.val { Some(s) => read_sighted(s); None => () }
   })
   // The old list offered the way back only after layout, more than 120 points from its end, except while gliding to it.
   // A page short of the chat's newest page always offers it, even when the list itself is at its end.
