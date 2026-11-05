@@ -657,6 +657,9 @@ pub struct Tree {
   /// structure's, what reacts reads: Tree::queued, Tree::structured): where things are laid out read in one is refused
   /// (Tree::layout_read)
   mut reads_followed : Int
+  /// how many hit tests run now, one in another (Tree::hit_test): where things are placed read in them, inside what is
+  /// followed too
+  mut hit_testing : Int
   /// the bindings worked out of where things are laid out (Live's Placed), by their numbers (Tree::queued's), in the
   /// order they were said: each worked out again as the tree is placed after anything of it was laid out or placed, and
   /// those whose reads changed otherwise since they ran (`placed_due`), never before the layout they read
@@ -913,6 +916,7 @@ pub fn Tree::new(
     laying: false,
     measuring: false,
     reads_followed: 0,
+    hit_testing: 0,
     placed_bounds: Map([]),
     placed_due: [],
     laid_bounds: Map([]),
@@ -2045,13 +2049,24 @@ fn[T] Tree::read_followed(self : Tree, w : @signals.Watch, read : () -> T) -> T 
 }
 
 ///|
+/// `f`, a hit test (what is at a point, where a node takes a finger: View::takes, what the pointer is followed over,
+/// Tree::follow_point): where things are placed read by it as a hit test reads them (docs/retained.md rule 10), inside
+/// what is followed too.
+fn[T] Tree::hit_test(self : Tree, f : () -> T) -> T {
+  self.hit_testing = self.hit_testing + 1
+  let v = f()
+  self.hit_testing = self.hit_testing - 1
+  v
+}
+
+///|
 /// Where things are laid out read here, by `what`: refused in what is followed to make, lay out or say something (a
 /// binding's read, a structure's, what reacts reads, a computed's), as going back within the frame, its change never
 /// told it (docs/retained.md rule 10). Read as the tree is placed or laid out by it (Live's Placed, View::laid_after),
 /// as it is drawn, at a cause (an event, a moment come, what reacts does), or once a change is committed
 /// (View::when_committed).
 fn Tree::layout_read(self : Tree, what : String, loc : SourceLoc) -> Unit {
-  if self.reads_followed > 0 || @signals.computing() {
+  if self.hit_testing == 0 && (self.reads_followed > 0 || @signals.computing()) {
     let by = if self.reads_followed > 0 { "what a binding, a structure or reacts reads" } else { "a computed" }
     let s = "\{what} read at \{loc} in \{by}: where things are laid out is read as the tree is placed, painted, at a cause or once a change is committed, never by what makes, lays out or says something, its change never told it (docs/retained.md rule 10)"
     // (said where the test that ran into it says what failed, as a trap says nothing of why)
@@ -4997,7 +5012,8 @@ fn Tree::takes_rects(
   let u = match unit.val {
     Some(u) => u
     None => {
-      let u = @signals.computed(fn(_) { f(w, h, at) })
+      // (a hit test's: where things are placed read by it, Tree::hit_test)
+      let u = @signals.computed(fn(_) { self.hit_test(fn() { f(w, h, at) }) })
       n.takes_units.push((u, w, h, at))
       u
     }
@@ -8593,7 +8609,8 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
   let mine = self.point_said
-  let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
+  // (a hit test, followed: where things are placed read by it, as a hit test reads them, Tree::hit_test)
+  let stop = self.queued(fn() { self.hit_test(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }) }, fn(found) {
     self.points_hover = found.1
     then(found.0)
   })
