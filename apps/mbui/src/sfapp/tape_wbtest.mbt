@@ -1323,3 +1323,37 @@ test "on the tape a passage picked anew after the sidebar was brought over bring
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
 }
+
+///|
+test "on the tape a mouse's wheel over the page showing beside the sidebar in use scrolls the page's messages, the sidebar still in use" {
+  new_run()
+  let src = fixture("chat-long")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let (w, h) = (740.0, 800.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=0, corners_held=false)
+  say_room(t, "medium", "medium")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (the words drawn in what shows of the page, by what they say: where each is down the window)
+  let shows = @sfdesk.tape_shows
+  let page_words = fn() {
+    let at : Map[String, Double] = {}
+    for word in t.words() {
+      if word.1 > w - shows {
+        at[word.0] = word.2
+      }
+    }
+    at
+  }
+  let before = page_words()
+  assert_false(before.is_empty(), msg="words in what shows of the page")
+  for _ in 0..<3 {
+    t.wheel(w - shows / 2.0, h / 2.0, -120.0)
+  }
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  let after = page_words()
+  let moved = before.iter().filter_map(fn(e) { after.get(e.0).map(fn(y) { y - e.1 }) }).collect()
+  assert_false(moved.is_empty(), msg="the same words before and after: \{before} \{after}")
+  assert_true(moved.iter().all(fn(d) { (d.abs() - 360.0).abs() < 0.5 }), msg="moved by \{moved}")
+}
