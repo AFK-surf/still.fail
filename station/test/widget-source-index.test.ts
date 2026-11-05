@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { installWidgetSources, WIDGET_SOURCE, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
@@ -234,5 +234,50 @@ test("a bad attachment does not make a message write fail", () => {
     assert.throws(() => store.untoldWidgetModels("a"), /malformed JSON/);
     db.prepare("UPDATE entries SET attachments='[]' WHERE thread=? AND n=1").run(thread);
     assert.deepEqual(store.untoldWidgetModels("a"), [{ path: "/w/item.html", name: "item.html", thread: null, model: "selected" }]);
+  } finally { store.close(); }
+});
+
+test("a failed widget index installation leaves no partial tables or triggers", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    beforeIndex(db);
+    db.setAuthorizer((action, name) => action === constants.SQLITE_INSERT && name === "widget_source_meta"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    assert.throws(() => installWidgetSources(db));
+    db.setAuthorizer(null);
+    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name LIKE 'widget_source_%'").get(), undefined);
+    installWidgetSources(db);
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
+test("a failed widget source batch rolls back its rows and cursor", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    beforeIndex(db);
+    const thread = store.openThread("ember", "EMBER", "rollback", null, null).id;
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,?,'message','agent','a',?,?)`);
+    for (const n of [1, 2]) put.run(thread, n, n, JSON.stringify([{ path: `/w/${n}`, name: String(n) }]));
+    installWidgetSources(db);
+    db.exec("CREATE TRIGGER fail_widget_batch BEFORE INSERT ON widget_source_rows WHEN NEW.n=2 BEGIN SELECT RAISE(ABORT,'failed batch'); END");
+    assert.throws(() => widgetSourcesStep(db, thread, 4), /failed batch/);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM widget_source_rows").get()?.n, 0);
+    assert.deepEqual(plain(db.prepare("SELECT last_n,complete FROM widget_source_scopes WHERE thread=?").get(thread)),
+      { last_n: null, complete: 0 });
+    db.exec("DROP TRIGGER fail_widget_batch");
+    assert.deepEqual(widgetSourcesStep(db, thread, 4), { done: true, visited: 2 });
+    assert.equal(db.prepare("SELECT count(*) AS n FROM widget_source_rows").get()?.n, 2);
+  } finally { store.close(); }
+});
+
+test("an incompatible widget index is neither read nor prepared", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "EMBER", "version", null, null).id;
+    store.joinThread(thread, "a", "ember");
+    store.putWidgetState("a", "/w/item.html", "{}", "selected");
+    db.exec("UPDATE widget_source_meta SET version=2");
+    assert.throws(() => widgetSourcesStep(db, thread), /widget source.*version/i);
+    assert.throws(() => store.untoldWidgetModels("a"), /widget source.*version/i);
   } finally { store.close(); }
 });
