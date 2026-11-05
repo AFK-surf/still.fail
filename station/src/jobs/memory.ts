@@ -245,9 +245,10 @@ function sessionIn(sessions: { key: string; workspace: string; cwd: string | nul
 }
 
 /// Which session each runner id is (a runner is a session's, its id made of the session's key, or a profile's, shared
-/// by its sessions): the sessions shown asked each time; every session ever only as a runner none of them names comes
-/// (an archived session's left on, a profile's), and what that found kept.
-export function runnerSessions(store: Store): (ids: string[]) => Map<string, string> {
+/// by its sessions). If the shared lookup is not ready, keep the immediate answer used before while it is prepared.
+export type RunnerNameLookup = (runners: readonly { id: string; part: string }[]) => Map<string, string> | "fallback";
+
+export function runnerSessions(store: Store, lookup?: RunnerNameLookup): (ids: string[]) => Map<string, string> {
   let all: Map<string, string> | null = null;
   const unnamed = new Set<string>();
   const of = (sessions: { key: string }[]) => {
@@ -256,6 +257,16 @@ export function runnerSessions(store: Store): (ids: string[]) => Map<string, str
     return whose;
   };
   return (ids) => {
+    if (ids.length === 0) { lookup?.([]); return new Map(); }
+    if (lookup !== undefined) {
+      const runners = ids.flatMap((id) => {
+        const kind = RUNTIME_KINDS.find((k) => id.startsWith(`${k}-`));
+        return kind === undefined ? [] : [{ id, part: id.slice(kind.length + 1) }];
+      });
+      if (runners.length === 0) { lookup([]); return new Map(); }
+      const named = lookup(runners);
+      if (named !== "fallback") return named;
+    }
     const whose = of(store.liveSessions());
     const rest = ids.filter((id) => !whose.has(id));
     if (rest.some((id) => !unnamed.has(id) && !all?.has(id))) {
@@ -279,9 +290,9 @@ export async function runnersWithSessions(data: string, whose: (ids: string[]) =
 
 /// The watch as the station runs it: over its jobs (`jobs`' store) and the commands of its runtimes (the runners of
 /// before and now, <data>/run/runners), on this machine's memory.
-export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock }): MemoryWatch {
+export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock; runnerNames?: RunnerNameLookup }): MemoryWatch {
   const { store } = o;
-  const whose = runnerSessions(store);
+  const whose = runnerSessions(store, o.runnerNames);
   // A directory none of the sessions shown has, and whose it is among every session ever (none: null): a session made
   // since is shown, found among those first.
   const found = new Map<string, string | null>();

@@ -96,6 +96,34 @@ test("switching sandbox mode off during preparation stops it and a later sweep r
   } finally { await builder.close(); store.close(); }
 });
 
+test("a runner appearing while the sandbox lookup is being turned off keeps it prepared", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sandbox-name-runner-race-"));
+  const path = join(dir, "store.db");
+  const store = Store.open(path), writer = new DatabaseSync(path);
+  let enabled = true;
+  const builder = new SandboxNameBuilder(store, Promise.resolve(), () => enabled);
+  try {
+    store.db.prepare(add).run("session", "token");
+    assert.deepEqual(await builder.sessions([name("session")]), new Map([[name("session"), "session"]]));
+    writer.exec("BEGIN IMMEDIATE");
+    enabled = false;
+    const off = builder.disable();
+    await tick();
+    assert.deepEqual(builder.runners([{ id: "claude-session", part: "session" }]), new Map([["claude-session", "session"]]));
+    writer.exec("COMMIT");
+    await off;
+    await builder.settled();
+    assert.equal(store.db.prepare("SELECT enabled FROM sandbox_name_meta WHERE id = 1").get()?.enabled, 1);
+    assert.deepEqual(builder.runners([{ id: "claude-session", part: "session" }]), new Map([["claude-session", "session"]]));
+  } finally {
+    try { writer.exec("ROLLBACK"); } catch {}
+    await builder.close();
+    writer.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a stopped sandbox lookup worker can be started again", async () => {
   const dir = mkdtempSync(join(tmpdir(), "sandbox-name-retry-"));
   const store = Store.open(join(dir, "store.db"));
