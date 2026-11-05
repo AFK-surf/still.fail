@@ -64,6 +64,9 @@ pub(all) struct Emits {
   /// waiting: seq, its message's ts (its row's key: Turn's), agent, its activity's folding (from when it began waiting)
   queue : Array[(Double, String, String, @motion.Anim)]
   mut current : Turn?
+  /// when each agent's last message came out of its avatar, as its poses declared it to end (not the frame that saw
+  /// it end): its line's lingering counted from there (chat_tick)
+  ended : Map[String, Double]
   /// where the flying avatar was last sent, for which message; where it last let one out
   mut aimed : (Double, Double)?
   mut aimed_at : Double
@@ -81,6 +84,8 @@ pub(all) struct Emits {
   /// a message's coming in held for words sent from here on their way (emit_step): till their declared landing (-1:
   /// none)
   mut held_until : Double
+  /// the newest message's seq as its list was first taken (or given whole): none to that come out of an avatar
+  mut floor : Double
   /// the first row of what was sent from here not in the chat yet (the outbox's, under the messages), as last built
   /// ("" none): a message coming in comes in over it
   mut out_key : String
@@ -120,6 +125,7 @@ pub fn emits_of(key : String) -> Emits {
         done: {},
         queue: [],
         current: None,
+        ended: {},
         aimed: None,
         aimed_at: -1.0,
         landed: None,
@@ -130,6 +136,7 @@ pub fn emits_of(key : String) -> Emits {
         mover: @ui.Mover::new(),
         held_until: -1.0,
         out_key: "",
+        floor: -1.0e300,
         taken: None,
         out_at: {},
         said: @signals.signal(0),
@@ -175,9 +182,7 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
           Set(at, _) => came.push(at)
           Whole(_) => {
             came.clear()
-            for i in 0..<v.messages.length() {
-              came.push(i)
-            }
+            e.floor = last_seq(v)
           }
           Removed(_, _, _) | Moved(_, _, _, _) => ()
         }
@@ -188,9 +193,8 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
         None => ()
       }
       e.taken = Some((rows, rows.reader()))
-      for i in 0..<v.messages.length() {
-        came.push(i)
-      }
+      // (what it holds as it is first taken: in it before, none of it to come out of an avatar; nothing of it read)
+      e.floor = last_seq(v)
     }
   }
   let decided = e.decided.length()
@@ -201,6 +205,9 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
     // (one not said while the chat shows comes of no avatar: decided off its row, no Message made of it, as a chat's
     // first take is of all of them, a long chat's thousands)
     let r = v.messages.row(i)
+    if r.seq <= e.floor {
+      continue
+    }
     let k = seq_s(r.seq)
     if e.decided.contains(k) {
       continue
@@ -257,6 +264,23 @@ pub fn emit_held(e : Emits, seq : Double) -> Bool {
     Some(t) if t.seq == seq && t.pose != Fold => false
     _ => true
   }
+}
+
+///|
+/// The messages waiting their turn (emit_held), by their seqs: those queued and the one under way, a few.
+pub fn emit_held_seqs(e : Emits) -> Array[Double] {
+  e.read()
+  let out = []
+  for q in e.queue {
+    if emit_held(e, q.0) {
+      out.push(q.0)
+    }
+  }
+  match e.current {
+    Some(t) if emit_held(e, t.seq) && !out.contains(t.seq) => out.push(t.seq)
+    _ => ()
+  }
+  out
 }
 
 ///|
@@ -325,6 +349,10 @@ pub fn emit_release(e : Emits) -> Unit {
 ///|
 pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   e.changed()
+  match e.current {
+    Some(t) => e.ended[t.agent] = t.clock.ends()
+    None => ()
+  }
   if e.queue.length() == 0 {
     e.current = None
     return
@@ -893,4 +921,17 @@ pub fn emit_glyph_out(
 ) -> @view.GlyphLook {
   let l = glyph_out(dmax(at - from, 0.0), { index: g.index, x: g.x, y: g.y, h: g.h, top: g.top, foot: g.foot }, col, seq.to_int64().to_int())
   { alpha: l.alpha, dx: l.dx, dy: l.dy, scale: l.scale, sx: l.sx }
+}
+
+///|
+/// The newest of chat `v`'s messages' seq, the least there is where it has none (its messages kept in seq's order).
+fn last_seq(v : ChatView) -> Double {
+  let n = v.messages.length()
+  if n > 0 { v.messages.seq_at(n - 1) } else { -1.0e300 }
+}
+
+///|
+/// When agent `agent`'s last message came out of its avatar, as declared (-1: none yet).
+pub fn emit_ended(e : Emits, agent : String) -> Double {
+  e.ended.get(agent).unwrap_or(-1.0)
 }

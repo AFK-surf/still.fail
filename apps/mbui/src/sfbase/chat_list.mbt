@@ -421,7 +421,7 @@ pub fn views_worked() -> Int {
 /// or left (its rows' words, its bar, its composer): 185 of a leave's 378 ms on a phone, when each read asked anew
 /// (2026-11-05).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
-  chat_views.read(chat_key(r), fn(_) { chat_view_now(src, r) }, same=fn(a, b) {
+  chat_views.read(chat_key(r), fn(_) { view_of_chat_now(src, r) }, same=fn(a, b) {
     same_view(a.0, b.0) && physical_equal(a.1, b.1) && a.2 == b.2
   })
 }
@@ -451,22 +451,49 @@ fn same_view(a : ChatView?, b : ChatView?) -> Bool {
 ///|
 /// Chat `r`'s view as it is now (view_of_chat's getter): what reads the view follows the topic through it, so a page
 /// left is told it changed by the topic's end.
-fn chat_view_now(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
+fn view_of_chat_now(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
   views_worked_count.val += 1
-  let params = chat_params(r)
-  let topic = (src.topic)("chat", params)
-  let read = chat_reads.read(chat_key(r), fn(was) { chat_read(src, params, was) })
-  match (read, topic.value, fresh_view(r)) {
+  let (read, present, error) = chat_read_now(src, r)
+  match (read, present, fresh_view(r)) {
     // (the chat a new chat became is never said to be empty: its first message is in it from the frame it was sent,
     // sent_local, while the core has it made and not yet sent to)
-    (Some(c), Some(Object(_)), Some(_)) if c.list.iter().any(fn(e) { e is Empty }) =>
-      (Some(c.view), c.list.filter(fn(e) { !(e is Empty) }), topic.error)
-    (Some(c), Some(Object(_)), _) => (Some(c.view), c.list, topic.error)
+    (Some(c), true, Some(_)) => {
+      let list = c.entries()
+      if list.iter().any(fn(e) { e is Empty }) {
+        (Some(c.view), list.filter(fn(e) { !(e is Empty) }), error)
+      } else {
+        (Some(c.view), list, error)
+      }
+    }
+    (Some(c), true, _) => (Some(c.view), c.entries(), error)
     // the chat a new chat became as its first words were sent, till the core's view of it is read: a chat with
     // nothing in it yet but what was sent from here (its own first view, as the core's will be: views.ts pendingChat)
     (_, _, Some((v, list))) => (Some(v), list, None)
-    _ => (None, [], topic.error)
+    _ => (None, [], error)
   }
+}
+
+///|
+/// The chat's view for a reader which does not need its list of entries (messages are made only as they are read).
+/// Not kept as view_of_chat's is (chat_views): a reaction of the tree reading it from one kept was not told the view
+/// changed (a request decided in its chat: its card kept its buttons, 2026-11-05); its readers are the page's
+/// reactions, a few, not each frame's hundreds.
+pub fn chat_view_now(src : Source, r : ChatRef) -> ChatView? {
+  let (read, present, _) = chat_read_now(src, r)
+  match (read, present, fresh_view(r)) {
+    (Some(c), true, _) => Some(c.view)
+    (_, _, Some((v, _))) => Some(v)
+    _ => None
+  }
+}
+
+///|
+/// Follow the topic and its cached view without asking for its entries.
+fn chat_read_now(src : Source, r : ChatRef) -> (ChatRead?, Bool, Json?) {
+  let params = chat_params(r)
+  let topic = (src.topic)("chat", params)
+  let read = chat_reads.read(chat_key(r), fn(was) { chat_read(src, params, was) })
+  (read, topic.value is Some(Object(_)), topic.error)
 }
 
 ///|
@@ -489,9 +516,23 @@ fn chat_key(r : ChatRef) -> String {
 /// A chat as chat_read made it: its view and its list's entries.
 priv struct ChatRead {
   view : ChatView
-  list : Array[Entry]
+  /// its entries, made only for a reader that asks for them (ChatRead::entries), once for each version
+  mut list : Array[Entry]?
   /// what of its value its entries are made of besides its messages (entry_sign)
   sign : String
+}
+
+///|
+/// Make the complete entry array only for a caller which asks for it, once per view.
+fn ChatRead::entries(self : ChatRead) -> Array[Entry] {
+  match self.list {
+    Some(list) => list
+    None => {
+      let list = entries_of(self.view)
+      self.list = Some(list)
+      list
+    }
+  }
 }
 
 ///|
@@ -525,7 +566,7 @@ fn chat_read(src : Source, params : Map[String, Json], was : ChatRead??) -> Chat
   // title, change the chat's value and none of its rows; not gone through again, a long chat's thousands)
   let list = match was {
     Some(Some(w)) if changed.is_empty() && physical_equal(w.view.messages, messages) && w.sign == sign => w.list
-    _ => entries_of(view)
+    _ => None
   }
   Some({ view, list, sign })
 }
@@ -586,7 +627,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     if chat_kept(r) is None {
       continue
     }
-    match view_of_chat(src, r).0 {
+    match chat_view_now(src, r) {
       Some(v) => chat_tick(c, rk, rd, v, shown=rd.shown(c), in_front~)
       None => ()
     }
@@ -708,7 +749,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
     let held = keeps.contains(k)
     // (asked while held too: its count starts at the last build they were still coming)
-    if @kit.after(c, at + "/gone", true, linger_ms) && !held {
+    // (counted from when its last message came out of its avatar as declared, not from the frame that saw it: a
+    // frame drawn late counts from then all the same)
+    if @kit.after(c, at + "/gone", true, linger_ms, since=if held { -1.0 } else { emit_ended(em, k) }) && !held {
       over.push(k)
     }
   }
@@ -2135,4 +2178,111 @@ pub fn sent_rows_taken(
     }
   }
   (all, all_keys, came_new)
+}
+
+///|
+/// A message's row's key as the page has it before what was sent from here takes it (sent_rows_taken's core keys):
+/// the outbox entry it was, else `m:` and its ts.
+pub fn said_key(rd : Reading, m : SaidRow) -> String {
+  if m.outgoing != "" {
+    "o:" + m.outgoing
+  } else {
+    match rd.sent.get(m.seq) {
+      Some(o) => "o:" + o
+      None => "m:" + m.ts
+    }
+  }
+}
+
+///|
+/// The rows at the end of chat `v`'s list (ChatRows' tail: the page after's spinner, the outbox and what was sent from
+/// here not in it yet, where it stands, its agents at work and those lingering, Foot), what was sent from here taken by
+/// the core's row once it has it (sent_rows_taken's, the messages looked at from the end: those newer than what was
+/// there as it was sent, and the outbox).
+pub fn tail_taken(rd : Reading, rk : String, v : ChatView, flight : SendFlight?) -> Array[Entry] {
+  for o in v.outbox {
+    if o.seq >= 0.0 {
+      rd.sent[o.seq] = o.id
+    }
+  }
+  let sending = sending_of(rk)
+  if sending.length() > 0 {
+    // (what may be one's: the messages newer than the oldest newest any was sent after, from the end; the outbox)
+    let oldest = sending.fold(init=@double.infinity, fn(a, l) { if l.newest < a { l.newest } else { a } })
+    let recent : Array[SaidRow] = []
+    let mut i = v.messages.length() - 1
+    while i >= 0 {
+      let m = v.messages.row(i)
+      if m.seq <= oldest {
+        break
+      }
+      recent.push(m)
+      i -= 1
+    }
+    recent.rev_in_place()
+    let taken : Map[String, Bool] = {}
+    let still : Array[LocalSent] = []
+    for l in sending {
+      let came = Ref("")
+      let take = fn(k : String) {
+        if !l.before.contains(k) && !taken.contains(k) && !rd.sent_as.contains(k) {
+          came.val = "o:" + l.row.id
+          rd.sent_as[k] = came.val
+          rd.sent_as_told.set(@signals.untracked(fn() { rd.sent_as_told.get() }) + 1)
+          taken[k] = true
+          true
+        } else {
+          false
+        }
+      }
+      for m in recent {
+        if m.mine && !m.system && m.seq > l.newest && take(said_key(rd, m)) {
+          break
+        }
+      }
+      if came.val == "" {
+        for o in v.outbox {
+          if take("o:" + o.id) {
+            break
+          }
+        }
+      }
+      if came.val == "" {
+        still.push(l)
+        continue
+      }
+      rd.known[came.val] = true
+      match flight {
+        Some(f) if f.key == "o:" + l.row.id => f.key = came.val
+        _ => ()
+      }
+    }
+    sending.clear()
+    for l in still {
+      sending.push(l)
+    }
+  }
+  let out : Array[Entry] = []
+  if v.newer {
+    out.push(Newer)
+  }
+  for o in v.outbox {
+    out.push(Out(o))
+  }
+  for l in sending {
+    out.push(Out(l.row))
+  }
+  if !v.newer {
+    match v.state {
+      Some((words, lead, rest)) => out.push(State(words, lead, rest))
+      None => ()
+    }
+    for a in v.agents {
+      if a.status == "running" {
+        out.push(Working(a))
+      }
+    }
+  }
+  out.push(Foot)
+  with_lingering(rd, out)
 }

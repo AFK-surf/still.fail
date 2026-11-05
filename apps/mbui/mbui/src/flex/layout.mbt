@@ -425,6 +425,30 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
+/// Measure and lay out a child of a custom container within the current compute, retaining this generation and
+/// its caches. This is not a new root compute. Its caller owns the child's final position.
+pub fn layout_child(node : Node, width : Double, height? : Double, containing_height? : Double) -> (Double, Double) {
+  let h = height.unwrap_or(undef)
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, width, h, width, h, width, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
+}
+
+///|
+/// Lay out a custom container's child at its intrinsic width, with `most` available, within the current compute.
+pub fn layout_child_fitted(node : Node, most : Double, containing_height? : Double) -> (Double, Double) {
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, undef, undef, most, undef, most, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
+}
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {
@@ -528,7 +552,11 @@ fn size_node(
       same(node.p_kh, kh) &&
       same(node.p_cbw, cb_w) &&
       same(node.p_cbh, cb_h) {
-      node.skip_gen = generation.val
+      // (laid out before this compute and found so: reused; laid out in this one already, its absolute boxes are
+      // still to be placed with the rest)
+      if node.p_gen != generation.val {
+        node.skip_gen = generation.val
+      }
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
       return node.p_w
@@ -574,6 +602,7 @@ fn size_node(
   let h = out_h.val
   if perform {
     node.p_ok = true
+    node.p_gen = generation.val
     node.p_kw = kw
     node.p_kh = kh
     node.p_cbw = cb_w
@@ -659,6 +688,19 @@ fn size_uncached(
   }
   let pbw = b.pbw()
   let pbh = b.pbh()
+  match node.layout_children {
+    Some(layout) => {
+      // A viewport's intrinsic content is empty; its parent must give it the final bounds (flex share, explicit
+      // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
+      if perform {
+        guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
+        layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+      }
+      out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
+      return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }
+    }
+    None => ()
+  }
   // leaves measured from their content
   match node.measure {
     Some(m) =>
@@ -1704,6 +1746,7 @@ fn layout_flex(
         let rh = fmax(h - ipbh, 0.0) + ipbh
         counters[0] = counters[0] + 1
         n.p_ok = true
+        n.p_gen = generation.val
         n.p_kw = iw
         n.p_kh = ih
         n.p_cbw = cb_w
@@ -2397,6 +2440,13 @@ fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
 /// position in its parent when it has no insets. (ox, oy): the parent's
 /// border box in cb's.
 fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> Unit {
+  if node.layout_children is Some(_) {
+    // The container has already placed its direct children; absolute descendants still use their own holders.
+    for c in node.children {
+      if c.line >= 0 && !kept(c) && c.children.length() > 0 { layout_static_absolute(c, c, 0.0, 0.0) }
+    }
+    return
+  }
   for c in node.children {
     let cs = c.style
     if cs.display == DisplayNone {
