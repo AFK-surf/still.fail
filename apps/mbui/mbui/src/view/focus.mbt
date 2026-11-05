@@ -25,15 +25,12 @@ pub(all) struct FocusAt {
 /// `keys` (focus_enter, focus_space: its on_press, as a press on it runs it). Not on, the focus on it let go of then;
 /// what it holds takes it or not by its own saying (what holds a node said to take no press, View::presses, keeps it
 /// from it). `tab`: whether Tab stops on it (false: it takes the focus as it is given it, a layer's own ground as it
-/// opens, Tab passing it by). `typing`: an editor whose existing focus a modal layer may leave in place for text
-/// input alone (View::leaves_typing); this does not give it the layer's keys or presses. Omitted, whether it is an
-/// editor stays as it was: changing an editor's enabled state does not change what takes its text.
-pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space, tab? : Bool = true, typing? : Bool) -> View {
+/// opens, Tab passing it by).
+pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space, tab? : Bool = true) -> View {
   // (whether it takes the focus is the logic's, as whether it takes presses is (View::presses): said at the moment it
   // changes, as the change saying it is committed, the focus on it let go of then; said anew, what was said before let
   // go of)
   guard self.live() is Some(n) else { return self }
-  let typing = typing.unwrap_or(n.focus_typing)
   match n.props.get(Focusable) {
     Some(stop) => {
       n.props.remove(Focusable)
@@ -54,16 +51,15 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   // what is read out of it told by the frame then owed, where it changed)
   let set = fn(on : Bool, tell : Bool) {
     guard self.live() is Some(n) else { return }
-    let was = (n.focusable, n.focus_keys, n.focus_tab, n.focus_typing)
+    let was = (n.focusable, n.focus_keys, n.focus_tab)
     n.focusable = on
-    n.focus_typing = typing
     n.focus_keys = keys
     // (Tab's stop on it View::tab_stop's where that was said after this: not undone as whether it takes the focus
     // changes)
     if !n.tab_by_stop {
       n.focus_tab = tab
     }
-    if tell && was != (on, keys, tab, typing) {
+    if tell && was != (on, keys, tab) {
       self.tree.marked()
     }
     // (its own focus let go of, not what it holds: whether they take it is their own, View::presses what holds them
@@ -157,7 +153,7 @@ pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
 pub fn Tree::focus_to(self : Tree, id : NodeId?, visible? : Bool = false) -> Bool {
   let ok = match id {
     Some(i) =>
-      self.can_focus(i) || (self.focused == Some(i) && self.typing_kept(i))
+      self.can_focus(i)
     None => true
   }
   if !ok {
@@ -277,14 +273,6 @@ pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool =
 /// it): what a screen reader may give it.
 pub fn Tree::can_focus(self : Tree, id : NodeId) -> Bool {
   self.alive_id(id) && self.nodes[id.at].focusable && !self.pressless_at(id.at)
-}
-
-///|
-/// An editor's existing focus kept for text input under a layer that leaves typing. Its presses and keys still
-/// belong to the layer; leaving, disabling or releasing the editor drops that focus as usual.
-fn Tree::typing_kept(self : Tree, id : NodeId) -> Bool {
-  self.alive_id(id) && self.nodes[id.at].focusable && self.nodes[id.at].focus_typing &&
-    self.typing_left_under() && !self.pressless_own_at(id.at)
 }
 
 ///|

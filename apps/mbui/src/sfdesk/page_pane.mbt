@@ -164,8 +164,7 @@ fn pane_made(
   page : Page,
   tips : @sf.TipLayer,
 ) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
-  // (a chat's made once whatever: its old view is gone; the library's pages by pane_makes)
-  guard pane_makes.val || page is (Chat(_) | History(_, _, _)) else { return None }
+  guard pane_makes.val else { return None }
   // (made in the workspace in view, its settings' core, under what it was opened from, as wide as the frame gives it)
   let made = fn(
     kind : String,
@@ -214,29 +213,6 @@ fn pane_made(
     )
   }
   match page {
-    // (a chat, kept by its chat: its root made once, chat_node.mbt)
-    Chat(r) =>
-      Some(
-        (
-          "chat/" + r.station + ":" + r.session,
-          fn(v : @view.View, _page, _under, _stint, k : Int) {
-            pane_made_host(v, src, k)
-            chat_root_node(v, src, r, k)
-          },
-        ),
-      )
-    // (an agent's history asked as a page: its chat, the history opened beside it at the entry asked, once as it is made)
-    History(r, key, entry) =>
-      Some(
-        (
-          "chat/" + r.station + ":" + r.session,
-          fn(v : @view.View, _page, _under, _stint, k : Int) {
-            pane_made_host(v, src, k)
-            history_beside(src, r, key, entry)
-            chat_root_node(v, src, r, k)
-          },
-        ),
-      )
     Setting(About) =>
       made("about", fn(a, core, _here, _stint, frame, width) {
         @sfpages.about_node(a, core, on_back=core.pop, frame~, width~)
@@ -319,7 +295,6 @@ pub let pane_makes : Ref[Bool] = Ref(true)
 /// what moves the page (a keyboard, the block): no motion of the old view's is in it to be scoped to its foot
 /// (@motion.scope's), its own (the update's bar's room) bound to its cause.
 fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
-  p.lends(pane_bar_node_lent, Ref(None)) |> ignore
   p
   .grow(Is(1.0))
   .min_height(Is(Some(0.0)))
@@ -350,21 +325,4 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
     .moves_window(Is(true))
     |> ignore
   })
-}
-
-///|
-/// The bar belongs to its page but has its own room round the folded sidebar. It is left out when that page's
-/// content span decides how far to move aside. Each retained page owns its bar's reference.
-// kept across runs: the key each pane lends; its value belongs to that pane and is let go with it
-let pane_bar_node_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
-
-///|
-fn pane_bar_made(bar : @view.View) -> Unit {
-  match bar.lent(pane_bar_node_lent) {
-    Some(slot) => {
-      slot.val = Some(bar)
-      bar.owns(fn() { if slot.val.map(fn(v) { v.id() }) == Some(bar.id()) { slot.val = None } }) |> ignore
-    }
-    None => ()
-  }
 }

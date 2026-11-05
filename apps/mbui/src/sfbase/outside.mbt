@@ -40,11 +40,11 @@ pub(all) struct OutsideAsk {
 }
 
 ///|
-pub let outside_ask : @signals.Signal[OutsideAsk?] = @signals.signal(None)
+pub let outside_ask : Ref[OutsideAsk?] = { val: None }
 
 ///|
 fn outside_reset() -> Unit {
-  outside_ask.set(None)
+  outside_ask.val = None
 }
 
 ///|
@@ -56,7 +56,7 @@ pub fn send_sharing(src : Source, key : String, station : String, words : String
     send()
     return
   }
-  match outside_ask.get() {
+  match outside_ask.val {
     // asked already, or asking: a second send does nothing meanwhile
     Some(s) if s.key == key && (s.checking.get() || s.open.get() || s.go.get()) => return
     _ => ()
@@ -73,7 +73,7 @@ pub fn send_sharing(src : Source, key : String, station : String, words : String
     busy: @signals.signal(false),
     error: @signals.signal(""),
   }
-  outside_ask.set(Some(s))
+  outside_ask.val = Some(s)
   (src.call)("chat.outsideRefs", { "station": Json::string(station), "text": Json::string(words) }, fn(res) {
     s.checking.set(false)
     // a core that cannot say (one before sharing) leaves it as before: sent as it is
@@ -112,12 +112,12 @@ fn outside_refs_of(v : Json) -> Array[OutsideRef] {
 /// Each build of draft `key`'s composer: what was cleared to go goes (said by the core's answer or a share's, which
 /// bring this frame), as it would have when pressed.
 pub fn sharing_go(key : String) -> Unit {
-  match outside_ask.get() {
+  match outside_ask.val {
     Some(s) if s.key == key && s.go.get() => {
       s.go.set(false)
       // (one asked about lets go as its page's asking has gone: outside_gone)
       if s.chats.is_empty() {
-        outside_ask.set(None)
+        outside_ask.val = None
       }
       (s.send)()
     }
@@ -129,7 +129,7 @@ pub fn sharing_go(key : String) -> Unit {
 /// What draft `key`'s send is asking the viewer, while it is (or while its asking is still shown going: `outside_gone`
 /// once it has).
 pub fn outside_asking(key : String) -> OutsideAsk? {
-  match outside_ask.get() {
+  match outside_ask.val {
     Some(s) if s.key == key && (s.open.get() || !s.chats.is_empty()) => Some(s)
     _ => None
   }
@@ -150,10 +150,8 @@ pub fn outside_yes(src : Source, s : OutsideAsk) -> Unit {
     return
   }
   if !outside_sharable(s) {
-    @signals.start_batch()
     s.open.set(false)
     s.go.set(true)
-    @signals.end_batch()
     return
   }
   s.busy.set(true)
@@ -162,12 +160,8 @@ pub fn outside_yes(src : Source, s : OutsideAsk) -> Unit {
     s.busy.set(false)
     match res {
       Ok(_) => {
-        // Closing the retained panel can run its cleanup immediately. Publish the send with the close, so the
-        // cleanup cannot discard the asking in the gap before its pending send is set.
-        @signals.start_batch()
         s.open.set(false)
         s.go.set(true)
-        @signals.end_batch()
       }
       Err(e) => s.error.set(@sf.t("web-main.outside.failed", args=[("error", error_words(e))]))
     }
@@ -183,8 +177,8 @@ pub fn outside_no(s : OutsideAsk) -> Unit {
 ///|
 /// Its page's asking has gone (closed and shown no more): let go of it.
 pub fn outside_gone(s : OutsideAsk) -> Unit {
-  match outside_ask.get() {
-    Some(now) if physical_equal(now, s) && !s.open.get() && !s.go.get() => outside_ask.set(None)
+  match outside_ask.val {
+    Some(now) if physical_equal(now, s) && !s.open.get() && !s.go.get() => outside_ask.val = None
     _ => ()
   }
 }

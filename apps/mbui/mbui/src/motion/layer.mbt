@@ -138,8 +138,6 @@ priv struct Moving {
   mut carry : Bool
   /// reshape: it changes shape from its foot (reshape's `foot`)
   mut foot : Bool
-  /// an explicit handover from another owner, in the window, in the cause's first frame
-  mut from : (Double, Double, Double, Double)?
   /// how it is drawn, worked out once this frame is laid out (placed)
   mut placed : (() -> @ui.Look)?
 }
@@ -152,9 +150,6 @@ priv struct Rec {
   mut y : Double
   mut w : Double
   mut h : Double
-  /// where its list/scope's origin was in the window when laid out, for a handover to another owner
-  mut window : (Double, Double)
-  mut reshaped : Bool
   /// How a measured node was drawn after all of its ancestors' looks were applied.
   mut drawn : @ui.DrawnState?
   mut drawn_frame : Int
@@ -266,8 +261,6 @@ fn Rec::new() -> Rec {
     y: 0.0,
     w: 0.0,
     h: 0.0,
-    window: (0.0, 0.0),
-    reshaped: false,
     drawn: None,
     drawn_frame: -10,
     ref: 0,
@@ -510,7 +503,6 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     reshape: false,
     carry: false,
     foot: false,
-    from: None,
     placed: None,
   }
   mo.stamp[i] = build
@@ -571,7 +563,6 @@ pub fn layout(
   drive? : Double = -1.0,
   screen? : Bool = false,
   cut? : Bool = true,
-  from? : (Double, Double, Double, Double),
 ) -> Unit {
   let e = moving_of(c, i)
   e.name = key
@@ -580,7 +571,6 @@ pub fn layout(
   e.cut = cut
   e.screen = screen
   e.spec = spec
-  e.from = from
   if by != "" {
     e.by = by
   }
@@ -651,7 +641,6 @@ pub fn reshape(
   spec~ : Spec,
   carry? : Bool = false,
   foot? : Bool = false,
-  from? : (Double, Double, Double, Double),
 ) -> Unit {
   let e = moving_of(c, i)
   e.name = key
@@ -661,7 +650,6 @@ pub fn reshape(
   e.carry = carry
   e.foot = foot
   e.spec = spec
-  e.from = from
   if by != "" {
     e.by = by
   }
@@ -765,25 +753,6 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
 }
 
 ///|
-/// The window rectangle of a named layout or reshape at this moment. A component changing owners can hand this
-/// place to its successor; reading the live way, rather than the last painted frame, also works between frames.
-pub fn layout_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
-  match mo.recs.get(motion_key(key)) {
-    Some(r) if r.seen >= c.frame_number() - 1 => {
-      let (wx, wy) = r.window
-      if r.reshaped {
-        let p = r.gp.get()
-        Some((wx + r.gx + (r.x - r.gx) * p, wy + r.gy + (r.y - r.gy) * p,
-          r.gw + (r.w - r.gw) * p, r.gh + (r.h - r.gh) * p))
-      } else {
-        Some((wx + r.x + r.ox.get(), wy + r.y + r.oy.get(), r.w, r.h))
-      }
-    }
-    _ => None
-  }
-}
-
-///|
 /// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once it
 /// has not been for a frame).
 pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
@@ -823,12 +792,6 @@ pub struct MeasuredCorners {
 ///|
 pub fn MeasuredCorners::uniform(radius : Double) -> MeasuredCorners {
   { values: (radius, radius, radius, radius) }
-}
-
-///|
-/// The four corners resolved by a retained node, top left, top right, bottom right and bottom left.
-pub fn MeasuredCorners::from_each(values : (Double, Double, Double, Double)) -> MeasuredCorners {
-  { values }
 }
 
 ///|
@@ -1730,25 +1693,6 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_hp = r.hp.get()
         r.was_hh = r.hh
         r.g_now = false
-        // A named owner handed this node its place for this cause. It is the same moving thing, even when
-        // its previous owner was a retained node and therefore had no entry in the old frame's motion table.
-        match e.from {
-          Some((x, y, w, h)) => {
-            r.was_x = x - (nx - rx)
-            r.was_y = y - (ny - ry)
-            r.was_w = w
-            r.was_h = h
-            r.was_ref = ref
-            r.was_seen = frame - 1
-            r.was_by = "handover\u{1}" + e.by
-            r.was_ox = 0.0
-            r.was_oy = 0.0
-            r.was_gp = 1.0
-            r.was_hp = 1.0
-            r.was_rad = c.node_radii(e.node)
-          }
-          None => ()
-        }
       }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
       let was_seen = r.was_seen >= frame - 1 && r.was_ref == ref
@@ -2030,8 +1974,6 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         }
       }
       r.rad = c.node_radii(e.node)
-      r.window = (nx - rx, ny - ry)
-      r.reshaped = e.reshape
       r.x = rx
       r.y = ry
       r.by = e.by

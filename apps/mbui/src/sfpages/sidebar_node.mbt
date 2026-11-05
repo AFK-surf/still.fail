@@ -452,7 +452,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
       1 =>
         p.box(fn(b) {
           @sf.style_node(b, fn() { empty_first })
-          @sf.drawable_node(b, fn() { if @sf.theme().dark { "illus_no_station_dark" } else { "illus_no_station" } }, illustration_w) |> ignore
+          @sf.drawable_node(b, if @sf.theme().dark { "illus_no_station_dark" } else { "illus_no_station" }, illustration_w) |> ignore
           @sf.words_node(b, fn() { @sf.t("android-settings.station.first") }, fn() { empty_title }) |> ignore
           @sf.words_node(b, fn() { @sf.t("android-settings.station.firstNote") }, fn() { empty_note }) |> ignore
         })
@@ -460,7 +460,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
       _ =>
         p.box(fn(b) {
           @sf.style_node(b, fn() { empty_box })
-          @sf.drawable_node(b, fn() { if @sf.theme().dark { "illus_new_chat_dark" } else { "illus_new_chat" } }, illustration_w) |> ignore
+          @sf.drawable_node(b, if @sf.theme().dark { "illus_new_chat_dark" } else { "illus_new_chat" }, illustration_w) |> ignore
           match filter {
             "mine" => @sf.words_node(b, fn() { @sf.t("android-chat.home.empty.mine") }, fn() { empty_words }) |> ignore
             "watching" =>

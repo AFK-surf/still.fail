@@ -10,13 +10,10 @@
 /// asked of the core); `size` its words', as it changes (0: the theme's body), on lines `line` times it high (0: Markdown.kt's 1.65);
 /// `ink` (0: the theme's text); `document`: its headings a document's; `bleed`: how far past its column either side its
 /// tables scroll; `copy`: its tables offer to be copied; `paths`: the files its paths name are a session's (chips);
-/// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held, `links_made` each paragraph's
-/// links as they are made (its node, its links, its runs: what shows a card over one); `chat_title`, what a bare
+/// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held; `chat_title`, what a bare
 /// link to a chat reads as; `code`, a fenced block of a language drawn another way (what draws it, its code as it
 /// changes); `files`, the files it names by their names, drawn where it names them (a paragraph of only a link to one,
 /// or its images); `screens`, its links to screens: a paragraph of only one its card, one bare in a sentence its title.
-/// `one_line`: its first words (within a block too), on one line, cut short with an ellipsis; `tracking`, its letters' spacing besides
-/// their own (a size of the theme's, as its style says).
 /// The node.
 pub fn markdown_node(
   parent : @view.View,
@@ -32,13 +29,10 @@ pub fn markdown_node(
   found? : () -> Array[String] = fn() { [] },
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
-  links_made? : ((@view.View, @ui.RunsLinks, () -> Array[@ui.Run]) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   files? : (String) -> PlacedNode? = fn(_) { None },
   screens? : ScreensNode,
-  one_line? : Bool = false,
-  tracking? : () -> @view.Spacing = fn() { @view.letters_own },
 ) -> @view.View {
   parent.box(fn(col) {
     // (its words asked of the core as it is made and as they change, none where it is told their reading; read by it
@@ -72,22 +66,13 @@ pub fn markdown_node(
       found,
       on_link,
       on_link_hold,
-      links_made,
       chat_title,
       code,
       files,
       screens,
-      one_line,
-      tracking,
     }
     let blocks = fn() { md_node_blocks(text(), tree()) }
-    if one_line {
-      // (as markdown's closed notice: the first words even within a quote or list, their breaks run on, the
-      // notice's own size; laid out on one line before being cut, never wrapped and then cut to a line)
-      md_words_node(col, md, fn() { first_words(blocks()) }, md.size, 0, wrap=false)
-    } else {
-      md_blocks_node(col, md, blocks, false)
-    }
+    md_blocks_node(col, md, blocks, false)
   })
 }
 
@@ -104,15 +89,10 @@ priv struct MdNode {
   found : () -> Array[String]
   on_link : (String) -> Unit
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
-  links_made : ((@view.View, @ui.RunsLinks, () -> Array[@ui.Run]) -> Unit)?
   chat_title : (String) -> String?
   code : (String) -> ((@view.View, () -> String) -> Unit)?
   files : (String) -> PlacedNode?
   screens : ScreensNode?
-  /// its first block alone, on one line, cut short with an ellipsis (a notice closed)
-  one_line : Bool
-  /// how far apart its letters are set besides their own spacing (a size of the theme's own, as it says it)
-  tracking : () -> @view.Spacing
 }
 
 ///|
@@ -442,7 +422,6 @@ fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?
           md.copy,
           md.on_link,
           md.on_link_hold,
-          files=md.files,
         )
       })
       |> ignore
@@ -585,20 +564,11 @@ fn md_words_node(
   }
   let look = fn() -> @view.WordsLook {
     let size = size()
-    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: (md.tracking)(), balance: false }
+    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own }
   }
   p.box(fn(w) {
-    w
-    .words_runs(By(runs))
-    .words_look(By(look))
-    .runs_look(By(fn() { if md.one_line { { ..table_runs_look(), max_lines: 1 } } else { table_runs_look() } }))
-    .ink(By(md.ink))
-    |> ignore
-    let links = @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold)
-    match md.links_made {
-      Some(f) => f(w, links, runs)
-      None => ()
-    }
+    w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
+    @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold) |> ignore
   })
   |> ignore
 }
@@ -790,11 +760,11 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
 
 ///|
 /// A code block (code_block's) in `p`: on the code ground, row_corner round, cut to it; its language and its copy key
-/// (a capsule, concentric with the block's corner) on a row of their own over the code with either input (code_block's);
-/// the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
+/// (a capsule, concentric with the block's corner) on a row of their own over the code with a finger, laid over its
+/// top right corner with a mouse; the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
 /// desktop's width 12 on 1.6), scrolled across rather than wrapped. Pressed, the key copies the code and says so
 /// copied_ms.
-pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
+fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
   let over = native_input() is Mouse
   let key_inset = capsule_in(row_corner, code_key_h)
   let copied = @signals.signal(false)
@@ -850,7 +820,9 @@ pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String,
     })
     |> ignore
   }
-  p.box(bar) |> ignore
+  if !over {
+    p.box(bar) |> ignore
+  }
   // (its code in a box of its own that scrolls across: what is over it stays)
   p.box(fn(sc) {
     sc.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
@@ -868,16 +840,22 @@ pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String,
           line: if over { code_line_wide } else { 18.0 },
           wrap: false,
           tracking: @view.letters_own,
-          balance: false,
         }
-        // (on its own lines, as written: not wrapped, broken where it breaks, Ctx::rich's `breaks`)
-        w.words_runs(By(runs), look~).runs_look(Is({ ..@view.runs_plain, breaks: true })).ink(By(fn() { theme().p.text })) |> ignore
+        w.words_runs(By(runs), look~).ink(By(fn() { theme().p.text })) |> ignore
       })
       |> ignore
     })
     |> ignore
   })
   |> ignore
+  if over {
+    p.box(fn(o) {
+      // (over its top, as wide as the block: its keys at its end)
+      o.over(Is(true)).lines_up(Is(None)) |> ignore
+      o.box(bar) |> ignore
+    })
+    |> ignore
+  }
 }
 
 ///|
@@ -913,7 +891,7 @@ let md_task_check : Double = 11.0
 ///|
 /// Words of `size` on one line, in 400, on lines `line` high (0: the theme's line for that size, as old text's with none said).
 fn md_plain_look(size : Double, line : Double) -> @view.WordsLook {
-  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own, balance: false }
+  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own }
 }
 
 ///|

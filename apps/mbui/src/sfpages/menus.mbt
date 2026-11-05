@@ -66,22 +66,6 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
 }
 
 ///|
-/// A link of words drawn by the window's tree held still (a finger's: felt as it opens) or right clicked, the piece of
-/// line under it at `at` (in the window): its menu there, as link_held's.
-fn link_held_node(href : String, at : (Double, Double, Double, Double)) -> Unit {
-  if !@sf.pointer_rests() {
-    @ui.haptic(LongPress)
-  }
-  let (x, y, w, h) = at
-  // (chosen: done as it is, outside any build: menus_frame's open and copy)
-  @sf.link_menu(href, from=@sf.Beside::At(x, y, w, h), fn() { @ui.open_url(href) |> ignore }, fn() {
-    let c = @ui.current()
-    c.copy_text(href)
-    say(c, @sf.t("common.link.copied"))
-  })
-}
-
-///|
 /// A file in a message (box `id`; a picture's image `src`, else "") held or right clicked: its menu there, as a
 /// passage's (pick.mbt): 引用 into the chat's draft (`quote`, where it is a message's), then what else it offers
 /// (`more`: 下载 and a video's 加载), then a picture's copy.
@@ -118,13 +102,6 @@ fn file_menu(
     }
     _ => ()
   }
-}
-
-///|
-/// What a menu's choice in a chat drawn by nodes left, done (menus_frame), as an old view over it is built: a picture
-/// copied once it is read.
-pub fn chat_menus_frame(c : @ui.Ctx) -> Unit {
-  menus_frame(c)
 }
 
 ///|

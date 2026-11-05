@@ -56,20 +56,6 @@ pub fn breathe(
 }
 
 ///|
-/// What waits, node `v` of the window's tree, breathing (breathe's): whole to `low` and back in breath_ms, each way on
-/// CSS's ease-in-out, by the clock it is drawn by (View::cycle); with motion reduced, whole.
-pub fn breathe_node(v : @view.View, low? : Double = 0.5) -> @view.View {
-  v.alpha(By(fn() {
-    if @ui.reduced_motion() {
-      return 1.0
-    }
-    let f = v.cycle(breath_ms)
-    let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
-    1.0 - (1.0 - low) * @ui.Ease::InOut.at(way)
-  }))
-}
-
-///|
 /// A placeholder bar (a title's, a line's, a picture's): in the line's grey, as what is drawn with nothing in it is
 /// (contrast.mbt), round; `breathing`, on the placeholders' breath by itself (Stations.kt Bar).
 pub fn bar(
@@ -322,31 +308,6 @@ pub fn progress_spinner(
       c.lines(lines, w=Px(size), h=Px(size))
     }
   }
-}
-
-///|
-/// The same transfer ring in a retained node: unknown progress turns, known progress eases to the new part.
-pub fn progress_spinner_node(parent : @view.View, coming : () -> Double?, size? : Double = 14.0, stroke? : Double = spin_stroke) -> @view.View {
-  parent.box(fn(root) {
-    root.width(Is(Some(size))).height(Is(Some(size))) |> ignore
-    root.pick(fn() { coming() is Some(_) }, fn(p, known) {
-      if !known { spinner_node(p, size~, stroke~) |> ignore } else {
-        let part = fn() { let k = coming().unwrap_or(0.0); if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k } }
-        let way = EdgeWay::new(@signals.untracked(part))
-        p.reacts(part, fn(k) { way.go(p, k, @kit.progress_ms) })
-        let pi = 3.141592653589793
-        let mid = size / 2.0
-        let r = mid - stroke / 2.0
-        let ring = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
-        p.width(Is(Some(size))).height(Is(Some(size))).lines(By(fn() {
-          let out = [@ui.line(ring, width=stroke, color=theme().p.line_strong)]
-          let shown = way.shown(p)
-          if shown > 0.0 { out.push(@ui.line(@ui.arc(mid, mid, r, from=-0.5 * pi, sweep=shown * 2.0 * pi), width=stroke, color=theme().p.accent)) }
-          out
-        })) |> ignore
-      }
-    })
-  })
 }
 
 ///|

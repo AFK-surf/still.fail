@@ -31,67 +31,6 @@ fn mn_tree() -> Json {
 let mn_text : String = "（mn_tree 的原文）"
 
 ///|
-test "a closed Markdown notice stays on one line as its width changes" {
-  let text = "本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发布的消息）；回复即可继续："
-  let width = @signals.signal(286.0)
-  let parsed = Json::array([Json::array([Json::string("p"), Json::array([Json::string(text)])])])
-  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=300.0, platform=2)
-  @ui.set_view_app(fn(root) {
-    @ui.set_tree_theme(ui_theme_now)
-    root.box(fn(box) {
-      box.width(By(fn() { Some(width.get()) })) |> ignore
-      markdown_node(box, fn() { text }, tree=fn() { Some(parsed) }, size=fn() { 13.0 }, line=22.0 / 13.0, one_line=true) |> ignore
-    }) |> ignore
-  })
-  for w in [285.97378942612806, 286.0, 285.5, 280.0, 200.0, 160.0] {
-    width.set(w)
-    t.draw()
-    let seen = t.words().filter(fn(w) { w.0.has_prefix("本轮 agent") })
-    assert_eq(seen.length(), 1)
-    assert_eq(seen[0].4, 22.0, msg="one line at width \{w}: \{seen}")
-  }
-}
-
-///|
-test "a closed Markdown notice reads the first words on one line, including within a block" {
-  let s = fn(x : String) { Json::string(x) }
-  let el = fn(name : String, kids : Array[Json]) { Json::array([Json::string(name), Json::array(kids)]) }
-  let trees = [
-    Json::array([el("p", [s("第一行\n第二行，仍是一条收起的提示")])]),
-    Json::array([el("hr", []), el("quote", [el("p", [s("引用里面的提示"), el("b", [s("重点")])])])]),
-    Json::array([Json::array([s("h"), Json::array([s("标题也用提示的字号")]), Json::object({ "depth": Json::number(1.0) })])]),
-  ]
-  for parsed in trees {
-    let draw = fn(node : Bool) {
-      let t = @ui.Tester::new(fn(c) {
-        begin(c) |> ignore
-        if !node {
-          c.with_theme(ui_theme(), fn() {
-            c.box(w=Px(286.0), fn() {
-              markdown(c, "notice", tree=Some(parsed), size=13.0, line=22.0 / 13.0, one_line=true) |> ignore
-            }) |> ignore
-          })
-        }
-      }, w=390.0, h=300.0, platform=2)
-      if node {
-        @ui.set_view_app(fn(root) {
-          @ui.set_tree_theme(ui_theme_now)
-          root.box(fn(box) {
-            box.width(Is(Some(286.0))) |> ignore
-            markdown_node(box, fn() { "notice" }, tree=fn() { Some(parsed) }, size=fn() { 13.0 }, line=22.0 / 13.0, one_line=true) |> ignore
-          }) |> ignore
-        })
-      }
-      t.draw()
-      t.words().map(fn(w) { (w.0, w.4) })
-    }
-    let old = draw(false)
-    assert_true(old.length() > 0)
-    assert_eq(draw(true), old, msg="closed notice from \{parsed}")
-  }
-}
-
-///|
 /// The words drawn now, each with where it is, in one order.
 fn mn_words(t : @ui.Tester) -> Array[String] {
   let all = t.words().map(fn(w) { "\{w.0} at \{(w.1 * 100.0).round() / 100.0},\{(w.2 * 100.0).round() / 100.0}" })

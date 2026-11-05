@@ -364,10 +364,6 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
   if all_in.length() > 0 {
     e.changed()
   }
-  // (and the frame their last comes in at built, they let go then: as their rows ask, emit_out)
-  for _, way in e.out_at {
-    c.wake_in(dmax(way.ends() - now, 0.0))
-  }
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
     turns.over(c, Emits, turns.moment(c))
@@ -541,7 +537,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     Some(t) if t.pose != Fold => t
     _ => return None
   }
-  let avatar = match emit_place(c, "emit-avatar/" + key + "/" + t.agent) {
+  let avatar = match @motion.measured_rect(c, "emit-avatar/" + key + "/" + t.agent) {
     Some(r) => (r.0, r.1)
     None => return None
   }
@@ -550,7 +546,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
   // there, the activities move down), or over what was sent from here not in the chat yet (the outbox's rows, under
   // the messages: it comes in over them), 3 down its row as a message's avatar sits; as it comes in, where it was
   // aimed
-  let known = match emit_place(c, "emit-landing/" + key + "/" + seq_s(t.seq)) {
+  let known = match @motion.measured_rect(c, "emit-landing/" + key + "/" + seq_s(t.seq)) {
     Some(r) => Some((r.0, r.1 + 3.0))
     None => None
   }
@@ -561,7 +557,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
   // (the activities' avatars sit 3 down their rows, as a message's does)
   let mut first : (Double, Double)? = None
   for a in agents {
-    match emit_place(c, "emit-avatar/" + key + "/" + a) {
+    match @motion.measured_rect(c, "emit-avatar/" + key + "/" + a) {
       Some(r) =>
         match first {
           Some(f) if f.1 <= r.1 => ()
@@ -571,7 +567,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     }
   }
   if e.out_key != "" {
-    match emit_place(c, "emit-out/" + key + "/" + e.out_key) {
+    match @motion.measured_rect(c, "emit-out/" + key + "/" + e.out_key) {
       Some(r) => {
         let y = r.1 + 3.0
         match first {
@@ -600,15 +596,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
         None => avatar
       }
       e.trace = (u, start.1, landing.1)
-      // The answer opens above the activity. That part of the trip is already moved by the list's common
-      // height curve; carry it whole, and glide only the remaining distance (other activities between them).
-      // Easing toward the moving landing again made an empty room appear before its avatar followed it.
-      let opened = match t.from {
-        None => emit_rooms.get("emit-landing/" + key + "/" + seq_s(t.seq)).bind(fn(f) { f() }).unwrap_or(0.0)
-        Some(_) => 0.0
-      }
-      let y = landing.1 + hermite(start.1 - landing.1 - opened, 0.0, 0.0, 0.0, u)
-      Some((hermite(start.0, 0.0, landing.0, 0.0, u), y, 1.0, 1.0))
+      Some((hermite(start.0, 0.0, landing.0, 0.0, u), hermite(start.1, 0.0, landing.1, 0.0, u), 1.0, 1.0))
     }
     Spit => {
       e.landed = Some(landing)
@@ -769,69 +757,3 @@ let emit_out_ms_most : Double = emit_screen_ms + emit_line_ms + emit_glyph_jitte
 ///|
 /// How far a message's head slides out of the avatar (points).
 let emit_out_slide : Double = 10.0
-
-///|
-/// Where what a message flies between is laid out, by its key ("emit-avatar/…", "emit-landing/…", "emit-out/…"), for
-/// the nodes of a list in the window's tree (what they lay out read as they are, each while it lives); an old view's
-/// measured as it is drawn (@motion.measure).
-/// A row mounting or leaving also tells readers: the old node's geometry has no further changes to publish
-/// after it is disposed, and its flying copy must stop using that node in the same frame.
-pub let emit_places : @sf.LiveMap[String, () -> (Double, Double, Double, Double)?] = @sf.LiveMap::new()
-
-///|
-/// The list room opening under a landing, in the same frame as emit_places. It is already a displacement of the
-/// avatar's destination, and must not be eased again. Registered and released with the node that owns the place.
-pub let emit_rooms : @sf.LiveMap[String, () -> Double?] = @sf.LiveMap::new()
-
-///|
-/// Where the node or old view kept as `key` is laid out, in the window: x, y, w, h (None while none is).
-pub fn emit_place(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
-  match emit_places.get(key) {
-    Some(f) => f()
-    None => @motion.measured_rect(c, key)
-  }
-}
-
-///|
-/// How far through its head's sliding out of the avatar a message coming out is at moment `at` (emit_out's: 0 to 1,
-/// eased), None while it is not coming out; 0 while it waits in the list for its avatar (emit_awaited). `at` read
-/// only while it comes out.
-pub fn emit_head_at(e : Emits, seq : Double, at : () -> Double) -> Double? {
-  e.read()
-  if emit_awaited(e, seq) {
-    return Some(0.0)
-  }
-  match e.out_at.get(seq_s(seq)) {
-    Some(way) => {
-      let since = dmax(at() - (way.ends() - emit_out_ms_most), 0.0)
-      Some(@ui.Ease::Out.at(dmin(since / emit_head_ms, 1.0)))
-    }
-    None => None
-  }
-}
-
-///|
-/// How far a message's head slides out of the avatar (points), all of it at 0 (emit_head_at).
-pub let emit_head_slide : Double = emit_out_slide
-
-///|
-/// When a message coming out of its avatar began coming out (emit_out's), while it does; None else. What draws its
-/// glyphs by the time (View::glyphs_by) works them out from it (emit_glyph_out).
-pub fn emit_out_from(e : Emits, seq : Double) -> Double? {
-  e.read()
-  e.out_at.get(seq_s(seq)).map(fn(way) { way.ends() - emit_out_ms_most })
-}
-
-///|
-/// A glyph `g` of a message coming out of its avatar (emit_out's glyph_out, for a node of the window's tree), at
-/// moment `at`, `from` when it began coming out (emit_out_from), its words' box `col` in the window, `seq` which message.
-pub fn emit_glyph_out(
-  seq : Double,
-  from : Double,
-  at : Double,
-  g : @view.GlyphAt,
-  col : (Double, Double, Double, Double),
-) -> @view.GlyphLook {
-  let l = glyph_out(dmax(at - from, 0.0), { index: g.index, x: g.x, y: g.y, h: g.h, top: g.top, foot: g.foot }, col, seq.to_int64().to_int())
-  { alpha: l.alpha, dx: l.dx, dy: l.dy, scale: l.scale, sx: l.sx }
-}

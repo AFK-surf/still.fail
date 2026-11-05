@@ -468,8 +468,6 @@ pub let peek_views : Ref[Int] = Ref(0)
 pub fn peeks_reset() -> Unit {
   peeks.clear()
   peeks_built.clear()
-  peeks_node_held.clear()
-  peeks_told.set(0)
   peek_views.val = 0
 }
 
@@ -575,7 +573,6 @@ pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit 
       p.got += 1
       @ui.add_image(k, b)
       p.pictures.push(k)
-      peeks_told.set(@signals.untracked(fn() { peeks_told.get() }) + 1)
     }
     _ => ()
   }
@@ -678,7 +675,7 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {
-    let held = peeks_built.contains(key) || peeks_node_held.contains(key)
+    let held = peeks_built.contains(key)
     let on = held && (p.target == 0 || c.rect_of(p.target) is Some(_))
     let want = shown && on
     match p.run {
@@ -705,7 +702,6 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
       let rest = p.pictures[newest:].to_array()
       p.pictures.clear()
       p.pictures.append(rest)
-      peeks_told.set(@signals.untracked(fn() { peeks_told.get() }) + 1)
     }
   }
   for key in gone {

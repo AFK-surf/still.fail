@@ -1925,20 +1925,19 @@ pub struct FieldLines {
   /// its words' top left in the window
   x : Double
   y : Double
-  priv scale : Double
 }
 
 ///|
 /// Where offset `off` of the words stands in the window: its x, and the top of the line it starts.
 pub fn FieldLines::place(self : FieldLines, off : Int) -> (Double, Double) {
   let (cx, l) = self.layout.caret(off)
-  (self.x + cx * self.scale, self.y + l.to_double() * self.layout.line_h * self.scale)
+  (self.x + cx, self.y + l.to_double() * self.layout.line_h)
 }
 
 ///|
 /// How high each of its lines is.
 pub fn FieldLines::line_h(self : FieldLines) -> Double {
-  self.layout.line_h * self.scale
+  self.layout.line_h
 }
 
 ///|
@@ -1963,7 +1962,6 @@ pub fn Ctx::field_lines(self : Ctx, key : String) -> FieldLines? {
             layout: tl,
             x: st.ox,
             y: st.oy,
-            scale: 1.0,
           })
         }
         None => None

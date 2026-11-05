@@ -42,6 +42,8 @@ pub fn chat_find_open(@ui.Ctx, @sfbase.ChatRef) -> Unit
 
 pub fn chat_pops_open() -> (Bool, Bool)
 
+pub fn chat_talk(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, Int32, () -> Unit) -> Unit
+
 pub let closed_bar_in : Double
 
 pub let closed_edge : Double
@@ -216,8 +218,6 @@ pub let page_beside_least : Double
 
 pub fn page_goes_on() -> Bool
 
-pub fn pane_content_span() -> (Double, Double)?
-
 pub fn pane_fold_at(Double) -> (Double, Double)?
 
 pub fn pane_fold_from() -> (Double, Double)?
@@ -284,7 +284,7 @@ pub fn row_took(@ui.Ctx) -> Bool
 
 pub fn rows_sample(@ui.Ctx, @sfbase.DriveAt, Shown, Int32, compact? : Bool) -> Unit
 
-pub fn rows_view(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, Shown, Bool, compact? : Bool, head? : () -> Unit, head_shows? : String, empty? : () -> Unit, foot? : Double) -> Unit
+pub fn rows_view(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, Shown, Bool, compact? : Bool, head? : () -> Unit, empty? : () -> Unit, foot? : Double) -> Unit
 
 pub fn save_entry(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry) -> Unit
 
@@ -410,6 +410,8 @@ pub fn tape_shows_left() -> Double
 
 pub fn tape_shows_right() -> Double
 
+pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf, leaving? : Bool) -> Unit
+
 pub let tape_side_max : Double
 
 pub fn tape_under(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace]) -> Unit
@@ -449,6 +451,8 @@ pub fn wide_back(@sfbase.Source) -> (() -> Unit)?
 pub fn wide_takes_back(@sfbase.Source) -> Bool
 
 pub fn window_zoom_keys(@ui.Ctx, @sfbase.Source) -> Unit
+
+pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, () -> Unit) -> Unit
 
 // Errors
 
@@ -623,10 +627,11 @@ pub(all) struct Wide {
   mut in_bar : Bool
   closed : @signals.Signal[Bool]
   mut brand_h : Double
-  mut list_top : Double
-  mut list_band : Double
   mut band : Double
   mut mark : Double
+  mut bar_pl : Double
+  mut bar_ml : Double
+  mut bar_mr : Double
   mut page_from : Double
   landed : @signals.Signal[String]
   rail_menu : @signals.Signal[(String, Double, Double)?]

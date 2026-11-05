@@ -53,9 +53,9 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: the focus as 
   }
   // (as main has it, 2f452a34)
   assert_eq(out, [
-    "focus: open {focused None ime (false, , 0, 0) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 68))) field same true text } titled {focused None ime (false, , 0, 0) dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 98))) field same true text } again {focused None ime (false, , 0, 0) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 68))) field same true text }",
-    "not focus: open {focused Some(TextField 发消息) ime (true, , 0, 0) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 68))) field same true text } titled {focused Some(TextField 发消息) ime (true, 甲, 1, 1) dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 98))) field same true text } again {focused Some(TextField 发消息) ime (true, 甲乙, 2, 2) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 68))) field same true text }",
-    "field: open {focused Some(TextField 填一下) ime (true, , 0, 0) dialog Some((填一下 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 107))) field same true text } titled {focused Some(TextField 填一下) ime (true, 甲, 1, 1) dialog Some((面板 填一下 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 137))) field same true text 甲} again {focused Some(TextField 填一下) ime (true, 甲乙, 2, 2) dialog Some((填一下 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 296, 107))) field same true text 甲乙}",
+    "focus: open {focused None ime (false, , 0, 0) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 65.8))) field same true text } titled {focused None ime (false, , 0, 0) dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 95.8))) field same true text } again {focused None ime (false, , 0, 0) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 65.8))) field same true text }",
+    "not focus: open {focused Some(TextField 发消息) ime (true, , 0, 0) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 65.8))) field same true text } titled {focused Some(TextField 发消息) ime (true, 甲, 1, 1) dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 95.8))) field same true text } again {focused Some(TextField 发消息) ime (true, 甲乙, 2, 2) dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 65.8))) field same true text }",
+    "field: open {focused Some(TextField 填一下) ime (true, , 0, 0) dialog Some((填一下 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 104.8))) field same true text } titled {focused Some(TextField 填一下) ime (true, 甲, 1, 1) dialog Some((面板 填一下 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 134.8))) field same true text 甲} again {focused Some(TextField 填一下) ime (true, 甲乙, 2, 2) dialog Some((填一下 面板里的话，长一些，好看它怎么折行 好的, (600, 306, 280, 104.8))) field same true text 甲乙}",
   ])
   assert_eq(drawn, [true, true, true])
 }
@@ -94,18 +94,18 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
   }
   // (as main has it, 2f452a34)
   assert_eq(out, [
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false)",
-    "100 面板: dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 98))) title [(616, 118, 264, 20)] words [(616, 142, 264, 22)] button Some((840, 168, 44, 24)) up Some(false)",
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false)",
-    "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 706, 296, 68))) title [] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
-    "780 面板: dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 676, 296, 98))) title [(616, 688, 264, 20)] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
-    "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 706, 296, 68))) title [] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
+    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] words [(616, 112, 248, 22)] button Some((826.2, 138, 44, 24)) up Some(false)",
+    "100 面板: dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 95.8))) title [(616, 118, 248, 20)] words [(616, 142, 248, 22)] button Some((826.2, 168, 44, 24)) up Some(false)",
+    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] words [(616, 112, 248, 22)] button Some((826.2, 138, 44, 24)) up Some(false)",
+    "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 708.2, 280, 65.8))) title [] words [(616, 714.2, 248, 22)] button Some((826.2, 740.2, 44, 24)) up Some(true)",
+    "780 面板: dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 678.2, 280, 95.8))) title [(616, 690.2, 248, 20)] words [(616, 714.2, 248, 22)] button Some((826.2, 740.2, 44, 24)) up Some(true)",
+    "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 708.2, 280, 65.8))) title [] words [(616, 714.2, 248, 22)] button Some((826.2, 740.2, 44, 24)) up Some(true)",
   ])
   // (what stands at its head's end there only while it has a title: as small_panel heads it; as main has it, 2f452a34)
   assert_eq(ends, [
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false) end []",
-    "100 面板: dialog Some((面板 尾 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 94))) title [(616, 113, 26, 20)] words [(616, 138, 264, 22)] button Some((840, 164, 44, 24)) up Some(false) end [(654, 112, 236, 22)]",
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false) end []",
+    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] words [(616, 112, 248, 22)] button Some((826.2, 138, 44, 24)) up Some(false) end []",
+    "100 面板: dialog Some((面板 尾 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 90.6))) title [(616, 111.8, 26, 20)] words [(616, 136.8, 248, 22)] button Some((826.2, 162.8, 44, 24)) up Some(false) end [(654, 110.8, 221.2, 22)]",
+    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] words [(616, 112, 248, 22)] button Some((826.2, 138, 44, 24)) up Some(false) end []",
   ])
 }
 
@@ -152,11 +152,11 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
   }
   // (as main has it, 2f452a34)
   assert_eq(out, [
-    "scrolled dialog Some((600, 8, 296, 484)) title [] row0 [(616, -106, 264, 22)] row10 [(616, 114, 264, 22)] button Some((840, 778, 44, 24)) held Some(true)",
-    "面板: dialog Some((600, 8, 296, 484)) title [(616, 20, 264, 20)] row0 [(616, -76, 264, 22)] row10 [(616, 144, 264, 22)] button Some((840, 808, 44, 24)) held Some(true)",
-    "面板 wheel: dialog Some((600, 8, 296, 484)) title [(616, 20, 264, 20)] row0 [(616, -196, 264, 22)] row10 [(616, 24, 264, 22)] button Some((840, 688, 44, 24)) held Some(true)",
-    ": dialog Some((600, 8, 296, 484)) title [] row0 [(616, -226, 264, 22)] row10 [(616, -6, 264, 22)] button Some((840, 658, 44, 24)) held Some(true)",
-    " wheel: dialog Some((600, 8, 296, 484)) title [] row0 [(616, -346, 264, 22)] row10 [(616, -126, 264, 22)] button Some((840, 538, 44, 24)) held Some(true)",
+    "scrolled dialog Some((600, 8, 280, 484)) title [] row0 [(616, -106, 248, 22)] row10 [(616, 114, 248, 22)] button Some((826.2, 778, 44, 24)) held Some(true)",
+    "面板: dialog Some((600, 8, 280, 484)) title [(616, 20, 248, 20)] row0 [(616, -76, 248, 22)] row10 [(616, 144, 248, 22)] button Some((826.2, 808, 44, 24)) held Some(true)",
+    "面板 wheel: dialog Some((600, 8, 280, 484)) title [(616, 20, 248, 20)] row0 [(616, -196, 248, 22)] row10 [(616, 24, 248, 22)] button Some((826.2, 688, 44, 24)) held Some(true)",
+    ": dialog Some((600, 8, 280, 484)) title [] row0 [(616, -226, 248, 22)] row10 [(616, -6, 248, 22)] button Some((826.2, 658, 44, 24)) held Some(true)",
+    " wheel: dialog Some((600, 8, 280, 484)) title [] row0 [(616, -346, 248, 22)] row10 [(616, -126, 248, 22)] button Some((826.2, 538, 44, 24)) held Some(true)",
   ])
   // (scrolled to its end with its title shown again: its last row seen whole (its glyphs drawn within the edges they
   // are cut to), its button in the window; pressed at its middle, said and closed)
@@ -173,9 +173,9 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
   let (bx, by, bw, bh) = t.get(Button, label="好的").rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(@ui.move_most_ms)
-  // (the title clips rows 20 and 21; row 22 is the first whose own glyphs show whole)
+  // (as main has it, 2f452a34)
   assert_eq([bottom, "said \{said} presenting \{@sf.presenting()}"], [
-    "seen (Some(第22行), Some(第39行)) title [(616, 20, 264, 20)] button Some((840, 456, 44, 24)) in window Some(true)",
+    "seen (Some(第20行), Some(第39行)) title [(616, 20, 248, 20)] button Some((826.2, 458.2, 44, 24)) in window Some(true)",
     "said [ok] presenting false",
   ])
 }

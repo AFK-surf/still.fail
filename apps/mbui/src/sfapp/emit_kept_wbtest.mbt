@@ -206,7 +206,7 @@ test "kept, host frames: the chat left before its answer is shown no more, and a
   let stall = host_frames_till(t, t.time() + fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + 3000.0)
   let rd = reading_of(emit_chat)
   // (the chat's page not drawn: never shown, whatever it marked used while it was)
-  assert_true(!rd.shown(t.ctx()), msg="shown under Home: \{emit_said(t)}")
+  assert_true(rd.shown_frame < t.ctx().frame_number() - 1, msg="shown under Home: \{emit_said(t)}")
   // (a wake each cycle_step_ms for the working marks the screen under it still draws, never a frame each frame)
   assert_true(t.wanted_after() != 0.0, msg="still asks: \{stall}; \{emit_said(t)}")
 }

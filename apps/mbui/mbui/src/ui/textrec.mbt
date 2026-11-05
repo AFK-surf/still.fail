@@ -88,9 +88,6 @@ fn rec_shape(
       Json::string(text),
     ]
     text_say("s" + style_key(size, weight, style) + "|" + text, { "s": args, "r": nums(out, k * 4) })
-    for i in 0..<k {
-      rec_shaped_glyph(out[i * 4 + 3].to_int())
-    }
   }
 }
 
@@ -107,16 +104,6 @@ fn rec_key(text : String, size : Double, weight : Int, style : Int, key : Int) -
       "k": args,
       "r": Json::number(key.to_double()),
     })
-    rec_shaped_glyph(key)
-  }
-}
-
-///|
-/// A recording needs the glyphs of all the words it shaped, including ones outside the current clip. Another
-/// timing can bring those words into view; the host's asynchronous drawing ahead returns no boxes to record.
-fn rec_shaped_glyph(key : Int) -> Unit {
-  if key >= 0 && !text_said.contains("g\{key}") {
-    h_glyph(key, FixedArray::make(7, 0.0))
   }
 }
 

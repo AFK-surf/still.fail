@@ -53,10 +53,6 @@ pub(all) struct RunsLook {
   code_ground : Int64
   code_scale : Double
   words : Bool
-  /// Wrapped words stop after this many lines, with an ellipsis; 0 leaves them whole.
-  max_lines : Int
-  /// Words not wrapped broken where they say so (code, as an old view's Ctx::rich's `breaks`); else on one line.
-  breaks : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -68,8 +64,6 @@ pub let runs_plain : RunsLook = {
   code_ground: 0x7676801FL,
   code_scale: 0.9,
   words: false,
-  max_lines: 0,
-  breaks: false,
 }
 
 ///|
@@ -79,12 +73,12 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
   let tree = self.tree
   let at = self.at
   let (set, ink) = match look {
-    Is(l) => (Is((l.code_scale, l.words, l.code_ground != 0L, l.max_lines, l.breaks)), Is((l.link, l.pressed, l.code_ink, l.code_ground)))
+    Is(l) => (Is((l.code_scale, l.words, l.code_ground != 0L)), Is((l.link, l.pressed, l.code_ink, l.code_ground)))
     By(f) =>
       (
         By(fn() {
           let l = f()
-          (l.code_scale, l.words, l.code_ground != 0L, l.max_lines, l.breaks)
+          (l.code_scale, l.words, l.code_ground != 0L)
         }),
         By(fn() {
           let l = f()
@@ -94,7 +88,7 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
   }
   self.bind(RunsSet, set, Both, fn(s) {
     let l = tree.nodes[at].look.runs_look
-    tree.nodes[at].look.runs_look = { ..l, code_scale: s.0, words: s.1, max_lines: s.3, breaks: s.4 }
+    tree.nodes[at].look.runs_look = { ..l, code_scale: s.0, words: s.1 }
     // (how its words are set said: what follows it told, once this is)
     self.words_told()
   })
@@ -129,23 +123,6 @@ pub fn View::runs_picked(self : View, span : Live[(Int, Int)]) -> View {
   self.bind(RunsPicked, span, Paint, fn(s) { tree.nodes[at].look.runs_picked = s })
   self
 }
-
-///|
-/// A passage of its words in pieces on a ground of its own (from, until, in their text's terms; its colour; how round at
-/// the passage's two ends, square where it runs on to the next line; none where from and until are the same), as it
-/// changes: drawn under them, as what is picked is (a quote's passage lit where it led).
-pub fn View::runs_lit(self : View, lit : Live[(Int, Int, Int64, Double)]) -> View {
-  let tree = self.tree
-  let at = self.at
-  self.bind(RunsLit, lit, Paint, fn(l) { tree.nodes[at].look.runs_lit = l })
-  self
-}
-
-///|
-/// What lends what holds it a passage of a node's words in pieces on a ground of its own (given the node, as
-/// View::words_runs makes it, now or later: its View::runs_lit).
-// kept across runs: what each node lends (View::lends), let go with it
-pub let runs_liter : Lent[(View) -> Live[(Int, Int, Int64, Double)]] = Lent::new()
 
 ///|
 /// What lends what holds it how what of a node's words in pieces is picked with the pointer is said (given the node, as
@@ -267,12 +244,12 @@ pub fn words_run(text : String, weight? : Int = 0, ink? : Int64 = 0L) -> @text.R
 ///|
 /// Words in pieces measured as a test's are: as their words one after another (words_measure).
 pub fn runs_measure(runs : Array[@text.Run], look : WordsLook, set : RunsLook, width : Double) -> (Double, Double) {
+  ignore(set)
   let words = StringBuilder()
   for r in runs {
     words.write_string(r.text)
   }
-  let (w, h) = words_measure(words.to_string(), look, width)
-  (w, if look.wrap && set.max_lines > 0 { dmin(h, set.max_lines.to_double() * 18.0) } else { h })
+  words_measure(words.to_string(), look, width)
 }
 
 ///|
@@ -387,7 +364,6 @@ pub fn View::shrink(self : View, s : Live[Double]) -> View {
   // (said so, not cut short by what holds it: its one say of how it gives way, View::cuts let go of)
   self.bind(Shrink, s, Layout, fn(s) {
     self.tree.nodes[self.at].cut = false
-    self.tree.nodes[self.at].flex.style.fit_held = false
     self.tree.nodes[self.at].shrink_said = Some(s)
     self.tree.give_way_applied(self.at)
   })
@@ -400,15 +376,12 @@ pub fn View::shrink(self : View, s : Live[Double]) -> View {
 /// down. That alone: how wide it may be and whether its words end in an ellipsis are their own properties
 /// (View::min_width, View::max_width, View::allow_ellipsis). As what holds it lays out now (View::row), as it changes.
 /// How much it gives way said otherwise (View::shrink) or this said again: the one said last.
-/// With `keep`, its row counts it whole before leaving out what may leave (View::fits, View::drops); only once those
-/// are gone may it be cut short. Its words or their size changing count anew, as layout measures them.
-pub fn View::cuts(self : View, on : Live[Bool], keep? : Bool = false) -> View {
+pub fn View::cuts(self : View, on : Live[Bool]) -> View {
   // (how it gives way, as View::shrink says it: one binding of the two, the last said taking it; not cut short, it
   // gives way nowhere, as a node says nothing of it)
   self.bind(Shrink, on, Layout, fn(c) {
     let n = self.tree.nodes[self.at]
     n.cut = c
-    n.flex.style.fit_held = c && keep
     if c {
       // (how it gives way its row's: Tree::cut_applied)
       n.shrink_said = None
@@ -472,21 +445,6 @@ pub fn View::wraps_at_least(self : View, on : Live[Bool]) -> View {
 }
 
 ///|
-/// Whether, where it wraps (View::wraps), its later lines go above its first, which stays at its foot (an old view's
-/// box's `flow_reverse`), as it changes: layout's.
-pub fn View::wraps_up(self : View, on : Live[Bool]) -> View {
-  self.bind(WrapsUp, on, Layout, fn(on) {
-    let n = self.tree.nodes[self.at]
-    n.wraps_up = on
-    let st = n.flex.style
-    if st.wrap is (Wrap | WrapReverse) {
-      st.wrap = if on { WrapReverse } else { Wrap }
-    }
-  })
-  self
-}
-
-///|
 /// How far apart what it holds is laid out (points, along and across), as it changes: layout's.
 pub fn View::gap(self : View, g : Live[Double]) -> View {
   self.bind(Gap, g, Layout, fn(g) {
@@ -510,7 +468,7 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
     n.line_gap = lines
     match lines {
       Some(g) => {
-        st.wrap = if n.wraps_up { WrapReverse } else { Wrap }
+        st.wrap = Wrap
         st.set_gap_row(Pt(g))
       }
       None => {

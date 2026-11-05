@@ -182,7 +182,7 @@ fn new_station_words(station : Json?) -> String {
 ///|
 /// The page narrow (the web's mobile NewChatOn, mNewBody, mNewFoot): the scene in all of it, scrolled when it does not
 /// fit, its end clear of the foot over it (the keyboard up, the choices and the composer stay over it); the foot a band
-/// of glass, what is wrong for now, the choices, the composer where a chat's is (chat_composer_node: the page becomes the
+/// of glass, what is wrong for now, the choices, the composer where a chat's is (chat_composer: the page becomes the
 /// chat, its composer where it was).
 fn new_narrow(
   c : @ui.Ctx,
@@ -890,9 +890,6 @@ fn new_send(
   fresh.made_sig.set(sig)
   // the page becomes the chat, in place, now: the scene leaving over it from here (new_chat_left), with the words
   fresh.scene.set(v)
-  // The new page has another draft's field. Carry the cursor with the composer even while the old field still
-  // owns it in this navigation batch; merely focusing when no field has it would lose this handover.
-  if c.editor_focused(composer_field_key) { composer_take_focus() }
   fresh.became.set(Some(r))
   fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
   fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
@@ -976,9 +973,6 @@ fn new_send(
           @sfbase.writing_carry(src, draft, d.key)
           @sfbase.writing_starting(src, d, false)
           writing_restore(src, d, text(Some(e), "message"))
-          // The cursor moved into the chat's different draft when this page became it. Give it back along with
-          // the restored words; a touch keyboard cannot find this field through the page's keymouse entry rule.
-          d.field.focus()
           app.nav.become(NewChat)
         }
       }
@@ -1226,3 +1220,4 @@ let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter h
 ///|
 // kept across runs: a value (no field of it changes)
 let new_link : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Link, wrap=false, w=Cut)
+

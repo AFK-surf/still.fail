@@ -208,7 +208,6 @@ fn md_table_body_node(
   copy : Bool,
   on_link : (String) -> Unit,
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
-  files? : (String) -> PlacedNode? = fn(_) { None },
 ) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
     let room = fn() {
@@ -225,17 +224,8 @@ fn md_table_body_node(
       rows.append(t.rows)
       let extents = rows.mapi(fn(r, row) {
         row.map(fn(cell) {
-          // (a cell of only images as wide as their row: Md::table's)
-          match cell_images_of(cell, files) {
-            Some(images) => {
-              let w = cell_images_width(images.map(fn(im) { (im.0, fn(_) {  }) }))
-              (w, w, true)
-            }
-            None => {
-              let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { c.sp(x) })
-              (lo, hi, false)
-            }
-          }
+          let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { c.sp(x) })
+          (lo, hi, false)
         })
       })
       table_widths(extents, room(), false, fn(x) { c.sp(x) })
@@ -298,24 +288,7 @@ fn md_table_body_node(
               }))
               .lies_along(Is(Middle))
               |> ignore
-              // (a cell of only the message's images: each as wide as cell_image_width says, 6 apart, 4 over and under;
-              // else its words as a message's, in pieces, a press on a link where it leads: runs_links)
-              let images = @signals.untracked(fn() { cell_images_of(words(), files) })
-              if images is Some(list) {
-                cell.box(fn(row) {
-                  row.row(Is(true)).gap(Is(6.0)).padding(Is((0.0, 4.0, 0.0, 4.0))) |> ignore
-                  for im in list {
-                    row.box(fn(one) {
-                      let w = cell_image_width(im.0)
-                      one.width(Is(Some(w))) |> ignore
-                      (im.1)(one, fn() { w })
-                    })
-                    |> ignore
-                  }
-                })
-                |> ignore
-                return
-              }
+              // (its words as a message's, in pieces, a press on a link where it leads: runs_links)
               cell.box(fn(w) {
                 let look = fn() -> @view.WordsLook {
                   let size = if head { 12.0 } else { 13.0 }
@@ -519,29 +492,5 @@ fn table_md(c : @ui.Ctx) -> Md {
     bleed: 0.0,
     copy: false,
     fit_tables: false,
-  }
-}
-
-///|
-/// A table's cell of only the message's images (Md::cell_images', of the window's tree): each one's proportion and its
-/// drawing in a node as wide as it is given; None for any other cell, drawn as words.
-fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Array[(Double, (@view.View, () -> Double) -> Unit)]? {
-  let out = []
-  for x in cell {
-    match x {
-      Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
-      SoftBreak | HardBreak => ()
-      Image(src, _) =>
-        match files(file_name_of(src)) {
-          Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
-          _ => return None
-        }
-      _ => return None
-    }
-  }
-  if out.length() == 0 {
-    None
-  } else {
-    Some(out)
   }
 }

@@ -59,7 +59,6 @@ test "wide: a chat whose agent made others has how many in its info (…), each 
   let (mx, _, mw, _) = t.rect_of("旧版引导页的截图 · 已归档").unwrap()
   ignore(mx)
   assert_true(mx + mw < px)
-  let found = t.words().filter(fn(w) { w.0.contains("构建") || w.0.contains("已归档") })
   t.click(MenuItem, label="夜里的构建又失败了")
   match app.nav.top() {
     Chat(r) => assert_eq(r.session, "s-c3")

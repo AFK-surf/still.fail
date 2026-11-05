@@ -7,8 +7,7 @@
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
 /// again, a spinner before its words), `disabled` while it cannot be pressed (faded), `across` as wide as what holds it
-/// gives (its words in its middle), `at_foot` in a card's foot (its words, without an icon, on the card's line, as
-/// card_foot_words'); `press` done as it is pressed. In a panel coming in its surface first, all of it
+/// gives (its words in its middle); `press` done as it is pressed. In a panel coming in its surface first, all of it
 /// (its ground, its icon, its spinner, its words) with the rest of what the panel holds: the panel's content's. Its
 /// words changing go to their place for that cause.
 /// The node.
@@ -21,7 +20,6 @@ pub fn button_node(
   disabled? : () -> Bool = fn() { false },
   across? : Bool = false,
   icon? : String = "",
-  at_foot? : Bool = false,
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
@@ -78,10 +76,7 @@ pub fn button_node(
     v
     .row(Is(true))
     .height(Is(Some(height)))
-    .padding(Is({
-      let padx = if at_foot && icon == "" && !across { card_foot_words_in(height) } else { button_padx }
-      (padx, 0.0, padx, 0.0)
-    }))
+    .padding(Is((button_padx, 0.0, button_padx, 0.0)))
     .lines_up(Is(Some(Middle)))
     .radius(Is(height / 2.0))
     .ground(By(fn() { looks().0 }))

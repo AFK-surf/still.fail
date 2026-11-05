@@ -131,8 +131,6 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   let t3 = work_now()
   h_present(c.inst, c.ninst)
-  // What a retained page read of its geometry is told only for the frame that reached the screen.
-  view_read_drawn()
   // what the shots being taken drew read back (shot.mbt)
   c.shots_after_present()
   log_drawn(w, h, scale, t)
@@ -837,10 +835,6 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     args.push(by.to_double())
   }
   // (where a mouse points, said before the event is taken; what it is over told once it is: view_host.mbt)
-  if button != 2 {
-    if kind == 0 { pointer_down_now.set(true) }
-    else if kind == 2 || kind == 3 { pointer_down_now.set(false) }
-  }
   view_point_said(kind, x, y)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
@@ -912,7 +906,6 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   }
   c.px = x
   c.py = y
-  c.pointer_pending = true
   // the event's own time (`t`): events handled together happened apart
   c.pointer_t = t
   if scroll_logging() {
@@ -1126,10 +1119,9 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           }
         }
       }
-      // A field keeps its keyboard while surrounding words are picked, including the tree's words that have no
-      // old widget target. A mouse on empty ground still lets the focus go; another field takes it on its own tap.
-      None => if target == 0 && c.focus_allowed() != 0 &&
-        !(c.field_focused() && (pointing() is Finger || picked.from.base != NoSel)) {
+      // On a finger's tap, a field keeps the keyboard while its surroundings are read or used. A mouse on nothing
+      // still lets the focus go; another field takes it on its own tap.
+      None => if target == 0 && c.focus_allowed() != 0 && !(pointing() is Finger && c.field_focused()) {
         c.focus_moved(0)
       }
     }
@@ -1378,11 +1370,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.active = 0
     c.editor_drag = false
     c.handle_drag = 0
-    // (what is picked no longer being dragged out: told what follows it, as it is now: tree_picked)
-    if picked.dragging {
-      picked.dragging = false
-      picked_told()
-    }
+    picked.dragging = false
     finger_let_go()
     select_edge_stop()
     second_ptr[2] = 0.0
@@ -1449,12 +1437,8 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
       c.pager_release(c.drag_scroll, 0.0)
     }
   }
-  // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it; told what
-  // follows it: tree_picked)
-  if picked.dragging {
-    picked.dragging = false
-    picked_told()
-  }
+  // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
+  picked.dragging = false
   finger_let_go()
   select_edge_stop()
   c.down = false

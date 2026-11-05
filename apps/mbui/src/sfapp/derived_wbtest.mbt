@@ -265,7 +265,7 @@ test "made again: one come at the end, one changed, one gone, one moved back, a 
 }
 
 ///|
-test "a chat's page with nothing changed makes none of its rows again; a message come, the rows there kept, the new one among them" {
+test "a chat's page with nothing changed goes over none of its rows again; a message come, its rows made again" {
   new_run()
   let base = fixture("chat")
   let messages = Array::makei(30, fn(i) { said(i + 1, "第 \{i + 1} 句") })
@@ -291,18 +291,17 @@ test "a chat's page with nothing changed makes none of its rows again; a message
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  // (its rows the window's tree's, kept as their nodes: frames with nothing changed make none of them anew)
-  t.tree_rows_kept() |> ignore
+  let rd = @sfbase.reading_of("ws1/st1\u{1}s-c1")
+  let rows = rd.motion_keys
+  assert_true(rows.length() > 30)
   t.frame()
   t.frame()
-  let alive = @ui.view_tree().unwrap().rows_alive().length()
-  let kept = t.tree_rows_kept()
-  assert_true(alive > 0 && kept == alive, msg="\{kept} of \{alive} rows kept")
-  // one more said: the rows there kept as they were, the new one among them once it has come in
+  assert_true(physical_equal(rd.motion_keys, rows))
+  // one more said: its rows made again, the new one among them once it has come in
   messages.push(said(31, "新的一句"))
   changes.set(2)
   t.frame()
-  assert_eq(t.tree_rows_kept(), alive, msg="the rows there before kept")
+  assert_false(physical_equal(rd.motion_keys, rows))
   t.run_for(@sf.enter_ms)
-  assert_true(t.find("新的一句") is Some(_))
+  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=rd.motion_keys.to_string())
 }
