@@ -124,3 +124,47 @@ test("the single-chat check and its answer share a snapshot with another writer"
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a prepared store read keeps its snapshot while a delivery changes the latest chat", () => {
+  const dir = mkdtempSync(join(process.cwd(), ".latest-prepared-snapshot-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let writer: DatabaseSync | undefined;
+  try {
+    const first = store.openThread("slack", "C", "first", null, null);
+    const second = store.openThread("slack", "C", "second", null, null);
+    store.joinThread(first.id, "s", "first"); store.joinThread(second.id, "s", "second");
+    db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(first.id);
+    while (!prepareLatestThreadStep(db, "s").done) { /* bounded batches */ }
+    writer = new DatabaseSync(path);
+    let interleaved = false;
+    db.function("deliver_during_latest", (thread) => {
+      if (!interleaved) {
+        writer!.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(second.id);
+        interleaved = true;
+      }
+      return thread;
+    });
+    const observed = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          if (sql !== LATEST_THREAD_ATTEMPT) return target.prepare(sql);
+          const traced = sql.replace("SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session",
+            "SELECT deliver_during_latest(thread) AS thread FROM thread_sessions INDEXED BY thread_sessions_session");
+          assert.notEqual(traced, sql);
+          const plan = (query: string) => target.prepare(`EXPLAIN QUERY PLAN ${query}`).all("s").map((row) => row.detail);
+          assert.deepEqual(plan(traced), plan(sql));
+          return target.prepare(traced);
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    Object.defineProperty(store, "db", { value: observed, configurable: true });
+    assert.equal(store.latestThread("s")?.thread.id, first.id);
+    assert.equal(interleaved, true);
+    assert.equal(store.latestThread("s")?.thread.id, second.id);
+  } finally {
+    Object.defineProperty(store, "db", { value: db, configurable: true });
+    writer?.close(); store.close(); rmSync(dir, { recursive: true, force: true });
+  }
+});
