@@ -72,6 +72,8 @@ fn composer_extras_node(
         let card = @sf.quote_card_node(item, fn() { text(q(), "author") }, fn() { text(q(), "text") },
           role=fn() { text(q(), "role") }, composer=true, corner~, remove=fn() { writing_unquote(src, w, id) },
           picture_shown=fn() { picture() is Some(_) },
+          // (a copy's room for its picture: its tile's, thumb_side square)
+          picture_box=fn(room) { room.box(fn(b) { b.width(Is(Some(thumb_side))).height(Is(Some(thumb_side))) |> ignore }) |> ignore },
           picture=fn(p) {
             let first = @signals.untracked(picture).unwrap()
             let kept = fn() { picture().unwrap_or(first) }

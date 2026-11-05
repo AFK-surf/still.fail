@@ -27,13 +27,15 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
   h.box(fn(col) {
     col.over(Is(true)).padding(By(fn() { (0.0, 0.0, 0.0, foot()) })) |> ignore
     // (the room over them the picture's: nothing of the foot's)
-    let room = col.box(fn(g) { g.grow(Is(1.0)) |> ignore })
+    col.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    // (what it takes as what it holds says, while no note is written: its open box keeps what they took)
     col.reacts(
       fn() {
         marks_said()
-        match (col.laid_size_told(), room.laid_size_told()) {
-          (Some(all), Some(over)) if marking.note < 0 => Some(all.1 - over.1)
-          _ => None
+        if marking.note < 0 {
+          Some(marks_foot_said(foot()))
+        } else {
+          None
         }
       },
       fn(taken) {
@@ -72,9 +74,30 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
 
 ///|
 /// How much of the window's foot marking's foot takes (its tools, the colours and the notes' cards over them, the
-/// system's bar under them), its picture fitted clear of it (none while it does not mark). The open note's box in
+/// system's bar under them), its picture fitted clear of it (none while it does not mark): as what it holds says, each
+/// part as tall as it is said to be, nothing of it read back as laid out (marks_foot_said). The open note's box in
 /// their place keeps what they took: the picture stays where the pin was put.
 let marks_foot_taken : @signals.Signal[Double] = @signals.signal(0.0)
+
+///|
+/// A note's tray card's height (note_tray_card_node's, said so): its pads, its pin's row as tall as the more of its pin
+/// and its first line at the system's size of words, 3 under it its words' one line.
+fn note_card_h() -> Double {
+  let c = @ui.current()
+  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
+  let top = pin_in - (note_first_line - note_pin) / 2.0
+  top + dmax(note_pin, c.sp(note_first_line)) + 3.0 + c.sp(note_body_line) + note_card_foot
+}
+
+///|
+/// What marking's foot takes as what it holds says (marks_foot_node's column over the system's bar, `foot`): the
+/// tools' row 8 over its foot; the colours' row 12 over that while asked for; the notes' cards 10 over those while
+/// there are any.
+fn marks_foot_said(foot : Double) -> Double {
+  let tools = marks_tools_pad + marks_tools_row_h + (if marking.palette { marks_palette_row_h + marks_tools_gap } else { 0.0 })
+  let notes = if mark_notes().length() > 0 { note_card_h() + marks_notes_over_tools } else { 0.0 }
+  foot + tools + notes
+}
 
 ///|
 pub fn marks_foot_over() -> Double {
@@ -92,7 +115,7 @@ fn marks_tools_node(col : @view.View, tips : @sf.TipLayer) -> Unit {
   let ink = marks_ink
   let round : @view.Live[Double] = Is(picture_key)
   let glass = fn() { Some(dark_glass()) }
-  col.lines_up(Is(Some(Middle))).gap(Is(12.0)).padding(Is((0.0, 0.0, 0.0, 8.0))) |> ignore
+  col.lines_up(Is(Some(Middle))).gap(Is(marks_tools_gap)).padding(Is((0.0, 0.0, 0.0, marks_tools_pad))) |> ignore
   col.show(
     fn() {
       marks_said()
@@ -102,6 +125,7 @@ fn marks_tools_node(col : @view.View, tips : @sf.TipLayer) -> Unit {
       row
       .row(Is(true))
       .lines_up(Is(Some(Middle)))
+      .height(Is(Some(marks_palette_row_h)))
       .padding(Is((4.0, 4.0, 4.0, 4.0)))
       .gap(Is(2.0))
       .radius(Is(20.0))
@@ -136,7 +160,7 @@ fn marks_tools_node(col : @view.View, tips : @sf.TipLayer) -> Unit {
     row
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
-    .height(Is(Some(44.0)))
+    .height(Is(Some(marks_tools_row_h)))
     .padding(Is((6.0, 0.0, 6.0, 0.0)))
     .gap(Is(2.0))
     .radius(Is(picture_bar_corner))
@@ -557,6 +581,8 @@ fn note_cards_node(r : @view.View) -> Unit {
         let mid = @signals.untracked(fn() { note.get().0 })
         cards[mid] = card
         card.owns(fn() { cards.remove(mid) }) |> ignore
+        // (as tall as it is said to be: what marking's foot takes is worked out of it, marks_foot_said)
+        card.height(By(fn() { Some(note_card_h()) })) |> ignore
         // (the last in the row leaving it first)
         card.drops(By(fn() {
           marks_said()
@@ -589,7 +615,7 @@ fn note_cards_node(r : @view.View) -> Unit {
               .words(By(fn() { note.get().2 }))
               .words_look(By(fn() {
                 let (size, _) = @ui.tree_theme().text_size(Caption)
-                { size, weight: 400, line: 17.0, wrap: false, tracking: @view.letters_own, balance: false }
+                { size, weight: 400, line: note_body_line, wrap: false, tracking: @view.letters_own, balance: false }
               }))
               .ink(Is(note_muted))
               |> ignore

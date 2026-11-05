@@ -4382,3 +4382,24 @@ test "viewer on the tree, narrow: a phone's tall picture fitted clear of the bar
   let (_, y, _, _) = v.zoom.rect().unwrap()
   assert_true(y >= @sf.viewer_bar_clear(390.0), msg="clear of the bar: \{y}")
 }
+
+///|
+test "viewer on the tree, a wide window, marking: what its foot takes as what it holds says, its tools, the colours over them, a note's card over those, as the foot laid them out" {
+  // (the tools' row and 8 under it; the colours' 40 and 12 over them; a note's card and 10 over the tools: what the
+  // foot was laid out as, arch/next 69f9a4916f's, read back then)
+  let (t, _, click) = wide_marking()
+  t.draw()
+  let tools = @sfbase.marks_foot_over()
+  click(pv("android-chat.marks.color"))
+  t.draw()
+  t.draw()
+  let colours = @sfbase.marks_foot_over()
+  marks_leave()
+  let (t2, _, click2, _) = wide_box_noted("这里")
+  click2(pv("android-chat.annotate.done"))
+  t2.draw()
+  t2.draw()
+  let noted = @sfbase.marks_foot_over()
+  marks_leave()
+  assert_eq((tools, colours, noted), (52.0, 104.0, 119.0))
+}

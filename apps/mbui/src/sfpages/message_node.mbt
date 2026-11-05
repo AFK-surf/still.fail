@@ -880,6 +880,15 @@ fn quotes_node(
           _ => ()
         }
       }
+      // (as wide as the card may be, not as its words are: what the viewer sends may be (the pane's, as the composer
+      // sets it), else the message's column; less the card's own room)
+      let quote_picture_most = fn() {
+        if mine {
+          Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
+        } else {
+          col.laid_size_told().map(fn(z) { @sf.quote_picture_room(z.0) })
+        }
+      }
       let card = @sf.quote_card_node(
         slot,
         fn() { q().author },
@@ -889,6 +898,24 @@ fn quotes_node(
         jump?=if @signals.untracked(fn() { q().ts != "" && here().go is Some(_) }) { Some(jump) } else { None },
         // (shown while the message has the file it names: what was sent from here has it once the core takes it over)
         picture_shown=fn() { quote_file(q(), files()) is Some(_) },
+        // (a copy's room for its picture: the box media_file_node lays it out in, as image_box makes it and as wide as
+        // the card lets it be, nothing of it read back)
+        picture_box=fn(room) {
+          room.box(fn(b) {
+            let size = fn() {
+              match (quote_file(q(), files()), quote_picture_most()) {
+                (Some(a), Some(most)) => {
+                  let (bw, bh, _) = image_box(a, image_least, min_side=image_min_side)
+                  let w = dmin(bw, most)
+                  (w, if bw > 0.0 { bh * w / bw } else { 0.0 })
+                }
+                _ => (0.0, 0.0)
+              }
+            }
+            b.width(By(fn() { Some(size().0) })).height(By(fn() { Some(size().1) })) |> ignore
+          })
+          |> ignore
+        },
         picture=fn(pv) {
           // The local file can acquire an upload key before its previous node is released. Both occupy this
           // quote's one picture slot; releasing the previous key must not erase the new one's landing.
@@ -899,15 +926,7 @@ fn quotes_node(
               None => []
             }
           }
-          // (as wide as the card may be, not as its words are: what the viewer sends may be (the pane's, as the
-          // composer sets it), else the message's column; less the card's own room)
-          let most = fn() {
-            if mine {
-              Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
-            } else {
-              col.laid_size_told().map(fn(z) { @sf.quote_picture_room(z.0) })
-            }
-          }
+          let most = quote_picture_most
           message_files_node(pv, src, here, own, false, at=fn() { at() + "/q:" + i.to_string() }, corner=@sf.quote_picture_corner, most~, landed=fn(k, l) {
             match l {
               Some(_) => {
