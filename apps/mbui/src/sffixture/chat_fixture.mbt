@@ -945,6 +945,21 @@ pub fn fix_own(files : Array[Json]) -> Array[Json] {
 }
 
 ///|
+/// The links of the chats picked from the @ menu (`chat.ref`), by their titles: what each mark `@[title]` in words
+/// sent becomes (refs.ts, as the core sends them: `[title](its page)`).
+pub let fix_ref_links : Map[String, String] = {}
+
+///|
+/// `words` with each mark of a chat picked its link, as the core sends it.
+fn fix_marks_linked(words : String) -> String {
+  let mut out = words
+  for title, link in fix_ref_links {
+    out = out.replace_all(old="@[" + title + "]", new="[" + title + "](" + link + ")")
+  }
+  out
+}
+
+///|
 /// The station has it: out of the outbox, the chat's own message; the agent's answer a moment after.
 pub fn fix_deliver(session : String, id : String) -> Unit {
   let fc = fix_chat(session)
@@ -965,7 +980,7 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
   fix_serial.val += 1
   let seq = 100 + fix_serial.val
   fc.sent.push(
-    msg(seq, "person", by_person("林"), words, "刚刚", {
+    msg(seq, "person", by_person("林"), fix_marks_linked(words), "刚刚", {
       "mine": true,
       "author": "lin@example.com",
       "ts": Json::string("sent\{fix_serial.val}"),
@@ -1183,7 +1198,17 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
       )
     }
     // a chat's mark (chat.ref): `@[its title]`, its link kept; links kept for marks (chat.refs)
-    "chat.ref" => Some(Ok({ "mark": Json::string("@[" + text(p, "title") + "]") }))
+    "chat.ref" => {
+      // (its link kept, as the core keeps it till the words are sent: refs.ts)
+      let station = text(p, "station")
+      let base = if text(p, "base") != "" { text(p, "base") } else { "https://app.still.fail" }
+      let (ws, st) = match station.find("/") {
+        Some(i) => (station.unsafe_substring(start=0, end=i), station.unsafe_substring(start=i + 1, end=station.length()))
+        None => (station, "")
+      }
+      fix_ref_links[text(p, "title")] = base + "/w/" + ws + "/s/" + st + "/chats/" + text(p, "id")
+      Some(Ok({ "mark": Json::string("@[" + text(p, "title") + "]") }))
+    }
     "chat.refs" => Some(Ok(Json::object({})))
     // what the words refer to in 个人 not shared with 星火工作室 yet, by their marks (`@[title]`)
     "chat.outsideRefs" => {

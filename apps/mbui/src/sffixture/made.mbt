@@ -38,6 +38,7 @@ pub fn fixture_reset() -> Unit {
   fix_done.val = 0
   fix_unsaid.clear()
   fix_drafts.clear()
+  fix_ref_links.clear()
   fix_composers.clear()
   fix_put_up.clear()
   fix_writes.clear()
