@@ -133,6 +133,8 @@ export type SecretsDeps = {
   home(): string | null;
   /// A chat's title, for the uses of a secret.
   title?(session: string): string | null;
+  /// Its title without an old-order fallback; undefined means its order needs preparation.
+  titleIfReady?(session: string): string | null | undefined;
   hub: Hub;
   /// The station's data directory: the proxy's CA is kept under `vault/`.
   data: string;
@@ -401,9 +403,39 @@ export class Secrets {
     const bodies = await this.#uses.read(ws, vault, vault === PLAIN ? viewer.email.toLowerCase() : null, limit);
     // A large old database may still have been filling its index: access can change while that read waits.
     if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
-    return bodies
-      .map((body) => JSON.parse(body) as Request)
-      .map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: this.#title(r.session), mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
+    const requests = bodies.map((body) => JSON.parse(body) as Request);
+    const names = new Map<string, string | null>();
+    const prepare = this.#d.hub.prepareLatestThreads;
+    const titleIfReady = this.#d.titleIfReady;
+    if (titleIfReady && prepare) {
+      const sessions = new Set(requests.map((r) => r.session));
+      for (;;) {
+        // The vault may have changed while the worker prepared old sessions.
+        if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
+        const missing: string[] = [];
+        names.clear();
+        // Read readiness and the name in one snapshot. Release it before waiting for the worker.
+        this.#d.db.exec("SAVEPOINT vault_use_titles");
+        try {
+          for (const session of sessions) {
+            try {
+              const name = titleIfReady(session);
+              if (name === undefined) missing.push(session);
+              else names.set(session, name);
+            } catch {
+              names.set(session, null);
+            }
+          }
+        } finally {
+          this.#d.db.exec("RELEASE vault_use_titles");
+        }
+        if (missing.length === 0) break;
+        await prepare(missing);
+      }
+    } else {
+      for (const session of new Set(requests.map((r) => r.session))) names.set(session, this.#title(session));
+    }
+    return requests.map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: names.get(r.session) ?? null, mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
   }
 
   #title(session: string): string | null {

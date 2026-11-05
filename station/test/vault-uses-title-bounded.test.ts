@@ -1,0 +1,184 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { sender, senderTitleIfReady } from "../src/sessions/messages.ts";
+import { prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
+import { Store } from "../src/store/store.ts";
+import { Secrets } from "../src/vault/secrets.ts";
+
+test("a page of secret uses prepares only the names it shows without sorting their old chats", async () => {
+  for (const older of [40, 400]) {
+    const store = Store.open(":memory:"), db = store.db, gate = Promise.withResolvers<void>();
+    let reading: Promise<unknown> | undefined;
+    try {
+      store.insertSession({ key: "s", connect: "slack", runtime: "claude", profile: "cc", workspace: "/w/s",
+        token: "s", createdAt: 1, lastActiveAt: 1 });
+      const first = store.openThread("slack", "C", "first", "first", null);
+      store.joinThread(first.id, "s", "slack");
+      db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',1)").run(first.id);
+      db.exec("BEGIN");
+      let later = first;
+      for (let n = 0; n < older; n++) {
+        const old = store.openThread("slack", "C", `old-${n}`, `old-${n}`, null);
+        store.joinThread(old.id, "s", "slack");
+        if (n === 0) later = old;
+      }
+      db.exec("COMMIT");
+      let slowReads = 0;
+      const traced = new Proxy(db, {
+        get(target, property) {
+          if (property === "prepare") return (sql: string) => {
+            if (sql.includes("ORDER BY (SELECT d.rowid FROM deliveries")) slowReads++;
+            return target.prepare(sql);
+          };
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      Object.defineProperty(store, "db", { value: traced, configurable: true });
+      const requested: string[][] = [];
+      const hub = {
+        store, link: () => null,
+        prepareLatestThreads: async (sessions: readonly string[]) => {
+          requested.push([...sessions]);
+          await gate.promise;
+          while (!prepareLatestThreadStep(db, "s", 64, { existingSession: true }).done) { /* bounded worker batches */ }
+        },
+      } as any;
+      const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+        lock: () => ({} as never), proxy: {} as never,
+        vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
+        title: (session) => sender(hub, session)[0], titleIfReady: (session) => senderTitleIfReady(hub, session) });
+      const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
+        item: "item", session: "s", mode: "env", status: "granted" });
+      db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
+      reading = secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(slowReads, 0, `${older} older memberships must not reach the original sort`);
+      assert.deepEqual(requested, [["s"]]);
+      db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',2)").run(later.id);
+      gate.resolve();
+      assert.equal((await reading as { chatTitle: string | null }[])[0]?.chatTitle, "old-0");
+    } finally {
+      gate.resolve();
+      await reading?.catch(() => undefined);
+      Object.defineProperty(store, "db", { value: db, configurable: true });
+      store.close();
+    }
+  }
+});
+
+function waitingUses() {
+  const db = new DatabaseSync(":memory:"), gate = Promise.withResolvers<void>();
+  let permitted = true, present = true, ready = false, prepares = 0, titles = 0;
+  const hub = {
+    store: {
+      subscribe: () => {}, getSession: () => present ? { ws: "w" } : null,
+      sessionHomeThread: () => null, latestThreadIfReady: () => ready ? null : undefined,
+    },
+    prepareLatestThreads: async () => { prepares++; await gate.promise; },
+  } as any;
+  const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+    lock: () => ({} as never), proxy: {} as never,
+    vaults: { vault: () => ({ members: permitted ? ["p"] : [] }) } as never, plain: {} as never,
+    title: () => { titles++; return "shown"; },
+    titleIfReady: () => { if (!present) return null; if (!ready) return undefined; titles++; return "shown"; } });
+  const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
+    item: "item", session: "s", mode: "env", status: "granted" });
+  db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
+  return { db, gate, secrets, prepares: () => prepares, titles: () => titles,
+    ready: () => { ready = true; }, remove: () => { present = false; }, revoke: () => { permitted = false; } };
+}
+
+test("a vault membership removed while use titles are prepared reveals no results", async () => {
+  const w = waitingUses();
+  try {
+    const reading = w.secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(w.prepares(), 1);
+    w.revoke(); w.ready(); w.gate.resolve();
+    assert.deepEqual(await reading, []);
+    assert.equal(w.titles(), 0);
+  } finally { w.gate.resolve(); w.db.close(); }
+});
+
+test("a session removed while use titles are prepared does not keep the page waiting", async () => {
+  const w = waitingUses();
+  try {
+    const reading = w.secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(w.prepares(), 1);
+    w.remove(); w.gate.resolve();
+    assert.equal((await reading)[0]?.chatTitle, null);
+    assert.equal(w.titles(), 0);
+  } finally { w.gate.resolve(); w.db.close(); }
+});
+
+test("a ready title is read once for repeated uses of the same chat", async () => {
+  const w = waitingUses();
+  try {
+    const body = JSON.stringify({ ws: "w", id: "r2", vault: "v", owner: "p@example.test", at: 2,
+      item: "item-2", session: "s", mode: "env", status: "granted" });
+    w.db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r2','s','granted',?)").run(body);
+    w.ready();
+    const rows = await w.secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    assert.deepEqual(rows.map((r) => r.chatTitle), ["shown", "shown"]);
+    assert.equal(w.prepares(), 0);
+    assert.equal(w.titles(), 1);
+  } finally { w.gate.resolve(); w.db.close(); }
+});
+
+test("a use keeps the session title when its latest-chat index is incompatible", async () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "s", connect: "slack", runtime: "claude", profile: "cc", workspace: "/w/s",
+      token: "s", createdAt: 1, lastActiveAt: 1 });
+    store.setTitle("s", "Session title");
+    let prepares = 0;
+    const hub = { store, link: () => null, prepareLatestThreads: async () => { prepares++; } } as any;
+    const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+      lock: () => ({} as never), proxy: {} as never,
+      vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
+      title: (session) => sender(hub, session)[0], titleIfReady: (session) => senderTitleIfReady(hub, session) });
+    const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
+      item: "item", session: "s", mode: "env", status: "granted" });
+    db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
+    db.exec("UPDATE latest_thread_meta SET version=2 WHERE id=1");
+    const rows = await secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    assert.equal(rows[0]?.chatTitle, "Session title");
+    assert.equal(prepares, 0);
+  } finally { store.close(); }
+});
+
+test("uses of a session's own chat read its name once without looking for its latest chat", async () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s",
+      token: "s", createdAt: 1, lastActiveAt: 1 });
+    const own = store.openThreadOf("ember", "CHAT", "own", "Own chat", null, "s");
+    store.joinThread(own.id, "s", "ember");
+    const reads = { session: 0, home: 0, latest: 0, link: 0 };
+    const observed = new Proxy(store, { get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        if (property === "getSession") reads.session++;
+        if (property === "sessionHomeThread") reads.home++;
+        if (property === "latestThreadIfReady") reads.latest++;
+        return value.apply(target, args);
+      };
+    } });
+    const hub = { store: observed, link: () => { reads.link++; return null; },
+      prepareLatestThreads: async () => { throw new Error("an own chat needs no preparation"); } } as any;
+    const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+      lock: () => ({} as never), proxy: {} as never,
+      vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
+      title: (session) => sender(hub, session)[0], titleIfReady: (session) => senderTitleIfReady(hub, session) });
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','granted',?)");
+    for (const id of ["r1", "r2"]) insert.run(id, JSON.stringify({ ws: "w", id, vault: "v", at: 1,
+      item: "item", session: "s", mode: "env", status: "granted" }));
+    const rows = await secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    assert.deepEqual(rows.map((r) => r.chatTitle), ["Own chat", "Own chat"]);
+    assert.deepEqual(reads, { session: 1, home: 1, latest: 0, link: 0 });
+  } finally { store.close(); }
+});
