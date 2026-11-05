@@ -3,6 +3,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect, Queue } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
+import { CoreError } from "../src/error.ts";
 import type { HttpRequest } from "../src/host.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import type { FakeHost } from "../src/testing.ts";
@@ -16,6 +17,12 @@ export const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) =>
 export const ME = "ab".repeat(32);
 /// A phone of the member s2's, waiting.
 export const PHONE = "cd".repeat(32);
+
+/// This fixture reaches its station through fetch, not a mesh; background connection attempts fail normally.
+export const withoutMesh = (device: string) => Effect.succeed({
+  deviceId: () => device,
+  link: () => Effect.fail(new CoreError("unsupported", "this fixture has no mesh")),
+} as never);
 
 /// A workspace's lock: s1 the owner, `signer` (this device's key, when it is in) their app; s2 a member; `more` devices.
 export function genesis(ws: string, signer: { id: string; signBytes(b: Uint8Array): string }, withMe: boolean, stations: { key: string; name: string }[] = [], cloudKeys: unknown = {}, me = ME, more: Record<string, unknown>[] = []): Entry {
@@ -100,7 +107,7 @@ export async function rig(locks: (signer: Signer) => Record<string, Entry>, befo
     before?.(x.host);
   });
   // This device's base key, as its mesh's (the fixture reaches its station another way, with no mesh).
-  s.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME } as never);
+  s.core.inner.mesh = () => withoutMesh(ME);
   const ui = s.core.connect();
   const values = new Map<number, unknown>();
   const done = new Map<number, Record<string, unknown>>();

@@ -15,7 +15,7 @@ import { t } from "../src/i18n.ts";
 import { PAIR_TRIES } from "../src/pair.ts";
 import { pairs } from "../src/views/lock.ts";
 import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, serveTrusted, trying } from "../src/views/pair.ts";
-import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 
 /// A seeded random (mulberry32): the same seed, the same draws.
 function rng(seed: number) {
@@ -94,6 +94,8 @@ async function once(seed: number): Promise<string[]> {
   const said: string[] = [`delays ${delays.join(",")}; cut after ${cutAfter ?? "never"}${lost ? "; the cloud's answer to the approval lost" : ""}`];
   const g = grant();
   const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  const defects: unknown[] = [];
+  r.core.inner.runner.onDefect = (error) => { defects.push(error); };
   await r.watch({ topic: "lock", workspace: "ws" });
   const prompts = await r.watch({ topic: "lockPrompts" });
   if (lost) r.cloud.lose.posts = 1;
@@ -112,7 +114,7 @@ async function once(seed: number): Promise<string[]> {
   if (met) keep(inner, y, ME, phone, ["ws"]);
   said.push(met ? `shown ${code}` : `no code: ${JSON.stringify(answer[0] ?? null)}`);
   // The new device's own key from here (the pairing session is its base key and the trusted one's).
-  inner.mesh = () => Effect.succeed({ deviceId: () => PHONE } as never);
+  inner.mesh = () => withoutMesh(PHONE);
 
   // What happened, for what the end may say.
   let denied = false;
@@ -172,6 +174,7 @@ async function once(seed: number): Promise<string[]> {
   }
   // Nothing left up on the trusted device.
   assert.deepEqual(shown, [], `a prompt stays on the trusted device; ${why}`);
+  assert.deepEqual(defects, [], `a core fiber failed; ${why}`);
   return said;
 }
 
@@ -203,7 +206,7 @@ test("two trusted devices show a code, the line to the one whose code is typed g
   cutNow();
   await r.host.time.pass(100);
   assert.deepEqual([pairs.mine(inner, "ws")?.state, pairs.mine(inner, "ws")?.devices], ["code", 1]);
-  inner.mesh = () => Effect.succeed({ deviceId: () => PHONE } as never);
+  inner.mesh = () => withoutMesh(PHONE);
   const said = await r.ask("lock.pairCode", { workspace: "ws", code }).then(() => null, (e) => e as { code: string; message: string });
   const words = t("core-misc.lock.pairWrongOrGone", { n: PAIR_TRIES - 1 });
   assert.deepEqual([said?.code, said?.message], ["pair_wrong", words]);
@@ -222,7 +225,7 @@ async function metOver(r: Awaited<ReturnType<typeof rig>>, g: ReturnType<typeof 
   const code = (await prompts()).pairing[0].code as string;
   const y = trying(inner, workspaces);
   keep(inner, y, ME, phone, (answer[0] as { workspaces: string[] }).workspaces);
-  inner.mesh = () => Effect.succeed({ deviceId: () => PHONE } as never);
+  inner.mesh = () => withoutMesh(PHONE);
   return { code, prompts };
 }
 
