@@ -5,6 +5,7 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
+import { initializeReboxIndex } from "./rebox-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_use_lookup (
@@ -133,6 +134,7 @@ export class UseIndex {
     this.#previousGone = options.previousGone ?? null;
     this.#priority = options.priority;
     initializeUseIndex(db);
+    initializeReboxIndex(db);
     this.#path = db.location();
     if (this.#path !== null) {
       if (this.#previousGone === null) this.#start();

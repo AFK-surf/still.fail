@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { REBOX_OLDER, REBOX_PREPARED } from "../src/vault/pending-index.ts";
+import { REBOX_LEGACY, REBOX_READY } from "../src/vault/rebox-index.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 
 async function visited(others: number) {
@@ -13,17 +13,13 @@ async function visited(others: number) {
   db.function("rebox_seen", (_id) => { if (observing) visited++; return 1; });
   const observed = new Proxy(db, { get(target, property) {
     if (property === "prepare") return (sql: string) => {
-      if (sql === "SELECT ws, id FROM vault_requests WHERE status = 'pending'") {
+      if (sql === REBOX_LEGACY) {
         traced = true;
         return target.prepare(sql.replace("WHERE status = 'pending'", "WHERE rebox_seen(id) AND status = 'pending'"));
       }
-      if (sql === REBOX_PREPARED) {
+      if (sql === REBOX_READY) {
         traced = true;
-        return target.prepare(sql.replace("WHERE p.ws = ?", "WHERE rebox_seen(p.id) AND p.ws = ?"));
-      }
-      if (sql === REBOX_OLDER) {
-        traced = true;
-        return target.prepare(sql.replace("WHERE ws = ?", "WHERE rebox_seen(id) AND ws = ?"));
+        return target.prepare(sql.replace("WHERE r.status = 'pending'", "WHERE rebox_seen(p.id) AND r.status = 'pending'"));
       }
       return target.prepare(sql);
     };
@@ -51,7 +47,7 @@ async function visited(others: number) {
   } finally { db.close(); }
 }
 
-test("recovering pending boxes does not read decided request history once that workspace is prepared", async () => {
+test("recovering pending boxes does not read decided request history once the recovery index is ready", async () => {
   assert.deepEqual(await Promise.all([visited(40), visited(400)]), [1, 1]);
 });
 
@@ -62,13 +58,13 @@ test("an older carried save finds its workspace without reading prepared history
     db.function("rebox_seen", (_id) => { if (observing) count++; return 1; });
     const observed = new Proxy(db, { get(target, property) {
       if (property === "prepare") return (sql: string) => {
-        if (sql === "SELECT ws, id FROM vault_requests WHERE status = 'pending'") {
+        if (sql === REBOX_LEGACY) {
           traced = true;
           return target.prepare(sql.replace("WHERE status = 'pending'", "WHERE rebox_seen(id) AND status = 'pending'"));
         }
-        if (sql === REBOX_PREPARED) {
+        if (sql === REBOX_READY) {
           traced = true;
-          return target.prepare(sql.replace("WHERE p.ws = ?", "WHERE rebox_seen(p.id) AND p.ws = ?"));
+          return target.prepare(sql.replace("WHERE r.status = 'pending'", "WHERE rebox_seen(p.id) AND r.status = 'pending'"));
         }
         return target.prepare(sql);
       };
@@ -97,7 +93,33 @@ test("an older carried save finds its workspace without reading prepared history
   assert.deepEqual(await Promise.all([visitHistory(40), visitHistory(400)]), [1, 1]);
 });
 
-test("recovering boxes keeps their existing order across prepared and older workspaces", async () => {
+test("an old database can still recover a waiting box while its new index is being prepared", () => {
+  const db = new DatabaseSync(":memory:");
+  let usedLegacy = false;
+  db.exec(`CREATE TABLE vault_requests (ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, status TEXT NOT NULL,
+    body TEXT NOT NULL, thread INTEGER, card_ts TEXT, PRIMARY KEY (ws, id));`);
+  db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','waiting','s','pending',?)")
+    .run(JSON.stringify({ ws: "w", id: "waiting", session: "s", vault: "v", at: 0, item: "i", mode: "env", status: "pending", box: "old" }));
+  const observed = new Proxy(db, { get(target, property) {
+    if (property === "prepare") return (sql: string) => {
+      if (sql === REBOX_LEGACY) usedLegacy = true;
+      return target.prepare(sql);
+    };
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  try {
+    const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => null,
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults: {} as never, plain: {} as never });
+    secrets.reboxed();
+    assert.equal(usedLegacy, true);
+    const row = db.prepare("SELECT body FROM vault_requests WHERE ws='w' AND id='waiting'").get() as { body: string };
+    assert.notEqual(JSON.parse(row.body).box, "old");
+  } finally { db.close(); }
+});
+
+test("recovering boxes keeps their existing order across workspaces", async () => {
   const db = new DatabaseSync(":memory:");
   try {
     const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "a", lock: () => null,
@@ -131,8 +153,8 @@ test("recovering boxes sees one snapshot even while the previous process writes"
   });
   const observed = new Proxy(db, { get(target, property) {
     if (property === "location") return () => null; // Use this connection for preparation; the second connection tests the snapshot.
-    if (property === "prepare") return (sql: string) => target.prepare(sql === REBOX_PREPARED
-      ? sql.replace("WHERE p.ws = ?", "WHERE rebox_write() AND p.ws = ?") : sql);
+    if (property === "prepare") return (sql: string) => target.prepare(sql === REBOX_READY
+      ? sql.replace("WHERE r.status = 'pending'", "WHERE rebox_write() AND r.status = 'pending'") : sql);
     const value = Reflect.get(target, property, target);
     return typeof value === "function" ? value.bind(target) : value;
   } });
