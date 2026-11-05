@@ -403,6 +403,8 @@ pub fn Tester::new(
     perf: -1,
     perf_sets: [],
     perf_lines: [],
+    perf_opens: false,
+    perf_opened: 0,
     perf_bytes: 0.0,
     view_texts: {},
     view_stills: {},
@@ -1856,6 +1858,18 @@ pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
 }
 
 ///|
+/// Whether the performance record's folder can be opened from now on (@hostapi.perf_opens: a host with no share sheet).
+pub fn Tester::set_perf_opens(self : Tester, opens : Bool) -> Unit {
+  self.fake.perf_opens = opens
+}
+
+///|
+/// How many times the app opened the performance record's folder (@hostapi.perf_open).
+pub fn Tester::perf_opened(self : Tester) -> Int {
+  self.fake.perf_opened
+}
+
+///|
 /// How many bytes the performance record's files have from now on (@hostapi.perf_size), told as a host tells it wrote
 /// them (its event: hostcall.mbt's on_outside, outside_perf).
 pub fn Tester::set_perf_size(self : Tester, bytes : Double) -> Unit {
@@ -2903,7 +2917,7 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   if faults.is_empty() {
     return
   }
-  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time} (the theme's ladder \{c.corner_ladder}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
     faults.join("\n")
   println(said)
   abort(said)
@@ -2918,4 +2932,29 @@ fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
     return []
   }
   self.with_tree_nodes(fn() { self.corner_faults() })
+}
+
+///|
+/// Every list and scroller the last frame drew (an old view's, a node of the window's tree's that scrolls: the page's
+/// own, View::scrolls_window) scrolled to its end by a wheel over its middle, then a move's time run: what each screen
+/// shows at its end, for the rules held at rest (a card last in a panel ending in its foot corners: corner_faults).
+/// How many it scrolled.
+pub fn Tester::scroll_all_to_end(self : Tester) -> Int {
+  let c = g()
+  let at : Array[(Double, Double)] = c.with_tree_nodes(fn() {
+    let out = []
+    for i in 0..<c.count {
+      let n = c.nodes[i]
+      if (n.kind == kind_list || n.kind == kind_scroll || n.tree_scrolls) && n.fw > 0.0 && n.fh > 0.0 {
+        let (x, y) = c.drawn_at(i)
+        out.push((x + n.fw / 2.0, y + n.fh / 2.0))
+      }
+    }
+    out
+  })
+  for p in at {
+    self.wheel(p.0, p.1, 100000.0)
+  }
+  self.run_for(move_most_ms)
+  at.length()
 }

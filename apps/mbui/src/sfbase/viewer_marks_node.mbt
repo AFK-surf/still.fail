@@ -375,7 +375,7 @@ fn note_box_node(w : @view.View) -> Unit {
         }))
         .words_look(By(fn() {
           let (size, _) = @ui.tree_theme().text_size(Meta)
-          { size, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }
+          { size, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }
         }))
         .ink(Is(note_muted))
         |> ignore
@@ -516,7 +516,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
           marks_said()
           "\{pin().0}"
         }))
-        .words_look(By(fn() { { size: 10.0, weight: 650, line: @ui.tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own } }))
+        .words_look(By(fn() { { size: 10.0, weight: 650, line: @ui.tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false } }))
         .ink(Is(0xFFFFFFFFL))
         |> ignore
       })
@@ -589,7 +589,7 @@ fn note_cards_node(r : @view.View) -> Unit {
               .words(By(fn() { note.get().2 }))
               .words_look(By(fn() {
                 let (size, _) = @ui.tree_theme().text_size(Caption)
-                { size, weight: 400, line: 17.0, wrap: false, tracking: @view.letters_own }
+                { size, weight: 400, line: 17.0, wrap: false, tracking: @view.letters_own, balance: false }
               }))
               .ink(Is(note_muted))
               |> ignore
@@ -684,7 +684,7 @@ fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) 
       .words(By(words))
       .words_look(By(fn() {
         let (size, _) = @ui.tree_theme().text_size(Meta)
-        { size, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own }
+        { size, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
       }))
       .ink(By(fn() { if quiet() { note_muted } else { note_ink } }))
       |> ignore
@@ -788,7 +788,7 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
         m.box(fn(t) {
           t
           .words(By(fn() { "\{pin.get().1}" }))
-          .words_look(By(fn() { { size: 11.0, weight: 700, line: @ui.tree_theme().text_line * 11.0, wrap: false, tracking: @view.letters_own } }))
+          .words_look(By(fn() { { size: 11.0, weight: 700, line: @ui.tree_theme().text_line * 11.0, wrap: false, tracking: @view.letters_own, balance: false } }))
           .ink(By(halo))
           |> ignore
         })
@@ -855,7 +855,7 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
               Some((_, _, rw, _)) => words.get().3 * rw / dmax(1.0, vw.zoom.nw)
               None => 0.0
             }
-            { size, weight: 600, line: size * 1.3, wrap: false, tracking: @view.letters_own }
+            { size, weight: 600, line: size * 1.3, wrap: false, tracking: @view.letters_own, balance: false }
           }))
           .ink(By(fn() { if edge { halo_of(words.get().2) } else { words.get().2 } }))
           .offset(By(fn() {

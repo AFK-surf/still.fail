@@ -46,12 +46,12 @@ test "the figure's white panels keep mbui's corners and room around their cards 
     let card = boxes.iter().find_first(fn(b) {
       b.bg == card_ground && b.x >= panel.x && b.y >= panel.y && b.x + b.w <= panel.x + panel.w && b.y + b.h <= panel.y + panel.h
     }).unwrap()
-    assert_true((panel.x + panel.w - card.x - card.w - @sf.corner_inset).abs() < 0.000001)
+    assert_true((panel.x + panel.w - card.x - card.w - @sf.panel_card_in).abs() < 0.000001)
     if panel.w == 860.0 {
-      assert_true((card.y - panel.y - @sf.corner_inset).abs() < 0.000001)
-      assert_true((panel.y + panel.h - card.y - card.h - @sf.corner_inset).abs() < 0.000001)
+      assert_true((card.y - panel.y - @sf.panel_card_in).abs() < 0.000001)
+      assert_true((panel.y + panel.h - card.y - card.h - @sf.panel_card_in).abs() < 0.000001)
     } else {
-      assert_eq(card.x - panel.x, @sf.corner_inset)
+      assert_eq(card.x - panel.x, @sf.panel_card_in)
       let caption = boxes.iter().find_first(fn(b) {
         b.text.has_prefix("The primary action") && b.x >= panel.x && b.y >= panel.y && b.x + b.w <= panel.x + panel.w && b.y + b.h <= panel.y + panel.h
       }).unwrap()

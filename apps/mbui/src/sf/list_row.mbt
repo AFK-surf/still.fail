@@ -79,12 +79,14 @@ pub fn list_row(
       let reach = match at {
         Side if end_slot > 0.0 => {
           let last = if corner_end > 0.0 { corner_end } else { l.face_d }
-          dmax(0.0, l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0))
+          l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0)
         }
         _ => 0.0
       }
+      // (reaching out past the row's padding where the corner's column is nearer its end, in from it where farther)
       let head_style = if reach > 0.0 { l.head.then(@ui.style(mr=room(-reach))) } else { l.head }
-      c.box(style=if end_room > 0.0 { head_style.then(@ui.style(pr=room(end_room))) } else { head_style }, head) |> ignore
+      let end_in = end_room + dmax(0.0, -reach)
+      c.box(style=if end_in > 0.0 { head_style.then(@ui.style(pr=room(end_in))) } else { head_style }, head) |> ignore
       match (corner, at) {
         // (the room what stands in the corner keeps at the end of the lines under the first)
         (Some(_), Side) =>

@@ -1,5 +1,5 @@
 // A sidebar's list at its end (sfdesk's side.mbt side_scroll, sfpages' sidebar.mbt, @sf.list_foot_in): its last row
-// as far from the column's foot as its rows are from its sides, in the panel's foot corners as in its sides; and a row
+// clear of the panel's foot corners (as far up as they are round), as its rows are of its sides; and a row
 // of the settings' list whose words at its end leave it before its title is cut.
 
 ///|
@@ -52,14 +52,14 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
 }
 
 ///|
-test "on the tape a sidebar's list ends as far under its last row as its rows stand in from its sides: the settings' 关于 lit at its end, in the panel's foot corner" {
+test "on the tape a sidebar's list ends clear of the panel's foot corners under its last row: the settings' 关于 lit at its end, as far up as the panel is round (its rows 16 in from its sides, round by a row's 18, in no corner of the panel's 42)" {
   let t = settings_at_end(520.0)
   guard side_row_at(t, "关于", 400.0) is Some((x, y, w, h)) else { fail("no 关于 in the sidebar") }
   guard side_panel(t) is Some(p) else { fail("no sidebar's panel") }
   let side = p.x + p.w - (x + w)
   let foot = p.y + p.h - (y + h)
   assert_eq(foot, @sf.list_foot_in(Side))
-  assert_true((foot - side).abs() < 0.01, msg="its foot \{foot}, its side \{side}")
+  assert_true(foot >= @sf.pane_corner - 0.01 && (side - 16.0).abs() < 0.01, msg="its foot \{foot}, its side \{side}")
   assert_eq(t.corner_faults(), [])
 }
 

@@ -1458,6 +1458,9 @@ void mb_host_perf_line(moonbit_string_t line) {
 // Where the record's files are, as the Files app and Xcode show the app's container (@hostapi.perf_where).
 moonbit_string_t mb_host_perf_where(void) { return mb_string_from_ns(@"Documents/perf"); }
 
+// Its folder shown (@hostapi.perf_open): shared through the share sheet here instead.
+int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
+
 // The record's files' bytes (@hostapi.perf_size): counted once, then as lines are written.
 double mb_host_perf_size(void) {
   if (perf_total < 0) dispatch_sync(perf_queue(), ^{

@@ -3,11 +3,14 @@
 // opened with, back on screen, the menu bar's items, the network), the number on its icon.
 
 ///|
-/// The words' language as the core says it (its prefs' `lang`: as chosen, else the device's), I18n.kt's follow: told
+/// The words' language as the core says it (its prefs' `lang`: as chosen, else the device's), I18n.kt's follow, and the
+/// product they name (its `product`): told
 /// each frame (appearance) and as the app's tree is made, before any page of nodes says a word.
 pub fn language_said(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
+  // and the product the words name, its cloud's (still.fail, monoid)
+  @sf.set_product(text(prefs, "product"))
 }
 
 ///|

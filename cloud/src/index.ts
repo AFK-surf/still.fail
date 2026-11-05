@@ -4,10 +4,10 @@
 // precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
-import { installScript, releaseType } from "./install.ts";
+import { installScript, releaseType, sharedRelease } from "./install.ts";
 import { windowsInstallScript } from "./install-windows.ts";
-import { requestLang, tr } from "./i18n.ts";
-import { latestDownload, serveRelease } from "./releases.ts";
+import { cloudProduct, requestLang, setCloud, tr } from "./i18n.ts";
+import { latestDownload, serveRelease, upstreamRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login";
 import { passwordSignIn } from "./password";
@@ -55,6 +55,7 @@ const toPublic = (env: Env, url: URL) => new Response(null, { status: 302, heade
 export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    setCloud(env.PUBLIC_ORIGIN);
     const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
     const started = Date.now();
     // What the handler noted for the span never goes out with the answer.
@@ -92,7 +93,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const release = asked === "android/beta/beta/latest.json" ? "android/beta/latest.json" : asked;
     const type = release ? releaseType(release) : null;
     if (release && type) {
-      return serveRelease(request, env.RELEASES, release, type);
+      const own = await serveRelease(request, env.RELEASES, release, type);
+      // (a cloud whose bucket holds its own apps' alone: the station's from still.fail's, install.ts sharedRelease)
+      if (own.status !== 404 || !env.RELEASES_UPSTREAM || !sharedRelease(release)) return own;
+      return upstreamRelease(request, env.RELEASES_UPSTREAM, release);
     }
     // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
     const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta|android-mbui|mac-mbui|win-mbui|linux-mbui|linux-arm64-mbui)$/.exec(path)?.[1];
@@ -204,7 +208,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {
-    return new Response(JSON.stringify(ASSET_LINKS), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
+    return new Response(JSON.stringify(assetLinks()), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
   }
   const handled = await api(request, env, url);
   if (handled) return handled;
@@ -220,9 +224,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
 /**
  * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself. Both the app from
  * before the rename (dev.ember.android) and the new one (fail.still.android), on every host: each says in its
- * manifest which hosts it opens.
+ * manifest which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
  */
-const ASSET_LINKS = ["fail.still.android", "dev.ember.android"].map((package_name) => ({
+const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android", "dev.ember.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
   relation: ["delegate_permission/common.handle_all_urls"],
   target: {
     namespace: "android_app",

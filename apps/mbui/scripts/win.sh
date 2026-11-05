@@ -40,12 +40,16 @@ core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }
 # variant: what MBUI_VARIANT builds the app as: its id, its name, its program's name where it is put (the desktop app's
 # own program's in its place), the folder it is put in (%LOCALAPPDATA%\Programs\<dir>: the desktop app's installer's,
 # its package name), and its own environment beyond those
+MONOID_ENV='MBUI_OWN=1\nMBUI_UPDATE_FEED=win\nMBUI_CLOUD=https://app.monoid.build\nMBUI_PRODUCT=monoid\nMBUI_STATION_ID=monoid\nMBUI_STATION_NAME=monoid'
 variant() {
   case "${MBUI_VARIANT:-preview}" in
     preview) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
     stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
     beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
-    *) echo "win.sh: MBUI_VARIANT is preview, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
+    # monoid's: the same app on monoid's cloud, its station its own (~\.monoid, 「monoid station」: install-windows.ts)
+    monoid) id=build.monoid.desktop name=monoid exe=monoid dir=monoid schemes=monoid extra="$MONOID_ENV" ;;
+    monoid-beta) id=build.monoid.desktop.beta name=monoid.zone exe=monoid.zone dir=monoid-beta schemes=monoid-beta extra="$MONOID_ENV\nMBUI_BETA=1" ;;
+    *) echo "win.sh: MBUI_VARIANT is preview, stable, beta, monoid or monoid-beta, not $MBUI_VARIANT" >&2; return 1 ;;
   esac
 }
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)

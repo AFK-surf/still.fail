@@ -58,3 +58,10 @@ let lift_spring : @motion.Spec = @motion.lift_spring
 ///|
 /// How far over a sheet coming up over it what is lifted stays.
 let lift_clear : Double = 12.0
+
+///|
+/// What of the window's tree is lifted over the scrim (View::over_scrim: a chat's row) kept clear of the sheet up, as
+/// lift_over keeps an old view's.
+fn init {
+  @ui.over_scrim_floor.val = fn(c) { @kit.sheet_top(c) }
+}

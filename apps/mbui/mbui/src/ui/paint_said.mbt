@@ -19,7 +19,6 @@ pub using @paint {
   smoothness,
   concentric,
   concentric_out,
-  smooth_round,
   round_like,
   round_like_out,
   smooth_middle,

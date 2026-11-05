@@ -73,10 +73,20 @@ if [ "${1:-}" = promote ]; then
   exit 0
 fi
 
+# --product monoid: monoid's apps (the same apps on monoid's cloud: apps/mbui's monoid and monoid-beta variants), for
+# monoid's bucket (in the company's Cloudflare account: CLOUDFLARE_API_TOKEN its), named monoid(-beta)-…; its stations
+# install still.fail's releases (cloud/src/install.ts sharedRelease), so only the apps.
+product=stillfail
+if [ "${1:-}" = --product ]; then product=$2; shift 2; fi
+case $product in stillfail | monoid) ;; *) echo "release.sh: --product is stillfail or monoid, not $product" >&2; exit 2 ;; esac
 beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
 platforms=${*:-darwin-arm64 linux-x64 linux-arm64 win32-x64}
 for platform in $platforms; do
+  case "$product $platform" in
+    "monoid android" | "monoid desktop" | "monoid desktop-win") ;;
+    monoid\ *) echo "release.sh: monoid releases its apps alone (android, desktop, desktop-win), not $platform" >&2; exit 2 ;;
+  esac
   # (the Windows app is mbui's, built on Windows: below)
   if [ "$platform" = desktop-win ]; then
     case "$(uname -s)" in MINGW* | MSYS*) continue ;; esac
@@ -123,6 +133,8 @@ for platform in $platforms; do
       # Electron app over.
       variant=${beta:+beta}
       variant=${variant:-stable}
+      # (monoid's: build.monoid.desktop, .beta, its own name and links; no Electron app of its own to move over)
+      [ "$product" = stillfail ] || variant=$product${beta:+-beta}
       mbui_cache=${MBUI_MAC_CACHE:-$HOME/stillfail-ci/mbui-mac-$variant}
       tools=
       # A fresh CI checkout already has MoonBit on PATH; a persistent machine keeps its own toolchain in the cache.
@@ -136,6 +148,7 @@ for platform in $platforms; do
         bash "$root/apps/mbui/scripts/beta.sh" mac
       app_zip="$out/mbui/mac/app-$variant.zip"
       id=fail.still.desktop${beta:+.beta}
+      [ "$product" = stillfail ] || id=build.$product.desktop${beta:+.beta}
       # what is in it checked before anything is uploaded: the app it replaces (its id), signed by still.fail's team
       # (an installed app takes nothing else; UNSIGNED=1, as build.sh's: for trying it out, never put), its build
       rm -rf "$out/mac-check" && mkdir -p "$out/mac-check" && ditto -x -k "$app_zip" "$out/mac-check"
@@ -149,16 +162,17 @@ for platform in $platforms; do
       [ "$have_id" = "$id" ] && [ "$have_build" = "$build" ] || { echo "release.sh: $app is $have_id $have_build, not $id $build: not released" >&2; exit 1; }
       [ "$have_team" = D9AAN3VJK8 ] || [ -n "${UNSIGNED:-}" ] || { echo "release.sh: $app is signed by ${have_team:-no team}, not still.fail's (D9AAN3VJK8): not released" >&2; exit 1; }
       echo "$app: $have_id $have_build, signed by team $have_team"
-      zip="stillfail${beta:+-beta}-0.1.$build-arm64-mac.zip"
+      zip="$product${beta:+-beta}-0.1.$build-arm64-mac.zip"
       put "$app_zip" "desktop/$zip" application/zip
       if [ -z "${RELEASE_DIR:-}" ]; then
         work=${WORK:-"$mbui_cache/work"}
         if [ "${MBUI_FRESH:-}" = 1 ]; then work="$root/apps/mbui"; fi
-        sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/stillfail${beta:+-beta}-$build-arm64-mac.zip"
+        sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/$product${beta:+-beta}-$build-arm64-mac.zip"
       fi
       sh "$root/scripts/mac-feeds.sh" "$app_zip" "$zip" "$build" "$out/mac-latest.json" "$out/mac.yml"
       put "$out/mac-latest.json" "mac/${beta:+beta/}latest.json" application/json
-      put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
+      # (electron-updater's, which moves an installed Electron app over: still.fail's alone had one)
+      [ "$product" != stillfail ] || put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
       ;;
     desktop-win)
       # The Windows app (fail.still.desktop; with --beta the beta app, fail.still.desktop.beta) is mbui's (apps/mbui) in
@@ -175,7 +189,12 @@ for platform in $platforms; do
       id=fail.still.desktop${beta:+.beta}
       program=still.fail
       [ -z "$beta" ] || program=youdid.wtf
-      exe="stillfail${beta:+-beta}-0.1.$build-x64-win.exe"
+      # (monoid's: build.monoid.desktop, .beta, its program monoid or monoid.zone: apps/mbui/scripts/win.sh)
+      if [ "$product" = monoid ]; then
+        variant=monoid${beta:+-beta} id=build.monoid.desktop${beta:+.beta} program=monoid
+        [ -z "$beta" ] || program=monoid.zone
+      fi
+      exe="$product${beta:+-beta}-0.1.$build-x64-win.exe"
       MBUI_VARIANT=$variant MBUI_BUILD=$build bash "$root/apps/mbui/scripts/win.sh" build
       MBUI_VARIANT=$variant MBUI_BUILD=$build MBUI_SETUP_NAME=$exe bash "$root/apps/mbui/scripts/win.sh" setup
       setup_out=$root/apps/mbui/out/setup
@@ -188,7 +207,7 @@ for platform in $platforms; do
       [ ! -f "$setup_out/$exe.sig" ] || put "$setup_out/$exe.sig" "desktop/$exe.sig" application/json
       sh "$root/scripts/win-feeds.sh" "$setup_out/$exe" "desktop/$exe" "$build" "$setup_out/$exe.sig" "$out/win-latest.json" "$out/win.yml"
       put "$out/win-latest.json" "win/${beta:+beta/}latest.json" application/json
-      put "$out/win.yml" "desktop/stillfail${beta:+-beta}.yml" "text/yaml; charset=utf-8"
+      [ "$product" != stillfail ] || put "$out/win.yml" "desktop/stillfail${beta:+-beta}.yml" "text/yaml; charset=utf-8"
       ;;
     android)
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json. The
@@ -199,12 +218,21 @@ for platform in $platforms; do
       # 0.1.4520): apk.json's `stable` variant, fail.still.android, the same key, updating the Kotlin app in place.
       variant=${beta:+beta}
       variant=${variant:-stable}
+      # (monoid's: build.monoid.android, .beta, the same key)
+      [ "$product" = stillfail ] || variant=$product${beta:+-beta}
       mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
-      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-      node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
-      node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
-      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
-        bash "$root/apps/mbui/scripts/beta.sh" build
+      # (one build in the cache at a time: still.fail's and monoid's Android apps are built on the same machine, often
+      # at once, and wrote each other's C over in its work/out (2026-11-04, "mbc: cannot write"); lockf's lock goes with
+      # the build that holds it, however it ends)
+      mkdir -p "$mbui_cache"
+      lockf -k "$mbui_cache/.build.lock" env MBUI_CACHE="$mbui_cache" MBUI_VARIANT="$variant" RELEASE_DIR="$out/mbui" \
+        root="$root" sh -c '
+          set -e
+          bash "$root/apps/mbui/scripts/beta.sh" tools
+          node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
+          node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
+          MBUI_TOOLS=$MBUI_CACHE/tools bash "$root/apps/mbui/scripts/beta.sh" build
+        '
       apk="$out/mbui/android/app-$variant.apk"
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)
@@ -216,7 +244,7 @@ for platform in $platforms; do
       have=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
       [ "$have" = "$want" ] || { echo "release.sh: $apk is signed with ${have:-no certificate}, not $want: not released" >&2; exit 1; }
       echo "$apk: signed with $have (SHA-256), release key"
-      name="stillfail${beta:+-beta}-$build.apk"
+      name="$product${beta:+-beta}-$build.apk"
       put "$apk" "android/$name" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"

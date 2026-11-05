@@ -918,7 +918,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
   if flag(p, "canAddModel") {
     c.box(style=pf_models_add, fn() { add_model(c, core, address, id) }) |> ignore
   }
-  @sf.panel_column(c, "profile-models/" + key, pf_models_most, pf_model_rows, fn() {
+  @sf.panel_column(c, "profile-models/" + key, pf_models_most, pf_model_rows.then(pf_models_foot()), fn() {
     for s in series {
       let sv = Some(s)
       if series.length() > 1 {
@@ -1706,6 +1706,19 @@ let pf_models_most : Double = 420.0
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_model_rows : @ui.Style = @ui.css("w=Full gap=SPx")
+
+///|
+/// Under the models, as much room as keeps the last one's box out of the panel's foot corner: a box there, its row's
+/// words on the panel's words' line (34 in from a corner 42 round), would have to be concentric with the corner (8
+/// round, a box's 6: the corner rule), so it stands clear of it, its rows' spacing as it was (a card row's control the
+/// same: @sf.card_control_end).
+fn pf_models_foot() -> @ui.Style {
+  @ui.style(pb=@sf.panel_foot_clear(@sf.theme().items.least, pf_like_box))
+}
+
+///|
+/// How big a model's box is (@kit.checkbox's).
+let pf_like_box : Double = 18.0
 
 ///|
 // kept across runs: a value (no field of it changes)

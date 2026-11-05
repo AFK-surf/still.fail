@@ -96,7 +96,9 @@ pub fn settings_parts(
         key: "workspace",
         lead: Space(text(w, "emoji"), text(w, "icon")),
         title: if w is Some(_) { text(w, "name") } else { here.name },
-        line: if w is Some(_) { @settings.role_label(role) + " · " + people } else { "" },
+        // (its line held before the workspace is read, a space: the row as tall as it will be, nothing under it moved
+        // when it is said; its tile no taller than its words then, the ladder's inset over and under it)
+        line: if w is Some(_) { @settings.role_label(role) + " · " + people } else { "\u{00A0}" },
         value: "",
         bad: false,
         dot: false,
@@ -611,7 +613,24 @@ fn settings_lead(c : @ui.Ctx, core : Core, here : @settings.Here, row : Settings
       // a picture put up fills the square; one of still.fail's icons or an emoji on the chips' ground; else its first
       // letter, muted, as the rail has it
       let picture = icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
-      c.box(style=@sf.workspace_tile.then(@ui.style(bg=Data(if picture { t.p.card } else { t.p.chip }))), fn() {
+      // (in its row's corner, out from the row's words to the ladder's inset from its start, top and foot, as the list
+      // made once has it: settings_row_node)
+      let out = @sf.corner_inset - @sf.text_in
+      // (held in its corner at any size of words: the row's lead is put in the middle of its first line (row_lead),
+      // which the tile, as tall as that line at least by its foot's margin, fills; the list made once puts it at the
+      // row's top as ever)
+      let line = @sf.row_lead_line(c)
+      let foot = dmax(out, line - @sf.identity_mark - out)
+      c.box(
+        style=@sf.workspace_tile.then(
+          @ui.style(
+            bg=Data(if picture { t.p.card } else { t.p.chip }),
+            ml=@sf.room_of(out),
+            mt=@sf.room_of(out),
+            mb=@sf.room_of(foot),
+          ),
+        ),
+        fn() {
         if picture {
           @sf.station_mark(c, emoji, icon, @sf.identity_mark, t.p.text)
         } else {
@@ -804,6 +823,9 @@ fn settings_space_node(parent : @view.View, row : () -> SettingsRow?, stint : ()
     .width(Is(Some(@sf.identity_mark)))
     .height(Is(Some(@sf.identity_mark)))
     .radius(By(fn() { @ui.tree_theme().corner(@sf.small_radius) }))
+    // (a tile in its row's corner: out from the row's words (text_in) to the ladder's inset (8) from its start, top and
+    // foot, concentric with its corner there, the small block's 10)
+    .margin(Is((@sf.corner_inset - @sf.text_in, @sf.corner_inset - @sf.text_in, 0.0, @sf.corner_inset - @sf.text_in)))
     .clips(Is(true))
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

@@ -4,7 +4,7 @@ test "squeeze_faults finds an unannounced ellipsis in the window tree" {
     root.box(fn(v) {
       v.width(Is(Some(20.0)))
       .height(Is(Some(20.0)))
-      .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own })
+      .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false })
       |> ignore
     }) |> ignore
   })
@@ -25,7 +25,7 @@ test "a window tree's deliberately cut words are permitted" {
     root.box(fn(v) {
       v.width(Is(Some(20.0)))
       .height(Is(Some(20.0)))
-      .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own })
+      .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false })
       .allow_ellipsis(By(fn() { allowed.get() }))
       |> ignore
     }) |> ignore
@@ -44,7 +44,7 @@ test "squeeze_faults finds cut words in styled runs in the window tree" {
       v.width(Is(Some(20.0)))
       .height(Is(Some(20.0)))
       .words_runs(Is([@view.words_run("10:"), @view.words_run("06", weight=600)]),
-        look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own })
+        look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false })
       |> ignore
     }) |> ignore
   })
@@ -61,7 +61,7 @@ test "a window tree's invisible words do not report an ellipsis" {
       holder.box(fn(v) {
         v.width(Is(Some(20.0)))
         .height(Is(Some(20.0)))
-        .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own })
+        .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false })
         |> ignore
       }) |> ignore
     }) |> ignore
@@ -80,7 +80,7 @@ test "a window tree's words entirely outside a clipping holder are not reported"
         .offset(Is((40.0, 0.0)))
         .width(Is(Some(20.0)))
         .height(Is(Some(20.0)))
-        .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own })
+        .words(Is("10:06"), look={ size: 10.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false })
         |> ignore
       }) |> ignore
     }) |> ignore

@@ -14,13 +14,16 @@ export function fallback(runtime: string): string[] {
   return ["low", "medium", "high", "xhigh", "max"];
 }
 
-export function available(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
+/// The levels a model's runtime reported, null where it has reported none.
+export function reported(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] | null {
   const models = catalog?.[runtime];
-  if (model !== null && model !== undefined && models) {
-    const levels = models[model] ?? Object.entries(models).find(([id]) => same(id, model))?.[1];
-    if (levels) return [...levels];
-  }
-  return fallback(runtime);
+  if (model === null || model === undefined || !models) return null;
+  const levels = models[model] ?? Object.entries(models).find(([id]) => same(id, model))?.[1];
+  return levels ? [...levels] : null;
+}
+
+export function available(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
+  return reported(runtime, model, catalog) ?? fallback(runtime);
 }
 
 export function common(profiles: string[][], runtime: string): string[] {

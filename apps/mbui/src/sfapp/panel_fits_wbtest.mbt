@@ -95,11 +95,11 @@ test "panel fits, the model's (model_pop): where it is, its models and how hard 
   // name, how hard it thinks a column beside the models, each titled, the runtime and how fast at the foot under a line;
   // since 2026-11-03 how much context at the foot too: a Claude model's panel as wide as its foot)
   assert_eq(out, [
-    "newchat-model: dialog Some((648.9, 567.6, 264, 201.6)) opus Some((654.9, 603.6, 172, 34)) high Some((834.9, 674.6, 72, 34))",
-    "newchat-tall-model: dialog Some((648.9, 195.9, 520, 331.6)) opus None high Some((1090.4, 337.9, 72.5, 34))",
-    "newchat-crowded-model: dialog Some((648.9, 290.9, 420, 236.6)) opus None high Some((990.9, 397.9, 72, 34))",
-    "newchat-crowded-model 低: dialog Some((648.9, 290.9, 420, 236.6)) high Some((990.9, 397.9, 72, 34))",
-    "newchat-crowded-model 最高: dialog Some((648.9, 290.9, 420, 236.6)) high Some((990.9, 397.9, 72, 34))",
+    "newchat-model: dialog Some((650, 566, 264, 212)) opus Some((656, 602, 172, 36)) high Some((836, 677, 72, 36))",
+    "newchat-tall-model: dialog Some((650, 176, 520, 350)) opus None high Some((1091.5, 324, 72.5, 36))",
+    "newchat-crowded-model: dialog Some((650, 277, 420, 249)) opus None high Some((992, 388, 72, 36))",
+    "newchat-crowded-model 低: dialog Some((650, 277, 420, 249)) high Some((992, 388, 72, 36))",
+    "newchat-crowded-model 最高: dialog Some((650, 277, 420, 249)) high Some((992, 388, 72, 36))",
   ])
   assert_eq(drawn, [true, true, true])
 }
@@ -113,17 +113,17 @@ let fits_main : Array[String] = [
   "plain 38: dialog Some((600, 106, 400, 86)) title [(616, 118, 368, 20)] words [(616, 142, 368, 44)] button None end None",
   "plain 8: dialog Some((600, 106, 400, 64)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button None end None",
   "plain 3: dialog Some((600, 106, 400, 64)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button None end None",
-  "foot 3: dialog Some((600, 106, 74, 104.8)) title [(616, 118, 42, 20)] words [(616, 142, 42, 22)] button Some((611.2, 172, 58, 34)) end None",
-  "foot 38: dialog Some((600, 106, 400, 126.8)) title [(616, 118, 368, 20)] words [(616, 142, 368, 44)] button Some((937.2, 194, 58, 34)) end None",
-  "foot 8: dialog Some((600, 106, 400, 104.8)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button Some((937.2, 172, 58, 34)) end None",
-  "foot 3: dialog Some((600, 106, 400, 104.8)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button Some((937.2, 172, 58, 34)) end None",
-  "end 3: dialog Some((600, 106, 103.8, 70.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 71.8, 22)] button None end Some((654, 110.8, 45, 34))",
-  "end 38: dialog Some((600, 106, 400, 92.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 368, 44)] button None end Some((654, 110.8, 341.2, 34))",
-  "end 8: dialog Some((600, 106, 400, 70.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 368, 22)] button None end Some((654, 110.8, 341.2, 34))",
-  "end 3: dialog Some((600, 106, 400, 70.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 368, 22)] button None end Some((654, 110.8, 341.2, 34))",
-  "narrow 3: dialog Some((600, 106, 103.8, 70.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 71.8, 22)] button None end Some((654, 110.8, 45, 34))",
-  "narrow 38: dialog Some((600, 106, 200, 136.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 168, 88)] button None end Some((654, 110.8, 141.2, 34))",
-  "narrow 8: dialog Some((600, 106, 200, 70.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 168, 22)] button None end Some((654, 110.8, 141.2, 34))",
-  "narrow 3: dialog Some((600, 106, 200, 70.8)) title [(616, 117.8, 26, 20)] words [(616, 148.8, 168, 22)] button None end Some((654, 110.8, 141.2, 34))",
+  "foot 3: dialog Some((600, 106, 74, 108)) title [(616, 118, 42, 20)] words [(616, 142, 42, 22)] button Some((610, 172, 58, 36)) end None",
+  "foot 38: dialog Some((600, 106, 400, 130)) title [(616, 118, 368, 20)] words [(616, 142, 368, 44)] button Some((936, 194, 58, 36)) end None",
+  "foot 8: dialog Some((600, 106, 400, 108)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button Some((936, 172, 58, 36)) end None",
+  "foot 3: dialog Some((600, 106, 400, 108)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button Some((936, 172, 58, 36)) end None",
+  "end 3: dialog Some((600, 106, 105, 74)) title [(616, 120, 26, 20)] words [(616, 152, 73, 22)] button None end Some((654, 112, 45, 36))",
+  "end 38: dialog Some((600, 106, 400, 96)) title [(616, 120, 26, 20)] words [(616, 152, 368, 44)] button None end Some((654, 112, 340, 36))",
+  "end 8: dialog Some((600, 106, 400, 74)) title [(616, 120, 26, 20)] words [(616, 152, 368, 22)] button None end Some((654, 112, 340, 36))",
+  "end 3: dialog Some((600, 106, 400, 74)) title [(616, 120, 26, 20)] words [(616, 152, 368, 22)] button None end Some((654, 112, 340, 36))",
+  "narrow 3: dialog Some((600, 106, 105, 74)) title [(616, 120, 26, 20)] words [(616, 152, 73, 22)] button None end Some((654, 112, 45, 36))",
+  "narrow 38: dialog Some((600, 106, 200, 140)) title [(616, 120, 26, 20)] words [(616, 152, 168, 88)] button None end Some((654, 112, 140, 36))",
+  "narrow 8: dialog Some((600, 106, 200, 74)) title [(616, 120, 26, 20)] words [(616, 152, 168, 22)] button None end Some((654, 112, 140, 36))",
+  "narrow 3: dialog Some((600, 106, 200, 74)) title [(616, 120, 26, 20)] words [(616, 152, 168, 22)] button None end Some((654, 112, 140, 36))",
   "column: dialog (600, 90, 74, 402) row0 [(616, 126, 42, 22)] held Some(false) | wheel: [(616, 6, 42, 22)]",
 ]

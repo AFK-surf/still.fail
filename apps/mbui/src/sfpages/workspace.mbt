@@ -102,7 +102,7 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
   let by_ws = field(marks.value, "workspaces")
   c.box(style=if compact { ws_list_compact } else { ws_list }, fn() {
     ws_label(c, @sf.t("android-misc.workspace.current"))
-    c.box(style=ws_current, fn() {
+    c.box(style=ws_current.then(@sf.panel_card_out()), fn() {
       c.box(style=ws_card.then(@ui.style(bg=Data(@sf.theme().p.chip))), fn() {
         if workspace_row(c, "ws/" + w.id, w.name, w.email, true, Some(w), "", Json::null(), on_card=true) {
           close()
@@ -160,12 +160,12 @@ let ws_list_compact : @ui.Style = @ui.css("w=Full pb=S3")
 ///|
 /// The one in use: on a card 12 in from the sides, 4 under its label, 16 over what follows.
 // kept across runs: a value (no field of it changes)
-let ws_current : @ui.Style = @ui.css("w=Full px=S3 pt=S1 pb=S4")
+let ws_current : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
 
 ///|
 /// A list card (Workspaces.kt RowsCard): its rows list_pad in, the list card's corner, on the chips' grey.
 // kept across runs: a value (no field of it changes)
-let ws_card : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, clip=true)
+let ws_card : @ui.Style = @ui.style(w=Full, p=@sf.room_of(@sf.corner_inset), radius=@sf.card_radius, clip=true)
 
 ///|
 /// Signing in another account and a new one: 8 under the list, 16 over the foot.
@@ -175,12 +175,12 @@ let ws_foot : @ui.Style = @ui.css("w=Full pt=S2 pb=S4")
 ///|
 /// A part's label (13, muted): 20 in, 6 over it and 2 under.
 fn ws_label(c : @ui.Ctx, label : String) -> Unit {
-  c.box(style=ws_label_box, fn() { c.text(label, style=ws_label_words) |> ignore }) |> ignore
+  c.box(style=ws_label_box.then(@sf.panel_words_in()), fn() { c.text(label, style=ws_label_words) |> ignore }) |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_label_box : @ui.Style = @ui.css("px=S5 pt=S1_5 pb=S0_5")
+let ws_label_box : @ui.Style = @ui.css("pt=S1_5 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -205,7 +205,8 @@ fn workspace_row(
   let id = c.id(key)
   // on a list card (Parts.kt PickRow, LocalOnCard): its words card_pad from the card's edge, the card's list_pad in
   // already; on a sheet, 12 in and 8 more
-  c.box(style=if on_card { ws_row_on_card } else { ws_row_in }, fn() {
+  // (in a panel: its card's, or a row of the panel's own `panel_card_in` from its sides, its words on the panel's line)
+  c.box(style=if on_card { ws_row_on_card } else { ws_row_in.then(@sf.panel_card_out()) }, fn() {
     c.box(style=if on_card { ws_row_card } else { ws_row }, id~, fn() {
       match lead {
         Some(w) =>
@@ -231,7 +232,7 @@ fn workspace_row(
         @sf.icon(c, "check", size=ws_row_check, color=t.p.accent) |> ignore
       }
       // Workspaces.kt: clip(Smooth(LIST_ROW_CORNER)).clickable
-      @motion.ripple(c, id, @sf.row_corner)
+      @motion.ripple(c, id, if on_card { @sf.row_corner } else { @sf.card_corner })
     })
     |> ignore
   })
@@ -242,7 +243,7 @@ fn workspace_row(
 ///|
 /// On a sheet: 12 in from its sides; the row 8 more in, 12 over and under, 12 apart.
 // kept across runs: a value (no field of it changes)
-let ws_row_in : @ui.Style = @ui.css("w=Full px=S3")
+let ws_row_in : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -250,12 +251,12 @@ let ws_row_on_card : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
+let ws_row : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.room_of(@sf.panel_words - @sf.panel_card_in)))
 
 ///|
 /// On a card: the card's list_pad in already, a row's room more (list_words_room: its words 16 from the card's edge).
 // kept across runs: a value (no field of it changes)
-let ws_row_card : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.list_words_room))
+let ws_row_card : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.room_of(@sf.text_in)))
 
 ///|
 /// A workspace's mark or its letter in a square 24 across: the mark 22, the letter 15 semibold, muted; an icon 20, the
@@ -283,7 +284,7 @@ let ws_row_label : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=@sf.pick_sub_line)
+let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut, leading=@sf.pick_sub_line)
 
 ///|
 /// What a workspace has waiting, after its name (SettingParts.kt MarkCounts): the chats its person takes part in that

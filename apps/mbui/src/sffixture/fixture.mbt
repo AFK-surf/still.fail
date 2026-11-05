@@ -1500,6 +1500,7 @@ pub fn fixture(mode : String) -> Source {
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
+    list: fn(_, _, _, _) { None },
     read_only: false,
   }
 }

@@ -183,19 +183,24 @@ pub(all) struct Items {
 
 ///|
 /// The corner ladder (docs/ui-panels.md「圆角阶梯」): the few corners nested things are round by, outermost first, each
-/// the one before it concentric `corner_inset` in (smooth.mbt concentric: that over 1.25 less): a pane of the frame
-/// (the tape's panels laid out Medium, a dialog), a card (a page's card, a sheet, the composer), a row or a block on a
-/// card, a small block on a row. What has a ground and lies in a container's corner stands `corner_inset` in from both
+/// the one before it concentric in it (the user, 2026-11-03): a panel (the tape's panels laid out Medium, a dialog, a
+/// sheet: what holds cards) 42, a card in it `panel_card_in` (16) in 26, a row or a block on a card `corner_inset` (8)
+/// in 18, a small block on a row 10. What has a ground and lies in a card's or a row's corner stands `corner_inset` in from both
 /// its edges and is round by the next step (mbui works its corner out: corners.mbt), or is a capsule or a circle `its
 /// half less than the container's corner` in. The theme's (Theme::corner_ladder): screen tests hold every corner with
 /// something in it, and what is there, to these.
-pub let pane_corner : Double = 34.0
+pub let pane_corner : Double = 42.0
 
 ///|
-pub let corner_inset : Double = 10.0
+pub let corner_inset : Double = 8.0
 
 ///|
-pub let card_corner : Double = @ui.concentric(pane_corner, corner_inset)
+/// How far in from a panel's sides a card it holds stands, concentric with its corners (the user, 2026-11-03: 面板里可以
+/// 放卡片; 为什么卡片离面板那么近, and of 8 and 16 side by side, 第二套感觉还行): a panel's corner is a card's and this.
+pub let panel_card_in : Double = 16.0
+
+///|
+pub let card_corner : Double = @ui.concentric(pane_corner, panel_card_in)
 
 ///|
 pub let row_corner : Double = @ui.concentric(card_corner, corner_inset)
@@ -230,11 +235,12 @@ pub let corner_fit : @ui.CornerFit = { least: 6.0, most: pane_corner, near: 4.0,
 ///|
 /// The corner of the tape's panels (laid out Medium) where they stand alone: less round than the ladder's pane corner a
 /// dialog has (the user, 2026-10-25: 中屏的页面圆角想办法搞小一点点, 34 to 30; 2026-10-26: 最好能把这个中屏的页面圆角搞小
-/// 点点, 30 to 28). Linked (tape_corners), what lies in their corners follows it there (a composer, a bar's buttons, the
+/// 点点, 30 to 28; 2026-11-03, back to a panel's: 中屏面板改回 34, a card in it 8 in concentric with it as in any panel).
+/// Linked (tape_corners), what lies in their corners follows it there (a composer, a bar's buttons, the
 /// rail's grounds), round as that makes it; what is in the middle of a page keeps the ladder's. A composer's capsule 48
 /// high is as high as stands concentric in it (28 less its half, 24: corner_fit's nearest, 4), and a finger's comes down
 /// to it (foot_capsule_h); opened, it is a card less round than the ladder's there (pane_foot_corner: 24.8, 4 in).
-pub let tape_corner : Double = 28.0
+pub let tape_corner : Double = pane_corner
 
 ///|
 /// The tape's one line (laid out Medium): how far under its panels' tops their first row's round buttons stand, as far
@@ -341,6 +347,14 @@ pub fn capsule_fits(corner : Double, height : Double) -> Bool {
 }
 
 ///|
+/// Under a list in a panel whose rows' words stand on the panel's words' line (panel_words), as much room as keeps a
+/// box `box` across, in the middle of its last row `row_h` high, out of the panel's foot corner (pane_corner): a box
+/// there would have to be concentric with the corner (the corner rule), so it stands clear of it instead.
+pub fn panel_foot_clear(row_h : Double, box : Double) -> @ui.Space {
+  room(dmax(0.0, pane_corner - panel_words - (row_h - box) / 2.0))
+}
+
+///|
 /// `x` as a style's room (room, for the frame's packages).
 pub fn room_of(x : Double) -> @ui.Space {
   room(x)
@@ -383,6 +397,17 @@ pub fn pane_top_right() -> Double? {
 /// with the panel's.
 pub fn in_pane() -> Bool {
   pane_round.val is Some(_)
+}
+
+///|
+/// `body` built in the panel `pane` (pane_round as the page that made it was built in): a list's rows, built as the
+/// list lays them out, after the build that said it (as with_look carries a page's arrangement to them).
+pub fn[T] with_pane(pane : FixedArray[@ui.CornerOf]?, body : () -> T) -> T {
+  let was = pane_round.val
+  pane_round.val = pane
+  let out = body()
+  pane_round.val = was
+  out
 }
 
 ///|
@@ -452,8 +477,8 @@ pub fn box_fit(corner : Double, inset : Double, alone : Double) -> (Double, Doub
 /// lets it have (further in, squarer), at least `least` round (what it holds in its own corner followed by it: holds_least):
 /// the nearest and the furthest; None where none is (a corner too square for one, or too round).
 fn fit_places(corner : Double, least? : Double = corner_fit.least) -> (Double, Double)? {
-  let nearest = dmax(corner_fit.near, (corner - corner_fit.most) * @ui.smooth_scale)
-  let furthest = dmin(corner_fit.far, (corner - dmax(least, corner_fit.least)) * @ui.smooth_scale)
+  let nearest = dmax(corner_fit.near, corner - corner_fit.most)
+  let furthest = dmin(corner_fit.far, corner - dmax(least, corner_fit.least))
   if nearest > furthest {
     None
   } else {
@@ -506,7 +531,7 @@ pub fn pane_foot_in_of(radii : FixedArray[Double]?, holds? : Double = 0.0) -> Do
 /// ladder's inset in a pane corner's 34, 10; in one of 30, 5), as near as corner_fit lets where that is nearer (the
 /// tape's 28: 4, less round than a card there, pane_foot_corner).
 fn foot_inset(corner : Double) -> Double {
-  dmax(corner_fit.near, (corner - card_corner) * @ui.smooth_scale)
+  dmax(corner_fit.near, corner - card_corner)
 }
 
 ///|
@@ -587,10 +612,15 @@ pub fn holds_least(holds : Double) -> Double {
 }
 
 ///|
-/// A card across the foot of what is built (a side panel's job picked): as far in from its sides and foot as
-/// pane_foot_in, a card's corner (in the panel's foot corners concentric with them: mbui works them out).
+/// A card across the foot of what is built (a side panel's job picked): a card of the panel's, as far in from its
+/// sides and foot as makes a card's corner concentric with the rounder of the panel's foot corners (16 in a panel's
+/// 42: the user, 2026-11-03, 面板里可以放卡片), the other one, a window's too square to follow there, as it stands alone;
+/// the ladder's inset in a window's whole.
 pub fn pane_foot_card() -> @ui.Style {
-  let d = pane_foot_in()
+  let d = match pane_radii() {
+    Some(k) => foot_inset(dmax(k[3], k[2]))
+    None => corner_inset
+  }
   @ui.style(mx=room(d), mb=room(d), radius=rounded(card_corner))
 }
 
@@ -632,7 +662,6 @@ pub fn foot_across(height : Double) -> @ui.Style {
 fn card_foot_words_in(height : Double) -> Double {
   card_pad - card_foot_in(height)
 }
-
 ///|
 /// Build controls at a card's foot, or fields immediately above them, with their words on the card's line (`on` when
 /// they are on a card). The previous setting is put back afterwards.
@@ -654,11 +683,12 @@ pub fn foot_start(height : Double, words_in : Double) -> @ui.Style {
 
 ///|
 /// A card's rows `row_h` high, each with something `end_h` high in its middle at its end (a key's button): reaching into
-/// the card's padding over the first and under the last by as much as that stands in from a row's top and foot, so the
-/// first's and the last's stand in the card's corners as far from both its edges (round by the ladder's there: mbui
-/// works it out).
+/// the card's padding over the first and under the last by as much as that stands in from a row's top and foot, and
+/// at their end, out further to where the ladder's small corner is concentric with the card's (16 in: card_end_out), so
+/// the first's and the last's stand in the card's corners as far from both its edges, round as the corner there wants.
 pub fn card_rows_reach(row_h : Double, end_h : Double) -> @ui.Style {
-  @ui.style(my=room((end_h - row_h) / 2.0))
+  let out = card_corner - small_corner - card_pad
+  @ui.style(my=room((end_h - row_h) / 2.0 + out), mr=room(out))
 }
 
 ///|
@@ -785,7 +815,68 @@ pub fn foot_corner(height : Double, side : Double, foot : Double) -> @ui.Style {
 
 ///|
 /// A page card of words: this in from every side.
-pub let card_pad : Double = 20.0
+pub let card_pad : Double = 24.0
+
+///|
+/// A block with a ground on a card (a field, a code block, a picture) out from the card's words to `corner_inset` in
+/// from its sides (and its top where `top`, its foot where `foot`), concentric with its corners there as a row is, a
+/// row's corner; its own words back on the card's line by its own padding (text_in: corner_inset and that, card_pad).
+pub fn card_block_out(top? : Bool = false, foot? : Bool = false) -> @ui.Style {
+  let out = room(corner_inset - card_pad)
+  @ui.style(w=Full, mx=out, mt?=if top { Some(out) } else { None }, mb?=if foot { Some(out) } else { None })
+}
+
+///|
+/// A small block with a ground in a card's top start corner on its first line (a mark, a tile): out from the card's
+/// words to where the ladder's small corner is concentric with the card's (card_corner less small_corner, 16 in).
+pub let card_mark_out : @ui.Style = @ui.style(
+  ml=room(card_corner - small_corner - card_pad),
+  mt=room(card_corner - small_corner - card_pad),
+)
+
+///|
+/// A line of a card whose end holds small blocks with grounds (a field's buttons: show, copy): its end out from the
+/// card's words to where the ladder's small corner is concentric with the card's (16 in), as card_mark_out at its start.
+pub let card_end_out : @ui.Style = @ui.style(mr=room(card_corner - small_corner - card_pad))
+
+///|
+/// A small block with a ground in a card's top end corner on its first line (its ⋯): out from the card's words to
+/// where the ladder's small corner is concentric with the card's (16 in), as card_mark_out at its start.
+pub let card_top_end_out : @ui.Style = @ui.style(
+  mr=room(card_corner - small_corner - card_pad),
+  mt=room(card_corner - small_corner - card_pad),
+)
+
+///|
+/// A tile with a ground leading a row (a maker's mark): out from the row's words (text_in) to the ladder's inset (8)
+/// from its start and top, concentric with its corner there (a row's 18 less 8, the small block's 10).
+pub fn row_lead_out() -> @ui.Style {
+  // (a narrow row's words `text_in` under its top, a wide one's 10: the web's list row's)
+  let top = match look() {
+    Narrow => text_in
+    Wide => 10.0
+  }
+  @ui.style(ml=room(corner_inset - text_in), mt=room(corner_inset - top))
+}
+
+///|
+/// What ends a card with small blocks with grounds at its foot (a field's buttons on its last line): its foot out from
+/// the card's words to where the ladder's small corner is concentric with the card's (16 in), as card_end_out at its end.
+pub let card_foot_out : @ui.Style = @ui.style(mb=room(card_corner - small_corner - card_pad))
+
+///|
+/// A line of small blocks with grounds that ends a card from its start (chips that narrow a page: 只看 10/3): out from
+/// the card's words at its start and its foot to where the ladder's small corner is concentric with the card's (16 in).
+pub let card_foot_start_out : @ui.Style = @ui.style(
+  ml=room(card_corner - small_corner - card_pad),
+  mb=room(card_corner - small_corner - card_pad),
+)
+
+///|
+/// How far in from a panel's sides its words stand (a dialog's, a sheet's: its title, what it says, its rows' words):
+/// as far as a card's words from its edge, cards in it or none; a card's own words as far in from the card, not on the
+/// panel's line (the user, 2026-11-03: 卡片里的字跟面板的字不需要对齐; 有卡片也应该这样).
+pub let panel_words : Double = card_pad
 
 ///|
 /// A command's box's corner: a block's on a card, its copy button corner_inset in from its corner.
@@ -858,17 +949,15 @@ pub let r_dialog : Double = 32.0
 
 ///|
 /// (a small panel's: a menu, a popover, a hover's card, and a list card: a taller row at its padding (panel_pad) the
-/// ladder's row corner, 18, concentric with it, 18 + 6 / 1.25 = 22.8: the ladder's small panels (corner_ladder). What
+/// ladder's row corner, 18, concentric with it, 18 + 6 = 24: the ladder's small panels (corner_ladder). What
 /// stands further in in it is round by the ladder's next steps as a card's is: what has a ground on its words' line 10.
-/// Its rows 34 high are capsules: they stand where that is concentric with it (menu_row_reach), a little nearer its
-/// edges.)
+/// Its rows 36 high are capsules, their half 18 as well: on its padding, concentric with it.)
 pub let r_menu : Double = surface_corner(panel_pad, row_corner)
 
 ///|
 /// How far a small panel's row `height` high reaches past its padding: a capsule (as high as twice the corner it would
-/// have there, or less) to where it is concentric with the panel's corner (capsule_in: a mouse's 34, 4.81 in, 1.19
-/// past), as every capsule in a corner stands (the user, 2026-10-27: a capsule in a smooth corner, off its curve);
-/// a taller row, rounded, none.
+/// have there, or less) to where it is concentric with the panel's corner (capsule_in: a mouse's 36, none past
+/// its padding), as every capsule in a corner stands; a taller row, rounded, none.
 pub fn menu_row_reach(height : Double) -> Double {
   if height / 2.0 <= small_panel_inner(r_menu) + 0.5 {
     dmax(0.0, panel_pad - capsule_in(r_menu, height))
@@ -1080,8 +1169,8 @@ let wide_type : Type = {
 }
 
 ///|
-/// A control's height (Theme::control_h): with keyboard and mouse 34, as a row and a button are (2026-10-30, one
-/// height: in place of the web's 36), a finger's (44); a button 34 with either (button_height).
+/// A control's height (Theme::control_h): with keyboard and mouse 36, as a row and a button are (2026-10-30, one
+/// height; 2026-11-03 34 to 36, the corners' numbers whole), a finger's (44); a button 36 with either (button_height).
 let wide_control_h : Double = menu_row_min
 
 ///|
@@ -2084,9 +2173,9 @@ pub let peek_card_px : Double = 280.0
 pub let peek_card_w : @ui.Len = Fixed(peek_card_px)
 
 ///|
-/// How far in from the card's top and sides its preview lies (its corners concentric with the card's).
-/// (S1 in its style: screen_links.mbt peek_card)
-pub let peek_card_in_px : Double = 4.0
+/// How far in from the card's top and sides its preview lies: the ladder's inset, its corners the next step (26 less 8,
+/// 18; the user, 2026-11-03, in place of 4).
+pub let peek_card_in_px : Double = corner_inset
 
 ///|
 /// The preview's width: the card's less its room on both sides.
@@ -2535,11 +2624,12 @@ pub let panel_icon_size : Double = 16.0
 pub let chooser_chevron : Double = 12.0
 
 ///|
-/// A menu's item at least with keyboard and mouse (controls.css.ts menuItem: 34 high), a capsule its panel's padding in
-/// from its corner, concentric with it (capsule_in(r_menu, 34) = panel_pad: what r_menu is made of). With touch a
+/// A menu's item at least with keyboard and mouse, 36 high (the user, 2026-11-03: 「改 36 吧」, what can be pressed one
+/// height: 34 before), a capsule its panel's padding in from its corner, concentric with it (capsule_in(r_menu, 36) =
+/// panel_pad: 24 = 6 + 18). With touch a
 /// finger's 44 (Theme::rows pick), its words in its middle, round as a row taller than the capsule is (panel_in: the
 /// ladder's 18).
-pub let menu_row_min : Double = 34.0
+pub let menu_row_min : Double = 36.0
 
 ///|
 /// A small panel's row (a menu's item, the `@` menu's chat, a picker's) as high as the screen's at least (Theme::rows
@@ -3009,6 +3099,7 @@ pub let top_bar_title_look : @view.WordsLook = {
   line: 30.0,
   wrap: false,
   tracking: ScaledPoints(-0.4),
+  balance: false,
 }
 
 ///|
@@ -3019,4 +3110,5 @@ pub let home_workspace_title_look : @view.WordsLook = {
   line: 26.0,
   wrap: false,
   tracking: ScaledPoints(-0.4),
+  balance: false,
 }

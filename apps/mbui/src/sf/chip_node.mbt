@@ -47,7 +47,7 @@ pub fn chip_node(
     v.show(fn() { label() != "" }, fn(w) {
       w
       .words(By(label))
-      .words_look(By(fn() { { size: theme().t.meta, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own } }))
+      .words_look(By(fn() { { size: theme().t.meta, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false } }))
       .ink(By(ink))
       |> ignore
     })

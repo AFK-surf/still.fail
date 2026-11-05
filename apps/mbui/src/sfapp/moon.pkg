@@ -24,4 +24,4 @@ import {
   "stillfail/sffixture",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens", "stillfail/rows" } for "wbtest"

@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -367,6 +367,7 @@ export class Store {
       addWaitWatchColumn(db);
       addWorkspaceColumns(db);
       addOpenerTitle(db);
+      addLeftColumn(db);
       addUsageColumns(db);
       installUsageSpan(db);
       addUsageTotals(db);
@@ -1205,15 +1206,30 @@ export class Store {
     return said ? toThread(said) : this.threadAt(surface, channel, ts);
   }
 
-  /// Makes a session take part in a thread, posting through `connect`. False if it already did.
+  /// Makes a session take part in a thread, posting through `connect`, or hear it again after it left. False if it
+  /// already did.
   joinThread(thread: number, session: string, connect: string): boolean {
     return this.#with((changes) => {
-      const joined = this.#run("INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)", thread, session, connect, this.now()) > 0;
+      const joined = this.#run(
+        `INSERT INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (thread, session) DO UPDATE SET left_at = NULL WHERE thread_sessions.left_at IS NOT NULL`,
+        thread, session, connect, this.now(),
+      ) > 0;
       if (joined) {
         changes.push({ type: "session", key: session });
         changes.push({ type: "thread", id: thread, entries: [] });
       }
       return joined;
+    });
+  }
+
+  /// A session stops hearing a thread it takes part in, until someone mentions it there (hub `acceptInTurn`). It stays
+  /// a member: it still reads the thread and can post there. False if it was not hearing it.
+  leaveThread(thread: number, session: string): boolean {
+    return this.#with((changes) => {
+      const left = this.#run("UPDATE thread_sessions SET left_at = ? WHERE thread = ? AND session = ? AND left_at IS NULL", this.now(), thread, session) > 0;
+      if (left) changes.push({ type: "session", key: session });
+      return left;
     });
   }
 

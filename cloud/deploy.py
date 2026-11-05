@@ -131,10 +131,18 @@ KEEP_BUILDS = 10
 CLOUDS = {
     "monoid": {
         "zones": {"still.fail": "monoid.build", "youdid.wtf": "monoid.zone"},
+        # its name where still.fail's stands alone in the static sites' pages (client/i18n/brand.ts says it for the rest)
+        "name": "monoid",
         "dropped": ["3720.org"],
         # The API's own: Cloudflare Access in front of the console (src/admin.ts), its application "monoid admin" on
         # admin.monoid.build letting in the AFK-surf GitHub organization's members.
-        "api_vars": {"ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com", "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5"},
+        # Its bucket holds its own apps' builds alone: the station's releases, the same code's, read from still.fail's
+        # (src/install.ts sharedRelease).
+        "api_vars": {
+            "ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com",
+            "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5",
+            "RELEASES_UPSTREAM": "https://app.still.fail/releases",
+        },
     },
 }
 CLOUD = env_var("CLOUD") or ""
@@ -147,6 +155,24 @@ def rehost(text: str, cloud: str = CLOUD) -> str:
     for zone, theirs in CLOUDS[cloud]["zones"].items() if cloud else []:
         text = re.sub(rf"(?<![\w.-])((?:[\w-]+\.)*){re.escape(zone)}(?![\w-]|\.\w)", rf"\g<1>{theirs}", text)
     return text
+
+
+# still.fail's name standing alone, not a host's part or an address (client/i18n/brand.ts NAME)
+STILLFAIL_NAME = re.compile(r"(?<![\w./@-])still\.fail(?![\w-]|\.\w)")
+
+
+def rebrand_static(cloud: str = CLOUD) -> None:
+    """The static sites' pages and manifests built in dist/ as `cloud` has them: its hosts, and its name for still.fail's
+    (the title, the description, the link previews'). Their scripts are left as they are: the app says its cloud's name
+    itself (its core's, client/i18n/brand.ts)."""
+    if not cloud:
+        return
+    for site in ("cloud-web", "cloud-admin", "cloud-share", "cloud-preview"):
+        for path in (REPO / "dist" / site).rglob("*"):
+            if path.suffix in (".html", ".webmanifest") and path.is_file():
+                text = path.read_text()
+                # (the name first: rehost would take a bare still.fail for the domain it also is)
+                path.write_text(rehost(STILLFAIL_NAME.sub(CLOUDS[cloud]["name"], text), cloud))
 
 
 def dropped(text: str, cloud: str = CLOUD) -> bool:
@@ -474,6 +500,7 @@ def main() -> None:
         else:
             print("note: no moon; building without the app (no web app deployed)", flush=True)
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
+        rebrand_static()
     if not args.skip_build and "site" in parts:
         subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
     if not args.skip_build and "site-beta" in parts:

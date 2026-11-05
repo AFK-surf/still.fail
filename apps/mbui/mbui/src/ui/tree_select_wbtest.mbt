@@ -16,7 +16,7 @@ test "a word picked by a still finger stays that word when its paragraph moves; 
           words_picked(p)
           p.offset(By(fn() { (0.0, 40.0 + shifted.get()) }))
           .width(Is(Some(300.0)))
-          .words_runs(Is(picked_runs), look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own }) |> ignore
+          .words_runs(Is(picked_runs), look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
         }) |> ignore
       } else {
         old(root, fn(c) {
@@ -57,7 +57,7 @@ fn tree_picked_tester(picks : Bool, platform? : Int = 0, centered? : Bool = fals
       page.box(fn(n) {
         n
         .width(Is(Some(300.0)))
-        .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
+        .words_runs(Is(picked_runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
         .words_centered(Is(centered))
         |> ignore
       })
@@ -175,7 +175,7 @@ test "words picked in a page's list scrolled away and back (the nodes that show 
       page.scrolls_window(s, fn() { keys.get() }, est=22.0, fn(b, i) {
         b.box(fn(n) {
           n
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
           |> ignore
         })
         |> ignore
@@ -236,7 +236,7 @@ fn picked_list_tester(height : @signals.Signal[Double], hidden : @signals.Signal
       page.scrolls_window(s, fn() { Array::makei(40, fn(i) { i }) }, est=22.0, fn(b, i) {
         b.box(fn(n) {
           n
-          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
+          .words_runs(Is([plain("第 \{i} 段 "), bold("hello")]), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
           |> ignore
         })
         |> ignore

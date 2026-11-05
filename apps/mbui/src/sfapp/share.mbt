@@ -373,8 +373,10 @@ let share_narrow : ShareLook = {
   model: 36.0,
   inset: @ui.css("w=Full"),
   files_in: 0.0,
-  files_top: 4.0,
-  tile_corner: 16.0,
+  // (in the sheet's top left corner, as far from its top as from its side (the sheet's words' 24, the grabber's room
+  // over it a point more), concentric with it there: the ladder's row corner)
+  files_top: @sf.panel_words - @sf.sheet_grab_h,
+  tile_corner: @sf.row_corner,
 }
 
 ///|
@@ -404,9 +406,11 @@ let share_wide_look : ShareLook = {
   row_gap: 2.0,
   model: 18.0,
   inset: @ui.css("w=Full px=S3"),
-  files_in: 8.0,
-  files_top: 8.0,
-  tile_corner: @ui.concentric(@sf.pane_corner, 20.0),
+  // (in the panel's top left corner on its words' line, as far from its top, concentric with it there: the ladder's
+  // row corner)
+  files_in: @sf.panel_words - 12.0,
+  files_top: @sf.panel_words - 12.0,
+  tile_corner: @sf.row_corner,
 }
 
 ///|
@@ -856,7 +860,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   let t = @sf.theme()
   let pictures = files.filter(fn(f) { f.image != "" })
   if pictures.length() > 0 {
-    c.box(dir=Row, w=Fill(1.0), pl=look.files_in, pr=look.files_in, pt=look.files_top, pb=8.0, gap=8.0, clip=true, fn() {
+    c.box(dir=Row, w=Fill(1.0), pl=look.files_in, pr=look.files_in, mt=look.files_top, pb=8.0, gap=8.0, clip=true, fn() {
       for f in pictures {
         c.box(w=Px(56.0), h=Px(56.0), radius=look.tile_corner, bg=t.p.chip, clip=true, fn() {
           c.image(f.image, w=Px(56.0), h=Px(56.0), radius=look.tile_corner, fit=FitCover, bg=0L) |> ignore

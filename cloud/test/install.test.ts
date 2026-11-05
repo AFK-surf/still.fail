@@ -99,6 +99,10 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");
   // Builds from before the rename keep being served: the latest.json of then names them.
   assert.equal(releaseType("android/ember-890.apk"), "application/vnd.android.package-archive");
+  // monoid's apps, in its own bucket
+  for (const name of ["android/monoid-beta-7300.apk", "android/monoid-7300.apk", "desktop/monoid-beta-0.1.7300-arm64-mac.zip", "desktop/monoid-0.1.7300-x64-win.exe", "desktop/monoid-beta-0.1.7300-x64-win.exe.sig"]) {
+    assert.notEqual(releaseType(name), null, name);
+  }
   assert.equal(releaseType("android/other-890.apk"), null);
   assert.equal(releaseType("android/../secret"), null);
   assert.equal(releaseType("desktop/other.zip"), null);
@@ -260,6 +264,28 @@ test("with both places there the new one is used and the old one left; a fresh m
     assert.match(done.said, /stillfail station enroll https:\/\/app\.still\.fail tok --stay/);
   } finally {
     fresh.done();
+  }
+});
+
+test("another product's station is installed beside still.fail's: its own data, command and service", () => {
+  const both = machine();
+  try {
+    mkdirSync(join(both.home, ".stillfail", "mesh"), { recursive: true });
+    writeFileSync(join(both.home, ".stillfail", "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    const done = both.run(["tok"], {}, installScript("https://app.monoid.build"));
+    assert.equal(done.status, 0, done.out);
+    assert.ok(existsSync(join(both.home, ".monoid", "app", "VERSION")));
+    assert.ok(!existsSync(join(both.home, ".stillfail", "app")), "still.fail's left as it was");
+    assert.equal(readlinkSync(join(both.home, ".local", "bin", "monoid")), join(both.home, ".monoid", "app", "bin", "stillfail"));
+    assert.ok(!existsSync(join(both.home, ".local", "bin", "stillfail")) && !existsSync(join(both.home, ".local", "bin", "ember")));
+    const plist = readFileSync(join(both.home, "Library", "LaunchAgents", "build.monoid.station.plist"), "utf8");
+    assert.match(plist, new RegExp(`<key>STILLFAIL_DATA</key><string>${join(both.home, ".monoid")}</string>`));
+    assert.ok(!existsSync(join(both.home, "Library", "LaunchAgents", "fail.still.station.plist")));
+    assert.match(done.said, /stillfail station enroll https:\/\/app\.monoid\.build tok --stay/);
+    // still.fail's service is never stopped for it
+    assert.doesNotMatch(done.said, /launchctl bootout \S*fail\.still\.station|org\.3720\.ember\.station/);
+  } finally {
+    both.done();
   }
 });
 

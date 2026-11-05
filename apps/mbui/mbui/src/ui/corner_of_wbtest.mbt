@@ -60,8 +60,9 @@ fn linked_nodes() -> (Node, Node) {
 
 ///|
 test "corners linked: a panel's corners linked to a Mac window's follow it, a ground linked to the panel's follows that, the rule holds both" {
-  let follow = concentric(16.0, 6.0)
-  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0, window_corner=16.0)
+  // (a window 22 round: the panel's 16 there, the ground's 10 in that, round enough to follow)
+  let follow = concentric(22.0, 6.0)
+  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0, window_corner=22.0)
   t.draw()
   let (p, b) = linked_nodes()
   assert_eq(corners4(p), (34.0, follow, follow, 34.0))
@@ -83,7 +84,7 @@ test "corners linked: the window square, each stands alone, worked out again; a 
 
 ///|
 test "corners linked: one standing elsewhere than its link says is said" {
-  let t = Tester::new(linked_panel(8.0), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
+  let t = Tester::new(linked_panel(8.0), w=400.0, h=200.0, window_corner=22.0, corners_held=false)
   t.draw()
   let faults = t.corner_faults()
   assert_true(faults.iter().any(fn(f) { f.contains("linked to follow") }), msg="\{faults}")
@@ -111,11 +112,11 @@ test "corners linked: a link's radius, whether it follows, where it stands" {
   assert_eq(deep.radius(at), 34.0)
   assert_false(deep.follows(at))
   assert_eq(deep.inset(at), None)
-  // a capsule 30 high in a 34 (a circle reads it as 32.52): 17.52 in, further than the ranges let; one 40 high, 12.52
+  // a capsule 30 high in a 34: 19 in, further than the ranges let; one 40 high, 14 (its half less the corner)
   let own : CornerOf = Own(34.0)
   assert_eq(own.capsule_at(30.0, at), None)
   match own.capsule_at(40.0, at) {
-    Some(d) => assert_true((d - (34.0 * smooth_round - 20.0)).abs() < 1.0e-9)
+    Some(d) => assert_true((d - (34.0 - 20.0)).abs() < 1.0e-9)
     None => fail("a capsule 40 high stands in a 34")
   }
 }

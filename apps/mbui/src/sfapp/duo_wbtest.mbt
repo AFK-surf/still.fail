@@ -804,7 +804,9 @@ test "Duo workspace heading opens the existing panel without a duplicate menu" {
   let panels = t.semantics().filter(fn(s) { !s.hidden && s.role == @ui.Role::Dialog })
   assert_true(panels.length() > 0)
   for p in panels {
-    assert_true(p.rect.3 < 400.0, msg="short workspace list stretched to \{p.rect.3}")
+    // (as tall as its few rows and their room, not the window's 669 less its margins: its rows' room grew with the
+    // cards' 24, 2026-11-04, so no round figure just over what it was)
+    assert_true(p.rect.3 < 669.0 * 0.7, msg="short workspace list stretched to \{p.rect.3}")
   }
   assert_true(t.nav_said().contains("workspace-switch"))
   assert_true(t.nav_said().contains("sidebar/search"))

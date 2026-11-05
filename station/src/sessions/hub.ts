@@ -553,7 +553,9 @@ export class Hub {
     const existing = this.store.threadAt(surface, message.channel, message.threadTs);
     const members = existing ? this.store.threadSessions(existing.id) : [];
     const exists = this.store.getSession(key) !== null;
-    const wanted = single ? message.addressed || !connect.requireMention || (exists && members.some((m) => m.session === key)) : exists || message.addressed;
+    // Left (chat_leave): it hears the thread again only once someone mentions it.
+    const left = members.some((m) => m.session === key && m.leftAt !== null);
+    const wanted = message.addressed || (!left && (single ? !connect.requireMention || (exists && members.some((m) => m.session === key)) : exists));
     // Chatter this connect is not part of, in a thread no session takes part in.
     if (!wanted && members.length === 0) return;
     const here: ThreadRef = { channel: message.channel, threadTs: message.threadTs };
@@ -645,7 +647,9 @@ export class Hub {
   /// context for `-compact`, clears it for `-clear` (saying in the thread why not, when it cannot now).
   /// A session archived by hand hears nothing until shown again.
   deliver(thread: number, n: number, sessions: string[], text: string) {
-    const hearing = sessions.filter((key) => this.store.getSession(key)?.archivedBy !== MANUAL);
+    // Neither archived by hand nor gone from the thread (chat_leave).
+    const left = new Set(this.store.threadSessions(thread).filter((m) => m.leftAt !== null).map((m) => m.session));
+    const hearing = sessions.filter((key) => !left.has(key) && this.store.getSession(key)?.archivedBy !== MANUAL);
     for (const key of this.store.deliver(thread, n, hearing)) {
       this.store.touch(key);
       const row = this.store.getSession(key);

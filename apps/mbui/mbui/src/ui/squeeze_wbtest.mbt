@@ -628,3 +628,81 @@ test "a field's placeholder is said the longest way that fits it, whole, the sho
   assert_eq(faults.length(), 1, msg=faults.join("\n"))
   assert_true(faults[0].contains("placeholder cut to 0"), msg=faults[0])
 }
+
+///|
+/// A row 140 wide: a title and a note under it that goes on in lines (`titled`: else the note alone), and after them
+/// a switch 44 by 26 (`end`: else words that give way too), across their middle (`middle`: else at their top), 12
+/// apart; `room_over`, no title, an empty box over the note in its place. Alone in the row the note is one line (105 of 140); beside the switch it has 84.
+fn note_beside(
+  titled~ : Bool,
+  middle~ : Bool,
+  end~ : Bool,
+  note? : String = "a note of some length",
+  room_over? : Bool = false,
+) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(dir=Row, w=Px(140.0), gap=12.0, align=if middle { ACenter } else { AStart }, fn() {
+      c.box(w=Fill(1.0), fn() {
+        if titled {
+          c.text("Title", size=10.0, wrap=false) |> ignore
+        } else if room_over {
+          c.box(w=Fill(1.0), h=Px(12.0), fn() {  }) |> ignore
+        }
+        c.text(note, size=10.0) |> ignore
+      })
+      |> ignore
+      if end {
+        c.box(w=Px(44.0), h=Px(26.0), bg=0x00FF00FFL, fn() {  }) |> ignore
+      } else {
+        c.text("more words", size=10.0) |> ignore
+      }
+    })
+    |> ignore
+  }
+}
+
+///|
+test "beside_faults: a note under its title, beside a control across their middle, takes the lines the row leaves it; alone in its column, beside the control's top, beside words that give too or a letter or two on its last line, said as before" {
+  let faults = fn(view) {
+    let t = Tester::new(view, w=400.0, h=200.0)
+    t.draw()
+    t.beside_faults()
+  }
+  assert_eq(faults(note_beside(titled=true, middle=true, end=true)), [])
+  // (no title: the note the row's words themselves)
+  assert_true(faults(note_beside(titled=false, middle=true, end=true)).iter().any(fn(f) { f.contains("lines for what shares their row") }))
+  // (the switch on the title's line, not across the middle of the title and its note)
+  assert_true(faults(note_beside(titled=true, middle=false, end=true)).iter().any(fn(f) { f.contains("lines for what shares their row") }))
+  // (words after it that give way too)
+  assert_true(faults(note_beside(titled=true, middle=true, end=false)).length() > 0)
+  // (room over it, no title: as though none)
+  assert_true(
+    faults(note_beside(titled=false, middle=true, end=true, room_over=true)).iter().any(fn(f) { f.contains("lines for what shares their row") }),
+  )
+  // (two letters left alone on its last line)
+  assert_true(
+    faults(note_beside(titled=true, middle=true, end=true, note="abcdefghijklmn op")).iter().any(fn(f) { f.contains("lines for what shares their row") }),
+  )
+}
+
+///|
+test "balance: wrapped words broken on as many lines, as even as they may be: none left a letter or two on its last; on one line as they are" {
+  let laid = fn(balance : Bool, words : String) {
+    let t = Tester::new(fn(c) { c.box(w=Px(84.0), fn() { c.text(words, size=10.0, balance~) |> ignore }) |> ignore }, w=400.0, h=200.0)
+    t.draw()
+    let mut starts = []
+    for i in 0..<g().count {
+      let n = g().nodes[i]
+      if n.kind == kind_text && n.text == words {
+        starts = n.tl.unwrap().line_start.copy()
+      }
+    }
+    starts
+  }
+  // (greedy: "abcdefghijklmn" then "op"; balanced: the same two lines, the last no shorter than it need be)
+  assert_eq(laid(false, "abcdefghijklmn op"), [0, 15])
+  assert_eq(laid(true, "abcd efghijklmn op").length(), 2)
+  let even = laid(true, "abcd efgh ijkl mnop")
+  assert_eq(even, [0, 10])
+  assert_eq(laid(true, "short"), [0])
+}

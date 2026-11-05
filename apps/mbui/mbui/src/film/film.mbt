@@ -86,7 +86,8 @@ pub fn film(
     dark~,
     inset~,
     window_corner~,
-    corners_held~,
+    // (held but where the run is to show what breaks the rule, scripts/corners.sh: MBUI_CORNERS_SHOWN=1)
+    corners_held=corners_held && arg("MBUI_CORNERS_SHOWN") != "1",
     words_over_held=false,
   )
   defer { t.end_run(host) }

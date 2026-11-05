@@ -325,6 +325,7 @@ fn md_table_body_node(
                     line: (Float::from_double(size) * (1.65 : Float)).to_double(),
                     wrap: true,
                     tracking: @view.letters_own,
+                    balance: false,
                   }
                 }
                 let runs = fn() { table_cell_runs(words()) }

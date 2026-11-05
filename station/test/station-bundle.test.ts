@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -58,4 +58,22 @@ done
       assert.equal(existsSync(join(station, "linux-portal.py")), platform.startsWith("linux-"));
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("files a module finds beside itself are named as they lie beside main.js in a release, where every module is bundled", () => {
+  // The release copies them flat beside main.js (package.json build), so a path into another directory of src only
+  // works from the source (2026-11-04: the chat's own phone screen looked for ../screens/scrcpy-server and found none).
+  const src = fileURLToPath(new URL("../src/", import.meta.url));
+  const wrong: string[] = [];
+  for (const name of readdirSync(src, { recursive: true, encoding: "utf8" })) {
+    if (!name.endsWith(".ts")) continue;
+    readFileSync(join(src, name), "utf8").split("\n").forEach((line, i) => {
+      // Built from the source only: mesh's library from a local cargo build, and skills found by where the module runs.
+      if (line.includes("native/mesh/target/") || line.includes('import.meta.url.endsWith(".ts")')) return;
+      for (const m of line.matchAll(/new URL\("([^"]*)", import\.meta\.url\)/g)) {
+        if (!/^\.\/[^/]+\/?$/.test(m[1])) wrong.push(`${name}:${i + 1} ${m[1]}`);
+      }
+    });
+  }
+  assert.deepEqual(wrong, []);
 });

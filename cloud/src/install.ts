@@ -22,13 +22,23 @@
 // place, the old service's definition removed and the new one started; `ember` is linked to the new command.
 
 import { tr, type Lang } from "./i18n.ts";
+import { PRODUCTS } from "../../client/i18n/brand.ts";
 
 /**
  * The installer for a still.fail cloud at `origin`, getting the release of `channel` by default: the stable one, or the
  * test channel's (beta/, scripts/release.sh --beta). STILLFAIL_CHANNEL where it runs says otherwise.
  */
 export function installScript(origin: string, channel: "stable" | "beta" = "stable", lang: Lang = "zh"): string {
-  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel).replaceAll("__LANG__", lang);
+  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel).replaceAll("__LANG__", lang).replace("__PRODUCTS__", () => productCases());
+}
+
+/** The installer's `case "$origin"` for each product other than still.fail (client/i18n/brand.ts): its id and reverse
+ * domain, for a cloud on its domains or under them, a port or none. */
+function productCases(): string {
+  return PRODUCTS.map(({ zones, product }) => {
+    const hosts = zones.flatMap((zone) => [`*://${zone}`, `*://${zone}:*`, `*://*.${zone}`, `*://*.${zone}:*`]);
+    return `  ${hosts.join("|")}) product=${product.id} reverse=${product.reverse} ;;`;
+  }).join("\n");
 }
 
 /**
@@ -69,19 +79,19 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail-beta\.yml$/, "text/yaml; charset=utf-8"],
   [/^android\/beta\/latest\.json$/, "application/json"],
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
-  [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip$/, "application/zip"],
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   // The Mac app's own updater's feeds, stable and beta (it is mbui's, apps/mbui, in the Electron app's place:
   // scripts/release.sh desktop; an AppRelease naming the zip above, which stillfail(-beta)-mac.yml names too).
   [/^mac\/(beta\/)?latest\.json$/, "application/json"],
   // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
-  [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
   // The Windows app's: its feed for an installed Electron app's updater (electron-updater's, named by the channel
   // alone), its installer and, of the Electron app's own installers, their blockmaps.
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
-  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
-  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
   // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
-  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
   // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
   // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
   [/^win\/(beta\/)?latest\.json$/, "application/json"],
@@ -95,7 +105,8 @@ const APP_FILES: [RegExp, string][] = [
   [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
-  [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // monoid's (release.sh --product monoid), in its own bucket: monoid(-beta)-<n>.apk.
+  [/^android\/(stillfail|ember|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
   // still.fail mbui (apps/mbui: the Android app in mbui, fail.still.mbui, a test app of its own; apps/mbui/scripts/beta.sh):
   // its feed and the builds it names.
   [/^android\/mbui\/latest\.json$/, "application/json"],
@@ -128,6 +139,16 @@ const APP_FILES: [RegExp, string][] = [
   [/^natives\/[a-z][a-z0-9-]{0,31}-(darwin-arm64|linux-x64|linux-arm64|win32-x64|wasm32|android-arm64)-[0-9a-f]{24}\.tar\.gz$/, "application/gzip"],
 ];
 
+/**
+ * The files every cloud made of this code serves alike, its stations' and not its apps': the station's releases and
+ * feeds, their Node, the modules, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
+ * own apps' builds alone (monoid's: RELEASES_UPSTREAM) reads these from still.fail's when it has none (releases.ts
+ * upstreamRelease); never an app's feed or build, which would update its apps to another product's.
+ */
+export function sharedRelease(file: string): boolean {
+  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(modules|fonts|natives|relay)\//.test(file);
+}
+
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
   const archive = file.endsWith(".zip") ? "application/zip" : "application/gzip";
@@ -151,10 +172,16 @@ set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
 lock="\${2:-}"
+# The product its cloud is (client/i18n/brand.ts): another product's station has a data directory, a command and a
+# service of its own beside still.fail's on the same machine (monoid's: ~/.monoid, \`monoid\`, build.monoid.station).
+product=stillfail reverse=fail.still
+case "$origin" in
+__PRODUCTS__
+esac
 # The data: $STILLFAIL_DATA, else $EMBER_DATA (a shell or service from before the rename), else ~/.stillfail. ~/.ember,
 # the default before the rename, is the default now too: it is moved to ~/.stillfail.
 old_data="$HOME/.ember"
-data="\${STILLFAIL_DATA:-\${EMBER_DATA:-$HOME/.stillfail}}"
+data="\${STILLFAIL_DATA:-\${EMBER_DATA:-$HOME/.$product}}"
 [ "$data" = "$old_data" ] && data="$HOME/.stillfail"
 # Moved from ~/.ember: only there (or ~/.stillfail an empty directory), not already moved (a link to ~/.stillfail).
 # Until then what runs now is found there.
@@ -187,14 +214,14 @@ esac
 wsl=""
 [ "$os" = Linux ] && grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null && wsl=yes
 app="$data/app"
-label="fail.still.station"
+label="$reverse.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 unit_dir="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-unit="stillfail-station.service"
-# The service as it was named before the rename: stopped and removed, the new one in its place.
-old_label="org.3720.ember.station"
+unit="$product-station.service"
+# The service as it was named before the rename: stopped and removed, the new one in its place (still.fail's alone).
+old_label="" old_unit=""
+if [ "$product" = stillfail ]; then old_label="org.3720.ember.station" old_unit="ember-station.service"; fi
 old_plist="$HOME/Library/LaunchAgents/$old_label.plist"
-old_unit="ember-station.service"
 # Whether this Linux has a systemd for the user to run services in (not a container's, not another init).
 user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
 # WSL keeps a distribution up only while something of Windows' holds it (a terminal, a wsl.exe): with none, its
@@ -208,7 +235,7 @@ keep_wsl() {
   case "$appdata" in ?:\\\\*) ;; *) return 1 ;; esac
   startup="$(wslpath -u "$appdata")/Microsoft/Windows/Start Menu/Programs/Startup"
   [ -d "$startup" ] || return 1
-  keeper="$startup/stillfail-station-$WSL_DISTRO_NAME.vbs"
+  keeper="$startup/$product-station-$WSL_DISTRO_NAME.vbs"
   keeper_win=$(wslpath -w "$keeper")
   printf 'CreateObject("WScript.Shell").Run "wsl.exe -d ""%s"" --exec sleep %s", 0, False\\r\\n' "$WSL_DISTRO_NAME" "$keeper_sleep" > "$keeper" || return 1
   pgrep -fx "sleep $keeper_sleep" >/dev/null 2>&1 || (cd / && cmd.exe /c wscript.exe "$keeper_win" >/dev/null 2>&1) || return 1
@@ -491,16 +518,16 @@ if [ -z "$handed" ]; then
 step restart
 # One running at a time: the old one stops before the new one takes its place (under either name).
 if [ "$os" = Darwin ]; then
-  for l in "$label" "$old_label"; do
+  for l in "$label" \${old_label:+"$old_label"}; do
     launchctl bootout "gui/$(id -u)/$l" 2>/dev/null || true
     # bootout returns before the service is gone; bootstrapping it again before then fails.
     for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$l" >/dev/null 2>&1 || break; sleep 1; done
   done
-  rm -f "$old_plist"
+  [ -z "$old_label" ] || rm -f "$old_plist"
 else
   if user_systemd; then
     systemctl --user stop "$unit" 2>/dev/null || true
-    if [ -f "$unit_dir/$old_unit" ]; then
+    if [ -n "$old_unit" ] && [ -f "$unit_dir/$old_unit" ]; then
       systemctl --user stop "$old_unit" 2>/dev/null || true
       systemctl --user disable "$old_unit" >/dev/null 2>&1 || true
       rm -f "$unit_dir/$old_unit"
@@ -518,8 +545,8 @@ rm -rf "$app.old"
 prune_node
 fi
 mkdir -p "$HOME/.local/bin"
-ln -sf "$app/bin/stillfail" "$HOME/.local/bin/stillfail"
-ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
+ln -sf "$app/bin/stillfail" "$HOME/.local/bin/$product"
+[ "$product" != stillfail ] || ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"

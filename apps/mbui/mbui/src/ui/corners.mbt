@@ -276,6 +276,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     n.fw = d.w
     n.fh = d.h
     n.bg = d.ground
+    // (its edge round its ground (View::edge): one with an edge shows a ground of its own though its fill be the
+    // container's, or none, as an old box's border)
+    let (edge_w, edge_c) = d.edge
+    n.border_w = edge_w
+    n.border_c = edge_c
     n.radius = d.radius
     // (its corners each where it says them, View::corners: as round as it is laid out or drawn, as its radius)
     match d.corners {
@@ -393,6 +398,23 @@ pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String
 }
 
 ///|
+/// What lies in a rounded container's corner, each as found (Tester::corner_pairs), while it is asked for; none else.
+// kept across runs: said only round a call of Tester::corner_pairs
+let corner_pairs_out : Ref[Array[String]?] = Ref(None)
+
+///|
+/// Every box that lies in a rounded container's corner in the frame just built, its corner, the container's and how
+/// far it stands from that corner's two edges, whether it keeps the corner rule or not: what a page's corners are,
+/// to read (not a check).
+pub fn Tester::corner_pairs(self : Tester) -> Array[String] {
+  corner_pairs_out.val = Some([])
+  self.corner_faults() |> ignore
+  let out = corner_pairs_out.val.unwrap_or([])
+  corner_pairs_out.val = None
+  out
+}
+
+///|
 /// Where the frame just built breaks the corner rule (Tester::corner_faults; a scripted run's `corners`).
 fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let c = self
@@ -418,6 +440,13 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
     }
     let p = ct.node
     if c.corner_exempt(i, p, c.container_most(ct), ct.ground, pictures) {
+      // (what scrolls up and down in it, a list's card or row, scrolls past its top and foot, but not past its sides:
+      // as wide as most of it, standing in from both alike, it passes its corners as it scrolls, concentric with them
+      // there: a card 16 in a panel's 42 round by 26, not 31 in with a 26; the user, 2026-11-03, 为啥圆角检测失效了)
+      match c.scrolled_side_fault(i, ct) {
+        Some(f) => out.push(f)
+        None => ()
+      }
       continue
     }
     let a = c.nodes[p]
@@ -480,6 +509,11 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         dmax(dx, dy) < ra + c.fit_near()
       if dx < -0.5 || dy < -0.5 || ((dx >= reach || dy >= reach) && !beside) || !nearest_corner(k, l, t, r, d) {
         continue
+      }
+      // (said as found, every one in a corner: corner_pairs)
+      match corner_pairs_out.val {
+        Some(o) => o.push("\{c.named(i)} (\{b.fw}×\{b.fh}, corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (\{a.fw}×\{a.fh}, corner \{ra}): \{dx} and \{dy} in")
+        None => ()
       }
       // a corner that never shows: past the window's foot or head (a sheet held past the bottom so its foot's corners
       // are under it). Not past its sides: a pane beside the one in use comes over whole
@@ -614,7 +648,9 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
           Some(e) => (e - dmax(dx, dy)).abs() <= 0.5
           None => false
         }
-        if !round && on_ladder(ladder, ra) && !on_ladder(ladder, rb) && !placed_off {
+        // (the window's corner is the system's, never the ladder's, though it may come near one of its steps: a Mac's 16
+        // zoomed out to 0.9, 17.78; what lies in it follows it, not the ladder)
+        if !round && !ct.window && on_ladder(ladder, ra) && !on_ladder(ladder, rb) && !placed_off {
           out.push(
             "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{ladder} (\{ladder_in(ladder, ra)})",
           )
@@ -757,8 +793,8 @@ fn Ctx::fit_place(self : Ctx, ra : Double, d : Double) -> Double {
   match self.corner_fit {
     None => d
     Some(f) => {
-      let nearest = dmax(f.near, (ra - f.most) * smooth_scale)
-      let furthest = dmin(f.far, (ra - f.least) * smooth_scale)
+      let nearest = dmax(f.near, ra - f.most)
+      let furthest = dmin(f.far, ra - f.least)
       dmin(dmax(d, nearest), furthest)
     }
   }
@@ -783,12 +819,12 @@ fn on_ladder(ladder : Array[Double], r : Double) -> Bool {
 
 ///|
 /// How far in a control's own parts hug its edge, the ladder's rule not theirs (corner_faults): under half the
-/// ladder's inset (its step over smooth.mbt's 1.25).
+/// ladder's inset (its step).
 fn ladder_hug(ladder : Array[Double]) -> Double {
   if ladder.length() < 2 {
     return 0.0
   }
-  (ladder[0] - ladder[1]) * smooth_scale / 2.0
+  (ladder[0] - ladder[1]) / 2.0
 }
 
 ///|
@@ -796,7 +832,7 @@ fn ladder_hug(ladder : Array[Double]) -> Double {
 /// said for a fault.
 fn ladder_in(ladder : Array[Double], ra : Double) -> String {
   match ladder.iter().find_first(fn(x) { x < ra - 0.5 }) {
-    Some(next) => "the next, \{next}, \{(ra - next) * smooth_scale} in"
+    Some(next) => "the next, \{next}, \{ra - next} in"
     None => "none in from it"
   }
 }
@@ -1339,6 +1375,51 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     hung,
     ra,
   )
+  // (a corner of it cut off by the container's corner: its two edges at different distances, the container cutting
+  // what it holds with a rounded corner and its own corner wholly outside that curve (cut_round_at, as corner_faults
+  // leaves it); what shows there is the container's corner, not its own, as where it reaches past an edge. An edge
+  // farther than the rest that lies in the container's corners only by such corners is no edge it is near: a band at
+  // a panel's foot grown up into its top corners, its top 33 down from a corner of 42, its side on the panel's)
+  let cut = FixedArray::make(4, false)
+  for k in 0..<4 {
+    let rk = self.container_r(ct, k)
+    let side = sides[if corner_left(k) { 0 } else { 2 }].1
+    let end = sides[if k < 2 { 1 } else { 3 }].1
+    cut[k] = side >= -inner_even &&
+      side < rk &&
+      end >= -inner_even &&
+      end < rk &&
+      (side - end).abs() > inner_even &&
+      self.cut_round_at(i, p, k)
+  }
+  let edge_corners = fn(name : String) -> (Int, Int) {
+    match name {
+      "left" => (0, 3)
+      "top" => (0, 1)
+      "right" => (1, 2)
+      _ => (2, 3)
+    }
+  }
+  // (a corner lies in the container's corner: both its edges nearer than that corner is round)
+  let in_corner = fn(k : Int) {
+    let rk = self.container_r(ct, k)
+    let side = sides[if corner_left(k) { 0 } else { 2 }].1
+    let end = sides[if k < 2 { 1 } else { 3 }].1
+    side >= -inner_even && side < rk && end >= -inner_even && end < rk
+  }
+  let nearest = near.fold(init=1.0e30, fn(m, s) { dmin(m, s.1) })
+  let dropped = FixedArray::make(4, false)
+  let near = near.filter(fn(s) {
+    let (k1, k2) = edge_corners(s.0)
+    let only_cut = (cut[k1] || !in_corner(k1)) && (cut[k2] || !in_corner(k2)) && (cut[k1] || cut[k2])
+    if s.1 > nearest + inner_even && only_cut {
+      dropped[k1] = dropped[k1] || cut[k1]
+      dropped[k2] = dropped[k2] || cut[k2]
+      false
+    } else {
+      true
+    }
+  })
   if near.is_empty() {
     match own {
       Some(r) => n.set_radii(r)
@@ -1379,7 +1460,10 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     let kk = concentric(rk, d)
     let side = sides[if corner_left(k) { 0 } else { 2 }].1
     let end = sides[if k < 2 { 1 } else { 3 }].1
-    let lies = (across || (side >= -inner_even && side < rk)) && (up_down || (end >= -inner_even && end < rk))
+    // (a corner cut off by the container's, its edge no edge it is near: in no corner of its own)
+    let lies = (across || (side >= -inner_even && side < rk)) &&
+      (up_down || (end >= -inner_even && end < rk)) &&
+      !dropped[k]
     all_lie = all_lie && lies
     rs[k] = match own {
       Some(r) if !lies => r[k]
@@ -1763,4 +1847,122 @@ fn Ctx::cut_away(self : Ctx, i : Int) -> Bool {
     p = self.nodes[p].parent
   }
   false
+}
+
+///|
+/// Where box `i`, in what scrolls up and down in container `ct` (and nothing sideways), as wide as most of it, standing
+/// in from its sides alike, is near one of the container's corners as it is drawn now (within the reach a thing
+/// follows a corner from, Theme::corner_fit far, from both its edges there; that corner of it shown, not cut off by
+/// what it scrolls in) and not concentric with it: said. Where it is now: scrolled to an end it may come to a corner,
+/// in the middle none (the user, 2026-11-03: 它角本身得离角在一定的距离内; 离十万八千里为啥要检测).
+fn Ctx::scrolled_side_fault(self : Ctx, i : Int, ct : Container) -> String? {
+  let p = ct.node
+  let (up_down, across) = self.scrolls_between(i, p)
+  if !up_down || across {
+    return None
+  }
+  let a = self.nodes[p]
+  let b = self.nodes[i]
+  if b.kind != kind_box || !b.shows_ground() || b.fw < a.fw / 2.0 || dmin(b.fw, b.fh) < corner_line || ct.window {
+    return None
+  }
+  let (far, least) = match self.corner_fit {
+    Some(f) => (f.far, f.least)
+    None => (self.container_most(ct), 0.0)
+  }
+  let half = dmin(b.fw, b.fh) / 2.0
+  // (what scrolls at its ends alone: scrolled to its top, its top corners; to its foot, its foot corners. Passing a
+  // corner in between, as anything scrolled does, is no place it stands: the user, 2026-11-03, 查滚动到底和滚动到顶的情况)
+  let (at_top, at_end) = self.scrolled_at_ends(i, p)
+  let sides = [b.x - a.x, a.x + a.fw - (b.x + b.fw)]
+  let ends = [b.y - a.y, a.y + a.fh - (b.y + b.fh)]
+  // (each of its corners by the container's there, as corner_faults has them: near both its edges, shown)
+  for k in 0..<4 {
+    let dx = sides[if corner_left(k) { 0 } else { 1 }]
+    let dy = ends[if k < 2 { 0 } else { 1 }]
+    if dx < 0.5 || dy < -0.5 || dx > far + 0.5 || dy > far + 0.5 || self.corner_cut_off(i, k) || self.corner_scrolled_off(i, p, k) ||
+      !(if k < 2 { at_top } else { at_end }) {
+      continue
+    }
+    let ra = self.container_r(ct, k)
+    let rb = b.corner_at(k)
+    let want = concentric(ra, dx)
+    // (a corner too square there to follow: it stands alone, as anything does)
+    if want < least - 0.5 {
+      continue
+    }
+    let round_ok = rb >= half - 0.5 && (round_like(ra) - (dx + half)).abs() <= 0.5
+    if (dy - dx).abs() > 0.5 || !((rb - want).abs() <= 0.5 || round_ok) {
+      let name = ["top left", "top right", "bottom right", "bottom left"][k]
+      return Some(
+        "\{self.named(i)} (corner \{rb}) in the \{name} of \{self.named(p)} (corner \{ra}), in what scrolls there: \{dx} and \{dy} from its edges, wants \{dx} from both and corner \{want}",
+      )
+    }
+  }
+  None
+}
+
+///|
+/// Whether node `i`'s corner `k` lies past the edge of what scrolls between it and its container `p` (a list, a node
+/// that scrolls, a box kept to a height): cut there, half scrolled out of view, not where it is.
+fn Ctx::corner_scrolled_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
+  let b = self.nodes[i]
+  let x = if corner_left(k) { b.x } else { b.x + b.fw }
+  let y = if k < 2 { b.y } else { b.y + b.fh }
+  let mut q = b.parent
+  while q >= 0 && q != p {
+    let n = self.nodes[q]
+    if (n.kind == kind_list || n.tree_scrolls || n.clip) &&
+      (x < n.x - 0.5 || x > n.x + n.fw + 0.5 || y < n.y - 0.5 || y > n.y + n.fh + 0.5) {
+      return true
+    }
+    q = n.parent
+  }
+  false
+}
+
+///|
+/// Whether what scrolls up and down between node `i` and its container `p` (the outermost) is scrolled to its top, and
+/// to its foot, now: what it holds starting at its top, ending at its foot (a list's first row built and at its top,
+/// its last built and at its foot).
+fn Ctx::scrolled_at_ends(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
+  let mut sc = -1
+  let mut q = self.nodes[i].parent
+  while q >= 0 && q != p {
+    let n = self.nodes[q]
+    let vertical_box = n.sideways &&
+      (match sideways.get(n.id) {
+        Some(st) => st.vertical
+        None => false
+      })
+    if n.kind == kind_list || n.tree_scrolls || vertical_box {
+      sc = q
+    }
+    q = n.parent
+  }
+  if sc < 0 {
+    return (true, true)
+  }
+  let s = self.nodes[sc]
+  let mut first = 1.0e30
+  let mut last = -1.0e30
+  for k in (sc + 1)..<self.count {
+    let n = self.nodes[k]
+    let mut r = n.parent
+    while r > sc {
+      r = self.nodes[r].parent
+    }
+    if r != sc {
+      continue
+    }
+    if n.fh > 0.0 {
+      first = dmin(first, n.y)
+      last = dmax(last, n.y + n.fh)
+    }
+  }
+  let (first_built, last_built) = match self.lists.get(s.id) {
+    Some(st) if s.kind == kind_list => (st.vis_first <= 0, st.vis_last >= st.count - 1)
+    _ => (true, true)
+  }
+  (first_built && first >= s.y - 0.5, last_built && last <= s.y + s.fh + 0.5)
 }

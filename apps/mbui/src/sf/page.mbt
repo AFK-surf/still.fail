@@ -307,7 +307,7 @@ fn barred_page(
   }
   if !lead.is_empty() {
     blocks.push(fn() {
-      c.box(style=if l == Narrow { pg_lead_box } else { desk_barred_lead }, fn() {
+      c.box(style=if l == Narrow { pg_lead_box } else { desk_barred_lead.then(desk_head_in_pane()) }, fn() {
         lead.draw(c, if l == Narrow { pg_lead } else { desk_muted })
       })
       |> ignore
@@ -540,15 +540,16 @@ fn narrow_list(
   // (`own`: how many of them are the page's own, before what it holds: its keys are those after)
   let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, own)
   let n = blocks.length()
-  c.list("settings/" + key, n + 1, 80.0, sized?, fn(i) {
+  let pane = pane_round.val
+  c.list("settings/" + key, n + 1, 80.0, sized?, fn(i) { with_pane(pane, fn() {
     if i == n {
       c.box(style=@ui.style(w=Full, h=Fixed(pg_foot + foot)), fn() {  }) |> ignore
     } else if i < chrome {
       (blocks[i])()
     } else {
-      c.box(style=pg_room, blocks[i]) |> ignore
+      c.box(style=pg_room_now(), blocks[i]) |> ignore
     }
-  })
+  }) })
   |> ignore
   (page_list_opened.val)(c, "settings/" + key, n + 1)
 }
@@ -582,7 +583,7 @@ fn wide_page(
     // as far down as a title's head stands
     Some(h) =>
       blocks.push(fn() {
-        c.box(style=if deep { desk_own_head_deep } else { desk_own_head }, fn() {
+        c.box(style=(if deep { desk_own_head_deep } else { desk_own_head }).then(desk_head_in_pane()), fn() {
           if deep {
             desk_back(c, label, on_back)
           }
@@ -592,7 +593,7 @@ fn wide_page(
       })
     None =>
       blocks.push(fn() {
-        c.box(style=if deep { desk_head_deep } else { desk_head }, fn() {
+        c.box(style=(if deep { desk_head_deep } else { desk_head }).then(desk_head_in_pane()), fn() {
           if deep {
             desk_back(c, label, on_back)
           }
@@ -654,7 +655,8 @@ pub fn desk_lanes(
   chrome? : Int = 0,
 ) -> Unit {
   let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, chrome)
-  c.list("settings/" + key, blocks.length() + 1, 80.0, sized?, fn(i) {
+  let pane = pane_round.val
+  c.list("settings/" + key, blocks.length() + 1, 80.0, sized?, fn(i) { with_pane(pane, fn() {
     if i == blocks.length() {
       if foot > 0.0 {
         c.box(style=@ui.style(w=Full, h=Fixed(desk_foot_h + foot)), fn() {  }) |> ignore
@@ -662,9 +664,9 @@ pub fn desk_lanes(
         c.box(style=desk_foot, fn() {  }) |> ignore
       }
     } else {
-      c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
+      c.box(style=desk_lane_now(), fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
     }
-  })
+  }) })
   |> ignore
   (page_list_opened.val)(c, "settings/" + key, blocks.length() + 1)
 }
@@ -863,10 +865,26 @@ pub fn heading(c : @ui.Ctx, title : String, note? : String = "", actions? : () -
 /// edges, its rows' grounds 10 in from its edges and 2 apart, their words 20 in, as a content card's (`card`: words on a
 /// card, pages.css.ts card).
 pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
+  // (in a panel's body (not a small panel's): a card of the panel's, `panel_card_in` from its sides, concentric with
+  // it, its rows the ladder's inset in, each on a ground of its own concentric with it, their words a row's padding in
+  // from that (a card's words, not the panel's line: the user, 2026-11-03, 面板里可以放卡片; 卡片里的字跟面板的字不需要对齐);
+  // wide, its rows as a list's are (in_list: wide_in_list's cells), narrow, as a card's)
+  if in_panel() && !in_small_panel() {
+    let listed = if look() is Narrow { 0 } else { 1 }
+    c.box(style=panel_card_group.then(panel_card_rows).then(panel_card_out()), fn() {
+      in_card.val += 1
+      in_list.val += listed
+      body()
+      in_list.val -= listed
+      in_card.val -= 1
+    })
+    |> ignore
+    return
+  }
   match look() {
     Narrow =>
       c.box(style=pg_card_room, fn() {
-        c.box(style=pg_card, fn() {
+        c.box(style=pg_card_now(), fn() {
           // (its rows' grounds round in its corner)
           in_card.val += 1
           body()
@@ -877,7 +895,7 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
       |> ignore
     Wide =>
       wide_alone(c, fn() {
-        c.box(style=if card { desk_card } else { desk_list }, fn() {
+        c.box(style=if card { desk_card } else { desk_list_card() }, fn() {
           // (what is not one of its rows stands in as far as its rows' words; its rows' grounds round in its corners)
           in_list.val += if card { 0 } else { 1 }
           in_card.val += if card { 0 } else { 1 }
@@ -934,8 +952,8 @@ pub fn rows_list(
   row : (Int) -> Unit,
   sized? : @ui.RowCauses,
 ) -> Int {
-  let l = look()
-  c.list(key, count, est, fn(i) { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) }, sized?)
+  let (l, pane) = (look(), pane_round.val)
+  c.list(key, count, est, fn(i) { with_pane(pane, fn() { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) }) }, sized?)
 }
 
 ///|
@@ -943,7 +961,7 @@ pub fn rows_list(
 /// holds: narrow_list); what stands where its rows will, while they are read (their head), as well.
 pub fn rows_room(c : @ui.Ctx, body : () -> Unit) -> Unit {
   if look() is Narrow {
-    c.box(style=pg_room, body) |> ignore
+    c.box(style=pg_room_now(), body) |> ignore
   } else {
     body()
   }
@@ -955,8 +973,8 @@ pub fn rows_room(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// the pane's middle, 792 at most, 24 from its sides at least).
 pub fn over_rows(c : @ui.Ctx, body : () -> Unit) -> Unit {
   match look() {
-    Narrow => c.box(style=pg_room, body) |> ignore
-    Wide => c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, body) |> ignore }) |> ignore
+    Narrow => c.box(style=pg_room_now(), body) |> ignore
+    Wide => c.box(style=desk_lane_now(), fn() { c.box(style=desk_lane_column, body) |> ignore }) |> ignore
   }
 }
 
@@ -1480,8 +1498,10 @@ pub fn link_row(
           row_ripple(c, id)
         }
       })
-    Wide =>
-      c.box(style=(if under && !face { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
+    Wide => {
+      let mut row = None
+      link_reach(c, id, goes, fn() {
+      row = Some(c.box(style=(if under && !face { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
         desk_list_link()
       } else {
         wide_list_row()
@@ -1567,7 +1587,10 @@ pub fn link_row(
             control_at_end(false)
           }
         }
+      }))
       })
+      row.unwrap()
+    }
   }
   if goes {
     c.semantics(b, Link, id~, label=title, expanded?=folds)
@@ -1732,11 +1755,7 @@ let line_end_box : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 /// middle of a line of its title's (narrow: the body's; wide: a list's title, the UI's 24), from the top where it is
 /// taller.
 fn row_lead(c : @ui.Ctx, look : Look, f : () -> Unit) -> Unit {
-  let line = match look {
-    Narrow => c.text_size(Body).1
-    Wide => c.theme().leading(L6).unwrap_or(c.text_size(Ui).1)
-  }
-  c.box(style=@ui.style(min_h=Fixed(c.sp(line)), justify=JCenter), f) |> ignore
+  c.box(style=@ui.style(min_h=Fixed(row_lead_line(c, at=look)), justify=JCenter), f) |> ignore
 }
 
 ///|
@@ -1828,13 +1847,17 @@ pub fn choice_row(
       }
     })
   } else {
-    c.box(style=(if goes { desk_list_link() } else { wide_list_row() }).then(line).then(top), id=if goes { id } else { 0 }, fn() {
+    let mut row = None
+    link_reach(c, id, goes, fn() {
+    row = Some(c.box(style=(if goes { desk_list_link() } else { wide_list_row() }).then(line).then(top), id=if goes { id } else { 0 }, fn() {
       match body {
         Some(f) => f()
         None => words()
       }
       ended(desk_chevron)
+    }))
     })
+    row.unwrap()
   }
   c.semantics(b, Button, id~, label~, selected=chosen, disabled~)
   goes && c.clicked(id)
@@ -1940,7 +1963,7 @@ pub fn switch_row(
     Narrow => {
       // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
       let mut now = on
-      c.box(style=narrow_row(false), fn() {
+      c.box(style=narrow_row(false).then(row_line(true)), fn() {
         // (its switch across the middle of its words: on its title's line it stood in the row's corner, not
         // concentric with it; a switch is narrow, its note keeps most of the row)
         c.box(style=pg_row_words, fn() {
@@ -2526,6 +2549,35 @@ pub let pg_room : @ui.Style = @ui.style(w=Full, px=room(pg_room_in))
 let pg_room_in : Double = 12.0
 
 ///|
+/// A narrow page's room in a panel of its own (the tape's, laid out Medium: in_pane): its cards cards of the panel's,
+/// `panel_card_in` from its sides (the user, 2026-11-03: 面板里可以放卡片); on a phone's screen, pg_room.
+pub fn pg_room_now() -> @ui.Style {
+  if in_pane() {
+    pg_room_pane
+  } else {
+    pg_room
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pg_room_pane : @ui.Style = @ui.style(w=Full, px=room(panel_card_in))
+
+///|
+/// A narrow page's card in a panel of its own: a card's corner, its rows the ladder's inset in.
+fn pg_card_now() -> @ui.Style {
+  if in_pane() {
+    pg_card_pane
+  } else {
+    pg_card
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pg_card_pane : @ui.Style = @ui.css("w=Full bg=Card clip").then(@ui.style(p=room(corner_inset), radius=card_radius))
+
+///|
 /// What reaches a narrow page's sides on purpose: out across the room it leaves there (pg_room); nothing on a wide one.
 pub fn page_bleed() -> @ui.Style {
   if look() is Narrow {
@@ -2693,6 +2745,40 @@ let desk_back_lit : @ui.TextStyle = desk_back_words.then(@ui.text_style(color=Fg
 pub let desk_lane : @ui.Style = @ui.css("w=Full px=S6 align=ACenter")
 
 ///|
+/// The same in a panel of its own (the tape's: in_pane): none in from the panel's sides, its blocks' own 16 there the
+/// cards' panel_card_in (the user, 2026-11-03: 面板里可以放卡片), the column in the middle where it is wider.
+pub fn desk_lane_now() -> @ui.Style {
+  if in_pane() {
+    desk_lane_pane
+  } else {
+    desk_lane
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_lane_pane : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+/// A wide page's head in a panel of its own: its words on the panel's words' line (panel_words), its cards 16 in;
+/// none elsewhere.
+fn desk_head_in_pane() -> @ui.Style {
+  if in_pane() {
+    desk_head_pane
+  } else {
+    no_desk_head
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_head_pane : @ui.Style = @ui.style(px=room(panel_words))
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_desk_head : @ui.Style = @ui.css("")
+
+///|
 // kept across runs: a value (no field of it changes)
 pub let desk_lane_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(desk_lane_most))
 
@@ -2756,7 +2842,7 @@ pub let desk_hint_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, 
 /// A card of words (pages.css.ts card: 20 in, its rows 14 apart, the settings' corner on the card's ground; a row of
 /// it: cardRow, 12 apart in its middle; its words cardRowText, 2 apart, the ui's 13 on 20, the title in 600).
 // kept across runs: a value (no field of it changes)
-pub let desk_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
+pub let desk_card : @ui.Style = @ui.css("w=Full gap=S3_5 radius=Xl3 bg=Card").then(@ui.style(p=room(card_pad)))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2795,16 +2881,74 @@ pub let desk_chevron : Double = 16.0
 pub let desk_mark : Double = 14.0
 
 ///|
+/// A card of a panel's, on its ground as its other cards are (the ink at 5%: info_list's, a choice's): a card's own ground is
+/// the panel's, unseen on it.
 // kept across runs: a value (no field of it changes)
+let panel_card_group : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(radius=rounded(card_corner)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_card_rows : @ui.Style = @ui.style(p=room(corner_inset))
+
+///|
 pub let desk_list : @ui.Style = @ui.style(w=Full, p=list_room, gap=S0_5, radius=list_card_radius, bg=Card)
+
+///|
+/// The same in a panel of its own (in_pane): a card of the panel's, its words 24 in from its edges, its rows' grounds
+/// the ladder's inset in (wide_list_link_pane: reaching past their rows to there), a card's corner, its rows as close
+/// as a list card's; what stands at a row's end in its corners stands outside them, as far in as its words (the user,
+/// 2026-11-03: 就按第 3 版).
+pub fn desk_list_card() -> @ui.Style {
+  if in_pane() {
+    desk_list_pane
+  } else {
+    desk_list
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_list_pane : @ui.Style = @ui.style(
+  w=Full,
+  px=room(corner_inset),
+  py=room(card_pad - wide_row_pad),
+  gap=S0_5,
+  radius=card_radius,
+  bg=Card,
+)
+
+///|
+/// How far a wide list's row's words stand under its top and over its foot (wide_list_row_ground's and
+/// wide_in_list's py=S2_5).
+let wide_row_pad : Double = 10.0
 
 ///|
 pub let desk_list_out : Double = 12.0
 
 ///|
 fn wide_list_row() -> @ui.Style {
-  wide_list_row_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
+  // (in a panel's card no ground of its own (one only where pressed: desk_list_link), so none in its corners)
+  (if in_pane() { wide_list_row_bare } else { wide_list_row_ground }).then(@ui.style(min_h=Fixed(desk_row_least())))
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_list_row_bare : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  pl=list_words_room,
+  pr=room(card_control_end),
+  py=S2_5,
+  gap=S3,
+  align=ACenter,
+)
+
+///|
+/// How far in from its end a row on a panel's card has what it holds at its end (a model's picker, 更新): its words'
+/// room, or as far as holds it out of the card's corner where that is more (the card's 26 round, its words 24 in: 2
+/// more; the user's 第 3 版, 2026-11-03: a control stays out of its card's corner, its row's spacing as it was).
+pub let card_control_end : Double = text_in + dmax(0.0, card_corner - panel_words)
+
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2820,8 +2964,56 @@ let wide_list_row_ground : @ui.Style = @ui.style(
 
 ///|
 fn desk_list_link() -> @ui.Style {
-  wide_list_row().then(link_hover)
+  if in_pane() && !rows_held_now.val {
+    // (its ground the box round it's: link_reach)
+    wide_list_row_bare.then(@ui.style(min_h=Fixed(desk_row_least())))
+  } else if rows_held_now.val {
+    // (on a card holding its rows the ladder's inset in: a ground of its own, concentric there)
+    wide_list_row_ground.then(@ui.style(min_h=Fixed(desk_row_least()))).then(link_hover)
+  } else {
+    wide_list_row().then(link_hover)
+  }
 }
+
+///|
+/// Whether the card the rows now made stand on holds them the ladder's inset from its top and foot, each its own ground
+/// (a settings page's list card: rows_held), so a pressed one's reaches past it none (link_reach).
+// kept across runs: said around a card's rows as they are made, put back after
+let rows_held_now : Ref[Bool] = Ref(false)
+
+///|
+/// `body`'s rows made on a card that holds them the ladder's inset from its top and foot (rows_held_now).
+pub fn rows_held(body : () -> Unit) -> Unit {
+  let was = rows_held_now.val
+  rows_held_now.val = true
+  body()
+  rows_held_now.val = was
+}
+
+///|
+/// A row pressed as a whole (`id`, where it `goes`) made by `row`: on a panel's card in a box round it whose ground,
+/// lit as the row is, reaches past it over and under to the card's rows' inset from its edges where it is first or
+/// last (desk_list_pane: its words 24 in, its grounds 8), as far past it every way; the row itself where it stands,
+/// what is pressed, a press beside it its neighbour's. Elsewhere the row alone.
+fn link_reach(c : @ui.Ctx, id : Int, goes : Bool, row : () -> Unit) -> Unit {
+  if goes && in_pane() && !rows_held_now.val {
+    let ground = if c.lit(id) { theme().p.hover } else { 0L }
+    c.box(style=wide_list_link_reach.then(@ui.style(bg=Data(ground))), row) |> ignore
+  } else {
+    row()
+  }
+}
+
+///|
+/// The box round a pressed row on a panel's card (link_reach): reaching `card_pad - wide_row_pad - corner_inset` past
+/// it over and under, the row back where it was by as much room.
+// kept across runs: a value (no field of it changes)
+let wide_list_link_reach : @ui.Style = @ui.style(
+  w=Full,
+  my=room(-(card_pad - wide_row_pad - corner_inset)),
+  py=room(card_pad - wide_row_pad - corner_inset),
+  radius=InnerOr(Xl2),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3045,14 +3237,25 @@ let head_mark_narrow_side : Double = 40.0
 /// holds in its middle, its corner the card's less the ladder's step (what stands in it, a switch at its end, is in
 /// its corners, not the card's).
 fn wide_in_list() -> @ui.Style {
-  wide_in_list_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
+  // (in a panel's card no ground of its own: what stands at its end in the card's corners stands outside them)
+  (if in_pane() { wide_in_list_bare } else { wide_in_list_ground }).then(@ui.style(min_h=Fixed(desk_row_least())))
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
+let wide_in_list_bare : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(@ui.style(px=list_words_room))
+
+///|
+// kept across runs: a value (no field of it changes)
 let wide_in_list_ground : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(
-  @ui.style(px=list_words_room, radius=InnerOr(Xl2)),
+  @ui.style(pl=list_words_room, pr=room(list_control_end), radius=InnerOr(Xl2)),
 )
+
+///|
+/// How far in from its end a row on a list card (not a panel's: wide_in_list_bare) has what it holds at its end (a
+/// switch, a choice): its words' room, or as far as holds it out of the card's corner where that is more (a list
+/// card's 24 round, its rows 6 in: 18; the user's 第 3 版, 2026-11-03: a control stays out of its card's corner).
+pub let list_control_end : Double = dmax(text_in, list_card_corner - list_pad)
 
 ///|
 /// What stands on the page as a section of its own without a title (a fold's row): wide, as far from what follows as a
@@ -3079,3 +3282,22 @@ let head_line_narrow : @ui.TextStyle = pg_lead
 /// page's).
 // kept across runs: a value (no field of it changes)
 let head_name_press : @ui.Style = @ui.css("w=Full pressed{opacity=O60}")
+
+///|
+/// How tall a row's lead stands at least where lines are under its first (row_lead's): its first line, as drawn.
+pub fn row_lead_line(c : @ui.Ctx, at? : Look) -> Double {
+  c.sp(match at.unwrap_or(look()) {
+    Narrow => c.text_size(Body).1
+    Wide => c.theme().leading(L6).unwrap_or(c.text_size(Ui).1)
+  })
+}
+
+///|
+/// How far a page's row's words stand in from its foot (narrow: text_in; wide: a list row's 10): what lies in its foot's
+/// corner reaches out by that less the ladder's inset.
+pub fn row_words_foot() -> Double {
+  match look() {
+    Narrow => text_in
+    Wide => wide_row_pad
+  }
+}

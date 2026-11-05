@@ -22,7 +22,18 @@ pub fn Tester::tree_rows_kept(self : Tester) -> Int {
   let now = tree.rows_alive()
   let was = tree_rows_were.val
   tree_rows_were.val = now
-  now.iter().filter(fn(id) { was.contains(id) }).count()
+  // (both in the tree's order, by where each is: walked side by side, not each looked for among the other)
+  let mut i = 0
+  let mut kept = 0
+  for id in now {
+    while i < was.length() && was[i].at < id.at {
+      i = i + 1
+    }
+    if i < was.length() && was[i] == id {
+      kept = kept + 1
+    }
+  }
+  kept
 }
 
 ///|

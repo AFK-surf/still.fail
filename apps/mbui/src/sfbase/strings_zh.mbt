@@ -1139,7 +1139,7 @@ let zh : Map[String, String] = {
   "web-main.rail.kind.lists": "对话列表",
   "web-main.rail.kind.places": "页面",
   "web-main.rail.label": "主导航",
-  "web-main.rail.lead": "设置左侧栏显示的内容和顺序，仅对此设备生效",
+  "web-main.rail.lead": "侧栏显示什么、按什么顺序",
   "web-main.rail.remove": "从侧边条移除{name}",
   "web-main.rail.reset": "侧边条恢复默认",
   "web-main.rail.title": "侧边条",

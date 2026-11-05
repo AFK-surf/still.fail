@@ -4,13 +4,18 @@
 # and is removed after: POSTHOG_JSON (the key the station and the Android app report errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
 # every Android release is signed with: test station's ~/.android/debug.keystore; another would stop installed apps updating),
 # CLOUDFLARE_API_TOKEN (the bucket; without it, the machine's own `wrangler login`).
-#   sh .github/release.sh [--stable] station|android|modules
+#   sh .github/release.sh [--product monoid] [--stable] station|android|modules
+# --product monoid: monoid's app (scripts/release.sh --product), for monoid's bucket.
 set -eu
+product=""
+if [ "${1:-}" = --product ]; then product="--product $2"; shift 2; fi
 beta=--beta
 if [ "${1:-}" = --stable ]; then beta=""; shift; fi
 cd "$(dirname "$0")/.."
-pnpm install --frozen-lockfile --prefer-offline > /dev/null
-(cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+# An Android package needs the core's packages (installed by its build), not the website's. Its staging job
+# prepares the uploader after building. The station and modules still prepare their own uploader here.
+[ "${1:-}" = android ] || pnpm install --frozen-lockfile --prefer-offline > /dev/null
+{ [ "${1:-}" = android ] && [ -n "${RELEASE_DIR:-}" ]; } || (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
 dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/stillfail-release.XXXXXX")
 trap 'rm -rf "$dir"' EXIT
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || unset CLOUDFLARE_API_TOKEN
@@ -36,7 +41,8 @@ case "${1:?usage: release.sh station|android|modules}" in
     export ANDROID_USER_HOME="$dir/android"
     # (scripts/release.sh verifies the APK, mbui's stable or beta, and that it is signed with test station's key
     # before putting it, and prints the certificate)
-    sh scripts/release.sh ${beta:+$beta} android
+    # shellcheck disable=SC2086 # --product and its value, two words
+    sh scripts/release.sh $product ${beta:+$beta} android
     ;;
   modules)
     # The modules' packages (scripts/module-bundle.ts): plain files, signed; nothing of the machine's in them. Each

@@ -199,13 +199,21 @@ pub fn side_list() -> @ui.Style {
 let side_list_top : @ui.Style = @ui.css("pt=S1")
 
 ///|
+/// How far under the band a sidebar's list stands (side_list_top's).
+pub let side_list_top_in : Double = 4.0
+
+///|
 /// A sidebar's list under its band (side_list): what `rows` builds and the room under its last (list_foot_in),
-/// scrolling under the band when it is taller than the room (a list of one: `key` keeps where it is scrolled to).
-pub fn side_scroll(c : @ui.Ctx, key : String, rows : () -> Unit) -> Unit {
+/// scrolling under the band when it is taller than the room (a list of one: `key` keeps where it is scrolled to);
+/// `top` the room over its first, scrolled with it.
+pub fn side_scroll(c : @ui.Ctx, key : String, top? : Double = 0.0, rows : () -> Unit) -> Unit {
   // The rows keep their inset; the scroll track belongs to the whole sidebar.
   c.box(style=side_list().then(@ui.style(px=S0)), fn() {
     c.list(key, 1, side_scroll_est, fn(_) {
       c.box(style=theme().chat_list.side_list.then(@ui.style(h=Hug)), fn() {
+        if top > 0.0 {
+          c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
+        }
         rows()
         // (the room under its last)
         c.box(style=@ui.style(h=Fixed(list_foot_in(Side))), fn() {  }) |> ignore

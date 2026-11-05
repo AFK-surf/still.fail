@@ -75,6 +75,8 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
       }
     })
     |> ignore
+    // (its actions at its end, out to where their small corner is concentric with the card's: text_actions_at)
+    c.box(style=text_actions_at, fn() {
     if text_action(c, "publish/copy/" + id, tr("common.copy")) {
       copy_link(c, text(l, "link"))
     }
@@ -95,6 +97,8 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
         danger=true,
       )
     }
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -118,10 +122,16 @@ fn text_action(c : @ui.Ctx, key : String, label : String) -> Bool {
 }
 
 ///|
-/// Its box: 24 high, 4 in, round by the ladder's last (at the end of an info card's row, 44 high and 10 in, 20 from the
-/// card's side and foot both, concentric with its foot corner there).
+/// Its box: 28 high, 4 in, round by the ladder's last (at the end of an info card's row, 44 high and 8 in, 16 from the
+/// card's side and foot both, concentric with its corner there: text_actions_at).
 // kept across runs: a value (no field of it changes)
-let text_action_box : @ui.Style = @ui.style(h=S6, px=S1, radius=@sf.small_radius, align=ACenter, justify=JCenter)
+let text_action_box : @ui.Style = @ui.style(h=S7, px=S1, radius=@sf.small_radius, align=ACenter, justify=JCenter)
+
+///|
+/// An info row's actions at its end: past the row's words' room to the ladder's inset (8) from its side, so 16 from the
+/// card's, where the small corner is concentric with it.
+// kept across runs: a value (no field of it changes)
+let text_actions_at : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter, mr=@sf.room_of(@sf.corner_inset - @sf.text_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -135,6 +145,6 @@ fn copy_link(c : @ui.Ctx, link : String) -> Unit {
 }
 
 ///|
-/// The publishing card 10 under the chat's actions (ChatInfo.kt: Spacer 10).
+/// The publishing card under the chat's actions, the room between the info's cards over it (info_lists_gap).
 // kept across runs: a value (no field of it changes)
-let publish_card_top : @ui.Style = @ui.css("w=Full pt=S2_5")
+let publish_card_top : @ui.Style = @ui.css("w=Full")

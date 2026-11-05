@@ -100,7 +100,10 @@ fn about_blocks_drawn(node : Bool, scale : Double) -> Array[String] {
 test "关于's blocks as nodes on a wide page: titled sections, a list's rows, a card of words with a switch, a list's switch and a row that acts, drawn as the old view's at sizes of words 1 and 2" {
   for scale in [1.0, 2.0] {
     let old = about_blocks_drawn(false, scale)
-    assert_eq(about_blocks_drawn(true, scale), old, msg="at \{scale}")
+    let made = about_blocks_drawn(true, scale)
+    // (what differs said: what each draws alone)
+    let alone = fn(a : Array[String], b : Array[String]) { a.filter(fn(x) { !b.contains(x) }).join("\n  ") }
+    assert_eq(made, old, msg="at \{scale}: made's alone:\n  \{alone(made, old)}\nold's alone:\n  \{alone(old, made)}")
   }
 }
 

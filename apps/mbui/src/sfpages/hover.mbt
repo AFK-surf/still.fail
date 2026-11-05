@@ -155,6 +155,11 @@ let hover_tile : @ui.Style = @ui.style(min_w=@sf.hover_tile_least, max_w=@sf.hov
 let hover_inner : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
 
 ///|
+/// How far a hover card's words stand in from its panel's padding (hover_inner's 10): what reaches out of them to its
+/// corners (a pill in a corner: peeks' peek_capsule_in, peek_button_in) reaches out by that.
+let hover_words_in : Double = 10.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let hover_bare : @ui.Style = @ui.css("w=Full")
 
@@ -208,7 +213,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
         side=agent_card_mark,
         said=text(s, "badgeText"),
         ground=@sf.panel_ground(),
-        // (in its ground's top left corner, 10 in: concentric with it there)
+        // (in its ground's top left corner, its padding in: concentric with it there, the ground a small panel's row's)
         corner=InnerOr(@sf.small_radius),
       )
       c.box(style=agent_card_who, fn() {
@@ -760,13 +765,20 @@ let agent_card_across : @ui.Style = @ui.style(w=Full, min_w=@sf.agent_card_w, ga
 /// Its head: a small panel's row (presenters' small_panel_row_in), its ground under the hand, concentric with the
 /// card's corners.
 // kept across runs: a value (no field of it changes)
-let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart p=S2_5 radius=Inner hovered{bg=Hover}")
-  .then(@ui.style(mt=@sf.room_of(-agent_card_head_out), mx=@sf.room_of(-agent_card_head_out)))
+let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart radius=Inner hovered{bg=Hover}")
+  .then(
+    @ui.style(p=@sf.room_of(agent_card_head_pad), mt=@sf.room_of(-agent_card_head_out), mx=@sf.room_of(-agent_card_head_out)),
+  )
 
 ///|
 /// How far its head reaches out past the card's words (hover_inner's 10) to be a small panel's row, its ground under
-/// the hand at the panel's padding (6 from its edges), its words text_in in from it, where they were.
-let agent_card_head_out : Double = @sf.text_in
+/// the hand at the panel's padding (6 from its edges): as far as the card's words are in (hover_inner's 10).
+let agent_card_head_out : Double = hover_words_in
+
+///|
+/// Its head's padding: the ladder's inset, its mark that far in from its ground's corner, round by the ladder's next
+/// step there (18 less 8: 10).
+let agent_card_head_pad : Double = @sf.corner_inset
 
 ///|
 /// Its label and its account's line under it: what its mark leaves of the head.
@@ -895,14 +907,14 @@ let agent_card_chips_gap : @ui.Space = S1
 ///|
 /// Its account (12) under its label, what is left of it at that line's end, 8 apart: the head's last line, what is
 /// left (capsules) in its ground's bottom right corner as far from both its edges as makes them concentric with it
-/// (@sf.capsule_in), out past the head's padding (text_in) to there, its words on their foot.
+/// (@sf.capsule_in), out past the head's padding (agent_card_head_pad) to there, its words on their foot.
 // kept across runs: a value (no field of it changes)
 let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").then(
   @ui.style(mb=@sf.room_of(agent_card_chips_in), mr=@sf.room_of(agent_card_chips_in)),
 )
 
 ///|
-let agent_card_chips_in : Double = @sf.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - @sf.text_in
+let agent_card_chips_in : Double = @sf.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
 
 ///|
 /// Words that lead somewhere: their whole line.

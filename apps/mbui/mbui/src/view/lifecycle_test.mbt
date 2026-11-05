@@ -3,6 +3,32 @@
 // and follows nothing.
 
 ///|
+test "a parent withdrawn between frames stops its children before advancing the drawing clock tells them" {
+  let now = Ref(0.0)
+  let data : @signals.Signal[String?] = @signals.signal(Some("station"))
+  let missing = Ref(0)
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(clock) {
+      clock.words(By(fn() { clock.drawn_at().to_string() })) |> ignore
+    }) |> ignore
+    root.show(fn() { data.get() is Some(_) }, fn(part) {
+      part.show(fn() {
+        match data.get() {
+          Some(name) => name != ""
+          None => { missing.val += 1; false }
+        }
+      }, fn(label) { label.words(Is("station")) |> ignore })
+    })
+  }, time=fn() { now.val })
+  t.frame(390.0, 844.0, now=0.0) |> ignore
+  now.val = 10.0
+  data.set(None)
+  t.frame(390.0, 844.0, now=now.val) |> ignore
+  assert_eq(missing.val, 0, msg="the child's data belongs to the part that has just been withdrawn")
+  assert_true(t.drawn().iter().all(fn(d) { d.words != "station" }))
+}
+
+///|
 test "a binding queued, then the property bound again: the one before runs no more, reads nothing again" {
   let a = @signals.signal(1L, same=fn(x, y) { x == y })
   let b = @signals.signal(2L, same=fn(x, y) { x == y })

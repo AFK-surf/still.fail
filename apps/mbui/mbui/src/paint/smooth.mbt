@@ -32,51 +32,32 @@ pub fn smoothness(radius : Double, room : Double) -> Double {
 }
 
 ///|
-/// The corner of a smooth box `inset` inside a smooth one of corner `outer`, concentric with it: a curve moved in by
-/// `inset` is drawn `inset` smaller, and a corner is drawn a quarter larger than it is given, so the inset is taken a
-/// quarter smaller (Corners.kt concentric). Never below 0.
+/// The corner of a smooth box `inset` inside a smooth one of corner `outer`, concentric with it: its corner as given
+/// less the inset (the user, 2026-11-03: 「平滑圆角只是在原有圆角的描述上做平滑」「边距应该是整数」: a corner is
+/// laid out by the radius it is given, its smoothing only how it is drawn). Never below 0.
 pub fn concentric(outer : Double, inset : Double) -> Double {
-  dmax(outer - inset / smooth_scale, 0.0)
+  dmax(outer - inset, 0.0)
 }
 
 ///|
 /// The other way round: the corner of a smooth box round a smooth one of corner `inner`, `inset` in from its edges.
 pub fn concentric_out(inner : Double, inset : Double) -> Double {
-  inner + inset / smooth_scale
+  inner + inset
 }
 
 ///|
-/// How round a circle's arc a wholly smooth corner reads as, to what lies in it (a circle, a capsule's end): no circle
-/// is concentric with a superellipse, and the one tangent to its edges that keeps nearest an even gap to it all along is
-/// centred this much of its radius in from them (fitted: the gap off even by under 1.25% of its radius anywhere, 0.34
-/// in a corner of 28; a circle centred its whole radius in, as a round corner would ask, is 3% off at the curve's
-/// middle, 0.84 there, the user, 2026-10-27: 中型屏的单行 composer 跟圆角还是对不上).
-pub let smooth_round : Double = 0.9565
-
-///|
 /// The round corner a circle or a capsule's end lying in a corner of `radius` follows, `room` half its box's shorter
-/// side (as smooth as that has room for, smoothness): it lies concentric where it stands that less its own half in from
-/// the corner's edges. A wholly smooth corner's smooth_round of it, a round one (a capsule's end) itself.
+/// side: the corner as given (at most `room`), its smoothing only how it is drawn (concentric): it lies concentric
+/// where it stands that less its own half in from the corner's edges.
 pub fn round_like(radius : Double, room? : Double = 1.0e30) -> Double {
-  let r = dmin(radius, room)
-  r * (1.0 - (1.0 - smooth_round) * smoothness(r, room))
+  dmin(radius, room)
 }
 
 ///|
 /// The other way round: the corner, of a box `room` its shorter half, that a circle or a capsule's end follows as
-/// `round` (round_like of it is `round`; at most `room`). By halving: round_like grows with the radius.
+/// `round` (round_like of it is `round`; at most `room`).
 pub fn round_like_out(round : Double, room? : Double = 1.0e30) -> Double {
-  let mut lo = dmin(round, room)
-  let mut hi = dmin(round / smooth_round, room)
-  for _ in 0..<48 {
-    let mid = (lo + hi) / 2.0
-    if round_like(mid, room~) < round {
-      lo = mid
-    } else {
-      hi = mid
-    }
-  }
-  hi
+  dmin(round, room)
 }
 
 ///|

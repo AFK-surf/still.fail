@@ -45,7 +45,7 @@ test("every tool has a name, a description and an object's input schema; the cha
   const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...remoteTools({} as Remote), ...adbTools(() => []), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
-    ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
+    ["chat_post", "slack_api", "chat_state", "chat_leave", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
   );
   assert.equal(new Set(ours.map((t) => t.name)).size, ours.length, "no name twice");
   for (const tool of ours) {
@@ -88,6 +88,46 @@ test("the agent's posts are recorded in the thread, and chat_history shows them 
   assert.equal(r.store.pendingMessages(key).length, 0, "an agent's own post is not delivered back to it");
   const history = await r.call(key, "chat_history", { to });
   assert.ok(matches(history, ['from="U1" ts="', '">\n<@UBOT> look', 'from="you" ts="', '">\nlooking']), history);
+  await r.close();
+});
+
+test("chat_leave stops a thread's messages reaching its agent until someone mentions it there again", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> look");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  await r.call(key, "chat_post", { to, text: "好，这个 thread 我不再看了，需要时再 @ 我", kind: "all_done", done: "已退出这个 thread" });
+  assert.ok((await r.call(key, "chat_leave", { to })).startsWith(`Left ${to}:`));
+  r.claude.last().complete();
+  await settle();
+  // Chatter there is still recorded, but no longer handed to it.
+  await r.accept({ ...say("we can take it from here", { addressed: false }), threadTs: m.threadTs });
+  await settle();
+  assert.equal(r.said(r.thread("C1", m.threadTs).id).at(-1)!.text, "we can take it from here");
+  assert.equal(r.store.pendingMessages(key).length, 0);
+  assert.equal(r.claude.last().prompts.length, 1);
+  // It still reads the thread and posts there.
+  assert.ok((await r.call(key, "chat_history", { to })).includes("we can take it from here"));
+  // A mention brings it back, and what follows reaches it again.
+  await r.accept({ ...say("<@UBOT> one more thing"), threadTs: m.threadTs });
+  await settle();
+  assert.equal(r.claude.last().prompts.length, 2);
+  assert.ok(r.claude.last().prompts[1]!.includes("one more thing"));
+  await r.call(key, "chat_post", { to, text: "ok", kind: "all_done", done: "回答了他补充的问题，见 ok 这条回复" });
+  r.claude.last().complete();
+  await settle();
+  await r.accept({ ...say("and this", { addressed: false }), threadTs: m.threadTs });
+  await settle();
+  assert.equal(r.claude.last().prompts.length, 3);
+  await r.close();
+});
+
+test("chat_leave refuses a still.fail chat", async () => {
+  const r = new Rig();
+  const [key, thread] = newSession(r.hub, { runtime: "claude" as const, createdBy: "ada@x.com" });
+  assert.ok((await r.refused(key, "chat_leave", { to: `EMBER/${thread.threadTs}` })).includes("cannot be left"));
   await r.close();
 });
 

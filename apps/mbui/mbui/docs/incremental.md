@@ -96,9 +96,8 @@ only with all of them green (frame_watch.mbt, `looks_check`).
 
 ## The way there
 
-1. Measured: still.fail's scenes offscreen (scripts/appbench.sh) and on a phone (scripts/appbench_phone.sh), what each
-   frame built, laid out and drew, how long each took and what asked for it (Tester::wanted_why); each step below
-   compared with the one before it.
+1. Measured: still.fail's scenes offscreen (scripts/appbench.sh), what each frame built, laid out and drew, how long
+   each took and what asked for it (Tester::wanted_why); each step below compared with the one before it.
 2. The whole frame first: its work runs under one watch of what it reads (signals' Watch, frame_watch.mbt), and it is
    built again only where that changed. The clock is a signal (Ctx::now reads it followed; what changes only at a
    moment reads it as one and wakes then), the host's settings are one (frame_env), and what is no signal yet is

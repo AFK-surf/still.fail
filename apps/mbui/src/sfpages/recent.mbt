@@ -337,14 +337,16 @@ pub fn attach_foot() -> Double {
 }
 
 ///|
-/// How far in the strip's tiles stand from the panel's sides and under its top: in a sheet 12 and 4 (Attach.kt
-/// RecentPhotos' contentPadding); in a small panel beside ＋, at its padding, as a menu's rows (the first tile in its
+/// How far in the strip's tiles stand from the panel's sides and under its top: in a sheet on its words' line
+/// (panel_words, 24) and its first tile as far down the sheet as its corner is round (pane_corner, under its grabber:
+/// @sf.sheet_grab_h): under that corner, in none of it (12 in and 29 down it would have to be round by 13; 24 in and
+/// 37 down it is in the corner, not concentric with it; Attach.kt RecentPhotos' 12 and 4 were for a 34); in a small panel beside ＋, at its padding, as a menu's rows (the first tile in its
 /// corner, concentric with it: attach_block_corner).
 fn recent_in() -> (Double, Double) {
   if @sf.in_small_panel() {
     (@sf.panel_pad, 0.0)
   } else {
-    (12.0, 4.0)
+    (@sf.panel_words, @sf.pane_corner - @sf.sheet_grab_h)
   }
 }
 

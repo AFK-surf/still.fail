@@ -175,7 +175,11 @@ build() {
   # (MBUI_VARIANT=stable or beta: still.fail's Android app's own, fail.still.android(.beta), for scripts/release.sh, which
   # puts it on that app's feed; the APK alone, in $RELEASE_DIR/android/app-<variant>.apk)
   local variant=${MBUI_VARIANT:-} id
-  case $variant in stable) id=fail.still.android ;; beta) id=fail.still.android.beta ;; *) echo "beta: build: MBUI_VARIANT is stable or beta, not '$variant'" >&2; exit 1 ;; esac
+  case $variant in
+    stable) id=fail.still.android ;; beta) id=fail.still.android.beta ;;
+    monoid) id=build.monoid.android ;; monoid-beta) id=build.monoid.android.beta ;;
+    *) echo "beta: build: MBUI_VARIANT is stable, beta, monoid or monoid-beta, not '$variant'" >&2; exit 1 ;;
+  esac
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android"
@@ -209,17 +213,17 @@ build() {
 
 # The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's; the core's shell is
 # still.fail's natives, scripts/core.sh apple), signed under .github/mac_signing.py (still.fail's identity, its signing
-# lock held for the signing only; a caller holding it already, .github/release-desktop.py, signs in its keychain:
+# lock held for the signing only; a caller holding it already, .github/release-desktop.sh, signs in its keychain:
 # MAC_SIGN_IDENTITY set). MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron app's place
 # (mac-app.sh's variants: fail.still.desktop(.beta)), for scripts/release.sh, which puts it on that app's feeds: the
 # signed app's zip alone, in $RELEASE_DIR/mac/app-<variant>.zip.
 mac() {
   local t0=$(now) n zip tb variant=${MBUI_VARIANT:-} sign
-  case $variant in stable|beta) ;; *) echo "beta: mac: MBUI_VARIANT is stable or beta, not '$variant'" >&2; exit 1 ;; esac
+  case $variant in stable|beta|monoid|monoid-beta) ;; *) echo "beta: mac: MBUI_VARIANT is stable, beta, monoid or monoid-beta, not '$variant'" >&2; exit 1 ;; esac
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac"
-  env MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+  env MBUI_BUILD=$n EMBER="$REPO" MBUI_SIGN_AFTER_BUILD=1 bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
   sign=(python3 "$REPO/.github/mac_signing.py" run --)
@@ -228,6 +232,8 @@ mac() {
   case $variant in
     stable) zip=$WORK/out/mac/stillfail-$n-arm64-mac.zip ;;
     beta) zip=$WORK/out/mac/stillfail-beta-$n-arm64-mac.zip ;;
+    monoid) zip=$WORK/out/mac/monoid-$n-arm64-mac.zip ;;
+    monoid-beta) zip=$WORK/out/mac/monoid-beta-$n-arm64-mac.zip ;;
   esac
   [ -f "$zip" ] || { echo "beta: no zip of the app" >&2; exit 1; }
   # (UNSIGNED=1, as scripts/release.sh's: trying it out, signed ad hoc; never put)

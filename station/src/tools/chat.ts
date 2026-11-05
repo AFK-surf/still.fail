@@ -1,10 +1,10 @@
 // The agents' tools for their conversations (the Rust station's hub.rs `tools`): chat_post, chat_state, chat_history,
-// chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
+// chat_leave, chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.
 import { sandboxed } from "../agents/sandbox.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
-import { chatHistory, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
+import { chatHistory, chatLeave, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
@@ -217,6 +217,25 @@ export const CHAT_STATE = {
     },
     "required": [
       "kind"
+    ],
+    "additionalProperties": false
+  },
+};
+
+export const CHAT_LEAVE = {
+  name: "chat_leave",
+  description:
+    "Stop following a Slack or Feishu thread you take part in, when people there tell you to (stop watching, 别跟了): its messages stop reaching you until someone mentions you there again, which brings you back. Tell them so in the thread first. You can still read it with chat_history and post there.",
+  inputSchema: {
+    "type": "object",
+    "properties": {
+      "to": {
+        "type": "string",
+        "description": "CHANNEL/THREAD_TS: the thread to leave."
+      }
+    },
+    "required": [
+      "to"
     ],
     "additionalProperties": false
   },
@@ -476,6 +495,7 @@ export function chatTools(hub: Hub): Tool[] {
     },
     ...slackTools(hub),
     { ...CHAT_STATE, run: (key, args) => chatState(hub, key, args) },
+    { ...CHAT_LEAVE, run: async (key, args) => chatLeave(hub, key, args) },
     { ...CHAT_HISTORY, run: (key, args) => chatHistory(hub, key, args) },
     { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },

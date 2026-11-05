@@ -21,7 +21,7 @@ test "a retained rich paragraph supplies the same line ranges and rectangles as 
     root.box(fn(para) {
       node.val = Some(para)
       para.width(By(fn() { Some(wide.get()) }))
-      .words_runs(By(runs), look={ size: 15.0, line: 22.0, weight: 400, wrap: true, tracking: @view.letters_own })
+      .words_runs(By(runs), look={ size: 15.0, line: 22.0, weight: 400, wrap: true, tracking: @view.letters_own, balance: false })
       .runs_look(Is({ ..@view.runs_plain, words: true })) |> ignore
     }) |> ignore
   })

@@ -80,6 +80,43 @@ pub fn chat_row_node(
       slot
     }
     let row = holder.box(fn(_) {  })
+    // held by a finger, it lifts off the list toward the finger (iOS's context menu): a little as its time shows, all
+    // the way once its menu opens, back down as the menu goes (@sf.lift_of's), a card of the raised ground over the
+    // menu's scrim, drawn in from the screen's sides (row_lifted, @sf.lift_over's)
+    let lift = @sf.EdgeWay::new(0.0)
+    let lifted = fn() { if finger && !found { dmin(1.0, dmax(0.0, lift.shown(slot))) } else { 0.0 } }
+    if finger && !found {
+      slot.reacts(
+        fn() {
+          if menu_on() {
+            1.0
+          } else if held.get() {
+            @sf.lift_held
+          } else {
+            0.0
+          }
+        },
+        fn(to) { lift.go_by(slot, to, @motion.lift_spring) },
+      )
+      slot
+      .ground(By(fn() {
+        let ink = lifted()
+        if ink > 0.0 {
+          @sf.alpha(t().p.raised, ink)
+        } else {
+          0L
+        }
+      }))
+      .radius(Is(@sf.row_corner))
+      .shadow(By(fn() {
+        let ink = lifted()
+        let r = @sf.held_raised
+        (r.sigma * ink, r.dy * ink, @sf.alpha(r.color, ink))
+      }))
+      .scale(By(fn() { 1.0 - row_lift_inset * lifted() }))
+      .over_scrim(By(fn() { lifted() > 0.0 }))
+      |> ignore
+    }
     let open_menu = fn(x : Double, y : Double, from_row : Bool) {
       guard @signals.untracked(menu_ok) else { return }
       let i = @signals.untracked(item)
@@ -112,7 +149,10 @@ pub fn chat_row_node(
     let ground = fn() {
       let p = t().p
       if finger {
-        if held.get() || menu_on() || press_lit.get() {
+        // (lifted, its card is its ground: the row's own drawn by the card round it, not square inside it)
+        if lifted() > 0.0 {
+          0L
+        } else if held.get() || menu_on() || press_lit.get() {
           @sf.alpha(p.text, 0.05)
         } else if on() {
           p.selected
@@ -140,7 +180,7 @@ pub fn chat_row_node(
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across the
     // whole screen at its second line's end; the row pointed at says when instead)
     let cornered = fn() { at == Side && !shows_time() && row_aside_shows(item(), lead) }
-    let face_ground = fn() { @sf.over(list_ground(), ground()) }
+    let face_ground = fn() { @sf.over(list_ground(), if lifted() > 0.0 { t().p.raised } else { ground() }) }
     @sf.list_row_node(
       row,
       at,
@@ -201,7 +241,7 @@ pub fn chat_row_node(
           |> ignore
         })
         // its station offline, or its link coming back: unplugged (its update's mark while it updates); one from
-        // elsewhere (Slack) says so
+        // elsewhere (Slack, Feishu) says so, by its platform's mark
         let away = fn() {
           match (item().offline, item().reconnecting) {
             (Some(why), _) | (None, Some(why)) => why
@@ -230,7 +270,7 @@ pub fn chat_row_node(
             match which {
               2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
               1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
-              _ => @sf.slack_mark_node(s, kind_mark) |> ignore
+              _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
             }
             @sf.tip_node(tips, s, said, within=true) |> ignore
           })
@@ -432,10 +472,14 @@ fn swipe_under_node(
   let fill = @sf.EdgeWay::new(0.0)
   row.reacts(fn() { past.get() }, fn(p) { fill.go(row, if p { 1.0 } else { 0.0 }, swipe_fill_ms) })
   row.show(fn() { out.get() }, fn(u) {
+    // (over the row as big as it is, out of its row of parts: what is past its end as wide as it)
+    u.over(Is(true)) |> ignore
     u.box(fn(g) {
+      // (归档 cut to it: laid out at the slot's end, it shows only as far as the row has uncovered, as under the row)
       g
       .over(Is(true))
       .shift(Is((1.0, 0.0)))
+      .clips(Is(true))
       .ground(By(fn() {
         let t = @sf.theme()
         @sf.mix(t.p.text, fill.shown(g), t.p.chip)

@@ -121,12 +121,12 @@ let sheet_tint : Double = 0.9
 
 ///|
 /// How far a sheet reaches on under the window's foot (sheet_look: its foot's corners out of sight).
-let sheet_under : Double = 26.0
+let sheet_under : Double = pane_corner
 
 ///|
 /// still.fail's sheet (Sheet.kt) as mbui's sheet draws it (@kit.sheet's look): the sheet's glass over the page, the
-/// scrim's black as far as it shows (`s.t`) under it, its top corners 26 round (26 more of it under the window's
-/// foot), a shadow; `ground` (not 0) a solid ground in the glass's place. What it holds starts with its grabber.
+/// scrim's black as far as it shows (`s.t`) under it, its top corners a panel's (pane_corner: it holds cards, the
+/// user 2026-11-03: 卡片里不能放卡片，面板里可以放卡片; sheet_under more of it under the window's foot), a shadow; `ground` (not 0) a solid ground in the glass's place. What it holds starts with its grabber.
 pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit) -> Unit {
   fn(c, s, body) {
     let t = theme()
@@ -134,7 +134,7 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
     let sheet = c.box(
       w=Fill(1.0),
       h=Px(s.h + sheet_under),
-      radius=26.0,
+      radius=pane_corner,
       bg=ground,
       glass?=if ground != 0L {
         None

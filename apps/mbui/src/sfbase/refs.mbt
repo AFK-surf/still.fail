@@ -260,8 +260,9 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
 }
 
 ///|
-/// How draft `key`'s field draws its words (RefMirror, refMark, refMarkHidden): each mark's `[` and `]` clear (the
-/// `[` put before its `@`, the same width: what follows keeps its place), the rest in `accent`.
+/// How draft `key`'s field draws its words (RefMirror, refMark, refMarkHidden): each mark as its message will draw it
+/// (words_runs: `@` a little lighter, its title in `accent`), its `[` and `]` taking no room, so that what is sent goes
+/// from the field with nothing of it moved or changed. As many code units as the words: the field's offsets hold.
 pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(Int, Int, Int64)]) {
   fn(s) {
     let f = ref_field(key)
@@ -277,12 +278,12 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
         continue
       }
       sb.write_string(s.view(start_offset=at, end_offset=a).to_string())
-      sb.write_string("[@")
-      sb.write_string(s.view(start_offset=a + 2, end_offset=b).to_string())
+      sb.write_string("\u{200B}@")
+      sb.write_string(s.view(start_offset=a + 2, end_offset=b - 1).to_string())
+      sb.write_string("\u{200B}")
       at = b
-      spans.push((a, a + 1, 0L))
-      spans.push((a + 1, b - 1, accent))
-      spans.push((b - 1, b, 0L))
+      spans.push((a + 1, a + 2, @sf.alpha(accent, ref_at_alpha)))
+      spans.push((a + 2, b - 1, accent))
     }
     sb.write_string(s.view(start_offset=at).to_string())
     (sb.to_string(), spans)
@@ -389,35 +390,6 @@ pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
   guard words.has_prefix(s.view(start_offset=lead, end_offset=end).to_string()) else { return [] }
   f.marks.filter_map(fn(m) { if m.0 >= lead && m.1 <= end { Some((m.0 - lead, m.1 - lead)) } else { None } })
 }
-
-///|
-/// Words `s` as a field draws its marks `marks` (refs_look): each one's `[` and `]` clear, the `[` before its `@`, the
-/// rest in `accent`.
-pub fn refs_runs(s : String, marks : Array[(Int, Int)], accent : Int64) -> Array[@ui.Run] {
-  let out : Array[@ui.Run] = []
-  let mut at = 0
-  for m in marks {
-    let (a, b) = m
-    if a < at || b > s.length() || b - a < 4 {
-      continue
-    }
-    if a > at {
-      out.push(@ui.span(s.view(start_offset=at, end_offset=a).to_string()))
-    }
-    out.push(@ui.span("[", color=clear))
-    out.push(@ui.span("@" + s.view(start_offset=a + 2, end_offset=b - 1).to_string(), color=accent))
-    out.push(@ui.span("]", color=clear))
-    at = b
-  }
-  if at < s.length() {
-    out.push(@ui.span(s.view(start_offset=at).to_string()))
-  }
-  out
-}
-
-///|
-/// (no ink: a rich run's 0 is the words' own)
-let clear : Int64 = 0x00FFFFFFL
 
 ///|
 /// Whether draft `key`'s field holds a mark, as the core read its words now; None while it has not read them (the words

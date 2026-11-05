@@ -25,7 +25,7 @@ pub fn panel_by_node(
   let x : PanelOf = {
     title: "", description: "", body, foot: None, w, fits: false, wide: false, live: None,
     tall: 0.0, grows: false, focus: true, ruled: false, lists: false, fade_out_together: false,
-    form: false, field: "", stage: false, above: None, head_end: None, heads_itself: true,
+    form: false, field: "", stage: false, above: None, head_end: None, title_row: None, heads_itself: true,
     side, along, offset: panel_offset, steps: false, on_back: None,
   }
   panel_node(parent, key, open, anchor, x, close, close, None, modal=false)

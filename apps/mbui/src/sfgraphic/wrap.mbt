@@ -66,12 +66,12 @@ fn comparison_panel(c : @ui.Ctx, x : Double, reverse : Bool) -> Unit {
     @figure.panel(c, dot, dot, 10.0, 10.0, if reverse { blue } else { red }, 5.0, fn() { })
     @figure.words(c, dot + 20.0, dot - 5.625, if reverse { "Narrow · reverse wrap" } else { "Narrow · normal wrap" }, 17.0, ink, weight=650)
     @figure.words(c, if reverse { 296.0 } else { 348.0 }, dot - 2.625, if reverse { "wrap-reverse ↑" } else { "wrap ↓" }, 11.0, faint)
-    card_at(c, @sf.corner_inset, 54.0, w - 2.0 * @sf.corner_inset, reverse, if reverse { "reverse" } else { "normal" })
-    @figure.words(c, @sf.corner_inset + @sf.card_pad, 220.0, if reverse { "The last action wraps up." } else { "The last action wraps down." }, 15.0, ink, weight=650)
+    card_at(c, @sf.panel_card_in, 54.0, w - 2.0 * @sf.panel_card_in, reverse, if reverse { "reverse" } else { "normal" })
+    @figure.words(c, @sf.panel_card_in + @sf.card_pad, 216.0, if reverse { "The last action wraps up." } else { "The last action wraps down." }, 15.0, ink, weight=650)
     @figure.words(
       c,
-      @sf.corner_inset + @sf.card_pad,
-      244.0,
+      @sf.panel_card_in + @sf.card_pad,
+      240.0,
       if reverse { "The primary action stays in the bottom-left corner." } else { "The primary action is no longer at the bottom." },
       12.0,
       muted,
@@ -85,7 +85,7 @@ pub fn wrap_figure(c : @ui.Ctx) -> Unit {
   c.set_theme(@sf.ui_theme_now())
   let wide_panel_w = 860.0
   let wide_card_x = 164.0
-  let wide_card_w = wide_panel_w - wide_card_x - @sf.corner_inset
+  let wide_card_w = wide_panel_w - wide_card_x - @sf.panel_card_in
   @figure.canvas(c, 960.0, 540.0, paper, fn() {
     @figure.words(c, 50.0, 19.0, "Same buttons. Different wrap.", 34.0, ink, weight=680)
     @figure.words(c, 50.0, 65.0, "Three actions fit on a wide row. When space runs out, the wrap direction matters.", 14.0, muted)
@@ -94,7 +94,7 @@ pub fn wrap_figure(c : @ui.Ctx) -> Unit {
     @figure.auto_panel(c, 50.0, 96.0, wide_panel_w, white, @sf.pane_corner, fn() {
       @figure.words(c, @sf.card_pad, 25.0, "Wide layout", 18.0, ink, weight=650)
       @figure.words(c, @sf.card_pad, 59.0, "All three actions\nfit on one line.", 14.0, muted, width=135.0, line=20.0)
-      c.box(style=@ui.style(w=Fixed(wide_card_w), ml=@sf.room_of(wide_card_x), my=@sf.inset_room), fn() {
+      c.box(style=@ui.style(w=Fixed(wide_card_w), ml=@sf.room_of(wide_card_x), my=@sf.room_of(@sf.panel_card_in)), fn() {
         sign_in_example(c, wide_card_w, true, "wide")
       })
       |> ignore

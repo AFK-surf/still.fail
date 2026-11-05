@@ -290,9 +290,10 @@ fn flight_waiting_node(parent : @view.View, f : SendFlight, origin : () -> (Doub
     .offset(By(fn() { let o = origin(); (f.field_x - o.0, f.field_y - o.1) })).clips(Is(true)) |> ignore
     room.box(fn(w) {
       w.width(Is(Some(f.field_w))).offset(Is((f.from_x - f.field_x, f.from_y - f.field_y)))
-      .words_runs(By(fn() { refs_runs(f.text, f.marks, @sf.theme().p.accent) }))
+      .words_runs(By(fn() { person_runs(f.text, f.runs, @sf.theme().p.accent) }))
       .words_look(By(fn() { @ui.style_words(@sf.theme().t.words) }))
-      .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) })) |> ignore
+      .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) }))
+      .runs_look(By(fn() { { ..@view.runs_plain, link: @sf.theme().p.blue, words: true } })) |> ignore
     }) |> ignore
   }) |> ignore
 }
@@ -353,15 +354,21 @@ fn flight_landing_node(
         group.each(fn() { pieces.get().unwrap_or([]).mapi(fn(i, _) { i }) }, fn(i) { i }, fn(cell, i) {
           cell.over(Is(true)) |> ignore
           let piece = fn() { pieces.get().unwrap()[i.get()] }
-          cell.width(By(fn() { Some(piece().at.2) })).height(By(fn() { Some(piece().at.3) })).clips(Is(true))
+          // (where the field and the message wrap at different places the pieces cross: each only the room the larger
+          // pieces leave it, as the old frame's pieces have it, flight_pieces_drawn; its path its own)
+          let room = fn() {
+            let w = wrect()
+            flight_piece_room(pieces.get().unwrap(), i.get(), w.0, w.1, across(), up())
+          }
+          cell.width(By(fn() { let (l, r) = room(); Some(dmax(0.0, r - l)) })).height(By(fn() { Some(piece().at.3) })).clips(Is(true))
           .offset(By(fn() {
             let q = piece()
             let w = wrect()
             let o = origin()
-            (q.from.0 + (w.0 + q.at.0 - q.from.0) * across() - o.0,
+            (q.from.0 + (w.0 + q.at.0 - q.from.0) * across() - o.0 + room().0,
               q.from.1 + (w.1 + q.at.1 - q.from.1) * up() - o.1)
           })) |> ignore
-          flight_words_node(cell, words, fn() { wrect().2 }, fn() { let q = piece(); (-q.at.0, -q.at.1) })
+          flight_words_node(cell, words, fn() { wrect().2 }, fn() { let q = piece(); (-q.at.0 - room().0, -q.at.1) })
         })
       } else {
         flight_words_node(group, words, fn() { wrect().2 }, fn() {

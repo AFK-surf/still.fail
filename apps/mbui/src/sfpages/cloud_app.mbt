@@ -90,7 +90,7 @@ fn invitation_row() -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invitation_card : @ui.Style = @ui.css("w=Full pt=S5 px=S5 gap=S3 radius=Xl3 bg=Surface")
+let invitation_card : @ui.Style = @ui.css("w=Full gap=S3 radius=Xl3 bg=Surface").then(@ui.style(pt=@sf.room_of(@sf.card_pad), px=@sf.room_of(@sf.card_pad)))
 
 ///|
 // kept across runs: a value (no field of it changes)

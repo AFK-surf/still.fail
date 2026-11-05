@@ -290,7 +290,7 @@ test "settings' 共享调试: grants show each chat, its reason and when it was 
   assert_true(t.find("2 小时前") is Some(_))
   assert_true(t.find("暂无使用记录") is Some(_))
   // Long reasons take the same single line, not as many lines as their words need.
-  let long = t.rect_of("在固定的开发版里").unwrap()
+  let long = t.rect_of("在开发版里打开对话").unwrap()
   let short = t.rect_of("量整页重搭").unwrap()
   assert_eq(long.3, short.3)
   // Each action is at the same end of its row, regardless of the title or the time's length.

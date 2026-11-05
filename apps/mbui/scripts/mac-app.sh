@@ -39,7 +39,10 @@ case "${MBUI_VARIANT:-preview}" in
   preview) ID=fail.still.mbui NAME="still.fail preview" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
   stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail ember) ZIP_NAME=stillfail ;;
   beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
-  *) echo "mac-app.sh: MBUI_VARIANT is preview, stable or beta, not $MBUI_VARIANT" >&2; exit 1 ;;
+  # monoid's: the same app on monoid's cloud (MONOID below), its own ids, name and links
+  monoid) ID=build.monoid.desktop NAME=monoid FEED=mac OWN=1 BETA= SCHEMES=(monoid) ZIP_NAME=monoid ;;
+  monoid-beta) ID=build.monoid.desktop.beta NAME=monoid.zone FEED=mac OWN=1 BETA=1 SCHEMES=(monoid-beta) ZIP_NAME=monoid-beta ;;
+  *) echo "mac-app.sh: MBUI_VARIANT is preview, stable, beta, monoid or monoid-beta, not $MBUI_VARIANT" >&2; exit 1 ;;
 esac
 OUT=$A/out/mac
 APPDIR="$OUT/$NAME.app"
@@ -104,7 +107,7 @@ t2=$(now)
 # system's appearance is, the app open or not; and the black face's .icns for the macOS before (CFBundleIconFile).
 # actool knows .icon from Xcode 26: the newest Xcode's that does, whichever is selected.
 VARIANT=${MBUI_VARIANT:-preview}
-[ "$VARIANT" = beta ] && FACE=beta || FACE=stable
+case $VARIANT in beta | monoid-beta) FACE=beta ;; *) FACE=stable ;; esac
 ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE
 [ -f "$ICON.icns" ] || swift "$D/mac-icon.swift" "$FACE" "$ICON.icns" > /dev/null
 if [ ! -f "$ICON.assets/Assets.car" ]; then
@@ -203,6 +206,16 @@ plutil -insert LSEnvironment -dictionary "$PLIST"
 put LSEnvironment.MBUI_UPDATE_FEED -string "$FEED"
 [ -z "$OWN" ] || put LSEnvironment.MBUI_OWN -string 1
 [ -z "$BETA" ] || put LSEnvironment.MBUI_BETA -string 1
+# monoid's: its cloud, its name before the core says it, its station's own directory and service (~/.monoid,
+# build.monoid.station: cloud/src/install.ts)
+case $VARIANT in
+  monoid | monoid-beta)
+    put LSEnvironment.MBUI_CLOUD -string https://app.monoid.build
+    put LSEnvironment.MBUI_PRODUCT -string monoid
+    put LSEnvironment.MBUI_STATION_ID -string monoid
+    put LSEnvironment.MBUI_STATION_LABEL -string build.monoid.station
+    ;;
+esac
 # the links that open it (stillfail://o/…, as still.fail's desktop app takes them: mac_app.m, then sfapp's links)
 if [ ${#SCHEMES[@]} -gt 0 ]; then
   plutil -insert CFBundleURLTypes -array "$PLIST"
@@ -213,10 +226,13 @@ if [ ${#SCHEMES[@]} -gt 0 ]; then
 fi
 plutil -lint "$PLIST" > /dev/null
 
-# ad hoc for now: `sign` after (still.fail's identity in CI)
-codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
-[ -z "$OWN" ] || codesign --force --sign - --timestamp=none "$SQUIRREL"
-codesign --force --sign - --timestamp=none "$APPDIR"
+# A standalone build can be opened ad hoc. beta.sh immediately runs `sign` on its release bundle: do not first
+# sign the same frameworks and app ad hoc only to replace those signatures there.
+if [ "${MBUI_SIGN_AFTER_BUILD:-}" != 1 ]; then
+  codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
+  [ -z "$OWN" ] || codesign --force --sign - --timestamp=none "$SQUIRREL"
+  codesign --force --sign - --timestamp=none "$APPDIR"
+fi
 echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the app and the core's parts $(python3 -c "print(f'{$t2-$t0:.1f}')") s," \
   "the bundle $(secs $t2) s"
 [ "${1:-}" = build ] || sign

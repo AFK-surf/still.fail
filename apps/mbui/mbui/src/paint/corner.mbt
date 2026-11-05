@@ -110,10 +110,12 @@ pub fn CornerOf::capsule_at(self : CornerOf, height : Double, at : CornerRoots) 
 ///|
 /// Whether a corner `k` round, `d` in from what it follows, is one ranges `fit` let it have (any where there are none).
 /// A window does not zoom with its contents: for its linked corners, the smallest visible radius is judged after the
-/// content zoom, so an enlarged but still visibly round corner does not suddenly fall back to its unrelated own radius.
+/// content zoom, so an enlarged but still visibly round corner does not suddenly fall back to its unrelated own radius
+/// (worked out there, the window's less how far in that stands, both as drawn: a Mac's 16 at 1.75, 6 in, 5.5, not
+/// 5.4999… out of a corner taken apart by the zoom and put back).
 fn corner_fit_ok(fit : CornerFit?, k : Double, d : Double, zoom : Double) -> Bool {
   match fit {
-    Some(f) => k * zoom >= f.least - 0.5 && k <= f.most + 0.5 && d >= f.near - 0.5 && d <= f.far + 0.5
+    Some(f) => (k * zoom * 1.0e6).round() / 1.0e6 >= f.least - 0.5 && k <= f.most + 0.5 && d >= f.near - 0.5 && d <= f.far + 0.5
     None => k >= 0.0
   }
 }

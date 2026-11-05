@@ -69,8 +69,8 @@ export const AdbLive = Layer.effectDiscard(
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
         if (change !== "grant") return;
         if (r.status === "denied" || r.status === "ended") {
-          displays.close(r.id);
-          void servers.stop(r.id);
+          // (its display's apps closed through the grant's adb server first)
+          void displays.close(r.id).then(() => servers.stop(r.id));
         }
         shares?.regrant(r.owner);
         // (granted while the phone is offered here already: its card says at once how it is held)

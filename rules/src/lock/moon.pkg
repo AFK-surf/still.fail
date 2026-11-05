@@ -1,0 +1,5 @@
+import {
+  "stillfail/rules/form",
+  "stillfail/rules/role",
+  "stillfail/rules/history",
+}

@@ -1,0 +1,87 @@
+# The workspace lock's rules in MoonBit (rules/, docs/rules.md): the JS committed in rules/js is what its source
+# builds to (station, cloud and the core take that JS as it is), and what is proved there still proves (`moon prove`).
+name: rules
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "rules/**"
+      - ".github/workflows/rules.yml"
+      - ".github/actions/mbui-moonbit/**"
+  workflow_dispatch:
+concurrency:
+  group: rules-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  built:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - name: rules/js is what rules/src builds to
+        run: |
+          sh rules/build.sh
+          git diff --exit-code -- rules/js || { echo "rules/js is not what rules/src builds to: run rules/build.sh and commit it"; exit 1; }
+  # What proving takes that every job's MoonBit leaves out: moonc-prove (32 MB, trimmed from the cache all jobs restore,
+  # .github/workflows/mbui-moonbit.yml) and Why3 1.7.2, the one moon asks for (Ubuntu packages 1.6.0, Debian 1.8), built
+  # with opam on Ubuntu's OCaml. Put in the Actions cache once for each MoonBit release, as mbui-moonbit puts that in.
+  tools:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: .github/actions }
+      - uses: ./.github/actions/mbui-moonbit
+      - id: key
+        run: echo "key=rules-prove-why3-1.7.2-$(cat "$RUNNER_TOOL_CACHE/moon-ci.key")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: had
+        with:
+          path: ~/prove-tools
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+      - if: steps.had.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/prove-tools/bin ~/release
+          curl -fsSL --retry 3 --retry-all-errors https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz | tar -xz -C ~/release
+          cp "$(find ~/release -name moonc-prove -type f | head -1)" ~/prove-tools/bin/
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends opam ocaml-nox libgmp-dev pkg-config >/dev/null
+          export OPAMROOT=~/prove-tools/opam OPAMYES=1
+          opam init --bare -n --disable-sandboxing -q
+          opam switch create w3 ocaml-system -q
+          opam install --switch=w3 -q why3.1.7.2
+          opam clean -a -c -s --logs --switch=w3
+          du -sh ~/prove-tools
+      - if: steps.had.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/prove-tools
+          key: ${{ steps.key.outputs.key }}
+  proved:
+    needs: tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/prove-tools
+          key: ${{ needs.tools.outputs.key }}
+          fail-on-cache-miss: true
+      - name: what is proved still proves
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends z3 >/dev/null
+          install -m 755 ~/prove-tools/bin/moonc-prove "$MOON_HOME/bin/moonc-prove"
+          ls "$MOON_HOME/lib/prelude_proof" >/dev/null
+          export PATH="$HOME/prove-tools/opam/w3/bin:$PATH"
+          why3 --version
+          why3 config detect >/dev/null
+          cd rules && moon prove

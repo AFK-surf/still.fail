@@ -72,7 +72,9 @@ export type AutoTitle = { title: string | null; n: number; changes: number };
 export type SessionThread = { thread: ThreadRow; connect: string };
 
 /// A session in a thread, and the connect it posts there through.
-export type Membership = { thread: number; session: string; connect: string; joinedAt: number };
+/// `leftAt`: when the session left the thread (chat_leave): it is still a member (reads it, posts there), but hears
+/// nothing there until someone mentions it again. Absent where it is not read (chat lists).
+export type Membership = { thread: number; session: string; connect: string; joinedAt: number; leftAt?: number | null };
 
 /// "ember" is the station itself (named, stored and sent as before the rename).
 export type AuthorKind = "person" | "agent" | "ember";
@@ -433,7 +435,7 @@ export function toThread(r: Json): ThreadRow {
 
 export const toSessionThread = (r: Json): SessionThread => ({ thread: toThread(r), connect: r.connect });
 
-export const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at });
+export const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at, leftAt: r.left_at ?? null });
 
 /// An entry's columns as they are stored (store.ts `#insertEntry`).
 export function entryColumns(e: EntryRow): Json {

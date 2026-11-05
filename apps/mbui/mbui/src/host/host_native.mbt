@@ -162,6 +162,9 @@ extern "C" fn ffi_perf_line(line : String) -> Unit = "mb_host_perf_line"
 
 extern "C" fn ffi_perf_where() -> String = "mb_host_perf_where"
 
+///|
+extern "C" fn ffi_perf_open(go : Int) -> Int = "mb_host_perf_open"
+
 extern "C" fn ffi_perf_size() -> Double = "mb_host_perf_size"
 
 extern "C" fn ffi_perf_read() -> Bytes = "mb_host_perf_read"
@@ -797,6 +800,11 @@ fn perf_line(line : String) -> Unit {
 ///|
 fn perf_where() -> String {
   ffi_perf_where()
+}
+
+///|
+fn perf_open(go : Bool) -> Bool {
+  ffi_perf_open(if go { 1 } else { 0 }) != 0
 }
 
 ///|

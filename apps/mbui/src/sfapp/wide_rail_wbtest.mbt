@@ -84,9 +84,10 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       .find_first(fn(b) { b.x == @sfdesk.closed_bar_in && b.radius > 0.0 && b.h > 400.0 && b.bg != 0L })
       .unwrap()
     assert_eq(bar.radii, (follow, follow, follow, follow))
-    // the settings' ground at the bar's foot, 6 from its left and its foot, concentric with the bar's corner there
-    // (6.4), all round alike; a place's in the middle the same, one layer, one corner
-    let inner = @ui.concentric(follow, 6.0)
+    // the settings' ground at the bar's foot, 6 from its left and its foot: the bar's corner there (10) less 6, 4, is
+    // squarer than the ranges let a corner be (6): it stands alone, a small block's 10, all round alike; a place's in
+    // the middle the same, one layer, one corner
+    let inner = if @ui.concentric(follow, 6.0) >= @sf.corner_fit.least { @ui.concentric(follow, 6.0) } else { @sf.small_corner }
     let g = rail_ground_at(t, gear)
     assert_eq(g.radii, (inner, inner, inner, inner))
     let files = rail_ground_at(t, t.query(Button, label="文件").unwrap().rect)
@@ -334,8 +335,9 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
       m.name == "chat.archive" && text(Some(m.params), "session") == "s-a2" && field(Some(m.params), "archived") == Some(Json::boolean(false))
     }),
   )
-  // right clicked (held, by a finger: its keys never drawn for one), its menu: 恢复到列表 and 删除
-  let (x, y) = t.find("整理上个月的发票").unwrap()
+  // right clicked (held, by a finger: its keys never drawn for one), its menu: 恢复到列表 and 删除 (its row in the list,
+  // not the chat open beside it, titled the same in its bar)
+  let (x, y) = t.locate("整理上个月的发票").filter(fn(p) { p.0 < 300.0 })[0]
   t.right_click(x, y)
   t.frame()
   assert_true(t.find("删除") is Some(_))

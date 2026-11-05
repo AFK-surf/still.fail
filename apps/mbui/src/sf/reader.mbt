@@ -1810,9 +1810,9 @@ let narrow_reader_top : Double = 28.0
 let narrow_reader_foot : Double = 72.0
 
 ///|
-/// The foot's room (12 round: what lies in its corners as far from both edges, concentric with it, still.fail's corner
-/// rule, where the web's bottom has 12 14 8), its tools 4 apart, a tool's ground the ink at 7% while on.
-let narrow_foot_in : Double = 12.0
+/// The foot's room (the ladder's inset: what lies in its corners as far from both edges, concentric with it, round by
+/// the next step), its tools 4 apart, a tool's ground the ink at 7% while on.
+let narrow_foot_in : Double = corner_inset
 
 ///|
 let narrow_tools_gap : Double = 4.0
@@ -1878,7 +1878,7 @@ let narrow_foot_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_foot_box : @ui.Style = @ui.css("p=S2_5 gap=S2 radius=Xl3")
+let narrow_foot_box : @ui.Style = @ui.css("gap=S2 radius=Xl3").then(@ui.style(p=room(narrow_foot_in)))
 
 ///|
 /// The chapter's row (chapterRow): 上一章, its name, 下一章, 10 apart; in the foot's top corners (narrow_chip_past).
@@ -2370,10 +2370,16 @@ let desk_swatch_glyph : @ui.TextStyle = @ui.text_style(size=Title, wrap=false)
 let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
-/// The size's row (sizeRow): 40 high, 4 in, the page's corner; its keys 32 high, 44 wide at least, 10 in, their
-/// corners concentric with the row's across its 4 (Inner: all four alike, 8.8).
+/// The size's row (sizeRow): a block of the ladder's (its row corner), its keys 32 high the ladder's inset in all round,
+/// round by its next step (Inner: 18 less 8, 10), so as high as they are and that twice.
 // kept across runs: a value (no field of it changes)
-let desk_size_row : @ui.Style = @ui.css("row w=Full h=S10 px=S1 align=ACenter radius=Xl")
+let desk_size_row : @ui.Style = @ui.css("row w=Full align=ACenter radius=Xl2").then(
+  @ui.style(h=Fixed(desk_size_row_h), px=room(corner_inset)),
+)
+
+///|
+/// The size's row's height: its keys' 32 and the ladder's inset over and under them.
+let desk_size_row_h : Double = 32.0 + 2.0 * corner_inset
 
 ///|
 // kept across runs: a value (no field of it changes)

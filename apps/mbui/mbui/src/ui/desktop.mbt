@@ -382,6 +382,8 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
     None => true
   }
   desk.sels = desk.next_sels.copy()
+  // (drawn where they are: none moved since)
+  sel_moved.val = (0.0, 0.0)
   finger_frame_end()
   if !self.down && self.px >= 0.0 {
     if pointing() is Finger {
@@ -1383,21 +1385,52 @@ pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
 /// Where the pointer let what is picked go, in the window: the end of it the pointer took (Picked's `to`: dragged
 /// down, the last of its lines' right end; dragged up, the first's left end), x and its line's top and height; None
 /// as selection_box. What it holds is what was dragged over, so this is where the pointer let go, not past the words.
-pub fn Ctx::selection_end(self : Ctx) -> (Double, Double, Double)? {
+/// As the words it ends in are laid out this frame: where they moved since they were drawn (a row above them grown as
+/// its height is learned) it moves with them, read back (readback.mbt): read before they were laid out, the frame is
+/// built again from where they are.
+#callsite(autofill(loc))
+pub fn Ctx::selection_end(self : Ctx, loc~ : SourceLoc) -> (Double, Double, Double)? {
   ignore(self)
+  let v = selection_end_drawn().map(fn(e) {
+    let (dx, dy) = sel_moved.val
+    (e.1 + dx, e.2 + dy, e.3)
+  })
+  if building.val {
+    if sel_read.val is None {
+      sel_read.val = Some((v, loc))
+    }
+    row_read_laid(Sel(v, loc))
+  }
+  v
+}
+
+///|
+/// How far the words what is picked ends in have moved since they were drawn, as this frame lays them out
+/// (Ctx::selection_moved_now): what Ctx::selection_end adds to where they were drawn. None moved as a frame draws them.
+// kept across runs: worked out as a frame is laid out, read as the next pass builds
+let sel_moved : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// Where what is picked ends as the build read it (Ctx::selection_end), the first read of a frame's pass: read back.
+// kept across runs: said as a pass builds, looked at as it is laid out
+let sel_read : Ref[((Double, Double, Double)?, SourceLoc)?] = Ref(None)
+
+///|
+/// The end of what is picked where its words were last drawn: the paragraph it ends in, x, y, the line's height.
+fn selection_end_drawn() -> (SelTarget, Double, Double, Double)? {
   if picked.dragging {
     return None
   }
   let down = spot_cmp(picked.from, picked.to) <= 0
-  let mut end : (Array[Int], Double, Double, Double)? = None
+  let mut end : (SelTarget, Array[Int], Double, Double, Double)? = None
   // (of the paragraphs drawn, where they are drawn: those scrolled out of view are nowhere)
   for t in sels_shown() {
     for r in t.picked_rects() {
       let (x, y) = (t.ox + r.0 * t.sc, t.oy + r.1 * t.sc)
-      let here = (t.at, if down { x + r.2 * t.sc } else { x }, y, r.3 * t.sc)
+      let here = (t, t.at, if down { x + r.2 * t.sc } else { x }, y, r.3 * t.sc)
       end = match end {
         None => Some(here)
-        Some((at, _, ey, _) as e) => {
+        Some((_, at, _, ey, _) as e) => {
           let k = order_cmp(t.at, at)
           let k = if k == 0 { y.compare(ey) } else { k }
           if (down && k > 0) || (!down && k < 0) {
@@ -1409,7 +1442,26 @@ pub fn Ctx::selection_end(self : Ctx) -> (Double, Double, Double)? {
       }
     }
   }
-  end.map(fn(e) { (e.1, e.2, e.3) })
+  end.map(fn(e) { (e.0, e.2, e.3, e.4) })
+}
+
+///|
+/// How far the paragraph what is picked ends in (an old view's, found by its words' key) is laid out this frame from
+/// where it was drawn (Ctx::sel_walk's ox, oy); none where it is not found.
+fn Ctx::selection_moved_now(self : Ctx) -> (Double, Double) {
+  guard selection_end_drawn() is Some((t, _, _, _)) else { return (0.0, 0.0) }
+  guard t.base is Para(base) else { return (0.0, 0.0) }
+  for j in 0..<self.count {
+    let n = self.nodes[j]
+    let said = match (n.rcut, n.rich) {
+      (Some(r), _) | (None, Some(r)) => r.select && r.base == base
+      _ => false
+    }
+    if n.kind == kind_rich && said {
+      return (n.x + n.pad_l - t.ox, n.y + n.pad_t - t.oy)
+    }
+  }
+  (0.0, 0.0)
 }
 
 ///|

@@ -296,6 +296,18 @@ pub fn small_chat(title : String, session : String) -> Json {
 }
 
 ///|
+/// An archived chat's title by its session, as the archive lists it (settings' fixture.mbt fx_archive): "" for none.
+fn archived_title(session : String) -> String {
+  match session {
+    "s-a1" => "整理上个月的发票"
+    "s-a2" => "试一下新的图标尺寸"
+    "s-a3" => "周会纪要"
+    "s-a4" => "清理旧的构建缓存"
+    _ => ""
+  }
+}
+
+///|
 /// A chat just made from a new chat (`new:N`, newChat.create): named by no one yet (新对话, as the core calls it),
 /// nothing said in it.
 pub fn made_chat(session : String) -> Json {
@@ -495,6 +507,10 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
               title = text(Some(r), "title")
             }
           }
+        }
+        // (or the archive's row's: settings' fixture.mbt fx_archive, the same chats)
+        if title == "" {
+          title = archived_title(session)
         }
         Some(with_sent(small_chat(title, session), session))
       }

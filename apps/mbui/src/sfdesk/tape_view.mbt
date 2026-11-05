@@ -1337,7 +1337,8 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   wide.closed.set(false)
   // (what the page's bars and the sidebar's parts work out from: open, apart, nothing of them moving on the tape)
   let r = tape_room_now()
-  bar_room_now.set((bar_in, 0.0, 0.0))
+  // (a page's title on the panel's words' line, panel_words, its row's own 8 (chat_bar_title_row's pl) in from this)
+  bar_room_now.set((@sf.panel_words - chat_bar_title_in, 0.0, 0.0))
   wide.brand_h = side_brand_h(false, r.top)
   wide.list_top = wide.brand_h
   wide.list_band = 1.0

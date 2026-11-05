@@ -256,6 +256,49 @@ test "words with a mark sent before the core has read them: their row has the ma
 }
 
 ///|
+test "words with a mark leave the field as they stand: the same inks from the frame sent, in pieces, as their message has them" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    // (the words sent stay what was sent from here)
+    call: fn(name, params, done) {
+      if name != "chat.send" {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0, pointing=Mouse)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.paste("[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)")
+  t.type_text(" 吧")
+  t.draw()
+  t.draw()
+  t.draw()
+  let inks = fn() {
+    let out : Array[Int64] = []
+    for g in t.drawn_glyphs() {
+      if g.1 > 700.0 && g.0 > 390.0 && g.0 < 500.0 && g.2 != 0L && !out.contains(g.2) {
+        out.push(g.2)
+      }
+    }
+    out.sort()
+    out
+  }
+  let field = inks()
+  assert_eq(field.length(), 3)
+  tap_send(t)
+  t.draw()
+  assert_eq(inks(), field)
+  let f = flight_of("ws1/st1:s-c1").unwrap()
+  assert_true(@sfbase.flight_said(f) == "@首页 吧")
+  t.draw()
+  assert_true(t.run_rects("吧").length() == 1)
+}
+
+///|
 test "a link to an execution history: its mark once the core keeps that link, else the link as it is" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
