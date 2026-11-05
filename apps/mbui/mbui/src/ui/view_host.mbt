@@ -2,9 +2,9 @@
 // the view package (src/view) whose root is the window's, and the old view, built as it is built, is in nodes of it
 // (`old`: an old island; at first one, the whole window's room; set_view_app for another tree). The tree lays out,
 // orders and draws the window, each old view in its place in that order: built for its node's room as a subtree of the
-// old frame's, in a box where the node is placed, cut to it, as opaque as the node (one the whole window's is the old
-// frame itself). A press goes to what the tree finds at its point: a node's own press, the old view where an island is,
-// nobody's where the old view is cut to its islands.
+// old frame's, in a box where the node is placed, cut by the tree's clipping ancestors, as opaque as the node (one the
+// whole window's is the old frame itself). A press goes to what the tree finds at its point: a node's own press, the
+// old view where an island is, nobody's where the old view is cut to its islands.
 //
 // Each old view is made once among the old frame's (made_island): built again only as what it read changes (or what
 // the old view takes from outside, an input, comes), another old view's changes building nothing of it; let go with
@@ -765,7 +765,7 @@ fn view_island_said() -> String {
 
 ///|
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
-/// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
+/// old view in a box of its own where it is placed, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
   // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
   // or let go: the tree brought and each placed as it is, so that the frame builds those there are where they are)
@@ -804,10 +804,11 @@ fn old_frame(c : Ctx) -> Unit {
           // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
           // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
           // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
+          // (the box lays out the island; only a clipping ancestor cuts what the island draws past it)
           style=if o.natural is Some(_) && !o.gives {
-            style(w=Fixed(w), clip=true)
+            style(w=Fixed(w))
           } else {
-            style(w=Fixed(w), h=Fixed(h), clip=true)
+            style(w=Fixed(w), h=Fixed(h))
           },
           left~,
           top~,
