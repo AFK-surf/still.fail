@@ -521,6 +521,8 @@ fn looks_reset() -> Unit {
   paint_base.wake = -1.0
   looks_tells.now = []
   looks_tells.before = []
+  looks_tells.kept_now = []
+  looks_tells.kept_before = []
   looks_drawn.val = false
   painted_alone.val = false
   tree_alone_drawn.val = false
@@ -811,22 +813,31 @@ fn inst_bits(x : Double, j : Int) -> Int64 {
 }
 
 ///|
-/// What the frames told outside (Ctx::after_build's ids, then Ctx::tell's), the last built and the one before.
+/// What the frames told outside (Ctx::after_build's ids, then Ctx::tell's), the last built and the one before; and of
+/// those what each of the two said again of what the build before it said (`kept_now`, `kept_before`): told as it goes
+/// on, not once. What a build tells once (a page left, the menu bar told anew) is an event, sent by that build; told
+/// again by none after it, nothing of it is for a frame after it to build again.
 priv struct LooksTold {
   mut now : Array[Int]
   mut before : Array[Int]
+  mut kept_now : Array[Int]
+  mut kept_before : Array[Int]
 }
 
 ///|
 // kept across runs: put back as a run begins (looks_reset), else said by each frame built whole
-let looks_tells : LooksTold = { now: [], before: [] }
+let looks_tells : LooksTold = { now: [], before: [], kept_now: [], kept_before: [] }
 
 ///|
-/// What the frame built tells outside (frame_body): what that does is for the next frame to read, so the next is built
-/// whole unless it told the same as the one before (said again each frame) and drew the same (looks_left).
+/// What the frame built tells outside (frame_body): what it goes on telling is for the next frame to read, so the next
+/// is built whole unless what it went on telling is what the one before went on telling (said again each frame) and it
+/// drew the same (looks_left). What it told once is not in that: sent by it, the next tells it no more either way.
 fn looks_told(after : Array[Int], told : Array[Int]) -> Unit {
   looks_tells.before = looks_tells.now
   looks_tells.now = after + told
+  looks_tells.kept_before = looks_tells.kept_now
+  let before = looks_tells.before
+  looks_tells.kept_now = looks_tells.now.filter(fn(i) { before.contains(i) })
 }
 
 ///|
@@ -850,7 +861,7 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
   } else {
     // (and it laid out what the one before it laid out, and told outside what that one told: built whole again, it
     // would lay out the same)
-    looks_base.told_same = looks_tells.now == looks_tells.before
+    looks_base.told_same = looks_tells.kept_now == looks_tells.kept_before
     looks_base.ok = left && paint_base.laid_same && looks_base.told_same
     looks_base.built_at = c.clock
   }
