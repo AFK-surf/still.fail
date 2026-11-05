@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { test } from "node:test";
-import { indexedLatestThread, installLatestThreadIndex, LATEST_THREAD_INDEXED, latestThreadReady, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
+import { indexedLatestThread, installLatestThreadIndex, LATEST_THREAD_INDEXED, LATEST_THREAD_REFRESH_UPDATING, latestThreadReady, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
 
 function prepare(store: Store, session: string, limit = 16) {
@@ -223,6 +223,30 @@ test("a changed thread does not inspect memberships of unprepared sessions", () 
       visited = 0;
       db.prepare("DELETE FROM threads WHERE id=?").run(thread.id);
       assert.equal(indexedLatestThread(db, "tracked"), null);
+      counts.push(visited);
+    } finally { store.close(); }
+  }
+  assert.deepEqual(counts, [1, 1]);
+});
+
+test("a nested change seeks only its affected outer-update snapshot", () => {
+  const counts: number[] = [];
+  for (const others of [40, 400]) {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      installLatestThreadIndex(db);
+      const put = db.prepare("INSERT INTO latest_thread_updating VALUES(?,?,0,0,0,NULL,NULL)");
+      put.run("target", 1);
+      for (let n = 0; n < others; n++) put.run(`other-${n}`, n + 2);
+      db.prepare("INSERT INTO latest_thread_changed VALUES('target',1,0,0,0,NULL,NULL)").run();
+      let visited = 0;
+      db.function("latest_update_visited", (session) => { visited++; return session; });
+      const observed = LATEST_THREAD_REFRESH_UPDATING.replace("WHERE (session,thread) IN", "WHERE latest_update_visited(session)=session AND (session,thread) IN");
+      assert.notEqual(observed, LATEST_THREAD_REFRESH_UPDATING);
+      const plan = (sql: string) => db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all().map((r) => String(r.detail));
+      assert.deepEqual(plan(observed), plan(LATEST_THREAD_REFRESH_UPDATING));
+      assert.match(plan(observed).join("\n"), /SEARCH latest_thread_updating USING PRIMARY KEY/);
+      db.exec(observed);
       counts.push(visited);
     } finally { store.close(); }
   }

@@ -24,15 +24,14 @@ const stage = (keys: string, table = "latest_thread_changed") => `DELETE FROM ${
 // An UPDATE OR REPLACE can fire DELETE triggers for displaced rows before its own AFTER trigger. Keep its snapshot
 // apart from their staging, and advance affected snapshots after each nested reconciliation to the rank now stored.
 // An ignored write may leave a snapshot, but changes neither the source nor the order; the next same kind clears it.
-const refreshUpdating = `UPDATE latest_thread_updating
+export const LATEST_THREAD_REFRESH_UPDATING = `UPDATE latest_thread_updating
     SET (old_valid,old_has,old_last,old_joined,old_member) =
       (SELECT m.rowid IS NOT NULL AND t.id IS NOT NULL,
         ${lastDelivery("x.session", "x.thread")} IS NOT NULL,COALESCE(${lastDelivery("x.session", "x.thread")},0),m.joined_at,m.rowid
         FROM latest_thread_changed x LEFT JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
           LEFT JOIN threads t ON t.id=x.thread
         WHERE x.session=latest_thread_updating.session AND x.thread=latest_thread_updating.thread)
-    WHERE EXISTS (SELECT 1 FROM latest_thread_changed x
-      WHERE x.session=latest_thread_updating.session AND x.thread=latest_thread_updating.thread);`;
+    WHERE (session,thread) IN (SELECT session,thread FROM latest_thread_changed);`;
 const reconcile = (table = "latest_thread_changed") => `DELETE FROM latest_thread_rows WHERE (session,has_last,last_delivery,joined_at,member_rowid) IN
     (SELECT session,old_has,old_last,old_joined,old_member FROM ${table} WHERE old_valid=1);
   DELETE FROM latest_thread_members WHERE (thread,session) IN
@@ -49,7 +48,7 @@ const reconcile = (table = "latest_thread_changed") => `DELETE FROM latest_threa
       LEFT JOIN deliveries d ON d.rowid=${lastDelivery("m.session", "m.thread")}
     WHERE NOT EXISTS (SELECT 1 FROM latest_thread_rows r WHERE r.session=m.session AND r.has_last=(d.rowid IS NOT NULL)
       AND r.last_delivery=COALESCE(d.rowid,0) AND r.joined_at IS m.joined_at AND r.member_rowid=m.rowid);
-  ${table === "latest_thread_changed" ? refreshUpdating : ""}
+  ${table === "latest_thread_changed" ? LATEST_THREAD_REFRESH_UPDATING : ""}
   DELETE FROM ${table};`;
 const deliveryKeys = (update: boolean) => `SELECT NEW.session AS session,NEW.thread AS thread
   UNION SELECT d.session,d.thread FROM deliveries d WHERE d.rowid=NEW.rowid
