@@ -145,6 +145,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   assert.equal((await ask(viewer, "GET", "/admin/api/tools/access"))[0], 200);
   assert.deepEqual(await ask(viewer, "POST", "/admin/api/sessions", { runtime: "claude" }), [403, { error: "read-only members cannot change this station" }]);
   assert.deepEqual(await ask(viewer, "PUT", "/admin/api/tools/access", { access: "full" }), [403, { error: "read-only members cannot change this station" }]);
+  for (const path of ["views/end", "views/v1/end", "views/v1/watch"]) assert.deepEqual(await ask(viewer, "POST", `/admin/api/screens/desktop/${path}`, {}), [403, { error: "read-only members cannot change this station" }]);
   // The drive (docs/drive.md): a viewer lists and reads what is shared, and changes nothing of it; a member does.
   const shared = realpathSync(mkdtempSync(join(tmpdir(), "comma-drive-")));
   t.after(() => rmSync(shared, { recursive: true, force: true }));

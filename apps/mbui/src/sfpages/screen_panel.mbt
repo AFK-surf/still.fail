@@ -594,6 +594,16 @@ fn center_panel(
         done()
       }
     }
+    // Its other views, this person's on other devices and others' alike (docs/remote-screens.md "Who is on a screen").
+    let others = items(s.state, "otherViews")
+    if others.length() > 0 &&
+      @sf.menu_item(c, @sf.t("web-pages.screen.endOthers", args=[("count", others.length().to_string())]), key="screen-end-others", panel=true, icon="close") {
+      for v in others {
+        let params = Map::of([("station", Json::string(s.station)), ("screen", Json::string(s.screen)), ("view", Json::string(text(Some(v), "id")))])
+        (src.call)("screen.endView", Json::object(params), fn(_) {  })
+      }
+      done()
+    }
     if @sf.menu_item(c, @sf.t("web-pages.screen.leave"), key="screen-leave", panel=true, icon="close", danger=true) {
       done()
       close()

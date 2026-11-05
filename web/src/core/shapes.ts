@@ -6701,6 +6701,30 @@ export interface ScreenDrop {
 	reveal: boolean;
 }
 
+/** One view of a screen, for a person to see where it is open and let it go (docs/remote-screens.md "Who is on a screen"). */
+export interface ScreenPresence {
+	/** The station's name for this view: `screen.endView`, `screen.watchOnly`. */
+	id: string;
+	/** Whose (an agent's as its chat). */
+	name: string;
+	/** The device and app it is on as that device says it (`youdid.wtf 桌面版 · Peng's MacBook`), else the device's id's start. */
+	device: string;
+	/** Which kind of app, as it said: `desktop`, `ios`, `android`, `web`; empty from a client before it. */
+	app?: string;
+	/** When it opened, in ms since 1970. */
+	at: number;
+	/** How long ago, in words (3 分钟前), as of when this was said. */
+	ago: string;
+	/** Its input is taken. */
+	control: boolean;
+	/** On the device asking. */
+	here?: boolean;
+	/** An agent's: not ended from here. */
+	agent?: boolean;
+	/** The viewer may end it or make it only look (a member who may drive the screen; a person's view). */
+	may?: boolean;
+}
+
 /** One panel of a simulator's device, as its device type's mask draws it. */
 export interface ScreenPanel {
 	/** As wide as its mask, whose height says which panel a picture is of. */
@@ -6726,6 +6750,8 @@ export interface ScreenItem {
 	controlledBy?: string[];
 	/** An agent drives it now (one of `controlledBy` is an agent's view). */
 	agent?: boolean;
+	/** Each view open on it now: on which device, since when, and what the viewer may do of it (none from a station before them). */
+	views?: ScreenPresence[];
 	/** What is missing for it to be seen or driven (macOS's grants), when something is. */
 	access?: ScreenAccess;
 	/** The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them. */
@@ -6861,8 +6887,12 @@ export interface ScreenViewState {
 	 * waits).
 	 */
 	takeOver?: boolean;
-	/** What the viewer's bar says: 只看 or 控制, and who else is on it (core). */
+	/** What the viewer's bar says: 只看 or 控制, who else is on it, and the viewer's own other devices it is open on (core). */
 	line: string;
+	/** How many times it was made to only look from elsewhere: a change is its page's 只看, as if chosen. */
+	watchOnly?: number;
+	/** The people's views on it but this one that the viewer may end (`screen.endView`), this view excluded by being on this device. */
+	otherViews?: ScreenPresence[];
 	/** `h264` or `jpeg`, once the first config came. */
 	codec?: string;
 	width?: number;

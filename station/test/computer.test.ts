@@ -9,6 +9,9 @@ import type { Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOp
 import { Computer, FIRST_MS, IDLE_MS, SETTLE_MS, type Timers, computerTools, keyPresses, toUnit, typing } from "../src/tools/computer.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 
+/// Who is on a screen by name, its views aside.
+const named = ({ viewers, controlledBy }: { viewers: string[]; controlledBy: string[] }) => ({ viewers, controlledBy });
+
 class FakeTimers implements Timers {
   now = 0;
   #due: { at: number; f: () => void; live: boolean }[] = [];
@@ -233,7 +236,7 @@ test("one view per session and screen, among the screen's people as the agent, c
   timers.advance(1000);
   await computer.act("s2", { screen: "browser:T1" });
   assert.equal(source.views.length, 2, "another session's own");
-  assert.deepEqual(hub.people("browser:T1"), { viewers: ["agent: Chat s1", "agent: Chat s2"], controlledBy: ["agent: Chat s1", "agent: Chat s2"] });
+  assert.deepEqual(named(hub.people("browser:T1")), { viewers: ["agent: Chat s1", "agent: Chat s2"], controlledBy: ["agent: Chat s1", "agent: Chat s2"] });
   assert.deepEqual(computer.open(), ["s1 browser:T1", "s2 browser:T1"]);
   timers.advance(IDLE_MS - 1001);
   assert.deepEqual([source.views[0]!.closed, source.views[1]!.closed], [false, false]);
@@ -248,7 +251,7 @@ test("one view per session and screen, among the screen's people as the agent, c
   assert.equal(source.views[2]!.closed, true);
   hub.close();
   assert.equal(source.views[1]!.closed, true);
-  assert.deepEqual(hub.people("browser:T1"), { viewers: [], controlledBy: [] });
+  assert.deepEqual(named(hub.people("browser:T1")), { viewers: [], controlledBy: [] });
   // A view whose source ended is opened again on the next call.
   await computer.act("s3", { screen: "browser:T1" });
   source.views[3]!.end();
@@ -266,7 +269,7 @@ test("a person driving the screen holds the agent's input off (screenshots go on
   await computer.act("s2", { screen: "browser:T1", action: "click", x: 2, y: 2, wait: 0 });
   const pat = hub.join("browser:T1", { name: "Pat", control: true, tell: () => {} });
   source.views[0]!.inputs = [];
-  await assert.rejects(computer.act("s1", { screen: "browser:T1", action: "type", text: "x" }), /Pat is controlling browser:T1 right now, so your input was not sent: do not fight them\. Wait .* or ask them/);
+  await assert.rejects(computer.act("s1", { screen: "browser:T1", action: "type", text: "x" }), /Pat \(.*opened .*\) is controlling browser:T1 right now, so your input was not sent: do not fight them\. Wait .*Ask them in the chat .*disconnect that view/);
   assert.deepEqual(source.views[0]!.inputs, []);
   const shot = await computer.act("s1", { screen: "browser:T1" });
   assert.match(text(shot), /Also on this screen: Vic, agent: Chat s2, Pat\./);
