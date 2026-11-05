@@ -2243,10 +2243,7 @@
     "one": "Used once",
     "other": "Used {n} times"
   },
-  "web-pages.vaultApp.wantsUse": "「{chat}」 asks to use it",
-  "web-pages.vaultApp.wantsSave": "「{chat}」 asks to keep it",
-  "web-pages.vaultApp.allowFor": "Allow · {time}",
-  "web-pages.vaultApp.typedThere": "This one is for you to type in: do it on its card in the chat",
+  "web-pages.vaultApp.askedIn": "Asked in {chat}",
   "web-pages.vaultApp.pick": "Pick a secret to see it",
   "web-pages.vaultApp.unlockToSee": "Unlock to see it",
   "web-pages.vaultApp.agent": "How agents use it",

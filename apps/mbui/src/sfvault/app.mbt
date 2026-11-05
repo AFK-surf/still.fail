@@ -56,10 +56,20 @@ fn rule(parent : @view.View, inset? : Double = 0.0) -> Unit {
 }
 
 ///|
-/// A card's ground, what it holds made by `body`.
-fn card(parent : @view.View, body : (@view.View) -> Unit) -> Unit {
+/// A card (the ladder's: card_pad in, round as a card), what it holds made by `body`.
+/// `rows`: rows one under another, a line between, each its own room over and under (the card's 10 less).
+/// `fields`: what it holds ends in fields (labelled's), the last in its foot corners: its foot as far in as makes that
+/// one concentric with them (card_foot_in).
+fn card(parent : @view.View, body : (@view.View) -> Unit, rows? : Bool = false, fields? : Bool = false) -> Unit {
+  let ends = if rows { 10.0 } else { @sf.card_pad }
+  let foot = if fields { @sf.card_foot_in(@sf.input_height()) } else { ends }
   parent.box(fn(c) {
-    c.radius(Is(14.0)).ground(By(fn() { p().card })).clips(Is(true)).min_width(Is(Some(0.0))) |> ignore
+    c
+    .padding(Is((@sf.card_pad, ends, @sf.card_pad, foot)))
+    .radius(Is(@sf.card_corner))
+    .ground(By(fn() { p().card }))
+    .min_width(Is(Some(0.0)))
+    |> ignore
     body(c)
   })
   |> ignore
@@ -79,7 +89,7 @@ fn heading(parent : @view.View, words : () -> String) -> Unit {
 /// A quiet line in a card where there is nothing to list.
 fn none_line(parent : @view.View, words : () -> String) -> Unit {
   parent.box(fn(n) {
-    n.padding(Is((16.0, 14.0, 16.0, 14.0))) |> ignore
+    n.padding(Is((0.0, 14.0, 0.0, 14.0))) |> ignore
     text(n, words, 13.0, fn() { p().muted }, wrap=true) |> ignore
   })
   |> ignore
@@ -118,7 +128,7 @@ fn tile(parent : @view.View, kind : () -> String, side : Double) -> Unit {
     t
     .width(Is(Some(side)))
     .height(Is(Some(side)))
-    .radius(Is(side * 0.27))
+    .radius(Is(if side > 40.0 { @sf.row_corner } else { @sf.small_corner }))
     .lines_up(Is(Some(Middle)))
     .lies_along(Is(Middle))
     .ground(By(fn() {
@@ -213,7 +223,7 @@ fn gate_view(v : @view.View, s : State, gate : Gate) -> Unit {
       m
       .width(Is(Some(64.0)))
       .height(Is(Some(64.0)))
-      .radius(Is(20.0))
+      .radius(Is(@sf.row_corner))
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
       .ground(By(fn() { p().accent_bg }))
@@ -257,7 +267,6 @@ fn gate_view(v : @view.View, s : State, gate : Gate) -> Unit {
           |> ignore
         Words => {
           card(f, fn(k) {
-            k.padding(Is((18.0, 16.0, 18.0, 16.0))) |> ignore
             text(k, fn() { s.words.get() }, 15.0, fn() { p().text }, wrap=true, line=26.0) |> ignore
           })
           text(f, fn() { @sf.t("web-pages.vault.words.once") }, 12.0, fn() { p().muted }) |> ignore
@@ -359,7 +368,7 @@ fn sidebar(parent : @view.View, s : State) -> Unit {
         m
         .width(Is(Some(28.0)))
         .height(Is(Some(28.0)))
-        .radius(Is(8.0))
+        .radius(Is(@sf.small_corner))
         .lines_up(Is(Some(Middle)))
         .lies_along(Is(Middle))
         .ground(By(fn() { p().primary }))
@@ -538,11 +547,12 @@ fn list_pane(parent : @view.View, s : State, width : Double?) -> Unit {
 fn list_row(r : @view.View, s : State, it : () -> Row) -> Unit {
   let id = fn() { @sfbase.text(Some(it().row), "id") }
   r.box(fn(row) {
-    row.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(12.0)).padding(Is((10.0, 8.0, 10.0, 8.0))).radius(Is(10.0)) |> ignore
+    row.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(12.0)).padding(Is((@sf.corner_inset, @sf.corner_inset, 10.0, @sf.corner_inset))).radius(Is(@sf.row_corner)) |> ignore
     @sf.nav_ground_node(row, fn() { s.chosen.get() == (it().vault, id()) && s.editing.get() is None })
     @sf.presses_node(row, fn() { s.show(it().vault, id()) })
     row.says(By(fn() { Some(@view.said(Link, label=row_name(it().row))) })) |> ignore
-    tile(row, fn() { @sfbase.text(Some(it().row), "kind") }, 36.0)
+    // (as high as the row's words, the inset from its edges: concentric with its corner)
+    tile(row, fn() { @sfbase.text(Some(it().row), "kind") }, 38.0)
     row.box(fn(c) {
       c.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).gap(Is(1.0)) |> ignore
       text(c, fn() { row_name(it().row) }, 14.0, fn() { p().text }, weight=500, line=20.0) |> ignore
@@ -651,7 +661,7 @@ fn item_view(v : @view.View, s : State, vault : String, id : String, back : Bool
     // (its delete asked first)
     c.show(fn() { s.deleting.get() }, fn(d) {
       card(d, fn(k) {
-        k.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(10.0)).padding(Is((16.0, 12.0, 12.0, 12.0))) |> ignore
+        k.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(10.0)) |> ignore
         text(k, fn() { @sf.t("web-pages.vaultApp.deleteConfirm") }, 13.0, fn() { p().red }, wrap=true).grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
         @sf.button_node(k, fn() { @sf.t("common.cancel") }, fn() { s.deleting.set(false) }, tone=Ghost) |> ignore
         @sf.button_node(k, fn() { @sf.t("common.delete") }, fn() { s.delete() }, tone=DangerSolid, busy=fn() { doing("vault/delete/" + id) }) |> ignore
@@ -684,7 +694,7 @@ fn item_view(v : @view.View, s : State, vault : String, id : String, back : Bool
     })
     |> ignore
     // its fields: as its row says them (dots) until opened, then as opened
-    card(c, fn(k) {
+    card(c, rows=true, fn(k) {
       k.each(
         fn() {
           let fs = match opened() {
@@ -697,13 +707,15 @@ fn item_view(v : @view.View, s : State, vault : String, id : String, back : Bool
         fn(fr, x) {
           let (i, f, open) = @signals.untracked(fn() { x.get() })
           if i > 0 {
-            rule(fr, inset=16.0)
+            rule(fr)
           }
           field_row(fr, s, id, f, open)
         },
       )
       k.show(fn() { opened() is None }, fn(u) {
-        u.padding(Is((16.0, 4.0, 16.0, 14.0))) |> ignore
+        // (across the card's foot, concentric with its foot corners: card_foot_in, the rows' card 10 over its foot)
+        let in_ = @sf.card_foot_in(@sf.button_height())
+        u.padding(Is((0.0, 4.0, 0.0, 0.0))).margin(Is((in_ - @sf.card_pad, 0.0, in_ - @sf.card_pad, in_ - 10.0))) |> ignore
         @sf.button_node(u, fn() { @sf.t("web-pages.vaultApp.unlockToSee") }, fn() { s.open() }, icon="eye", busy=fn() {
           doing("vault/open/" + id)
         })
@@ -713,7 +725,7 @@ fn item_view(v : @view.View, s : State, vault : String, id : String, back : Bool
     // how agents may use it
     heading(c, fn() { @sf.t("web-pages.vaultApp.agent") })
     card(c, fn(k) {
-      k.padding(Is((16.0, 12.0, 16.0, 14.0))).gap(Is(6.0)) |> ignore
+      k.gap(Is(6.0)) |> ignore
       text(k, fn() { @sfbase.text(r(), "agentText") }, 14.0, fn() { p().text }, weight=500, wrap=true) |> ignore
       k.show(fn() { @sfbase.flag(r(), "listed") }, fn(l) {
         l.gap(Is(4.0)) |> ignore
@@ -726,11 +738,11 @@ fn item_view(v : @view.View, s : State, vault : String, id : String, back : Bool
     })
     // when agents used it
     heading(c, fn() { @sf.t("web-pages.vault.uses.title") })
-    card(c, fn(k) {
+    card(c, rows=true, fn(k) {
       k.each(fn() { s.item_uses(vault, id).mapi(fn(i, u) { (i, u) }) }, fn(x) { x.0 }, fn(ur, x) {
         let (i, u) = @signals.untracked(fn() { x.get() })
         if i > 0 {
-          rule(ur, inset=16.0)
+          rule(ur)
         }
         use_row(ur, u, item=false)
       })
@@ -750,7 +762,15 @@ fn field_row(k : @view.View, s : State, id : String, f : Json, open : Bool) -> U
   let mono = @sfbase.flag(Some(f), "mono")
   let clear = fn() { !secret || s.clear.get().contains(id + "/" + key) }
   k.box(fn(r) {
-    r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(4.0)).padding(Is((16.0, 10.0, 8.0, 10.0))).min_height(Is(Some(56.0))) |> ignore
+    // (its keys out from the card's words to the small block's inset from its end: card_end_out's)
+    r
+    .row(Is(true))
+    .lines_up(Is(Some(Middle)))
+    .gap(Is(4.0))
+    .padding(Is((0.0, 10.0, 0.0, 10.0)))
+    .margin(Is((0.0, 0.0, @sf.card_corner - @sf.small_corner - @sf.card_pad, 0.0)))
+    .min_height(Is(Some(56.0)))
+    |> ignore
     r.box(fn(c) {
       c.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).gap(Is(2.0)) |> ignore
       text(c, fn() { label }, 12.0, fn() { p().muted }) |> ignore
@@ -804,7 +824,7 @@ fn secret_runs(v : String) -> Array[@text.Run] {
 fn use_row(parent : @view.View, u : Json, item~ : Bool) -> Unit {
   let v = Some(u)
   parent.box(fn(r) {
-    r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(10.0)).padding(Is((16.0, 10.0, 16.0, 10.0))) |> ignore
+    r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(10.0)).padding(Is((0.0, 10.0, 0.0, 10.0))) |> ignore
     r.box(fn(c) {
       c.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).gap(Is(2.0)) |> ignore
       let title = if item {
@@ -855,28 +875,28 @@ fn now_pane(parent : @view.View, s : State, with_chips? : Bool = false) -> Unit 
           request_card(rr, s, fn() { s.requests().search_by(fn(r) { @sfbase.text(Some(r), "id") == rid }).map(fn(i) { s.requests()[i] }) })
         })
         list.show(fn() { s.requests().length() == 0 }, fn(n) {
-          card(n, fn(k) { none_line(k, fn() { @sf.t("web-pages.vaultApp.requestsNone") }) })
+          card(n, rows=true, fn(k) { none_line(k, fn() { @sf.t("web-pages.vaultApp.requestsNone") }) })
         })
       })
       |> ignore
       heading(c, fn() { @sf.t("web-pages.vaultApp.held") })
-      card(c, fn(k) {
+      card(c, rows=true, fn(k) {
         k.each(fn() { s.grants().map(fn(g) { @sfbase.text(Some(g), "request") }) }, fn(x) { x }, fn(gr, x) {
           let rid = @signals.untracked(fn() { x.get() })
           // (a line over it while another is over it: the first one gone, the next has none)
           gr.show(fn() { s.grants().search_by(fn(g) { @sfbase.text(Some(g), "request") == rid }).unwrap_or(0) > 0 }, fn(l) {
-            rule(l, inset=16.0)
+            rule(l)
           })
           grant_row(gr, s, rid)
         })
         k.show(fn() { s.grants().length() == 0 }, fn(n) { none_line(n, fn() { @sf.t("web-pages.vaultApp.heldNone") }) })
       })
       heading(c, fn() { @sf.t("web-pages.vaultApp.recent") })
-      card(c, fn(k) {
+      card(c, rows=true, fn(k) {
         k.each(fn() { s.recent().mapi(fn(i, u) { (i, u) }) }, fn(x) { x.0 }, fn(ur, x) {
           let (i, u) = @signals.untracked(fn() { x.get() })
           if i > 0 {
-            rule(ur, inset=16.0)
+            rule(ur)
           }
           use_row(ur, u, item=true)
         })
@@ -888,102 +908,55 @@ fn now_pane(parent : @view.View, s : State, with_chips? : Bool = false) -> Unit 
 }
 
 ///|
-/// A request waiting on the person: which item, which chat asks and why, how it would be given (the command, the
-/// domains); 拒绝, 仅这一次 and allowed for the time the agent asked (an hour's idle where it said none), as far as the
-/// item allows. One to keep a secret: 存入 or 不存 (one the person types in, on its card in the chat).
+/// A request waiting on the person: the card its chat shows (settings' vault_asked_node: what is asked, why, the
+/// command, how it is given), which chat asks under its title, and its answer at its foot as the chat's card has it
+/// (vault_actions_node: 允许 with how long, 拒绝; 存入, 不存).
 fn request_card(parent : @view.View, s : State, r : () -> Json?) -> Unit {
   let v = fn() { r() }
   let id = @sfbase.text(@signals.untracked(v), "id")
-  let save = @sfbase.field(@signals.untracked(v), "save") is Some(Object(_))
-  let typed = @sfbase.flag(@sfbase.field(@signals.untracked(v), "save"), "typed")
-  card(parent, fn(k) {
-    k.padding(Is((16.0, 14.0, 16.0, 14.0))).gap(Is(8.0)) |> ignore
-    k.box(fn(h) {
-      h.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(12.0)) |> ignore
-      tile(h, fn() {
-        match @sfbase.field(v(), "save") {
-          Some(sv) => @sfbase.text(Some(sv), "kind")
-          None => "token"
-        }
-      }, 36.0)
-      h.box(fn(t) {
-        t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).gap(Is(1.0)) |> ignore
-        text(t, fn() { @sfbase.text(v(), "itemName") }, 15.0, fn() { p().text }, weight=600) |> ignore
-        text(t, fn() {
-          let chat = @sfbase.text(v(), "chatTitle")
-          let chat = if chat == "" { @sfbase.text(v(), "chat") } else { chat }
-          @sf.t(if save { "web-pages.vaultApp.wantsSave" } else { "web-pages.vaultApp.wantsUse" }, args=[("chat", chat)])
-        }, 12.0, fn() { p().muted })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-    text(k, fn() { @sfbase.text(v(), "reason") }, 14.0, fn() { p().text }, wrap=true, line=21.0) |> ignore
-    k.show(fn() { !save }, fn(w) {
-      text(w, fn() {
-        let cmd = @sfbase.text(v(), "command")
-        @sfbase.text(v(), "howText") + (if cmd == "" { "" } else { " · " + cmd })
-      }, 12.0, fn() { p().muted }, wrap=true)
-      |> ignore
-    })
-    gap(k, 2.0)
-    if save && typed {
-      text(k, fn() { @sf.t("web-pages.vaultApp.typedThere") }, 12.0, fn() { p().muted }, wrap=true) |> ignore
+  let asked = fn() -> @settings.Asked {
+    let rv = v()
+    let save = @sfbase.field(rv, "save")
+    {
+      name: match @sfbase.text(rv, "itemName") {
+        "" => @sfbase.text(rv, "item")
+        n => n
+      },
+      reason: @sfbase.text(rv, "reason"),
+      timeout_kind: @sfbase.text(rv, "timeoutKind"),
+      timeout_seconds: @sfbase.number(rv, "timeoutSeconds").to_int(),
+      approved_timeout_kind: "",
+      approved_timeout_seconds: 0,
+      mode: @sfbase.text(rv, "mode"),
+      command: @sfbase.text(rv, "command"),
+      how_text: @sfbase.text(rv, "howText"),
+      save_kind: @sfbase.text(save, "kind"),
+      username: @sfbase.text(save, "username"),
+      filename: @sfbase.text(save, "filename"),
+      typed: @sfbase.flag(save, "typed"),
+      station: "",
     }
-    k.box(fn(acts) {
-      // (its buttons at its end, onto another line where the card has not the room for them)
-      acts.row(Is(true)).lines_up(Is(Some(Middle))).lies_along(Is(End)).gap(Is(8.0)).wraps(Is(Some(8.0))) |> ignore
-      let busy = fn() { doing("vault/approve/" + id) || doing("vault/deny/" + id) }
-      @sf.button_node(acts, fn() {
-        @sf.t(if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" })
-      }, fn() { s.deny(id) }, tone=Ghost, disabled=busy)
-      |> ignore
-      if save {
-        if !typed {
-          @sf.button_node(acts, fn() { @sf.t("android-settings.vault.act.save") }, fn() { s.approve(id) }, tone=Primary, busy=busy) |> ignore
-        }
-      } else {
-        @sf.button_node(acts, fn() { @sf.t("android-settings.vault.scope.once") }, fn() { s.approve(id) }, disabled=busy) |> ignore
-        acts.show(fn() { @sfbase.text(v(), "lasts") != "once" }, fn(a) {
-          @sf.button_node(a, fn() { @sf.t("web-pages.vaultApp.allowFor", args=[("time", asked_words(v()))]) }, fn() {
-            s.approve(id, timeout=asked_time(@signals.untracked(v)))
-          }, tone=Primary, busy=busy)
+  }
+  match @sfbase.workspace_in_view(s.src).0 {
+    Some(w) => {
+      let core = @sfbase.settings_core(s.src, w)
+      @sf.card_node(parent, fn(k) {
+        k.box(fn(t) {
+          t.gap(Is(4.0)) |> ignore
+          @settings.vault_asked_node(t, asked)
+          @sf.words_node(t, fn() {
+            let chat = @sfbase.text(v(), "chatTitle")
+            @sf.t("web-pages.vaultApp.askedIn", args=[("chat", if chat == "" { @sfbase.text(v(), "chat") } else { chat })])
+          }, fn() { @sf.ask_note })
           |> ignore
         })
-      }
-    })
-    |> ignore
-  })
-}
-
-///|
-/// How long the agent asked for (its kind and seconds), as far as the item allows: an hour's idle where it asked
-/// none; an item given for an hour at most, an hour at most.
-fn asked_time(r : Json?) -> (String, Int) {
-  let kind = match @sfbase.text(r, "timeoutKind") {
-    "" => "idle"
-    k => k
+        |> ignore
+        @settings.vault_actions_node(k, core, s.ws(), id, fn() { true })
+      })
+      |> ignore
+    }
+    None => ()
   }
-  let asked = @sfbase.number(r, "timeoutSeconds").to_int()
-  let most = if @sfbase.text(r, "lasts") == "hour" { 3600 } else { 30 * 86400 }
-  let seconds = if asked <= 0 { 3600 } else if asked > most { most } else { asked }
-  (kind, seconds)
-}
-
-///|
-/// That time in words (闲置 1 小时后失效, 2 天后失效).
-fn asked_words(r : Json?) -> String {
-  let (kind, seconds) = asked_time(r)
-  let minutes = seconds / 60
-  let duration = if minutes % 1440 == 0 {
-    @sf.t("android-settings.vault.timeout.nDays", args=[("n", (minutes / 1440).to_string())])
-  } else if minutes % 60 == 0 {
-    @sf.t("android-settings.vault.timeout.nHours", args=[("n", (minutes / 60).to_string())])
-  } else {
-    @sf.t("android-settings.vault.timeout.nMinutes", args=[("n", minutes.to_string())])
-  }
-  @sf.t("android-settings.vault.timeout.button." + kind, args=[("time", duration)])
 }
 
 ///|
@@ -991,7 +964,7 @@ fn asked_words(r : Json?) -> String {
 fn grant_row(parent : @view.View, s : State, rid : String) -> Unit {
   let g = fn() { s.grants().search_by(fn(x) { @sfbase.text(Some(x), "request") == rid }).map(fn(i) { s.grants()[i] }) }
   parent.box(fn(r) {
-    r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(12.0)).padding(Is((16.0, 10.0, 12.0, 10.0))) |> ignore
+    r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(12.0)).padding(Is((0.0, 12.0, 0.0, 12.0))) |> ignore
     tile(r, fn() {
       match @sfbase.text(g(), "mode") {
         "ssh" => "ssh_key"

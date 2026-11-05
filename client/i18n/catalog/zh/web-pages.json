@@ -2168,10 +2168,7 @@
     "one": "已用 {n} 次",
     "other": "已用 {n} 次"
   },
-  "web-pages.vaultApp.wantsUse": "「{chat}」申请使用",
-  "web-pages.vaultApp.wantsSave": "「{chat}」申请存入",
-  "web-pages.vaultApp.allowFor": "允许 · {time}",
-  "web-pages.vaultApp.typedThere": "这个值要你亲手填写，请到对话里的卡片上填",
+  "web-pages.vaultApp.askedIn": "来自对话 {chat}",
   "web-pages.vaultApp.pick": "选择一条密钥查看详情",
   "web-pages.vaultApp.unlockToSee": "解锁后查看",
   "web-pages.vaultApp.agent": "agent 怎么用",

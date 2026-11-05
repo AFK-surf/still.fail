@@ -2605,6 +2605,7 @@ web-pages.screen.debug.app
 web-pages.screen.device.back
 web-pages.screen.debug.paneHide
 web-pages.screen.debug.paneShow
+web-pages.vaultApp.askedIn
 web-pages.vaultApp.title
 web-pages.vaultApp.now
 web-pages.vaultApp.nowLead
@@ -2618,10 +2619,6 @@ web-pages.vaultApp.revoked
 web-pages.vaultApp.ends
 web-pages.vaultApp.endsIdle
 web-pages.vaultApp.used
-web-pages.vaultApp.wantsUse
-web-pages.vaultApp.wantsSave
-web-pages.vaultApp.allowFor
-web-pages.vaultApp.typedThere
 web-pages.vaultApp.pick
 web-pages.vaultApp.unlockToSee
 web-pages.vaultApp.agent

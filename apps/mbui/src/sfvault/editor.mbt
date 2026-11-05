@@ -121,8 +121,8 @@ fn editor(v : @view.View, s : State, id : String, kind : String, back : Bool) ->
       }, fn(i) { kind_now.set(new_kinds[i]) })
       |> ignore
     }
-    card(c, fn(k) {
-      k.padding(Is((16.0, 14.0, 16.0, 16.0))).gap(Is(12.0)) |> ignore
+    card(c, fields=true, fn(k) {
+      k.gap(Is(12.0)) |> ignore
       labelled(k, "web-pages.vault.editor.name", fn(b) {
         @sf.input_node(b, name, placeholder=@sf.t("web-pages.vault.editor.namePlaceholder")) |> ignore
       })
@@ -147,9 +147,9 @@ fn editor(v : @view.View, s : State, id : String, kind : String, back : Bool) ->
       })
     })
     // how agents may ask for it
-    card(c, fn(k) {
-      k.padding(Is((16.0, 14.0, 16.0, 16.0))).gap(Is(12.0)) |> ignore
-      @sf.switch_row_node(k, fn() { @sf.t("web-pages.vault.editor.agent") }, fn() { agent.get() }, fn(on) { agent.set(on) }, note=fn() {
+    card(c, fields=true, fn(k) {
+      k.gap(Is(12.0)) |> ignore
+      @sf.switch_row_node(k, fn() { @sf.t("web-pages.vault.editor.agent") }, fn() { agent.get() }, fn(on) { agent.set(on) }, in_words=true, note=fn() {
         @sf.t("web-pages.vault.editor.agentNote")
       })
       |> ignore
@@ -207,12 +207,18 @@ fn editor(v : @view.View, s : State, id : String, kind : String, back : Bool) ->
 }
 
 ///|
-/// A field's label over what `body` makes.
+/// A field's label over what `body` makes: on a card, out from its words to where a field in its foot corners stands
+/// concentric with them (over_foot_reach's), its words then on the label's line.
 fn labelled(parent : @view.View, label : String, body : (@view.View) -> Unit) -> Unit {
+  let out = @sf.card_foot_in(@sf.input_height()) - @sf.card_pad
   parent.box(fn(b) {
     b.gap(Is(6.0)) |> ignore
     text(b, fn() { @sf.t(label) }, 12.0, fn() { p().muted }, weight=500) |> ignore
-    body(b)
+    b.box(fn(f) {
+      f.margin(Is((out, 0.0, out, 0.0))) |> ignore
+      body(f)
+    })
+    |> ignore
   })
   |> ignore
 }
