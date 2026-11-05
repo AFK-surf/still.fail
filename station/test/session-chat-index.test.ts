@@ -87,6 +87,25 @@ test("old sessions are prepared in bounded batches, including members added behi
   } finally { store.close(); }
 });
 
+test("a prepared name follows remaining entries when their old state row is absent", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const first = store.openThread("ember", "C", "first", null, null).id;
+    const second = store.openThread("slack", "C", "second", null, null).id;
+    store.joinThread(first, "s", "c"); store.joinThread(second, "s", "c");
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,?,'message','person','p',?)");
+    put.run(first, 1, 60); put.run(first, 2, 100); put.run(second, 1, 50);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, first);
+    // Old writers can remove one entry, which also removes thread_state while earlier entries remain.
+    db.prepare("DELETE FROM entries WHERE thread=? AND n=2").run(first);
+    assert.equal(db.prepare("SELECT 1 FROM thread_state WHERE thread=?").get(first), undefined);
+    prepare(store, "s");
+    assert.equal(original(store, "s"), first);
+    assert.equal(indexedSessionChat(db, "s")?.id, first);
+  } finally { store.close(); }
+});
+
 test("both chat candidates seek their own ordered index", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
