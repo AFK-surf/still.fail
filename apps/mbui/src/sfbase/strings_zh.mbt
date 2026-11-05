@@ -2232,7 +2232,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.envSaved": "已保存 {masked}，留空保持不变",
   "web-pages.profiles.envValue": "值",
   "web-pages.profiles.fast": "默认 Fast",
-  "web-pages.profiles.fastLead": "跟随订阅的会话使用此设置；Fast 消耗更多额度或积分",
+  "web-pages.profiles.fastLead": "跟随账号的会话使用此设置；Fast 消耗更多额度或费用",
   "web-pages.profiles.fastOff": "已关闭默认 Fast",
   "web-pages.profiles.fastOn": "已打开默认 Fast",
   "web-pages.profiles.fastSave": "保存 Fast",

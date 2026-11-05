@@ -2256,7 +2256,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.envSaved": "Saved {masked}. Leave empty to keep it",
   "web-pages.profiles.envValue": "Value",
   "web-pages.profiles.fast": "Fast by default",
-  "web-pages.profiles.fastLead": "Applies to sessions that follow the subscription. Fast uses more quota or credits.",
+  "web-pages.profiles.fastLead": "Applies to sessions that follow the account. Fast uses more quota or credits.",
   "web-pages.profiles.fastOff": "Fast default off",
   "web-pages.profiles.fastOn": "Fast default on",
   "web-pages.profiles.fastSave": "save Fast",
