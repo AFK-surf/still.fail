@@ -174,7 +174,8 @@ export type SignIns = {
 
 /// What goes over to the next station process at a handover, from memory to memory (never written down): the keeper's
 /// boxes and grants, and the secrets agents asked to keep, until decided.
-export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string, string>][] };
+type SaveScope = { ws: string; owner: string };
+export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string, string>, SaveScope[]?][] };
 
 /// A command sent to another station to run, or one it sent here, waiting for how it ended.
 type Away = { station: string; session?: string; workspace?: string; done(result: Json): void; used?(): number | null };
@@ -204,6 +205,13 @@ export class Secrets {
   /// The secrets agents asked to keep, by request, until decided: only in memory (a restart forgets them). The plain
   /// library's is written from here once approved; a vault's is sealed to its owner's devices set up later.
   readonly #unsaved = new Map<string, Record<string, string>>();
+  /// The held saves by workspace and owner. The fields remain only in `#unsaved`.
+  readonly #savesByOwner = new Map<string, Map<string, Set<string>>>();
+  readonly #saveScopes = new Map<string, SaveScope[]>();
+  /// Older handovers have fields but no scope; reboxed discovers those already written by the earlier process.
+  readonly #unscopedSaves = new Set<string>();
+  /// A save whose card is being posted has not been written yet; a device published meanwhile must get it too.
+  readonly #postingSaves = new Map<string, Request>();
   /// Commands sent to other stations, by the id they say how they ended under (`vault.done`).
   readonly #away = new Map<string, Away>();
   readonly #incoming = new Map<string, { peer: string; revoked: boolean }>();
@@ -260,15 +268,48 @@ export class Secrets {
     }
   }
 
+  #scopeSave(id: string, ws: string, owner: string) {
+    const scopes = this.#saveScopes.get(id) ?? [];
+    if (scopes.some((s) => s.ws === ws && s.owner === owner)) return;
+    scopes.push({ ws, owner });
+    this.#saveScopes.set(id, scopes);
+    const owners = this.#savesByOwner.get(ws) ?? new Map<string, Set<string>>();
+    const requests = owners.get(owner) ?? new Set<string>();
+    requests.add(id);
+    owners.set(owner, requests);
+    this.#savesByOwner.set(ws, owners);
+  }
+
+  #forgetSave(id: string) {
+    this.#unsaved.delete(id);
+    this.#unscopedSaves.delete(id);
+    for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
+      const owners = this.#savesByOwner.get(ws);
+      const requests = owners?.get(owner);
+      requests?.delete(id);
+      if (requests?.size === 0) owners!.delete(owner);
+      if (owners?.size === 0) this.#savesByOwner.delete(ws);
+    }
+    this.#saveScopes.delete(id);
+  }
+
   /// What this process holds only in memory, for the next one (a handover).
   carried(): SecretsCarried {
-    return { keeper: this.keeper.carried(), unsaved: [...this.#unsaved] };
+    return { keeper: this.keeper.carried(), unsaved: [...this.#unsaved].map(([id, fields]): SecretsCarried["unsaved"][number] => {
+      const scopes = this.#saveScopes.get(id);
+      return scopes ? [id, fields, scopes.map((s) => ({ ...s }))] : [id, fields];
+    }) };
   }
 
   /// What the process before this one held (`carried`), held here too.
   carry(c: SecretsCarried) {
     this.keeper.carry(c.keeper);
-    for (const [id, fields] of c.unsaved ?? []) if (!this.#unsaved.has(id)) this.#unsaved.set(id, fields);
+    for (const [id, fields, scopes] of c.unsaved ?? []) {
+      if (this.#unsaved.has(id)) continue;
+      this.#unsaved.set(id, fields);
+      for (const scope of scopes ?? []) if (typeof scope.ws === "string" && typeof scope.owner === "string") this.#scopeSave(id, scope.ws, scope.owner);
+      if (!this.#saveScopes.has(id)) this.#unscopedSaves.add(id);
+    }
   }
 
   /// Nothing more comes from the process before (it handed over, or there was none: a restart): each request still
@@ -276,13 +317,19 @@ export class Secrets {
   /// no secret: only what is sealed to it once granted).
   reboxed() {
     const rows = this.#d.db.prepare("SELECT ws, id FROM vault_requests WHERE status = 'pending'").all() as { ws: string; id: string }[];
+    const resolved = new Set<string>();
     for (const { ws, id } of rows) {
       const k = this.#kept(ws, id)!;
+      if (this.#unsaved.has(id) && k.request.save && k.request.owner !== undefined) {
+        this.#scopeSave(id, ws, k.request.owner);
+        resolved.add(id);
+      }
       if (k.request.box === "" || this.keeper.waiting(id)) continue;
       k.request.box = this.keeper.open(id);
       this.#save(k);
       this.#told(k.request);
     }
+    for (const id of resolved) this.#unscopedSaves.delete(id);
   }
 
   /// Tells `f` of each request made or decided (the members' event streams).
@@ -744,14 +791,26 @@ export class Secrets {
       box: lock === null ? "" : this.keeper.open(id), at: Math.floor(requestedAt / 1000), status: "pending", owner: email, save, ...(from ? { runOn: from } : {}),
       ...(lock !== null && fields !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
     };
-    if (fields !== null) this.#unsaved.set(id, fields);
-    const kept: Kept = { request, thread: null, cardTs: null };
-    if (thread !== null) {
-      request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
-      kept.cardTs = a.quiet ? null : await this.#postSave(session, thread, request);
-      kept.thread = thread.thread.id;
+    if (fields !== null) {
+      this.#unsaved.set(id, fields);
+      this.#scopeSave(id, ws, email);
+      this.#postingSaves.set(id, request);
     }
-    this.#save(kept);
+    const kept: Kept = { request, thread: null, cardTs: null };
+    try {
+      if (thread !== null) {
+        request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
+        kept.cardTs = a.quiet ? null : await this.#postSave(session, thread, request);
+        kept.thread = thread.thread.id;
+      }
+      this.#save(kept);
+    } catch (error) {
+      this.#forgetSave(id);
+      this.keeper.drop(id);
+      throw error;
+    } finally {
+      this.#postingSaves.delete(id);
+    }
     a.quiet?.(id);
     this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${command}` : (command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
     this.#told(request);
@@ -804,20 +863,38 @@ export class Secrets {
     return `${asked} ${UNDECIDED} Only their approval in the app keeps it: a reply in the chat saying yes does not.`;
   }
 
+  #sealSave(r: Request, lock: LockState, cert: BoxCert, sub: string, email: string): boolean {
+    const fields = this.#unsaved.get(r.id);
+    if (r.ws !== lock.ws || !r.save || r.vault === PLAIN || r.owner !== email || fields === undefined || r.sealed?.some((x) => x.box === cert.box)) return false;
+    r.sealed = [...(r.sealed ?? []).filter((x) => x.device !== cert.device), this.#sealTo(cert, r.ws, r.id, fields)];
+    if (r.vault === "") r.vault = this.#vaultFor(lock, sub);
+    return true;
+  }
+
   /// A device's box key published (PUT vault/boxes, checked): the secrets waiting to be kept for its person sealed to
   /// it too, so that they may approve them from it.
   boxed(lock: LockState, cert: BoxCert) {
     const sub = lock.devices.get(cert.device)?.sub;
     const email = sub === undefined ? undefined : lock.members.get(sub)?.email.toLowerCase();
     if (sub === undefined || email === undefined) return;
-    const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(lock.ws) as { body: string }[];
-    for (const row of rows) {
-      const r = JSON.parse(row.body) as Request;
-      const fields = this.#unsaved.get(r.id);
-      if (!r.save || r.vault === PLAIN || r.owner !== email || fields === undefined || r.sealed?.some((x) => x.box === cert.box)) continue;
-      const k = this.#kept(r.ws, r.id)!;
-      k.request.sealed = [...(r.sealed ?? []).filter((x) => x.device !== cert.device), this.#sealTo(cert, r.ws, r.id, fields)];
-      if (k.request.vault === "") k.request.vault = this.#vaultFor(lock, sub);
+    // A handover from an older station may contain a save not written yet. Until its scope can be recovered, keep the
+    // earlier lookup; reboxed has already scoped those it could find. New saves and handovers carry their own scope.
+    if (this.#unscopedSaves.size > 0) {
+      const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(lock.ws) as { body: string }[];
+      for (const row of rows) {
+        const r = JSON.parse(row.body) as Request;
+        if (this.#unscopedSaves.has(r.id) && r.save && r.owner !== undefined) this.#scopeSave(r.id, r.ws, r.owner);
+      }
+    }
+    // Request ids are ASCII ULIDs: retain the old workspace scan's primary-key order for notifications.
+    const requests = [...(this.#savesByOwner.get(lock.ws)?.get(email) ?? [])].sort();
+    for (const id of requests) {
+      const posting = this.#postingSaves.get(id);
+      if (posting !== undefined) this.#sealSave(posting, lock, cert, sub, email);
+      const row = this.#d.db.prepare("SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'").get(lock.ws, id) as { body: string; thread: number | null; card_ts: string | null } | undefined;
+      if (row === undefined) continue;
+      const k: Kept = { request: JSON.parse(row.body), thread: row.thread ?? null, cardTs: row.card_ts ?? null };
+      if (!this.#sealSave(k.request, lock, cert, sub, email)) continue;
       this.#save(k);
       this.#told(k.request);
     }
@@ -882,7 +959,7 @@ export class Secrets {
     k.request.status = status;
     if (into !== undefined) k.request.vault = into;
     this.#save(k);
-    this.#unsaved.delete(r.id);
+    this.#forgetSave(r.id);
     if (status !== "granted") this.keeper.drop(r.id);
     if (k.thread !== null && k.cardTs !== null) {
       this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);

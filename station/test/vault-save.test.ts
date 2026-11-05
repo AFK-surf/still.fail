@@ -300,6 +300,60 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
   }
 });
 
+test("a device registered while the save card is being posted can approve the secret", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    h.onPost(() => {
+      const other = w.cert(w.bob);
+      h.vaults.putBox(other);
+      h.secrets.boxed(w.state, other);
+      const cert = w.cert(w.alice);
+      h.vaults.putBox(cert);
+      h.secrets.boxed(w.state, cert);
+    });
+    const asked = h.secrets.save("s1", { name: "During post", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    assert.match(await asked, /You are told in this session when it is decided/);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.equal(request.sealed?.length, 1);
+    assert.deepEqual(opened(request, w.alice), { value: "sample" });
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a waiting save is available after a handover before requests are reboxed", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    await h.secrets.save("s1", { name: "Carried", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const next = h.make();
+    next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+    const cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    next.boxed(w.state, cert);
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(opened(request, w.alice), { value: "sample" });
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a failed save card does not leave the secret or its request box in memory", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    h.onPost(() => { throw new Error("post failed"); });
+    await assert.rejects(h.secrets.save("s1", { name: "Failed", kind: "token", reason: "test", value: "sample", cwd: h.dir }), /post failed/);
+    assert.deepEqual(h.secrets.carried().unsaved, []);
+    assert.deepEqual(h.secrets.carried().keeper.boxes, []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
 test("a secret to keep printed by a command: taken without being shown; a command that fails says so with it hidden", async () => {
   const w = world();
   const h = harness(() => w.state);
