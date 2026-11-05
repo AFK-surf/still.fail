@@ -87,7 +87,8 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : ((Double, MeasureMode, Double, MeasureMode) -> (Double, Double))?
-  mut layout_children : ((Double, Double, Double, Double) -> Unit)?
+  mut layout_children : ((Double, Double, Double, Double) -> Double)?
+  mut sized_by_children : Bool
   mut left : Double
   mut top : Double
   mut width : Double

@@ -693,11 +693,18 @@ fn size_uncached(
   let pbh = b.pbh()
   match node.layout_children {
     Some(layout) => {
+      // (given its width alone and tall as what it holds says: laid out as it is probed, in the same pass, its height
+      // its own as a leaf's measure is)
+      if node.sized_by_children && known(w) && !known(h) {
+        let said = layout(fmax(w - pbw, 0.0), undef, b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+        out_h.val = clamp_size((if known(said) { said } else { 0.0 }) + pbh, b.min_h, b.max_h)
+        return w
+      }
       // A viewport's intrinsic content is empty; its parent must give it the final bounds (flex share, explicit
       // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
       if perform {
         guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
-        layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+        layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t) |> ignore
       }
       out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
       return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }

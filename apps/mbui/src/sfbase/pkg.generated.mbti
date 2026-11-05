@@ -1478,7 +1478,7 @@ pub let send_flight : @signals.Signal[SendFlight?]
 
 pub fn send_flight_node(@view.View, String, (SendFlight) -> (@view.View, @view.View)?, quotes? : (SendFlight, String) -> @sf.QuoteCardNode?, files? : (SendFlight, String) -> FileLandingNode?) -> Unit
 
-pub fn send_list_rise(@view.View, String, (SendFlight) -> @view.View?) -> Double
+pub fn send_list_rise(@view.Laid, @view.View, String, (SendFlight) -> @view.View?) -> Double
 
 pub fn send_row_arrived(@view.View, String, String) -> Double
 

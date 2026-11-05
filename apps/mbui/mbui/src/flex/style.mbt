@@ -1011,9 +1011,12 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : MeasureFn?
-  // A bounded container that measures and places its own children. Called only for the final layout, with its
-  // content width/height and content origin; intrinsic size probes never build children.
-  mut layout_children : ((Double, Double, Double, Double) -> Unit)?
+  // A container that measures and places its own children, with its content width/height and content origin; what it
+  // gives back is how tall what it holds is (NaN: it says nothing). A bounded one is called only for the final layout;
+  // intrinsic size probes never build children. One `sized_by_children`, given its width and not its height, is called
+  // as it is probed too, and is as tall as it says (a list of files, a card as tall as its words).
+  mut layout_children : ((Double, Double, Double, Double) -> Double)?
+  mut sized_by_children : Bool
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1080,6 +1083,7 @@ pub fn Node::new() -> Node {
     children: [],
     measure: None,
     layout_children: None,
+    sized_by_children: false,
     left: 0.0,
     top: 0.0,
     width: 0.0,
