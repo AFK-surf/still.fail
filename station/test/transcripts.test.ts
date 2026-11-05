@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { zstdCompressSync } from "node:zlib";
 import { SEGMENT, framesOf, seekTable, segmented, segmentedSoon, unpackedWhole } from "../src/read/packed.ts";
 import { ChainTail, MARK_EVERY, PIECE, TranscriptTail } from "../src/read/tail.ts";
-import { READING, brief, readTimeline } from "../src/read/transcript.ts";
+import { READING, brief, readTimeline, scriptCalls } from "../src/read/transcript.ts";
 import { chainOf, entriesOf, forgetKept, lengthOf } from "../src/read/transcripts.ts";
 import { packFile, segmentFile } from "../src/sessions/archive.ts";
 
@@ -404,6 +404,16 @@ test("what a Codex script's calls are given, read from a mark after the script, 
   assert.deepEqual(chainOf("codex", [path], null)[0]!.state.inner, []);
   forgetKept();
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a Codex script's calls are read in a time that grows with it, not with its square: a long one in a page of a history", { timeout: 20_000 }, () => {
+  // Pages of a Codex history whose scripts were tens of KB took 1 to 3 s each to read on a station (2026-11-05), the
+  // rest of a script looked at again from each of its characters: one of 400 KB would take hours.
+  assert.deepEqual(scriptCalls('text( await tools.exec_command({"cmd":"ls"}) );'), [[["exec_command", { cmd: "ls" }]], true]);
+  assert.deepEqual(scriptCalls('text(  await\ttools.a({}))text()await;'), [[["a", {}]], true]);
+  assert.deepEqual(scriptCalls("tools.a({}); 😀text( 😀await)"), [[["a", {}]], false]);
+  const long = `const r = await tools.exec_command({"cmd":"ls"}); ${"const x = r.split('\\n').map((l) => l.trim());\n".repeat(8_000)}text(r);`;
+  assert.deepEqual(scriptCalls(long), [[["exec_command", { cmd: "ls" }]], false]);
 });
 
 test("where a reading stands goes to another thread: a tail made from it reads on as the one it was taken of, keeping none", () => {
