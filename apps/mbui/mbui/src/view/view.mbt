@@ -7236,7 +7236,8 @@ fn Tree::each_drawn_in_order(
 /// (x, y) and how big (s): what it says no to skipped whole, none of it visited. No order of every node is kept: what
 /// is gone through is what is there (retained.md rule 13). `from`: that node's subtree alone, what holds it composed as
 /// `held` says (where what holds it is in the window, how opaque, how big, and where it would be were nothing grown or
-/// shrunk nor drawn off), as one layer is gone through again.
+/// shrunk nor drawn off), as one layer is gone through again. `own`: `from` itself where `held` says (its own place,
+/// opacity and size: at 0, 0 for a layer gone through in its own terms, Tree::placed_in), not composed from it.
 fn Tree::walk_drawn(
   self : Tree,
   f : (Int, Int, Content, Double, Double, Double, Double, Double, Double) -> Unit,
@@ -7244,6 +7245,7 @@ fn Tree::walk_drawn(
   enter~ : (Int, Double, Double, Double, Bool) -> Bool,
   from? : Int = 0,
   held? : (Double, Double, Double, Double, Double, Double) = (0.0, 0.0, 1.0, 1.0, 0.0, 0.0),
+  own? : Bool = false,
 ) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live || from < 0 || from >= self.nodes.length() || !self.nodes[from].live {
     return
@@ -7284,14 +7286,15 @@ fn Tree::walk_drawn(
     } else {
       (ox, oy)
     }
-    let x = bx + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx)
-    let y = by + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy)
-    let a = ba * n.la
-    let s = bs * n.ls
+    let mine = own && at == from
+    let x = if mine { bx } else { bx + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx) }
+    let y = if mine { by } else { by + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy) }
+    let a = if mine { ba } else { ba * n.la }
+    let s = if mine { bs } else { bs * n.ls }
     // (and were nothing grown or shrunk nor drawn off: its words set on the pixels there, then drawn off by whole pixels,
     // as an old view's are painted where they are laid out and then moved by its look)
-    let ux = hx + n.lx
-    let uy = hy + n.ly
+    let ux = if mine { hx } else { hx + n.lx }
+    let uy = if mine { hy } else { hy + n.ly }
     let held = match n.content {
       Some(c) => {
         let i = count.val
