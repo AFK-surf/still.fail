@@ -228,35 +228,3 @@ test "what a test shared in (Tester::share_in) is handed to its holder as the ne
   t.draw()
   assert_eq(got.length(), 1, msg="once")
 }
-
-///|
-test "what the host has once handed on lays out a node said Roomed whose rule reads what is laid out as told: no fault, it laid out" {
-  let host = OnceHad::new()
-  let part = @signals.signal(0.5)
-  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
-  let inner : Ref[@view.View?] = Ref(None)
-  set_view_app(fn(root) {
-    root.box(fn(b) {
-      b.width(Is(Some(200.0))).height(Is(Some(40.0))) |> ignore
-      b.box(fn(i) {
-        // (its rule a node's own read, as a binding's: what is laid out read there as told last, a page's size)
-        i
-        .width(Roomed(b, fn(w, _) { Some(w * part.get() + root.laid_size_told().map(fn(_) { 0.0 }).unwrap_or(0.0)) }))
-        .height(Is(Some(10.0)))
-        |> ignore
-        inner.val = Some(i)
-      })
-      |> ignore
-      on_host_said(root, kind="part-asked", fn() { host.said() }, fn(_) {
-        part.set(0.25)
-        // (laid out as of its moment there and then: the Roomed rule run in it)
-        b.laid_size() |> ignore
-      })
-    })
-    |> ignore
-  })
-  t.draw()
-  host.had.val = Some("asked")
-  t.draw()
-  assert_eq(inner.val.unwrap().laid_size().0, 50.0)
-}

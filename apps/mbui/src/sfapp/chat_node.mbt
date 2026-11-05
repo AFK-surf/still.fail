@@ -42,7 +42,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       }))
       |> ignore
       let list = @sfpages.chat_list_node(l, src, r, view, fn() { list_top() }, list_room, settings_core(src, w),
-        foot_gap=list_foot())
+        foot_gap=list_foot(), composer_across=fn() { @sfpages.composer_width(width()) })
       latest.val = list.to_latest
       landing.val = list.landing_of
     })
