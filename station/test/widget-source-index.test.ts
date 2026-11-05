@@ -178,6 +178,26 @@ test("old widget preparation skips edits that are not messages", () => {
   assert.deepEqual([visited(40), visited(400)], [1, 1]);
 });
 
+test("old widget preparation orders message numbers numerically across batches", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    beforeIndex(db);
+    const thread = store.openThread("ember", "EMBER", "numbered", null, null).id;
+    store.joinThread(thread, "a", "ember");
+    const path = "/w/item.html";
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,?,'message','agent','a',?,?)`);
+    for (let n = 1; n <= 15; n++) {
+      const files = n === 2 || n === 9 ? JSON.stringify([{ path, name: `source-${n}` }]) : "[]";
+      put.run(thread, n, n, files);
+    }
+    installWidgetSources(db);
+    while (!widgetSourcesStep(db, thread, 3).done) {}
+    assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
+    assert.equal((db.prepare(WIDGET_SOURCE).get("a", path) as { name: string }).name, "source-9");
+  } finally { store.close(); }
+});
+
 for (const missing of [null, "entries_said", "entries_letters"] as const) {
   test(`old widget preparation keeps ordinary and letter messages${missing ? ` without ${missing}` : ""}`, () => {
     const store = Store.open(":memory:"), db = store.db;
