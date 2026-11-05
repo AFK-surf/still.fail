@@ -6,12 +6,14 @@ import { PhoneGrants } from "../src/adb/grants.ts";
 function fixture(pending: number, granted: boolean) {
   const db = new DatabaseSync(":memory:");
   let fetched = 0;
+  const queries: string[] = [];
   // Count rows actually returned to the grants reader, without changing its SQL or query plan.
   const traced = new Proxy(db, {
     get(target, property) {
       if (property === "prepare") return (sql: string) => {
         const statement = target.prepare(sql);
         if (!/FROM adb_requests WHERE session\s*=\s*\?/.test(sql)) return statement;
+        queries.push(sql);
         return new Proxy(statement, {
           get(s, p) {
             if (p === "all") return (...args: any[]) => { const rows = s.all(...args); fetched += rows.length; return rows; };
@@ -41,7 +43,7 @@ function fixture(pending: number, granted: boolean) {
   };
   for (let n = 0; n < pending; n++) add(`p-${n}`, "pending");
   if (granted) add("live", "granted");
-  return { db, grants, reset: () => { fetched = 0; }, fetched: () => fetched };
+  return { db, grants, queries, reset: () => { fetched = 0; queries.length = 0; }, fetched: () => fetched };
 }
 
 test("finding a held phone grant does not read the session's pending requests", () => {
@@ -68,4 +70,18 @@ test("reusing a pending phone request reads only the one it returns", async () =
     } finally { w.db.close(); }
   }
   assert.deepEqual(reads, [1, 1]);
+});
+
+test("phone request status reads seek the existing session and status index", async () => {
+  const w = fixture(3, false);
+  try {
+    w.reset();
+    await w.grants.ask("s", "again");
+    assert.equal(w.queries.length, 2);
+    for (const sql of w.queries) {
+      const plan = w.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("s").map((row) => row.detail).join(" | ");
+      assert.match(plan, /SEARCH adb_requests USING INDEX adb_requests_by_session \(session=\? AND status=\?\)/);
+      assert.doesNotMatch(plan, /TEMP B-TREE/);
+    }
+  } finally { w.db.close(); }
 });

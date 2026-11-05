@@ -59,9 +59,10 @@ function world() {
     notify: (_s: string, text: string) => void told.push(text),
   };
   let ids = 0;
-  const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
+  const db = new DatabaseSync(":memory:");
+  const grants = new PhoneGrants({ db, hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
   return {
-    grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
+    db, grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
     latestReads: () => latestReads,
     withoutOriginal: () => { originalJoined = false; },
     withoutChats: () => { hasChats = false; },
@@ -81,6 +82,24 @@ function world() {
     },
   };
 }
+
+test("phone request status stays consistent as it is asked, granted and ended", async () => {
+  const w = world();
+  try {
+    const status = () => {
+      const row = w.db.prepare("SELECT status,body FROM adb_requests WHERE id='p1'").get() as { status: string; body: string };
+      assert.equal(JSON.parse(row.body).status, row.status);
+      return row.status;
+    };
+    await w.grants.ask("s1", "debug the screen");
+    assert.equal(status(), "pending");
+    assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
+    assert.equal(status(), "granted");
+    w.pass(3600_000);
+    assert.deepEqual(w.grants.held("s1"), []);
+    assert.equal(status(), "ended");
+  } finally { w.db.close(); }
+});
 
 test("reusing a pending phone request does not find the latest of the session's other chats", async () => {
   const w = world();

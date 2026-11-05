@@ -179,6 +179,7 @@ export class PhoneGrants {
 
   /// The grants live for `session` (the agent's), and those of `owner` (their devices': which chats their phone is lent to).
   held(session: string): PhoneRequest[] {
+    // #save writes the indexed status and the body's status together, including for requests made by older stations.
     return this.#load("SELECT body FROM adb_requests WHERE session = ? AND status = 'granted'", session)
       .filter((r) => r.status === "granted" && this.#live(r));
   }
