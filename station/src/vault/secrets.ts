@@ -683,9 +683,8 @@ export class Secrets {
     const currentLock = () => {
       const current = this.#d.hub.store.getSession(session);
       if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone; nothing was kept.");
-      const next = this.#placeOf(session);
-      if (next.ws !== ws || this.#starter(session) !== email) throw new Refused("This chat's owner or workspace changed; nothing was kept.");
-      return next.lock;
+      if ((current.ws ?? this.#d.home()) !== ws || this.#starter(session) !== email) throw new Refused("This chat's owner or workspace changed; nothing was kept.");
+      return this.#d.lock(current.ws ?? null);
     };
     currentLock();
     let thread = this.#latestThreadReady(session);

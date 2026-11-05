@@ -117,7 +117,8 @@ function waitingVault() {
   return { db, dir, gate, cookies, secrets, posts, prepared: () => prepared, captured: () => captured,
     ready: () => { ready = true; }, remove: () => { present = false; },
     move: () => { workspace = "other"; }, changeOwner: () => { owner = "other@example.test"; },
-    lockWithoutOwner: () => { lock = { members: new Map() }; } };
+    lockWithoutOwner: () => { lock = { members: new Map() }; },
+    lockWithOwner: () => { lock = { ws: "w", members: new Map([["p", { sub: "p", email: "p@example.test" }]]), devices: new Map() }; } };
 }
 
 function noRequest(w: ReturnType<typeof waitingVault>) {
@@ -163,6 +164,20 @@ test("a secret save does not survive deletion or a change of workspace, owner or
       noRequest(w);
     } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
   }
+});
+
+test("a secret save uses security mode enabled while its chat order is prepared", async () => {
+  const w = waitingVault();
+  try {
+    const asking = w.secrets.save("s", { name: "new key", kind: "token", reason: "test", value: "fake", cwd: w.dir });
+    w.lockWithOwner(); w.ready(); w.gate.resolve();
+    await asking;
+    const row = w.db.prepare("SELECT body FROM vault_requests").get() as { body: string };
+    const request = JSON.parse(row.body);
+    assert.equal(request.vault, "", "the owner has no vault set up yet");
+    assert.notEqual(request.box, "", "the request is for a vault, not the plain library");
+    assert.equal(w.secrets.carried().keeper.boxes.length, 1);
+  } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
 });
 
 test("a ready secret request does not prepare the chat order", async () => {
