@@ -200,6 +200,37 @@ test("the activity worker prepares old recovery waits after handover without hol
   }
 });
 
+test("the activity worker prepares old awake deadlines after handover", async () => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { setTimeout: pause } = await import("node:timers/promises");
+  const { buildWorkspaceActivity } = await import("../src/sessions/workspace-activity-builder.ts");
+  const { awakeWaitsReady } = await import("../src/store/awake-waits.ts");
+  const dir = mkdtempSync(join(tmpdir(), "awake-waits-"));
+  const store = Store.open(join(dir, "station.db"));
+  let builder: ReturnType<typeof buildWorkspaceActivity> | null = null;
+  try {
+    const db = store.db;
+    store.insertSession({ key: "waiting", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: "waiting", createdAt: 1, lastActiveAt: 1, ws: "W" });
+    db.prepare("INSERT INTO turns(id,session_key,kind,started_at,ended_at,outcome,declared,wait_seconds) VALUES ('t','waiting','user',0,1,'completed','waiting',600)").run();
+    db.exec("UPDATE session_recover_waits SET awake_deadline=NULL; UPDATE session_awake_wait_meta SET cursor=NULL, complete=0 WHERE id=1");
+    const previous = Promise.withResolvers<void>();
+    builder = buildWorkspaceActivity(store, previous.promise);
+    assert.equal(await builder.ready, true);
+    assert.equal(store.awakeWait(100_000, 60_000), true, "the original comparison remains available during preparation");
+    assert.equal(awakeWaitsReady(db), false);
+    previous.resolve();
+    while (!awakeWaitsReady(db)) await pause(10);
+    assert.equal(store.awakeWait(100_000, 60_000), true);
+  } finally {
+    await builder?.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("rejoining reads the active index and pending deliveries from one snapshot", async () => {
   const { DatabaseSync } = await import("node:sqlite");
   const { mkdtempSync, rmSync } = await import("node:fs");

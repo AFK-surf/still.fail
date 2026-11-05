@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { working } from "../src/ops/awake.ts";
 import { RECOVER_AWAKE_WAITS } from "../src/store/recover-waits.ts";
+import { AWAKE_WAIT_STATUS } from "../src/store/awake-waits.ts";
 import { LAST_TURN_OF_SESSION, LIVE_SESSIONS, Store } from "../src/store/store.ts";
 
 test("the periodic awake check does not inspect idle sessions to find a waiting turn", () => {
@@ -18,6 +19,7 @@ test("the periodic awake check does not inspect idle sessions to find a waiting 
         if (sql === LIVE_SESSIONS) return target.prepare(sql.replace("WHERE archived_at IS NULL", "WHERE awake_session_seen(key) AND archived_at IS NULL"));
         if (sql === LAST_TURN_OF_SESSION) return target.prepare(sql.replace("WHERE s.key = ?", "WHERE awake_turn_seen(s.key) AND s.key = ?"));
         if (sql === RECOVER_AWAKE_WAITS) return target.prepare(sql.replace("WHERE s.archived_at IS NULL", "WHERE awake_candidate_seen(w.session) AND s.archived_at IS NULL"));
+        if (sql === AWAKE_WAIT_STATUS) return target.prepare(sql.replace("WHERE deadline > ?", "WHERE deadline > ? AND awake_candidate_seen(session)"));
         return target.prepare(sql);
       };
       const value = Reflect.get(target, property, target);
