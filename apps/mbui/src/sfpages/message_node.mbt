@@ -507,8 +507,10 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
       say(place())
     })
   })
-  // (its files, as the composer held them, and what of them still goes up)
+  // (its files, as the composer held them, and what of them still goes up: across the column, which lines what it
+  // holds up at its end, as wide as the column they are laid out by; at its end in it)
   col.show(fn() { !(row.files)().is_empty() }, fn(fs) {
+    fs.width_share(Is(1.0)) |> ignore
     message_files_node(fs, src, here, row.files, true, at=row.files_at, by=fn() {
       let ts = (row.ts)()
       if ts == "" { None } else { Some((@sf.t("web-main.chat.you"), "person", ts)) }
@@ -888,12 +890,11 @@ fn quotes_node(
             }
           }
           // (as wide as the card may be, not as its words are: what the viewer sends may be (the pane's, as the
-          // composer sets it), else the message's column; less the card's own room)
+          // composer sets it), else the message's column as it is laid out; less the card's own room)
           let most = fn() {
-            if mine {
-              Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
-            } else {
-              col_w.map(@sf.quote_picture_room)
+            match col_w {
+              Some(w) => @sf.quote_picture_room(w)
+              None => @sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side)
             }
           }
           message_files_node(pv, src, here, own, false, at=fn() { at() + "/q:" + i.to_string() }, corner=@sf.quote_picture_corner, most~, landed=fn(k, l) {

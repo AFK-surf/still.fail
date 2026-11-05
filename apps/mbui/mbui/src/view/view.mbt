@@ -876,6 +876,8 @@ struct Bound {
   /// what is laid out after all else is about to be: `laid`), never pulled before
   placed : Bool
   laid : Bool
+  /// what it is, as a refusal or what is left owed names it (Tree::owes_why)
+  about : () -> String
 }
 
 ///|
@@ -1945,7 +1947,7 @@ fn[T] Tree::queued(
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  }, unmarked: fn() {  }, placed: placed || laid, laid }
+  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  }, unmarked: fn() {  }, placed: placed || laid, laid, about }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
   let k = self.pulls_made
@@ -6954,6 +6956,47 @@ fn Tree::owes(self : Tree) -> Bool {
   self.laid_due.iter().any(fn(b) { b.queued }) ||
   !self.places_due.is_empty() ||
   !self.looks_due.is_empty()
+}
+
+///|
+/// What is left owed once a pass of the tree's is done (Tree::owes), each named (a binding by what it is): what asks the
+/// frame after it, said where a test finds a frame asked for at rest. "": nothing.
+pub fn Tree::owes_why(self : Tree) -> String {
+  let why = []
+  if self.layout_due {
+    why.push("its layout")
+  }
+  if self.lists_due {
+    why.push("a windowed list or what is made by its room")
+  }
+  if self.laid_afters_due {
+    why.push("what is laid out after all else")
+  }
+  if self.order_due {
+    why.push("its order")
+  }
+  let named = fn(what : String, bs : Array[Bound]) {
+    let queued = bs.filter(fn(b) { b.queued })
+    if queued.length() > 0 {
+      why.push(what + ": " + queued.map(fn(b) { (b.about)() }).join(", "))
+    }
+  }
+  named("bindings", self.bindings_due)
+  named("worked out as it is placed", self.placed_due)
+  named("worked out as it is laid out after all else", self.laid_due)
+  if !self.places_due.is_empty() {
+    why.push("places of \{self.places_due.length()}")
+  }
+  if !self.looks_due.is_empty() {
+    why.push("looks of \{self.looks_due.length()}")
+  }
+  if self.drawn_due {
+    why.push("what a cause laid out and placed, to be drawn")
+  }
+  if self.due && why.is_empty() {
+    why.push("marked, nothing named left owed")
+  }
+  why.join("; ")
 }
 
 ///|

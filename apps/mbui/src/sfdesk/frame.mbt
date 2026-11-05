@@ -681,9 +681,10 @@ pub let tape_shows : Double = 56.0
 /// side panel in use): tape_shows; where the window's buttons are in the app's top row there (a Mac's, not full
 /// screen), as wide as holds them with as much room past them as before them from the window's edge (the strip's own
 /// edge is off it), so they stand on what is at the window's left, in use or a strip, never over the panel beside it
-/// (the user, 2026-10-26: 红绿灯没有一个空位可以放).
+/// (the user, 2026-10-26: 红绿灯没有一个空位可以放). Followed where a node of the window's tree reads it (the tape's room,
+/// what the frame gives a page as its width): the window's buttons as the frame began (@ui.window_keys_left_now).
 pub fn tape_shows_left() -> Double {
-  if @ui.window_keys_left() {
+  if @ui.window_keys_left_now() {
     dmax(tape_shows, window_buttons_in + window_buttons_w + window_buttons_in)
   } else {
     tape_shows
@@ -695,9 +696,9 @@ pub fn tape_shows_left() -> Double {
 /// panel's, the page in use): tape_shows; where the window's buttons are the app's, at its right (Windows'), as wide
 /// as holds them (@sf.window_keys_room_tape: from the window's side to before their rule) with the panels' 6 past
 /// them, so they stand on what is at the window's right, in use or a strip, never over the panel beside it, as a Mac's
-/// at its left (tape_shows_left).
+/// at its left (tape_shows_left), followed as it is.
 pub fn tape_shows_right() -> Double {
-  if @ui.window_keys_own() {
+  if @ui.window_keys_own_now() {
     dmax(tape_shows, @sf.window_keys_room_tape() + @sf.window_in)
   } else {
     tape_shows

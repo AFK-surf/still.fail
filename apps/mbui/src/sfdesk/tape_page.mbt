@@ -350,7 +350,9 @@ fn tape_made(
           fn(v : @view.View, _page, _under, _stint, k : Int) {
             v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             context_node(v)
-            chat_root_node(v, src, r, k, width, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+            // (as wide as the tape lays the stack out in the page's panel as it is drawn: the panel less the ground it has
+            // under the system's column, tape_page_pane; not a page's at rest, which a chat's composer would stand out of)
+            chat_root_node(v, src, r, k, fn() { tape_page_at(tape_drawn_at(v)) }, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
           },
         ),
       )
@@ -363,7 +365,7 @@ fn tape_made(
             v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             context_node(v)
             history_beside(src, r, key, entry)
-            chat_root_node(v, src, r, k, width, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+            chat_root_node(v, src, r, k, fn() { tape_page_at(tape_drawn_at(v)) }, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
           },
         ),
       )

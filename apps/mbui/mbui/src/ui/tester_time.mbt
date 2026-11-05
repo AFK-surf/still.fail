@@ -242,7 +242,10 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
       } else if watch_said.val != "" {
         " (\{watch_said.val})"
       } else {
-        ""
+        match view_tree() {
+          Some(tree) if tree.owes_why() != "" => " (the window's tree owes \{tree.owes_why()})"
+          _ => ""
+        }
       }),
     )
   } else if layout_left() {

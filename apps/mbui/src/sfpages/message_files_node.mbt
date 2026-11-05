@@ -8,8 +8,10 @@
 /// `by` whose and when (what quoting one says), `at` where in the chat it is (its preview's place); `landed` told each
 /// one's landing by its key as it is made and let go; `corner` its pictures' (a quote's own: @sf.quote_picture_corner);
 /// `by` whose message it is, their role and its ts (what quoting one of them says; none: not quoted from here); `most`
-/// how wide they may be where what holds them is as wide as they are (a quote's card: none, the column's). Made by the
-/// room they are laid out in (View::by_room): drawn as wide as that lets them, made again as it changes.
+/// how wide they may be where what holds them is as wide as they are (a quote's card, as wide as what it holds: their
+/// row made in it, as wide as they come to). None: the column's, `col` as wide as it (what holds `col` gives it that
+/// width): made by the room they are laid out in (View::by_room, which holds nothing in its flow), drawn as wide as
+/// that lets them, made again as it changes.
 fn message_files_node(
   col : @view.View,
   src : Source,
@@ -20,47 +22,51 @@ fn message_files_node(
   landed? : (String, @sfbase.FileLandingNode?) -> Unit = fn(_, _) {  },
   corner? : Double = @sf.message_file_corner,
   by? : () -> (String, String, String)? = fn() { None },
-  most? : () -> Double? = fn() { None },
+  most? : () -> Double,
 ) -> Unit {
   col.box(fn(holder) {
-    // (as wide as they may be: what holds them where it is as wide as they are, else the column's as it is laid out)
-    holder.by_room(fn(w) { most().unwrap_or(w) }, fn(flow, room_w) {
-    flow
-    .row(Is(true))
-    .gap(Is(files_gap))
-    .wraps(Is(Some(files_gap)))
-    .lies_along(Is(if mine { End } else { Start }))
-    .lines_up(Is(Some(Start)))
-    |> ignore
-    let room = fn() { room_w }
-    flow.each(fn() { list().map(fn(a) { @sfbase.file_key(a) }) }, fn(k) { k }, fn(item, k) {
-      let key = @signals.untracked(fn() { k.get() })
-      // (as it is now; as it last was while it goes)
-      let last : Ref[Attachment?] = Ref(None)
-      let a = fn() {
-        match list().iter().find_first(fn(x) { @sfbase.file_key(x) == key }) {
-          Some(x) => {
-            last.val = Some(x)
-            x
+    let made = fn(flow : @view.View, room_w : () -> Double) {
+      flow
+      .row(Is(true))
+      .gap(Is(files_gap))
+      .wraps(Is(Some(files_gap)))
+      .lies_along(Is(if mine { End } else { Start }))
+      .lines_up(Is(Some(Start)))
+      |> ignore
+      let room = room_w
+      flow.each(fn() { list().map(fn(a) { @sfbase.file_key(a) }) }, fn(k) { k }, fn(item, k) {
+        let key = @signals.untracked(fn() { k.get() })
+        // (as it is now; as it last was while it goes)
+        let last : Ref[Attachment?] = Ref(None)
+        let a = fn() {
+          match list().iter().find_first(fn(x) { @sfbase.file_key(x) == key }) {
+            Some(x) => {
+              last.val = Some(x)
+              x
+            }
+            None => last.val.unwrap()
           }
-          None => last.val.unwrap()
         }
-      }
-      let kind = @signals.untracked(fn() { file_kind(a().name) })
-      match kind {
-        "image" | "video" => {
-          let landing = media_file_node(item, src, here, a, kind, room, at, corner, by)
-          landed(key, Some(landing))
+        let kind = @signals.untracked(fn() { file_kind(a().name) })
+        match kind {
+          "image" | "video" => {
+            let landing = media_file_node(item, src, here, a, kind, room, at, corner, by)
+            landed(key, Some(landing))
+          }
+          _ => {
+            let landing = card_file_node(item, src, here, a, room, at, by)
+            landed(key, Some(landing))
+          }
         }
-        _ => {
-          let landing = card_file_node(item, src, here, a, room, at, by)
-          landed(key, Some(landing))
-        }
-      }
-      item.owns(fn() { landed(key, None) }) |> ignore
-    })
-    })
-    |> ignore
+        item.owns(fn() { landed(key, None) }) |> ignore
+      })
+    }
+    match most {
+      // (as wide as they may be in what is as wide as they are: their row in it, as wide as they come to)
+      Some(most) => holder.box(fn(flow) { made(flow, most) }) |> ignore
+      // (the column's, as it is laid out)
+      None => holder.by_room(fn(w) { w }, fn(flow, room_w) { made(flow, fn() { room_w }) }) |> ignore
+    }
   })
   |> ignore
 }

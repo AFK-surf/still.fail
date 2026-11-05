@@ -304,6 +304,16 @@ let seg_lens_shadow : Double = 6.0
 let seg_lens_shadow_y : Double = 2.0
 
 ///|
+/// What a narrow page's choice's thumb and lens are doing (seg_fill_node's): a finger held on an option, how far the
+/// lens is out, the cover's way and what it set out from. Made once with it, whatever its options are made again for.
+priv struct SegFillState {
+  fingered : @signals.Signal[Int]
+  held : EdgeWay
+  cover : @signals.Signal[(Array[(Int, Double)], Int)]
+  way : EdgeWay
+}
+
+///|
 /// A narrow page's choice of a few (seg's filling Seg, as nodes: segmented's on a narrow page) in `parent`: as wide as
 /// where it is, `labels` sharing it alike, none narrower than its words with their sides (fitted: where they need more,
 /// their sides narrower, else their words smaller alike, else the chosen one alone with a chevron, the others in a pick a
@@ -323,6 +333,15 @@ pub fn seg_fill_node(
   choose : (Int) -> Unit,
   said? : String = "",
 ) -> @view.View {
+  // (what its thumb and its lens are doing, made once with it: a finger held on an option, how far the lens is out, the
+  // cover's way and what it set out from; never made again with its options as the room they share changes)
+  let first = @signals.untracked(chosen)
+  let state : SegFillState = {
+    fingered: @signals.signal(-1),
+    held: EdgeWay::new(0.0),
+    cover: @signals.signal(([(first, 1.0)], first)),
+    way: EdgeWay::new(1.0),
+  }
   parent.box(fn(track) {
     track.radius(Is(seg_radius)).ground(By(fn() { alpha(theme().p.text, 0.06) })) |> ignore
     // how its options share the room its track is laid out in, as seg's: where their words with their sides come to
@@ -342,7 +361,7 @@ pub fn seg_fill_node(
           None
         }
       },
-      fn(inner, fit) { seg_fill_fitted(inner, labels, chosen, choose, fit, said) },
+      fn(inner, fit) { seg_fill_fitted(inner, labels, chosen, choose, fit, said, state) },
     )
     |> ignore
   })
@@ -359,6 +378,7 @@ fn seg_fill_fitted(
   choose : (Int) -> Unit,
   fit : Fitted?,
   said : String,
+  state : SegFillState,
 ) -> Unit {
     let menu = fit is Some({ fit: Menu, .. })
     let widths = match fit {
@@ -368,6 +388,17 @@ fn seg_fill_fitted(
     let smaller = match fit {
       Some({ fit: Smaller(k), .. }) => k
       _ => 1.0
+    }
+    // (the chosen one alone: no thumb, no lens; side by side again, the thumb at the one chosen then, as an old view's
+    // cover not drawn in the frame before is)
+    if menu {
+      @signals.untracked(fn() {
+        let k = chosen()
+        state.fingered.set(-1)
+        state.held.put(0.0)
+        state.cover.set(([(k, 1.0)], k))
+        state.way.put(1.0)
+      })
     }
     let options : Array[@view.View] = []
     let track = inner
@@ -421,9 +452,9 @@ fn seg_fill_fitted(
       let x_of = fn(k : Int) { seg_inset + options.get(k).map(fn(o) { o.laid_place_now().0 }).unwrap_or(0.0) }
       // (a finger held on an option, where glass is not drawn solid: the thumb there, a lens over it; the one chosen
       // only as it is let go on it, @kit.toggle_group's)
-      let fingered : @signals.Signal[Int] = @signals.signal(-1)
+      let fingered = state.fingered
       let lensed = fn() { !@ui.current().glass_solid() && fingered.get() >= 0 }
-      let held = EdgeWay::new(0.0)
+      let held = state.held
       strip.reacts(lensed, fn(down) { held.go_by(strip, if down { 1.0 } else { 0.0 }, @motion.lift_spring) })
       let lens = fn() { if @ui.current().glass_solid() { 0.0 } else { held.shown(strip) } }
       // the thumb's and the lens's cover (@ui.Ctx::cover's): the item it goes to, what it set out from (items by their
@@ -431,9 +462,8 @@ fn seg_fill_fitted(
       // that moment; where it is drawn the blend of where those items are laid out as it is drawn (moved or resized
       // meanwhile: with them)
       let at = fn() { if lensed() { fingered.get() } else { chosen() } }
-      let first = @signals.untracked(at)
-      let cover : @signals.Signal[(Array[(Int, Double)], Int)] = @signals.signal(([(first, 1.0)], first))
-      let way = EdgeWay::new(1.0)
+      let cover = state.cover
+      let way = state.way
       strip.reacts(at, fn(k) {
         let (from, to) = @signals.untracked(fn() { cover.get() })
         if k != to {
