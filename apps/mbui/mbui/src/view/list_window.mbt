@@ -485,9 +485,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let top = index.val.top(i)
     let to = dmax(0.0, if known { top + past } else { top })
     anchor.val = Some((k, top))
-    s.x.set(to)
-    // (let go once it is laid out as it is and can go there: what shows all laid out as it is, by then)
+    // (as far toward it as it can go as it is counted now: where it rests within that, as its layout keeps it (the
+    // end of lay_now), there while it may go no further, never put past it to be taken back)
     let most = dmax(0.0, extent_now() - vh)
+    s.x.set(dmin(to, most))
+    // (let go once it is laid out as it is and can go there: what shows all laid out as it is, by then)
     let inside = offset >= 0.0 || -offset < h
     if known && inside && to <= most + 0.5 {
       held_at.val = None
