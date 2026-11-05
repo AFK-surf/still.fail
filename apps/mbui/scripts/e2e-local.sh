@@ -22,6 +22,7 @@
 #   scripts/e2e-local.sh peer-said WORD   until that output has a line beginning WORD: SAY its first field (a code)
 #   scripts/e2e-local.sh peer-wait  until that peer has ended (its output; fails as it failed)
 #   scripts/e2e-local.sh android-pin PIN   the emulator's screen lock set to PIN (a phone with a lock, as the vault needs)
+#   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
 #   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
@@ -367,7 +368,18 @@ console.log('STATIONS ' + s.stations.size);
 " "$f")
 }
 
-# the emulator's screen lock (EMU_PORT): a PIN set, as a person's phone has one (what the vault's box key asks for)
+# the emulator's screen lock (EMU_PORT): a PIN set, as a person's phone has one (what the vault's box key asks for);
+# `android-unlock PIN`: the system's prompt for it (BiometricPrompt, the device's credential) answered with it
+# (the prompt's PIN field focused, as the system's own view tree says it: a fact of its state, read until so; the
+# prompt's window is secure, no picture of it)
+android_unlock() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}" i
+  for i in $(seq 1 60); do
+    $adb exec-out uiautomator dump /dev/tty 2>/dev/null | grep -q 'resource-id="com.android.systemui:id/lockPassword"[^>]*focused="true"' && {
+      $adb shell input text "$1" && $adb shell input keyevent 66; echo "UNLOCK typed"; return 0; }
+  done
+  echo "UNLOCK no prompt"; return 1
+}
 android_pin() {
   local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}"
   $adb shell locksettings set-pin "$1" >/dev/null 2>&1 || $adb shell locksettings verify --old "$1" >/dev/null
@@ -657,6 +669,7 @@ case "${1:-all}" in
   peer-bg) shift; peer_bg "$@" ;;
   peer-said) shift; peer_said "$@" ;;
   peer-wait) peer_wait ;;
+  android-unlock) android_unlock "$2" ;;
   lock-state) lock_state ;;
   android-pin) shift; android_pin "$@" ;;
   android-tap) shift; "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s emulator-${EMU_PORT:-5586} shell input tap "$@" ;;

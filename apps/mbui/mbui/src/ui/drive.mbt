@@ -25,7 +25,8 @@
 //                               composer over a list's last row, a sheet); tap1 TEXT the highest
 //   tapxy X Y                   taps there (negative: from the right, the bottom)
 //   hold MS TEXT                pressed on TEXT for MS, then let go (a long press)
-//   type TEXT                   committed by the input method      mark TEXT    composed (not yet committed)
+//   type TEXT                   committed by the input method (the next step once they are in a field)
+//   mark TEXT                   composed (not yet committed)
 //   enter                       backspace                 back       the system's back
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
@@ -161,6 +162,11 @@ priv struct Driver {
   dir : String
   // the app's events (Ctx::say) the run's `said` lines have taken: those before this one
   mut said_taken : Int
+  // words a `type` sent the way the system does (the input method's, @hostapi.drive), not yet in a field: the next
+  // step waits for them there ("" none). The host hands them on to the app later, as their own event; a tap taken
+  // before them moved the focus, and they went into the field it focused (2026-11-05, the vault's editor on Android:
+  // a host's words in the name's field)
+  mut typed : String
 }
 
 ///|
@@ -287,6 +293,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     seen_frame: -1,
     dir,
     said_taken: 0,
+    typed: "",
   })
   let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
   h_log("DRIVE start: \{steps.length()} lines" + watched)
@@ -857,6 +864,16 @@ fn drive_steps(c : Ctx) -> Unit {
       d.mark = runtime().outside_ended()
       d.shown_mark = d.shown
     }
+    if d.typed != "" {
+      if fields_hold(c, d.typed) {
+        d.typed = ""
+      } else if waited > d.timeout {
+        drive_fail(c, d, "the words typed (\"\{d.typed}\") never reached a field after \{d.timeout.to_int()} ms")
+        return
+      } else {
+        return
+      }
+    }
     match cmd {
       "" => next()
       _ if cmd.has_prefix("#") => next()
@@ -1019,7 +1036,11 @@ fn drive_steps(c : Ctx) -> Unit {
               // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
               words if cmd == "typedone" && words.has_prefix("ok ") => {
                 let typed = words.view(start_offset=3).to_string()
-                if !h_drive(0, typed) {
+                if h_drive(0, typed) {
+                  if c.editors.contains(c.focus) {
+                    d.typed = typed
+                  }
+                } else {
                   on_text(0, typed, 0, 0)
                 }
                 acted()
@@ -1207,7 +1228,12 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "type" => {
-        if !h_drive(0, arg) {
+        if h_drive(0, arg) {
+          // (into a field: what a key catcher takes, a remote screen's, is in none)
+          if c.editors.contains(c.focus) {
+            d.typed = arg
+          }
+        } else {
           on_text(0, arg, 0, 0)
         }
         acted()
