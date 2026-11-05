@@ -93,3 +93,33 @@ test("latest conversation preparation shares the copy worker and lets a short se
     assert.equal(ccSessionReady(store.db, "long"), true);
   } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("cancelling latest conversation preparation leaves a copy request for the same session waiting", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "latest-thread-cancel-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>(), cancel = new AbortController();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store); installLatestThreadIndex(store.db);
+    const stopped = builder.readyLatest(["short"], cancel.signal), kept = builder.ready(["short"]);
+    cancel.abort(); await assert.rejects(stopped, /read cancelled/);
+    previous.resolve(); await kept;
+    assert.equal(ccSessionReady(store.db, "short"), true);
+    assert.equal(latestThreadReady(store.db, "short"), false);
+  } finally { cancel.abort(); previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a stopped shared worker resumes latest conversation preparation", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "latest-thread-worker-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const file = join(dir, "worker.mjs"), marker = join(dir, "exited");
+  const real = new URL("../src/read/cc-index-worker.ts", import.meta.url).href;
+  writeFileSync(file, `import { existsSync, writeFileSync } from 'node:fs';\nif (!existsSync(${JSON.stringify(marker)})) { writeFileSync(${JSON.stringify(marker)}, '1'); process.exit(1); }\nawait import(${JSON.stringify(real)});\n`);
+  const builder = new CcIndexBuilder(path, {}, pathToFileURL(file));
+  try {
+    oldSessions(store); installLatestThreadIndex(store.db);
+    await builder.readyLatest(["short"]);
+    assert.ok(existsSync(marker));
+    assert.equal(latestThreadReady(store.db, "short"), true);
+  } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
