@@ -26,7 +26,7 @@ export type Carried = { boxes: [string, string][]; held: Held[] };
 
 /// What a keeper is told of: whether a session's chat is over (archived or gone), and where its grants are kept
 /// across restarts (`save` each grant taken or used, `forget` each one gone).
-export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(id: string): void } };
+export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(h: Held): void } };
 
 /// Whether `host` is one of `patterns`: the same name, or under a `*.` pattern's domain (not the domain itself).
 export function hostAllowed(host: string, patterns: string[]): boolean {
@@ -85,7 +85,11 @@ export class Keeper {
     const timer = this.#timers.get(id);
     if (timer !== undefined) timer();
     this.#timers.delete(id);
-    if (this.#held.delete(id)) this.#d.kept?.forget(id);
+    const h = this.#held.get(id);
+    if (h !== undefined) {
+      this.#held.delete(id);
+      this.#d.kept?.forget(h);
+    }
   }
 
   /// A box for request `id`'s secret: its public half, to be sealed to; the private half stays here.
