@@ -44,7 +44,6 @@ const memberConflictSession = (extra: string) => `(SELECT session FROM thread_se
 const markOrder = (thread: string) => {
   const many = `EXISTS (SELECT 1 FROM recent_scope_rows INDEXED BY recent_scope_rows_thread WHERE thread = ${thread} LIMIT 1 OFFSET 64)`;
   return `
-    UPDATE recent_scope_order_dispatch SET after_ws = NULL WHERE thread = ${thread};
     INSERT INTO recent_scope_order_dirty(ws, thread)
       SELECT r.ws, r.thread FROM (SELECT ws, thread FROM recent_scope_rows INDEXED BY recent_scope_rows_thread
         WHERE thread = ${thread} ORDER BY ws LIMIT 64) r
@@ -117,11 +116,12 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
           ${markMember("NEW.thread", "NEW.session")}
       END;
       CREATE TRIGGER recent_scope_member_drop BEFORE DELETE ON thread_sessions BEGIN ${markMember("OLD.thread", "OLD.session")} END;
-      CREATE TRIGGER recent_scope_order_row_add AFTER INSERT ON recent_scope_rows BEGIN
-        UPDATE recent_scope_order_dispatch SET after_ws = NULL WHERE thread = NEW.thread;
-      END;
-      CREATE TRIGGER recent_scope_order_row_drop AFTER DELETE ON recent_scope_rows BEGIN
-        UPDATE recent_scope_order_dispatch SET after_ws = NULL WHERE thread = OLD.thread;
+      -- Rows inserted behind a running distributor's cursor must also be marked. Existing dirty rows remain
+      -- pending until this thread's distribution finishes, so another message need not restart the scan.
+      CREATE TRIGGER recent_scope_order_row_add AFTER INSERT ON recent_scope_rows
+        WHEN EXISTS (SELECT 1 FROM recent_scope_order_dispatch WHERE thread = NEW.thread) BEGIN
+        INSERT INTO recent_scope_order_dirty(ws, thread) SELECT NEW.ws, NEW.thread WHERE NOT EXISTS
+          (SELECT 1 FROM recent_scope_order_dirty WHERE ws = NEW.ws AND thread = NEW.thread);
       END;
       CREATE TRIGGER recent_scope_order_thread_before_add BEFORE INSERT ON threads BEGIN
         ${markOrder("NEW.id")} ${markOrder(displacedThread)}
