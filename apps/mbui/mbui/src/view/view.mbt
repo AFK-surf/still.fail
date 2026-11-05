@@ -2097,9 +2097,7 @@ fn Tree::layout_read(self : Tree, what : String, loc : SourceLoc) -> Unit {
       None => ""
     }
     let s = "\{what} read at \{loc} in \{by}\{reader}: where things are laid out is read as the tree is placed, painted, at a cause or once a change is committed, never by what makes, lays out or says something, its change never told it (docs/retained.md rule 10)"
-    // (said where the test that ran into it says what failed, as a trap says nothing of why)
-    println(s)
-    abort(s)
+    read_fault(s)
   }
 }
 
@@ -2498,8 +2496,7 @@ fn Tree::laid_bounds_run(self : Tree, all : Bool) -> Unit {
 /// back within the frame (docs/retained.md rule 10). `what`: what it was given for.
 fn laid_refused(what : String) -> Unit {
   let s = "\{what} worked out of where things are laid out (Live's Placed): layout goes one way, read by placing and painting alone, never by what it lays out or makes (docs/retained.md rule 10)"
-  println(s)
-  abort(s)
+  read_fault(s)
 }
 
 ///|

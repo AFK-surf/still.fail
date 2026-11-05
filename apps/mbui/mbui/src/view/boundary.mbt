@@ -37,6 +37,20 @@ pub fn fault(said : String) -> Unit {
 }
 
 ///|
+/// What goes back within the frame, said (docs/retained.md rule 10: where things are laid out read by what makes, lays
+/// out or says something, Tree::layout_read; what the pointer is over read by what lays out, places or makes,
+/// Tree::pointer_read): a fault. In a test and a tool it stops the run where it is read, said first where the test that
+/// ran into it says what failed (a trap says nothing of why); in an app's run on a host it is told once (the host's
+/// error report) and read on as it is, followed by nothing: what read it shows what it was then, the app never stopped
+/// for it.
+fn read_fault(said : String) -> Unit {
+  if faults_stop.val {
+    println(said)
+  }
+  fault(said)
+}
+
+///|
 /// A fault under node `id` (fault): told to the nearest boundary holding it, if one does and it is alive.
 pub fn Tree::fault(self : Tree, id : NodeId, said : String) -> Unit {
   fault(said)

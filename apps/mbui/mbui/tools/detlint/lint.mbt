@@ -333,12 +333,15 @@ fn lint_mbt(
     // where or how large something was laid out, read back by what builds (a first frame has none, a change lays the
     // frame out twice): said as layout instead; the framework's own not counted. An old view's (a Ctx's, of a box by its
     // id) alone: what the window's tree reads of itself (a View's, of no id) is held by the tree as it is read
-    // (Tree::layout_read: refused in what is followed to make, lay out or say something; mbui's docs/retained.md rule 10)
-    if layout_read_back.contains(c.name) &&
-      c.kind == "method" &&
+    // (Tree::layout_read: refused in what is followed to make, lay out or say something; mbui's docs/retained.md rule 10);
+    // and what an old view reads of the box it is laid out in (Ctx::old_given), of no id
+    if c.kind == "method" &&
       app &&
       !in_t &&
-      c.args.iter().any(fn(a) { a.0 is None }) {
+      (
+        (layout_read_back.contains(c.name) && c.args.iter().any(fn(a) { a.0 is None })) ||
+        old_read_back.contains(c.name)
+      ) {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was

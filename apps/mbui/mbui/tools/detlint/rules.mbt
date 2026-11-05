@@ -70,6 +70,11 @@ let built_by_hand : Array[String] = ["forget_parts", "built_from_changed"]
 let layout_read_back : Array[String] = ["rect_of", "laid_size", "laid_rect"]
 
 ///|
+/// a Ctx's reads of how large the box an old view is laid out in was laid out, of no id: the old view's own
+/// (layout-read-back)
+let old_read_back : Array[String] = ["old_given"]
+
+///|
 /// what @math works out by the engine on js (implementation-approximated in ECMAScript): @dmath's in their place
 let engine_math : Array[String] = [
   "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "exp", "expm1", "ln", "ln_1p",

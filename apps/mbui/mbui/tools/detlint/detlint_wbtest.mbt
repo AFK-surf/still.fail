@@ -1998,8 +1998,8 @@ test "built-by-hand" {
 
 ///|
 test "layout-read-back" {
-  // what was laid out read back by the app (an old view's, of a box by its id); a test's, the framework's and the window's
-  // tree's of itself (a View's, held by the tree as it is read) not counted
+  // what was laid out read back by the app (an old view's, of a box by its id, or of the box it is laid out in); a
+  // test's, the framework's and the window's tree's of itself (a View's, held by the tree as it is read) not counted
   let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
   let fs = found(
     [
@@ -2011,14 +2011,15 @@ test "layout-read-back" {
         "  let r = c.laid_rect(id)\n" +
         "  let m = @motion.measured_rect(c, \"thumb\")\n" +
         "  let h = row.laid_size().1\n" +
+        "  let g = c.old_given()\n" +
         "}\n",
       ),
       ("src/app/card_wbtest.mbt", "test \"t\" {\n  t.ctx().rect_of(1)\n}\n"),
       ("src/ui/list.mbt", "fn w(c : Ctx) -> Unit {\n  c.rect_of(1) |> ignore\n}\n"),
     ],
     "layout-read-back",
-    3,
+    4,
     cfg~,
   )
-  assert_eq(lines(fs), [2, 3, 4])
+  assert_eq(lines(fs), [2, 3, 4, 7])
 }
