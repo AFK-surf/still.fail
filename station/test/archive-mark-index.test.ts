@@ -70,6 +70,23 @@ for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", 
   });
 }
 
+test("ignored mark writes leave the next changes and lookups exact", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec("INSERT INTO pins(rowid,viewer,session,at) VALUES(1,'a','one',1),(2,'b','two',1)");
+    db.exec("INSERT INTO kept_chats(rowid,viewer,thread) VALUES(1,'a',1),(2,'b',2)");
+    db.exec("INSERT OR IGNORE INTO pins(viewer,session,at) VALUES('a','one',2)");
+    db.exec("INSERT OR IGNORE INTO kept_chats(viewer,thread) VALUES('a',1)");
+    db.exec("UPDATE OR IGNORE pins SET rowid=2,viewer='b',session='two' WHERE rowid=1");
+    db.exec("UPDATE OR IGNORE kept_chats SET rowid=2,viewer='b',thread=2 WHERE rowid=1");
+    check(store);
+    db.exec("DELETE FROM pins WHERE rowid=2; DELETE FROM kept_chats WHERE rowid=2");
+    db.exec("INSERT INTO pins(rowid,viewer,session,at) VALUES(2,'c','three',1)");
+    db.exec("INSERT INTO kept_chats(rowid,viewer,thread) VALUES(2,'c',3)");
+    check(store);
+  } finally { store.close(); }
+});
+
 test("old marks are prepared in bounded batches as writers change them", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
