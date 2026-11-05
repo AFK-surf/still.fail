@@ -310,7 +310,7 @@ test "as the Android app's SearchResultsTest: each kind, 查看更多 only where
   assert_true(app.nav.top() == Service("ws1/st1", "j-1"))
   let pages = app.nav.pages()
   match pages[pages.length() - 2] {
-    Chat(r) => assert_eq(r.session, "ember:c-2")
+    Chat(r) => assert_eq(r.session, "chat:c-2")
     _ => fail("no chat under the service")
   }
 }

@@ -15,12 +15,12 @@ test("prepared recent pages read only their limited order rows as unrelated chat
           token: key, createdAt: 1, lastActiveAt: 1, ws });
       db.exec("BEGIN");
       for (let i = 0; i < 10; i++) {
-        const id = store.openThread("ember", "EMBER", `here-${i}`, "Here", null).id;
+        const id = store.openThread("ember", "CHAT", `here-${i}`, "Here", null).id;
         store.joinThread(id, "here", "ember");
         store.joinThread(id, "missing", "ember"); // Present in both the default and the explicit home.
       }
       for (let i = 0; i < foreign; i++) {
-        const id = store.openThread("ember", "EMBER", `away-${i}`, "Away", null).id;
+        const id = store.openThread("ember", "CHAT", `away-${i}`, "Away", null).id;
         db.prepare("UPDATE threads SET home = 'away' WHERE id = ?").run(id);
       }
       db.exec("COMMIT");

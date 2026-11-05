@@ -8,7 +8,7 @@ test("closing an old card does not search through later ordinary messages", () =
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "close", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "close", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     put.run(thread, 1, "message", "one", "agent", "a", "choose", 1, card);
     db.exec("BEGIN");
@@ -47,7 +47,7 @@ for (const { name, kind, author, nextCard, options, closes } of [
   test(`a card ${closes ? "can" : "cannot"} be closed after ${name}`, () => {
     const store = Store.open(":memory:");
     try {
-      const thread = store.openThread("ember", "EMBER", name, null, null).id;
+      const thread = store.openThread("ember", "CHAT", name, null, null).id;
       const put = store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card,options) VALUES (?,?,?,?,?,?,?,?,?,?)");
       put.run(thread, 1, "message", "card", "agent", "a", "choose", 1, card, null);
       put.run(thread, 2, kind, "next", author, "someone", "next", 2, nextCard, options);
@@ -59,7 +59,7 @@ for (const { name, kind, author, nextCard, options, closes } of [
 test("a previously closed card stays closed even after a later message", () => {
   const store = Store.open(":memory:");
   try {
-    const thread = store.openThread("ember", "EMBER", "closed", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "closed", null, null).id;
     const put = store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     put.run(thread, 1, "message", "card", "agent", "a", "choose", 1, card);
     assert.equal(store.closeCard("person", thread, 1, "yes"), true);

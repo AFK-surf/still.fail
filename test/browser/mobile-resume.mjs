@@ -22,7 +22,7 @@ import {mEdge} from './src/mobile/app.css.ts';
 const pending=new URLSearchParams(location.search).has('pending');
 const chat=demoCore.chats.find(c=>c.key===SAFARI_KEY)!;
 extendDemo({topic:t=>t.topic==='job'?{id:'review',name:'预览测试',state:'exited',port:null,open:false}:
- t.topic==='chat'&&t.session==='new:review'?{...chatView(chat,runs()),key:'ember:c-review-ready'}:undefined});
+ t.topic==='chat'&&t.session==='new:review'?{...chatView(chat,runs()),key:'chat:c-review-ready'}:undefined});
 history.replaceState(null,'','/w/demo/s/local/chats/'+(pending?'new%3Areview':encodeURIComponent(SAFARI_KEY)+'?service=review'));
 window.receive=()=>{chat.messages.push(message(chat,'agent','隐藏期间收到的消息'));demoCore.publish();};
 window.edge=mEdge;
@@ -41,7 +41,7 @@ createRoot(root).render(<Tooltip.Provider><BrowserRouter><Navigation/><Routes><R
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     const hidden = () => page.waitForFunction(() => [...document.querySelectorAll('[data-role=under] > *')].some(e => getComputedStyle(e).display === 'none'));
     const settled = () => page.waitForFunction(() => !document.querySelector('[data-role=in],[data-role=out]'));
-    const chatPath = '/w/demo/s/local/chats/ember%3Ac-demo-safari';
+    const chatPath = '/w/demo/s/local/chats/chat%3Ac-demo-safari';
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/mobile-resume-check.html`);
     await page.waitForFunction(() => location.pathname.endsWith('/services/review'));
     await hidden();
@@ -59,7 +59,7 @@ createRoot(root).render(<Tooltip.Provider><BrowserRouter><Navigation/><Routes><R
 
     // A provisional chat already renamed by its station must not replace the covering page during a back preview.
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/mobile-resume-check.html?pending`);
-    await page.waitForFunction(() => location.pathname.endsWith('/chats/ember%3Ac-review-ready'));
+    await page.waitForFunction(() => location.pathname.endsWith('/chats/chat%3Ac-review-ready'));
     await input.waitFor();
     await page.evaluate(() => window.go('/w/demo/settings'));
     await hidden();
@@ -75,7 +75,7 @@ createRoot(root).render(<Tooltip.Provider><BrowserRouter><Navigation/><Routes><R
     await page.goBack();
     await input.waitFor();
     await settled();
-    assert.equal(new URL(page.url()).pathname, '/w/demo/s/local/chats/ember%3Ac-review-ready');
+    assert.equal(new URL(page.url()).pathname, '/w/demo/s/local/chats/chat%3Ac-review-ready');
     assert.deepEqual(errors, []);
     console.log(`PASS ${engine}: service back stays in chat; draft and new messages survive hiding; assigned chat address is not replayed on a back preview`);
     await browser.close(); browser = null;

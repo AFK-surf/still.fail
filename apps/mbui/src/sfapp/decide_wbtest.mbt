@@ -225,7 +225,7 @@ test "the desk's history beside a chat: a group opens to its steps, a step to it
 
 ///|
 test "a chat's link" {
-  assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
+  assert_eq(chat_link("ws1/st1", "chat:c-1"), "https://app.still.fail/o/ws1/st1/chat%3Ac-1")
 }
 
 ///|

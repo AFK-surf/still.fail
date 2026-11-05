@@ -17,12 +17,12 @@ function fixture() {
   for (const [key, ws] of [["here", "here"], ["away", "away"]] as const)
     store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: key, createdAt: 1, lastActiveAt: 1, ws });
-  const named = store.openThreadOf("ember", "EMBER", "named", "Named", null, "here").id;
-  const shared = store.openThread("ember", "EMBER", "shared", "Shared", null).id;
+  const named = store.openThreadOf("ember", "CHAT", "named", "Named", null, "here").id;
+  const shared = store.openThread("ember", "CHAT", "shared", "Shared", null).id;
   store.joinThread(shared, "here", "ember");
   store.joinThread(shared, "missing", "ember");
-  const orphan = store.openThread("ember", "EMBER", "orphan", "Orphan", null).id;
-  store.openThreadOf("ember", "EMBER", "away", "Away", null, "away");
+  const orphan = store.openThread("ember", "CHAT", "orphan", "Orphan", null).id;
+  store.openThreadOf("ember", "CHAT", "away", "Away", null, "away");
   return { dir, store, named, shared, orphan, close: () => { store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
 

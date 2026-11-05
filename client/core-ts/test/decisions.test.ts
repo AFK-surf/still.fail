@@ -288,20 +288,20 @@ test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () 
 });
 
 test("a_card_is_locked_while_its_agent_is_still_in_the_turn_that_asked", () => {
-  const card = { ...askedMsg(2), by: { name: "Claude", agent: "ember:c-1" } };
+  const card = { ...askedMsg(2), by: { name: "Claude", agent: "chat:c-1" } };
   // Its agent at work: an option that closes the card (closed-card) is refused by the station meanwhile, so the
   // clients draw it as not answerable yet rather than let it be picked and fail.
-  let messages: J[] = d.inMessages([card], [2, false], [], new Set(["ember:c-1"]));
+  let messages: J[] = d.inMessages([card], [2, false], [], new Set(["chat:c-1"]));
   assert.deepEqual(messages[0].decision, { resolved: false, locked: true });
   shape("MessageDecision", messages[0].decision);
   // Another agent of the chat at work: not the one that asked.
-  messages = d.inMessages([card], [2, false], [], new Set(["ember:c-2"]));
+  messages = d.inMessages([card], [2, false], [], new Set(["chat:c-2"]));
   assert.deepEqual(messages[0].decision, { resolved: false });
   // Its turn over: answerable as before.
-  messages = d.inMessages([{ ...askedMsg(2), by: { name: "Claude", agent: "ember:c-1" } }], [2, false]);
+  messages = d.inMessages([{ ...askedMsg(2), by: { name: "Claude", agent: "chat:c-1" } }], [2, false]);
   assert.deepEqual(messages[0].decision, { resolved: false });
   // Answered (or replaced): nothing left to wait for, whatever its agent is doing.
-  messages = d.inMessages([card, said(3, "person", "A")], null, [], new Set(["ember:c-1"]));
+  messages = d.inMessages([card, said(3, "person", "A")], null, [], new Set(["chat:c-1"]));
   assert.equal(messages[0].decision.locked, undefined);
   assert.equal(messages[0].decision.resolved, true);
 });

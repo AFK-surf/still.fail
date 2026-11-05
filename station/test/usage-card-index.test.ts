@@ -37,8 +37,8 @@ const kept = (store: Store) =>
 
 /// Chats with cards of every shape, answered every way.
 function write(store: Store) {
-  const a = store.openThread("ember", "EMBER", "a", null, null).id;
-  const b = store.openThread("ember", "EMBER", "b", null, null).id;
+  const a = store.openThread("ember", "CHAT", "a", null, null).id;
+  const b = store.openThread("ember", "CHAT", "b", null, null).id;
   let ts = 0;
   const say = (thread: number, kind: "agent" | "person", text: string, more: { card?: unknown; options?: unknown } = {}) =>
     store.insertMessage({ ...newMessage(thread, String(++ts), kind, kind === "agent" ? "k1" : "p@x", text), ...more } as any)[0];
@@ -83,7 +83,7 @@ test("answering new cards seeks past old answered cards, including after upgradi
       END;`);
     store.close();
     store = Store.open(path, join(dir, "archive"));
-    const thread = store.openThread("ember", "EMBER", "scale", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "scale", null, null).id;
     const old = store.db.prepare("INSERT INTO card_outcomes (thread, n, author, labels, answered, said) VALUES (?, ?, 'agent', '[]', 1, 0)");
     store.db.exec("BEGIN");
     for (let n = 1; n <= 2_000; n++) old.run(thread, n);

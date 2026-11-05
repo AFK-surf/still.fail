@@ -8,7 +8,7 @@ for (const column of ["card", "options"] as const) {
   test(`a recent answer to a ${column} does not traverse its later edits`, () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
-      const thread = store.openThread("ember", "EMBER", `card-edits-${column}`, null, null).id;
+      const thread = store.openThread("ember", "CHAT", `card-edits-${column}`, null, null).id;
       const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at,${column})
         VALUES(?,?,?,?, 'agent','a','choose',?,?)`);
       const value = column === "card" ? '{"type":"text"}' : '["yes"]';
@@ -70,7 +70,7 @@ for (const prepared of [false, true]) {
   test(`card events keep their immediate answers when the old index is ${prepared ? "ready" : "not ready"}`, () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
-      const thread = store.openThread("ember", "EMBER", `event-${prepared}`, null, null).id;
+      const thread = store.openThread("ember", "CHAT", `event-${prepared}`, null, null).id;
       if (!prepared) db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
       const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at,card) VALUES(?,?,?,?,?,?,?,?,?)");
       const card = JSON.stringify({ type: "options", options: [{ label: "yes", action: "close" }] });

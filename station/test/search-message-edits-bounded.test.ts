@@ -8,7 +8,7 @@ import { Store } from "../src/store/store.ts";
 test("search reads a chat's messages without traversing later edits", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "search-edits", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "search-edits", null, null).id;
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at)
       VALUES(?,?,?,?, 'person','viewer',?,?)`);
     put.run(thread, 1, "message", null, "original", 1);
@@ -37,7 +37,7 @@ test("search reads a chat's messages without traversing later edits", () => {
 test("search continues to the next message batch without traversing edits between batches", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "search-edits-batches", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "search-edits-batches", null, null).id;
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at)
       VALUES(?,?,?,?, 'person','viewer',?,?)`);
     db.exec("BEGIN");
@@ -72,8 +72,8 @@ test("search continues to the next message batch without traversing edits betwee
 test("search message batches keep the original bounds, old letters and latest edits", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "search-message-bounds", null, null).id;
-    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "search-message-bounds", null, null).id;
+    const other = store.openThread("ember", "CHAT", "other", null, null).id;
     const insert = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at,letter)
       VALUES(?,?,?,?, 'person','viewer',?,?,?)`);
     const letter = JSON.stringify({ way: "in", title: "old", link: null });
@@ -109,8 +109,8 @@ test("search message batches keep the original bounds, old letters and latest ed
 test("search reads only a batch from the two ordered message indexes", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const short = store.openThread("ember", "EMBER", "short-search", null, null).id;
-    const long = store.openThread("ember", "EMBER", "long-search", null, null).id;
+    const short = store.openThread("ember", "CHAT", "short-search", null, null).id;
+    const long = store.openThread("ember", "CHAT", "long-search", null, null).id;
     const insert = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter)
       VALUES(?,?,'message','person','viewer','words',?,?)`);
     const letter = JSON.stringify({ way: "in", title: "old", link: null });

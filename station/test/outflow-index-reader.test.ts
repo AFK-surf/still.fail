@@ -16,7 +16,7 @@ function fixture() {
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
   store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1, ws: "A" });
-  const thread = store.openThreadOf("ember", "EMBER", "chat", "A chat", "ann@x", "a");
+  const thread = store.openThreadOf("ember", "CHAT", "chat", "A chat", "ann@x", "a");
   store.joinThread(thread.id, "a", "ember");
   store.db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(thread.id);
   const say = (n: number, at: number) => store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','ann@x','body',?)").run(thread.id, n, at);

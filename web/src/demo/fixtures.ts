@@ -130,7 +130,7 @@ export function newChat(thread: number, model?: string): DemoChat {
 }
 
 function chatOf(key: string, thread: number, title: string, model: Model, people: Person[], extra: Partial<DemoChat> = {}): DemoChat {
-  return { key: `ember:c-demo-${key}`, thread, title, model, people, messages: [], outbox: [], items: [], running: null, blocked: false, failed: false, unread: false, ...extra };
+  return { key: `chat:c-demo-${key}`, thread, title, model, people, messages: [], outbox: [], items: [], running: null, blocked: false, failed: false, unread: false, ...extra };
 }
 
 /** A chat's history so far: each (who, what, minutes ago); the agent's posts are recorded in its history too. */
@@ -146,8 +146,8 @@ function seed(chat: DemoChat, lines: [Who, string, number][]): DemoChat {
 }
 
 export const SAFARI_ASK = "登录页在手机上显示不对，帮我修一下";
-export const DEPS_KEY = "ember:c-demo-deps";
-export const SAFARI_KEY = "ember:c-demo-safari";
+export const DEPS_KEY = "chat:c-demo-deps";
+export const SAFARI_KEY = "chat:c-demo-safari";
 
 export function startingChats(): DemoChat[] {
   return [

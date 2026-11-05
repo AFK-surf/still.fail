@@ -11,7 +11,7 @@ test("a shared chat row finds the last different author without visiting a long 
   const db = store.db;
   try {
     store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "s", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
     store.joinThread(thread, "s", "ember");
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message',?,?,'hello',?)");
     db.exec("BEGIN");

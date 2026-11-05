@@ -8,7 +8,7 @@ import { LIN, SAFARI_KEY, stamp } from "../src/demo/fixtures.ts";
 import { markdown } from "../../client/core-ts/src/markdown.ts";
 import { SENT, readFile } from "./data.ts";
 
-const AGENT = { name: "Claude Opus 5.5", agent: "ember:c-demo-share", maker: { id: "anthropic", name: "Anthropic" }, runtime: "claude" as const };
+const AGENT = { name: "Claude Opus 5.5", agent: "chat:c-demo-share", maker: { id: "anthropic", name: "Anthropic" }, runtime: "claude" as const };
 
 /** A message of the picture's, said `minutes` ago. */
 function said(seq: number, minutes: number, rest: Partial<ChatMessage> & Pick<ChatMessage, "authorKind" | "author" | "by" | "text">): ChatMessage {

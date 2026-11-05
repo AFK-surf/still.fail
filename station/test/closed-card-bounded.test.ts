@@ -6,7 +6,7 @@ test("a card closed after many ordinary messages does not read the intervening h
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "card", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "card", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     put.run(thread, 1, "message", "one", "agent", "a", "choose", 1, JSON.stringify({ type: "options", options: [{ label: "yes" }] }));
     db.prepare("INSERT INTO closed_cards(thread,n,viewer,at) VALUES (?,1,'person',2)").run(thread);
@@ -52,7 +52,7 @@ for (const { name, kind, author, card, options, ended } of [
   test(`a closed card's wait ${ended ? "has" : "has not"} ended when there is ${name}`, () => {
     const store = Store.open(":memory:");
     try {
-      const thread = store.openThread("ember", "EMBER", name, null, null).id;
+      const thread = store.openThread("ember", "CHAT", name, null, null).id;
       const put = store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card,options) VALUES (?,?,?,?,?,?,?,?,?,?)");
       put.run(thread, 1, "message", "card", "agent", "a", "choose", 1, JSON.stringify({ type: "options", options: [{ label: "yes" }] }), null);
       put.run(thread, 2, kind, "next", author, "someone", "next", 2, card, options);

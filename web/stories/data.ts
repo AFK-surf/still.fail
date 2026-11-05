@@ -206,7 +206,7 @@ const LOGIN_AT = Date.UTC(2026, 9, 17, 8, 0);
 /** A login on the demo's station as the core shows it, in one state or another. */
 const login = (id: string, command: string, more: Partial<MachineLoginShown>): MachineLoginShown => ({
   id, station: "demo/local", stationName: "Willow", name: command.split(" ")[0]!, title: `在 Willow 上登录 ${command.split(" ")[0]}`, command, state: "browser",
-  active: true, waiting: false, listening: false, statusText: "", byText: "林", chat: "ember:c-demo", chatTitle: "发布 0.4 版", whenText: "16:00", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
+  active: true, waiting: false, listening: false, statusText: "", byText: "林", chat: "chat:c-demo", chatTitle: "发布 0.4 版", whenText: "16:00", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
 });
 /** Logins in each of their states, by id. */
 export const LOGINS: Record<string, MachineLoginShown> = {

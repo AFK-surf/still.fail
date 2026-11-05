@@ -708,7 +708,7 @@ pub fn fix_with_syncing(v : Json) -> Json {
 
 ///|
 /// The chat a letter came from, by its link (the core's key for it).
-pub let fix_letters_link : String = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e"
+pub let fix_letters_link : String = "https://app.still.fail/o/w/s/chat%3Ac-4dbf0d0c6e"
 
 ///|
 /// What the chat's agents and other chats' wrote each other (the core's `chatLetters`): two chats written with, the
@@ -728,7 +728,7 @@ pub fn fix_letters() -> Json {
       _ => m
     }
   }
-  let mbui = "https://app.still.fail/o/w/s/ember%3Ac-06ffb79643"
+  let mbui = "https://app.still.fail/o/w/s/chat%3Ac-06ffb79643"
   {
     "title": "整理发布清单",
     "whole": true,
@@ -741,7 +741,7 @@ pub fn fix_letters() -> Json {
         "lastActiveAt": 1790000300000.0,
         "time": { "lastActiveAt": { "ago": "4 分钟前" } },
         "letters": [
-          way(msg(300, "agent", theirs("接手监督 mbui", mbui), "测试版 **4521** 已出，你这边的改动等它跑完再合", "4 分钟前", { "author": "peer/ember:c-8" }), "in"),
+          way(msg(300, "agent", theirs("接手监督 mbui", mbui), "测试版 **4521** 已出，你这边的改动等它跑完再合", "4 分钟前", { "author": "peer/chat:c-8" }), "in"),
         ],
       },
       {
@@ -752,9 +752,9 @@ pub fn fix_letters() -> Json {
         "lastActiveAt": 1790000200000.0,
         "time": { "lastActiveAt": { "ago": "5 分钟前" } },
         "letters": [
-          way(msg(200, "agent", theirs("BFT 备份尺寸分析", link), "用户让精简备份并改用 zstd，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "7 分钟前", { "author": "peer/ember:c-9" }), "in"),
+          way(msg(200, "agent", theirs("BFT 备份尺寸分析", link), "用户让精简备份并改用 zstd，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "7 分钟前", { "author": "peer/chat:c-9" }), "in"),
           way(msg(201, "agent", by_agent("anthropic", "claude", "s-c1"), "已替换，**今晚 02:00** 那份会按新脚本出", "6 分钟前", {}), "out"),
-          way(msg(202, "agent", theirs("BFT 备份尺寸分析", link), "补充一点：系统自带的 tar 能直接解 zstd", "5 分钟前", { "author": "peer/ember:c-9" }), "in"),
+          way(msg(202, "agent", theirs("BFT 备份尺寸分析", link), "补充一点：系统自带的 tar 能直接解 zstd", "5 分钟前", { "author": "peer/chat:c-9" }), "in"),
         ],
       },
     ],

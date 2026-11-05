@@ -139,7 +139,7 @@ test("removing a membership releases its copy destination row even if that sessi
 test("merging a source chat's session candidates preserves its original twenty destinations and connects", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "multi", null, null).id;
+    const home = store.openThread("ember", "CHAT", "multi", null, null).id;
     store.joinThread(home, "b", "ember"); store.joinThread(home, "a", "ember");
     for (let n = 0; n < 35; n++) {
       const id = store.openThread("slack:one", "C", `target-${n}`, null, null).id;
@@ -161,7 +161,7 @@ test("merging a source chat's session candidates preserves its original twenty d
 test("merged copy destinations keep SQLite's ordering of old non-integer entry times", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "old-times", null, null).id;
+    const home = store.openThread("ember", "CHAT", "old-times", null, null).id;
     store.joinThread(home, "a", "ember"); store.joinThread(home, "b", "ember");
     for (const [n, at] of [1, 5.5, "old", null].entries()) {
       const id = store.openThread("slack:one", "C", `old-${n}`, null, null).id;
@@ -179,7 +179,7 @@ test("merged copy destinations agree with the original across overlapping member
   const store = Store.open(":memory:"), db = store.db;
   try {
     const sessions = ["z", "agent a", "a/1", "甲", "β", "a\"b"];
-    const home = store.openThread("ember", "EMBER", "overlap", null, null).id;
+    const home = store.openThread("ember", "CHAT", "overlap", null, null).id;
     for (const session of [...sessions].reverse()) store.joinThread(home, session, "ember");
     let state = 42;
     const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state; };
@@ -201,7 +201,7 @@ for (const recursive of [false, true]) {
     const store = Store.open(":memory:"), db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
-      const home = store.openThread("ember", "EMBER", "home", null, null).id;
+      const home = store.openThread("ember", "CHAT", "home", null, null).id;
       store.joinThread(home, "agent", "ember");
       const ids = Array.from({ length: 6 }, (_, n) => {
         const id = store.openThread("slack:one", "C", `target-${n}`, null, null).id;

@@ -17,7 +17,7 @@ function prepared(store: Store, thread: number): ReturnType<Store["ccThreads"]> 
 test("copy destinations keep shared membership and the last entry's order", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "home", null, null).id;
+    const home = store.openThread("ember", "CHAT", "home", null, null).id;
     store.joinThread(home, "a", "ember");
     store.joinThread(home, "b", "ember");
     const shared = store.openThread("slack:one", "C", "shared", null, null).id;
@@ -47,7 +47,7 @@ test("copy destinations keep shared membership and the last entry's order", () =
 test("shared copy destinations are counted once before the twenty most recent are chosen", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "home-many", null, null).id;
+    const home = store.openThread("ember", "CHAT", "home-many", null, null).id;
     store.joinThread(home, "a", "ember");
     store.joinThread(home, "b", "ember");
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
@@ -66,7 +66,7 @@ test("shared copy destinations are counted once before the twenty most recent ar
 test("copy destinations with the same last entry time use creation time and thread id", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "home-ties", null, null).id;
+    const home = store.openThread("ember", "CHAT", "home-ties", null, null).id;
     store.joinThread(home, "agent", "ember");
     const make = (name: string, created: number, at: number | null) => {
       const id = store.openThread("slack:one", "C", name, null, null).id;
@@ -85,7 +85,7 @@ test("copy destinations with the same last entry time use creation time and thre
 test("copy destinations with tied times choose the twenty largest thread numbers numerically", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "home-tied-numbers", null, null).id;
+    const home = store.openThread("ember", "CHAT", "home-tied-numbers", null, null).id;
     store.joinThread(home, "agent", "ember");
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
       VALUES(?,1,'message','person','viewer',5)`);
@@ -103,7 +103,7 @@ test("copy destinations with tied times choose the twenty largest thread numbers
 test("a chat's copy destinations do not traverse its older linked threads", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const home = store.openThread("ember", "EMBER", "home", null, null).id;
+    const home = store.openThread("ember", "CHAT", "home", null, null).id;
     store.joinThread(home, "agent", "ember");
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
       VALUES(?,1,'message','person','viewer',?)`);

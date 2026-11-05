@@ -20,7 +20,7 @@ for (const recursive of [false, true]) for (const partial of [false, true]) test
     let seed = 0x845ab613, name = 0;
     const pick = (n: number) => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % n; };
     const add = () => {
-      const id = store.openThread("ember", "EMBER", `chat-${name++}`, "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${name++}`, "Chat", null).id;
       db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(20), id);
       return id;
     };

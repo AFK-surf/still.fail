@@ -13,8 +13,8 @@
 /admin/api/sessions/$SESSION/
 /admin/api//sessions//$SESSION
 /admin/api/sessions/unknown
-/admin/api/sessions/ember:c-2356a6fb4c
-/admin/api/sessions/ember:c-945313018a
+/admin/api/sessions/chat:c-2356a6fb4c
+/admin/api/sessions/chat:c-945313018a
 /admin/api/sessions/ember%3Afx-up
 /admin/api/sessions/$SESSION/timeline
 /admin/api/sessions/$SESSION/timeline?before=10&limit=5
@@ -61,7 +61,7 @@
 /admin/api/threads?session=$SESSION
 /admin/api/threads?session=
 /admin/api/threads?session=unknown
-/admin/api/threads?session=ember:c-2356a6fb4c
+/admin/api/threads?session=chat:c-2356a6fb4c
 /admin/api/threads/$THREAD
 /admin/api/threads/$THREAD/
 /admin/api/threads/1

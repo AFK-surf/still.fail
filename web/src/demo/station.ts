@@ -255,9 +255,9 @@ export function resources() {
     diskRead: processes.reduce((n, p) => n + p.diskRead, 0), diskWrite: processes.reduce((n, p) => n + p.diskWrite, 0),
   });
   const groups = [
-    group("chat:ember:c-demo-p99", "chat", "ember:c-demo-p99", [proc(41130, "chrome-headless-shell", 61.2, 412, 840, 36, 0.2, 3.1, true), proc(41131, "chrome-headless-shell", 18.4, 96, 0, 0, 0, 0.4, true), proc(40634, "node", 13.4, 188, 0, 0, 1.2, 0.8, true), proc(40856, "claude", 6.9, 241, 12, 4.2)]),
+    group("chat:chat:c-demo-p99", "chat", "chat:c-demo-p99", [proc(41130, "chrome-headless-shell", 61.2, 412, 840, 36, 0.2, 3.1, true), proc(41131, "chrome-headless-shell", 18.4, 96, 0, 0, 0, 0.4, true), proc(40634, "node", 13.4, 188, 0, 0, 1.2, 0.8, true), proc(40856, "claude", 6.9, 241, 12, 4.2)]),
     group("app", "app", null, [proc(39480, "still.fail Helper (Renderer)", 12.8, 500, 1.4, 0.6), proc(39425, "still.fail Helper (GPU)", 7.9, 109), proc(39434, "still.fail Helper", 0.8, 238), proc(39394, "still.fail", 0.4, 230)]),
-    group("chat:ember:c-demo-csv", "chat", "ember:c-demo-csv", [proc(40631, "python3", 9.6, 322, 0, 0, 12, 24, true), proc(25080, "codex", 1.1, 88, 3.1, 1.2)]),
+    group("chat:chat:c-demo-csv", "chat", "chat:c-demo-csv", [proc(40631, "python3", 9.6, 322, 0, 0, 12, 24, true), proc(25080, "codex", 1.1, 88, 3.1, 1.2)]),
     group("station", "station", null, [proc(37148, "node", 1.6, 310, 2.2, 1.8), proc(1947, "stillfail-station", 0.2, 42)]),
   ];
   const sum = (k: "cpu" | "memory" | "netIn" | "netOut" | "diskRead" | "diskWrite") => groups.reduce((n, g) => n + g[k], 0);
@@ -268,7 +268,7 @@ export function resources() {
     return { at: now - (119 - i) * 5000, cpu: total.cpu * f, memory: total.memory * (0.9 + 0.1 * Math.sin(i / 20)), netIn: total.netIn * f * f, netOut: total.netOut * f, diskRead: total.diskRead * f, diskWrite: total.diskWrite * (0.5 + 0.5 * Math.abs(Math.sin(i / 3))) };
   });
   // Their sessions as the demo's chats have them (fixtures.ts chatOf), for the agents' cards.
-  const chats = { "ember:c-demo-p99": { thread: 4, title: "排查 API p99 变慢" }, "ember:c-demo-csv": { thread: 5, title: "订单导出支持 CSV" } };
+  const chats = { "chat:c-demo-p99": { thread: 4, title: "排查 API p99 变慢" }, "chat:c-demo-csv": { thread: 5, title: "订单导出支持 CSV" } };
   const value = { at: now, everyMs: 5000, counted: true, net: true, disk: true, total, groups, history, chats, machine: { cores: 10, memory: 32 * 1024 ** 3 } };
   return resourcesView([{ address: STATION, name: "Willow", online: true, value: { ok: value } }], now, () => ({ reading: false, failing: [], empty: false }));
 }
@@ -305,10 +305,10 @@ export function usage(days: number) {
     daily, max: Math.max(...daily.map((d) => d.cost)), ...scale(Math.max(...daily.map((d) => d.cost))),
     lists: [
       { key: "chats", title: "按对话", items: [
-        item("deps", "每周依赖升级", 0.31, "Willow · Sonnet 5.5", { chat: { station: STATION, session: "ember:c-demo-deps" } }),
-        item("p99", "排查 API p99 变慢", 0.24, "Willow · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-p99" } }),
-        item("csv", "订单导出支持 CSV", 0.19, "Willow · GPT-5.5", { chat: { station: STATION, session: "ember:c-demo-csv" } }),
-        item("safari", "登录页手机适配", 0.15, "Willow · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-safari" } }),
+        item("deps", "每周依赖升级", 0.31, "Willow · Sonnet 5.5", { chat: { station: STATION, session: "chat:c-demo-deps" } }),
+        item("p99", "排查 API p99 变慢", 0.24, "Willow · Opus 5.5", { chat: { station: STATION, session: "chat:c-demo-p99" } }),
+        item("csv", "订单导出支持 CSV", 0.19, "Willow · GPT-5.5", { chat: { station: STATION, session: "chat:c-demo-csv" } }),
+        item("safari", "登录页手机适配", 0.15, "Willow · Opus 5.5", { chat: { station: STATION, session: "chat:c-demo-safari" } }),
         item("docs", "补一下部署文档", 0.11, "Willow · Opus 5.5"),
       ] },
       { key: "people", title: "按人", items: people.map((p, k) => item(p.id, p.name, [0.5, 0.33, 0.17][k]!, undefined, { person: p })) },
@@ -364,7 +364,7 @@ export function vaults(): VaultsView {
     available: true, locked: true, canSign: true, setUp: true, refused: [], statusText: "1 个待批准", statusBad: true,
     vaults: [{ id: "mine", name: "我的密钥", owner: "lin", ownerName: "林晓", mine: true, members: [], station: STATION, stationName: "Willow", items: 3, devices: 2, open: true, keyed: true, missing: 0, recoverable: true, lasts: "chat" }],
     requests: [{
-      id: "ask-1", vault: "mine", vaultName: "我的密钥", item: "github", itemName: "GitHub token", lasts: "chat", session: "ember:c-demo-safari", chat: "登录页手机适配",
+      id: "ask-1", vault: "mine", vaultName: "我的密钥", item: "github", itemName: "GitHub token", lasts: "chat", session: "chat:c-demo-safari", chat: "登录页手机适配",
       station: "local", mode: "proxy", reason: "推送 fix/login-button 分支并开 PR", command: "git push origin fix/login-button", hosts: ["github.com", "api.github.com"],
       at: Date.now() - 20_000, howText: "代理 · 限 github.com",
     }],

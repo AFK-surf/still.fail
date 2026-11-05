@@ -18,7 +18,7 @@ test("new unrelated connections cannot keep an old workspace scan open", () => {
       store.insertSession({ key, connect, runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     }
-    const chat = store.openThreadOf("ember", "EMBER", "old-chat", "Old", null, "ours").id;
+    const chat = store.openThreadOf("ember", "CHAT", "old-chat", "Old", null, "ours").id;
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     let done = false;
@@ -41,7 +41,7 @@ test("new sessions on an old connection are journaled instead of extending the o
   try {
     store.insertSession({ key: "old", connect: "a", runtime: "claude", profile: "cc", workspace: "/work",
       token: "old", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const old = store.openThreadOf("ember", "EMBER", "old-chat", "Old", null, "old").id;
+    const old = store.openThreadOf("ember", "CHAT", "old-chat", "Old", null, "old").id;
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     let done = false, newest = 0;
@@ -49,7 +49,7 @@ test("new sessions on an old connection are journaled instead of extending the o
       const key = `new-${i}`;
       store.insertSession({ key, connect: "a", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
-      newest = store.openThreadOf("ember", "EMBER", `new-chat-${i}`, "New", null, key).id;
+      newest = store.openThreadOf("ember", "CHAT", `new-chat-${i}`, "New", null, key).id;
       const result = scanRecentWorkspaceStep(db, "here", 1);
       assert.ok(result.visited <= 1);
       done = result.sourceDone;
@@ -78,7 +78,7 @@ for (const recursive of [false, true]) test(`a session moved past the old scan b
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
     store.insertSession({ key: "old", connect: "a", runtime: "claude", profile: "cc", workspace: "/work",
       token: "old", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const chat = store.openThreadOf("ember", "EMBER", "old-chat", "Old", null, "old").id;
+    const chat = store.openThreadOf("ember", "CHAT", "old-chat", "Old", null, "old").id;
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     db.prepare("UPDATE sessions SET _rowid_ = 900 WHERE key = 'old'").run();
@@ -102,7 +102,7 @@ for (const recursive of [false, true]) test(`a session whose connection moves be
     for (const [key, connect] of [["first", "a"], ["moving", "z"]] as const)
       store.insertSession({ key, connect, runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const chat = store.openThreadOf("ember", "EMBER", "moving-chat", "Moving", null, "moving").id;
+    const chat = store.openThreadOf("ember", "CHAT", "moving-chat", "Moving", null, "moving").id;
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     scanRecentWorkspaceStep(db, "here", 1);
@@ -131,8 +131,8 @@ test("the finite old-session walk resumes after reopening and rolls back as one 
       store.insertSession({ key, connect: `c-${String(i).padStart(3, "0")}`, runtime: "claude", profile: "cc",
         workspace: "/work", token: key, createdAt: 1, lastActiveAt: 1, ws: i === 69 ? "here" : "away" });
     }
-    store.openThreadOf("ember", "EMBER", "later", "Later", null, "old-069");
-    store.openThreadOf("ember", "EMBER", "moves", "Moves", null, "old-000");
+    store.openThreadOf("ember", "CHAT", "later", "Later", null, "old-069");
+    store.openThreadOf("ember", "CHAT", "moves", "Moves", null, "old-000");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     const progress = () => db.prepare("SELECT * FROM recent_scope_tracked WHERE kind = 1 AND ws = 'here'").get()!;
@@ -142,7 +142,7 @@ test("the finite old-session walk resumes after reopening and rolls back as one 
     db.prepare("UPDATE sessions SET ws = 'here' WHERE key = 'old-000'").run();
     store.insertSession({ key: "new", connect: "new", runtime: "claude", profile: "cc", workspace: "/work",
       token: "new", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    store.openThreadOf("ember", "EMBER", "new", "New", null, "new");
+    store.openThreadOf("ember", "CHAT", "new", "New", null, "new");
     const beforeClose = progress();
     store.close();
     store = Store.open(path);
@@ -197,7 +197,7 @@ test("an explicit workspace's old chat sources resume in bounded batches", () =>
     }
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
     for (let i = 0; i < 80; i++) {
-      const id = store.openThread("ember", "EMBER", `chat-${i}`, "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${i}`, "Chat", null).id;
       if (i < 10) db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(id);
       else if (i < 20) { store.joinThread(id, "one", "ember"); store.joinThread(id, "two", "slack"); }
       else { db.prepare("UPDATE threads SET home = 'other' WHERE id = ?").run(id); store.joinThread(id, "one", "ember"); }
@@ -229,7 +229,7 @@ test("a failed workspace source batch rolls back both the cursor and its contrib
   try {
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(id);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
@@ -253,9 +253,9 @@ test("a later session's failed source rolls back the earlier sessions in its bat
     for (const key of ["first", "second"]) {
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
-      store.openThreadOf("ember", "EMBER", `chat-${key}`, "Chat", null, key);
+      store.openThreadOf("ember", "CHAT", `chat-${key}`, "Chat", null, key);
     }
-    const hidden = store.openThreadOf("ember", "EMBER", "hidden-membership", "Hidden", null, "outside").id;
+    const hidden = store.openThreadOf("ember", "CHAT", "hidden-membership", "Hidden", null, "outside").id;
     store.joinThread(hidden, "first", "ember");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
@@ -284,7 +284,7 @@ test("a session that moves behind the initial scan keeps the workspace unready",
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     }
-    const thread = store.openThread("ember", "EMBER", "moved", "Moved", null).id;
+    const thread = store.openThread("ember", "CHAT", "moved", "Moved", null).id;
     db.prepare("UPDATE threads SET home = 'earlier' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
@@ -318,7 +318,7 @@ for (const recursive of [false, true]) test(`a session can move again while its 
     for (const key of ["one", "two"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/work", token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
     for (let i = 0; i < 8; i++) {
-      const id = store.openThread("ember", "EMBER", `chat-${i}`, "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${i}`, "Chat", null).id;
       store.joinThread(id, "one", "ember");
       if (i === 0) store.joinThread(id, "two", "ember");
     }

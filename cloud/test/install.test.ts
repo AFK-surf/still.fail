@@ -94,6 +94,8 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   for (const file of ["relay/iroh-relay-43a6892f-linux-x64", "relay/iroh-relay-43a6892ffe0689de0cf2545e3a8f3d567146b408-darwin-arm64", "relay/../station.json"]) {
     assert.equal(releaseType(file), null, file);
   }
+  assert.equal(releaseType("relay/dht-node-43a6892ffe0689de0cf2545e3a8f3d567146b408-linux-x64"), "application/octet-stream");
+  assert.equal(releaseType("relay/dht-node-43a6892f-linux-x64"), null);
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");
