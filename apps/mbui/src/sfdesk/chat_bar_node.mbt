@@ -250,18 +250,27 @@ fn chat_station_node(parent : @view.View, address : String, station : () -> Stat
   .lines_up(Is(Some(Middle))).padding(By(fn() { (if station().via != "" { chat_station_dot_in } else { @ui.Space::px(@sf.chat_station_in) }, 1.0, @ui.Space::px(@sf.chat_station_in), 1.0) }))
   .edge(By(fn() { (1.0, @ui.tree_theme().color(if parent.pointed() { Border } else { Line })) }))
   .says(By(fn() { Some(@view.said(Button, label=station().name)) })) |> ignore
-  @sfpages.hover_node(parent, "bar-station/" + address, fn(c) { @settings.station_peek_card(c, address) }, tile=true, padded=false) |> ignore
-  @sf.presses_node(parent, fn() {
-    if !@sf.pointer_rests() {
-      let (x, y, w, h) = parent.placed_window_now()
-      @settings.open_station_peek(address, from=At(x, y, w, h))
-    }
-  })
+  station_card_node(parent, "bar-station/" + address, address)
   parent.show(fn() { station().via != "" }, fn(d) { chat_via_dot_node(d, fn() { station().via }, via_dot_side, 0.0) })
   parent.show(fn() { @sf.has_station_mark(station().emoji, station().icon) }, fn(m) {
     @sf.station_mark_node(m, fn() { station().emoji }, fn() { station().icon }, chat_station_mark, fn() { @sf.theme().p.muted }, stint)
   })
   bar_words(parent, fn() { station().name }, chat_station_words, fn() { 1000.0 })
+}
+
+///|
+/// The card of the station a chat runs on over where the bar names it (`trigger`), as main's station_card_on: while the
+/// pointer rests there (hover_node), its click doing nothing, the arrow over it; a finger, which rests on nothing, taps
+/// it for the card.
+fn station_card_node(trigger : @view.View, key : String, address : String) -> Unit {
+  @sfpages.hover_node(trigger, key, fn(c) { @settings.station_peek_card(c, address) }, tile=true, padded=false) |> ignore
+  @sf.presses_node(trigger, fn() {
+    if !@sf.pointer_rests() {
+      let (x, y, w, h) = trigger.placed_window_now()
+      @settings.open_station_peek(address, from=At(x, y, w, h))
+    }
+  })
+  trigger.cursor(Is(Some(Arrow))) |> ignore
 }
 
 ///|
@@ -307,13 +316,7 @@ fn agent_tile_node(parent : @view.View, src : Source, r : ChatRef, agent : () ->
     .ground(By(fn() { if part.pointed() || part.pressed() { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
     let s = fn() { station().unwrap() }
     part.says(By(fn() { if whole() { None } else { Some(@view.said(Button, label=s().name)) } })) |> ignore
-    @sfpages.hover_node(part, "bar-agent-station/" + key, fn(c) { @settings.station_peek_card(c, r.station) }, tile=true, padded=false) |> ignore
-    @sf.presses_node(part, fn() {
-      if !@sf.pointer_rests() {
-        let (x, y, w, h) = part.placed_window_now()
-        @settings.open_station_peek(r.station, from=At(x, y, w, h))
-      }
-    })
+    station_card_node(part, "bar-agent-station/" + key, r.station)
     part.presses(By(fn() { !whole() })).points(By(fn() { !whole() })) |> ignore
     let mark = fn() { @sf.has_station_mark(s().emoji, s().icon) }
     part.show(mark, fn(m) { @sf.station_mark_node(m, fn() { s().emoji }, fn() { s().icon }, chat_station_mark, fn() { @sf.theme().p.muted }, stint) })

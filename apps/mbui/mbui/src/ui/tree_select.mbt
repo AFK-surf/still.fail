@@ -25,10 +25,10 @@ let words_picks : @view.Lent[Bool] = @view.Lent::new()
 /// `lined`: a finger's handles a line down its ends' lines with a knob, whatever the platform's are.
 pub fn words_picked(v : @view.View, color? : Int64, lined? : Bool = false) -> Unit {
   v.lends(words_picks, true).lends(@view.runs_picker, words_picked_span) |> ignore
-  // (the I-beam over them, pointed at alone where the pointer is in it (what holds it pointed in still), as over an old
-  // view's page's words picked so (Ctx::selectable); what takes presses in it its own, a link of theirs the hand:
-  // runs_links')
-  v.cursor(Is(Some(IBeam))).points(Is(true)) |> ignore
+  // (pointed at alone where the pointer is in it (what holds it pointed in still); the I-beam over its words picked
+  // alone and the arrow round them, as over an old view's page's words picked so (Ctx::selectable): view_node_shape;
+  // what takes presses in it its own, a link of theirs the hand: runs_links')
+  v.points(Is(true)) |> ignore
   match color {
     Some(k) => v.lends(words_pick_color, k) |> ignore
     None => ()

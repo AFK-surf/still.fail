@@ -924,7 +924,8 @@ pub fn chat_list_node(
   })
   // what waits to be decided and does not show (ToAsk: the core's `asks`): a bell over the list right over the send
   // button, over the way to the end where both show; pressed, the chat goes to the first one's post, the next one's the
-  // next time. Out of view once the list is laid out (nothing known to be out of view before).
+  // next time. Out of view once the list is laid out (nothing known to be out of view before); shown till every one
+  // is in sight, as main's (asks_in_view): one in sight while another waits further on, the bell still goes to it.
   let asking = fn() {
     guard view() is Some(cv) else { return false }
     let asks = if cv.archived || cv.thread is None { [] } else { cv.asks }
@@ -935,12 +936,17 @@ pub fn chat_list_node(
     if in_sight.length() == 0 {
       return false
     }
-    !in_sight.iter().any(fn(k) {
-      match row_of(k) {
-        Some((Said(m), _)) => asks.contains(m.seq)
-        _ => false
-      }
-    })
+    // (an ask's row: its post's, or the chat's end where what an agent needs is said there, the core's `stateAsk`)
+    let seen = fn(seq : Double) {
+      in_sight.iter().any(fn(k) {
+        match row_of(k) {
+          Some((Said(m), _)) => m.seq == seq && cv.state_ask != Some(seq)
+          Some((State(_, _, _), _)) => cv.state_ask == Some(seq)
+          _ => false
+        }
+      })
+    }
+    !asks.iter().all(seen)
   }
   // Both actions stand six points inside the composer's end. The page supplies the same width it gives the
   // composer, including a panel's corners; a list made alone falls back to the width in its own room.

@@ -1527,13 +1527,23 @@ fn Ctx::tree_draw_node(
   }
   // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own
   // drawn or made, no glyph of its words asked of the host, as the old frame paints nothing of what lies outside its
-  // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries); not where what it draws may lie
-  // elsewhere than its box: turned, shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
+  // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries), turned by as far as it can turn to; not
+  // where what it draws may lie elsewhere than its box: shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
   // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
+  // (the window's edges among what it is drawn in, as the old frame's root clips to the window: a panel past its edge
+  // draws nothing of what is wholly beyond it, whatever its own clip reaches)
   let k = clip_top()
-  if (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) &&
+  let (cx0, cy0) = (dmax(clip_stack[k], 0.0), dmax(clip_stack[k + 1], 0.0))
+  let (cx1, cy1) = (dmin(clip_stack[k + 2], self.width), dmin(clip_stack[k + 3], self.height))
+  // (turned, about whatever point of its box: what it draws no further from its box than the box's diagonal)
+  let (bw, bh) = (c.w * s, c.h * s)
+  let out = if tree.turn_of(c.id).0 == 0.0 {
+    0.0
+  } else {
+    (bw * bw + bh * bh).sqrt()
+  }
+  if (x - out > cx1 || y - out > cy1 || x + bw + out < cx0 || y + bh + out < cy0) &&
     p.stretching.length() == 0 &&
-    tree.turn_of(c.id).0 == 0.0 &&
     tree.ground_drawn_of(c.id) == (0.0, 0.0, 0.0, 0.0) &&
     (c.shadow.2 & 0xFFL) == 0L {
     unseen()
@@ -5123,6 +5133,19 @@ priv enum ShapeOf {
 let view_shape_of : Ref[ShapeOf] = Ref(OfOld)
 
 ///|
+/// The pointer's shape over node `id`, what is pointed at (Tree::cursor_of): the one it says; else, where it takes no
+/// press, the I-beam over words picked with the pointer under it (tree_sel_at), the arrow round them, as the old frame
+/// shows a page's (Ctx::show_cursor's sel_at): not the I-beam over all of what lends its words picking (words_picked).
+fn view_node_shape(tree : @view.Tree, id : @view.NodeId) -> Cursor {
+  let shape = tree.cursor_of(id)
+  guard shape == Arrow && tree.cursor_said(id) is None else { return shape }
+  match view_point.val {
+    Some((x, y)) if tree_sel_at(x, y) is Some(_) => IBeam
+    _ => shape
+  }
+}
+
+///|
 /// The host shown the pointer's shape, where it changed: while a press is held, the shape of what holds it (a node of
 /// the tree's it went down on, a resizing edge dragged off it: its own; the old views', theirs, Ctx::show_cursor keeping
 /// the one it was pressed with); else of what the pointer is over (view_shape_of): a node's (Tree::cursor_of: what it
@@ -5136,7 +5159,7 @@ fn view_cursor_tell() -> Unit {
     (Some(_), Some(Old(_, _))) => desk.old_shape
     (Some(tree), _) =>
       match view_shape_of.val {
-        OfNode(id) => tree.cursor_of(id).code()
+        OfNode(id) => view_node_shape(tree, id).code()
         OfOld => desk.old_shape
         OfGround => Cursor::Arrow.code()
       }

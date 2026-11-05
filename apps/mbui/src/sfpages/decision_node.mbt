@@ -146,6 +146,9 @@ fn who_node(w : @view.View, m : () -> Message, resolved : () -> Bool) -> Unit {
       now.put(0.0)
     }
   })
+  // (its words as wide as they are, at its start: decision_box's align=AStart, the column round it stretching only
+  // the options under it (options_room's w=Full))
+  w.lines_up(Is(Some(Start))) |> ignore
   w.box(fn(a) {
     settled_words_node(a, who)
     a.alpha(By(fn() { way_shown(was, a) })) |> ignore

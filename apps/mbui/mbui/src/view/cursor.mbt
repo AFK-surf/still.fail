@@ -81,3 +81,11 @@ pub fn Tree::cursor_of(self : Tree, id : NodeId) -> Cursor {
     None => if n.on_press is Some(_) && self.takes_presses(id) { Hand } else { Arrow }
   }
 }
+
+///|
+/// The pointer's shape node `id` says (View::cursor), None where it says none (what it is shown by without being told,
+/// Tree::cursor_of) or is gone.
+pub fn Tree::cursor_said(self : Tree, id : NodeId) -> Cursor? {
+  guard self.alive_id(id) else { return None }
+  self.nodes[id.at].cursor
+}
