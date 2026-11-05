@@ -1057,6 +1057,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
+  // (what the host has for the app once, taken and handed to the node that holds it: host_said.mbt)
+  host_said_arrive()
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()

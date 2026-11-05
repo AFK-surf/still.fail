@@ -3016,6 +3016,7 @@ pub fn View::laid_before_causes(self : View) -> Unit {
 /// and its offset), drawn off and grown or shrunk by nothing: as it stood before a change told now is laid out, in the
 /// terms of laid_window_now (for what moves from there for that change's cause, said once at that moment).
 pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) {
+  layout_read("placed_window_now")
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   let mut x = 0.0
   let mut y = 0.0
@@ -3083,6 +3084,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
 /// it is laid out too, drawn off and grown or shrunk by nothing): where a change told now puts it, said once at that
 /// moment, never followed.
 pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
+  layout_read("laid_window_now")
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
   let mut x = 0.0
@@ -6442,6 +6444,7 @@ fn Tree::shown_now(self : Tree) -> Unit {
 /// the first layout after it is first asked has been done (not measured yet: no size of nothing). Never a motion's
 /// target.
 pub fn View::laid_size_told(self : View) -> (Double, Double)? {
+  layout_read("laid_size_told")
   guard self.live() is Some(n) else { return None }
   let cell = match n.size_cell {
     Some(c) => c
@@ -6462,6 +6465,7 @@ pub fn View::laid_size_told(self : View) -> (Double, Double)? {
 /// Drawing transforms are excluded, as in placed_window_now. This describes geometry; it never starts or retimes a
 /// motion. A flight declares its way once for the send and uses this only to locate its destination on that way.
 pub fn View::laid_window_told(self : View) -> (Double, Double, Double, Double)? {
+  layout_read("laid_window_told")
   guard self.live() is Some(n) else { return None }
   let cell = match n.rect_cell {
     Some(c) => c
@@ -8211,4 +8215,28 @@ pub fn Tree::rows_alive(self : Tree) -> Array[NodeId] {
 ///|
 fn Tree::alive_id(self : Tree, id : NodeId) -> Bool {
   id.at >= 0 && id.at < self.nodes.length() && self.nodes[id.at].live && self.nodes[id.at].gen == id.gen
+}
+
+///|
+/// Where what is laid out may not be read now (what the host has once handed on, before anything is laid out:
+/// @ui.on_host_said): why. None: it may be read.
+// kept across runs: said and put back around each such hand-off
+let layout_reads_shut : Ref[String?] = Ref(None)
+
+///|
+/// From now on what is laid out may not be read (`why`: where), until it is put back with what this gives (None: it may
+/// be read). Only ui's hand-off of what the host has once (host_said_arrive) says it; an app never does.
+pub fn shut_layout_reads(why : String?) -> String? {
+  let was = layout_reads_shut.val
+  layout_reads_shut.val = why
+  was
+}
+
+///|
+/// A read of what is laid out (`what`), where none may be: a fault (stopped in a test's run, told the host once).
+fn layout_read(what : String) -> Unit {
+  match layout_reads_shut.val {
+    Some(why) => fault("View::\{what} read in \{why}: nothing is laid out yet there")
+    None => ()
+  }
 }
