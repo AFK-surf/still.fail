@@ -18,8 +18,9 @@ priv struct Rows {
   mut rename_seen : Bool
   mut rename_opened_at : Int
   rename_field : @ui.Field
-  mut menu_for : String
-  mut menu_serial : Int
+  /// the row whose menu is open and the presenter it is: told as it changes, what reads it (a row's ground, its time) as
+  /// it opens
+  menu_open : @signals.Signal[(String, Int)]
   swiped_off : Map[String, Bool]
   felt_past : Map[String, Bool]
 }
@@ -30,8 +31,7 @@ let rows : Rows = {
   rename_seen: false,
   rename_opened_at: -1,
   rename_field: @ui.Field::new(),
-  menu_for: "",
-  menu_serial: -1,
+  menu_open: @signals.signal(("", -1), same=fn(a, b) { a == b }),
   swiped_off: {},
   felt_past: {},
 }
@@ -45,8 +45,7 @@ fn chat_rows_reset() -> Unit {
   rows.rename_seen = false
   rows.rename_opened_at = -1
   rows.rename_field.set("")
-  rows.menu_for = ""
-  rows.menu_serial = -1
+  rows.menu_open.set(("", -1))
   rows.swiped_off.clear()
   rows.felt_past.clear()
 }
@@ -64,7 +63,8 @@ fn row_ref(item : ChatItem) -> ChatRef {
 ///|
 /// Whether `item`'s row has its menu open (its ground stays lit, its time shown, meanwhile).
 fn row_menu_open(item : ChatItem) -> Bool {
-  rows.menu_for == @sfbase.row_name(item) && @sf.presented_drawn_of(rows.menu_serial)
+  let (name, serial) = rows.menu_open.get()
+  name == @sfbase.row_name(item) && @sf.presented_drawn_of(serial)
 }
 
 ///|
@@ -639,8 +639,7 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
   @sf.menu(chat_menu_items(src, item, []), from=if finger { Of(id) } else { @sf.at_point(x, y) })
-  rows.menu_for = @sfbase.row_name(item)
-  rows.menu_serial = @sf.last_presented()
+  rows.menu_open.set((@sfbase.row_name(item), @sf.last_presented()))
 }
 
 ///|

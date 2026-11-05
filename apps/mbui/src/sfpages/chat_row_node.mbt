@@ -131,8 +131,7 @@ pub fn chat_row_node(
         @ui.haptic(LongPress)
       }
       @sf.menu(chat_menu_items(src, i, []), from~)
-      rows.menu_for = @sfbase.row_name(i)
-      rows.menu_serial = @sf.last_presented()
+      rows.menu_open.set((@sfbase.row_name(i), @sf.last_presented()))
     }
     let hover = fn() { !finger && (@sf.lit_in_node(row) || menu_on()) }
     let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
