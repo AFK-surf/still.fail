@@ -66,7 +66,7 @@ let rule_words : Map[String, String] = {
 let built_by_hand : Array[String] = ["forget_parts", "built_from_changed"]
 
 ///|
-/// a Ctx's reads of where or how large a node was laid out (layout-read-back)
+/// a Ctx's reads of where or how large a box was laid out, by its id (layout-read-back)
 let layout_read_back : Array[String] = ["rect_of", "laid_size", "laid_rect"]
 
 ///|

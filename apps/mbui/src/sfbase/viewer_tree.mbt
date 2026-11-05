@@ -600,6 +600,9 @@ fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
     n.at_moment(vw.fly.end(), fn() {
       if vw.flies && !vw.fly_back {
         vw.flies = false
+        // (at rest where it landed, said so: what draws its picture by the flight or lying flat read again, which it is
+        // now, whenever it was last read)
+        vw.fly.put(1.0)
         pv_hidden.set("")
       }
     })

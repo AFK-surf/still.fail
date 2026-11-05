@@ -797,9 +797,6 @@ pub struct Tree {
   mut withins_asked : Bool
   /// whether a frame's laying out is telling what is under the pointer (Tree::laid_out): what it lays out then not again
   mut withins_passing : Bool
-  /// what what is under the pointer told placed otherwise, under a pointer that stays where it is: told again by the
-  /// next frame's pointer pass, as a move of the pointer's after it would be (nothing goes back within the frame)
-  mut withins_owed : Bool
   /// the nodes whose taking input is read (View::takes_input), as first read
   inputs_at : Array[Int]
   /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
@@ -1009,7 +1006,6 @@ pub fn Tree::new(
     withins_at: [],
     withins_asked: false,
     withins_passing: false,
-    withins_owed: false,
     inputs_at: [],
     point_said: 0,
     hits: 0,
@@ -6879,10 +6875,12 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 /// things are as an event finds them in the middle of its change: Tree::laid_now). One way, once (docs/retained.md's
 /// rule 10): the bindings told worked out; what they marked laid out and placed, the windowed lists' blocks by their
 /// lists after all else; what goes beside another and what is placed by where things are laid out placed then
-/// (View::beside, View::offset_placed), what changed of its look made again; then what where things are tells (what
-/// rows left out, what is under the pointer) told, and what that marks of where things are drawn and how they look
-/// worked out with it (Tree::told_applied). Nothing is laid out again for what layout told: what that marks of layout
-/// is the next frame's, counted as owed (Work's `owed`).
+/// (View::beside, View::offset_placed), what changed of its look made again; then what rows left out told, and what
+/// that marks of where things are drawn and how they look worked out with it (Tree::told_applied). Nothing is laid out
+/// again for what layout told: what that marks of layout is the next frame's, counted as owed (Work's `owed`). What is
+/// under the pointer is a hit test's (rule 6), the pointer's, an input's: told once all of it is placed, and what that
+/// marks done in this same frame, a pass of what it marked, till nothing is told otherwise (rule 9: the same at any rate
+/// of frames).
 fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   ignore(upto)
   let w = self.last_w
@@ -6957,28 +6955,27 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.outs_changed {
     self.outs_told()
   }
+  // (what that told, worked out with what it marks of where things are drawn and how they look; of layout, the next
+  // frame's)
+  self.told_applied()
   // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed; which column's
   // bar the pointer is along told anew as what is drawn or found there changes without anything placed: an order, what
-  // bounds input, what takes it)
+  // bounds input, what takes it. A hit test's, the pointer's (rule 6): of the frame's moment as a move of the pointer
+  // is, what it marks done in this same frame, a pass of what it marked, told again till nothing is told otherwise
+  // (rule 9: what is under a pointer that stays where it is the same at any rate of frames or in one; a finger points at
+  // nothing, nothing told). What is told otherwise still after withins_rounds flips as it is told (a node placed from
+  // under the pointer by its being under it): the next frame's, owed.)
   if !self.withins_passing {
-    if placing || self.withins_owed {
-      self.withins_owed = false
+    let bars = self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due)
+    if placing || bars {
       self.withins_passing = true
-      self.withins_told() |> ignore
-      self.withins_passing = false
-    } else if self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
-      self.withins_passing = true
-      self.bars_near_told() |> ignore
+      let mut rounds = 0
+      while rounds < withins_rounds && (if placing || rounds > 0 { self.withins_told() } else { self.bars_near_told() }) {
+        rounds = rounds + 1
+        self.laid_out(upto)
+      }
       self.withins_passing = false
     }
-  }
-  // (what that told, worked out with what it marks of where things are drawn and how they look; what it placed otherwise
-  // under a pointer that stays where it is told by the next frame's pointer pass: Tree's withins_owed)
-  let composed = self.composed.length()
-  self.told_applied()
-  if self.composed.length() > composed && (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) {
-    self.withins_owed = true
-    self.marked()
   }
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
@@ -8814,6 +8811,12 @@ fn Tree::within(self : Tree, at : Int) -> Bool {
   let (x, y, s) = self.placed(at)
   px >= x && px < x + n.lw * s && py >= y && py < y + n.lh * s
 }
+
+///|
+/// How many times a frame tells what is under the pointer again at most, each after a pass of what the one before marked
+/// (Tree::laid_out): as long a chain as what is placed under it by what is under it makes, and more; past it, what is
+/// still told otherwise flips as it is told.
+let withins_rounds : Int = 16
 
 ///|
 /// Each node whose being under the pointer is read told it again, as it is now (the pointer moved, or what is placed):

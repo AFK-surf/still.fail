@@ -191,7 +191,7 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
 10. **A frame goes one way: events, bindings, layout, paint.** The events due by its moment are committed first, each at
    its own; then the bindings told are worked out; then layout runs once, measuring and placing; then what changed is
    painted. Layout is of one moment, the frame's; a frame drawn ahead of it (for when it is shown) samples only paint's
-   properties there (a place moved, a look), as a compositor's motions are, never a size. Nothing goes back within the frame (Compose's phases: "no way to go backwards while in the same frame").
+   properties there (a place moved, a look), as a compositor's motions are, never a size. Nothing goes back within the frame (Compose's phases: "no way to go backwards while in the same frame") but for what the pointer is over (rule 6: a hit test of the tree as it is placed, the pointer's, an input's): what that tells is of the frame's moment, as a move of the pointer is, and what it marks is done in the same frame, a pass of what it marked, till nothing is told otherwise, so what is under a pointer that stays where it is is the same at any rate of frames (rule 9); a finger points at nothing, and nothing is told.
    Sizes and places worked out by layout are read by paint, by hit tests and by the next event; no binding, `computed`
    or `reacts` reads them to change the structure, a property layout reads, or where a list is scrolled to. Nothing of
    layout is a signal to follow, and each read of it (`View::laid_size`, `rect`, `laid_window_now`, `placed_window_now`,
@@ -209,8 +209,8 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    property layout reads only inside such a root of its own, as that root is about to be laid out (never of what that
    root itself lays out); a page's width given by the frame, never read from its layout. A cause reads where things
    are laid out as of its moment (`View::laid_window_now`; once its change is committed whole, `View::when_committed`)
-   for what it sets going then, said once (how long a send flies, by how far its landing is), never followed. `Tree::laid_out` does not call
-   itself; a node marked during layout fails a test where what is marked and what marked it are the tree's own (an old view
+   for what it sets going then, said once (how long a send flies, by how far its landing is), never followed. `Tree::laid_out` calls itself
+   for that alone; a node marked during layout fails a test where what is marked and what marked it are the tree's own (an old view
    lays out the old way, reading its layout back and building again: what it marks is counted as owed, the count only
    ever smaller, never let fail what is not yet the tree's) (the browser's ResizeObserver defers what it cannot deliver and
    says so; here what a frame cannot settle in its one pass is a fault, rule 9).
