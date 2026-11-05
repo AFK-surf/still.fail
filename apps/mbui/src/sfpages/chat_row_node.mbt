@@ -78,8 +78,8 @@ pub fn chat_row_node(
     // the way once its menu opens, back down as the menu goes (@sf.lift_of's), a card of the raised ground over the
     // menu's scrim, drawn in from the screen's sides (row_lifted, @sf.lift_over's)
     let lift = @sf.EdgeWay::new(0.0)
-    let lifted = fn() { if finger && !found { dmin(1.0, dmax(0.0, lift.shown(slot))) } else { 0.0 } }
-    if finger && !found {
+    let lifted = fn() { if finger { dmin(1.0, dmax(0.0, lift.shown(slot))) } else { 0.0 } }
+    if finger {
       slot.reacts(
         fn() {
           if menu_on() {
