@@ -64,33 +64,52 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 }
 
 ///|
-/// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
-/// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
-/// and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file picker for its draft
-/// (composer.file); Space with no field focused, the composer (composer.focus).
-fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  if @settings.action_pressed(c, prefs, "chat.jobs") {
-    toggle_jobs_pop()
-  }
-  if @settings.action_pressed(c, prefs, "chat.screen", in_field=true) {
-    chat_screen_first(r, v.screens)
-  }
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
-    composer_focus()
-  }
-  if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
-    c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })
-  }
-  if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
-    history_toggle(src, r, v)
-  }
-  if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
-    stop_agents(src, r, v)
-  }
-  if @settings.action_pressed(c, prefs, "composer.file", in_field=true) && !v.offline {
-    @sfpages.pick_files(writing(src, r.station + ":" + r.session))
-  }
+/// ⌘F's bar opened in chat `r` at the key's moment, its popovers shut (chat_find_open's, its bar a node's).
+fn chat_find_open_now(r : ChatRef) -> Unit {
+  chat_own.info_open.set(false)
+  chat_own.jobs_open.set(false)
+  @sfpages.find_open_now(chat_key(r))
+}
+
+///|
+/// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut) on its page `talk` (its view `view`, the list to its end
+/// `latest`), each done at its moment while the page takes input (@settings.actions_node), and as chosen from the menu
+/// bar: ⌘F its find (a chat with a thread); ⌘↓ its list to its end, following it again, or short of the chat's end its
+/// latest page (chat.latest); ⌘⇧E into the archive while nothing is left in it, ⌘⇧H its first agent's history beside it
+/// (one in front: the panel closed), ⌘. its agents at work stopped, its services and jobs (chat.jobs), its station's own
+/// display (chat.screen); ⌘U the system's file picker for its draft (composer.file); Space with no field focused, the
+/// composer's field (composer.focus).
+fn chat_actions_node(talk : @view.View, src : Source, w : Workspace, r : ChatRef, view : () -> ChatView?, latest : () -> Unit) -> Unit {
+  let draft = r.station + ":" + r.session
+  let with_view = fn(f : (ChatView) -> Bool) { fn() { match view() { Some(v) => f(v); None => false } } }
+  @settings.actions_node(talk, fn() { (src.topic)("prefs", {}).value }, [
+    ("chat.find", with_view(fn(v) { if v.thread is Some(_) { chat_find_open_now(r); true } else { false } })),
+    ("chat.latest", with_view(fn(v) {
+      match (v.newer, v.thread) {
+        (false, _) => { latest(); true }
+        (true, Some(th)) => {
+          (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, fn(_) {  })
+          true
+        }
+        _ => false
+      }
+    })),
+    ("chat.jobs", with_view(fn(_) { toggle_jobs_pop(); true })),
+    ("chat.screen", with_view(fn(v) { chat_screen_first(r, v.screens); true })),
+    ("composer.focus", with_view(fn(_) {
+      if switcher_open() || @ui.current().field_focused() { return false }
+      writing(src, draft).field.focus()
+      true
+    })),
+    ("chat.archive", with_view(fn(v) {
+      if v.archived || v.offline { return false }
+      archive_asked(src, w, r, v, (src.topic)("chat", chat_params(r)).value)
+      true
+    })),
+    ("chat.history", with_view(fn(v) { if v.agents.length() > 0 { history_toggle(src, r, v); true } else { false } })),
+    ("chat.stop", with_view(fn(v) { stop_agents(src, r, v); true })),
+    ("composer.file", with_view(fn(v) { if v.offline { false } else { @sfpages.pick_files(writing(src, draft)); true } })),
+  ])
 }
 
 ///|

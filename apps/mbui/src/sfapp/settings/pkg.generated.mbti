@@ -18,7 +18,7 @@ pub fn action_asked_done() -> Unit
 
 pub fn action_pressed(@ui.Ctx, @json.Json?, String, in_field? : Bool) -> Bool
 
-pub fn actions_node(@view.View, () -> @json.Json?, Array[(String, Bool, () -> Bool)]) -> Unit
+pub fn actions_node(@view.View, () -> @json.Json?, Array[(String, () -> Bool)]) -> Unit
 
 pub fn adb_asking() -> Bool
 
