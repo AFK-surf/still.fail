@@ -5,7 +5,8 @@
 
 ///|
 /// The icon button in `parent` showing icon `icon`, `size` across (round), its icon `icon_size`; named `label` (read
-/// out, and its tip in `tips`); `press` done as it is pressed. The node.
+/// out, and its tip in `tips`); `press` done as it is pressed; its corners linked where `linked` says (icon_button's
+/// `linked`: a bar's key at the window's corner following it, bar_keys_link), round where it says None. The node.
 pub fn icon_button_node(
   parent : @view.View,
   icon : String,
@@ -15,6 +16,7 @@ pub fn icon_button_node(
   size? : Double = icon_button_side,
   icon_size? : Double = 16.0,
   icon_now? : () -> String,
+  linked? : () -> @ui.CornerOf?,
 ) -> @view.View {
   parent.box(fn(v) {
     // (the hand on it: a mouse over it or pressing it, a finger pressing it; the keyboard's focus shown on it)
@@ -40,6 +42,11 @@ pub fn icon_button_node(
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
     .on_press(press)
     |> ignore
+    // (linked as an old view's box is: drawn following it, and the corner rule taking its corners as following it)
+    match linked {
+      Some(l) => @ui.tree_corners_linked(v, fn() { l().map(fn(k) { FixedArray::make(4, k) }) })
+      None => ()
+    }
     icon_node(v, icon, icon_size, By(fn() { if hand.shown(v) > 0.5 { theme().p.text } else { theme().p.muted } }), name_now?=icon_now)
     |> ignore
     let tip = match tips {
