@@ -128,6 +128,10 @@ export const backgroundStopped = (tasks: BackgroundTask[], resumable: string[]) 
 ${tasks.map((t) => `- ${t.kind === "agent" ? "subagent" : "background command"} ${t.id}${t.description === "" ? "" : ` (${t.description})`}${resumable.includes(t.id) ? ": SendMessage to it goes on from where it stopped" : ""}`).join("\n")}
 Before you wait on any of it, check where each got to and start again what is still needed.`;
 
+/// Its turn ended waiting, and the station ended its process at that turn's end: the background work it waits on is
+/// gone (told above it, `backgroundStopped`).
+export const BACKGROUND_STOPPED_WAITING = `You ended your last turn waiting, but what you waited on was stopped with your process (see above), so it will never bring you back. Check where it got to (a run it watched may already be done), act on that, and watch again what is still going before you wait.`;
+
 /// The agent said it would wait this long, and nothing has brought it back.
 export const waitOver = (seconds: number) => `You said you were waiting on work you started (${seconds} seconds), and nothing has brought you back yet. Check on it now.
 - If it is done: pick up its results and carry on. If nothing was watching it (you would have been told when it ended), start a watch the next time instead of waiting on a guessed duration.
