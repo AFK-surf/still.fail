@@ -19,7 +19,7 @@ type Lane = { pending: () => boolean; step: () => number };
 export class RecentChatPreparation {
   readonly #db: DatabaseSync;
   readonly #limit: number;
-  #turn = 0;
+  readonly #turns = new Map<string, number>();
   #globalInstalled = false;
   #scopeInstalled = false;
   #homeInstalled = false;
@@ -82,10 +82,13 @@ export class RecentChatPreparation {
         step: () => scanRecentHomeOverlapStep(db, limit).visited },
       { pending: () => exists("SELECT 1 FROM recent_home_overlap_dirty LIMIT 1"), step: () => settleRecentHomeOverlapStep(db, limit).visited },
     );
+    // Each requested scope has different lanes. Sharing a turn between them can repeatedly skip one scope's
+    // home-only work when another busy scope is interleaved with it.
+    const key = JSON.stringify([ws, isHome]), turn = this.#turns.get(key) ?? 0;
     for (let n = 0; n < lanes.length; n++) {
-      const at = (this.#turn + n) % lanes.length, lane = lanes[at]!;
+      const at = (turn + n) % lanes.length, lane = lanes[at]!;
       if (!lane.pending()) continue;
-      this.#turn = (at + 1) % lanes.length;
+      this.#turns.set(key, (at + 1) % lanes.length);
       return { done: false, visited: lane.step() };
     }
     // Another connection can have completed work after the earlier readiness check.

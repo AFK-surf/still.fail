@@ -6,10 +6,12 @@ import { recentHomeChatStep } from "./chat-list-home-source.ts";
 import { acknowledgeRecentScopeSession, installRecentScopeJournal, trackRecentScope } from "./chat-list-scope-journal.ts";
 import { recentScopeSessionThreadsStep } from "./chat-list-scope-source.ts";
 
-const mark = (thread: string) => `
-  UPDATE recent_home_dirty SET revision = revision + 1 WHERE thread = ${thread};
-  INSERT INTO recent_home_dirty(thread, revision) SELECT ${thread}, 1 WHERE ${thread} IS NOT NULL
+const mark = (thread: string, when = "1") => `
+  UPDATE recent_home_dirty SET revision = revision + 1 WHERE thread = ${thread} AND (${when});
+  INSERT INTO recent_home_dirty(thread, revision) SELECT ${thread}, 1 WHERE ${thread} IS NOT NULL AND (${when})
     AND NOT EXISTS (SELECT 1 FROM recent_home_dirty WHERE thread = ${thread});`;
+// Once a chat has a home, that session alone decides default-home membership; its other members cannot change it.
+const markMember = (thread: string) => mark(thread, `EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL)`);
 const conflictingThread = `(SELECT t.id FROM threads t WHERE t.surface = NEW.surface AND t.channel = NEW.channel
   AND t.thread_ts = NEW.thread_ts AND t.id IS NOT NEW.id)`;
 const conflictingMember = `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid)`;
@@ -57,15 +59,15 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         CREATE TRIGGER recent_home_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${mark("NEW.id")} END;
         CREATE TRIGGER recent_home_thread_order AFTER UPDATE OF created_at ON threads BEGIN ${markOrder("NEW.id")} END;
         CREATE TRIGGER recent_home_thread_drop AFTER DELETE ON threads BEGIN ${mark("OLD.id")} END;
-        CREATE TRIGGER recent_home_member_before_add BEFORE INSERT ON thread_sessions BEGIN ${mark(conflictingMember)} END;
-        CREATE TRIGGER recent_home_member_add AFTER INSERT ON thread_sessions BEGIN ${mark("NEW.thread")} END;
+        CREATE TRIGGER recent_home_member_before_add BEFORE INSERT ON thread_sessions BEGIN ${markMember(conflictingMember)} END;
+        CREATE TRIGGER recent_home_member_add AFTER INSERT ON thread_sessions BEGIN ${markMember("NEW.thread")} END;
         CREATE TRIGGER recent_home_member_before_change BEFORE UPDATE OF thread, session, rowid ON thread_sessions
           WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
-            ${mark("OLD.thread")} ${mark(conflictingMember)}
+            ${markMember("OLD.thread")} ${markMember(conflictingMember)}
         END;
         CREATE TRIGGER recent_home_member_change AFTER UPDATE OF thread, session ON thread_sessions
-          WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session BEGIN ${mark("NEW.thread")} END;
-        CREATE TRIGGER recent_home_member_drop BEFORE DELETE ON thread_sessions BEGIN ${mark("OLD.thread")} END;
+          WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session BEGIN ${markMember("NEW.thread")} END;
+        CREATE TRIGGER recent_home_member_drop BEFORE DELETE ON thread_sessions BEGIN ${markMember("OLD.thread")} END;
         CREATE TRIGGER recent_home_state_add AFTER INSERT ON thread_state BEGIN ${markOrder("NEW.thread")} END;
         CREATE TRIGGER recent_home_state_change AFTER UPDATE OF thread, said_n ON thread_state
           WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${markOrder("OLD.thread")} END;
