@@ -1778,7 +1778,15 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
         continue
       }
       match scene.layers.get(id) {
-        Some(l) if l.id.at != 0 && scene_place_now(tree, l) != Some(l.held) =>
+        // (placed otherwise in what holds it, that where it was: drawn where it is put now in what it was drawn in, as
+        // that is still (a list's column as it scrolls); else what holds it drawn again)
+        Some(l) if l.id.at != 0 &&
+          scene_place_now(tree, l) != Some(l.held) &&
+          !(
+            l.outer is Some(o) &&
+            scene.layers.get(o) is Some(ol) &&
+            (ol.id.at == 0 || scene_place_now(tree, ol) == Some(ol.held))
+          ) =>
           match l.outer {
             Some(o) if scene.layers.contains(o) => {
               scene_mark(o)
