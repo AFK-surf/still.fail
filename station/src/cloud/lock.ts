@@ -107,10 +107,27 @@ export const validKeyId = (id: unknown): id is string => {
   }
 };
 
+/// The station's own check of a signature, where it has one (native/mesh `verify`: libcrux, HACL*'s Ed25519 and P-256
+/// proved in F*, as a native app's shell checks them), set as the station starts (services.ts); none (cloud, a test, a
+/// mesh addon from before): node's.
+export type Verify = (alg: "Ed25519" | "ES256" | "ES256-der", key: Buffer, signature: Buffer, message: Buffer) => boolean;
+let native: Verify | null = null;
+export function verifyWith(v: Verify | null): void {
+  native = v;
+}
+
+/// Whether `signature` is the key `id`'s over `message` (`der`: a P-256 one DER-encoded, as WebAuthn gives it).
+export function signatureOk(id: string, signature: Buffer, message: Buffer, der = false): boolean {
+  const { alg, key } = publicKey(id);
+  if (native !== null) return native(alg === "Ed25519" ? "Ed25519" : der ? "ES256-der" : "ES256", Buffer.from(alg === "Ed25519" ? id.slice(8) : id.slice(5), alg === "Ed25519" ? "hex" : "base64url"), signature, message);
+  if (alg === "Ed25519") return verify(null, message, key, signature);
+  return verify("sha256", message, { key, dsaEncoding: der ? "der" : "ieee-p1363" }, signature);
+}
+
 /// Whether `sig` is the key's over the entry `hash`; a passkey's also on one of `origins` for `rp_id`.
 export function sigValid(sig: Sig, hash: string, origins: string[], rp_id: string, passkey: boolean): boolean {
   try {
-    const { alg, key } = publicKey(sig.key);
+    const { alg } = publicKey(sig.key);
     if (sig.alg === "webauthn") {
       if (!passkey || alg !== "ES256") return false;
       const client = Buffer.from(sig.client_data, "base64url");
@@ -119,11 +136,10 @@ export function sigValid(sig: Sig, hash: string, origins: string[], rp_id: strin
       const auth = Buffer.from(sig.authenticator_data, "base64url");
       // rpIdHash, then flags: user present.
       if (auth.length < 37 || !auth.subarray(0, 32).equals(sha256(rp_id)) || (auth[32]! & 1) === 0) return false;
-      return verify("sha256", Buffer.concat([auth, sha256(client)]), { key, dsaEncoding: "der" }, Buffer.from(sig.sig, "base64url"));
+      return signatureOk(sig.key, Buffer.from(sig.sig, "base64url"), Buffer.concat([auth, sha256(client)]), true);
     }
     if (sig.alg !== alg || passkey) return false;
-    if (alg === "Ed25519") return verify(null, signedBytes(hash), key, Buffer.from(sig.sig, "hex"));
-    return verify("sha256", signedBytes(hash), { key, dsaEncoding: "ieee-p1363" }, Buffer.from(sig.sig, "base64url"));
+    return signatureOk(sig.key, Buffer.from(sig.sig, alg === "Ed25519" ? "hex" : "base64url"), signedBytes(hash));
   } catch {
     return false;
   }
@@ -132,7 +148,7 @@ export function sigValid(sig: Sig, hash: string, origins: string[], rp_id: strin
 /// Whether a device's base key says `endpoint` is its own in workspace `ws`.
 export function endpointProof(ws: string, base: string, endpoint: string, proof: string): boolean {
   try {
-    return isId(base) && verify(null, endpointBytes(ws, endpoint), publicKey(`ed25519:${base}`).key, Buffer.from(proof, "hex"));
+    return isId(base) && signatureOk(`ed25519:${base}`, Buffer.from(proof, "hex"), endpointBytes(ws, endpoint));
   } catch {
     return false;
   }

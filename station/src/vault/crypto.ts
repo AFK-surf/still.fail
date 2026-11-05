@@ -2,8 +2,8 @@
 // whether a vault or item version may follow the one kept. The station holds only ciphertext and signatures; what it
 // checks here is who may write what, so a station or cloud taken over cannot add itself to a vault. Pure; the same
 // formats as client/core-ts/src/vault/crypto.ts, tested on the same values (test/fixtures/vault-vectors.json).
-import { createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, diffieHellman, hkdfSync, randomBytes, verify } from "node:crypto";
-import { canonical, publicKey, type LockState } from "../cloud/lock.ts";
+import { createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, diffieHellman, hkdfSync, randomBytes } from "node:crypto";
+import { canonical, publicKey, signatureOk, type LockState } from "../cloud/lock.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 
@@ -108,10 +108,9 @@ export function signedOk(o: { sig: Sig } & Record<string, unknown>, tag: string)
 function sigOver(sig: Sig, bytes: Uint8Array): boolean {
   try {
     if (sig === null || typeof sig !== "object" || typeof sig.sig !== "string") return false;
-    const { alg, key } = publicKey(sig.key);
+    const { alg } = publicKey(sig.key);
     if (sig.alg !== alg) return false;
-    if (alg === "Ed25519") return verify(null, bytes, key, Buffer.from(sig.sig, "hex"));
-    return verify("sha256", bytes, { key, dsaEncoding: "ieee-p1363" }, Buffer.from(sig.sig, "base64url"));
+    return signatureOk(sig.key, Buffer.from(sig.sig, alg === "Ed25519" ? "hex" : "base64url"), Buffer.from(bytes));
   } catch {
     return false;
   }

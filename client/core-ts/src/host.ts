@@ -111,6 +111,11 @@ export interface Host {
   /// (lock.ts lockClaim), all of it on the core's thread ahead of what the UI asked for.
   ed25519Sign?(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null;
 
+  /// Whether `signature` is `key`'s over `message`: Ed25519, or ECDSA P-256 over SHA-256 (`ES256` r‖s, `ES256-der`),
+  /// where the host checks it by a formally verified implementation of its own (a native app's shell: libcrux, HACL*'s
+  /// proved in F*). None, or null for a host that cannot: the core's own, noble's (vault/verified.ts).
+  verify?(alg: "Ed25519" | "ES256" | "ES256-der", key: Uint8Array, signature: Uint8Array, message: Uint8Array): boolean | null;
+
   /// A zstd stream taken apart by the host, open while the scope is, where it has a way of its own (a native app's
   /// shell: libzstd). None: the core's own, fzstd, in JS. Host decompression keeps this work off the core's thread.
   unzstd?(): Effect.Effect<Unzstd, HostError, Scope.Scope>;
