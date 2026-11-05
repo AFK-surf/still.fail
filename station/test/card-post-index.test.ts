@@ -8,6 +8,11 @@ import { Store } from "../src/store/store.ts";
 import { CARD_POST_ADD_CHANGED, cardPostsReady, cardPostsStep, installCardPosts } from "../src/store/card-post-index.ts";
 
 const textCard = '{"type":"text"}';
+function beforeIndex(db: DatabaseSync): void {
+  const objects = db.prepare("SELECT type,name FROM sqlite_master WHERE name LIKE 'card_post%' AND type IN ('trigger','table')").all() as { type: string; name: string }[];
+  for (const type of ["trigger", "table"] as const) for (const object of objects.filter((item) => item.type === type))
+    db.exec(`DROP ${type.toUpperCase()} "${object.name.replaceAll('"', '""')}"`);
+}
 const posts = (db: DatabaseSync, thread: number) => db.prepare(
   "SELECT CAST(n AS TEXT) AS n FROM card_posts WHERE thread=? ORDER BY card_posts.n",
 ).all(thread).map((row) => row.n);
@@ -49,6 +54,7 @@ for (const recursive of [false, true]) {
     const store = Store.open(":memory:"), db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      beforeIndex(db);
       const untracked = store.openThread("ember", "EMBER", "untracked", null, null).id;
       installCardPosts(db);
       const tracked = store.openThread("ember", "EMBER", "tracked", null, null).id;
@@ -97,6 +103,7 @@ for (const recursive of [false, true]) {
     const store = Store.open(":memory:"), db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      beforeIndex(db);
       const untracked = store.openThread("ember", "EMBER", "untracked", null, null).id;
       installCardPosts(db);
       const tracked = ["one", "two"].map((name) => store.openThread("ember", "EMBER", name, null, null).id);
@@ -131,6 +138,7 @@ test("old card posts are prepared in bounded batches while another connection wr
   const store = Store.open(path), db = store.db;
   let other: DatabaseSync | null = null;
   try {
+    beforeIndex(db);
     const thread = store.openThread("ember", "EMBER", "old", null, null).id;
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,card,options)
       VALUES(?,?,?,?,'agent','a',?,?,?)`);
@@ -160,6 +168,7 @@ test("a writer between the old-position read and commit cannot be missed", () =>
   const store = Store.open(path), db = store.db;
   let other: DatabaseSync | null = null;
   try {
+    beforeIndex(db);
     const thread = store.openThread("ember", "EMBER", "race", null, null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,1,'message','agent','a',1,?)").run(thread, textCard);
     installCardPosts(db);
@@ -200,6 +209,7 @@ test("a writer between the old-position read and commit cannot be missed", () =>
 test("a failed card post batch rolls back its rows and cursor", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
+    beforeIndex(db);
     const thread = store.openThread("ember", "EMBER", "rollback", null, null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,1,'message','agent','a',1,?)").run(thread, textCard);
     installCardPosts(db);
@@ -216,6 +226,7 @@ test("a failed card post batch rolls back its rows and cursor", () => {
 test("an old store losing a card index during preparation restarts the bounded primary-key walk", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
+    beforeIndex(db);
     const thread = store.openThread("ember", "EMBER", "missing-index", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card,options) VALUES(?,?,'message','agent','a',?,?,?)");
     put.run(thread, 1, 1, null, '["yes"]');

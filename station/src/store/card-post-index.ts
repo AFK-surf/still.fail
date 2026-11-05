@@ -4,9 +4,12 @@ import type { DatabaseSync } from "node:sqlite";
 // Requested old threads are prepared in slices; triggers keep each prepared or partly prepared thread current, even
 // when the writer is an older station. The entries table remains the source of truth.
 const VERSION = 1;
+export const CARD_POSTS_PENDING = "card posts pending:";
 export const CARD_POST_BEFORE = "SELECT MAX(n) AS n FROM card_posts WHERE thread=? AND n<?";
 export const CARD_POST_NEXT = "SELECT n FROM card_posts WHERE thread=? AND n>=? ORDER BY n LIMIT 1";
 export const CARD_POST_AFTER = "SELECT 1 FROM card_posts WHERE thread=? AND n>? LIMIT 1";
+export const CARD_POST_LATEST = "SELECT n FROM card_posts WHERE thread=? ORDER BY n DESC LIMIT 1";
+export const CARD_POST_SAMPLE = "SELECT n FROM card_posts WHERE thread=? ORDER BY n LIMIT 65";
 
 const candidate = "NEW.kind='message' AND (NEW.card IS NOT NULL OR NEW.options IS NOT NULL)";
 // REPLACE may silently remove a row without firing its DELETE trigger, including a row in a different thread by rowid.

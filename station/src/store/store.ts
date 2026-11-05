@@ -52,6 +52,7 @@ import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPos
 import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
+import { installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
@@ -392,6 +393,7 @@ export class Store {
       installSaidState(db);
       installWidgetSources(db);
       installCcIndex(db);
+      installCardPosts(db);
     } catch (e) {
       db.close();
       throw e;

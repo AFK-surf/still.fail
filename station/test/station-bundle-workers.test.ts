@@ -52,6 +52,8 @@ test("the workers in a station release start and process a batch", { skip: !proc
       .run(JSON.stringify([{ path: "/w/bundle.html", name: "bundle.html" }]), thread);
     store.db.prepare("DELETE FROM widget_source_rows WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM widget_source_scopes WHERE thread=?").run(thread);
+    store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(thread);
+    store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/session-count-worker.js", {}],
@@ -64,6 +66,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/session-up-jobs-worker.js", { session: "old-count" }],
       ["read/widget-sources-worker.js", { thread }],
       ["read/cc-index-worker.js", { session: "old-cc" }],
+      ["read/card-posts-worker.js", { thread }],
       ["read/archive-mark-worker.js", { scope: "all" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],

@@ -14,6 +14,7 @@ import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady 
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
+import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
@@ -21,7 +22,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, MESSAGES_BEFORE, type Membership, type MessageRow, OPTIONS_BEFORE,
+  CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -681,21 +682,16 @@ export function keptChats(s: Store, viewer: string | null, threads: number[] | n
 /// The thread's card still pending, if any: its latest post with a card, as long as no person has written in the
 /// thread since (nor was it closed). The post as merged, and its card.
 export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null {
-  // The latest of each kind (cards, and options from before cards), each read by its own index.
-  const latest = (column: string): Json | undefined =>
-    one(s, `SELECT n, card, options FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
-  const a = latest("card");
-  const b = latest("options");
-  const asked = a && b ? (a.n >= b.n ? a : b) : (a ?? b);
-  if (!asked) return null;
-  const n: number = asked.n;
-  const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
-  const closed = one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
-  if (answered || closed) return null;
-  const card = cardOf(asked.card, asked.options);
-  if (card === undefined) return null;
-  const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-  return m ? [toMessage(m), card] : null;
+  if (!cardPostsReady(s.db, thread) && threadsWithCards(s, [thread]).length === 0) return null;
+  requireCardPosts(s, [thread]);
+  const asked = one(s, CARD_POST_LATEST, thread);
+  return asked === undefined ? null : cardAt(s, thread, asked.n);
+}
+
+/// Prepare only threads a read will actually ask about, together so a list is not rebuilt once per old chat.
+export function requireCardPosts(s: Store, threads: readonly number[]): void {
+  const missing = [...new Set(threads)].filter((thread) => !cardPostsReady(s.db, thread));
+  if (missing.length) throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify(missing));
 }
 
 /// The cards `threads` wait on as kept (store/schema.ts PENDING_CARDS): by thread, the post's entry (`at`); and those of
@@ -782,18 +778,12 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
 
 /// A short card history can be checked by its cards; beyond this, look at recent people instead of all old cards.
 const ANSWER_CARD_SAMPLE_SIZE = 65;
-export const ANSWER_CARD_SAMPLE = "SELECT n, kind FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL ORDER BY n LIMIT 65";
-export const ANSWER_OPTIONS_SAMPLE = "SELECT n, kind FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL ORDER BY n LIMIT 65";
 export const HAS_ANSWER_PEOPLE_SINCE = `SELECT 1 FROM entries INDEXED BY entries_people_since
   WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ? LIMIT 1`;
 export const FIRST_ANSWER_PERSON_SINCE = `SELECT MIN(n) AS n FROM entries INDEXED BY entries_people_since
   WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ?`;
 export const ANSWER_PEOPLE_AFTER = `SELECT thread, n FROM entries INDEXED BY entries_people_since
   WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ? AND n > ? ORDER BY n`;
-export const ANSWER_NEXT_CARD = `SELECT n FROM entries INDEXED BY entries_cards
-  WHERE thread = ? AND n >= ? AND kind = 'message' AND card IS NOT NULL ORDER BY n LIMIT 1`;
-export const ANSWER_NEXT_OPTIONS = `SELECT n FROM entries INDEXED BY entries_options
-  WHERE thread = ? AND n >= ? AND kind = 'message' AND options IS NOT NULL ORDER BY n LIMIT 1`;
 export const ANSWER_NEXT_PERSON = `SELECT n, at FROM entries INDEXED BY entries_people_by_n
   WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1`;
 
@@ -801,14 +791,10 @@ export const ANSWER_NEXT_PERSON = `SELECT n, at FROM entries INDEXED BY entries_
 /// order. With many old cards, seek from a person to the next card and its first person, skipping ordinary messages.
 function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
   if (one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) === undefined) return [];
-  // Sample all card-bearing entries, including edits, so even a chat of many card edits cannot make this scan long.
-  const cardRows = all(s, ANSWER_CARD_SAMPLE, thread);
-  const optionRows = all(s, ANSWER_OPTIONS_SAMPLE, thread);
-  if (cardRows.length >= ANSWER_CARD_SAMPLE_SIZE || optionRows.length >= ANSWER_CARD_SAMPLE_SIZE) {
+  const cardRows = all(s, CARD_POST_SAMPLE, thread);
+  if (cardRows.length >= ANSWER_CARD_SAMPLE_SIZE) {
     const nextCard = (n: number): number | null => {
-      const a = one(s, ANSWER_NEXT_CARD, thread, n)?.n as number | undefined;
-      const b = one(s, ANSWER_NEXT_OPTIONS, thread, n)?.n as number | undefined;
-      return a === undefined ? b ?? null : b === undefined ? a : Math.min(a, b);
+      return (one(s, CARD_POST_NEXT, thread, n)?.n as number | undefined) ?? null;
     };
     const firstCard = nextCard(0);
     if (firstCard === null) return [];
@@ -836,9 +822,7 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
       }
     }
   }
-  const cards = [...new Set([
-    ...cardRows, ...optionRows,
-  ].filter((r) => r.kind === "message").map((r) => r.n as number))].sort((a, b) => a - b);
+  const cards = cardRows.map((r) => r.n as number);
   const out: { thread: number; n: number }[] = [];
   cards.forEach((card, i) => {
     const next = one(s, "SELECT n, at FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1", thread, card);
@@ -855,16 +839,22 @@ export function answersSince(s: Store, since: number, threads: number[] | null =
   const out: CardAnswer[] = [];
   // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
   // message after each: looking up every recent message in every thread would need work unrelated to the changed items.
-  const said: Json[] =
-    threads === null
-      ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
-      : threads.flatMap((thread) => answersOf(s, thread, since));
+  let said: Json[];
+  if (threads === null) {
+    const people = all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
+    const carded = new Set(threadsWithCards(s, [...new Set(people.map((row) => row.thread as number))]));
+    requireCardPosts(s, [...carded]);
+    said = people.filter((row) => carded.has(row.thread as number));
+  } else {
+    const withPeople = threads.filter((thread) => one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) !== undefined);
+    const carded = new Set(threadsWithCards(s, withPeople));
+    const relevant = withPeople.filter((thread) => carded.has(thread));
+    requireCardPosts(s, relevant);
+    said = relevant.flatMap((thread) => answersOf(s, thread, since));
+  }
   const of = threads === null ? null : new Set(threads);
   const askedBefore = (thread: number, n: number): number | null => {
-    const card: number | null = one(s, CARD_BEFORE, thread, n).n;
-    const options: number | null = one(s, OPTIONS_BEFORE, thread, n).n;
-    // Option's max: None below any Some.
-    return card === null ? options : options === null ? card : Math.max(card, options);
+    return one(s, CARD_POST_BEFORE, thread, n).n as number | null;
   };
   const cardAt = (thread: number, n: number): [MessageRow, Json] | null => {
     const row = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
