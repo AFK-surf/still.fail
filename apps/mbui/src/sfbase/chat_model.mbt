@@ -875,7 +875,6 @@ pub fn ChatMessages::of_value(v : Json?, was? : ChatMessages) -> ChatMessages {
   match was {
     Some(w) =>
       w.made.each(fn(k, p) { m.made[k] = p })
-      w.heads.each(fn(k, p) { m.heads[k] = p })
     None => ()
   }
   m

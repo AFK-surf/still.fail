@@ -450,6 +450,8 @@ pub let emits_turn : String
 
 pub fn english(String, args? : Array[(String, String)]) -> String?
 
+pub fn entries_made() -> Int32
+
 pub fn entries_of(ChatView) -> Array[Entry]
 
 pub fn error_words(@json.Json) -> String
@@ -2144,6 +2146,7 @@ pub fn ChatMessages::of(@rows.TopicList) -> Self
 pub fn ChatMessages::of_value(@json.Json?, was? : Self) -> Self
 pub fn ChatMessages::op_get(Self, Int32) -> Message
 pub fn ChatMessages::read_changes(Self) -> Array[@rows.ListChange]
+pub fn ChatMessages::row(Self, Int32) -> SaidRow
 pub fn ChatMessages::to_array(Self) -> Array[Message]
 
 pub(all) struct ChatPick {
@@ -2174,7 +2177,7 @@ pub fn ChatRows::entry(Self, Int32) -> Entry
 pub fn ChatRows::find(Self, String, Int32) -> Int32?
 pub fn ChatRows::key(Self, Int32) -> String
 pub fn ChatRows::length(Self) -> Int32
-pub fn ChatRows::new(ChatMessages, (Message) -> String) -> Self
+pub fn ChatRows::new(ChatMessages, (SaidRow) -> String) -> Self
 pub fn ChatRows::take(Self, ChatView, Array[Entry]) -> Unit
 pub fn ChatRows::version_of(Self, String) -> Int32?
 pub fn ChatRows::work(Self) -> Int32
@@ -2405,7 +2408,7 @@ pub(all) enum Entry {
   Older
   Empty
   Line
-  Said(Message)
+  Said(SaidRow)
   Sent(Elsewhere)
   Newer
   Out(Outgoing)
@@ -3165,6 +3168,20 @@ pub struct RowsMade {
   list : Array[Entry]
   keys : Array[String]
 }
+
+pub(all) struct SaidRow {
+  seq : Double
+  ts : String
+  outgoing : String
+  said : Bool
+  mine : Bool
+  system : Bool
+  joined : Bool
+  elsewhere : Array[Elsewhere]
+  version : Int32
+  // private fields
+}
+pub fn SaidRow::message(Self) -> Message
 
 #derive(Eq)
 pub(all) struct ScreenAt {
