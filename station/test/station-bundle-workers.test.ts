@@ -43,6 +43,9 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.exec("DELETE FROM session_count_seen; UPDATE session_count_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM sessions), complete=0");
     store.db.exec("DELETE FROM session_list_rows; UPDATE session_list_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM sessions), complete=0");
     store.db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-binding','old-count'); DELETE FROM session_binding_rows; UPDATE session_binding_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM bindings), complete=0");
+    store.insertJob({ id: "old-job", sessionKey: "old-count", name: "old-job", command: "true", cwd: "/", port: null,
+      token: "old-job", state: "running", pgid: null, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
+    store.db.exec("DELETE FROM session_up_job_rows; UPDATE session_up_job_meta SET fresh=0");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/session-count-worker.js", {}],
@@ -52,6 +55,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/recent-chat-worker.js", { scope: JSON.stringify([null, null]) }],
       ["read/session-list-worker.js", { scope: "all" }],
       ["read/session-bindings-worker.js", { scope: "all" }],
+      ["read/session-up-jobs-worker.js", { session: "old-count" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
@@ -77,5 +81,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
     assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");
+    assert.deepEqual(store.upJobIds("old-count"), ["old-job"]);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
