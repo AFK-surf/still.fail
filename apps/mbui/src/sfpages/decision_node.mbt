@@ -323,10 +323,15 @@ fn dismiss_node(
       let hot = fn() { live() && w.pointed() }
       w
       .padding(Is((0.0, 2.0, 0.0, 0.0)))
-      .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
-      .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
-      .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
       .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.chat.asks.dismiss"))) }))
+      |> ignore
+      w.box(fn(words) {
+        words
+        .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
+        .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+        .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+        |> ignore
+      })
       |> ignore
       @sf.presses_node(w, on=live, fn() {
         guard key() is Some(k) && thread() is Some(th) else { return }
