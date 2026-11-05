@@ -484,21 +484,26 @@ let looks_own : LooksOwn = { wake: -1.0, cycling: false }
 let looks_check : Ref[Bool] = Ref(false)
 
 ///|
-/// How often a Tester checks its frames (scene_check's frame painted again with nothing kept, the looks' frame drawn
-/// whole after it; each compared): every `checks_every`th frame from the first, by the frame's place since the Tester
-/// was made (`checks_frame`), so a run checks the same frames whatever its machine (Tester::scene_checks_every: a test
-/// that only opens screens, its first frame checked still).
-// kept across runs: set by each Tester as it is made (Tester::new), the test's own after
+/// How often a Tester checks the frames a run of its draws on the way (scene_check's frame painted again with nothing
+/// kept, the looks' frame drawn whole after it; each compared): every `checks_every`th from the first, by the frame's
+/// place since the Tester was made (`checks_frame`), so a run checks the same frames whatever its machine
+/// (Tester::scene_checks_every: a test that only opens screens). A frame a test can read (one drawn by a step of its
+/// own, the last of a run: `checks_between` 0) is checked always.
 let checks_every : Ref[Int] = Ref(1)
 
 ///|
-// kept across runs: put back by each Tester as it is made, counted by each frame drawn (frame_drawn)
 let checks_frame : Ref[Int] = Ref(0)
 
 ///|
-/// Whether the frame being drawn is one a Tester checks (looks_check, on its every checks_every-th frame).
+/// Whether the frame being drawn is one on the way of a Tester's run (Tester::run_for), not its last: what no test
+/// reads (more than 0: inside one).
+let checks_between : Ref[Int] = Ref(0)
+
+///|
+/// Whether the frame being drawn is one a Tester checks (looks_check): any a test can read; one on the way of a run,
+/// on its every checks_every-th.
 fn frame_checked() -> Bool {
-  looks_check.val && (checks_frame.val - 1) % checks_every.val == 0
+  looks_check.val && (checks_between.val == 0 || (checks_frame.val - 1) % checks_every.val == 0)
 }
 
 ///|
@@ -1447,9 +1452,10 @@ pub fn Tester::check_looks(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
-/// Each frame checked as check_looks says only on every `n`th from the first (frame_checked): what a test that opens
-/// screen after screen and looks at each once asks for (the corners', the screens', the contrast's, the flows seen
-/// again), its every frame drawn as a host draws it still, its first and every `n`th compared; every frame by default.
+/// The frames a run draws on the way (Tester::run_for's before its last) checked as check_looks says only on every
+/// `n`th from the first (frame_checked): what a test that opens screen after screen and looks at each once asks for
+/// (the corners', the screens', the contrast's, the flows seen again). Every frame it can read (its own steps', a
+/// run's last) checked still; every frame by default.
 pub fn Tester::scene_checks_every(self : Tester, n : Int) -> Unit {
   ignore(self)
   checks_every.val = if n < 1 { 1 } else { n }

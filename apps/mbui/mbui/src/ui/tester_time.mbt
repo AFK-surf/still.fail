@@ -124,7 +124,8 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
   // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)
   if self.host_frames {
     while self.fake.time < end - 1.0e-9 {
-      self.clock_frame()
+      // (one on the way, not the run's last: checked as Tester::scene_checks_every says)
+      self.between_frame(self.tick_after(self.fake.time) < end - 1.0e-9, fn() { self.clock_frame() })
     }
     // (asked on by a hair, less than the same moment summed another way: on to the frame that is at or past it)
     if ms > 0.0 && end > self.fake.time {
@@ -146,17 +147,33 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     if due > self.fake.time + 1.0e-9 && due < next {
       next = due
     }
-    self.frame_at(next)
+    // (one on the way, not the run's last: checked as Tester::scene_checks_every says)
+    let at = next
+    self.between_frame(at < end - 1.0e-9, fn() { self.frame_at(at) })
     // what that frame left owed (a host's answer posted, an input's frame after, a layout read back) drawn at its
     // moment, as Tester::draw draws it: what it sets off goes on from there, not from the next due moment
-    if next < end - 1.0e-9 {
-      self.draw_owed(1)
+    if at < end - 1.0e-9 {
+      self.between_frame(true, fn() { self.draw_owed(1) })
     }
   }
   // (and asked on by a hair, less than the same moment summed another way: there, at what was asked, not left a hair
   // short of it (a timer's moment summed as its cause's and a length, past the display's frame the clock is at))
   if ms > 0.0 && end > self.fake.time {
     self.frame_at(end)
+  }
+}
+
+///|
+/// `draw` done, its frames one on the way of a run where `between` (Tester::run_for's before its last: checked as
+/// Tester::scene_checks_every says), else frames a test can read (checked always).
+fn Tester::between_frame(self : Tester, between : Bool, draw : () -> Unit) -> Unit {
+  ignore(self)
+  if between {
+    checks_between.val = checks_between.val + 1
+  }
+  draw()
+  if between {
+    checks_between.val = checks_between.val - 1
   }
 }
 
