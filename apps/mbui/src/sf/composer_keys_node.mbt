@@ -10,7 +10,7 @@ pub fn composer_send_node(parent : @view.View, ready : () -> Bool, starting : ()
     v.reacts(hot, fn(on) { lit.go(v, if on { 1.0 } else { 0.0 }, dur_ms) })
     v.width(By(fn() { Some(theme().round.side) })).height(By(fn() { Some(theme().round.side) }))
     .radius(By(fn() { theme().round.side / 2.0 })).lines_up(Is(Some(Middle))).lies_along(Is(Middle))
-    .presses(By(ready)).focusable(By(ready))
+    .turned_off(By(fn() { !ready() })).focusable(By(ready))
     .says(By(fn() { Some(@view.said(Button, label=t("web-main.composer.send"))) }))
     .on_press(fn() { if ready() { send() } })
     .ground(By(fn() {

@@ -124,7 +124,7 @@ pub fn file_card_node(
     .says(By(fn() { Some(@view.said(Group, label=if info().title != "" { info().title } else { info().name })) }))
     |> ignore
     match open {
-      Some(go) => card.on_press(fn() { if open_shown() { go() } }).presses(By(open_shown)) |> ignore
+      Some(go) => card.on_press(fn() { if open_shown() { go() } }).turned_off(By(fn() { !open_shown() })) |> ignore
       None => ()
     }
     card.pick(fn() { info().pending && info().sent is None }, fn(mark, waiting) {
