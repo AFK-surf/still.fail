@@ -17,14 +17,41 @@ pub struct ChatImages {
   /// how far the ones coming have come, by id: the bytes here, of how many when that is known (the core's
   /// `{loaded, total}`)
   coming : Map[String, (Double, Double?)]
-  /// one more each time one comes, fails or is to be asked again: what shows them reads it, drawn again as that
-  /// changes (each one's state is in the maps above, read as they are)
-  told : @signals.Signal[Int]
+  /// Each picture's state changes are told only to what follows that picture.
+  told : Map[String, @signals.Signal[Int]]
 }
 
 ///|
 pub fn ChatImages::new() -> ChatImages {
-  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {}, told: @signals.signal(0) }
+  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {}, told: {} }
+}
+
+///|
+/// Read a picture's own changes; a progress update for another picture leaves this one alone.
+fn ChatImages::read(self : ChatImages, id : String) -> Unit {
+  let told = match self.told.get(id) {
+    Some(t) => t
+    None => {
+      let t = @signals.signal(0)
+      self.told[id] = t
+      t
+    }
+  }
+  told.get() |> ignore
+}
+
+///|
+/// Say that picture changed; a signal followed by nothing can be dropped when it changes.
+fn ChatImages::tell(self : ChatImages, id : String) -> Unit {
+  match self.told.get(id) {
+    Some(told) =>
+      if told.watched() {
+        told.set(@signals.untracked(fn() { told.get() }) + 1)
+      } else {
+        self.told.remove(id)
+      }
+    None => ()
+  }
 }
 
 ///|
@@ -47,7 +74,7 @@ pub fn ChatImages::get(
   name : String,
   ask : ((Json) -> Unit, (Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
 ) -> String {
-  self.told.get() |> ignore
+  self.read(id)
   match self.keys.get(id) {
     Some(k) => k
     None => {
@@ -63,7 +90,7 @@ pub fn ChatImages::get(
                   _ => None
                 },
               )
-              self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+              self.tell(id)
             }
             _ => ()
           }
@@ -87,7 +114,7 @@ pub fn ChatImages::get(
             }
           }
         }
-        self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+        self.tell(id)
       },
       )
       ""
@@ -99,21 +126,21 @@ pub fn ChatImages::get(
 /// How far picture `id` has come while it comes: the bytes here and of how many when known; None before the core has
 /// said, or once it is here.
 pub fn ChatImages::coming(self : ChatImages, id : String) -> (Double, Double?)? {
-  self.told.get() |> ignore
+  self.read(id)
   self.coming.get(id)
 }
 
 ///|
 /// Whether picture `id` failed for want of its station (asked again by `again`), not for its station having none.
 pub fn ChatImages::unreached(self : ChatImages, id : String) -> Bool {
-  self.told.get() |> ignore
+  self.read(id)
   self.unreached.contains(id)
 }
 
 ///|
 /// Whether picture `id` came from what the device had (the core's `held`), not from its station.
 pub fn ChatImages::held(self : ChatImages, id : String) -> Bool {
-  self.told.get() |> ignore
+  self.read(id)
   self.held.contains(id)
 }
 
@@ -121,14 +148,17 @@ pub fn ChatImages::held(self : ChatImages, id : String) -> Bool {
 /// The pictures of `station` ("" every station's) that failed for want of it asked again from the next frame on.
 pub fn ChatImages::again(self : ChatImages, station : String) -> Unit {
   let ids = self.unreached.iter().filter(fn(e) { station == "" || e.1 == station }).map(fn(e) { e.0 }).to_array()
+  if ids.length() == 0 {
+    return
+  }
+  @signals.start_batch()
   for id in ids {
     self.unreached.remove(id)
     self.keys.remove(id)
     self.coming.remove(id)
+    self.tell(id)
   }
-  if ids.length() > 0 {
-    self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
-  }
+  @signals.end_batch()
 }
 
 ///|
