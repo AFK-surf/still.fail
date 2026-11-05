@@ -37,8 +37,21 @@ const text = (t: Titled | null | undefined, k: keyof Titled): string => {
   return typeof v === "string" ? trim(v) : "";
 };
 
-/// Whether a thread is one of still.fail's own chats (its surface `ember`, or `stillfail` as some records say it).
-export const isOwnChat = (t: Titled | null | undefined) => t?.surface === "ember" || t?.surface === "stillfail";
+/// The names the station's own chats go by (station/src/sessions/internal.ts): their surface and connect, their
+/// channel, and the author of the station's own notices. Each is read in the names of before too (`ember`, as stations
+/// wrote them before the rename, and `stillfail`, as some records say it); new ones are written in the first.
+export const OWN_SURFACES: readonly string[] = ["chat", "ember", "stillfail"];
+export const OWN_CHANNELS: readonly string[] = ["CHAT", "EMBER", "STILLFAIL"];
+export const STATION_AUTHORS: readonly string[] = ["station", "ember", "stillfail"];
+/// Whether a surface (or a connect) is the station's own chats'.
+export const isOwnSurface = (surface: unknown) => typeof surface === "string" && OWN_SURFACES.includes(surface);
+/// Whether a channel is the station's own chats'.
+export const isOwnChannel = (channel: unknown) => typeof channel === "string" && OWN_CHANNELS.includes(channel);
+/// Whether a message's author kind (or a notice's `via`) is the station itself.
+export const isStationAuthor = (kind: unknown) => typeof kind === "string" && STATION_AUTHORS.includes(kind);
+
+/// Whether a thread is one of the station's own chats.
+export const isOwnChat = (t: Titled | null | undefined) => isOwnSurface(t?.surface);
 
 /// A Feishu chat's id (`oc_…`, docs/feishu.md).
 export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
@@ -51,7 +64,7 @@ export function givenTitle(t: Titled | null | undefined): string | null {
 /// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
 export function placeName(surface: string, channel: string, channelName: string, words: { directMessage: string; feishu: string }): string | null {
   if (surface.startsWith("feishu:") || isFeishuChat(channel)) return channelName || words.feishu;
-  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
+  if (isOwnSurface(surface) || surface === "") return null;
   return channel.startsWith("D") ? words.directMessage : `#${channelName || channel}`;
 }
 

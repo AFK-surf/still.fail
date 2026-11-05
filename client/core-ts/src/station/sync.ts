@@ -42,6 +42,7 @@ import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, r
 import { type Marks, marksOf, marksWith, rowsMade, rowsShared } from "./rows-made.ts";
 import { current, tr } from "../i18n.ts";
 import { timed } from "../spent.ts";
+import { isOwnSurface } from "../titles.ts";
 
 export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
 export type { EventsFor, LiveView } from "./link.ts";
@@ -1629,7 +1630,7 @@ export class StationsSync {
         // A chat new to the list, or one whose rows only lend their title (a Slack thread): the station's to say, once
         // a person wrote in it.
         if (rows.length === 0) {
-          const own = get(core.data.of(address)?.thread(address, id), "surface") === "ember";
+          const own = isOwnSurface(get(core.data.of(address)?.thread(address, id), "surface"));
           if (own || entries.some((e) => get(e, "authorKind") === "person")) this.#rowsRead(address, { threads: [id] });
           return;
         }
