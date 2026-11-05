@@ -49,6 +49,11 @@ test("awake waits keep their expiry, latest-turn and old-store behavior", () => 
     db.prepare("INSERT INTO turns(id,session_key,kind,started_at,ended_at,outcome,declared,wait_seconds) VALUES ('wait','s','user',0,100,'completed','waiting',NULL)").run();
     assert.equal(working(store, 60_099), true);
     assert.equal(working(store, 60_100), false, "the original deadline is exclusive");
+    db.prepare("UPDATE turns SET outcome='failed',detail='other: interrupted' WHERE id='wait'").run();
+    assert.equal(working(store, 101), true, "awake also follows a recorded wait from an unsuccessful turn");
+    db.prepare("UPDATE turns SET ended_at=NULL WHERE id='wait'").run();
+    assert.equal(working(store, 101), false, "an unended turn is not a recorded wait");
+    db.prepare("UPDATE turns SET ended_at=100 WHERE id='wait'").run();
     db.prepare("INSERT INTO turns(id,session_key,kind,started_at,ended_at,outcome,declared) VALUES ('done','s','user',1,100,'completed','all_done')").run();
     assert.equal(working(store, 101), false, "a wait in history no longer keeps the station awake");
     db.prepare("DELETE FROM turns WHERE id='done'").run();
