@@ -75,6 +75,7 @@ fn messages_reset() -> Unit {
   system_size_class_now.val = None
   system_fold_now.set({ hinge: NoHinge, divisions: [] })
   system_nav_action_now.val = None
+  host_saids.clear()
 }
 
 ///|
