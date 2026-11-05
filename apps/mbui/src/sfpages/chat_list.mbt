@@ -370,6 +370,13 @@ fn composer_width_in(pane : Double, side : Double) -> Double {
 let composer_most : Double = 804.0
 
 ///|
+/// The composer's widest as its room is said (composer_width_in): none on a native screen, where it is as wide as its
+/// pane leaves it.
+fn composer_widest() -> Double? {
+  if @sf.native_on() { None } else { Some(composer_most) }
+}
+
+///|
 /// (In a panel of its own, as far in as makes its box concentric with the panel's foot corners its round controls can
 /// follow in turn in its own: @sf.pane_foot_in.)
 pub fn composer_side() -> Double {

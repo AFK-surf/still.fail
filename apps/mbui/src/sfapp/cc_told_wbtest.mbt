@@ -14,7 +14,7 @@ fn chat_cc_tester(src : Source, r : ChatRef, read : () -> ChatView) -> @ui.Teste
     @ui.set_tree_theme(@sf.ui_theme_now)
     root.lies_along(Is(End)) |> ignore
     made.val = Some(@sfpages.chat_composer_node(root, src, r, fn() { Some(read()) },
-      fn() { @sfpages.composer_width(900.0) }, fn() { 500.0 }, fn() { @sfpages.composer_foot_in(900.0) },
+      fn() { @sfpages.composer_side() }, fn() { 500.0 }, fn() { @sfpages.composer_foot_in(900.0) },
       fn() { @sfpages.composer_alone }, fn(_) { }))
   })
   t.draw()

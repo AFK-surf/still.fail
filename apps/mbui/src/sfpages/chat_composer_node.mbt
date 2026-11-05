@@ -33,7 +33,7 @@ pub fn chat_composer_node(
   src : Source,
   r : ChatRef,
   view : () -> ChatView?,
-  width : () -> Double,
+  side : () -> Double,
   height : () -> Double,
   foot : () -> Double,
   place : () -> ComposerPlace,
@@ -60,10 +60,11 @@ pub fn chat_composer_node(
   }
   let root = parent.box(fn(root) {
     root_at.val = Some(root)
-    root.lines_up(Is(Some(Middle))).padding(By(fn() { (0.0, 12.0, 0.0, foot()) })) |> ignore
-    let notices = composer_notices_node(root, src, r, view, width)
+    // (as wide as its room leaves it `side` in from each side, its widest at most: composer_width_in, said to layout)
+    root.lines_up(Is(Some(Middle))).padding(By(fn() { (side(), 12.0, side(), foot()) })) |> ignore
+    let notices = composer_notices_node(root, src, r, view)
     let body = root.box(fn(body) {
-      body.width(By(fn() { Some(width()) })) |> ignore
+      body.width_share(Is(1.0)).max_width(By(composer_widest)) |> ignore
       node.val = Some(composer_node(body, src, draft, fn() {
         let v = view()
         { station: r.station, draft, session: r.session, placeholder: @sf.t("web-main.composer.placeholder"), toolbar: None,
