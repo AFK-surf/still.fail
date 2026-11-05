@@ -135,8 +135,6 @@ fn picked_row() -> (@ui.TreePicked, PickRow)? {
 /// finger picked of a message, the pill over what a mouse did (pick_layer's, pick_pop's); quoted into draft `draft`.
 /// `top` the bar's room over the list, `foot` the composer's under it.
 pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () -> Double, foot : () -> Double) -> Unit {
-  let at : Ref[(Double, Double, Double, Double)?] = Ref(None)
-  layer.reacts(fn() { layer.laid_window_told() }, fn(r) { at.val = r })
   let quote = fn(t : @ui.TreePicked, r : PickRow) {
     let text = t.words.trim(chars=" \n\t").to_string()
     if text != "" {
@@ -191,11 +189,20 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
     guard which is Some(finger) else { return }
     // (back lets go of what is picked before it goes back a page: MessagePick.kt's BackHandler, pick_back's)
     over.over(Is(true)).lines_up(Is(Some(Start))).takes_back(fn() { @sfbase.pick_clear() }) |> ignore
-    // (where it stands: worked out as what is picked changes, from where that is drawn then)
-    let place = fn() -> (Double, Double) {
-      picked_row() |> ignore
-      let (lx, ly, lw, lh) = at.val.unwrap_or((0.0, 0.0, 0.0, 0.0))
-      match @signals.untracked(@ui.picked_box) {
+    // (where what is picked is drawn, and where a pointer let it go: taken as what is picked changes, at the event
+    // that changed it, not as the frame is painted, where nothing is laid out again)
+    let picked_at : @signals.Signal[((Double, Double, Double, Double)?, (Double, Double, Double)?)] = @signals.signal(
+      (None, None),
+      same=fn(a, b) { a == b },
+    )
+    over.reacts(fn() { picked_row().map(fn(p) { p.0 }) }, fn(_) {
+      picked_at.set((@signals.untracked(@ui.picked_box), @signals.untracked(@ui.picked_end)))
+    })
+    // (where it stands in the layer laid out at `at`)
+    let place = fn(at : (Double, Double, Double, Double)?) -> (Double, Double) {
+      let (lx, ly, _, lh) = at.unwrap_or((0.0, 0.0, 0.0, 0.0))
+      let (picked, end) = picked_at.get()
+      match picked {
         Some((x, y, w, h)) =>
           if finger {
             // (over the passage; under it where the bar over the list is too near; on the screen where it runs past)
@@ -206,7 +213,7 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
             (x + w / 2.0 - lx, yy - ly)
           } else {
             // (8 over where the pointer let it go, its middle there: pick_pop's)
-            match @signals.untracked(@ui.picked_end) {
+            match end {
               Some((ex, ey, _)) => (ex - lx, ey - 8.0 - pick_pop_h - ly)
               None => (x + w - lx, y - 8.0 - pick_pop_h - ly)
             }
@@ -217,10 +224,12 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
     over.box(fn(b) {
       // (a tap on it keeps what is picked: what it does is done with it)
       @ui.keeps_picked(b) |> ignore
-      b.offset(By(fn() {
-        let (x, y) = place()
-        let half = b.laid_size_told().map(fn(z) { z.0 / 2.0 }).unwrap_or(0.0)
-        let w = at.val.map(fn(r) { r.2 }).unwrap_or(0.0)
+      // (from where this frame laid the layer and it out, read as it is painted)
+      b.offset(Painted(fn(laid) {
+        let at = laid.rect(layer)
+        let (x, y) = place(at)
+        let half = laid.size(b).map(fn(z) { z.0 / 2.0 }).unwrap_or(0.0)
+        let w = at.map(fn(r) { r.2 }).unwrap_or(0.0)
         // (kept on the screen, 8 in from its sides)
         (dmax(8.0, dmin(x - half, w - half * 2.0 - 8.0)), y)
       }))
