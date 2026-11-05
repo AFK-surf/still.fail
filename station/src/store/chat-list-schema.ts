@@ -13,15 +13,21 @@ export const RECENT_CHAT_SCHEMA_VERSION = `SELECT (SELECT version = 1 FROM recen
 /// A version and its component's tables and triggers are installed in the same transaction. Future changes that
 /// cannot use this version must migrate or rebuild it after handover; they must not silently read a partial index.
 export function recentChatIndexInstalled(db: DatabaseSync, part: RecentIndexPart): boolean {
-  const found = db.prepare(RECENT_CHAT_SCHEMA_TABLES)
-    .get(tables[part]) as { component: number; versions: number };
-  if (!found.versions) {
-    if (!found.component) return false;
-    throw new Error(`recent chat ${part} index has an incompatible or missing version`);
+  let marker: { current: number | null; component: number };
+  try {
+    // Ready indexes take one statement: the marker and its component are read from the same snapshot.
+    marker = db.prepare(RECENT_CHAT_SCHEMA_VERSION).get(part, tables[part]) as typeof marker;
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== "no such table: recent_chat_versions") throw error;
+    const found = db.prepare(RECENT_CHAT_SCHEMA_TABLES)
+      .get(tables[part]) as { component: number; versions: number };
+    if (!found.versions) {
+      if (!found.component) return false;
+      throw new Error(`recent chat ${part} index has an incompatible or missing version`);
+    }
+    // Another connection installed the version table after the first statement failed. Recheck both on one snapshot.
+    marker = db.prepare(RECENT_CHAT_SCHEMA_VERSION).get(part, tables[part]) as typeof marker;
   }
-  // Installation can finish on another connection between the two statements. Read its marker and component on
-  // the same snapshot, rather than comparing the marker with the earlier snapshot's table list.
-  const marker = db.prepare(RECENT_CHAT_SCHEMA_VERSION).get(part, tables[part]) as { current: number | null; component: number };
   if (!marker.component && marker.current === null) return false;
   if (!marker.component || marker.current !== 1) throw new Error(`recent chat ${part} index has an incompatible or missing version`);
   return true;
