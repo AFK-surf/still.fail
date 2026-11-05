@@ -160,6 +160,7 @@ export const isFor = (to: To, { viewer, lang }: { viewer: Viewer; lang: Lang }, 
 type Handed = {
   pid: number; at: number; log: Kept<To>; rows: [string, [string, string][]][]; overviews: [string, string][]; last: { viewer: Viewer; lang: Lang } | null;
   away?: [string, Away][];
+  shared?: { rows: [string, string][]; until: number };
 };
 
 /// What changed of the sidebar of a viewer none of whose streams is here (in one language), while it is kept for one
@@ -212,9 +213,12 @@ export class Events {
   /// What each viewer's streams were last told of their sidebar (row id → JSON) and their overview (JSON), by viewer and
   /// language (`viewerKey`): what changes is told against it.
   private rowsTold = new Map<string, Map<string, string>>();
-  /// The chat list as it was told last to every stream that makes its sidebar of it (row id → JSON); null until it is
-  /// read whole (a process that took over tells nothing of it until then: a stream reads it whole as it opens).
+  /// The chat list as it was told last to every stream that makes its sidebar of it (row id → JSON). Kept while a
+  /// shared stream may return, and handed over with the event log so changes during a handover are told too.
   private sharedTold: Map<string, string> | null = null;
+  private sharedUntil = 0;
+  private sharedReading: Promise<void> | null = null;
+  private openingShared = 0;
   private overviewTold = new Map<string, string>();
   /// For each viewer whose streams all went (by `viewerKey`), what changed of their sidebar since (`Away`): as one comes
   /// back, only that is read (`cameBack`). Read whole at each, every device that came back (each link that moved, every
@@ -295,6 +299,10 @@ export class Events {
           this.rowsTold = rows;
           this.overviewTold = overviews;
           this.last = handed.last;
+          if (handed.shared && now <= handed.shared.until) {
+            this.sharedTold = new Map(handed.shared.rows);
+            this.sharedUntil = handed.shared.until;
+          }
           // What changed of each viewer's sidebar meanwhile is what the process before kept; one that kept none (from
           // before it): all of each of theirs, as they come back.
           this.away = new Map(handed.away ?? [...rows.keys()].map((k): [string, Away] => [k, { whole: true, sessions: [], threads: [] }]));
@@ -343,7 +351,10 @@ export class Events {
     // sidebars from now is the next one's to remember.
     const away = new Map(this.away);
     for (const k of this.rowsTold.keys()) if (!away.has(k)) away.set(k, { whole: false, sessions: [], threads: [] });
-    const handed: Handed = { pid: process.pid, at, log: this.log.kept(), rows: [...this.rowsTold].map(([k, told]) => [k, [...told]]), overviews: [...this.overviewTold], last, away: [...away] };
+    const shared = this.keepsShared() && this.sharedTold !== null
+      ? { rows: [...this.sharedTold] as [string, string][], until: this.clients.some((c) => c.shared) ? at + KEPT_MS : this.sharedUntil }
+      : undefined;
+    const handed: Handed = { pid: process.pid, at, log: this.log.kept(), rows: [...this.rowsTold].map(([k, told]) => [k, [...told]]), overviews: [...this.overviewTold], last, away: [...away], shared };
     try {
       mkdirSync(dirname(file), { recursive: true });
       const tmp = `${file}.tmp-${process.pid}`;
@@ -405,15 +416,43 @@ export class Events {
 
   /// Whether what is told is made and kept: someone follows, or may come back to what they missed.
   private listening(): boolean {
-    return !this.handed && (this.clients.length > 0 || this.lingering !== null);
+    return !this.handed && (this.clients.length > 0 || this.lingering !== null || this.openingShared > 0);
+  }
+
+  /// A shared stream can return for as long as its changes are kept, even if only older streams remain connected.
+  private keepsShared(): boolean {
+    if (this.openingShared > 0 || this.clients.some((c) => c.shared)) return true;
+    if (this.sharedTold !== null && this.time.now() <= this.sharedUntil) return true;
+    this.sharedTold = null;
+    this.sharedUntil = 0;
+    return false;
+  }
+
+  /// Read the baseline before the first shared stream joins. Changes arriving during the read wait for it in
+  /// `tellShared`, so the first change after that stream joins is compared against a current baseline too.
+  private prepareShared(): Promise<void> {
+    if (this.sharedTold !== null) return Promise.resolve();
+    if (this.sharedReading !== null) return this.sharedReading;
+    const reading = this.deps.readers.read("sharedOf", { sessions: null, threads: null }, "zh", TOLD).then((text) => {
+      const read = JSON.parse(text) as { rows: any[] };
+      this.sharedTold = new Map(read.rows.map((r) => [String(r.id ?? ""), JSON.stringify(r)]));
+      this.sharedUntil = this.time.now() + KEPT_MS;
+    }).finally(() => { this.sharedReading = null; });
+    this.sharedReading = reading;
+    this.whenRead(reading);
+    return reading;
   }
 
   /// Nobody follows: what is told is still made a while, for one coming back; past it, nothing before can be.
   private linger() {
     this.lingering = this.time.after(KEPT_MS, () => {
+      // A stream is already opening and its baseline read has not finished. Keep the log until it joins or fails.
+      if (this.openingShared > 0) return this.linger();
       this.lingering = null;
       this.log.clear();
       this.rowsTold.clear();
+      this.sharedTold = null;
+      this.sharedUntil = 0;
       this.overviewTold.clear();
       this.away.clear();
     });
@@ -483,6 +522,15 @@ export class Events {
     if (follows) live = [];
     // What the process before this one told goes on here, ids and all: not before it is taken up.
     if (this.taking !== null) await this.taking;
+    const wantsShared = rows && shared;
+    // An older process did not hand over the shared baseline. Its log cannot promise all shared changes: require a
+    // fresh read instead of resuming it. Opening streams share the one initial read.
+    const sharedHistory = !wantsShared || (this.keepsShared() && this.sharedTold !== null);
+    if (wantsShared) {
+      this.openingShared++;
+      try { while (this.sharedTold === null) await this.prepareShared(); }
+      catch (error) { this.openingShared--; throw error; }
+    }
     const queue: string[] = [];
     let wakeReader: (() => void) | null = null;
     let closed = false;
@@ -512,7 +560,7 @@ export class Events {
     // Coming back where all that was told since is kept (their sidebar told on this run too, or one that makes its rows
     // itself from what was told).
     const k = viewerKey(viewer, lang);
-    const resumes = since !== null && (rows || this.rowsTold.has(k)) && this.log.has(since);
+    const resumes = since !== null && sharedHistory && (rows || this.rowsTold.has(k)) && this.log.has(since);
     if (since !== null && !resumes) {
       // Why, for the log: a station whose streams are never resumed has every client read it again each time.
       log.info("events", "a stream is not resumed", { since, ...this.log.state(), rows: this.rowsTold.has(k) });
@@ -565,6 +613,7 @@ export class Events {
     // link cut read the whole station again (a dozen reads). Clients from before skip a block without data.
     if (!resumes && (rows || this.rowsTold.has(k))) client.raw(`id: ${this.log.at()}\n\n`);
     this.clients.push(client);
+    if (wantsShared) this.openingShared--;
     this.last = { viewer, lang };
     this.lingering?.();
     this.lingering = null;
@@ -585,6 +634,7 @@ export class Events {
       closed = true;
       wakeReader?.();
       this.clients = this.clients.filter((c) => c !== client);
+      if (client.shared && !this.clients.some((c) => c.shared)) this.sharedUntil = this.time.now() + KEPT_MS;
       client.stops.forEach((stop) => stop());
       if (this.clients.length > 0) return;
       this.stopTimers();
@@ -1004,33 +1054,51 @@ export class Events {
   }
 
   /// The chat list's rows a round's changes touch, made once for everyone (read/views.ts `sharedChats`), each told to
-  /// the streams that see it as it changed (`chat-shared`; gone: `chat-shared-removed`). None while no stream makes its
-  /// sidebar of it.
+  /// the streams that see it as it changed (`chat-shared`; gone: `chat-shared-removed`), also while one may come back.
   private async tellShared(dirty: ReturnType<typeof Events.clean>) {
-    if (!this.clients.some((c) => c.shared)) return;
+    if (!this.keepsShared()) return;
+    if (this.sharedReading !== null) {
+      try { await this.sharedReading; } catch { return; }
+    }
     const sessions = [...new Set([...dirty.items.sessions, ...dirty.made.sessions])];
     const threads = [...new Set([...dirty.items.threads, ...dirty.made.threads])];
-    const whole = this.sharedTold === null || dirty.rowsAll;
+    const whole = dirty.rowsAll;
     if (!whole && sessions.length === 0 && threads.length === 0) return;
     let read: { rows: any[]; scope: string[] | null };
     try {
       read = JSON.parse(await this.deps.readers.read("sharedOf", whole ? { sessions: null, threads: null } : { sessions, threads }, "zh", TOLD));
     } catch (error) {
-      return log.warn("events", "the chat list not read", { error: (error as Error).message });
+      log.warn("events", "the chat list not read; its streams will read again", { error: (error as Error).message });
+      this.sharedTold = null;
+      this.sharedUntil = 0;
+      this.log.clear();
+      for (const c of this.clients.filter((c) => c.shared)) c.end();
+      return;
     }
     const told = this.sharedTold;
     const now = new Map(read.rows.map((r) => [String(r.id ?? ""), JSON.stringify(r)]));
-    if (told === null) return void (this.sharedTold = now);
+    if (told === null) return;
+    // A row can move between workspaces. A returning stream must hear the last change for each place it may see,
+    // including removal from the old place, even when another place received a newer version of the same row.
+    const place = (text: string) => (JSON.parse(text) as { ws?: string | null }).ws ?? null;
+    const key = (id: string, ws: string | null) => `chat-shared\0${id}\0${JSON.stringify(ws)}`;
     for (const row of read.rows) {
       const id = String(row.id ?? "");
       if (told.get(id) === now.get(id)) continue;
+      const before = told.get(id);
+      const ws = row.ws ?? null;
+      if (before !== undefined && place(before) !== ws) {
+        const old = place(before);
+        this.emit("chat-shared-removed", { id }, { sees: { ws: old } }, key(id, old));
+      }
       told.set(id, now.get(id)!);
-      this.emit("chat-shared", row, { sees: { ws: row.ws ?? null } }, `chat-shared\0${id}`);
+      this.emit("chat-shared", row, { sees: { ws } }, key(id, ws));
     }
     const gone = read.scope === null ? [...told.keys()].filter((id) => !now.has(id)) : read.scope.filter((id) => !now.has(id) && told.has(id));
     for (const id of gone) {
+      const ws = place(told.get(id)!);
       told.delete(id);
-      this.emit("chat-shared-removed", { id }, {}, `chat-shared\0${id}`);
+      this.emit("chat-shared-removed", { id }, { sees: { ws } }, key(id, ws));
     }
   }
 

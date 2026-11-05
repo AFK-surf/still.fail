@@ -93,6 +93,138 @@ async function openedShared(events: Events, since: string | null = null) {
   return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", ...reader(answer.body as AsyncIterable<Buffer>) };
 }
 
+test("the first change can remove a shared chat", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const stream = await openedShared(events);
+  rows["a@x"] = [];
+  change({ type: "threadRemoved", id: 1, ws: "w" });
+  await settle();
+  assert.ok(stream.got.some((e) => e.event === "chat-shared-removed" && e.data.id === "1"));
+  await stream.close();
+});
+
+test("shared changes are kept while only an older stream follows", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const old = await opened(events);
+  const shared = await openedShared(events);
+  change({ type: "session", key: "1" });
+  await settle();
+  const heard = shared.got.findLast((e) => e.id)!.id!;
+  await shared.close();
+  rows["a@x"] = [...rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  change({ type: "session", key: "2" });
+  await settle();
+  const back = await openedShared(events, heard);
+  await settle();
+  assert.equal(back.resumed, true);
+  assert.ok(back.got.some((e) => e.event === "chat-shared" && e.data.id === "2"));
+  await back.close();
+  await old.close();
+});
+
+test("a shared chat moving between workspaces is removed from the old one, including on replay", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const from = await openedShared(events);
+  const answer = await events.open({ ...viewer("b@x"), workspace: "other", home: false }, "zh", false, [], [], null, false, [], false, false, true, true);
+  const to = reader(answer.body as AsyncIterable<Buffer>);
+  change({ type: "session", key: "1" });
+  await settle();
+  const heard = from.got.findLast((e) => e.id)!.id!;
+  await from.close();
+  rows["a@x"] = [{ id: "1", title: "one", ws: "other" }];
+  change({ type: "session", key: "1" });
+  await settle();
+  const back = await openedShared(events, heard);
+  await settle();
+  assert.equal(back.resumed, true);
+  assert.ok(back.got.some((e) => e.event === "chat-shared-removed" && e.data.id === "1"));
+  assert.ok(to.got.some((e) => e.event === "chat-shared" && e.data.id === "1"));
+  await back.close();
+  await to.close();
+});
+
+test("changes while the first shared list is read are included in its baseline", async () => {
+  const { events, rows, readers, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "old", ws: "w" }];
+  const read = readers.read;
+  let finish: (() => void) | undefined;
+  readers.read = async (op: string, args: unknown) => {
+    if (op !== "sharedOf" || finish) return read(op, args);
+    const captured = await read(op, args);
+    return new Promise<string>((resolve) => { finish = () => resolve(captured); });
+  };
+  const opening = openedShared(events);
+  await settle();
+  assert.ok(finish);
+  rows["a@x"] = [{ id: "1", title: "new", ws: "w" }];
+  change({ type: "session", key: "1" });
+  await settle();
+  finish();
+  const stream = await opening;
+  await settle();
+  rows["a@x"] = [{ id: "1", title: "old", ws: "w" }];
+  change({ type: "session", key: "1" });
+  await settle();
+  assert.ok(stream.got.some((e) => e.event === "chat-shared" && e.data.title === "old"));
+  await stream.close();
+});
+
+test("an old handover without a shared baseline cannot resume a shared stream", async () => {
+  const time = testClock();
+  const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");
+  const before = setup(time.clock, { file, previous: previous() });
+  const lost = await openedShared(before.events);
+  before.change({ type: "session", key: "1" });
+  await settle();
+  const heard = lost.got.findLast((e) => e.id)!.id!;
+  await before.events.handOver();
+  const handed = JSON.parse(readFileSync(file, "utf8"));
+  delete handed.shared;
+  writeFileSync(file, JSON.stringify(handed));
+  const after = setup(time.clock, { file, previous: previous() }, before);
+  const back = await openedShared(after.events, heard);
+  await settle();
+  assert.equal(back.resumed, false);
+  assert.ok(back.got.some((e) => e.event === "missed"));
+  await lost.close();
+  await back.close();
+});
+
+test("a failed shared update ends its stream and prevents resuming across the missing change", async () => {
+  const { events, rows, readers, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const stream = await openedShared(events);
+  change({ type: "session", key: "1" });
+  await settle();
+  const heard = stream.got.findLast((e) => e.id)!.id!;
+  const read = readers.read;
+  let fail = true;
+  readers.read = (op: string, args: unknown) => {
+    if (op === "sharedOf" && fail) { fail = false; return Promise.reject(new Error("reader failed")); }
+    return read(op, args);
+  };
+  rows["a@x"] = [...rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  change({ type: "session", key: "2" });
+  await settle();
+  assert.equal(events.inUse(), false);
+  const back = await openedShared(events, heard);
+  await settle();
+  assert.equal(back.resumed, false);
+  assert.ok(back.got.some((e) => e.event === "missed"));
+  await back.close();
+});
+
+test("several shared streams read the initial list only once", async () => {
+  const { events, reads } = setup(testClock().clock);
+  const [first, second] = await Promise.all([openedShared(events), openedShared(events)]);
+  assert.equal(reads.filter((op) => op === "sharedOf").length, 1);
+  await first.close();
+  await second.close();
+});
+
 test("the first change after a shared stream opens tells its chat", async () => {
   const { events, rows, change } = setup(testClock().clock);
   rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
