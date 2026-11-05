@@ -133,6 +133,22 @@ for (const change of ["member.remove", "device.remove", "member"] as const) test
   assert.equal((await answer).status, change === "member" ? 200 : 403);
 });
 
+test("a cancelled pending-request read does not settle requests after preparation", async () => {
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  let read = false;
+  const secrets = { preparePending: () => preparing, pending: () => { read = true; return []; } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => null })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const controller = new AbortController();
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS }, signal: controller.signal } as never, []);
+  controller.abort();
+  const result = await Promise.race([answer, tick().then(() => null)]);
+  ready();
+  assert.equal(result?.status, 503);
+  assert.equal(read, false);
+});
+
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
   const h = harness(() => null);
   try {

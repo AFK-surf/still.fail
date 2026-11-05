@@ -31,6 +31,20 @@ export type VaultRequestsDeps = {
 
 const refuse = (status: number, code: string, error: string, more: Record<string, unknown> = {}): Answer => json(status, JSON.stringify({ error, code, ...more }));
 
+/// Preparation is shared; a caller that disconnects stops waiting without cancelling the other callers' work.
+async function preparedBeforeCancel(preparing: Promise<void>, signal?: AbortSignal): Promise<boolean> {
+  if (signal === undefined) { await preparing; return true; }
+  return new Promise<boolean>((resolve, reject) => {
+    const abort = () => { signal.removeEventListener("abort", abort); resolve(false); };
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+    preparing.then(() => { signal.removeEventListener("abort", abort); resolve(!signal.aborted); }, (error) => {
+      signal.removeEventListener("abort", abort);
+      reject(error);
+    });
+  });
+}
+
 function body(r: Request): unknown {
   try {
     return JSON.parse(r.body.toString("utf8"));
@@ -56,7 +70,8 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       pattern: /^\/vault\/requests$/,
       handle: async (r) => {
         const before = locked(r);
-        await secrets.preparePending(r.viewer.workspace);
+        if (r.signal?.aborted) return refuse(503, "read_cancelled", "read cancelled");
+        if (!await preparedBeforeCancel(secrets.preparePending(r.viewer.workspace), r.signal)) return refuse(503, "read_cancelled", "read cancelled");
         const current = locked(r);
         if (current !== before) {
           if (current === null) return refuse(409, "lock_changed", "the workspace's security mode changed while the requests were prepared; try again");

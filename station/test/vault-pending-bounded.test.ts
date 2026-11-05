@@ -123,6 +123,42 @@ test("a later handover keeps a save even after the pending list was prepared", a
   } finally { db.close(); }
 });
 
+test("other people's carried saves do not get read on every prepared list", async () => {
+  async function visits(n: number) {
+    const db = new DatabaseSync(":memory:");
+    let reads = 0, reading = false;
+    const observed = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (reading && sql.startsWith("SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ?")) reads++;
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    try {
+      const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => null,
+        hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+        proxy: {} as never, vaults: {} as never, plain: {} as never });
+      const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','pending',?)");
+      const carried: ReturnType<Secrets["carried"]> = { keeper: { boxes: [], held: [] }, unsaved: [] };
+      for (let i = 0; i < n; i++) {
+        const id = `other-${i}`;
+        const request = { ws: "w", id, session: "s", vault: PLAIN, owner: "bob@example.test", at: 0,
+          item: "i", mode: "env", status: "pending", save: { typed: false } };
+        insert.run(id, JSON.stringify(request));
+        carried.unsaved.push([id, { value: "secret" }, [{ ws: "w", owner: "bob@example.test" }]]);
+      }
+      secrets.carry(carried);
+      await secrets.preparePending("w");
+      reading = true;
+      assert.deepEqual(secrets.pending("w", null, { sub: "alice", email: "alice@example.test" }), []);
+      reading = false;
+      return reads;
+    } finally { db.close(); }
+  }
+  assert.deepEqual(await Promise.all([visits(40), visits(400)]), [0, 0]);
+});
+
 test("a prepared list settles other people's lost and overdue saves in request order", async () => {
   const db = new DatabaseSync(":memory:");
   try {
