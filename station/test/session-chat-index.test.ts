@@ -273,3 +273,27 @@ test("a synchronous title keeps its immediate answer while requesting preparatio
     assert.deepEqual(requests, ["s", "s"]);
   } finally { store.close(); }
 });
+
+test("deleting a session releases its prepared chat-name scope", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "s", createdAt: 1, lastActiveAt: 1, ws: "mine" });
+    const own = store.openThread("ember", "EMBER", "own", null, null);
+    store.joinThread(own.id, "s", "ember");
+    prepare(store, "s");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 1);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_ember WHERE session='s'").get()?.n, 1);
+    db.exec("SAVEPOINT gone; DELETE FROM sessions WHERE key='s'; ROLLBACK TO gone; RELEASE gone");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 1, "a rolled back deletion keeps its scope");
+    store.deleteSession("s");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_ember WHERE session='s'").get()?.n, 0);
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "new-s", createdAt: 2, lastActiveAt: 2, ws: "mine" });
+    const replacement = store.openThread("ember", "EMBER", "new-own", null, null);
+    store.joinThread(replacement.id, "s", "ember");
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, replacement.id);
+  } finally { store.close(); }
+});

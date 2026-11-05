@@ -20,6 +20,9 @@ export function installSessionChatIndex(db: DatabaseSync): void {
     session TEXT NOT NULL, has_last INTEGER NOT NULL, last_at NOT NULL, created_at INTEGER NOT NULL, thread INTEGER NOT NULL,
     PRIMARY KEY(session, has_last DESC, last_at DESC, created_at DESC, thread DESC)
   ) WITHOUT ROWID;
+  CREATE TRIGGER session_chat_session_drop AFTER DELETE ON sessions BEGIN
+    DELETE FROM session_chat_scopes WHERE session=OLD.key;
+  END;
   CREATE TRIGGER session_chat_cc_add AFTER INSERT ON cc_session_rows
     WHEN NEW.surface='ember' AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session) BEGIN
       INSERT OR IGNORE INTO session_chat_ember(session,has_last,last_at,created_at,thread)
