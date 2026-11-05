@@ -1308,15 +1308,18 @@ test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_re
     mineOf: [], said: { n: 1, authorKind: "agent", author: "new-chat", other: 1 },
   };
   const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [] };
-  const { host, core, push, read } = await ui(answers);
+  const { host, core, push, read, end, streams } = await ui(answers);
   await read();
   push("made", { rows: true, marks: true, shared: true });
   await coalesce(host);
   assert.equal(core.inner.data.chat(ST, "new-chat"), undefined);
 
   // Another device creates the chat while this stream is away. The station cannot replay the missed events.
+  Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode('id: 1f2e3d4c.9\nevent: overview\ndata: {}\n\n'));
+  await host.settle();
   answers["GET /chats?shared=1"] = [row];
-  push("missed", {});
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
   await coalesce(host);
   assert.equal((core.inner.data.chat(ST, "new-chat") as J)?.title, "New chat", "the refreshed list includes the missed chat");
   core.close();

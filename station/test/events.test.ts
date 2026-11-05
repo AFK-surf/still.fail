@@ -31,6 +31,10 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
       if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
       // The same for several viewers in one read (read/ops.ts chatRowsOf, read/ops-sessions.ts threadViews).
       if (op === "chatRowsOf") return JSON.stringify(args.viewers.map((v: any) => ({ rows: rows[v.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[v.viewer.email] ?? []).map((r) => r.id)] })));
+      if (op === "sharedOf") {
+        const all = rows["a@x"] ?? [];
+        return JSON.stringify({ rows: all, scope: args.sessions === null ? null : [...args.sessions, ...all.map((r) => r.id)] });
+      }
       if (op === "threadViews") return JSON.stringify(args.viewers.map((v: any) => ({ id: args.id, last: 1, unread: 1, for: v.viewer.email })));
       throw new Error(op);
     },
@@ -83,6 +87,64 @@ async function opened(events: Events, since: string | null = null) {
   const answer = await events.open(viewer("a@x"), "zh", false, [], [], since);
   return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", ...reader(answer.body as AsyncIterable<Buffer>) };
 }
+
+async function openedShared(events: Events, since: string | null = null) {
+  const answer = await events.open(viewer("a@x"), "zh", false, [], [], since, false, [], false, false, true, true);
+  return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", ...reader(answer.body as AsyncIterable<Buffer>) };
+}
+
+test("the first change after a shared stream opens tells its chat", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const stream = await openedShared(events);
+  await settle();
+  rows["a@x"] = [...rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  change({ type: "session", key: "2" });
+  await settle();
+  assert.ok(stream.got.some((e) => e.event === "chat-shared" && e.data.id === "2"));
+  await stream.close();
+});
+
+test("a shared stream coming back is told a chat created while nobody followed", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const lost = await openedShared(events);
+  change({ type: "session", key: "1" });
+  await settle();
+  const heard = lost.got.findLast((e) => e.id)!.id!;
+  await lost.close();
+  rows["a@x"] = [...rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  change({ type: "session", key: "2" });
+  await settle();
+  const back = await openedShared(events, heard);
+  await settle();
+  assert.equal(back.resumed, true);
+  assert.ok(back.got.some((e) => e.event === "chat-shared" && e.data.id === "2"));
+  await back.close();
+});
+
+test("a shared stream coming back after station handover is told a chat created while away", async () => {
+  const time = testClock();
+  const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");
+  const before = setup(time.clock, { file, previous: previous() });
+  before.rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const lost = await openedShared(before.events);
+  before.change({ type: "session", key: "1" });
+  await settle();
+  const heard = lost.got.findLast((e) => e.id)!.id!;
+  await lost.close();
+  await before.events.handOver();
+  const after = setup(time.clock, { file, previous: previous() }, before);
+  await settle();
+  after.rows["a@x"] = [...after.rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  after.change({ type: "session", key: "2" });
+  await settle();
+  const back = await openedShared(after.events, heard);
+  await settle();
+  assert.equal(back.resumed, true);
+  assert.ok(back.got.some((e) => e.event === "chat-shared" && e.data.id === "2"));
+  await back.close();
+});
 
 test("changes are told as events, rows by what changed, read only to its viewer", async () => {
   const { events, rows, change, reads } = setup(testClock().clock);
