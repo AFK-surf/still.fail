@@ -4312,9 +4312,10 @@ fn view_target_pointed(t : @view.Target, x : Double, y : Double) -> Unit {
       view_old_pointed(Some((x, y)))
       view_shape_of.val = OfOld
     }
-    TopRow(_) => {
+    TopRow(id) => {
       view_old_pointed(None)
-      view_shape_of.val = OfGround
+      // The row owns the press, but may say a cursor or have selectable words under it.
+      view_shape_of.val = OfNode(id)
     }
     Nothing => {
       view_old_pointed(if old_whole.val { Some((x, y)) } else { None })
