@@ -1,5 +1,8 @@
-// A bounded parent owns the order in which its children are measured and placed. A virtual list builds only
-// the children it needs here; geometry is returned directly, never published as another reactive input.
+// A box whose children it lays out itself (View::layout_box): which it makes, measures and places, and in what order,
+// in its own layout (a list from its anchor: the rows it needs alone, made as it comes to them); what it measures given
+// back to it there, never told as a signal of its own. Its place reads what it took before it (`content`) and its
+// constraints, no other; a row it makes is made as any view is (the build's guard), one it measures measured as flex
+// measures one (the layout's).
 
 ///|
 pub struct Layout {
@@ -27,8 +30,9 @@ fn Layout::check(self : Layout, child : View) -> Unit {
 }
 
 ///|
-/// A keyed child retained across layouts. Only keys requested during this callback survive it. A child requested
-/// but not placed stays alive (including selection and animation), but is absent from drawing and hit testing.
+/// Its child by `key`, made by `make` the first time it is asked for (a build, under the build's guard), the same one
+/// while it is asked for in each of its layouts; one not asked for in one let go. One asked for and not placed is kept
+/// (what is selected in it, what moves in it), drawn and pressed nowhere.
 pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View {
   guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
     abort("a layout context is only used inside its own callback")
@@ -36,7 +40,7 @@ pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View
   let child = match self.keyed.get(key) {
     Some(v) if v.alive() => v
     _ => {
-      let guard_before = @signals.set_access_guard(None)
+      let guard_before = @signals.set_access_guard(@signals.phase_guard(Build))
       let v = self.owner.box(make)
       @signals.set_access_guard(guard_before) |> ignore
       v.tree.nodes[v.at].flex.line = -1
@@ -52,31 +56,30 @@ pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View
 }
 
 ///|
-/// Measure this child now, before another child that needs its height. A clean subtree at the same constraints
-/// reuses its measured layout; this never starts a second tree layout or tells a geometry signal.
+/// The child measured `width` wide (`height` tall, where said) now, before another that needs its height: as flex
+/// measures one (the layout's guard, what measuring reads (a font's theme) read as ever), the same one at the same
+/// constraints not measured again; no other layout of the tree begun, nothing told.
 pub fn Layout::measure(self : Layout, child : View, width : Double, height? : Double) -> (Double, Double) {
   self.check(child)
-  // The child's own measuring code has the same inputs as when flex measures it normally (for example the host's
-  // font theme). The captured-input guard belongs to this parent's callback, not the child being measured. The
-  // tree's layout-owner guard still rejects any attempt by that child to change another branch.
-  let guard_before = @signals.set_access_guard(None)
+  // (the tree's layout owner still this box: what the child does to another branch aborted)
+  let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child(child.tree.nodes[child.at].flex, width, height?, containing_height=self.height)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
 
 ///|
-/// Measure and lay out a child as wide as it asks, with at most `most` available, in this parent's layout.
+/// The child measured and laid out as wide as it asks, `most` at most, as Layout::measure measures it.
 pub fn Layout::fit(self : Layout, child : View, most : Double) -> (Double, Double) {
   self.check(child)
-  let guard_before = @signals.set_access_guard(None)
+  let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child_fitted(child.tree.nodes[child.at].flex, most, containing_height=self.height)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
 
 ///|
-/// Place a measured child relative to the content box. A retained child not placed in this callback is hidden.
+/// The child, measured, put at (`x`, `y`) in the box's content; one asked for and not placed in a layout is hidden.
 pub fn Layout::place(self : Layout, child : View, x : Double, y : Double) -> Unit {
   self.check(child)
   let n = child.tree.nodes[child.at].flex
@@ -92,10 +95,10 @@ pub fn Layout::place(self : Layout, child : View, x : Double, y : Double) -> Uni
 }
 
 ///|
-/// Own the layout of this bounded box's children. State and time are captured by `content` before layout; `place`
-/// reads that snapshot, measures children in dependency order and places them. It may subcompose keyed children
-/// with Layout::child, but may not mutate another branch or feed geometry into ordinary reactive state.
-/// Recalled when content, constraints or a measured child's subtree changes; an idle box does no work.
+/// The box's children laid out by `place` (a box of a bound size): what it reads taken by `content` before its layout,
+/// `place` given that and its constraints alone (any other read aborts), making the children it asks for
+/// (Layout::child), measuring and placing them in the order it needs; another branch changed or a geometry told from
+/// it aborts. Laid out again as its content, its constraints or a child it measured changes; nothing done else.
 pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout, K) -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   let value : Ref[K?] = Ref(None)

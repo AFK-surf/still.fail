@@ -49,3 +49,31 @@ pub fn[T] Computed::peek(self : Computed[T], loc~ : SourceLoc) -> T? {
   access_checked("computed peek", loc)
   self.1.value
 }
+
+///|
+/// The tree's phases a read may be guarded in (phase_guard): a build (what a view reads as it is made, a row made in a
+/// layout's too), a layout (what measuring reads, a child measured in a layout's too).
+pub(all) enum AccessPhase {
+  Build
+  Layout
+} derive(Eq, Show)
+
+///|
+// kept across runs: what each phase may not read, as said for it (none yet: each reads what it reads now)
+let phase_guards : Map[String, String] = {}
+
+///|
+/// The guard of `phase`, what a part of another phase that is one of it (a row made in a layout: a build) runs under:
+/// set_access_guard's, given back as it ends.
+pub fn phase_guard(phase : AccessPhase) -> String? {
+  phase_guards.get(phase.to_string())
+}
+
+///|
+/// What `phase` may not read from now (None: what it reads now).
+pub fn set_phase_guard(phase : AccessPhase, reason : String?) -> Unit {
+  match reason {
+    Some(r) => phase_guards[phase.to_string()] = r
+    None => phase_guards.remove(phase.to_string())
+  }
+}
