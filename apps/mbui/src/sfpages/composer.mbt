@@ -266,6 +266,8 @@ pub fn composer(
   }
   outside_dialog(c, src, w.key)
   let cap = c.id("composer/cap")
+  // Its glass covers the messages below, including where a press lands beside its field.
+  c.blocks_selection(cap)
   // (a press on it is its field's: the I-beam over it)
   if !spec.locked {
     c.cursor(cap, IBeam)

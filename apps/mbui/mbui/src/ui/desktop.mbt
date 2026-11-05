@@ -442,7 +442,8 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 ///|
 /// A node's marks (Node's `marks`): it takes presses (Ctx::takes_presses, and what reads its click), a press on it drags
 /// the window (Ctx::window_drag), keeps what is picked (Ctx::keeps_selection), is what lies under it's when held
-/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked); above them, the pointer's shape over it and one
+/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked), or covers words picked with the pointer
+/// (Ctx::blocks_selection); above them, the pointer's shape over it and one
 /// (Ctx::cursor), 0 where none is said.
 let mark_takes : Int = 1
 
@@ -459,7 +460,10 @@ let mark_holds : Int = 8
 let mark_asks : Int = 16
 
 ///|
-let mark_cursor_at : Int = 5
+let mark_blocks_selection : Int = 32
+
+///|
+let mark_cursor_at : Int = 6
 
 ///|
 /// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
@@ -1242,7 +1246,7 @@ fn select_edge_stop() -> Unit {
 /// The paragraph that can be picked under (x, y), the topmost, in the layer a press there goes to (Ctx::layer_at):
 /// none of the page's under a popover's panel or a dialog's ground.
 fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
-  if x < 0.0 {
+  if x < 0.0 || self.selection_blocked(x, y) {
     return None
   }
   // (the window's tree's words picked, where they are said to be (words_picked): what is over them there is the tree's
@@ -1329,6 +1333,35 @@ pub fn Ctx::selection_made(self : Ctx) -> Int {
 /// drawn.
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_keeps)
+}
+
+///|
+/// A surface and what it holds cover words under them: a press on it lets go of a selection, but cannot begin one in
+/// words behind it. The surface's own fields keep their usual selection and scroll behavior.
+pub fn Ctx::blocks_selection(self : Ctx, id : Int) -> Unit {
+  self.mark_id(id, mark_blocks_selection)
+}
+
+///|
+/// Whether the target a press reaches, or one of its holders, covers words behind it.
+fn Ctx::selection_blocked(self : Ctx, x : Double, y : Double) -> Bool {
+  let top = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y, pressed=true)
+  let k = press_reach(self.hit_ids, self.hit_rects, self.hit_clips, top, x, y)
+  if k < 0 {
+    return false
+  }
+  if k < self.hit_marks.length() && (self.hit_marks[k] & mark_blocks_selection) != 0 {
+    return true
+  }
+  for j in 0..<k {
+    if j < self.hit_ends.length() &&
+      self.hit_ends[j] > k &&
+      j < self.hit_marks.length() &&
+      (self.hit_marks[j] & mark_blocks_selection) != 0 {
+      return true
+    }
+  }
+  false
 }
 
 ///|

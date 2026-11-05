@@ -1087,6 +1087,7 @@ pub fn Ctx::ask_action(Self, Int32, @view.Action) -> Unit
 pub fn Ctx::back(Self) -> Bool
 pub fn Ctx::bench_frames(Self, Bool) -> Unit
 pub fn Ctx::bg_by(Self, Int32, () -> Int64) -> Unit
+pub fn Ctx::blocks_selection(Self, Int32) -> Unit
 pub fn Ctx::blur(Self) -> Unit
 pub fn Ctx::bone_whole(Self, Int32) -> Unit
 pub fn Ctx::bones(Self, Int64, () -> Unit) -> Unit

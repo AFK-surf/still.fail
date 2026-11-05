@@ -954,11 +954,18 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection);
     // picking them lets go of what the focused field had picked, the focus staying its (focus.mbt): one thing picked
     // in the window, as in a browser, and it is what ⌘C copies
-    if !c.editors.contains(target) && !keeps_selection_on(target) {
-      c.select_press(x, y, c.clicks)
-      match c.editors.get(c.focus_allowed()) {
-        Some(st) if picked.from.base != NoSel => st.anchor = st.caret
-        _ => ()
+    if !keeps_selection_on(target) {
+      if c.editors.contains(target) {
+        // A click in a field lets go of a page selection; the field's own selection is separate.
+        if pointing() is Mouse && picked.from.base != NoSel {
+          select_none()
+        }
+      } else {
+        c.select_press(x, y, c.clicks)
+        match c.editors.get(c.focus_allowed()) {
+          Some(st) if picked.from.base != NoSel => st.anchor = st.caret
+          _ => ()
+        }
       }
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
