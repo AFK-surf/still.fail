@@ -331,13 +331,15 @@ fn host_between(s : HostStep) -> Map[String, Int] {
 /// changes they make settled then: what a phone's PERF does not see, 300–400 ms of it as a long chat is entered or left
 /// on 2026-11-05) what they do for a chat of its last 30 alone: no more nodes made, bindings run, nodes laid out, list
 /// entries or messages made.
-test "entering, leaving or choosing a long chat does no more outside its frames than for a chat of 30, on a phone and a desktop" {
+test "typing into, flinging, entering, leaving or choosing a long chat does no more outside its frames than for a chat of 30, on a phone and a desktop" {
   let out : Array[String] = []
   for w in [390.0, 1280.0] {
     let (long, _) = host_walk_of("chat-long", w)
     let (short, _) = host_walk_of("chat-long-30", w)
     for s in long {
-      if !["left", "entered", "another chosen", "chosen back", "sent"].contains(s.what) {
+      // (every step: a key typed costs outside its frames what it costs a chat of 30 too: 2026-11-05, every key made
+      // the list's 3002 entries again on a desktop)
+      if s.what == "focused" {
         continue
       }
       match short.search_by(fn(o) { o.what == s.what }) {
