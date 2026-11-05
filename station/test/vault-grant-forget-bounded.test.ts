@@ -31,6 +31,7 @@ function fixture() {
 }
 
 test("forgetting a plain grant does not traverse grants of other workspaces", () => {
+  const visits: number[] = [], plans: string[] = [];
   for (const others of [40, 400]) {
     const f = fixture();
     try {
@@ -39,12 +40,31 @@ test("forgetting a plain grant does not traverse grants of other workspaces", ()
       f.secrets.keeper.restore(f.held("w", "mine", PLAIN));
       f.reset();
       f.secrets.keeper.drop("mine");
-      assert.equal(f.visits(), 1, `${others} other grants must not be traversed`);
+      visits.push(f.visits());
       assert.equal(f.db.prepare("SELECT count(*) AS n FROM vault_grants").get()?.n, others);
-      const plan = f.db.prepare(`EXPLAIN QUERY PLAN ${f.deletes[0]}`).all("w", "mine").map((row) => String(row.detail)).join(" | ");
-      assert.match(plan, /SEARCH vault_grants USING INDEX sqlite_autoindex_vault_grants_1 \(ws=\? AND id=\?\)/);
+      plans.push(f.deletes[0]!);
     } finally { f.db.close(); }
   }
+  assert.deepEqual(visits, [1, 1], "other workspaces' grants must not be traversed");
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec("CREATE TABLE vault_grants(ws TEXT NOT NULL, id TEXT NOT NULL, session TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(ws,id))");
+    for (const sql of plans) {
+      const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("w", "mine").map((row) => String(row.detail)).join(" | ");
+      assert.match(plan, /SEARCH vault_grants USING INDEX sqlite_autoindex_vault_grants_1 \(ws=\? AND id=\?\)/);
+    }
+  } finally { db.close(); }
+});
+
+test("forgetting a plain grant keeps an unrelated workspace's grant with the same id", () => {
+  const f = fixture();
+  try {
+    f.insert.run("w", "mine");
+    f.insert.run("other", "mine");
+    f.secrets.keeper.restore(f.held("w", "mine", PLAIN));
+    f.secrets.keeper.drop("mine");
+    assert.deepEqual(f.db.prepare("SELECT ws FROM vault_grants ORDER BY ws").all().map((r) => r.ws), ["other"]);
+  } finally { f.db.close(); }
 });
 
 test("forgetting a vault grant does not touch the plain-grants table", () => {
