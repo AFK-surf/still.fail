@@ -12,6 +12,88 @@ import { readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.t
 import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
 
+for (const recursive of [false, true]) test(`many unrelated shared home changes do not block a small workspace (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["owner", "away"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "backlog-target", "Target", null, "here").id;
+    const changing: number[] = [];
+    for (let i = 0; i < 66; i++) {
+      const thread = store.openThreadOf("ember", "EMBER", `backlog-shared-${i}`, "Shared", null, "owner").id;
+      for (let j = 0; j < 65; j++) store.joinThread(thread, `unknown-${j}`, "ember");
+      changing.push(thread);
+    }
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 16).sourceDone) { /* Prepare this workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
+    for (const thread of changing) move.run(null, thread);
+    const check = () => {
+      db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "thread_sessions"
+        ? constants.SQLITE_DENY : constants.SQLITE_OK);
+      try { assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 }); }
+      finally { db.setAuthorizer(null); }
+    };
+    check();
+    const last = changing.at(-1)!;
+    store.joinThread(last, "here", "ember");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    while (!settleRecentWorkspaceMemberStep(db, "here", 16).membersDone) { /* Settle the new member. */ }
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a member of a job beyond the first 65 must wait");
+    db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'here'").run(last);
+    while (!settleRecentWorkspaceMemberStep(db, "here", 16).membersDone) { /* Settle the departure. */ }
+    check();
+    move.run("owner", last);
+    store.joinThread(last, "here", "ember");
+    while (!settleRecentWorkspaceMemberStep(db, "here", 16).membersDone) { /* The named home still hides this member. */ }
+    assert.equal(db.prepare("SELECT 1 FROM recent_scope_rows WHERE ws = 'here' AND thread = ?").get(last), undefined);
+    move.run(null, last);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a hidden member of a later job must also wait");
+    db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'here'").run(last);
+    while (!settleRecentWorkspaceMemberStep(db, "here", 16).membersDone) { /* Settle the departure. */ }
+    check();
+    move.run("here", last);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a new named home must wait even before it has a row");
+    move.run("owner", last);
+    while (!settleRecentWorkspaceMemberStep(db, "here", 16).membersDone) { /* Settle the earlier named home. */ }
+    db.prepare("UPDATE sessions SET ws = 'here' WHERE key = 'owner'").run();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the home session's move must be recorded");
+    while (!settleRecentWorkspaceSessionStep(db, "here", 16).sessionsDone) { /* Account for the moved session. */ }
+    const source = db.prepare("SELECT 1 FROM recent_scope_rows WHERE ws = 'here' AND thread = ?");
+    assert.ok(source.get(last));
+    for (let i = 0; i < 100 && source.get(last); i++) settleRecentScopeVisibilityStep(db, 16);
+    assert.equal(source.get(last), undefined, "the pending visibility pass removed its old source");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the moved named home remains pending during the pass");
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
+test("many pending changes do not make a workspace scan unlimited hidden members", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (const [key, ws] of [["owner", "away"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "many-hidden-target", "Target", null, "here").id;
+    for (let i = 0; i < 65; i++) {
+      const thread = store.openThreadOf("ember", "EMBER", `many-hidden-${i}`, "Hidden", null, "owner").id;
+      store.joinThread(thread, "here", "ember");
+    }
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 16).sourceDone) { /* Prepare the hidden members. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    const insert = db.prepare("INSERT INTO recent_scope_visibility_dirty(thread, revision, home_ws, ambiguous) VALUES (?, 1, NULL, 1)");
+    for (let i = 0; i < 65; i++) insert.run(-1 - i);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "both sides are too large for the bounded check");
+    db.prepare("DELETE FROM recent_scope_visibility_dirty WHERE thread = -65").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`many named home moves do not block an unrelated workspace (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {

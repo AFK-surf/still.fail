@@ -111,7 +111,7 @@ for (const recursive of [false, true]) test(`a changed message updates only its 
   } finally { store.close(); }
 });
 
-test("too many undistributed chats conservatively wait without scanning all of them", () => {
+test("many unrelated undistributed chats do not block a small workspace", () => {
   const store = Store.open(":memory:");
   const db = store.db;
   try {
@@ -121,19 +121,41 @@ test("too many undistributed chats conservatively wait without scanning all of t
     db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
-    putRecentScopeSource(db, "here", BigInt(thread), "one");
+    while (!scanRecentWorkspaceStep(db, "here", 8).sourceDone) { /* Prepare this workspace. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
     const original = readPreparedRecentWorkspace(db, "here", 5);
     const insert = db.prepare("INSERT INTO recent_scope_order_dispatch(thread) VALUES (?)");
-    for (let i = 0; i < 64; i++) insert.run(10_000 + i);
+    for (let i = 0; i < 64; i++) insert.run(-10_000 - i);
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), original);
-    insert.run(10_064);
-    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a larger pending set takes the bounded wait path");
+    insert.run(-10_064);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), original, "unrelated work must not block this workspace");
+    insert.run(thread);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "an affected chat after the first 65 jobs is still pending");
+    db.prepare("DELETE FROM recent_scope_order_dispatch WHERE thread = ?").run(thread);
     const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get("here") as { n: number };
-    for (let i = 0; i < 500; i++) insert.run(20_000 + i);
+    for (let i = 0; i < 500; i++) insert.run(-20_000 - i);
     assert.equal(db.prepare(RECENT_SCOPE_ORDER_PENDING).get("here")!.n, pending.n, "only the first 65 jobs are considered");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), original);
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${RECENT_SCOPE_ORDER_PENDING}`).all("here") as { detail: string }[];
     assert.ok(plan.some((row) => row.detail.includes("SEARCH r USING PRIMARY KEY")), JSON.stringify(plan));
+  } finally { store.close(); }
+});
+
+test("a large workspace waits instead of scanning its rows against a large dispatch backlog", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    for (let i = 0; i < 65; i++) store.openThreadOf("ember", "EMBER", `large-workspace-${i}`, "Chat", null, "one");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 16).sourceDone) { /* Prepare this workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    const insert = db.prepare("INSERT INTO recent_scope_order_dispatch(thread) VALUES (?)");
+    for (let i = 0; i < 65; i++) insert.run(-1 - i);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    db.prepare("DELETE FROM recent_scope_order_dispatch WHERE thread = -65").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
   } finally { store.close(); }
 });
 

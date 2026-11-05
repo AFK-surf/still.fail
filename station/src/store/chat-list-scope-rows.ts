@@ -19,6 +19,18 @@ export const RECENT_SCOPE_VISIBILITY_PENDING = `SELECT COUNT(*) AS n,
 export const RECENT_SCOPE_VISIBILITY_AMBIGUOUS = `SELECT MAX(EXISTS (
   SELECT 1 FROM recent_scope_candidates c WHERE c.ws = ?1 AND c.thread = d.thread)) AS affects
   FROM (SELECT thread, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d WHERE d.ambiguous`;
+// If there are many pending chats, the opposite direction can still be bounded for a small workspace. Limit its
+// rows before probing pending chat ids; a 65th row means the reader must wait instead of walking the whole scope.
+export const RECENT_SCOPE_ORDER_SMALL = `SELECT COUNT(*) AS n, MAX(EXISTS (
+  SELECT 1 FROM recent_scope_order_dispatch d WHERE d.thread = r.thread)) AS affects
+  FROM (SELECT thread FROM recent_scope_rows WHERE ws = ?1 ORDER BY thread LIMIT 65) r`;
+export const RECENT_SCOPE_VISIBILITY_ROWS_SMALL = `SELECT COUNT(*) AS n, MAX(EXISTS (
+  SELECT 1 FROM recent_scope_visibility_dirty d WHERE d.thread = r.thread)) AS affects
+  FROM (SELECT thread FROM recent_scope_rows WHERE ws = ?1 ORDER BY thread LIMIT 65) r`;
+export const RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL = `SELECT COUNT(*) AS n, MAX(EXISTS (
+  SELECT 1 FROM recent_scope_visibility_dirty d WHERE d.thread = c.thread AND d.ambiguous = 1)) AS affects
+  FROM (SELECT thread FROM recent_scope_candidates WHERE ws = ?1 ORDER BY thread, session LIMIT 65) c`;
+export const RECENT_SCOPE_VISIBILITY_HOME = "SELECT 1 FROM recent_scope_visibility_dirty WHERE home_ws = ? LIMIT 1";
 export const RECENT_WORKSPACE_PAGE = `SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?
   ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`;
 
@@ -70,13 +82,23 @@ export function preparedRecentWorkspaceTotal(db: DatabaseSync, ws: string): numb
       db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined)
     return null;
   const visibility = db.prepare(RECENT_SCOPE_VISIBILITY_PENDING).get(ws) as { n: number; ambiguous: number | null; affects: number | null };
-  if (visibility.n > 64 || visibility.affects === 1) return null;
-  if (visibility.ambiguous === 1) {
+  if (visibility.affects === 1) return null;
+  if (visibility.n > 64) {
+    if (meta.scan_done !== 1 || meta.scan_session !== null || db.prepare(RECENT_SCOPE_VISIBILITY_HOME).get(ws) !== undefined) return null;
+    for (const sql of [RECENT_SCOPE_VISIBILITY_ROWS_SMALL, RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL]) {
+      const small = db.prepare(sql).get(ws) as { n: number; affects: number | null };
+      if (small.n > 64 || small.affects === 1) return null;
+    }
+  } else if (visibility.ambiguous === 1) {
     if (meta.scan_done !== 1 || meta.scan_session !== null) return null;
     if ((db.prepare(RECENT_SCOPE_VISIBILITY_AMBIGUOUS).get(ws) as { affects: number | null }).affects === 1) return null;
   }
   const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get(ws) as { n: number; affects: number | null };
-  if (pending.n > 64 || pending.affects === 1) return null;
+  if (pending.affects === 1) return null;
+  if (pending.n > 64) {
+    const small = db.prepare(RECENT_SCOPE_ORDER_SMALL).get(ws) as { n: number; affects: number | null };
+    if (small.n > 64 || small.affects === 1) return null;
+  }
   return meta.total;
 }
 

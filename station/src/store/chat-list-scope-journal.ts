@@ -134,6 +134,7 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       INSERT INTO recent_scope_order_turn VALUES (1, NULL, NULL);
       CREATE TABLE recent_scope_visibility_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
         home_ws TEXT, ambiguous INTEGER NOT NULL);
+      CREATE INDEX recent_scope_visibility_home ON recent_scope_visibility_dirty(home_ws) WHERE home_ws IS NOT NULL;
       CREATE TABLE recent_scope_visibility_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
         phase TEXT NOT NULL, after_ws TEXT, after_session TEXT);
       CREATE TABLE recent_scope_visibility_turn (id INTEGER PRIMARY KEY CHECK (id = 1), after_thread INTEGER, through_thread INTEGER);

@@ -27,7 +27,8 @@ import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTOR
 import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
 import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
-import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_PENDING,
+import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_HOME,
+  RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_SCOPE_VISIBILITY_ROWS_SMALL,
   RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
 import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
 import { FIRST_SCOPE_CANDIDATE_SESSION, NEXT_SCOPE_CANDIDATE_SESSION, PUT_SCOPE_CANDIDATE, RECENT_SCOPE_MEMBER_EXISTS,
@@ -95,6 +96,16 @@ function assertRecentChatPlans() {
   const visibilitySteps = plan(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, ["ws"]);
   assert.match(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, /ORDER BY thread LIMIT 65/);
   assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH c ") && s.includes("PRIMARY KEY (ws=? AND thread=?)")), visibilitySteps.join(" | "));
+  for (const sql of [RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISIBILITY_ROWS_SMALL, RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL]) {
+    const steps = plan(sql, ["ws"]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /WHERE ws = \?1 ORDER BY thread(?:, session)? LIMIT 65/);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")), detail);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH d ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  const homeSteps = plan(RECENT_SCOPE_VISIBILITY_HOME, ["ws"]);
+  assert.ok(homeSteps.some((s) => s.startsWith("SEARCH ") && s.includes("recent_scope_visibility_home") && s.includes("home_ws=?")),
+    homeSteps.join(" | "));
   for (const sql of [PUT_SCOPE_CANDIDATE, REMOVE_SCOPE_CANDIDATE]) {
     const steps = plan(sql, ["ws", 1, "a"]);
     assert.ok(steps.some((s) => s.startsWith("SEARCH recent_scope_candidates ") && s.includes("PRIMARY KEY (ws=? AND thread=? AND session=?)")),
