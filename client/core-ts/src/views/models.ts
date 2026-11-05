@@ -349,7 +349,7 @@ export function machineMeta(session: J, now: number, offsetMin = 0): J {
   let ago: string | null = null;
   if (typeof session.updatedAt === "number") {
     const secs = Math.max(format.round((now - session.updatedAt) / 1000), 0);
-    ago = secs < 5 ? t("core-logic.jobs.ago.now") : secs >= 86_400 && secs < 2 * 86_400 ? t("core-logic.jobs.ago.yesterday") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
+    ago = secs < 5 ? t("core-logic.jobs.ago.now") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
   }
   const at = typeof session.updatedAt === "number" ? session.updatedAt : null;
   const today = at !== null && format.localDay(at, offsetMin) === format.localDay(now, offsetMin);
