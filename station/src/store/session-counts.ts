@@ -2,6 +2,11 @@
 // writers from an older station, including changes made while that scan is in progress.
 import type { DatabaseSync } from "node:sqlite";
 
+const VERSION = 1;
+function checkVersion(version: number): void {
+  if (version !== VERSION) throw new Error(`session count index version ${version} is incompatible with ${VERSION}`);
+}
+
 export const SESSION_COUNT_FIRST = `SELECT CAST(rowid AS TEXT) AS position, key FROM sessions
   WHERE rowid <= CAST(? AS INTEGER) ORDER BY rowid LIMIT ?`;
 export const SESSION_COUNT_NEXT = `SELECT CAST(rowid AS TEXT) AS position, key FROM sessions
@@ -37,11 +42,13 @@ const remove = `UPDATE session_count_groups SET n = n - 1 WHERE ${group("OLD")};
 // REPLACE can displace a different key, token, or rowid without firing its DELETE trigger. Remember those keys before
 // the write, then reconcile them against the actual rows afterward. An implicit NEW.rowid may be -1; if a real row has
 // that rowid it is harmless to check it, since the reconciliation changes only rows that actually differ.
+const displaced = (key: string, token: string, rowid: string) => `SELECT key FROM sessions WHERE key = ${key}
+  UNION SELECT key FROM sessions WHERE token = ${token}
+  UNION SELECT key FROM sessions WHERE rowid = ${rowid}`;
+export const SESSION_COUNT_DISPLACED = displaced("?1", "?2", "?3");
 const stage = (old: boolean) => `DELETE FROM session_count_replaced;
   INSERT INTO session_count_replaced (session)
-    SELECT key FROM sessions WHERE key = NEW.key
-    UNION SELECT key FROM sessions WHERE token = NEW.token
-    UNION SELECT key FROM sessions WHERE rowid = NEW.rowid
+    ${displaced("NEW.key", "NEW.token", "NEW.rowid")}
     ${old ? "UNION SELECT OLD.key" : ""};`;
 const reconcile = `DELETE FROM session_count_seen
   WHERE session IN (SELECT session FROM session_count_replaced)
@@ -57,14 +64,14 @@ const see = (key: string) => `INSERT INTO session_count_seen (session, connect, 
 
 export function installSessionCounts(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_count_meta'").get() !== undefined;
-  if (installed()) return;
+  if (installed()) { sessionCountsReady(db); return; }
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!installed()) db.exec(`
-      CREATE TABLE session_count_meta (id INTEGER PRIMARY KEY CHECK (id = 1), last_rowid INTEGER,
+      CREATE TABLE session_count_meta (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL, last_rowid INTEGER,
         end_rowid INTEGER, complete INTEGER NOT NULL) WITHOUT ROWID;
-      INSERT INTO session_count_meta (id, last_rowid, end_rowid, complete)
-        SELECT 1, NULL, (SELECT rowid FROM sessions ORDER BY rowid DESC LIMIT 1),
+      INSERT INTO session_count_meta (id, version, last_rowid, end_rowid, complete)
+        SELECT 1, ${VERSION}, NULL, (SELECT rowid FROM sessions ORDER BY rowid DESC LIMIT 1),
           NOT EXISTS (SELECT 1 FROM sessions LIMIT 1);
       CREATE TABLE session_count_seen (session TEXT PRIMARY KEY, connect TEXT NOT NULL, ws TEXT) WITHOUT ROWID;
       CREATE TABLE session_count_replaced (session TEXT PRIMARY KEY) WITHOUT ROWID;
@@ -87,6 +94,7 @@ export function installSessionCounts(db: DatabaseSync): void {
         DELETE FROM session_count_seen WHERE session = OLD.key;
       END;
     `);
+    else sessionCountsReady(db);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -95,7 +103,10 @@ export function installSessionCounts(db: DatabaseSync): void {
 }
 
 export function sessionCountsReady(db: DatabaseSync): boolean {
-  return (db.prepare("SELECT complete FROM session_count_meta WHERE id = 1").get() as { complete: number }).complete === 1;
+  const meta = db.prepare("SELECT version, complete FROM session_count_meta WHERE id = 1").get() as { version: number; complete: number } | undefined;
+  if (meta === undefined) throw new Error("session count index version marker is missing");
+  checkVersion(meta.version);
+  return meta.complete === 1;
 }
 
 /// Advance at most `limit` old rows. The fixed rowid boundary prevents newly allocated rows from extending the scan;
@@ -104,8 +115,10 @@ export function sessionCountsStep(db: DatabaseSync, limit = 64): { done: boolean
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("session count batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    const meta = db.prepare(`SELECT CAST(last_rowid AS TEXT) AS last_rowid, CAST(end_rowid AS TEXT) AS end_rowid, complete
-      FROM session_count_meta WHERE id = 1`).get() as { last_rowid: string | null; end_rowid: string | null; complete: number };
+    const meta = db.prepare(`SELECT version, CAST(last_rowid AS TEXT) AS last_rowid, CAST(end_rowid AS TEXT) AS end_rowid, complete
+      FROM session_count_meta WHERE id = 1`).get() as { version: number; last_rowid: string | null; end_rowid: string | null; complete: number } | undefined;
+    if (meta === undefined) throw new Error("session count index version marker is missing");
+    checkVersion(meta.version);
     if (meta.complete === 1) { db.exec("COMMIT"); return { done: true, visited: 0 }; }
     const rows = (meta.last_rowid === null
       ? db.prepare(SESSION_COUNT_FIRST).all(meta.end_rowid, limit)

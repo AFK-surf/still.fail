@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import { overview } from "../src/api/overview.ts";
 import { buildSessionCounts } from "../src/sessions/session-count-builder.ts";
-import { installSessionCounts, sessionCountsReady, sessionCountsStep } from "../src/store/session-counts.ts";
+import { installSessionCounts, sessionCountsReady, sessionCountsStep, SESSION_COUNT_TOTAL } from "../src/store/session-counts.ts";
 import { Store } from "../src/store/store.ts";
 
 function withoutCounts(db: DatabaseSync) {
@@ -89,6 +89,33 @@ test("a failed session count batch rolls back its counts and cursor", () => {
   } finally { store.close(); }
 });
 
+test("an incompatible session count index is neither read nor built", () => {
+  const { store, db, add } = fixture();
+  try {
+    add("one", "x", "mine");
+    db.exec("UPDATE session_count_meta SET version=2");
+    assert.throws(() => store.overviewSessionCounts({ workspace: "mine" }, ["x"]), /session count.*version/i);
+    assert.throws(() => sessionCountsStep(db), /session count.*version/i);
+    assert.throws(() => installSessionCounts(db), /session count.*version/i);
+  } finally { store.close(); }
+});
+
+test("new sessions do not keep an old count scan open", () => {
+  const { store, db, add, exact } = fixture();
+  try {
+    withoutCounts(db);
+    for (let i = 0; i < 8; i++) add(`old-${i}`, "x", "mine");
+    installSessionCounts(db);
+    let steps = 0;
+    while (!sessionCountsReady(db)) {
+      sessionCountsStep(db, 2);
+      for (let i = 0; i < 20; i++) add(`new-${steps}-${i}`, "other", "elsewhere");
+      assert.ok(++steps <= 5, "new rowids cannot extend the old scan");
+    }
+    exact();
+  } finally { store.close(); }
+});
+
 test("old session rowids beyond JavaScript's safe integer range do not prevent counting", () => {
   const { store, db, exact } = fixture();
   try {
@@ -166,4 +193,41 @@ test("an old overview waits for complete counts after handover", async () => {
     assert.equal(result.counts.sessions, 1);
     assert.equal(result.connects[0].sessions, 1);
   } finally { await builder?.close(); store.close(); }
+});
+
+test("an overview's workspace and connection totals use one snapshot", () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-count-snapshot-"));
+  const path = join(dir, "station.db");
+  const { store, db, add } = fixture(Store.open(path));
+  const writer = new DatabaseSync(path);
+  try {
+    add("one", "x", "mine");
+    let changed = false;
+    Object.defineProperty(store, "db", { configurable: true, value: new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (sql !== SESSION_COUNT_TOTAL) return statement;
+          return new Proxy(statement, { get(s, p) {
+            if (p === "get") return (...args: any[]) => {
+              const row = (s.get as any)(...args);
+              if (!changed) { changed = true; writer.exec("UPDATE sessions SET connect='y' WHERE key='one'"); }
+              return row;
+            };
+            const value = Reflect.get(s, p, s);
+            return typeof value === "function" ? value.bind(s) : value;
+          } });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) });
+    const viewer = { workspace: "mine", home: false };
+    const before = store.overviewSessionCounts(viewer, ["x", "y"])!;
+    assert.equal(before.total, 1);
+    assert.deepEqual([...before.byConnect], [["x", 1], ["y", 0]]);
+    const after = store.overviewSessionCounts(viewer, ["x", "y"])!;
+    assert.equal(after.total, 1);
+    assert.deepEqual([...after.byConnect], [["x", 0], ["y", 1]]);
+  } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
