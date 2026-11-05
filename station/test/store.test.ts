@@ -18,7 +18,7 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSI
   SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
 import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_EXISTS, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS } from "../src/store/archive-mark-index.ts";
-import { widgetSourcesStep } from "../src/store/widget-sources.ts";
+import { WIDGET_SOURCE, WIDGET_SOURCE_POSITIONS_FIRST, WIDGET_SOURCE_POSITIONS_NEXT, widgetSourcesStep } from "../src/store/widget-sources.ts";
 import { SESSION_UP_JOB, SESSION_UP_JOBS, SESSION_UP_JOBS_CONFLICT, SESSION_UP_JOBS_DISPLACED, SESSION_UP_JOBS_END, SESSION_UP_JOBS_FIRST, SESSION_UP_JOBS_NEXT } from "../src/store/session-up-jobs.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
@@ -1482,6 +1482,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [SESSION_UP_JOB, ["a"]], [SESSION_UP_JOBS, ["a"]],
     [SESSION_UP_JOBS_END, ["a"]],
     [SESSION_UP_JOBS_FIRST, ["a", "100", 64]], [SESSION_UP_JOBS_NEXT, ["a", "1", "100", 64]],
+    [WIDGET_SOURCE_POSITIONS_FIRST, [1, "100", 64]], [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 64]],
     [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
@@ -1522,6 +1523,12 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(SESSION_UP_JOBS_END)!.some((d) => d.includes("jobs_by_session (session_key=?)")));
   assert.ok(plans.get(SESSION_UP_JOBS_FIRST)!.some((d) => d.includes("jobs_by_session (session_key=? AND rowid<?)")));
   assert.ok(plans.get(SESSION_UP_JOBS_NEXT)!.some((d) => d.includes("jobs_by_session (session_key=? AND rowid>? AND rowid<?)")));
+  for (const sql of [WIDGET_SOURCE_POSITIONS_FIRST, WIDGET_SOURCE_POSITIONS_NEXT]) {
+    assert.ok(plans.get(sql)!.some((d) => d.includes("MERGE (UNION ALL)")));
+    assert.ok(plans.get(sql)!.some((d) => d.includes("entries_said (thread=?")));
+    assert.ok(plans.get(sql)!.some((d) => d.includes("entries_letters (thread=?")));
+    assert.ok(!plans.get(sql)!.some((d) => d.includes("TEMP B-TREE")));
+  }
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
   // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on a station).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
@@ -1597,6 +1604,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_BINDINGS_DELETE, ["a"]],
     [SESSION_UP_JOBS_DISPLACED, ["a", "token", 1]],
     [SESSION_UP_JOBS_CONFLICT, ["a", "token", 1]],
+    [WIDGET_SOURCE, ["a", "/w/item.html"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
@@ -1637,6 +1645,9 @@ test("what is told as chats change is planned by the size of what it finds, not 
   lacks(read.LATEST_TURNS, "TEMP B-TREE");
   has(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=? AND n=?)");
   lacks(CC_THREADS_SQL, "e USING INDEX sqlite_autoindex_entries_1 (thread=?)");
+  // The original lookup remains only for noncanonical attachment JSON, which older SQLite writers cannot validate.
+  has(WIDGET_SOURCE, "thread_sessions_session (session=?)");
+  has(WIDGET_SOURCE, "widget_source_by_path (thread=? AND path=?)");
   has(read.SHARES_OF, "chat_shares USING INDEX sqlite_autoindex_chat_shares_1 (session=?)");
   has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");

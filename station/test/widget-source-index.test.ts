@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
-import { installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_POSITIONS_FIRST, WIDGET_SOURCE_POSITIONS_NEXT, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
+import { installWidgetSources, WIDGET_SOURCE, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
 
 const original = `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') AS name FROM merged m
   JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
@@ -196,22 +196,6 @@ for (const missing of [null, "entries_said", "entries_letters"] as const) test(`
     while (!widgetSourcesStep(db, thread, 3).done) {}
     assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
     assert.equal((db.prepare(WIDGET_SOURCE).get("a", path) as { name: string }).name, "source-9");
-  } finally { store.close(); }
-});
-
-test("old widget preparation seeks the ordinary and legacy message indexes", () => {
-  const store = Store.open(":memory:"), db = store.db;
-  try {
-    for (const [sql, args] of [
-      [WIDGET_SOURCE_POSITIONS_FIRST, [1, "100", 2]],
-      [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 2]],
-    ] as const) {
-      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join("\n");
-      assert.match(plan, /MERGE \(UNION ALL\)/);
-      assert.match(plan, /SEARCH entries USING (?:COVERING )?INDEX entries_said \(thread=\?/);
-      assert.match(plan, /SEARCH entries USING (?:COVERING )?INDEX entries_letters \(thread=\?/);
-      assert.doesNotMatch(plan, /USE TEMP B-TREE FOR ORDER BY/);
-    }
   } finally { store.close(); }
 });
 
