@@ -65,6 +65,7 @@ import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
+import { buildSessionCounts } from "./session-count-builder.ts";
 import { PostBlockBuilder } from "./post-block-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
@@ -249,6 +250,11 @@ export const AgentsLive = (control: Control) =>
         (builder) => Effect.promise(() => builder.close()),
       );
       hub.waitForWorkspaceActivity = () => workspaceActivity.ready;
+      const sessionCounts = yield* Effect.acquireRelease(
+        Effect.sync(() => buildSessionCounts(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForSessionCounts = () => sessionCounts.ready;
       const postBlocks = yield* Effect.acquireRelease(
         Effect.sync(() => new PostBlockBuilder(store, previous)),
         (builder) => Effect.promise(() => builder.close()),
@@ -495,6 +501,7 @@ export const AgentsLive = (control: Control) =>
         ask: (station, workspace, request) => remote.ask(station, workspace === null ? request : { workspace, ...request }),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
+        machineEmail: (runtime) => accounts.machineLogins().find((login) => login.runtime === runtime && login.loggedIn)?.email ?? null,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
         codexRenewRunning: async (id) => !sandboxed(data) && (await codex.renewLogin(id)),
@@ -525,9 +532,10 @@ export const AgentsLive = (control: Control) =>
       // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
       parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
-      hub.recentChatList = async (ws, home, limit) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh"));
+      hub.recentChatList = async (ws, home, limit, signal) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh", { signal }));
       hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
+      hub.prepareSessionUpJobs = (session) => readers.prepareSessionUpJobs([session]);
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
@@ -767,6 +775,7 @@ export const AgentsLive = (control: Control) =>
           stopArchiving();
           await postBlocks.close();
           await workspaceActivity.close();
+          await sessionCounts.close();
           await time.close();
           await sharing?.close();
           await xshare.close();

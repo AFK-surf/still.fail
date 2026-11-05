@@ -355,20 +355,18 @@ pub(all) struct Alert {
   confirmed : Bool
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum BadgeTone {
   Neutral
   Accent
   Positive
   Danger
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum ButtonSize {
   Sm
   Md
   Lg
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct ButtonState {
   label : String
@@ -379,11 +377,10 @@ pub(all) struct ButtonState {
   disabled : Bool
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum CardTone {
   Plain
   Lifted
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct CheckboxState {
   check : @view.Check
@@ -393,11 +390,10 @@ pub(all) struct CheckboxState {
   disabled : Bool
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum Density {
   Comfy
   Compact
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct DialogState {
   title : String
@@ -428,19 +424,17 @@ pub(all) struct Field {
   submitted : Bool
 }
 
-#derive(Eq, Show)
 pub(all) enum FieldKind {
   Words
   Email
   Secret
   Number
-}
+} derive(Eq, Show)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum FieldSize {
   Sm
   Md
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct FieldState {
   id : Int32
@@ -484,18 +478,16 @@ pub(all) struct GroupState {
   disabled : Bool
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum Indent {
   Page
   Inset
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show)
 pub(all) struct Item {
   value : String
   label : String
   disabled : Bool
-}
+} derive(Eq, Show)
 
 pub struct Media {
   // private fields
@@ -558,15 +550,13 @@ pub(all) struct MediaFrame {
   said : String
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum MediaNote {
   Back(Double)
   Ahead(Double)
   Paused
   Played
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum MediaPhase {
   Opening
   Buffering
@@ -574,9 +564,8 @@ pub(all) enum MediaPhase {
   Paused
   Ended
   Failed
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) struct MediaStatus {
   state : Int32
   duration : Double
@@ -587,7 +576,7 @@ pub(all) struct MediaStatus {
   ended : Bool
   width : Double
   height : Double
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct MediaTrack {
   name : String
@@ -651,12 +640,11 @@ pub(all) struct PopState {
   panel : Int32
 }
 
-#derive(Show)
 pub(all) struct Presence {
   built : Bool
   shown : Bool
   t : Double
-}
+} derive(Show)
 pub fn Presence::leaving(Self) -> Bool
 
 pub(all) struct ProgressState {
@@ -673,11 +661,10 @@ pub(all) struct RadioState {
   disabled : Bool
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum RowTone {
   Normal
   Bad
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct SelectState {
   text : String
@@ -694,12 +681,11 @@ pub(all) struct Sheet {
   dragged : SheetDrag?
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum SheetDrag {
   DraggedClosed
   DraggedBack
   DraggedTo(Double)
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct SheetState {
   t : Double
@@ -725,19 +711,17 @@ pub(all) struct SwitchState {
   disabled : Bool
 }
 
-#derive(Eq, @debug.Debug)
 pub(all) enum TipOwner {
   Built(Int32)
   Node(Int32)
-}
+} derive(Eq, @debug.Debug)
 
-#derive(Eq, Show)
 pub(all) struct Toast {
   id : String
   title : String
   description : String
   action : String
-}
+} derive(Eq, Show)
 
 pub struct ToastNode {
   // private fields
@@ -779,14 +763,13 @@ pub(all) struct TriggerState {
   disabled : Bool
 }
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum Variant {
   Solid
   Soft
   Outline
   Ghost
   Danger
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub struct Zoom {
   mut nw : Double

@@ -146,7 +146,7 @@ export function stationHost(answers: Answers) {
     Effect.gen(function* () {
       const asked = req.url.replace("https://stillfail.test/admin/api", "");
       const feed = told.get(asked);
-      if (feed || `GET ${asked}` in answers) {
+      if (feed || `GET ${asked}` in answers || asked.startsWith("/usage?")) {
         if (!feed) {
           const whole = answer(req);
           let given = false;
@@ -231,4 +231,3 @@ export async function started(answers = base(), sample = 0, wire?: (host: FakeHo
   await s.host.time.pass(500);
   return { ...s, core };
 }
-

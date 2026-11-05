@@ -15,6 +15,13 @@ import { MinuteReader } from "../usage/minute-reader.ts";
 import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
 import { SaidBuilder } from "./said-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";
+import { RecentChatBuilder } from "./recent-chat-builder.ts";
+import { RECENT_CHAT_PENDING } from "./recent-chat.ts";
+import { SessionListBuilder } from "./session-list-builder.ts";
+import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
+import { SessionBindingsBuilder } from "./session-bindings-builder.ts";
+import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
+import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
@@ -108,6 +115,10 @@ export class Readers {
   private outflowChats: OutflowChatIndex | null = null;
   private said: SaidBuilder | null = null;
   private turns: TurnBuilder | null = null;
+  private recentChats: RecentChatBuilder | null = null;
+  private sessionList: SessionListBuilder | null = null;
+  private sessionBindings: SessionBindingsBuilder | null = null;
+  private sessionUpJobs: SessionUpJobsBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -216,6 +227,8 @@ export class Readers {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
+    if (op === "recentChatList") return this.recentChatRead(args, lang, told, signal);
+    if (op === "sessions") return this.sessionListRead(args, lang, told, background, signal);
     return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
@@ -226,11 +239,29 @@ export class Readers {
     return this.covered(this.said.ready(threads, signal), signal);
   }
 
+  /// Prepare the old connection bindings for session reads and auto-archiving together.
+  prepareSessionBindings(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.sessionBindings ??= new SessionBindingsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.sessionBindings.readyIndex(signal), signal);
+  }
+
+  /// Prepare the jobs of the sessions an archive check is waiting on.
+  prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.sessionUpJobs ??= new SessionUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.sessionUpJobs.ready(sessions, signal), signal);
+  }
+
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
         if (!(error instanceof HttpError)) throw error;
+        if (error.message === SESSION_BINDINGS_PENDING) {
+          await this.prepareSessionBindings(signal);
+          continue;
+        }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
           let sessions: unknown;
           try { sessions = JSON.parse(error.message.slice(TURN_COUNT_PENDING.length)); } catch { throw error; }
@@ -316,6 +347,34 @@ export class Readers {
         if (!(error instanceof HttpError) || error.message !== OUTFLOW_CHATS_PENDING) throw error;
         this.outflowChats ??= new OutflowChatIndex(join(this.data, "stillfail.db"), this.backfill);
         await this.covered(this.outflowChats.ready(viewer, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async recentChatRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    const a = args as { ws?: unknown; home?: unknown } | null;
+    const ws = a?.ws, home = a?.home;
+    if ((ws !== null && typeof ws !== "string") || (home !== null && typeof home !== "string"))
+      throw new HttpError(400, "invalid recent chat scope");
+    while (!this.closed) {
+      try { return await this.saidRead("recentChatList", args, lang, told, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== RECENT_CHAT_PENDING) throw error;
+        this.recentChats ??= new RecentChatBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.recentChats.readyScope({ ws, home }, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
+    while (!this.closed) {
+      try { return await this.saidRead("sessions", args, lang, told, background, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== SESSION_LIST_PENDING) throw error;
+        this.sessionList ??= new SessionListBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.sessionList.readyIndex(signal), signal);
       }
     }
     throw new HttpError(502, "station stopping");
@@ -441,6 +500,10 @@ export class Readers {
     if (this.outflowChats !== null) void this.outflowChats.close();
     if (this.said !== null) void this.said.close();
     if (this.turns !== null) void this.turns.close();
+    if (this.recentChats !== null) void this.recentChats.close();
+    if (this.sessionList !== null) void this.sessionList.close();
+    if (this.sessionBindings !== null) void this.sessionBindings.close();
+    if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();

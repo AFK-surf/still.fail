@@ -14,10 +14,7 @@
 pub struct Sub {
   id : Int
   topic : Json
-  /// its whole value but for its keyed lists asked for (Sub::list), which are their own: Sub::value puts them in
-  priv mut whole : Json?
-  /// whether `whole`'s lists are as their own are (Sub::value made it so since they last changed)
-  priv mut lists_in : Bool
+  mut value : Json?
   mut error : Json?
   mut version : Int
   /// told by the core, while it has no value, that its value waits on a station: none of what it shows is on the device
@@ -25,10 +22,6 @@ pub struct Sub {
   mut waiting : Bool
   priv key : String
   changes : @signals.Signal[Int]
-  /// its keyed lists asked for by their items (Sub::list, sub_list.mbt)
-  priv lists : Array[@rows.TopicList]
-  /// its value without its lists (Sub::rest), as of its version then
-  priv mut rest : (Int, Json?)?
 }
 
 ///|
@@ -229,7 +222,7 @@ pub fn Client::subscribe(
     None => {
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, whole: None, lists_in: true, error: None, version: 0, waiting: false, key, changes: @signals.signal(0), lists: [], rest: None }
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, changes: @signals.signal(0) }
       self.subs[id] = s
       self.by_key[key] = s
       self.ask(s)
@@ -531,49 +524,38 @@ fn Client::take(self : Client, msg : Json) -> Unit {
   }
   match self.subs.get(id) {
     Some(s) => {
-      if m.get("waiting") is Some(True) && s.whole is None && s.error is None {
+      if m.get("waiting") is Some(True) && s.value is None && s.error is None {
         // (no value of it yet: what shows it shows what is to come, the core's wait for it going on)
         s.waiting = true
         self.version += 1
         s.changes.set(-2)
         return
       }
-      // (its lists' changes and its own told as one: what reads both works out once)
-      @signals.start_batch()
       match (m.get("value"), m.get("delta"), m.get("error")) {
         (_, _, Some(e)) => {
           // The topic could not be read: the next message is a whole value, not a delta.
-          s.whole = None
+          s.value = None
           s.error = Some(e)
-          s.lists_given()
         }
         (Some(v), _, _) => {
-          s.whole = Some(v)
+          s.value = Some(v)
           s.error = None
-          s.lists_given()
         }
         (_, Some(Array(ops)), _) =>
-          match s.whole {
-            Some(v) => s.whole = Some(s.lists_take(v, ops))
-            None => {
-              @signals.end_batch()
-              return
-            }
+          match s.value {
+            Some(v) => s.value = Some(apply_delta(v, ops))
+            None => return
           }
-        _ => {
-          @signals.end_batch()
-          return
-        }
+        _ => return
       }
       s.waiting = false
       match self.timing {
-        Some(f) if s.version == 0 => f(id, topic_name(s.topic), s.value(), true)
+        Some(f) if s.version == 0 => f(id, topic_name(s.topic), s.value, true)
         _ => ()
       }
       s.version += 1
       self.version += 1
       s.changed()
-      @signals.end_batch()
       self.end_sub_wait(id)
       self.draft_came(id)
     }

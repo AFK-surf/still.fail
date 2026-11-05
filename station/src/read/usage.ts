@@ -241,7 +241,7 @@ let reportedSummaryReuse = false;
 let reportedCleanSummaryReuse = false;
 
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
-  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage } = {}): Json {
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; detailsPreparing?: boolean } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
@@ -256,7 +256,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   let summaryParts: number | undefined;
   let summaryCandidates: number | undefined;
   let summarySqlSlowOp: string | undefined;
-  const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
+  const groups = options.detailsPreparing ? [] : summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
     stages.summaryQuery = ms;
     if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
     if (diagnostics.selectedRestMs !== undefined) stages.summarySelectedRestMs = diagnostics.selectedRestMs;
@@ -318,6 +318,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     since,
     ...(detailSince !== null ? { detailSince } : {}),
     reading,
+    ...(options.detailsPreparing ? { detailsPreparing: true } : {}),
     prices,
     rows,
     threads,

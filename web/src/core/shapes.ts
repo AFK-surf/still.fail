@@ -843,12 +843,12 @@ export interface PickView {
 	borrow?: PickBorrow;
 	/**
 	 * A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most
-	 * four, the station's own: kept nearest what opened its panel, the rest past them.
+	 * four, the station's own, the starred left out: kept nearest what opened its panel, the rest past them.
 	 */
 	near?: string[];
 	/**
-	 * The models (their `model`) starred (`pick.like`), the first starred first, those in `near` left out:
-	 * past them, before the rest.
+	 * The models (their `model`) starred (`pick.like`), the first starred first, every one of them however
+	 * often used: past `near`, before the rest.
 	 */
 	liked?: string[];
 	/**
@@ -2789,6 +2789,11 @@ export interface Outgoing {
 	uploads?: ComposerFile[];
 	id: string;
 	text: string;
+	/**
+	 * Its words in runs, as its message will draw them (refLinks.ts personWords: a reference to a chat `ref`, a
+	 * bare web address `link`). Absent when it has none.
+	 */
+	words?: unknown;
 	/**
 	 * Its files as its message will draw them, an image still going up among them already (its `upload`; its
 	 * `path` `upload:<id>` until it is up, no station having it yet).
@@ -6628,6 +6633,56 @@ export interface ScreenChat {
 	link: string;
 }
 
+export interface ScreenChromeSize {
+	width: number;
+	height: number;
+}
+
+export interface ScreenChromeRect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** A button of the device (`screen.input` `{t: "button", page, usage, down}`). */
+export interface ScreenChromeButton {
+	/** As chrome.json has it: `power`, `volume-up`, `volume-down`, `action`, `mute`, `home`. */
+	name: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	/** The way it goes in as it is pressed, across. */
+	dx: number;
+	/** Down. */
+	dy: number;
+	/** On the case (a home button), not behind it. */
+	front?: boolean;
+	/** Its HID usage page; none: it is only drawn. */
+	page?: number;
+	/** Its usage. */
+	usage?: number;
+}
+
+/** One panel of a simulator's device as Xcode draws it (docs/remote-screens.md). */
+export interface ScreenChrome {
+	/** Which case it is, the same where another device has the same. */
+	key: string;
+	/** Its framebuffer's width in pixels, as its height says which panel a picture is of. */
+	width: number;
+	/** Its height. */
+	height: number;
+	/** The case and all round it, upright as the framebuffer is, in the case's own points: all below is in it. */
+	frame: ScreenChromeSize;
+	/** Where the picture goes. */
+	screen: ScreenChromeRect;
+	/** The panel's corners as `ScreenPanel.corners` has them. */
+	corners?: number[];
+	/** Behind the case, what shows of them outside it. */
+	buttons: ScreenChromeButton[];
+}
+
 /** Where a screen's pointer is, as its station says. */
 export interface ScreenCursor {
 	/** 0..1 of the frame's width. */
@@ -6689,6 +6744,8 @@ export interface ScreenItem {
 	poses?: boolean;
 	/** A simulator's panels (an iPhone Duo's two), for the device body drawn round its picture. */
 	panels?: ScreenPanel[];
+	/** Its case and buttons as Xcode has them, a panel's each (`screen.chrome`); none from a station before them or a Mac without them: `panels`. */
+	chrome?: ScreenChrome[];
 	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
 	chat?: ScreenChat;
 	/**
@@ -6787,6 +6844,10 @@ export interface ScreenViewState {
 	poses?: boolean;
 	/** Its panels (`ScreenItem.panels`). */
 	panels?: ScreenPanel[];
+	/** Its case (`ScreenItem.chrome`). */
+	chrome?: ScreenChrome[];
+	/** How far its picture is turned clockwise, in quarter turns; none from a station before it. */
+	turn?: number;
 	/** Driving it now: input goes to the station (else only seen). */
 	control: boolean;
 	/** May drive it (not a read-only member). */
@@ -7421,6 +7482,8 @@ export interface UsageView {
 	 * has told its history (stations from before).
 	 */
 	summary?: UsageSummary;
+	/** A station is preparing its recent usage; the totals are still being read. */
+	detailsPreparing?: boolean;
 }
 
 /** A field of an item as its page shows it (vault-words.ts shownFields): `vault.open` answers `shown`, a row says `shut`. */

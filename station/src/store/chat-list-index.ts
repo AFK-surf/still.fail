@@ -1,0 +1,147 @@
+// A maintained ordering for the recent chat tool. This first part keeps the unscoped ordering; workspace visibility
+// and its independently prepared counts are built on it separately.
+import type { DatabaseSync } from "node:sqlite";
+import { recentChatDisplacedEntry } from "./chat-list-entry-rowid.ts";
+import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
+
+export type RecentChatPage = { ids: number[]; total: number };
+export const RECENT_GLOBAL_PAGE = "SELECT thread FROM recent_chat_rows INDEXED BY recent_chat_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?";
+
+// Do not use INSERT OR IGNORE inside a trigger: an outer INSERT OR REPLACE can override that conflict policy. The
+// existence test keeps one pending entry even when an older process writes with its own conflict mode.
+const dirty = (thread: string) => `INSERT INTO recent_chat_dirty (thread)
+  SELECT ${thread} WHERE ${thread} IS NOT NULL AND NOT EXISTS
+    (SELECT 1 FROM recent_chat_dirty WHERE thread = ${thread});`;
+const conflictingThread = `(SELECT t.id FROM threads t WHERE t.surface = NEW.surface AND t.channel = NEW.channel
+  AND t.thread_ts = NEW.thread_ts AND t.id IS NOT NEW.id)`;
+const replacedSaid = (exceptOld: boolean) => `EXISTS (SELECT 1 FROM thread_state s
+  JOIN entries e ON e.thread = s.thread AND e.n = s.said_n AND e.kind = 'message'
+  WHERE s.thread = NEW.thread AND (e.n = NEW.n OR (NEW.ts IS NOT NULL AND e.ts = NEW.ts))
+    ${exceptOld ? "AND (e.thread IS NOT OLD.thread OR e.n IS NOT OLD.n)" : ""})`;
+// An old writer may replace the selected row without firing a DELETE trigger. Also mark when the selected number
+// was absent: inserting it makes the existing thread_state pointer resolve to a message for the first time.
+const insertedSaid = `EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND
+  (s.said_n = NEW.n OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = s.thread
+    AND e.n = s.said_n AND e.kind = 'message' AND e.ts = NEW.ts))))`;
+
+const SCHEMA = `
+CREATE TABLE recent_chat_rows (thread INTEGER PRIMARY KEY, at INTEGER NOT NULL, said_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX recent_chat_order ON recent_chat_rows (at DESC, said_at DESC, created_at DESC, thread DESC);
+CREATE TABLE recent_chat_dirty (thread INTEGER PRIMARY KEY);
+CREATE TABLE recent_chat_meta (id INTEGER PRIMARY KEY CHECK (id = 1), cursor INTEGER, through INTEGER,
+  total INTEGER NOT NULL, complete INTEGER NOT NULL, prefer_dirty INTEGER NOT NULL);
+INSERT INTO recent_chat_meta SELECT 1, NULL, (SELECT MAX(id) FROM threads), 0,
+  NOT EXISTS (SELECT 1 FROM threads LIMIT 1), 1;
+
+-- REPLACE can evict a different row without running that row's DELETE trigger. Remember the evicted id first.
+CREATE TRIGGER recent_chat_thread_before_add BEFORE INSERT ON threads BEGIN ${dirty(conflictingThread)} END;
+CREATE TRIGGER recent_chat_thread_before_change BEFORE UPDATE OF id, surface, channel, thread_ts ON threads
+  BEGIN ${dirty(conflictingThread)} END;
+CREATE TRIGGER recent_chat_thread_add AFTER INSERT ON threads BEGIN ${dirty("NEW.id")} END;
+CREATE TRIGGER recent_chat_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${dirty("OLD.id")} ${dirty("NEW.id")} END;
+CREATE TRIGGER recent_chat_thread_drop AFTER DELETE ON threads BEGIN ${dirty("OLD.id")} END;
+CREATE TRIGGER recent_chat_state_add AFTER INSERT ON thread_state BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_state_change AFTER UPDATE OF thread, said_n ON thread_state
+  WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${dirty("OLD.thread")} END;
+CREATE TRIGGER recent_chat_entry_before_add BEFORE INSERT ON entries
+  WHEN ${insertedSaid} BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
+  WHEN ${replacedSaid(true)} BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_entry_before_rowid_add BEFORE INSERT ON entries
+  WHEN EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+  BEGIN ${dirty("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
+CREATE TRIGGER recent_chat_entry_before_rowid_change BEFORE UPDATE ON entries
+  WHEN OLD.rowid IS NOT NEW.rowid AND EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+  BEGIN ${dirty("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
+CREATE TRIGGER recent_chat_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_entry_drop AFTER DELETE ON entries BEGIN ${dirty("OLD.thread")} END;
+`;
+
+/// Install empty tables and writers without reading historical chats. Old rows are added by bounded later steps.
+export function installRecentChatIndex(db: DatabaseSync): void {
+  const installed = () => recentChatIndexInstalled(db, "global");
+  if (installed()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!installed()) { db.exec(SCHEMA); markRecentChatIndexInstalled(db, "global"); }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+type Meta = { cursor: bigint | null; through: bigint | null; complete: bigint; prefer_dirty: bigint };
+type Current = { id: bigint; at: bigint | number; said_at: bigint | number; created_at: bigint | number };
+
+/// Account at most `limit` old or changed chats, atomically with the cursor. New writes coalesce by thread. Alternate
+/// old and changed work while both exist so a stream of new messages cannot indefinitely postpone old chats.
+export function stepRecentChatIndex(db: DatabaseSync, limit = 64): { done: boolean; processed: number } {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent chat batch must be positive");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const getMeta = db.prepare("SELECT cursor, through, complete, prefer_dirty FROM recent_chat_meta WHERE id = 1");
+    getMeta.setReadBigInts(true);
+    const meta = getMeta.get() as Meta;
+    const getPending = db.prepare("SELECT thread FROM recent_chat_dirty ORDER BY thread LIMIT ?");
+    getPending.setReadBigInts(true);
+    const pending = getPending.all(limit) as { thread: bigint }[];
+    const useDirty = pending.length > 0 && (meta.complete === 1n || meta.prefer_dirty === 1n);
+    let old: { thread: bigint }[] = [];
+    if (!useDirty && meta.complete === 0n && meta.through !== null) {
+      const query = db.prepare(meta.cursor === null
+        ? "SELECT id AS thread FROM threads WHERE id <= ? ORDER BY id LIMIT ?"
+        : "SELECT id AS thread FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?");
+      query.setReadBigInts(true);
+      old = (meta.cursor === null ? query.all(meta.through, limit) : query.all(meta.cursor, meta.through, limit)) as { thread: bigint }[];
+    }
+    const rows = useDirty ? pending : old;
+    const current = db.prepare(`SELECT t.id, COALESCE(e.at, t.created_at) AS at, COALESCE(e.at, 0) AS said_at, t.created_at
+      FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
+      LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message' WHERE t.id = ?`);
+    current.setReadBigInts(true);
+    const exists = db.prepare("SELECT 1 FROM recent_chat_rows WHERE thread = ?");
+    const put = db.prepare(`INSERT INTO recent_chat_rows (thread, at, said_at, created_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT (thread) DO UPDATE SET at = excluded.at, said_at = excluded.said_at, created_at = excluded.created_at
+      WHERE at IS NOT excluded.at OR said_at IS NOT excluded.said_at OR created_at IS NOT excluded.created_at`);
+    const remove = db.prepare("DELETE FROM recent_chat_rows WHERE thread = ?");
+    const clean = db.prepare("DELETE FROM recent_chat_dirty WHERE thread = ?");
+    let delta = 0;
+    for (const row of rows) {
+      const had = exists.get(row.thread) !== undefined;
+      const now = current.get(row.thread) as Current | undefined;
+      if (now === undefined) {
+        if (had) { remove.run(row.thread); delta--; }
+      } else {
+        put.run(now.id, now.at, now.said_at, now.created_at);
+        if (!had) delta++;
+      }
+      clean.run(row.thread);
+    }
+    if (useDirty) db.prepare("UPDATE recent_chat_meta SET total = total + ?, prefer_dirty = 0 WHERE id = 1").run(delta);
+    else db.prepare("UPDATE recent_chat_meta SET cursor = ?, total = total + ?, complete = ?, prefer_dirty = 1 WHERE id = 1")
+      .run(rows.at(-1)?.thread ?? meta.cursor, delta, meta.complete === 1n || rows.length < limit ? 1 : 0);
+    const done = (db.prepare("SELECT complete FROM recent_chat_meta WHERE id = 1").get() as { complete: number }).complete === 1 &&
+      db.prepare("SELECT 1 FROM recent_chat_dirty LIMIT 1").get() === undefined;
+    db.exec("COMMIT");
+    return { done, processed: rows.length };
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+/// Null means old or changed chats are still being accounted. The caller waits outside the reader and asks again.
+export function readGlobalRecentChatIndex(db: DatabaseSync, limit: number): RecentChatPage | null {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent chat page size must be nonnegative");
+  if (limit === 0) return { ids: [], total: 0 };
+  db.exec("SAVEPOINT recent_chat_page");
+  try {
+    if (!recentChatIndexInstalled(db, "global")) return null;
+    const meta = db.prepare("SELECT total, complete FROM recent_chat_meta WHERE id = 1").get() as { total: number; complete: number };
+    if (meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_chat_dirty LIMIT 1").get() !== undefined) return null;
+    const rows = db.prepare(RECENT_GLOBAL_PAGE).all(limit) as { thread: number }[];
+    return { ids: rows.map((row) => row.thread), total: meta.total };
+  } finally { db.exec("RELEASE recent_chat_page"); }
+}

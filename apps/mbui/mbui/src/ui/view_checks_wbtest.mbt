@@ -11,61 +11,6 @@ fn tree_tester(make : (@view.View) -> Unit) -> Tester {
 }
 
 ///|
-test "corners: a face moved over its small slot belongs to that slot; a circle laid in a large box still follows the corner" {
-  let faults = fn(mark : Bool) {
-    let t = tree_tester(fn(root) {
-      root.box(fn(card) {
-        card.width(Is(Some(200.0))).height(Is(Some(66.0))).radius(Is(18.0)).ground(Is(0xEEEEEEFFL)) |> ignore
-        card.box(fn(at) {
-          let slot = if mark { 18.0 } else { 80.0 }
-          at.over(Is(true)).offset(Is(if mark { (169.0, 35.0) } else { (150.0, 20.0) }))
-          .width(Is(Some(slot))).height(Is(Some(slot))) |> ignore
-          at.box(fn(face) {
-            face.over(Is(true)).offset(Is(if mark { (-3.0, 0.0) } else { (16.0, 15.0) }))
-            .width(Is(Some(18.0))).height(Is(Some(18.0)))
-            .radius(Is(9.0)).ground(Is(0x884433FFL)) |> ignore
-          }) |> ignore
-        }) |> ignore
-      }) |> ignore
-    })
-    t.corner_faults()
-  }
-  assert_eq(faults(true), [])
-  assert_true(!faults(false).is_empty())
-}
-
-///|
-test "a field's glyphs are its own when another node draws the same colour over its hidden hint" {
-  let shown = @signals.signal(true)
-  let dx = @signals.signal(0.0)
-  let field_node : Ref[@view.View?] = Ref(None)
-  let words_node : Ref[@view.View?] = Ref(None)
-  let t = tree_tester(fn(root) {
-    root.drawn_off(By(fn() { (dx.get(), 0.0) })) |> ignore
-    field_node.val = Some(field(root, Field::new(), placeholder="Hint", colors_by=fn() {
-      (0x555555FFL, if shown.get() { 0x555555FFL } else { 0x55555500L }, 0L)
-    }))
-    words_node.val = Some(root.box(fn(w) {
-      w.over(Is(true)).width(Is(Some(200.0))).words(Is("Quote"), ink=0x555555FFL) |> ignore
-    }))
-  })
-  let field_id = field_node.val.unwrap().id()
-  let words_id = words_node.val.unwrap().id()
-  let hint = t.drawn_glyphs(node=field_id)
-  let quote = t.drawn_glyphs(node=words_id)
-  assert_true(!hint.is_empty() && !quote.is_empty())
-  shown.set(false)
-  t.draw()
-  assert_eq(t.drawn_glyphs(node=field_id), [])
-  assert_eq(t.drawn_glyphs(node=words_id), quote)
-  assert_eq(t.drawn_glyphs(), quote)
-  dx.set(30.0)
-  t.draw()
-  assert_eq(t.drawn_glyphs(node=field_id), [])
-  assert_eq(t.drawn_glyphs(node=words_id), quote.map(fn(g) { (g.0 + 30.0, g.1, g.2) }))
-}
-
-///|
 test "contrast: a node of the tree's words too faint on its ground found, as made and as its instances kept drawn again" {
   let t = tree_tester(fn(root) {
     root.box(fn(b) {
@@ -183,28 +128,6 @@ test "contrast: a node of the tree's icon too faint on its ground found, as an o
   assert_eq(icon_faults(0xDDDDDDFFL, true, 1.0), ([], []))
   assert_eq(icon_faults(0xDDDDDDFFL, false, 0.0), ([], []))
   assert_eq(icon_faults(0x333333FFL, false, 1.0), ([], []))
-}
-
-///|
-test "contrast: a disabled retained button's icon is exempt until that same button becomes available" {
-  let ready = @signals.signal(false)
-  let t = tree_tester(fn(root) {
-    root.ground(Is(0xFFFFFFFFL)) |> ignore
-    root.box(fn(button) {
-      button.presses(By(fn() { ready.get() })).says(Is(Some(@view.said(Button, label="Send")))) |> ignore
-      button.box(fn(icon) {
-        icon.width(Is(Some(20.0))).height(Is(Some(20.0)))
-        .shapes(Is([shape_of([([2.0, 2.0, 18.0, 2.0, 18.0, 18.0, 2.0, 18.0], true)], fill=0xDDDDDDFFL)])) |> ignore
-      }) |> ignore
-    }) |> ignore
-  })
-  assert_true(t.get(Button, label="Send").disabled)
-  assert_eq(t.contrast_faults(), [])
-  ready.set(true)
-  t.draw()
-  assert_false(t.get(Button, label="Send").disabled)
-  let icons = t.contrast_faults().filter(fn(f) { f.has_prefix("icon (a node of the window's tree's)") })
-  assert_eq(icons.length(), 1)
 }
 
 ///|

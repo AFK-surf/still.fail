@@ -250,12 +250,7 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
       let k = rl.run_at(13)
       assert_true(k >= 0)
     }
-    None =>
-      // (drawn by the window's tree: the piece the words are in, bold)
-      match t.tree_runs_of("帮我把聊天页的列表做成虚拟列表") {
-        Some(runs) => assert_eq(runs.filter(fn(r) { r.text == "虚拟列表" }).map(fn(r) { r.weight }), [600])
-        None => fail("no bubble")
-      }
+    None => fail("no bubble")
   }
   t.run_for(found_draw_ms)
   // still marked once drawn in: for as long as the chat shows

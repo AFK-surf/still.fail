@@ -210,7 +210,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             x,
             fn() { done(fn() {  }) },
             fn() { dismissed_now(serial) },
-            Some(p),
+            p,
             shown~,
             gone~,
           )

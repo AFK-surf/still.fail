@@ -915,10 +915,16 @@ fn Ctx::emit_text(
     }
     let gx = glyph_x(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
     let gy = glyph_row(top + tl.ascent, g.oy / z, sc)
+    // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
+    // pixels where the scene composes them, view_blit)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z))
+      None => ()
+    }
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
-    let (lx, ly, gw, gh, ga) = match own {
+    let (gx, gy, gw, gh, ga) = match own {
       Some(l) => {
         let ink_x = gx + gw * (1.0 - l.scale) / 2.0
         let cell_x = ox + dx + tl.xs[c] + s.adv[c] / 2.0
@@ -927,13 +933,6 @@ fn Ctx::emit_text(
       }
       None => (gx, gy, gw, gh, alpha)
     }
-    // (where it is before it is set on the pixels, moved as its own look moves it, for what places it again elsewhere:
-    // a node's words, set on the pixels where the scene composes them, view_blit)
-    match unplaced {
-      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z + (lx - gx), top + tl.ascent, g.oy / z + (ly - gy)))
-      None => ()
-    }
-    let (gx, gy) = (lx, ly)
     glyph_pushing.val = true
     self.push_inst(
       gx,

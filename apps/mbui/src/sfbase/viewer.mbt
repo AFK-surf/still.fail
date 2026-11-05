@@ -569,10 +569,6 @@ pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
 ///|
 /// The thumbnail of `id` where it was last laid out, while some of it is on the screen.
 pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
-  match tree_thumb_owner(id).get() {
-    Some((node, look)) => return tree_thumb_of(c, node, look)
-    None => ()
-  }
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
     (Some(l), Some((x, y, w, h))) if w > 0.0 && h > 0.0 && x < c.width && x + w > 0.0 && y < c.height && y + h > 0.0 =>
       Some({
@@ -3079,8 +3075,6 @@ pub fn file_viewer_reset() -> Unit {
   marking.note_field.set("")
   marks_changed()
   pv_thumbs.clear()
-  pv_tree_thumbs.clear()
-  pv_tree_lists.clear()
   pv_lists.clear()
   pv_frames.clear()
   pv_frames_n.val = 0

@@ -227,6 +227,7 @@ export class StationTopics implements Owner {
     this.#wholes.delete(key);
     if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
     if (topic.topic === "stationSearch") this.#sync.searchHidden(topic);
+    if (topic.topic === "stationUsage") this.#sync.usageHidden(station);
     if (topic.topic === "net" || topic.topic === "way") this.#unsampleNet(station, topic.topic);
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);

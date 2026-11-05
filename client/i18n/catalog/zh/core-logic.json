@@ -66,7 +66,7 @@
   "core-logic.choose.repick.same": "仍使用 {name}",
   "core-logic.choose.save": "改成 {model} · {effort} · {account}",
   "core-logic.choose.save.unchanged": "无变更",
-  "core-logic.choose.speed.plan": "跟随订阅",
+  "core-logic.choose.speed.plan": "跟随账号",
   "core-logic.choose.speed.standard": "标准",
   "core-logic.choose.context.whole": "完整",
   "core-logic.choose.context.whole_of": "完整 · {window}",

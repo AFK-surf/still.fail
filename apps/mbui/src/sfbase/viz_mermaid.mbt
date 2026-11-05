@@ -147,31 +147,26 @@ fn mermaid_ways(c : @ui.Ctx, station : String, place : String, svg : Bytes, w : 
   c.box(style=viz_ways, fn() {
     let full = c.id("viz/full/" + place + "/mermaid/" + svg.length().to_string())
     if c.clicked(full) {
-      c.tell("viz/open-mermaid", fn() { mermaid_open(station, svg, w, h) })
+      c.tell("viz/open-mermaid", fn() {
+        let a : Attachment = {
+          name: "Mermaid.svg",
+          path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
+          size: svg.length().to_double(),
+          width: w,
+          height: h,
+          thumbhash: "",
+          owner: "",
+          upload: "",
+          duration: 0.0,
+          frames: 0,
+          held: false,
+        }
+        // (the viewer's id of it, Viewer::id: its station, no session, its path)
+        keep_read(station + "//" + a.path, svg)
+        open_preview(station, "", a)
+      })
     }
     viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
   })
   |> ignore
-}
-
-///|
-/// A chart over the whole screen (mermaid_ways'): the viewer's, as a picture waiting in the composer opens (from its
-/// bytes, a path of its own, no session's), its SVG `svg` `w` × `h`, on `station`.
-fn mermaid_open(station : String, svg : Bytes, w : Double, h : Double) -> Unit {
-  let a : Attachment = {
-    name: "Mermaid.svg",
-    path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
-    size: svg.length().to_double(),
-    width: w,
-    height: h,
-    thumbhash: "",
-    owner: "",
-    upload: "",
-    duration: 0.0,
-    frames: 0,
-    held: false,
-  }
-  // (the viewer's id of it, Viewer::id: its station, no session, its path)
-  keep_read(station + "//" + a.path, svg)
-  open_preview(station, "", a)
 }

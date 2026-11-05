@@ -44,7 +44,7 @@ pub fn native_call(name : String, params : Json) -> NativeCall {
   match fake.val {
     Some(f) => {
       let ask : FakeNative = { name, params, answer: None }
-      let at = answers_frames.val
+      let at = g().frame_no
       let mut held = -1
       for i, h in f.dev.native_held {
         if h.0 == name {
@@ -127,7 +127,7 @@ pub fn NativeCall::got(self : NativeCall) -> Result[Json, String]? {
       match fake.val {
         Some(f) if self.fake >= 0 && self.fake < f.dev.natives.length() =>
           match f.dev.natives[self.fake].answer {
-            Some((r, at)) if answers_frames.val > at => Some(r)
+            Some((r, at)) if g().frame_no > at => Some(r)
             _ => None
           }
         _ => None
@@ -181,7 +181,7 @@ fn native_of_line(line : String) -> (String, Result[Json, String])? {
 fn fake_native_give(f : FakeHost, name : String, r : Result[Json, String]) -> Unit {
   for a in f.dev.natives {
     if a.name == name && a.answer is None {
-      a.answer = Some((r, answers_frames.val))
+      a.answer = Some((r, g().frame_no))
       f.wants = true
       return
     }
@@ -225,7 +225,7 @@ fn fake_native_answer(f : FakeHost, id : Int, r : Result[Json, String]) -> Unit 
   guard id >= 1 && id <= f.dev.natives.length() else { return }
   let a = f.dev.natives[id - 1]
   guard a.answer is None else { return }
-  a.answer = Some((r, answers_frames.val))
+  a.answer = Some((r, g().frame_no))
   f.wants = true
 }
 

@@ -22,7 +22,7 @@ export type Tool = {
   description: string;
   inputSchema: unknown;
   /// The text the agent sees; a thrown error's message comes back as a tool error.
-  run(session: string, args: Record<string, unknown>): Promise<string>;
+  run(session: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<string>;
   /// What the agent sees when it is more than text (a screenshot): called instead of `run` where there is one.
   content?(session: string, args: Record<string, unknown>): Promise<ToolReply>;
 };
@@ -63,7 +63,7 @@ export class McpEndpoint {
     this.gate = gate;
   }
 
-  async handle(method: string, authorization: string | undefined, body: Buffer | string): Promise<Reply> {
+  async handle(method: string, authorization: string | undefined, body: Buffer | string, signal?: AbortSignal): Promise<Reply> {
     if (method !== "POST") return { status: 405 };
     const token = (authorization ?? "").replace(/^(Bearer |bearer )/, "").trim();
     const session = token ? this.resolve(token) : undefined;
@@ -108,9 +108,9 @@ export class McpEndpoint {
             const { content, isError } = await tool.content(session, args);
             return reply({ result: { content, ...(isError ? { isError: true } : {}) } });
           }
-          return reply({ result: { content: [{ type: "text", text: await tool.run(session, args) }] } });
+          return reply({ result: { content: [{ type: "text", text: await tool.run(session, args, signal) }] } });
         } catch (error) {
-          log.warn("mcp", "tool call failed", { session, tool: name, error: (error as Error).message });
+          if (!signal?.aborted) log.warn("mcp", "tool call failed", { session, tool: name, error: (error as Error).message });
           return reply({ result: { content: [{ type: "text", text: (error as Error).message }], isError: true } });
         }
       }

@@ -8,18 +8,13 @@ import { compareKeys, equal, isObject } from "./util.ts";
 
 /// Where the keyed lists of a value are: `key` (the fields an item's key is made of) says the value at this place is
 /// one; `item` where the keyed lists of each item are; `fields` those of an object's fields.
-export type Spec = { key?: string[]; item?: Spec; fields?: Record<string, Spec>; sent?: (item: unknown) => boolean };
-
-/// Why an item came into a keyed list (mbui docs/retained.md, rule 12): put after what was there (`came`: a message
-/// come), sent from this core (`sent`: the spec's `sent` says so of it), or put before all that was there (`history`:
-/// fetched). The device moves it in by that; an op without one (an older core's) is shown as it is.
-export type Why = "came" | "sent" | "history";
+export type Spec = { key?: string[]; item?: Spec; fields?: Record<string, Spec> };
 
 /// A key as it goes out: the one field's value, or the fields' values in order.
 export type Key = unknown;
 
 export type KeyedOp =
-  | { path: Segment[]; key: string[]; put: unknown; before?: Key | null; why?: Why }
+  | { path: Segment[]; key: string[]; put: unknown; before?: Key | null }
   | { path: Segment[]; key: string[]; patch: Key; ops: AnyOp[] }
   | { path: Segment[]; key: string[]; drop: Key }
   | { path: Segment[]; key: string[]; move: Key; before: Key | null };
@@ -34,12 +29,7 @@ const SPECS: Record<string, Spec> = {
   chats: { fields: { days: { key: ["daysAgo"], item: { fields: { items: rows } } } } },
   chatSearch: { fields: { items: rows, messages: { key: ["station", "thread", "seq"] } } },
   search: { fields: { items: rows, messages: { key: ["station", "thread", "seq"] }, groups: { key: ["kind"], item: { fields: { items: items("key") } } } } },
-  chat: {
-    fields: {
-      messages: { key: ["seq", "outgoing"], sent: (m) => isObject(m) && typeof m.outgoing === "string" },
-      outbox: { key: ["id"], sent: () => true },
-    },
-  },
+  chat: { fields: { messages: { key: ["seq", "outgoing"] }, outbox: items("id") } },
   archive: { fields: { days: { key: ["label"], item: { fields: { items: rows } } } } },
   chatRows: items("id"),
   archivedRows: items("id"),
@@ -146,14 +136,11 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
     return true;
   }
   const stay = longestRun(positions);
-  // (what comes before all that was kept is history fetched; the rest came, unless sent from here)
-  const firstKept = positions.findIndex((p) => p >= 0);
   for (let i = next.length - 1; i >= 0; i--) {
     const before = i + 1 < next.length ? keyOf(next[i + 1], fields) : null;
     const from = positions[i]!;
     if (from < 0) {
-      const why: Why = spec.sent?.(next[i]) ? "sent" : firstKept >= 0 && i < firstKept ? "history" : "came";
-      out.push({ path: [...path], key: fields, put: next[i], before, why });
+      out.push({ path: [...path], key: fields, put: next[i], before });
       continue;
     }
     if (!stay.has(i)) out.push({ path: [...path], key: fields, move: keyOf(next[i], fields), before });

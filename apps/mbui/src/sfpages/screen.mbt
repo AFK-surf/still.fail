@@ -601,15 +601,13 @@ fn ScreenSess::cursor(self : ScreenSess) -> (Double, Double)? {
 }
 
 ///|
-/// The frame's size in pixels: the config's, else the picture's as the stream last showed it.
+/// The frame's size in pixels: the picture's as the stream last showed it, else (none yet) the config's.
 fn ScreenSess::frame_size(self : ScreenSess) -> (Int, Int)? {
-  match self.size {
-    Some(s) => Some(s)
-    None =>
-      match self.stream {
-        Some(st) => st.size()
-        None => None
-      }
+  // the picture's as it shows: a config says the next one's size before that is decoded (a device turned), the one showing
+  // squashed into it till then
+  match self.stream {
+    Some(st) if st.size() is Some(_) => st.size()
+    _ => self.size
   }
 }
 

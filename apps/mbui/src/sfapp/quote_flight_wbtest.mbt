@@ -46,35 +46,29 @@ fn quote_ground(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
 }
 
 ///|
-/// The field's own glyphs: a quote flying over it in the same colour is not its hint.
-fn hint_glyphs(t : @ui.Tester, hint : String) -> Array[(Double, Double, Int64)] {
-  let field = @ui.view_tree().bind(fn(tree) {
-    tree.said_order().iter().find_first(fn(n) {
-      !n.hidden && n.said is Some(s) && s.role == TextField && s.label == hint
-    })
-  })
-  if field is Some(n) { return t.drawn_glyphs(node=n.id) }
+/// Whether the composer's hint (发消息; a new chat's, 做任何事) is seen now: drawn in its colour where it is.
+fn hint_seen(t : @ui.Tester, hint? : String = "发消息") -> Bool {
   match t.words().iter().find_first(fn(w) { w.0 == hint }) {
     Some((_, x, y, w, h, _)) =>
       t
       .drawn_glyphs()
-      .filter(fn(g) { g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 })
-    None => []
+      .iter()
+      .any(fn(g) { g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 && g.2 == @sf.theme().p.subtle })
+    None => false
   }
-}
-
-///|
-/// Whether the composer's hint (发消息; a new chat's, 做任何事) is seen now, drawn in its own colour.
-fn hint_seen(t : @ui.Tester, hint? : String = "发消息") -> Bool {
-  hint_glyphs(t, hint).iter().any(fn(g) { g.2 == @sf.theme().p.subtle })
 }
 
 ///|
 /// The empty quote comment's hint is drawn in the field's colour, where the field is drawn.
 fn quote_hint_seen(t : @ui.Tester) -> Bool {
-  hint_glyphs(t, "添加说明（可选）").iter().any(fn(g) {
-    g.2 >> 8 == @sf.theme().p.subtle >> 8 && (g.2 & 0xFFL) != 0L
-  })
+  match t.words().iter().find_first(fn(w) { w.0 == "添加说明（可选）" && w.5 > 0.05 }) {
+    Some((_, x, y, w, h, _)) =>
+      t.drawn_glyphs().iter().any(fn(g) {
+        g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 &&
+          g.2 >> 8 == @sf.theme().p.subtle >> 8 && (g.2 & 0xFFL) != 0L
+      })
+    None => false
+  }
 }
 
 ///|
@@ -117,15 +111,9 @@ fn x_over_card(t : @ui.Tester) -> Bool raise {
 ///|
 /// The send button's ground as drawn now: its round.
 fn send_ground(t : @ui.Tester) -> Int64 raise {
-  let label = @sf.t("web-main.composer.send")
-  let drawn = @ui.view_tree().bind(fn(tree) {
-    tree.said_order().iter().find_first(fn(n) { !n.hidden && n.said is Some(s) && s.label == label })
-    .bind(fn(n) { tree.drawn_of(n.id) }).map(fn(d) { (d.x, d.y, d.w, d.h) })
-  })
-  let (x, y, w, h) = match (drawn, t.query(Button, label~)) {
-    (Some(r), _) => r
-    (_, Some(b)) => b.rect
-    _ => fail("no send button")
+  let (x, y, w, h) = match t.query(Button, label=@sf.t("web-main.composer.send")) {
+    Some(b) => b.rect
+    None => fail("no send button")
   }
   // (its round: the largest round about its middle, what it is pressed in reaching past it; drawn on its way as the
   // composer changes shape, its place in the capsule's end and in the opened box's corner 1.13 apart: smooth.mbt
@@ -144,8 +132,7 @@ fn send_ground(t : @ui.Tester) -> Int64 raise {
     Some(r) => r.4
     None => {
       let near = t.drawn_rects().filter(fn(r) { r.0 < x + w && r.0 + r.2 > x && r.1 < y + h && r.1 + r.3 > y })
-      let rounds = t.drawn_rects().filter(fn(r) { (r.2 - r.3).abs() < 0.5 && r.2 >= 30.0 && r.2 <= 45.0 })
-      fail("nothing drawn as the send button at \{(x, y, w, h)}: \{near}, rounds=\{rounds}, time=\{t.time()}")
+      fail("nothing drawn as the send button at \{(x, y, w, h)}: \{near}")
     }
   }
 }
@@ -224,10 +211,11 @@ test "a long quoted picture's words do not rewrap as the card sets out" {
     "author": "Ana", "text": Json::string(passage), "ts": "ts8",
   }, file~)
   t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
-  let before = t.lines_of(passage, visible=true)
+  let before = t.lines_of(passage)
   assert_true(before.length() > 0, msg="the quote's words were not laid out")
   tap_send(t)
-  assert_eq(t.lines_of(passage, visible=true), before, msg="the quote's words rewrapped on sending")
+  let first = t.lines_of(passage)
+  assert_eq(first, before, msg="the quote's words rewrapped on sending")
 }
 
 ///|
@@ -261,7 +249,7 @@ test "a quote sent alone is in the list at once, its card flying there from the 
       hinted = true
     }
   }
-  assert_false(hinted, msg="the hint appeared under the departing card")
+  assert_false(hinted)
   // and back once it is out of it
   t.run_for(@sf.hint_back_ms)
   assert_true(hint_seen(t))

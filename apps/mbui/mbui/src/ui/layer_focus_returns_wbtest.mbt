@@ -47,39 +47,3 @@ test "an old view's field with the focus; in one change a layer giving the focus
   t.draw()
   assert_eq((before, opened, upper_closed, said()), ("TextField 旧字段", "Button 上的按钮", "TextField 旧字段", "TextField 旧字段"))
 }
-
-///|
-test "a kept page laid nowhere while a gate shows gets its node's focus back as the gate goes; a node removed meanwhile does not" {
-  let gated = @signals.signal(false)
-  let kept = @signals.signal(true)
-  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
-  t.check_looks(false)
-  set_view_app(fn(root) {
-    root.show(fn() { gated.get() }, fn(g) {
-      g.grow(Is(1.0)).focus_returns() |> ignore
-    })
-    root.box(fn(page) {
-      page.laid_nowhere(By(fn() { gated.get() })) |> ignore
-      page.show(fn() { kept.get() }, fn(b) {
-        b.width(Is(Some(80.0))).height(Is(Some(40.0)))
-        .focusable(Is(true)).says(Is(Some(@view.said(Button, label="页内按钮")))) |> ignore
-      })
-    }) |> ignore
-  })
-  t.draw()
-  t.act(Button, Focus, label="页内按钮")
-  let focus = t.ctx().focus
-  gated.set(true)
-  t.draw()
-  assert_eq(t.ctx().focus, 0)
-  gated.set(false)
-  t.draw()
-  assert_eq(t.ctx().focus, focus)
-  assert_eq(t.focused().map(fn(n) { n.label }), Some("页内按钮"))
-  gated.set(true)
-  t.draw()
-  kept.set(false)
-  gated.set(false)
-  t.draw()
-  assert_eq(t.ctx().focus, 0)
-}

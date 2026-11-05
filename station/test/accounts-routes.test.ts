@@ -329,6 +329,27 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a check that cannot read the models this time keeps those it read last", async () => {
+    let listed: string[] | null = ["claude-opus-5-5", "claude-sonnet-5-5"];
+    let state = "ok";
+    const t = await rig({ check: async () => ({ state, detail: "fake", models: listed, checkedAt: Date.now() }) });
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5", "claude-sonnet-5-5"]);
+    // Its model list not answered (a timeout, a 5xx), or the whole check failing a moment: still the models it runs.
+    listed = null;
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5", "claude-sonnet-5-5"]);
+    state = "failed";
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5", "claude-sonnet-5-5"]);
+    // A list read again replaces it.
+    state = "ok";
+    listed = ["claude-opus-5-5"];
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5"]);
+    await t.close();
+  });
+
   test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
     const data = temp("outdated");
     writeFileSync(
@@ -534,6 +555,26 @@ describe("the accounts routes", { concurrency: true }, () => {
     script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": false}'\nexit 1\n`);
     await machine.refresh();
     await until(() => checked.length > afterPlan, "checked again");
+    await s.close();
+  });
+
+  test("machine login identity readings tell sharing, including the first and a later sign-in", async () => {
+    const m = fakeMachine({ claude: `echo '{"loggedIn": true, "email": "first@x.test"}'` });
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake", expiresAt: Date.now() + 3_600_000 } }));
+    const machine = new MachineLogins(m.env, undefined, () => "zh");
+    const identities: (string | null)[] = [];
+    const s = await rig({ machine, shared: {
+      status: async () => ({ check: null, quota: null }), view: () => null,
+      loginUpdated: () => identities.push(machine.get().find((l) => l.runtime === "claude")?.email ?? null),
+    } });
+    await until(() => identities.includes("first@x.test"), "the first reading tells sharing");
+    const count = identities.length;
+    await machine.refresh();
+    assert.equal(identities.length, count, "an unchanged reading does not refresh sharing");
+    script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": true, "email": "second@x.test"}'\n`);
+    await machine.refresh();
+    assert.equal(identities.at(-1), "second@x.test");
     await s.close();
   });
 
@@ -954,6 +995,30 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.call("PUT", "/profiles/cx", { fast: false });
     assert.equal(t.view("cx")!.fast, false);
     assert.deepEqual(await t.call("PUT", "/profiles/cx", { fast: "yes" }), [400, { error: "fast must be a boolean" }]);
+    await t.close();
+  });
+
+  test("an Anthropic key on Claude Code has a Fast default too; a Claude Code profile on its own variables does not", async () => {
+    const t = await rig();
+    assert.equal(t.view("cc")!.fast, null);
+    assert.equal((await t.call("PUT", "/profiles/cc", { fast: true, access: { kind: "anthropic-api", key: "sk-ant-1" } }))[0], 200);
+    assert.equal(t.view("cc")!.fast, true);
+    await t.call("PUT", "/profiles/cc", { fast: false });
+    assert.equal(t.view("cc")!.fast, false);
+    await t.close();
+  });
+
+  test("a Claude subscription has a Fast default only while its allowance says its usage credits are on", async () => {
+    let extraUsage: boolean | undefined;
+    const t = await rig({ readQuota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0, ...(extraUsage === undefined ? {} : { extraUsage }) }) });
+    assert.equal((await t.call("PUT", "/profiles/cc", { fast: true, access: { kind: "subscription" } }))[0], 200);
+    assert.equal(t.view("cc")!.fast, null, "not known yet");
+    extraUsage = false;
+    await t.call("POST", "/profiles/cc/quota");
+    assert.equal(t.view("cc")!.fast, null, "credits off");
+    extraUsage = true;
+    await t.call("POST", "/profiles/cc/quota");
+    assert.equal(t.view("cc")!.fast, true);
     await t.close();
   });
 

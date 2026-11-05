@@ -184,6 +184,8 @@ export function parseInput(v: any): ScreenInput | null {
       return v.name === "closed" || v.name === "book" || v.name === "open" ? { t: "pose", name: v.name } : null;
     case "device":
       return v.name === "volume_up" || v.name === "volume_down" || v.name === "memory_warning" || v.name === "rotate" ? { t: "device", name: v.name } : null;
+    case "button":
+      return Number.isInteger(v.page) && Number.isInteger(v.usage) && v.page > 0 && v.page < 0x10000 && v.usage > 0 && v.usage < 0x10000 && typeof v.down === "boolean" ? { t: "button", page: v.page, usage: v.usage, down: v.down } : null;
     default:
       return null;
   }
@@ -290,6 +292,7 @@ class ViewSession {
   #unlogin: () => void = () => {};
   #unpasskey: () => void = () => {};
   #unpoint: () => void = () => {};
+  #unturn: () => void = () => {};
   #title: string;
   /// The bit rate the source was last asked for.
   #rate: number | null = null;
@@ -384,6 +387,7 @@ class ViewSession {
     this.#unlogin();
     this.#unpasskey();
     this.#unpoint();
+    this.#unturn();
     this.view.close();
     this.#leave();
     this.#unwatch();
@@ -438,6 +442,12 @@ class ViewSession {
     if (this.view.watchCursor) {
       this.#unpoint = this.view.watchCursor((cursor) => {
         if (!this.#closed) void this.#state({ cursor });
+      });
+    }
+    // How a simulator's picture is turned: its case is drawn turned with it.
+    if (this.view.watchTurn) {
+      this.#unturn = this.view.watchTurn((turn) => {
+        if (!this.#closed) void this.#state({ turn });
       });
     }
     // The display's scale, to a person who drives it (a source whose scale is changed: Windows' desktop).

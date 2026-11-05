@@ -21,53 +21,8 @@ let words_picks : @view.Lent[Bool] = @view.Lent::new()
 /// The words in pieces node `v` holds, now or later, picked with the pointer, a mouse's (a page's, as an old view's
 /// page's in Ctx::selectable): pressed and dragged over, picked; ⌘C (Ctrl+C) copies them; a press elsewhere lets them
 /// go.
-/// `color`: what is picked of them drawn on, and its handles in it whole (else the page's: Ctx::selectable's);
-/// `lined`: a finger's handles a line down its ends' lines with a knob, whatever the platform's are.
-pub fn words_picked(v : @view.View, color? : Int64, lined? : Bool = false) -> Unit {
+pub fn words_picked(v : @view.View) -> Unit {
   v.lends(words_picks, true).lends(@view.runs_picker, words_picked_span) |> ignore
-  // (the I-beam over them, pointed at alone where the pointer is in it (what holds it pointed in still), as over an old
-  // view's page's words picked so (Ctx::selectable); what takes presses in it its own, a link of theirs the hand:
-  // runs_links')
-  v.cursor(Is(Some(IBeam))).points(Is(true)) |> ignore
-  match color {
-    Some(k) => v.lends(words_pick_color, k) |> ignore
-    None => ()
-  }
-  if lined {
-    v.lends(words_pick_lined, true) |> ignore
-  }
-}
-
-///|
-/// What a node lends what it holds: a finger's handles over its words lined (words_picked's `lined`).
-// kept across runs: what each node lends (View::lends), let go with it
-let words_pick_lined : @view.Lent[Bool] = @view.Lent::new()
-
-///|
-/// Whether a finger's handles over node `id`'s words are lined (words_picked).
-fn picked_lined(id : @view.NodeId) -> Bool {
-  match view_app.val {
-    Some(tree) => tree.view_of(id).bind(fn(v) { v.lent(words_pick_lined) }).unwrap_or(false)
-    None => false
-  }
-}
-
-///|
-/// What a node lends what it holds: what of its words is picked is drawn on (words_picked's `color`).
-// kept across runs: what each node lends (View::lends), let go with it
-let words_pick_color : @view.Lent[Int64] = @view.Lent::new()
-
-///|
-/// What node `id`'s words picked are drawn on: what holds it says (words_picked), else the page's (Ctx::selectable).
-fn picked_color_of(id : @view.NodeId) -> Int64 {
-  match view_app.val {
-    Some(tree) =>
-      match tree.view_of(id) {
-        Some(v) => v.lent(words_pick_color).unwrap_or(desk.sel_color)
-        None => desk.sel_color
-      }
-    None => desk.sel_color
-  }
 }
 
 ///|
@@ -318,14 +273,7 @@ fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> U
         // (a column it scrolls held it: called off, as a hold handed on calls its cover's off)
         Some(Dragging(id)) if tree.claims_scroll(id) =>
           tree.drag_at(id, Off, x, y, view_moment(), finger=view_fingers[0]) |> ignore
-        // (a cover whose still hold goes through to what lies under it (a panel not in use: the words in it picked as
-        // it is brought over): the words', its own hold called off)
-        Some(Dragging(id)) if tree.goes_through(id) && tree_sel_at(x, y, finger=true) is Some(_) =>
-          tree.drag_at(id, Off, x, y, view_moment(), finger=view_fingers[0]) |> ignore
         Some(Nowhere) => ()
-        // (an old view's under the words that has nothing of its own there (no target, no words of its own: a page's
-        // whole frame under the tree's), held only as nothing over it took the finger: the words' as on nothing)
-        Some(Old(_, _)) if old_owns_nothing_at(x, y) => ()
         // (a node's own press, its own hold: its)
         _ => return
       }
@@ -340,13 +288,6 @@ fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> U
 }
 
 ///|
-/// Whether the old views have nothing of their own at (x, y) to take a press: no target of theirs, no words of theirs.
-fn old_owns_nothing_at(x : Double, y : Double) -> Bool {
-  let c = g()
-  hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true) < 0 && c.sel_finger_at(x, y) is None
-}
-
-///|
 /// What a finger's hold on words of the window's tree set going called off (tree_finger_down).
 fn tree_finger_off() -> Unit {
   match tree_finger_hold.val {
@@ -354,102 +295,4 @@ fn tree_finger_off() -> Unit {
     None => ()
   }
   tree_finger_hold.val = None
-}
-
-///|
-/// What of the window's tree's words is picked with the pointer, as an app asks it (tree_picked): by a finger or not,
-/// the rows of lists made by their keys it is in (View::row_place's, in order), its words.
-pub(all) struct TreePicked {
-  finger : Bool
-  rows : Array[@view.NodeId]
-  words : String
-  /// where it runs in each paragraph's words it is in, in order: from, until
-  spans : Array[(Int, Int)]
-} derive(Eq)
-
-///|
-/// What of the window's tree's words is picked with the pointer now, followed as that changes (picked_said); None while
-/// nothing of them is, or it is still being dragged out.
-/// `dragged`: as far as it is while it is still being dragged out too.
-pub fn tree_picked(dragged? : Bool = false) -> TreePicked? {
-  picked_said.get() |> ignore
-  if !tree_picking() || (picked.dragging && !dragged) {
-    return None
-  }
-  let spans : Array[(SelKey, SelSpan)] = picked.spans.iter().filter(fn(e) { e.1.a < e.1.b }).collect()
-  if spans.is_empty() {
-    return None
-  }
-  spans.sort_by(fn(p, q) { order_cmp(p.1.at, q.1.at) })
-  let rows : Array[@view.NodeId] = []
-  for e in spans {
-    match e.0 {
-      Words(_, row, _) => if !rows.contains(row) { rows.push(row) }
-      _ => ()
-    }
-  }
-  Some({ finger: picked.finger, rows, words: selected_words(), spans: spans.map(fn(e) { (e.1.a, e.1.b) }) })
-}
-
-///|
-/// Where what is picked with the pointer is drawn in the window, as it is laid out now (Ctx::selection_box's), read once.
-pub fn picked_box() -> (Double, Double, Double, Double)? {
-  g().selection_box()
-}
-
-///|
-/// Where the pointer let what is picked go, in the window (Ctx::selection_end: x, its line's top and height); None
-/// while it is dragged or nothing is picked.
-pub fn picked_end() -> (Double, Double, Double)? {
-  g().selection_end()
-}
-
-///|
-/// What a finger picked widened to all the words of where it picked (its text menu's 全选).
-/// `within`: of the window's tree's words, those of nodes it says (the words of one message, as an app knows them),
-/// the rest left out.
-pub fn picked_all(within? : (@view.NodeId) -> Bool) -> Unit {
-  match within {
-    Some(f) =>
-      g().finger_select_all(within=fn(t) {
-        match t.node {
-          Some(id) => f(id)
-          None => false
-        }
-      })
-    None => g().finger_select_all()
-  }
-}
-
-///|
-/// Nothing picked with the pointer any more, told.
-pub fn picked_none() -> Unit {
-  select_none()
-}
-
-///|
-/// Whether what a finger picked in these rows of the window's tree's lists (View::row_place's) has its own menu
-/// over it, an app's, not the system's text menu (finger_menu): what the app says.
-// kept across runs: an app's, set once as it starts
-pub let tree_menu_own : Ref[(Array[@view.NodeId]) -> Bool] = Ref(fn(_) { false })
-
-///|
-/// What a node lends what it holds: a tap on it keeps what a finger picked (keeps_picked).
-// kept across runs: what each node lends (View::lends), let go with it
-let keeps_picks : @view.Lent[Bool] = @view.Lent::new()
-
-///|
-/// Node `v` and what it holds keeping what a finger picked as they are tapped (a bar of what to do with it: 引用, 复制,
-/// 全选), as Ctx::keeps_selection keeps it for an old view's.
-pub fn keeps_picked(v : @view.View) -> @view.View {
-  v.lends(keeps_picks, true)
-}
-
-///|
-/// Whether a tap on node `id` keeps what a finger picked (keeps_picked).
-fn tree_keeps_picked(id : @view.NodeId) -> Bool {
-  match view_app.val {
-    Some(tree) => tree.view_of(id).bind(fn(v) { v.lent(keeps_picks) }).unwrap_or(false)
-    None => false
-  }
 }

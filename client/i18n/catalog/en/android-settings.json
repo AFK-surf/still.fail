@@ -359,7 +359,7 @@
   "android-settings.profile.disableWhat": "turn it off",
   "android-settings.profile.disabled": "Turned off",
   "android-settings.profile.fast": "Default Fast",
-  "android-settings.profile.fastNote": "For chats on Plan default; Fast uses more allowance or credits",
+  "android-settings.profile.fastNote": "For chats on Account default; Fast uses more allowance or credits",
   "android-settings.profile.fastOff": "Default Fast turned off",
   "android-settings.profile.fastOn": "Default Fast turned on",
   "android-settings.profile.keyHint": "Rechecked after saving.",

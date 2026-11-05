@@ -464,21 +464,6 @@ fn keys_taken_now(focus : Int, code : Int, mods : Int) -> Bool {
   if focus == 0 || g().dev.catchers.contains(focus) || !g().keys_reach(focus) {
     return false
   }
-  // A retained field has the same first refusal as the old field's completion menu, owned by its live node.
-  match (tree_said_ids.get(focus), view_app.val) {
-    (Some(id), Some(tree)) if tree.allows(id) => match tree_fields.get(id) {
-      Some(tf) => match tf.keys {
-        Some(take) => {
-          let took = Ref(false)
-          tree.event(view_moment(), fn() { took.val = take(code, mods) })
-          if took.val { return true }
-        }
-        None => ()
-      }
-      None => ()
-    }
-    _ => ()
-  }
   match keys_taken.get(focus) {
     Some(w) if w.build >= builds_made.val => {
       @signals.start_batch()

@@ -489,19 +489,6 @@ pub fn[P] Nav::top_stay(self : Nav[P]) -> (Int, Int) {
 }
 
 ///|
-/// The page drawn in the top's place, its serial and its stint: the one kept shown there while the top waits for what
-/// it shows (Nav::flat_keep), else the top (read: told as it changes). What is the page's while it is the one seen (its
-/// draft's editor) is this one's.
-pub fn[P] Nav::drawn_stay(self : Nav[P]) -> (Int, Int) {
-  self.said.get() |> ignore
-  self.shown.get() |> ignore
-  match self.flat_kept_entry() {
-    Some(e) => (e.serial, e.stint)
-    None => self.top_stay()
-  }
-}
-
-///|
 /// Drawn flat (Ctx::nav_flat), what shows is said by its owner at its causes, not by the frames (`owned`; let go, as
 /// Nav::shows_when says it): what it keeps shown (Nav::flat_keep) and when the one on top shows.
 pub fn[P] Nav::flat_owned(self : Nav[P], owned : Bool) -> Unit {

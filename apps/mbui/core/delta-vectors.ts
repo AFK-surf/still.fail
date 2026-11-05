@@ -1,8 +1,8 @@
-// Test vectors for mbui/core's delta applier (src/rows/delta.mbt), written as a MoonBit test file: values shaped like
+// Test vectors for mbui/core's delta applier (src/core/delta.mbt), written as a MoonBit test file: values shaped like
 // the core's topics, their changes diffed by ember's core-ts (collections.ts `diffKeyed`: keyed ops where the topic's
 // spec says, the plain ones elsewhere) and applied by it (`applyKeyed`), so the MoonBit applier is held to the core's
 // own result; then ops that do not fit their value, which the core skips. Seeded, so the file is the same each time.
-//   EMBER=<ember checkout> node core/delta-vectors.ts > src/rows/vectors_test.mbt      (scripts/core.sh vectors)
+//   EMBER=<ember checkout> node core/delta-vectors.ts > src/core/vectors_test.mbt      (scripts/core.sh vectors)
 const ember = process.env.EMBER;
 if (!ember) throw new Error("EMBER: an ember checkout");
 const { diffKeyed, applyKeyed, specOf } = await import(`${ember}/client/core-ts/src/collections.ts`);

@@ -85,3 +85,53 @@ jobs:
           why3 --version
           why3 config detect >/dev/null
           cd rules && moon prove
+  # Each mistake planted in the proved rules makes the proof fail (rules/planted.sh), beside `proved`.
+  planted:
+    needs: tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/prove-tools
+          key: ${{ needs.tools.outputs.key }}
+          fail-on-cache-miss: true
+      - name: each planted mistake fails the proof
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends z3 >/dev/null
+          install -m 755 ~/prove-tools/bin/moonc-prove "$MOON_HOME/bin/moonc-prove"
+          export PATH="$HOME/prove-tools/opam/w3/bin:$PATH"
+          why3 config detect >/dev/null
+          sh rules/planted.sh
+  # The lock, face-to-face approval and the vault's key as messages over a network the adversary holds (rules/protocol,
+  # Tamarin): each lemma verified, each mistake planted in a copy caught. Tamarin and Maude as released, cached.
+  protocol:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - id: had
+        uses: actions/cache@v4
+        with:
+          path: ~/tamarin
+          key: tamarin-1.12.0-maude-3.5.1
+      - if: steps.had.outputs.cache-hit != 'true'
+        name: Tamarin 1.12.0 and Maude 3.5.1
+        run: |
+          mkdir -p ~/tamarin/bin && cd ~/tamarin
+          curl -sSfL -o t.tgz https://github.com/tamarin-prover/tamarin-prover/releases/download/1.12.0/tamarin-prover-1.12.0-linux64-ubuntu.tar.gz
+          tar xzf t.tgz && rm t.tgz
+          curl -sSfL -o m.zip https://github.com/maude-lang/Maude/releases/download/Maude3.5.1/Maude-3.5.1-linux-x86_64.zip
+          unzip -q m.zip -d maude && rm m.zip
+          ln -sf "$(find ~/tamarin -name tamarin-prover -type f | head -1)" bin/tamarin-prover
+          m=$(find ~/tamarin/maude -name 'maude*' -type f -perm -u+x | head -1)
+          ln -sf "$m" bin/maude
+          echo "$(dirname "$m")" > maude-lib
+      - name: each lemma verified, each planted mistake caught
+        run: |
+          export PATH="$HOME/tamarin/bin:$PATH" MAUDE_LIB="$(cat ~/tamarin/maude-lib)"
+          tamarin-prover --version | head -1
+          sh rules/protocol/check.sh

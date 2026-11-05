@@ -36,18 +36,6 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
 }
 
 ///|
-test "dismiss keeps the space below its options card as well as its own inset" {
-  let t = decide_core([], "chat")
-  let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "一起换" }).unwrap()
-  let (x, y, w, h) = option.rect
-  let card = t.boxes_held().iter().find_first(fn(b) {
-    b.radii.0 > 20.0 && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h && b.h < 300.0
-  }).unwrap()
-  let (_, top, _, _) = t.rect_of("忽略").unwrap()
-  assert_true((top - (card.y + card.h) - 8.0).abs() < 0.5, msg="space below the card: \{top - (card.y + card.h)}")
-}
-
-///|
 test "an option tapped in the chat answers its card (decision.answer)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
@@ -67,25 +55,6 @@ test "an option tapped in the chat answers its card (decision.answer)" {
   // the last tap's ripple shown whole, its way in and out
   t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
-}
-
-///|
-test "a chat's options use the column's room up to their wide card width, with short labels too" {
-  for width in [390.0, 700.0, 1280.0] {
-    new_run()
-    let src = fixture("chat")
-    open_fixture_over("chat", src)
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0,
-      platform=if width == 390.0 { 2 } else { 0 })
-    t.run_for(@ui.move_most_ms)
-    let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "先不换" }).unwrap()
-    let (x, y, w, h) = option.rect
-    let cards = t.boxes_held().filter(fn(b) {
-      b.radii.0 > 20.0 && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h && b.h < 300.0
-    })
-    assert_true(cards.iter().any(fn(b) { (b.w - dmin(460.0, width - 32.0)).abs() < 0.5 }),
-      msg="window \{width}, options card \{cards.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
-  }
 }
 
 ///|
@@ -191,13 +160,12 @@ test "the desk's chat: 忽略 at the end of the line saying what an agent needs,
   let t = decide_core(calls, "chat-need", wide=true)
   // in the reminder's card at the chat's end, after its words, not under the post that asks
   let (x, y) = t.find_last("忽略").unwrap()
-  // (the card's own words: the post that asks says them too)
-  let (_, said_x, said_y, said_w, said_h, _) = t.words().filter(fn(w) { w.0 == @sffixture.need_state.2 }).last().unwrap()
+  let (said_x, said_y, said_w, said_h) = t.rect_of(@sffixture.need_state.2).unwrap()
   assert_true(x > said_x + said_w)
   assert_true(y >= said_y && y <= said_y + said_h)
   // its words and 忽略 on lines as high as the bell's column (an option's disc, 20), the bell in their middle: on the
   // state line's 18 laid from the top they stood 1 over it
-  let (_, _, end_y, _, end_h, _) = t.words().filter(fn(w) { w.0 == "忽略" }).last().unwrap()
+  let (_, end_y, _, end_h) = t.rect_of("忽略").unwrap()
   assert_eq((said_h, end_y, end_h), (20.0, said_y, 20.0))
   t.tap(x, y)
   let made = named(calls, "decision.dismiss")
@@ -359,3 +327,4 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
 }
+

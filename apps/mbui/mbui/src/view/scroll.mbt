@@ -60,8 +60,6 @@ pub struct Scroll {
   priv mut claimed : Bool
   /// what is told as it scrolls (its bar), at the moment
   priv mut on_scrolled : (Double) -> Unit
-  /// The hand's requested distance, before it moves or any new layout measures what it brings into sight.
-  priv mut on_hand : (Double) -> Unit
   /// which column it is, of all made (what hosts the tree tells its glides by: Tree::on_glides)
   priv serial : Int
   /// it moves as a page's list does on the platform it is on (Scroll::list): what shows past its ends, pulled there or
@@ -79,12 +77,6 @@ pub struct Scroll {
   priv across : Bool
   /// brought on by the hand held past its edge (Scroll::edge_toward), while it is said
   priv edge : @signals.Signal[Edge?]
-  /// The editor these choices belong to, whose input method stays while they are scrolled.
-  priv mut for_field : NodeId?
-  /// a page's list's blocks (View::scrolls_window): the first and last of them in sight, by their places, it put with
-  /// one of them at its top, by its place, and how far past the first in sight's top it is (what a test reads and asks
-  /// of an old view's list)
-  priv mut rows : ((() -> (Int, Int)), (Int) -> Unit, () -> Double, (Int) -> (Double, Double, Double, Double)?)?
 }
 
 ///|
@@ -102,17 +94,6 @@ pub fn Scroll::new() -> Scroll {
 /// A row's scroll, at its start: across, as an old view's box scrolled sideways does (ui's Ctx::sideways).
 pub fn Scroll::across() -> Scroll {
   Scroll::made(false, across=true)
-}
-
-///|
-/// The editor node whose choices scroll in `id`, if it still exists. A host keeps that editor's keyboard when a
-/// finger scrolls its choices; another editor's keyboard is dismissed as for any other scrolling column.
-pub fn Tree::scrolls_for(self : Tree, id : NodeId) -> NodeId? {
-  guard self.alive_id(id) else { return None }
-  match self.scrolls_at.get(id.at).bind(fn(s) { s.for_field }) {
-    Some(f) if self.alive_id(f) => Some(f)
-    _ => None
-  }
 }
 
 ///|
@@ -135,7 +116,6 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     hand_v: 0.0,
     claimed: false,
     on_scrolled: fn(_) {  },
-    on_hand: fn(_) { },
     serial: {
       scrolls_made.val += 1
       scrolls_made.val
@@ -146,8 +126,6 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     tall: fn() { 0.0 },
     host: None,
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
-    for_field: None,
-    rows: None,
   }
 }
 
@@ -166,13 +144,6 @@ fn[T] same_ref(a : T?, b : T?) -> Bool {
 /// none at rest, held, or stopped (pressed again, the wheel, what it holds shorter, let go of).
 pub fn Scroll::glides_till(self : Scroll) -> Double? {
   @signals.untracked(fn() { self.rest_now() })
-}
-
-///|
-/// The same end, followed as a glide starts, changes or ends. For an observation of the page's reading position;
-/// a layout deciding where to put its contents uses glides_till without following its own scroll changes.
-pub fn Scroll::glides_till_told(self : Scroll) -> Double? {
-  self.rest_now()
 }
 
 ///|
@@ -274,8 +245,7 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
       }
     None =>
       match self.notch.get() {
-        // (set out from under its top, what it holds shown lower than it lies (Scroll::glide_under): from there)
-        Some(n) => dclamp(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
+        Some(n) => dclamp(n.x0 + ease_come(n.total, n.v0, t - n.t0), 0.0, most)
         None => dclamp(self.x.get(), 0.0, most)
       }
   }
@@ -439,7 +409,6 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   let was = self.stopped(t)
   let to = dclamp(was + d, 0.0, self.most())
-  if to != was { (self.on_hand)(to - was) }
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)
@@ -601,10 +570,8 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// laid out as wide as it is, given way to nothing across where what holds it is narrower; a hold its own once it moves
 /// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
 /// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
-/// holds' last line), none while it cannot. `for_field`: the editor these choices belong to; scrolling keeps
-/// that editor's keyboard, as an old view's capped column does. `content_extent`: a virtual list's counted content
-/// height (width across), available when its heights change, before those heights have been laid out in its holder.
-/// `bar_clear`: the top and foot room kept clear by the scroll bar.
+/// holds' last line), none while it cannot. `bar_clear`: down a column, how much of its top and its foot its bar keeps
+/// clear of, as it is now (what lies over them: a bar the list runs under), as an old view's list's bar does.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
@@ -612,8 +579,6 @@ pub fn View::scrolls(
   slop? : Double,
   bar? : ScrollBar,
   bar_in? : Double = 0.0,
-  for_field? : NodeId,
-  content_extent? : () -> Double,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> View {
   guard self.live() is Some(_) else { return self }
@@ -625,7 +590,6 @@ pub fn View::scrolls(
     }
   }
   s.host = Some(self)
-  s.for_field = for_field
   // (found by what it holds: View::scroll_holding)
   self.tree.scrolls_at[self.at] = s
   let across = s.across
@@ -645,10 +609,6 @@ pub fn View::scrolls(
   self.tree.layout_marked_at(self.at)
   // (how far it can go: as tall as what it holds is, less as tall as it shows; told as laid out)
   s.room = fn() {
-    match content_extent {
-      Some(extent) => return self.laid_size_told().map(fn(v) { extent() - (if across { v.0 } else { v.1 }) })
-      None => ()
-    }
     match inner.val {
       Some(held) =>
         match (held.laid_size_told(), self.laid_size_told()) {
@@ -802,7 +762,6 @@ pub fn View::scrolls(
     s.room = fn() { None }
     s.tall = fn() { 0.0 }
     s.host = None
-    s.for_field = None
     match self.tree.scrolls_at.get(self.at) {
       Some(o) if physical_equal(o, s) => self.tree.scrolls_at.remove(self.at)
       _ => ()
@@ -938,21 +897,6 @@ pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
-/// Whether node `id` scrolls what it holds up and down (View::scrolls) and that is shorter than it, as last laid out:
-/// what it holds ends above its foot, where its words end, so where its last part is from its container's foot corners
-/// is what it holds, not a place it stands (ui's corner rule: compared with them only as it scrolls to its end; the
-/// user, 2026-11-04: 滚到底才查底角).
-pub fn Tree::scroll_short(self : Tree, id : NodeId) -> Bool {
-  guard self.alive_id(id) else { return false }
-  let n = self.nodes[id.at]
-  n.scroll_held >= 0 &&
-  n.scroll_held < self.nodes.length() &&
-  self.nodes[n.scroll_held].live &&
-  !n.scroll_across &&
-  self.nodes[n.scroll_held].flex.height < n.flex.height - 0.5
-}
-
-///|
 /// Whether node `id` is in what one that scrolls moves (View::scrolls: its held), however far that can go now: where it
 /// is moves with that, as what an old view's box that scrolls (its capped, a sideways one) holds does. Not what stands
 /// beside that in the one that scrolls (its bar, what is put over it), which stays.
@@ -969,3 +913,4 @@ pub fn Tree::in_scroller(self : Tree, id : NodeId) -> Bool {
   }
   false
 }
+

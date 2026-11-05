@@ -79,7 +79,6 @@ test "refused by the core: what was sent leaves the list, the words back in the 
   (named(calls, "chat.send")[0].done)(
     Err({ "code": Json::string("invalid_params"), "message": Json::string("太长了") }),
   )
-  assert_true(send_flight.get() is None, msg="the refused row cannot keep drawing a copy over the restored draft")
   t.draw()
   assert_eq(sent_rows(), [])
   let (_, words, _, _) = t.ime()

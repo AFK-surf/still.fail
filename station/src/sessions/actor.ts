@@ -10,7 +10,7 @@ import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -1336,9 +1336,15 @@ export class SessionActor {
             this.deps.store.setRunning(this.key, false);
           }
           // What it had going in the background is gone with it.
-          this.stopped.push(...(this.agent?.session.background?.() ?? []));
+          const gone = this.agent?.session.background?.() ?? [];
+          this.stopped.push(...gone);
           this.agent = null;
           this.deps.store.notify(this.key);
+          // Waiting on it, it would never be brought back: it goes on now, as at a turn's end.
+          if (gone.length > 0 && this.phase === "waiting" && !this.deps.held(this.key)) {
+            log.info("session", "its background work ended with its process while it waits; going on now", { session: this.key, stopped: gone.length });
+            await this.startTurn("resume", BACKGROUND_STOPPED_WAITING);
+          }
         });
         break;
     }
@@ -1498,6 +1504,12 @@ export class SessionActor {
     const declared = turn?.declared ?? null;
     if (ends?.kind === "waiting") {
       this.nudges = 0;
+      // What it waits on may be the background work its process just ended with (it lost the station's tools): that
+      // would never bring it back, so it goes on now, told what stopped, rather than when the wait runs out.
+      if (!retry && this.stopped.length > 0 && !this.deps.held(this.key)) {
+        log.info("session", "its background work ended with its process while it waits; going on now", { session: this.key, stopped: this.stopped.length });
+        return this.startTurn("resume", BACKGROUND_STOPPED_WAITING);
+      }
       this.wait(ends.seconds);
       this.deps.idle(this.key);
       return;
@@ -1725,6 +1737,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     model,
     effort: row.effort ?? undefined,
     ...(typeof row.context === "number" ? { context: row.context } : {}),
+    ...(typeof row.fast === "boolean" ? { fast: row.fast } : {}),
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
     instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)) + (preset ? presetInstructions(preset) : ""),
     ...(skills !== undefined ? { skills } : {}),

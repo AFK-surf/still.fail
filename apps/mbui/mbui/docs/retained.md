@@ -198,7 +198,9 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    common holder lays both out (a layout of its own: Compose's "the minimal shared parent serves as the source of
    truth"), not a size told back and set on the other. The one structure made in layout is a lazy container's
    (rule 11): it makes and lets go of nodes in its own subtree as it lays them out. `Tree::laid_out` does not call
-   itself; a node marked during layout fails a test (the browser's ResizeObserver defers what it cannot deliver and
+   itself; a node marked during layout fails a test where what is marked and what marked it are the tree's own (an old view
+   lays out the old way, reading its layout back and building again: what it marks is counted as owed, the count only
+   ever smaller, never let fail what is not yet the tree's) (the browser's ResizeObserver defers what it cannot deliver and
    says so; here what a frame cannot settle in its one pass is a fault, rule 9).
 11. **A long list is laid out from its anchor.** Its scroll state is an anchor: a row's key and how far its edge is from
    the list's (Compose's LazyListState: the first visible item and its offset, kept by key across changes of the
@@ -226,6 +228,51 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    counting: the same scene with 30 and with 3000 rows does the same work a frame (bindings worked out, rows gone
    through, measures), a check in CI; and in milliseconds (matklad's "Benchmark In Milliseconds") against the build
    before a page moved into the tree: opening, scrolling and a send's motion each faster, on a native build.
+   A frame's cost is also what the GPU and the display do for it, counted the same way: the area drawn again (the
+   damage the host is given, as a share of the window), the area of glass sampled again for it, whether the host was
+   asked for the frame it drew and for the display's highest rate while something is typed or moves. A keystroke into
+   a field draws again the field and what it pushes, no more; a scroll, the list and what is over it; neither builds an
+   old view again. Held by the Tester run as a host runs it (a frame at each refresh, drawn only where asked: the frames
+   a host would draw: #3962) on the real pages with long data, 30 and 3000 rows alike, in CI; and on a
+   phone (the slowest device the app ships to: frames over its budget, refreshes missed, the GPU's time a frame) against
+   the build before, a dev build beside the person's own. Milliseconds on a desktop's offscreen run show a step is not
+   slower; they do not show a frame is in its budget, and no step is called faster by them alone (2026-11-05: the
+   layers of rule 15 measured four times faster offscreen drew the whole phone screen every frame).
+15. **The scene is kept by layer.** A layer begins at the window's root, at what the root holds (a page, what is over
+   it), at what a `show`, `pick` or `each` made (a page, a sheet, a row), at a list's rows, at an old view, at what is
+   over all or over the scrim, and at what moves as it is drawn (a place property bound: a spinner turning, a row
+   sliding, a fade): `Tree::starts_layer` (Flutter's repaint boundaries, Chromium's paint chunks). Each keeps what it
+   drew, where that is among the frame's instances, what it was cut, faded and stretched by as it began, the glyphs'
+   plots it draws from (said drawn from in each frame the old frame paints: `Atlas::drawn`) and the pictures it shows, and what its
+   drawing read, by a watch of its own (src/ui/scene_layers.mbt).
+16. **A frame draws again only the layers something of changed, and says it at its cause.** The tree tells what changed
+   as it changes (`Tree::take_changed`: content made again; `take_placed`: placed, faded, turned or cut otherwise;
+   `take_removed`: let go); a layer's watch tells what its drawing read changed (an image decoded, a field's words, the
+   clock while it reads it); a moment its drawing waits for comes. Each marks the layer it is in; one placed, or cutting,
+   fading or setting the glyphs of what it holds, draws all it holds again with it. Every other layer is the instances it
+   was: copied where it is put, as the old frame paints the frame, or left where it lies, a frame of the tree alone
+   (`alone_frame`: nothing of the old frame painted, each layer to draw again drawn in a buffer of its own from what it
+   began in and put where it was, where it comes to as many instances; else the old frame paints the frame, copying
+   what is kept).
+17. **Where the window changed is told by what changed, never found.** Each node the tree said changed is drawn again
+   where all it and what it holds reached as last drawn and where they reach once drawn (`@damage.Parts`: as far as any
+   pixel reaches, merged, at most four, glass a part reaches taken in whole); a layer whose drawing read what changed,
+   all of it; what the old frame paints again: each old view where what it draws differs from what it drew the last time it
+   painted (`@damage.Parts::add_changed`: the old frame says nothing of what changed in it, so this one place compares,
+   an adapter of rule 4's kind said to be one, gone with the islands; an old view whole is a phone's screen whole); the old
+   frame's cycles by the clock where they were and are; a stream's picture each frame. Nothing of the tree's is
+   compared with the frame before it; `src/damage` keeps no frame (the old views' instances, kept by the scene for
+   the adapter above, go with them).
+18. **The host is given the whole by an adapter that says so.** The renderers upload every instance each frame
+   (`@hostapi.present`): that is the adapter of rule 4, named where it is (`h_present`), no "only what changed", and
+   nothing is done because of it; what changed is the parts (`@hostapi.render_dirty`). A renderer taking the layers
+   that changed is its own step, not this one.
+19. **Held by the tests.** A frame that copied a layer kept is painted again with nothing kept, in every Tester
+   (`Ctx::scene_check`, with `looks_check`): instance for instance the same, or the test fails naming the layer; a frame
+   of the tree alone is built whole after it as well and compared (`looks_compare`). What a frame costs is counted
+   (`@ui.scene_done`: layers drawn, instances drawn and copied, frames of the tree alone, the work of saying where it
+   changed): a spinner turning over a chat's 3000 messages and over an empty page cost the same, as does a row of a
+   list of 3000 and of 30 changed (src/ui/scene_cost_wbtest.mbt, in CI).
 
 Where mbui is not yet so (2026-11-04):
 
@@ -237,14 +284,8 @@ Where mbui is not yet so (2026-11-04):
   logical moment turns the clock there and back in the middle of layout. Each reader goes to paint's, the next event's,
   or into the layout of the holder of both; laid_out runs once, at the frame's moment.
 - The core's topics give a list whole each time, and pages work out maps and positions of the whole (rule 12).
-- What is drawn is gone through down the tree as it is (`Tree::walk_drawn`), no order of every node kept; a point is
-  found going down only into what may take it there (`Tree::walk_taken`: what bounds its input to itself, a column
-  that scrolls, gone into only where the point is in it; what takes no press skipped whole); a key goes to what has
-  the focus and up through what holds it, then to the rest said to take keys, topmost first, as a window's own
-  listeners; back to the topmost said to take it, by the window's stack of layers first (rule 13, counted:
-  `walk_cost_test.mbt`, the same with 30 rows and 3000). Not yet: a node's box does not bound what it holds (what is
-  placed absolutely may lie past it), so a subtree is skipped only where something cuts input to it, and the host is
-  still given the whole scene each frame to draw (rule 4).
+- The order of every node is made again as any one comes or goes (`Tree::ordered`), and back and keys are found by
+  going through the whole tree (`topmost_from`) (rule 13).
 - The old frame is built beside the tree every frame (ui's `frame_drawn` after `view_frame`), back and focus each kept
   twice; a page moved into the tree lets its old way go in the same change.
 - `Tree` holds events, the clock, layout, focus, back and the scroll bars together, whether a step may run said by
@@ -265,7 +306,8 @@ fails, saying the frame, the node and the property. Every test holds it, as `loo
 
 ## The way there
 
-Each step merged with all tests green and the app's frames pixel for pixel the same as before (the screens, corners,
+Each step merged with all tests green, no page costing more a frame than before it (rule 14: counted, and on a
+phone against the build before; a page partly moved is held to it too, its old views and the adapters included), and the app's frames pixel for pixel the same as before (the screens, corners,
 squeeze and contrast checks; film's images before and after where a step touches what shows).
 
 1. **What a frame says goes onto its nodes.** Today a build says what takes the focus, the pointer's shape, what
@@ -289,12 +331,18 @@ squeeze and contrast checks; film's images before and after where a step touches
    subtree of the old frame kept as its nodes, built again only as what it read changes or an input goes to it, and
    owning (a scope of its node's) all it makes as it is built and laid out, its parts and rows and what they follow,
    let go at once with its node. The old frame's work area (its Ctx, its frame) is shared by the islands for now, a
-   way there: what each owns is its own. What comes that is no signal yet (a message, a host's answer, a test's draw)
-   builds every island anew; an input builds the one it went to.
+   way there: what each owns is its own, and each is built and painted again alone: what one read changing builds that
+   one (its part), not the old frame whole nor its other islands; an input builds the one it went to (the focus's, for
+   the keys and the input method's words; none where the focus is the tree's); where an old view is placed or how big
+   it is laid out is its own, not the frame's settings (moved, it is drawn where it is; resized, it alone is built
+   again). What comes that is no signal yet (a message, a host's answer, a test's draw) builds every island anew, and
+   is made a signal as it is found.
 4. **From the outside in.** The window and its shell (frame, panes, tape, stacks, presenters) made once; each page in
    them an island. Then src/kit and src/sf's components, each given its made-once form beside its old one while pages
    still use the old; then each page made once, its island gone with it. Each step makes a page's island smaller; none
-   leaves an app built two ways for longer than its PRs.
+   leaves an app built two ways for longer than its PRs. What is on screen in every state (the islands under and over
+   the shell: its bottom bar, its presenters, its toasts) goes before the pages, as it is paid for by every page while
+   it stays.
 
    Where it stands (2026-10-31). Made once: the app's state (app_is: failed, signed out, starting, signed in) a node
    picked by it; signed in, the shell a node picked by the window's width (View::window) and whether a workspace is in
@@ -410,7 +458,7 @@ squeeze and contrast checks; film's images before and after where a step touches
    outside a frame is no way there. It moves with the pages.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
-   for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of
-   instances, the `old` island itself. Gone first, as nothing used it once islands were kept as their nodes: the
+   for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, the `old` island itself. Gone
+   already: src/damage's comparing of instances (rules 15–17, 2026-11-04). Gone first, as nothing used it once islands were kept as their nodes: the
    replay of a part or a row from what its build and paint recorded (KeptPart, RowKept, their bands, on_drawn_again,
    off since #2325).

@@ -1269,7 +1269,7 @@ fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[Flyi
           ground: 0L,
           leaving: None,
           quote_words: None,
-          quote_to: None, source_scale: 1.0, node: None, leaving_node: None,
+          quote_to: None,
         })
       _ => ()
     }
@@ -1310,7 +1310,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
       (Some(up), Some(from)) if up.done.get() is Some(a) && x.mode == "file" && text(Some(a), "path") != "" =>
-        flying.push({ key: text(Some(a), "path"), from, shown: None, picture: None, paint: None, face: fn() { ref_card(c, d.key, x) }, ground: 0L, leaving: None, quote_words: None, quote_to: None, source_scale: 1.0, node: None, leaving_node: None })
+        flying.push({ key: text(Some(a), "path"), from, shown: None, picture: None, paint: None, face: fn() { ref_card(c, d.key, x) }, ground: 0L, leaving: None, quote_words: None, quote_to: None })
       _ => ()
     }
   }

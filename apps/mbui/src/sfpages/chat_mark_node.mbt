@@ -130,7 +130,7 @@ pub fn state_line_node(
           line.box(fn(slot) {
             @sf.style_node(slot, fn() { state_slot }, in_row=true)
             slot.says(By(fn() { Some(@view.said(Image, label=label())) })) |> ignore
-            lead_icon_node(slot, fn() { icon }, ink)
+            lead_icon_node(slot, icon, ink)
             @sf.tip_node(tips, slot, label, within=true) |> ignore
           })
           |> ignore
@@ -149,12 +149,7 @@ pub fn state_line_node(
 /// The lead's icon (lead_icon's) in `parent`, 14 in its 10 wide column (2 out of it each side), in `ink` as it is now:
 /// a bell, a check, the archive box; waiting's arc with its three dots breathing one after another; watching's dot
 /// beating, its arcs lit after it, every lead_loop_ms (at rest with motion reduced).
-fn lead_icon_node(parent : @view.View, lead : () -> String, ink : () -> Int64, centred? : Bool = false) -> Unit {
-  parent.pick(lead, fn(p, lead) { lead_icon_kind_node(p, lead, ink, centred~) })
-}
-
-///|
-fn lead_icon_kind_node(parent : @view.View, lead : String, ink : () -> Int64, centred? : Bool = false) -> Unit {
+fn lead_icon_node(parent : @view.View, lead : String, ink : () -> Int64) -> Unit {
   let name = match lead {
     "need" => "bell"
     "done" => "check"
@@ -173,7 +168,7 @@ fn lead_icon_kind_node(parent : @view.View, lead : String, ink : () -> Int64, ce
     b
     .width(Is(Some(state_icon)))
     .height(Is(Some(state_icon)))
-    .offset(Is((if centred { 0.0 } else { -state_icon_out }, 0.0)))
+    .offset(Is((-state_icon_out, 0.0)))
     |> ignore
     match lead {
       // (its arc, and its dots breathing one after another, in one icon)
@@ -236,7 +231,7 @@ pub fn row_aside_node(
           guard groups().search_by(fn(x) { key(x) == k }).map(fn(i) { groups()[i] }) is Some(x) else { return }
           slot.box(fn(m) {
             @sf.style_node(m, fn() { aside_agent }, in_row=true)
-            @sf.maker_mark_node(m, fn() { x.maker }, fn() { x.runtime }, @sf.theme().chat_list.agent_mark) |> ignore
+            @sf.maker_mark_node(m, x.maker, x.runtime, @sf.theme().chat_list.agent_mark) |> ignore
           })
           |> ignore
         })

@@ -144,31 +144,15 @@ pub fn Ctx::held_look(self : Ctx, i : Int, p : Double, top? : Bool = false) -> L
 /// from it as it was as its cause came (from nothing, one coming; from the height it had, one changed), by less as the
 /// list's way goes, every row on it by the same share (RowSizing).
 fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Double, frame : Int) -> Double {
-  match self.causes {
+  let (c, key, cause) = match self.causes {
     Some(c) if k < c.keys.length() => {
-      self.sizes_end = c.end
-      c.height(self.sizes, self.shown_h, c.keys[k], natural, now, frame)
+      c.read()
+      match c.by.get(c.keys[k]) {
+        Some((cause, _)) => (c, c.keys[k], cause)
+        None => return natural
+      }
     }
-    _ => natural
-  }
-}
-
-///|
-/// The same height calculation for an old list and a list kept as nodes. Natural heights and the last heights
-/// shown are separate: measuring a new target must not lose where the row stood when its content changed.
-fn RowCauses::height(
-  c : RowCauses,
-  sizes : Map[String, RowSizing],
-  shown_h : Map[String, Double],
-  key : String,
-  natural : Double,
-  now : Double,
-  frame : Int,
-) -> Double {
-  c.read()
-  let cause = match c.by.get(key) {
-    Some((cause, _)) => cause
-    None => return natural
+    _ => return natural
   }
   let to = match cause {
     Goes(_) => 0.0
@@ -181,16 +165,17 @@ fn RowCauses::height(
     return to
   }
   // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
+  self.sizes_end = c.end
   let own = c.own.contains(key)
   c.way_begun(frame)
-  let r = match sizes.get(key) {
+  let r = match self.sizes.get(key) {
     Some(r) => r
     None => {
       let from = match cause {
         Comes(_) => 0.0
         // (as tall as it was last laid out, by its key: what is had by its place in the list may be another row's as
         // the rows given change)
-        _ => shown_h.get(key).unwrap_or(natural)
+        _ => self.shown_h.get(key).unwrap_or(natural)
       }
       // (off as the way set out: laid out first a while on, it is where the way has it by then)
       let r = {
@@ -204,7 +189,7 @@ fn RowCauses::height(
         frame: -1,
         was: (cause, from - to, to, c.start, c.end, 0.0, None),
       }
-      sizes[key] = r
+      self.sizes[key] = r
       c.way_off(key, from - to, 0.0)
       r
     }
@@ -243,17 +228,31 @@ fn RowCauses::height(
     r.a = if x > 0.02 { (h - base(r)) / x } else { 0.0 }
   } else if r.cause != cause || r.start != c.start || r.end != c.end {
     let t = c.start
-    // (till then, on the way it was on; one whose own cause sets out then (timed on: words sent leaving the composer)
-    // as it is now, till then)
-    let held = cause.at() > now
-    let (h, v) = if held { (r.at(now, base(r), r.k).0, 0.0) } else { r.at(t, base(r), r.k) }
-    r.before = if t <= now {
+    // A future way replaces another future way, not the motion already under way. Keep that motion until the new
+    // start, including when the future way is retimed again or a closing row is due to return.
+    let before = if t <= now {
       None
-    } else if held {
+    } else if cause.at() > now && r.cause.at() == now &&
+      ((cause is Comes(_) && r.cause is Comes(_)) || (cause is Changed(_) && r.cause is Changed(_))) {
+      // The row's own start was just moved into the future, before that change set out.
+      let (h, _) = r.at(now, base(r), r.k)
       Some((h - base(r), base(r), @double.infinity, @double.infinity, 0.0))
+    } else if r.start > now {
+      match r.before {
+        Some(previous) => Some(previous)
+        None => Some((r.a, base(r), @double.infinity, @double.infinity, 0.0))
+      }
     } else {
       Some((r.a, base(r), r.start, r.end, r.k))
     }
+    let (h, v) = match before {
+      Some((a, bto, start, end, k)) => {
+        let (x, speed) = way_share(t, start, end, k)
+        (bto + a * x, a * speed)
+      }
+      None => r.at(t, base(r), r.k)
+    }
+    r.before = before
     r.a = h - to
     r.to = to
     r.start = c.start
@@ -568,28 +567,6 @@ pub fn[T] ListRows::rows(
   let now = c.moment()
   // (its list not shown the frame before, its page come back to, its pane slid to: shown as it is, nothing coming)
   let watched = watched && self.causes.laid >= c.frame_number() - 1
-  let result = self.rows_at(now, keys, items, version, watched~, ms~, from~, comes~, moves~)
-  // (built again at its end: what goes out of the list then)
-  if !self.going.is_empty() && self.causes.end > now {
-    c.shows_until(self.causes.end - 0.001)
-  }
-  result
-}
-
-///|
-/// Changes of identity and content, independent of the host that schedules the end of their shared way.
-fn[T] ListRows::rows_at(
-  self : ListRows[T],
-  now : Double,
-  keys : Array[String],
-  items : Array[T],
-  version : (T) -> String,
-  watched~ : Bool,
-  ms~ : (String) -> Double?,
-  from~ : (String) -> Double?,
-  comes~ : (T) -> Bool,
-  moves~ : (T) -> Bool,
-) -> (Array[T], Array[String]) {
   // (the same arrays as last given: nothing of them changed, nothing to look over)
   let same = self.given &&
     physical_equal(keys, self.last_keys) &&
@@ -744,6 +721,10 @@ fn[T] ListRows::rows_at(
     self.causes.leads.clear()
   }
   self.causes.end = end
+  // (built again at its end: what goes out of the list then)
+  if !self.going.is_empty() && end > now {
+    c.shows_until(end - 0.001)
+  }
   if !same {
     self.was.clear()
     for i, k in keys {

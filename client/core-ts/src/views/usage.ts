@@ -251,6 +251,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const dayOnly = typeof pick.day === "string" && dayList.includes(pick.day) ? pick.day : null;
   const several = sources.filter((s) => s.online).length > 1;
   let reading = false;
+  let detailsPreparing = false;
   const waiting: string[] = [];
   const failing: { station: string; name: string; message: string }[] = [];
   const notes: string[] = [];
@@ -304,6 +305,13 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       continue;
     }
     const value = s.value.ok as J;
+    if (get(value, "detailsPreparing") === true) {
+      // Its history can already be shown, but no recent totals have been read yet. Do not count an empty row set as
+      // zero, including when another station has already answered.
+      detailsPreparing = true;
+      waiting.push(s.name);
+      continue;
+    }
     reading ||= get(value, "reading") === true;
     const from = get(value, "from");
     if (typeof from !== "number" || localDay(from, offset) > beforeFirst) compared = false;
@@ -463,7 +471,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       return { key: String(get(a, "key") ?? ""), title: String(get(a, "title") ?? ""), quota: a.profile.quota, cost: sum.cost, costText: sum.costText() };
     })
     .sort((a, b) => b.cost - a.cost || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
-  if (reading) notes.unshift(t("core-views.usage.note.reading"));
+  if (reading || detailsPreparing) notes.unshift(t("core-views.usage.note.reading"));
   if (since !== null && localDay(since, offset) > first) {
     const label = dayLabel(localDay(since, offset));
     const [month, day] = label.split("/");
@@ -474,7 +482,8 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   // the one seen alone, by its name in its list (none spent in the days: its key)
   const onlyShown = only !== null ? { list: only.list, key: only.key, title: lists_[only.list].get(only.key)?.title ?? only.key } : null;
   const dayShown = dayOnly !== null ? (dayOnly === today ? t("core-views.usage.today") : dayLabel(dayOnly)) : null;
-  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0 && !unavailableDay), empty: total.calls === 0 && !unavailableDay, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
+  const empty = detailsPreparing || (total.calls === 0 && !unavailableDay);
+  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, empty), empty, ...(detailsPreparing ? { detailsPreparing: true } : {}), tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

@@ -27,7 +27,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
-import { type AccessKind, accessKind, KIMI_CODE, kimiSignedIn, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
+import { type AccessKind, accessKind, KIMI_CODE, kimiSignedIn, profileVia, type Runtime, takesFast, fastNeedsCredits, type Via } from "../agents/profiles.ts";
 import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
 import { type Viewer, managesStation } from "../mesh/credential.ts";
 import { maskValue, startEnv } from "../ops/agent-env.ts";
@@ -319,6 +319,8 @@ export class Accounts {
           this.changed();
           const before = last;
           last = new Map(["claude", "codex"].map((r) => [r, said(r)]));
+          // The first reading can arrive after sharing starts; its identity and later sign-ins must reach borrowers.
+          if (before === null || [...last].some(([runtime, value]) => before.get(runtime) !== value)) this.deps.shared?.loginUpdated?.();
           if (before === null) {
             // The first reading can finish after a start-up check. If it knows a more specific tier, recheck that
             // profile so its view and any borrowed copy get the machine login's tier.
@@ -1011,6 +1013,9 @@ export class Accounts {
       if (typeof login?.plan === "string" && login.plan.trim() !== "") check.plan = login.plan.trim();
     }
     const previous = this.checks.get(id);
+    // A list not read this time (the provider not answering a moment, a check that failed) does not take away the models
+    // the profile was found to run: the pickers' liked and frequent models are only those it runs.
+    if (check.models === null && previous !== undefined && previous.models !== null) check.models = previous.models;
     if (codexSubscription && previous?.codexRevoked) {
       check.state = "login";
       check.detail = previous.detail;
@@ -1477,7 +1482,7 @@ export class Accounts {
         loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home, p.machine === true) : "",
         machine: p.machine === true,
         backgroundOnMessage: p.backgroundOnMessage,
-        fast: p.runtime === "codex" && kind === "subscription" ? p.fast === true : null,
+        fast: takesFast(p) && (!fastNeedsCredits(p) || this.quotas.get(p.id)?.extraUsage === true) ? p.fast === true : null,
         check: checkView,
         login: this.logins.get(p.id),
         quota: this.quotas.get(p.id) ?? null,

@@ -130,7 +130,7 @@ test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from 
       shown += 1
       // (its edge on its left: dragged left, the panel wider, its edge as far left as the pointer went)
       t.drag(x, y, x - 30.0, y)
-      assert_eq(edge_x(), line - 30.0, msg="from \{dx} at \{y}: edge \{edge_x()}, expected \{line - 30.0}")
+      assert_eq(edge_x(), line - 30.0, msg="from \{dx} at \{y}")
       t.drag(x - 30.0, y, x, y)
       assert_eq(edge_x(), line, msg="back from \{dx} at \{y}")
     }

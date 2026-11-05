@@ -626,6 +626,27 @@ test("sending_to_an_archived_chat_restores_it_before_delivery_and_keeps_a_failed
   core.close();
 });
 
+test("a_message_in_the_outbox_carries_its_words_in_runs_as_its_message_will", async () => {
+  const thread = threadView(7, 0);
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? status(500, { error: "busy" }) : undefined));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "看 [首页](https://app.still.fail/w/ws/s/st/chats/s-c2) 吧" });
+  await host.settle();
+  apply(host, values);
+  // What the page draws while it is in the outbox: the reference, never `[首页](…)` as written.
+  const pending = v(values, 1).outbox[0];
+  assert.deepEqual(pending.words.map((r: J) => [r.text, r.ref ?? false]), [["看 ", false], ["首页", true], [" 吧", false]]);
+  core.close();
+});
+
 test("two_messages_sent_during_a_restore_do_not_lose_the_second_if_the_first_restore_fails", async () => {
   const thread: J = { ...threadView(7, 0), hiddenAt: 42 };
   const { host, core } = await started({
@@ -1032,6 +1053,11 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
   // (as it last ran: a field none is left out of the topic)
   const ran = (o: J) => ["runtime", "effort", "fast"].map((f) => o.usual?.[f] ?? null);
+  // (none starred: a starred one is listed among those starred, not here)
+  for (const [n, m] of [[7, "claude-opus-5-5"], [8, "claude-sonnet-5"], [9, "gpt-6-astra"]] as const) {
+    await ask(host, core, ui, n, "pick.like", { station: "ws/st", of: "new", model: m, liked: false });
+  }
+  apply(host, values);
   assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
   assert.equal(option(1, "gpt-6-astra").usual ?? null, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
@@ -1080,7 +1106,7 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   assert.deepEqual(v(values, 1).liked, [], "once changed, as changed");
   // the makers of its models, in their models' order, each with how many
   assert.deepEqual(v(values, 1).makers.map((k: J) => [k.id, k.title, k.count]), [["anthropic", "Anthropic", 2], ["openai", "OpenAI", 1]]);
-  // starred, in the order starred; one used most is not listed again
+  // starred, in the order starred; one used most stays among them and is not listed among those used most again
   await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: true });
   await ask(host, core, ui, 3, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
   apply(host, values);
@@ -1090,13 +1116,14 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: null });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
-  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
-  // unstarred
-  await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: false });
+  assert.deepEqual(v(values, 1).near, []);
+  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
+  // unstarred: back among those used most
+  await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: false });
   apply(host, values);
-  assert.deepEqual(v(values, 1).liked, []);
-  assert.equal(option("gpt-6-astra").liked, true, "still starred, listed among those used most");
+  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
+  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
+  assert.equal(option("gpt-6-astra").liked, false);
   core.close();
 });
 

@@ -39,6 +39,17 @@ export const profileModel = (p: Profile): string | undefined => str(p.model);
 /// On the machine's own login (machine_logins.rs).
 export const isMachine = (p: Profile): boolean => p.machine === true;
 export const profileFast = (p: Profile): boolean => p.fast === true;
+/// The runtimes a session can be set to Fast on (its own `fast`, else its profile's).
+export const FAST_RUNTIMES: readonly string[] = ["codex", "claude"];
+/// Whether a profile's account takes Fast: an OpenAI subscription on Codex (its service tier); on Claude Code (its
+/// `fastMode` setting) an Anthropic key, or a Claude subscription, whose Fast is billed to its usage credits (offered
+/// only while they are on: `fastNeedsCredits`; Claude Code runs at standard speed without them).
+export const takesFast = (p: Profile): boolean => {
+  const kind = accessKind(p);
+  return (p.runtime === "codex" && kind === "subscription") || (p.runtime === "claude" && (kind === "anthropic-api" || kind === "subscription"));
+};
+/// A Claude subscription: its Fast is offered only while its allowance says its usage credits are on.
+export const fastNeedsCredits = (p: Profile): boolean => p.runtime === "claude" && accessKind(p) === "subscription";
 export const profileVia = (p: Profile): Via => {
   const a = access(p);
   return { provider: str(a.provider), endpoint: a.endpoint === undefined ? undefined : cleanEndpoint(a.endpoint), protocol: str(a.protocol) };

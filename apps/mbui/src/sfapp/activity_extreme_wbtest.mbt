@@ -40,8 +40,7 @@ fn activity_extreme_clock_positions(
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=if two_agents { 0 } else { platform })
   t.run_for(squeeze_opening)
   if two_agents {
-    // (the activity's words themselves: other words in the chat hold its few characters too)
-    let (_, x, y, _, h, _) = t.words().iter().find_first(fn(w) { w.0 == before }).unwrap()
+    let (x, y, _, h) = t.rect_of(before).unwrap()
     t.move(x + 2.0, y + h / 2.0)
     t.frame()
     assert_true(t.all(Button).iter().any(fn(s) { s.label == "停止 Claude" }), msg="the stop control is visible")

@@ -2,10 +2,11 @@
 // The core itself is linked into the app (its native stub includes apple_engine.m or android_engine.c from here);
 // this is what the app's MoonBit does with it.
 //
-// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession), through it (@core.sign_in);
-// elsewhere (Android, macOS, Windows) as a command-line tool does (@hostapi.browser_login, which knows nothing of
-// still.fail): auth.begin with a loopback address, the page in the browser (a Custom Tab; the default browser),
-// auth.complete with what comes back.
+// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession; Android's Custom Tab coming back
+// on the app's own scheme), through it (@core.sign_in); elsewhere (macOS, Windows) as a command-line tool does
+// (@hostapi.browser_login, which knows nothing of still.fail): auth.begin with a loopback address, the page in the
+// default browser, auth.complete with what comes back. (Android signed in on the loopback too until a vendor's freezer,
+// ColorOS's, was seen leaving the browser's way back to a backgrounded app unanswered.)
 //
 // The environment's say, read once at `start`:
 // - MBUI_CORE_SIGNIN=1 presses 登录 once the accounts are read (scripted runs; with MBUI_AUTH_DRY=1 the browser
@@ -179,7 +180,7 @@ fn tell_device() -> Unit {
 /// come back.
 pub fn frame(accounts : @core.Sub) -> Unit {
   // (by the accounts the core says and the environment's: the same in each build of the frame)
-  if accounts.value() is Some(list) {
+  if accounts.value is Some(list) {
     if state.account != "" {
       let account = state.account
       state.account = ""

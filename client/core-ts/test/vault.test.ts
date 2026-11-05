@@ -22,7 +22,7 @@ import {
   openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
-import { forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
+import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
@@ -52,6 +52,21 @@ test("a_signature_is_checked_once_for_what_it_is_over_not_again_each_time_it_is_
   assert.equal(signedOk({ ...record, device: "d-other" }, TAG.box), false);
   assert.equal(signedOk(record, TAG.vault), false);
   assert.equal(verifies.count - before, 3);
+});
+
+test("a_signature_is_checked_by_the_hosts_own_where_it_has_one_and_by_nobles_where_it_says_it_cannot", () => {
+  // A native app's shell checks by libcrux (formally verified); what it says is what counts, true or false.
+  const signer = key(fill(8));
+  const record = sign({ device: "d-host", ws: "w", box: "x25519:" + "00".repeat(32) }, TAG.box, signer);
+  const asked: string[] = [];
+  checkWith((alg) => (asked.push(alg), false));
+  assert.equal(signedOk(record, TAG.box), false, "the host's answer, though noble's would be yes");
+  assert.deepEqual(asked, ["Ed25519"]);
+  // One that cannot (null): noble's.
+  checkWith(() => null);
+  assert.equal(signedOk({ ...record, device: "d-host2" }, TAG.box), false);
+  assert.equal(signedOk(sign({ device: "d-host3", ws: "w", box: "x25519:" + "00".repeat(32) }, TAG.box, signer), TAG.box), true);
+  checkWith(null);
 });
 
 test("a_signature_checked_on_this_device_is_kept_past_the_run_not_checked_again_as_the_app_starts", () => {
@@ -205,7 +220,10 @@ function fakeStation() {
     if (!locked.on) return status(409, { error: "no lock", code: "vault_needs_lock" });
     switch (key) {
       case "GET /vault/vaults":
-        return { vaults: [...vaults.values()] };
+        // (a member's: as the station lists them, those this person is in)
+        return { vaults: [...vaults.values()].filter((v) => v.members.includes("s1")) };
+      case "POST /vault/vaults/latest":
+        return { vaults: (body.held as Vault[]).map((h) => vaults.get(h.id)).filter((v): v is Vault => v !== undefined) };
       case "PUT /vault/vaults": {
         const prev = vaults.get(body.id);
         // A copy from another station: any later version; one no later answered with the one held.
@@ -444,7 +462,129 @@ test("a vault version the stations would refuse is not trusted here: one naming 
   r.st.vaults.set(id, ghost);
   r.push("vault", ghost);
   await r.host.time.pass(200);
-  assert.deepEqual(vaults().vaults, [], "a station would refuse it (member ghost is not in the lock): not this person's vault to show");
+  // (a station would refuse it, member ghost not in the lock: it is not taken, the version before it shown still)
+  assert.deepEqual(vaults().vaults.map((x: any) => [x.id, x.members.length]), [[id, 1]]);
+  r.core.close();
+});
+
+// A station that lies (the attacks of Scarlata et al., "Zero Knowledge (About) Encryption", USENIX Security 2026, on a
+// station rather than a password manager's server): what it makes up is not taken, and hides nothing taken before.
+
+test("a later vault version a station made up (signed by a member who is not its owner) neither shows nor hides the one before it", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const v = r.st.vaults.get(id)!;
+  const { sig: _, ...rest } = v;
+  // s2's device signs its owner's vault anew, with s2 in it and no key for this device.
+  const forged = sign({ ...rest, seq: v.seq + 1, members: [...v.members, "s2"], keys: [], at: v.at + 1 }, TAG.vault, r.other);
+  r.st.vaults.set(id, forged);
+  r.push("vault", forged);
+  await r.host.time.pass(200);
+  assert.deepEqual(vaults().vaults.map((x: any) => [x.id, x.keyed]), [[id, true]], "the vault as it was, still keyed here");
+  // Nor one it says deleted it: its items are there still.
+  const put0 = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "kept", fields: { value: "0" } } });
+  const items = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  const gone = sign({ ...rest, seq: v.seq + 2, epoch: v.epoch + 1, keys: [], deleted: true, at: v.at + 2 }, TAG.vault, r.other);
+  delete (gone as { recovery?: string }).recovery;
+  r.push("vault", gone);
+  await r.host.time.pass(200);
+  assert.deepEqual(items().items.map((x: any) => x.id), [put0.id], "nothing deleted");
+  // The station tells the truth again: nothing lost meanwhile; written on from the version it holds.
+  r.st.vaults.set(id, v);
+  r.push("vault", v);
+  await r.host.time.pass(200);
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "x", fields: { value: "1" } } });
+  assert.equal(r.st.items.get(put.id)!.epoch, v.epoch);
+  assert.deepEqual(r.st.vaults.get(id)!.members, ["s1"], "s2 was never let in");
+  r.core.close();
+});
+
+test("a vault a station lists no more is let go here only by the version taking this person out; one it hides without one is held still", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  // s2's vault, this person in it, keyed for this device.
+  const id = "v_01M4871X3MTC0903ZX5CPB8JH7";
+  const key = fill(11);
+  const v0 = sign({ v: 1 as const, ws: "ws", id, seq: 0, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 0, keys: [{ cert: mine, wrapped: sealWith(mine.box, key, keyContext("ws", id, 0), fill(12)) }], at: 2000 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v0);
+  r.push("vault", v0);
+  await r.host.time.pass(200);
+  assert.ok(vaults().vaults.some((v: any) => v.id === id));
+  // The station hides it (lists it no more, and has no later version to show): held here still.
+  r.st.vaults.delete(id);
+  const again = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  await r.host.time.pass(1000);
+  assert.ok(vaults().vaults.some((v: any) => v.id === id), "held still: a station not listing it says nothing of why");
+  again();
+  // s2 takes this person out: the station lists it no more, and gives the version that did when asked by the one held.
+  const v1 = sign({ v: 1 as const, ws: "ws", id, seq: 1, owner: "s2", name: "Team", members: ["s2"], epoch: 1, keys: [], at: 2001 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v1);
+  await r.watch(3, { topic: "vaultUses", workspace: "ws", vault: id, item: "x" });
+  await r.host.time.pass(1000);
+  assert.ok(!vaults().vaults.some((v: any) => v.id === id), "let go: the version taking this person out, checked");
+  r.core.close();
+});
+
+test("a later item version a station made up (its listing sending the secret elsewhere, its signature not its writer's) leaves the item as it was", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  const i = r.st.items.get(put.id)!;
+  const { sig: _, ...rest } = i;
+  const forged = sign({ ...rest, version: i.version + 1, listing: { ...i.listing!, hosts: ["evil.example"] } }, TAG.item, r.other);
+  r.st.items.set(put.id, forged);
+  r.push("vault-item", forged);
+  await r.host.time.pass(200);
+  assert.deepEqual(shown().items.map((x: any) => [x.id, x.listed]), [[put.id, true]], "still there, as it was");
+  r.st.items.set(put.id, i);
+  // Written on: the next version follows the one its writer signed.
+  await r.ask("vault.putItem", { vault: id, id: put.id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_y" } } });
+  assert.equal(r.st.items.get(put.id)!.version, i.version + 1);
+  r.core.close();
+});
+
+test("a later box certificate a station made up for a device in the lock (the box key its own) is not sealed to: the key goes to the device's own box", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const phoneBox = fill(7);
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(200);
+  // The station's own box key put in the phone's name, later, signed by another member's device.
+  const evil = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(8)), at: 3000 }, TAG.box, r.other);
+  r.st.boxes.set(r.phone.hex, evil);
+  r.push("vault-box", evil);
+  await r.host.time.pass(200);
+  await r.ask("vault.addDevice", { vault: id });
+  const keys = r.st.vaults.get(id)!.keys.filter((k) => k.cert.device === r.phone.hex);
+  assert.deepEqual(keys.map((k) => k.cert.box), [phoneCert.box], "sealed to the phone's own box only");
+  assert.equal(openSeal(phoneBox, keys[0]!.wrapped, keyContext("ws", id, r.st.vaults.get(id)!.epoch)).length, 32);
+  r.core.close();
+});
+
+test("an older vault version a station gives back (from before it was deleted) is not gone back to", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const v0 = r.st.vaults.get(id)!;
+  await r.ask("vault.delete", { vault: id });
+  assert.equal(r.st.vaults.get(id)!.deleted, true);
+  // The station gives the version before back, as if it had never been deleted.
+  r.st.vaults.set(id, v0);
+  r.push("vault", v0);
+  await r.host.time.pass(200);
+  assert.deepEqual(vaults().vaults, [], "still deleted here");
+  await fails(r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "x", fields: { value: "y" } } }), "vault_unknown");
   r.core.close();
 });
 
@@ -1040,6 +1180,35 @@ test("a vault of one's own deleted: its last version sealed to no one, brought t
   assert.match(r.host.secureAsked.at(-1)?.reason ?? "", /Work/);
   assert.equal(r.st.vaults.get(id)!.deleted, true);
   assert.deepEqual(vaults().vaults, []);
+  r.core.close();
+});
+
+test("an item a station keeps back (no longer listed, or given at an older version) is shown here still and brought back to it; a device that held none of it sees it from the other station", async () => {
+  const r = await rig(false, true);
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-1" } } });
+  await r.ask("vault.putItem", { vault: id, id: put.id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-2" } } });
+  await r.host.time.pass(1000);
+  const latest = r.st.items.get(put.id)!;
+  assert.deepEqual(r.st2.items.get(put.id), latest);
+  // Its host keeps it back: lists it no more.
+  r.st.items.delete(put.id);
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  await r.host.time.pass(1000);
+  assert.deepEqual(shown().items.map((x: any) => x.id), [put.id], "held here, shown still");
+  assert.deepEqual(r.st.items.get(put.id), latest, "brought back to the station that kept it back");
+  // A device that holds nothing of the vault yet (this one, its records gone): the host gives the older version, the
+  // other station the latest; the latest is the one held.
+  r.st.items.set(put.id, { ...latest, version: 0 });
+  r.core.inner.data.forgetRecord("vault", "ws");
+  r.core.inner.data.forgetRecord("vaultItems", `ws/${id}`);
+  // (the vaults page shown: the stations read again)
+  await r.watch(3, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(1000);
+  assert.deepEqual(shown().items.map((x: any) => x.id), [put.id]);
+  const opened = await r.ask("vault.open", { item: put.id });
+  assert.equal(opened.plain.fields.value, "xoxp-2", "the latest version, as the other station holds it");
   r.core.close();
 });
 

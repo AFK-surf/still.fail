@@ -48,6 +48,20 @@ export const groupTitle = (kind: (typeof GROUPS)[number]) => t(`core-views.profi
 export function workspaceProfiles(stations: J[]): J {
   const byId = new Map(stations.map((s) => [String(s.id), s]));
   const name = (id: string) => String(byId.get(id)?.name ?? id.slice(0, 8));
+  // A host and its copies are one share even when an older station did not tell a copy the account's email. The
+  // host's account is authoritative: a copy can still carry the email from before the host signed in again.
+  const identities = new Map<string, { host: boolean; account: string | null; copies: Set<string> }>();
+  for (const s of stations) for (const p of Array.isArray(s.overview?.profiles) ? s.overview.profiles : []) {
+    const share = isObject(p.share) ? p.share : null;
+    if (typeof share?.id !== "string") continue;
+    const identity = identities.get(share.id) ?? { host: false, account: null, copies: new Set<string>() };
+    const key = account(p);
+    if (share.role === "host") {
+      identity.host = true;
+      identity.account = key;
+    } else if (key !== null) identity.copies.add(key);
+    identities.set(share.id, identity);
+  }
   const groups = new Map<string, [J, J][]>();
   const waiting: string[] = [];
   for (const s of stations) {
@@ -60,7 +74,9 @@ export function workspaceProfiles(stations: J[]): J {
     }
     for (const p of Array.isArray(overview.profiles) ? overview.profiles : []) {
       const share = isObject(p.share) ? p.share : null;
-      const key = account(p) ?? (share ? `share:${share.id}` : `${s.station}/${p.id}`);
+      const identity = typeof share?.id === "string" ? identities.get(share.id) : undefined;
+      const sharedAccount = identity?.host ? identity.account : identity?.copies.size === 1 ? [...identity.copies][0] : null;
+      const key = identity ? (sharedAccount ?? `share:${share.id}`) : (account(p) ?? `${s.station}/${p.id}`);
       const list = groups.get(key) ?? [];
       list.push([s, p]);
       groups.set(key, list);

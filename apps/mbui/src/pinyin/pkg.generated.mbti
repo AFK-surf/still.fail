@@ -13,13 +13,12 @@ pub fn write_text(String, String) -> Bool
 // Errors
 
 // Types and methods
-#derive(Show)
 pub struct Candidate {
   text : String
   typed : Int32
   syls : Array[Int32]
   cost : Int32
-}
+} derive(Show)
 
 pub struct Composer {
   dict : Dict
@@ -64,11 +63,10 @@ pub fn Learned::parse(String, Dict) -> Self
 pub fn Learned::picked(Self, String) -> Unit
 pub fn Learned::to_text(Self, Dict) -> String
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum Scheme {
   Full
   Xiaohe
-}
+} derive(Eq, Show, @debug.Debug)
 
 pub struct Spelled {
   steps : Array[Array[Step]]

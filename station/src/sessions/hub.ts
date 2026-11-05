@@ -151,12 +151,14 @@ export class Hub {
   /// (some 15 queries a thread, 1,200 threads on a station: 10 seconds held while memory was short). Unset (tests): the store.
   threadList: (() => Promise<ThreadSummary[]>) | null = null;
   /// A recent, unfiltered chat_list, with details for its page alone.
-  recentChatList: ((ws: string | null, home: string | null, limit: number) => Promise<RecentChatList>) | null = null;
+  recentChatList: ((ws: string | null, home: string | null, limit: number, signal?: AbortSignal) => Promise<RecentChatList>) | null = null;
   /// The matching chats and count for a chat_list search.
   searchChatList: ((ws: string | null, home: string | null, limit: number, query: string) => Promise<RecentChatList>) | null = null;
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// Prepare an old session's up-job lookup before its archived actor stops its jobs.
+  prepareSessionUpJobs: ((session: string) => Promise<void>) | null = null;
   /// The station's logins (logins/module.ts sets it): whether one waits for a code from its page (a Slack login card
   /// takes one only then), and that code handed to it, entered by `by` on its card. Unset: no logins here.
   logins: { pastes(id: string): boolean; answer(id: string, code: string, by?: Person): void } | null = null;
@@ -165,6 +167,8 @@ export class Hub {
   readonly actors = new Map<string, SessionActor>();
   /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
   waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  /// An older store's session totals are built in bounded batches after handover.
+  waitForSessionCounts: (() => Promise<boolean>) | null = null;
   /// An old thread's requested message suffix is indexed off the station thread before delivery.
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
@@ -1199,7 +1203,17 @@ export class Hub {
       endJobs: async (key) => {
         const jobs = this.jobs;
         if (!jobs) return;
-        for (const id of this.store.upJobIds(key)) {
+        let old = false;
+        if (this.prepareSessionUpJobs !== null) {
+          try {
+            if (this.store.sessionHasUpJob(key) === null) await this.prepareSessionUpJobs(key);
+          } catch (error) {
+            // A failure must not leave an archived session's service running: the old lookup is still exact.
+            old = true;
+            log.warn("hub", "preparing jobs for archive failed", { session: key, error: (error as Error).message });
+          }
+        }
+        for (const id of this.store.upJobIds(key, old)) {
           try {
             await jobs.stop(id);
             log.info("hub", "job stopped with its session archived", { session: key, job: id });

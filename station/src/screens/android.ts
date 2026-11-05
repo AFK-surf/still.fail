@@ -100,6 +100,7 @@ export class AndroidInput {
       case "device":
         return e.name === "volume_up" ? press(KEY_VOLUME_UP) : e.name === "volume_down" ? press(KEY_VOLUME_DOWN) : [];
       case "pose":
+      case "button":
         return [];
     }
   }

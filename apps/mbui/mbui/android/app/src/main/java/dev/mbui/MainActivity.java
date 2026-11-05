@@ -154,8 +154,11 @@ public class MainActivity extends Activity {
                 ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
                         .hideSoftInputFromWindow(mbView.getWindowToken(), 0);
             }
+            boolean turned = shown != imeShown;
             imeShown = shown;
             Host.imeVisible = shown;
+            // (the keyboard up: what is typed drawn at the display's highest; gone, let go of as a motion's end is)
+            if (turned) mbView.typingChanged();
             if (shown) Host.imeAwaited = false;
             return WindowInsets.CONSUMED;
         });
@@ -333,11 +336,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Brought back (singleTask): by BrowserLogin once the browser has come back, or by its page's link. */
+    /** Brought back (singleTask): by the browser coming back (WebAuth, BrowserLogin), or by a login page's link. */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        WebAuth.took(intent);
         Notices.from(intent);
         Shares.take(intent);
         Host.log("activity onNewIntent " + (intent.getData() != null ? intent.getData().getScheme() + "://" + intent.getData().getHost() : "(in front again)"));
@@ -443,6 +447,7 @@ public class MainActivity extends Activity {
         // the core hears the app left the front (its drawing goes on until the window is off the screen: onStop)
         Host.resumed = false;
         Host.tellAppState();
+        WebAuth.paused();
     }
 
     @Override
@@ -460,6 +465,8 @@ public class MainActivity extends Activity {
         setBackEnabled(Host.backWanted);
         Host.resumed = true;
         Host.tellAppState();
+        // (after onNewIntent: the browser come back is told before this)
+        WebAuth.resumed();
         // back from giving the leave to install apps: a newer build ready goes on (Updates.resumed)
         Updates.resumed();
         // whether it is over another app, said to the app as it changes (src/hostapi/system.mbt `over`)

@@ -270,7 +270,7 @@ fn signed_ok(o : Json, tag : String, c : &Crypto) -> Bool {
 /// one that does is not its person's own.
 pub fn signer_of(lock : LockView, key : String) -> (String, String)? {
   for id, d in lock.devices {
-    if d.kind == "app" && d.own && d.sign_key == Some(key) && lock.members.contains(d.sub) {
+    if @role.device_signs(d.kind == "app", d.sign_key == Some(key), d.own, lock.members.contains(d.sub)) {
       return Some((d.sub, id))
     }
   }
@@ -297,12 +297,12 @@ pub fn cert_ok(lock : LockView, cert : Json?, ever : Bool, c : &Crypto) -> Strin
   guard d is Some(d) && d.kind == "app" && lock.members.contains(d.sub) else {
     return Some("the box certificate's device is not an app device in the lock")
   }
-  if !d.own && !ever {
+  if !@role.cert_device_ok(d.own, ever) {
     return Some("the box certificate's device was put in the lock by someone else, not its person")
   }
   let key = text_of(field(field(cert, "sig"), "key")).unwrap()
   let had = lock.sign_keys.get(device).unwrap_or([])
-  if d.sign_key != Some(key) && !(ever && had.contains(key)) {
+  if !@role.cert_key_ok(d.sign_key == Some(key), ever, had.contains(key)) {
     return Some("a box certificate is signed by its own device's key")
   }
   if !signed_ok(cert.unwrap(), "stillfail-vault-box/1", c) {
@@ -397,16 +397,15 @@ pub fn vault_ok(lock : LockView, prev : Json?, next : Json, copy : Bool, c : &Cr
       return Some(why)
     }
     let device = text_of(field(field(k, "cert"), "device")).unwrap()
-    if seen.contains(device) {
-      return Some("one key per device")
+    let member = members.contains(lock.devices.get(device).unwrap().sub)
+    if !@role.key_ok(seen.contains(device), member) {
+      return Some(if seen.contains(device) { "one key per device" } else { "a key is for a member's device" })
     }
     seen[device] = ()
-    if !members.contains(lock.devices.get(device).unwrap().sub) {
-      return Some("a key is for a member's device")
-    }
   }
   let key = text_of(field(field(v, "sig"), "key")).unwrap()
-  guard signer_of(lock, key) is Some((sub, _)) && sub == owner else {
+  let by = signer_of(lock, key)
+  guard @role.signed_by(by is Some(_), by.map(fn(b) { b.0 == owner }).unwrap_or(false)) else {
     return Some("a vault is signed by one of its owner's devices in the lock")
   }
   if !signed_ok(next, "stillfail-vault/1", c) {
@@ -504,7 +503,7 @@ pub fn item_ok(lock : LockView, vault : Json, prev : Json?, next : Json, copy : 
       if text_of(field(p, "id")) != Some(id) || field(p, "vault") != field(i, "vault") {
         return Some("another item")
       }
-      if field(p, "deleted") is Some(True) {
+      if !@history.item_open(field(p, "deleted") is Some(True)) {
         return Some("the item was deleted")
       }
       let held = num(field(p, "version"))
@@ -515,7 +514,8 @@ pub fn item_ok(lock : LockView, vault : Json, prev : Json?, next : Json, copy : 
   }
   let key = text_of(field(field(i, "sig"), "key")).unwrap()
   let members = strings(field(vault, "members"))
-  guard signer_of(lock, key) is Some((sub, _)) && has_text(members, sub) else {
+  let by = signer_of(lock, key)
+  guard @role.signed_by(by is Some(_), by.map(fn(b) { has_text(members, b.0) }).unwrap_or(false)) else {
     return Some("an item is signed by a vault member's device in the lock")
   }
   if !signed_ok(next, "stillfail-vault-item/1", c) {

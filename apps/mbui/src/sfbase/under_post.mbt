@@ -45,27 +45,7 @@ let under_ways : Map[String, (Double, Double)] = {}
 pub fn under_rest() -> Double {
   let mut end = -1.0
   under_ends.each(fn(_, a) { if a.ends_at() > end { end = a.ends_at() } })
-  under_goes.each(fn(_, f) { if f() > end { end = f() } })
   end
-}
-
-///|
-/// The rooms under the posts made as nodes of the window's tree (sfpages under_node), by their number: when each is at
-/// rest (-1: it is), as under_rest reads them.
-// kept across runs: put back by under_reset (sfbase's reset)
-pub let under_goes : Map[Int, () -> Double] = {}
-
-///|
-// kept across runs: put back by under_reset (sfbase's reset)
-let under_goes_made : Ref[Int] = Ref(0)
-
-///|
-/// A room under a post made as nodes, at rest as `rest` says (-1: it is, else when it will be): read by under_rest
-/// while it is there; let it go with the number this gives.
-pub fn under_goes_told(rest : () -> Double) -> Int {
-  under_goes_made.val = under_goes_made.val + 1
-  under_goes[under_goes_made.val] = rest
-  under_goes_made.val
 }
 
 ///|
@@ -136,14 +116,8 @@ pub fn under_post(
 fn on_row_way(c : @ui.Ctx, a : @motion.Anim, to : Double, way : (Double, Double)) -> Unit {
   let (at, ms) = way
   let later = dmax(at - c.moment(), 0.0)
-  a.animate(to, under_row_spec(ms, later), start_at?=if later > 0.0 { None } else { Some(at) })
-}
-
-///|
-/// The list's shared height curve, for the parts under a post in either renderer.
-pub fn under_row_spec(ms : Double, delay : Double) -> @motion.Spec {
   // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (docs/list-motion.md)
-  @motion.tween(ms, ease=Move, delay~)
+  a.animate(to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
 }
 
 // ── the cards in a chat ─────────────────────────────────────────────────
@@ -177,5 +151,4 @@ let under_room_lead : @ui.Style = @ui.css("w=Full pt=S1_5")
 pub fn under_reset() -> Unit {
   under_ends.clear()
   under_ways.clear()
-  under_goes.clear()
 }

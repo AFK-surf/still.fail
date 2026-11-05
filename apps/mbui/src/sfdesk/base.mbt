@@ -320,6 +320,7 @@ using @sfpages {
   body_size,
   chat_find_list,
   chat_key,
+  chat_list,
   composer_width,
   composer_side,
   context_tile_id,

@@ -124,13 +124,6 @@ pub fn View::shown_across(self : View, but? : View) -> (Double, Double)? {
 ///|
 /// The node `id` names, while it lives (that making of it); None let go.
 pub fn Tree::view_of(self : Tree, id : NodeId) -> View? {
-  // (a row's name for its key (Tree::row_name): the row it is now, made anew as that may be; none while it is not made)
-  if id.at < -1 {
-    return match self.rows_known.get(id) {
-      Some(at) if self.nodes[at].live && self.nodes[at].row_id == Some(id) => Some(self.handle(at))
-      _ => None
-    }
-  }
   if id.at < 0 || id.at >= self.nodes.length() {
     return None
   }
@@ -145,7 +138,7 @@ pub fn Tree::view_of(self : Tree, id : NodeId) -> View? {
 ///|
 /// What of the window node `id` can be seen in as what holds it cuts it (View::clips: each that does, as it was last
 /// placed, its scale with it): x0, y0, x1, y1 in the window, its own box not cut by itself.
-pub fn Tree::seen_bounds(self : Tree, id : NodeId, drawing? : Bool = false) -> (Double, Double, Double, Double) {
+pub fn Tree::seen_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, Double) {
   let mut b = (-1.0e9, -1.0e9, 1.0e9, 1.0e9)
   if id.at < 0 || id.at >= self.nodes.length() {
     return b
@@ -154,7 +147,7 @@ pub fn Tree::seen_bounds(self : Tree, id : NodeId, drawing? : Bool = false) -> (
   while i >= 0 {
     let n = self.nodes[i]
     if n.look.clips {
-      let (x, y, _, sc) = self.projected(i, drawing~)
+      let (x, y, sc) = self.placed(i)
       let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
       b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))
     }

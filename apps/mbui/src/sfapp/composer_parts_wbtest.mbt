@@ -28,7 +28,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "照片.png", png_head())
   t.draw()
   t.run_for(@ui.move_most_ms)
-  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files.get()[0]), "id")
+  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
   let seen = "ws1/st1//draft:" + id
   let tile = match thumb_of(t.ctx(), seen) {
     Some(tile) => tile
@@ -48,7 +48,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   }
   assert_eq(named(calls, "station.file").length(), 0)
   // the picture is not taken out by the tap
-  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.get().length(), 1)
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
   t.back()
   t.run_for(preview_rest() - t.time())
   assert_true(viewer.get() is None)
@@ -74,7 +74,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
   t.draw()
   t.run_for(@ui.move_most_ms)
-  let id = text(Some(w.files.get()[0]), "id")
+  let id = text(Some(w.files[0]), "id")
   let picture = @sfbase.writing_pictures[id]
   let tile = thumb_of(t.ctx(), "ws1/st1//draft:" + id).unwrap()
   let visible = fn() {
@@ -179,7 +179,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
     t.run_for(@ui.move_most_ms)
-    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
     assert_eq(tiles.length(), 2)
@@ -215,7 +215,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     let (cx, cy, cw, ch) = t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "build.log")])).unwrap().rect
     t.tap(cx + cw / 2.0, cy + ch / 2.0)
     t.draw()
-    let left = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
+    let left = @sfbase.writing(src, "ws1/st1:s-c1").files
     assert_eq(left.length(), 1)
     assert_eq(text(Some(left[0]), "name"), "第二张.png")
   }
@@ -244,7 +244,7 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     let drawn = t.drawn_rects().filter(fn(r) { near(r.0, x) && near(r.1, y) && near(r.2, cw) && near(r.3, ch) })
     assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{drawn.map(fn(r) { r.4 })}, not \{ground}")
     assert_false(t.drawn_shadows().iter().any(fn(s) { near(s.0, x) && near(s.2, cw) }), msg="a shadow under it (platform \{platform})")
-    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
     assert_eq(tiles.length(), 1)
@@ -395,26 +395,24 @@ test "an offline station's cache choice stays visible but cannot be opened" {
 }
 
 ///|
-test "Enter and Space open the cache choice for the keyboard" {
-  for key in [@ui.key_code_enter, @ui.key_of_char(' ')] {
-    let calls : Array[Made] = []
-    let t = decide_core(calls, "chat-cache-cold", wide=true)
-    let choice = t.get(Button, label="接着聊")
-    t.ctx().focus_on(choice.id, visible=true)
-    t.draw()
-    assert_eq(t.focused().map(fn(n) { n.label }), Some("接着聊"), msg="the choice has keyboard focus")
-    t.key(key)
-    t.draw()
-    assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="key \{key} opens the choices")
-    assert_eq(t.focused().map(fn(n) { n.role }), Some(MenuItemRadio), msg="the menu focuses an item")
-    t.key(@ui.key_code_down)
-    assert_eq(t.focused().map(fn(n) { n.label }), Some("换新上下文"), msg="Down moves to the other choice")
-    t.enter()
-    t.draw()
-    let asked = named(calls, "session.settings")
-    assert_eq(asked.length(), 1)
-    assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
-  }
+test "the cache choice can be changed from the keyboard" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  let choice = t.get(Button, label="接着聊")
+  t.ctx().focus_on(choice.id, visible=true)
+  t.draw()
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("接着聊"), msg="the choice has keyboard focus")
+  t.enter()
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="Enter opens the choices")
+  assert_eq(t.focused().map(fn(n) { n.role }), Some(MenuItemRadio), msg="the menu focuses an item")
+  t.key(@ui.key_code_down)
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("换新上下文"), msg="Down moves to the other choice")
+  t.enter()
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
 }
 
 ///|
@@ -453,7 +451,6 @@ test "choosing how to continue an expired cache keeps the draft's keyboard" {
     t.tap_text("发消息")
     t.type_text("签名")
     keyboard_up(t, 300.0)
-    assert_true(t.ime().0, msg="the keyboard is up before the choice")
     t.click(Button, label="接着聊")
     assert_true(t.ime().0, msg="the keyboard stays while the choices are shown")
     t.click(MenuItemRadio, label="换新上下文")
@@ -784,17 +781,12 @@ test "files sent fly from their tiles to their places in the message, then are i
   // its row in the list (the outbox's, at once): the picture goes to where the message has it
   t.draw()
   t.draw()
-  // (its actual picture in the scrolling list; the row keeps its send key when the core names it anew)
-  let tree = @ui.view_tree().unwrap()
-  let label = @sf.t("web-main.file.view", args=[("name", "截图.png")])
-  let picture = tree.said_order().iter().filter(fn(n) {
-    n.said is Some(s) && s.role == Button && s.label == label
-  }).filter_map(fn(n) { tree.view_of(n.id) }).find_first(fn(v) { v.scroll_holding() is Some(_) }).unwrap()
-  assert_true(picture.laid_size().0 > 56.0, msg="the message's picture is laid out in its row")
-  assert_eq(tree.drawn_of(picture.id()).unwrap().alpha, 0.0, msg="its flight owns the picture until it lands")
+  match @motion.measured_rect(t.ctx(), "flight/to/" + ff.key) {
+    Some((_, _, w, _)) => assert_true(w > 56.0)
+    None => fail("the message's picture is not where the flight can see it")
+  }
   t.run_for(@sfbase.flight_most_ms)
   assert_true(send_flight.get() is None)
-  assert_eq(tree.drawn_of(picture.id()).unwrap().alpha, 1.0, msg="the message owns the picture after it lands")
   fix_clock.val = None
 }
 

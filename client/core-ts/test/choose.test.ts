@@ -74,7 +74,10 @@ test("frequent_combos_keep_speed_separate_and_restore_it_including_defaults", ()
     assert.equal(combos.find((c) => c.fast === true).speedText, "Fast");
     assert.equal(combos.find((c) => c.fast === null).speedText, undefined);
   }
-  const other = { ...base, runtime: "claude" };
+  // Claude Code's speed is kept apart as Codex's is (an Anthropic key's Fast); one without Fast has none to keep.
+  const claude = { ...base, runtime: "claude" };
+  assert.equal(recordCombo(recordCombo([], { ...claude, fast: true }, 1), { ...claude, fast: false }, 2).length, 2);
+  const other = { ...base, runtime: "dsh" };
   assert.equal(recordCombo(recordCombo([], { ...other, fast: true }, 1), { ...other, fast: false }, 2).length, 1);
 });
 
@@ -84,7 +87,7 @@ test("speed_choices_preserve_false_and_follow_the_runtime", () => {
     const r = resolve(options, { runtime: "codex", model: "gpt-6-astra", fast });
     assert.equal(r.fast, fast);
   }
-  assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, null);
+  assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, true);
   assert.deepEqual([resolve(options, { runtime: "dsh", fast: true }).runtime, resolve(options, { runtime: "dsh", fast: true }).fast], ["dsh", null]);
 });
 

@@ -36,21 +36,8 @@ let turns : Turns = {
 }
 
 ///|
-// kept across runs: cleared by turns_reset with the layers whose hand it describes
-let overlay_owners_in_use : @signals.Keyed[@view.NodeId] = @signals.keyed()
-
-///|
-/// Whether an overlay built by old view `owner` holds the pointer or keyboard focus, including nested overlays.
-/// A portal remains owned by the view that opened it even when it lies outside that view's rectangle.
-/// Followed as the hand changes and as frames publish or remove the overlays.
-pub fn old_overlay_in_use(owner : @view.View) -> Bool {
-  overlay_owners_in_use.has(owner.id())
-}
-
-///|
 /// Put back as a run begins: nothing over, nothing down, no layer, since the run's clock.
 fn turns_reset(at : Double) -> Unit {
-  overlay_owners_in_use.set([])
   turns.over.clear()
   turns.left.clear()
   turns.down = false
@@ -88,22 +75,12 @@ fn turns_said(c : Ctx, at : Double, frame? : Bool = false) -> Unit {
     turns.down_at = at
   }
   // the layers drawn
-  let owners : Array[@view.NodeId] = []
   @signals.untracked(fn() {
     for l in c.last_layers {
-      let pointer = c.pointer_in_overlay(l.id)
-      let keyboard = c.keyboard_in_overlay(l.id)
-      turned(turns.pointer_in, l.id, pointer, at)
-      turned(turns.keys_in, l.id, keyboard, at)
-      if c.layer_takes(l) && (pointer || keyboard) {
-        match l.owner {
-          Some(owner) => if !owners.contains(owner) { owners.push(owner) }
-          None => ()
-        }
-      }
+      turned(turns.pointer_in, l.id, c.pointer_in_overlay(l.id), at)
+      turned(turns.keys_in, l.id, c.keyboard_in_overlay(l.id), at)
     }
   })
-  overlay_owners_in_use.set(owners)
   if frame {
     let drawn = c.last_layers.map(fn(l) { l.id })
     for m in [turns.pointer_in, turns.keys_in] {

@@ -205,7 +205,7 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's 
   assert_true(log.contains("EXIT 0"), msg="\{log}")
   // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
   t.draw()
-  let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
   assert_eq(files.length(), 1)
   assert_eq(text(field(Some(files[0]), "ref"), "path"), "/Users/lin/文档/发布清单.md")
   assert_true(t.find("发布清单") is Some(_))

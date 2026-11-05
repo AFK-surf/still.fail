@@ -23,7 +23,7 @@ test "followed at its end, a message said over the agent's line: the line stays 
   let working = tr("android-chat.chat.working")
   // its line in at the chat's end, the list there
   t.run_for(fix_deliver_ms)
-  let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap_or(@double.infinity)
+  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
   t.run_for(at - t.time() + working_turn_ms)
   let rest = t.rest_of("a list")
   if rest > t.time() && rest < @double.infinity {

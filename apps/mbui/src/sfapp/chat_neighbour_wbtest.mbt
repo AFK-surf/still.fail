@@ -18,7 +18,7 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   let core = (src.topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value
   let first_day = items(core, "days")[0]
   assert_eq(text(Some(items(Some(first_day), "items")[0]), "id"), "c5")
-  assert_true(t.get(Link, label="给设置页加一个深色模式开关").rect.1 < t.get(Link, label="盯着 CI，绿了告诉我").rect.1)
+  assert_true(t.find("给设置页加一个深色模式开关").unwrap().1 < t.find("盯着 CI，绿了告诉我").unwrap().1)
   // A menu action stays asked throughout the frame. Even if it is built more than once, it moves just one row.
   @settings.ask_action("chat.next")
   t.frame()

@@ -31,11 +31,10 @@ pub(all) struct Episode {
   place : Place?
 }
 
-#derive(Eq)
 pub(all) enum Kind {
   Movie
   Show
-}
+} derive(Eq)
 
 pub(all) struct Library {
   recent : Array[Title]

@@ -27,43 +27,17 @@ pub fn lit_in_node(v : @view.View) -> Bool {
 ///|
 /// `v` pressed as an old view's box with an id is (a tap on it, a mouse's let go on it, Enter or Space with the
 /// keyboard's focus on it, a screen reader's Activate), `press` done then; while `on` says so (a box given no id: none
-/// of these). Nothing drawn of it: what it draws as the hand is on it is its own (lit_node). `menu`: held still by a
-/// finger a long press's time (felt), or right clicked, its menu asked for where (in the window), nothing pressed as
-/// the finger lets go then (Ctx::menu_asked's, menu_held's).
-pub fn presses_node(
-  v : @view.View,
-  press : () -> Unit,
-  on? : () -> Bool = fn() { true },
-  menu? : (Double, Double) -> Unit,
-) -> Unit {
+/// of these). Nothing drawn of it: what it draws as the hand is on it is its own (lit_node).
+pub fn presses_node(v : @view.View, press : () -> Unit, on? : () -> Bool = fn() { true }) -> Unit {
   // (taken by the keyboard's focus as it is pressed: an old view's box with an id)
   v.presses(By(on)).focusable(By(on)).on_press(press) |> ignore
   let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
-  let held = Ref(false)
-  let hold = menu.map(fn(f) {
-    (
-      @ui.long_press_ms,
-      fn(d : @view.Drag) {
-        if @ui.pointing() is Finger {
-          held.val = true
-          @ui.haptic(LongPress)
-          f(d.wx, d.wy)
-        }
-      },
-    )
-  })
   v.gesture(
     @ui.touch_slop(),
-    press=fn(_) { held.val = false },
-    tap=fn(d) { if on_it(d) && !held.val { press() } },
-    hold?=hold,
-    drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && !held.val { press() } },
+    tap=fn(d) { if on_it(d) { press() } },
+    drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { press() } },
   )
   |> ignore
-  match menu {
-    Some(f) => v.on_menu(fn(m) { f(m.wx, m.wy) }) |> ignore
-    None => ()
-  }
 }
 
 ///|
@@ -111,7 +85,7 @@ pub fn presses_held_node(
 /// `v` pressed as an old view's box with an id is (Ctx::clicked: a tap, a mouse's click, Enter or Space with the focus,
 /// a screen reader's press): `press` done then; its ripple and sink as `corner` rounds it (press_look); read out as
 /// `role` named `label`.
-pub fn pressed_node(
+fn pressed_node(
   v : @view.View,
   press : () -> Unit,
   corner : @view.Live[Double],
@@ -1238,7 +1212,6 @@ pub fn round_key_node(
   press : () -> Unit,
   side? : Double = 34.0,
   icon_size? : Double = 22.0,
-  ink? : () -> Int64 = fn() { theme().p.text },
 ) -> Unit {
   parent.box(fn(k) {
     k
@@ -1249,7 +1222,7 @@ pub fn round_key_node(
     .lies_along(Is(Middle))
     |> ignore
     pressed_node(k, press, Is(side / 2.0), Button, label)
-    icon_node(k, icon, icon_size, By(ink)) |> ignore
+    icon_node(k, icon, icon_size, By(fn() { theme().p.text })) |> ignore
   })
   |> ignore
 }

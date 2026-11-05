@@ -90,15 +90,3 @@ test("a_history_going_back_a_page_puts_its_items_before_and_leaves_the_rest_as_t
   assert.deepEqual(applied, next);
   assert.equal(applied.items[5], old.items[3]);
 });
-
-test("a_chats_messages_put_say_why_they_came_history_before_what_was_there_sent_from_here", () => {
-  const m = (seq: number, outgoing?: string) => ({ seq, text: `m${seq}`, ...(outgoing ? { outgoing } : {}) });
-  const chat = (messages: ReturnType<typeof m>[]) => ({ title: "t", messages, outbox: [] });
-  const spec = specOf({ topic: "chat", station: "w/s", session: "c" });
-  const old = chat([m(10), m(11)]);
-  const next = chat([m(8), m(9), m(10), m(11), m(12), m(13, "o1")]);
-  const ops = diffKeyed(old, next, spec) as { put?: { seq: number }; why?: string }[];
-  const why = ops.filter((op) => op.put).map((op) => [op.put!.seq, op.why]);
-  assert.deepEqual(why.sort((a, b) => (a[0] as number) - (b[0] as number)), [[8, "history"], [9, "history"], [12, "came"], [13, "sent"]]);
-  assert.deepEqual(applyKeyed(old, ops as never), next);
-});

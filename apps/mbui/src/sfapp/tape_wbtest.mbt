@@ -746,18 +746,13 @@ test "on the tape what shows of the page dragged a little and let go: the tape b
 ///|
 /// Where the composer's field is drawn from the left and the bottom of the panel it is in (as drawn: a panel's move
 /// and any of the field's own); None when it is drawn out of every panel.
-fn tape_composer_field(t : @ui.Tester) -> @ui.SemNode? {
-  t.semantics().iter().find_first(fn(s) { s.role == TextField && (s.label == "发消息" || s.label == "按空格输入") })
-}
-
-///|
 fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
   let bs = t.boxes_held()
-  guard tape_composer_field(t) is Some(field) else { return None }
-  let (x, y, w, _) = field.rect
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
   for b in bs {
-    if b.radius == @sf.tape_corner && b.x <= x && x + w <= b.x + b.w {
-      return Some((x - b.x, b.y + b.h - y))
+    if b.radius == @sf.tape_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
+      return Some((ed.x - b.x, b.y + b.h - ed.y))
     }
   }
   None
@@ -791,11 +786,11 @@ test "on the tape the composer is drawn with its page as the page moves, never a
 /// it, the theme's): their corners.
 fn composer_corners(t : @ui.Tester) -> (Double, Double, Double)? {
   let bs = t.boxes_held()
-  guard tape_composer_field(t) is Some(field) else { return None }
-  let (x, y, w, h) = field.rect
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
   let mut box : @ui.Laid? = None
   for b in bs {
-    if b.glass && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h {
+    if b.glass && b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h {
       box = Some(b)
     }
   }
@@ -859,9 +854,9 @@ test "on the tape the page panel's corner is its own: the composer and its butto
 /// composer's box (the glass round the field): as laid out.
 fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
   let bs = t.boxes_held()
-  guard tape_composer_field(t) is Some(field) else { return None }
-  let (x, y, w, h) = field.rect
-  let round = fn(b : @ui.Laid) { b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h }
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
+  let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
   let mut panel : @ui.Laid? = None
   let mut box : @ui.Laid? = None
   for b in bs {
@@ -962,15 +957,13 @@ fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
 ///|
 /// The middle of the first words `words` drawn, across (their line's).
 fn words_middle(t : @ui.Tester, words : String) -> Double? {
-  // (the line as drawn, its top and its bottom: a node of the window's tree's words is held with no height, so its box
-  // would say only where it starts, words of two lines' heights told apart by that alone)
-  let mut first : (Double, Double)? = None
-  for r in t.text_runs() {
-    if r.text == words {
-      if first is None || r.top < first.unwrap().0 { first = Some((r.top, r.bottom)) }
+  for b in t.boxes() {
+    if (b.kind == "text" || b.kind == "rich") && b.text == words {
+      return Some(b.y + b.h / 2.0)
     }
   }
-  first.map(fn(r) { (r.0 + r.1) / 2.0 })
+  // (or a node of the window's tree's: the sidebar's band made once)
+  t.rect_of(words).map(fn(r) { r.1 + r.3 / 2.0 })
 }
 
 ///|

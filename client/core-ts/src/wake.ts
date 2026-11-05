@@ -171,6 +171,7 @@ export class WakingHost implements Host {
   readonly savedRead?: Host["savedRead"];
   readonly unzstd?: Host["unzstd"];
   readonly ed25519Sign?: Host["ed25519Sign"];
+  readonly verify?: Host["verify"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
@@ -195,6 +196,7 @@ export class WakingHost implements Host {
     if (inner.unzstd) this.unzstd = () => inner.unzstd!();
     // A signature: the device's, at once.
     if (inner.ed25519Sign) this.ed25519Sign = (seed, message) => inner.ed25519Sign!(seed, message);
+    if (inner.verify) this.verify = (alg, key, signature, message) => inner.verify!(alg, key, signature, message);
   }
 
   /// Names in the order people read them: the system's, at once (the files page's: drive-browse.ts).

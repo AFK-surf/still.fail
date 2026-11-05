@@ -22,7 +22,7 @@ pub(all) struct Found {
 /// was last asked of the core, what the core found (None nothing asked yet), the time the reader is at (which of its
 /// messages, which time in it), whether what is not on the device is being read.
 pub(all) struct Finding {
-  chat : @signals.Signal[String]
+  mut chat : String
   field : @ui.Field
   mut query : String
   asked : @signals.Signal[String]
@@ -37,7 +37,7 @@ pub(all) struct Finding {
 
 ///|
 pub let finding : Finding = {
-  chat: @signals.signal("", same=fn(a, b) { a == b }),
+  chat: "",
   field: @ui.Field::new(),
   query: "",
   asked: @signals.signal("", same=fn(a, b) { a == b }),
@@ -68,23 +68,23 @@ pub fn chat_key(r : ChatRef) -> String {
 ///|
 /// The chat ⌘F's bar is open in ("" none).
 pub fn find_chat() -> String {
-  finding.chat.get()
+  finding.chat
 }
 
 ///|
 /// ⌘F's bar open in the chat `key` (opened again: its field takes the keyboard again).
 pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
-  if finding.chat.get() != key {
+  if finding.chat != key {
     find_close()
-    finding.chat.set(key)
+    finding.chat = key
   }
-  c.focus_field(finding.field)
+  c.focus_editor(find_key)
 }
 
 ///|
 /// ⌘F's bar closed: what it looked for forgotten (what the list marked for it is the page's to let go: FindList).
 pub fn find_close() -> Unit {
-  finding.chat.set("")
+  finding.chat = ""
   finding.field.set("")
   finding.query = ""
   finding.asked.set("")
@@ -100,7 +100,7 @@ pub fn find_close() -> Unit {
 ///|
 /// ⌘F's bar open in chat `key` with `words` typed (a screen's fixture).
 pub fn find_preset(key : String, words : String) -> Unit {
-  finding.chat.set(key)
+  finding.chat = key
   finding.field.set(words)
 }
 
@@ -108,7 +108,7 @@ pub fn find_preset(key : String, words : String) -> Unit {
 /// The words to mark in every message of chat `key` drawn now: what ⌘F found while its bar is open in it.
 pub fn find_words_in(key : String) -> Array[String] {
   match finding.found.get() {
-    Some(f) if finding.chat.get() == key => f.words
+    Some(f) if finding.chat == key => f.words
     _ => []
   }
 }
@@ -188,7 +188,7 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
   let n = finding.moves
   (src.call)("chat.find.go", Json::object(params), fn(res) {
     // (closed, typed on, or moved again since: an answer to what is no longer asked)
-    if finding.chat.get() != key || finding.moves != n {
+    if finding.chat != key || finding.moves != n {
       return
     }
     match (res, finding.found.get()) {
@@ -250,7 +250,7 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
       },
       fn(res) {
         // (typed on since, or closed: an answer to what is no longer asked)
-        if finding.asked.get() != query || finding.chat.get() != key {
+        if finding.asked.get() != query || finding.chat != key {
           return
         }
         match res {

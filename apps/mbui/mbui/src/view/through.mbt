@@ -113,15 +113,13 @@ fn Tree::through_takes(self : Tree, th : Through, x : Double, y : Double) -> Boo
     Dragged(u) | Hosted(u) => u
     _ => return false
   }
-  guard self.alive_id(u) && !self.pressless_at(u.at) && !self.out_at(u.at) else { return false }
-  let n = self.nodes[u.at]
-  let (left, top, scale) = self.placed(u.at)
-  let (w, h) = (n.flex.width * scale, n.flex.height * scale)
-  if !(x >= left && y >= top && x < left + w && y < top + h) {
+  guard self.alive_id(u) && !self.pressless_at(u.at) && self.drawn_of(u) is Some(d) else { return false }
+  if !(x >= d.x && y >= d.y && x < d.x + d.w && y < d.y + d.h) {
     return false
   }
+  let n = self.nodes[u.at]
   let at = self.logic_at()
-  guard @signals.untracked(fn() { self.takes_here(n, x - left, y - top, w, h, at) }) else { return false }
+  guard @signals.untracked(fn() { self.takes_here(n, x - d.x, y - d.y, d.w, d.h, at) }) else { return false }
   match th.under {
     Dragged(_) => n.on_drag is Some(_) && n.drag_said == th.said
     Hosted(_) => n.hosted && th.token is Some(_) && (self.hosts_at)(u, x, y) == th.token
@@ -157,17 +155,6 @@ fn Tree::hand_through(self : Tree, id : NodeId, x : Double, y : Double, moved? :
     Moved(_, _) => self.after_event(fn() { self.hand_on(th, why, x, y, now) })
   }
   true
-}
-
-///|
-/// Whether node `id` holds a finger now whose still hold goes through it (View::gesture's `through`: a cover), not
-/// handed on yet: what lies under it may take that hold as its own, where nothing of the tree's is found to take it
-/// (words of the tree's picked by a finger's hold: mbui/ui's tree_select).
-pub fn Tree::goes_through(self : Tree, id : NodeId) -> Bool {
-  match self.through {
-    Some(th) => th.cover == id
-    None => false
-  }
 }
 
 ///|

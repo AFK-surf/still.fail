@@ -23,6 +23,7 @@ export const usageOps: Record<string, ReadOp> = {
   // `history`: the page's year by day as well (usage.ts usageHistory; `historyRange`, its days).
   usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz), typeof a.reading === "boolean" ? a.reading : true, a.viewer ?? null, a.history === true,
     { ...(a.historyRange ? { historyRange: { from: BigInt(a.historyRange.from), to: BigInt(a.historyRange.to) } } : {}),
+      ...(a.detailsPreparing === true ? { detailsPreparing: true } : {}),
       ...(a.batchedSummary ? { batched: a.batchedSummary } : {}) }),
   usageCalls: (store, a) => usageCallsPage(store, String(a.session), BigInt(a.from), BigInt(a.to), [BigInt(a.beforeAt), BigInt(a.beforeSeq)],
     Math.min(Math.max(num(a.limit), 1), 200), a.viewer ?? null),
