@@ -8,8 +8,9 @@ import { recentScopeSessionThreadsStep, recentScopeSessionsStep, type RecentScop
 type Progress = { scan_connect: string | null; scan_after: bigint | null; scan_done: bigint; scan_session: string | null;
   scan_phase: "home" | "members" | null; scan_thread_after: bigint | null };
 
-/// One write transaction advances at most one session source or `limit` of that session's chat sources. A crash
-/// leaves the rows and cursor at the same committed point. Completion here means only the initial scan is finished.
+/// One transaction advances at most `limit` source units. An empty session phase or connection also costs one unit,
+/// so ordinary short sessions can share a batch without an unbounded scan. A crash leaves rows and cursor together.
+/// Completion here means only the initial scan is finished.
 export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64): { sourceDone: boolean; visited: number } {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent workspace scan batch must be positive");
   db.exec("BEGIN IMMEDIATE");
@@ -17,27 +18,41 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
     const get = db.prepare(`SELECT scan_connect, scan_after, scan_done, scan_session, scan_phase, scan_thread_after
       FROM recent_scope_tracked WHERE kind = 1 AND ws = ?`);
     get.setReadBigInts(true);
-    const progress = get.get(ws) as Progress | undefined;
-    if (progress === undefined) throw new Error("recent scope is not tracked");
-    if (progress.scan_session !== null) {
-      const cursor: RecentScopeThreadCursor = { phase: progress.scan_phase ?? "home", after: progress.scan_thread_after };
-      const batch = recentScopeSessionThreadsStep(db, progress.scan_session, cursor, limit);
-      for (const thread of batch.threads) putRecentScopeSource(db, ws, thread, progress.scan_session);
-      if (batch.cursor.phase === "done") db.prepare(`UPDATE recent_scope_tracked SET scan_session = NULL,
-        scan_phase = NULL, scan_thread_after = NULL WHERE kind = 1 AND ws = ?`).run(ws);
-      else db.prepare(`UPDATE recent_scope_tracked SET scan_phase = ?, scan_thread_after = ? WHERE kind = 1 AND ws = ?`)
-        .run(batch.cursor.phase, batch.cursor.after, ws);
-      db.exec("COMMIT");
-      return { sourceDone: batch.cursor.phase === "done" && progress.scan_done === 1n, visited: batch.visited };
+    const row = get.get(ws) as Progress | undefined;
+    if (row === undefined) throw new Error("recent scope is not tracked");
+    const progress = { ...row };
+    let visited = 0;
+    while (visited < limit) {
+      if (progress.scan_session !== null) {
+        const cursor: RecentScopeThreadCursor = { phase: progress.scan_phase ?? "home", after: progress.scan_thread_after };
+        const batch = recentScopeSessionThreadsStep(db, progress.scan_session, cursor, limit - visited);
+        for (const thread of batch.threads) putRecentScopeSource(db, ws, thread, progress.scan_session);
+        visited += Math.max(1, batch.visited);
+        if (batch.cursor.phase === "done") {
+          progress.scan_session = null;
+          progress.scan_phase = null;
+          progress.scan_thread_after = null;
+        } else {
+          progress.scan_phase = batch.cursor.phase;
+          progress.scan_thread_after = batch.cursor.after;
+        }
+      } else if (progress.scan_done === 1n) break;
+      else {
+        const batch = recentScopeSessionsStep(db, ws, { connect: progress.scan_connect, after: progress.scan_after, done: false }, 1);
+        progress.scan_connect = batch.cursor.connect;
+        progress.scan_after = batch.cursor.after;
+        progress.scan_done = batch.cursor.done ? 1n : 0n;
+        progress.scan_session = batch.sessions[0]?.key ?? null;
+        progress.scan_phase = progress.scan_session === null ? null : "home";
+        progress.scan_thread_after = null;
+        visited++;
+      }
     }
-    if (progress.scan_done === 1n) { db.exec("COMMIT"); return { sourceDone: true, visited: 0 }; }
-    const batch = recentScopeSessionsStep(db, ws, { connect: progress.scan_connect, after: progress.scan_after, done: false }, 1);
-    const session = batch.sessions[0]?.key ?? null;
-    db.prepare(`UPDATE recent_scope_tracked SET scan_connect = ?, scan_after = ?, scan_done = ?, scan_session = ?,
-      scan_phase = ?, scan_thread_after = NULL WHERE kind = 1 AND ws = ?`)
-      .run(batch.cursor.connect, batch.cursor.after, batch.cursor.done ? 1 : 0, session, session === null ? null : "home", ws);
+    if (visited !== 0) db.prepare(`UPDATE recent_scope_tracked SET scan_connect = ?, scan_after = ?, scan_done = ?, scan_session = ?,
+      scan_phase = ?, scan_thread_after = ? WHERE kind = 1 AND ws = ?`)
+      .run(progress.scan_connect, progress.scan_after, progress.scan_done, progress.scan_session, progress.scan_phase, progress.scan_thread_after, ws);
     db.exec("COMMIT");
-    return { sourceDone: batch.cursor.done && session === null, visited: batch.sessions.length };
+    return { sourceDone: progress.scan_done === 1n && progress.scan_session === null, visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
