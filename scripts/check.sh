@@ -21,10 +21,10 @@
 # output is kept to itself, and they are reported in the order they are listed here, as each is done, with the seconds
 # it took (the end of its output when it failed). A run takes as long as its longest step, not all of them.
 #
-# STILLFAIL_SKIP_CHECKS=1 (or EMBER_SKIP_CHECKS=1) skips it all (git's --no-verify does too); say why when you do.
+# STILLFAIL_SKIP_CHECKS=1 skips it all (git's --no-verify does too); say why when you do.
 set -eu
 cd "$(dirname "$0")/.."
-[ -n "${STILLFAIL_SKIP_CHECKS:-${EMBER_SKIP_CHECKS:-}}" ] && { echo "checks skipped (STILLFAIL_SKIP_CHECKS)"; exit 0; }
+[ -n "${STILLFAIL_SKIP_CHECKS:-}" ] && { echo "checks skipped (STILLFAIL_SKIP_CHECKS)"; exit 0; }
 export PATH="$HOME/.cargo/bin:$PATH"
 # One-off builds: incremental state only fills target/, and sccache (if set as the rustc wrapper) skips
 # incremental crates.

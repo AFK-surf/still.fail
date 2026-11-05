@@ -8,9 +8,8 @@ export const SESSION_IDLE_SEC = 7 * 24 * 60 * 60;
 export const LOGIN_TTL_SEC = 10 * 60;
 export const CODE_TTL_SEC = 60;
 export const REFRESH_RETRY_SEC = 120;
-// Existing sessions' tokens name it: it keeps its old name.
 const ISSUER = "stillfail-cloud";
-const ACCEPTED_ISSUERS = [ISSUER, "ember-cloud"];
+const ACCEPTED_ISSUERS = [ISSUER];
 const encoder = new TextEncoder();
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
@@ -44,9 +43,9 @@ export const digest = async (value: string) => b64url(new Uint8Array(await crypt
 export const validSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 export const validId = (value: unknown): value is string => typeof value === "string" && /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(value);
 
-/** The Android app's callbacks: the app registers this scheme and host for the Custom Tab to return to (apps from before the rename, ember://). */
+/** The Android app's callbacks: the app registers this scheme and host for the Custom Tab to return to. */
 // The beta apps (fail.still.android.beta, fail.still.desktop.beta: 「youdid.wtf」) come back on a scheme of their own.
-export const APP_REDIRECTS = ["stillfail://auth/callback", "ember://auth/callback", "stillfail-beta://auth/callback"];
+export const APP_REDIRECTS = ["stillfail://auth/callback", "stillfail-beta://auth/callback"];
 /**
  * The Android apps' own: each build comes back on its package (apps/mbui WebAuth, its manifest's
  * `${applicationId}://auth`), so the stable, beta and dev apps installed side by side never take each other's.
@@ -161,9 +160,8 @@ export async function verifyToken(env: Env, token: string, type: "access" | "ref
 // An interrupted rotation can return exactly the same credentials; refresh
 // secrets are hashed, with only the last rotation's answer retained, encrypted
 // (until the session ends, or rotates again).
-// (The key's label keeps its old name: a retry sealed before a deploy still opens after it.)
 async function encryptionKey(env: Env) {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(`ember-refresh-retry\0${env.AUTH_SIGNING_KEY}`)));
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(`stillfail-refresh-retry\0${env.AUTH_SIGNING_KEY}`)));
 }
 export async function seal(env: Env, value: Tokens, expires: number): Promise<string> {
   return new EncryptJWT({ value })

@@ -74,6 +74,8 @@ export function hostInfo(dataDir: string, last: Seen): { info: unknown; seen: Se
     memory: mem,
     disk: disk(dataDir),
     stationRssBytes: rss,
+    // Clients from before the name need this field, and refuse the whole station list without it.
+    emberRssBytes: rss,
     checkedAt: wall.now(),
   };
   return { info, seen, needsTicks };

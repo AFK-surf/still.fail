@@ -140,7 +140,7 @@ height>` is a small trend line, e.g. in a table cell.
   grid lines, no frame or fill behind the plot, axis titles with units, `data-tooltip` on each mark. Size each SVG from
   its container with a `ResizeObserver`; never scale down a fixed-width `viewBox`. For a canvas or a library that needs
   real colours, read them with `getComputedStyle(document.documentElement).getPropertyValue("--viz-series-2")` and
-  redraw on the `ember-viz:theme` event.
+  redraw on the `viz:theme` event.
 
 ## Composition
 
@@ -154,14 +154,14 @@ height>` is a small trend line, e.g. in a table cell.
 
 ## Talking back
 
-`window.ember` (also named `window.openai`, as Codex has it):
+`window.openai` (as Codex names it):
 
-- `ember.widgetState` — what the widget kept last time it was shown (or null); `ember.setWidgetState(value)` keeps a
+- `openai.widgetState` — what the widget kept last time it was shown (or null); `openai.setWidgetState(value)` keeps a
   JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
   should know in `value.modelContent` (the person's choices, say) and the rest in `value.privateContent`:
   `modelContent` reaches you with the next message they send, as a note beside it; keeping state never starts a turn.
   Save after meaningful interactions, never on load.
-- `ember.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
+- `openai.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
   wrote it. Only from their click or key press; it never sends by itself. Use it for drill-downs ("explain this
   week's spike") with the selected values in the prompt, and label the button for what it asks.
 

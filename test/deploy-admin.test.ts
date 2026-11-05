@@ -10,7 +10,6 @@ from pathlib import Path
 
 with tempfile.TemporaryDirectory() as directory:
     os.environ.pop("STILLFAIL_ADMIN_EMAIL", None)
-    os.environ.pop("EMBER_ADMIN_EMAIL", None)
     os.environ["STILLFAIL_DEPLOY_DIR"] = directory
     spec = importlib.util.spec_from_file_location("deploy", "cloud/deploy.py")
     deploy = importlib.util.module_from_spec(spec)

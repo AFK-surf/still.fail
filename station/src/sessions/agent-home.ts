@@ -42,9 +42,6 @@ const BUILTIN_SKILLS = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "st
 /// When to offer a bug report to the still.fail team: only from a station on the stable channel, beside the
 /// `feedback_send` tool; gone from one on the test channel (the team's own).
 const FEEDBACK_SKILL = "stillfail-feedback";
-/// The station's own skills as they were named before the rename: gone once the new ones are written (they would be
-/// listed twice). A directory with more in it than the SKILL.md the station wrote is left.
-const FORMER_BUILTIN_SKILLS = ["ember-jobs", "ember-show", "ember-viz"];
 
 /// Where the skills' text is.
 const skillsSource = (): URL => (import.meta.url.endsWith(".ts") ? new URL("../skills/", import.meta.url) : new URL("./skills/", import.meta.url));
@@ -65,10 +62,6 @@ function onlySkill(dir: string): boolean {
 /// (else it is taken away, unless someone added to it).
 export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
   const [, skills] = agentHomePaths(agentHome);
-  for (const name of FORMER_BUILTIN_SKILLS) {
-    const dir = join(skills, name);
-    if (onlySkill(dir)) rmSync(dir, { recursive: true, force: true });
-  }
   if (!feedback && onlySkill(join(skills, FEEDBACK_SKILL))) rmSync(join(skills, FEEDBACK_SKILL), { recursive: true, force: true });
   for (const name of feedback ? [...BUILTIN_SKILLS, FEEDBACK_SKILL] : BUILTIN_SKILLS) {
     const text = builtinSkill(name);
@@ -96,7 +89,7 @@ const isLink = (path: string) => {
 /// The paths already said to be left alone: said once, not at each look.
 const leftAlone = new Set<string>();
 
-/// Whether `path` is a link to `target`, however either is spelled (~/.ember is a link to ~/.stillfail).
+/// Whether `path` is a link to `target`, however either is spelled (one may be a link to the other).
 function linksTo(path: string, target: string): boolean {
   try {
     return lstatSync(path).isSymbolicLink() && (readlinkSync(path) === target || realpathSync(path) === realpathSync(target));

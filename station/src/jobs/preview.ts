@@ -51,7 +51,7 @@ export function proxyPreview(method: string, headers: [string, string][], body: 
   const sent: Record<string, string | string[]> = {};
   for (const [name, value] of headers) {
     if (peer ? HOP.includes(name) && name !== "authorization" : HOP.includes(name) || name === "accept-encoding") continue;
-    if (name.startsWith("x-stillfail-") || name.startsWith("x-ember-")) continue;
+    if (name.startsWith("x-stillfail-")) continue;
     const was = sent[name];
     sent[name] = was === undefined ? value : [...(Array.isArray(was) ? was : [was]), value];
   }

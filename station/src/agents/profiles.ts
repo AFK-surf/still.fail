@@ -66,7 +66,7 @@ export function apiSource(via: Via): [Source, Endpoints] | undefined {
 const NO_KEY = "none";
 export const OPENCODE = "https://opencode.ai/zen/go";
 /// The variable a Codex provider config reads an API provider's key from.
-const CODEX_KEY = "EMBER_API_KEY";
+const CODEX_KEY = "STILLFAIL_API_KEY";
 /// The variable DeepSeek Harness reads a profile's key from (its route's `apiKeyEnv`, dsh.ts); DeepSeek's own route
 /// and its web search read DEEPSEEK_API_KEY.
 export const DSH_KEY = "STILLFAIL_DSH_KEY";
@@ -85,8 +85,7 @@ export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
     };
   }
-  // The provider's session key keeps the name of before the rename: its sessions go on under it.
-  if (kind === "opencode-go" && runtime === "codex") return { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "ember-{route}" };
+  if (kind === "opencode-go" && runtime === "codex") return { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "stillfail-{route}" };
   if ((kind === "opencode-go" || kind === "anthropic-api") && runtime === "dsh") return { [DSH_KEY]: key };
   // Grok Build on SuperGrok signs in in its own home (grok.ts); on an xAI key, it is given it.
   if (runtime === "grok") return kind === "api-provider" && via.provider === "xai" ? { XAI_API_KEY: key } : {};
@@ -124,7 +123,7 @@ function apiEnv(runtime: Runtime, key: string, model: string | undefined, via: V
   }
   if (at.responses === undefined) return {};
   const env: Record<string, string> = { [CODEX_KEY]: keyOrNone };
-  if (source.sessionHeader) env.OPENCODE_SESSION = "ember-{route}";
+  if (source.sessionHeader) env.OPENCODE_SESSION = "stillfail-{route}";
   return env;
 }
 
@@ -174,7 +173,7 @@ export type DshRoute =
 
 export function dshRoute(p: Profile): DshRoute | null {
   const kind = accessKind(p);
-  const session = { "x-opencode-session": "ember-{route}" };
+  const session = { "x-opencode-session": "stillfail-{route}" };
   if (kind === "opencode-go") return { kind: "pi", name: "OpenCode Go", api: "openai-completions", baseURL: `${OPENCODE}/v1`, headers: session };
   if (kind === "anthropic-api") return { kind: "pi", name: "Anthropic", api: "anthropic-messages", baseURL: "https://api.anthropic.com" };
   if (kind !== "api-provider") return null;
@@ -229,6 +228,3 @@ export function profileEnv(p: Profile, runtime: Runtime): Record<string, string>
 export const expandRoute = (env: Record<string, string>, route: string): Record<string, string> =>
   Object.fromEntries(Object.entries(env).map(([k, v]) => [k, v.replaceAll("{route}", route)]));
 
-/// Both names of a variable the station sets for what it starts (former.rs `both`): the new one, and the old one for
-/// scripts written against it.
-export const bothNames = (name: string): [string, string] => [`STILLFAIL_${name}`, `EMBER_${name}`];

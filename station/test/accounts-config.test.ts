@@ -97,14 +97,14 @@ test("a provider is set up for each runtime from where it speaks", () => {
   assert.equal(openai["model_providers.api.base_url"], '"https://api.openai.com/v1"');
   assert.deepEqual([openai.model_provider, openai["model_providers.api.wire_api"], openai.model], ['"api"', '"responses"', '"gpt-x"']);
   assert.equal(openai["model_providers.api.env_http_headers"], undefined);
-  assert.equal(accessEnv("codex", "api-provider", "k", undefined, { provider: "openai" }).EMBER_API_KEY, "k");
+  assert.equal(accessEnv("codex", "api-provider", "k", undefined, { provider: "openai" }).STILLFAIL_API_KEY, "k");
   const zen = Object.fromEntries(codexOverrides("api-provider", undefined, { provider: "opencode" }));
   assert.equal(zen["model_providers.api.env_http_headers"], '{"x-opencode-session"="OPENCODE_SESSION"}');
   const azure = Object.fromEntries(codexOverrides("api-provider", undefined, { provider: "azure-openai", endpoint: "https://r.openai.azure.com/openai/v1/" }));
   assert.equal(azure["model_providers.api.base_url"], '"https://r.openai.azure.com/openai/v1"');
   assert.deepEqual(accessEnv("claude", "api-provider", "k", undefined, { provider: "groq" }), {});
   assert.equal(codexOverrides("api-provider", undefined, { provider: "groq" }).length, 2);
-  assert.equal(accessEnv("codex", "api-provider", "", undefined, { provider: "custom", endpoint: "http://localhost:4000/v1", protocol: "responses" }).EMBER_API_KEY, "none");
+  assert.equal(accessEnv("codex", "api-provider", "", undefined, { provider: "custom", endpoint: "http://localhost:4000/v1", protocol: "responses" }).STILLFAIL_API_KEY, "none");
   assert.ok(!needsKey("api-provider", "custom") && needsKey("api-provider", "groq") && needsKey("opencode-go", undefined));
 });
 
@@ -112,7 +112,7 @@ test("opencode go sets up each runtime its own way", () => {
   const claude = accessEnv("claude", "opencode-go", "k", undefined, {});
   assert.equal(claude.ANTHROPIC_BASE_URL, OPENCODE);
   assert.equal(claude.ANTHROPIC_SMALL_FAST_MODEL, "deepseek-flash");
-  assert.equal(accessEnv("codex", "opencode-go", "k", undefined, {}).OPENCODE_SESSION, "ember-{route}");
+  assert.equal(accessEnv("codex", "opencode-go", "k", undefined, {}).OPENCODE_SESSION, "stillfail-{route}");
   assert.equal(Object.fromEntries(codexOverrides("opencode-go", "m", {})).model, '"m"');
   assert.equal(codexOverrides("subscription", undefined, {}).length, 2);
 });

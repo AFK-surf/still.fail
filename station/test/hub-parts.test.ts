@@ -896,15 +896,6 @@ test("the station's own skills are written and kept as the station has them; the
   mkdirSync(join(home, "skills", "team-skill"), { recursive: true });
   writeFileSync(join(home, "skills", "team-skill", "SKILL.md"), "ours");
   writeBuiltinSkills(home, false);
-  // The same skills as the station wrote them before the rename: replaced; one someone added to is left.
-  for (const name of ["ember-jobs", "ember-viz"]) {
-    mkdirSync(join(home, "skills", name), { recursive: true });
-    writeFileSync(join(home, "skills", name, "SKILL.md"), `---\nname: ${name}\n---\n`);
-  }
-  writeFileSync(join(home, "skills", "ember-viz", "notes.md"), "mine");
-  writeBuiltinSkills(home, false);
-  assert.ok(!existsSync(join(home, "skills", "ember-jobs")));
-  assert.ok(existsSync(join(home, "skills", "ember-viz", "notes.md")));
   const path = join(home, "skills", "stillfail-jobs", "SKILL.md");
   assert.ok(readFileSync(path, "utf8").startsWith("---\nname: stillfail-jobs\n"));
   assert.equal(readFileSync(path, "utf8"), readFileSync(new URL("../src/skills/stillfail-jobs.md", import.meta.url), "utf8"), "the station's text");

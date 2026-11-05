@@ -1,7 +1,7 @@
 // A station for the mesh tests (mesh.test.ts, bridge.test.ts): accepts credentials starting with "ok", echoes requests.
 // On localhost over the native addon (station/native/mesh), or on a simulated network (sim-iroh.ts: its `world`).
 import { loadAddon } from "../src/hosts/node-iroh.ts";
-import { ALPN, FORMER_ALPN } from "../src/mesh.ts";
+import { ALPN } from "../src/mesh.ts";
 import { configFrame, readClientFrames, stateFrame, videoFrame } from "../src/screen-frames.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -43,14 +43,14 @@ export class Station {
   /// the latest one's connection is where the station opens its tunnels.
   offers: { conn: J; head: J }[] = [];
 
-  static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN], world: World = REAL): Promise<Station> {
+  static async start(alpns: Uint8Array[] = [ALPN], world: World = REAL): Promise<Station> {
     return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" }, world);
   }
 
   /// One at home on the relay `home`, held on `other` (one relay or several) too by a keeper there (station/native/mesh
   /// keep.rs).
   static async on(home: string, other: string | string[], world: World = REAL): Promise<Station> {
-    const s = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world);
+    const s = await Station.bound({ alpns: [Buffer.from(ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world);
     await s.endpoint.online();
     s.endpoint.keep(Array.isArray(other) ? other : [other]);
     return s;
