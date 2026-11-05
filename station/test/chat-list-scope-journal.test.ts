@@ -55,6 +55,28 @@ for (const recursive of [false, true]) test(`workspace session moves record only
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`a move between named workspaces does not delay the home scope (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "moving", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "moving", createdAt: 1, lastActiveAt: 1, ws: "A" });
+    const thread = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    db.prepare("UPDATE threads SET home = 'moving' WHERE id = ?").run(thread);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "home" });
+    trackRecentScope(db, { kind: "workspace", workspace: "A" });
+    trackRecentScope(db, { kind: "workspace", workspace: "B" });
+    db.prepare("UPDATE sessions SET ws = 'B' WHERE key = 'moving'").run();
+    assert.equal(db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0").get(), undefined,
+      "its home visibility is unchanged");
+    db.prepare("UPDATE sessions SET ws = NULL WHERE key = 'moving'").run();
+    assert.ok(db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND session = 'moving'").get(),
+      "moving into home does need a home update");
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`replacing a session also records the workspace and home it leaves (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:");
   const db = store.db;
