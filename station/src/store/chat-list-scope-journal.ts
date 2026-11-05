@@ -99,6 +99,8 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         home_ws TEXT, ambiguous INTEGER NOT NULL);
       CREATE TABLE recent_scope_visibility_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
         phase TEXT NOT NULL, after_ws TEXT, after_session TEXT);
+      CREATE TABLE recent_scope_visibility_turn (id INTEGER PRIMARY KEY CHECK (id = 1), after_thread INTEGER);
+      INSERT INTO recent_scope_visibility_turn VALUES (1, NULL);
       CREATE TABLE recent_scope_sources (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
         PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE INDEX recent_scope_sources_session ON recent_scope_sources(ws, session, thread);

@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
 import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep, settleRecentWorkspaceSessionStep } from "../src/store/chat-list-scope-build.ts";
@@ -36,6 +40,45 @@ for (const recursive of [false, true]) test(`a frequently moving chat does not p
     assert.deepEqual(page, recentChatIds(db, "here", "home", 5),
       "work on the unrelated changing chat must not indefinitely postpone this workspace");
   } finally { store.close(); }
+});
+
+test("visibility work keeps its turn across rollback and reopening", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-visibility-turn-"));
+  const path = join(dir, "station.db");
+  let store = Store.open(path);
+  try {
+    let db = store.db;
+    for (const [key, ws] of [["a", "a"], ["b", "b"], ["here", "here"], ["away", "away"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const hot = store.openThread("ember", "EMBER", "hot", "Hot", null).id;
+    const target = store.openThread("ember", "EMBER", "target", "Target", null).id;
+    const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
+    move.run("a", hot);
+    move.run("here", target);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    move.run("b", hot);
+    move.run("away", target);
+    db.setAuthorizer((action, name) => action === constants.SQLITE_UPDATE && name === "recent_scope_visibility_dirty"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { assert.throws(() => settleRecentScopeVisibilityStep(db, 1)); }
+    finally { db.setAuthorizer(null); }
+    settleRecentScopeVisibilityStep(db, 1);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the failed turn was rolled back");
+    store.close();
+    store = Store.open(path);
+    db = store.db;
+    settleRecentScopeVisibilityStep(db, 1);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5),
+      "the next chat gets a turn after the worker reopens its database");
+  } finally {
+    store.db.setAuthorizer(null);
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 for (const recursive of [false, true]) for (const home of ["two", null]) {
