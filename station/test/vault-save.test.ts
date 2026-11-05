@@ -79,7 +79,7 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp", archivedAt: null } : null),
       starter: () => starter.toLowerCase(),
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
-      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }],
+      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       withdrawCard: (_session: string, _thread: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: () => true,
       insertMessage: (m: { text: string; card: unknown }) => (cards.push({ text: m.text, card: m.card }), hidden = false, [cards.length]),

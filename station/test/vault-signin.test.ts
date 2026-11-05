@@ -34,7 +34,7 @@ function world(o: { listed?: string; held?: string; surface?: string; db?: Datab
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
-      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }] as any,
+      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card, text: m.text });
         hidden = false;

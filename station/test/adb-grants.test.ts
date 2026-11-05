@@ -32,7 +32,7 @@ function world() {
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any,
-      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }] as any,
+      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card });
         hidden = false;
