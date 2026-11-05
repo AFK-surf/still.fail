@@ -230,9 +230,10 @@ pub fn start_batch() -> Unit {
 ///|
 pub fn end_batch() -> Unit {
   run.batch_depth -= 1
-  // An unchanged batch inside a queued watcher adds no work of its own. Let the outer flush finish the queue
-  // instead of nesting every independent watcher. A batch that writes still commits before its caller continues.
-  if run.batch_depth == 0 && (run.flushing == 0 || run.batch_changed) {
+  // (a flush never in another: one under way runs what this batch queued after the effect it is in returns, in the
+  // order it was queued; a batch inside an effect setting off the effects it queued there and then nested a flush
+  // in each, as deep as the effects that went on so: 0.1.7305's GL thread out of stack, a chat left, 2026-11-05)
+  if run.batch_depth == 0 && run.flushing == 0 {
     flush()
   }
 }
@@ -349,7 +350,7 @@ pub fn trigger(f : () -> Unit) -> Unit {
     }
   }
   run.batch_depth -= 1
-  if run.batch_depth == 0 {
+  if run.batch_depth == 0 && run.flushing == 0 {
     flush()
   }
 }
@@ -601,7 +602,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
         let was = setting.val
         setting.val = Some(loc)
         propagate(subs, run.run_depth != 0)
-        if run.batch_depth == 0 {
+        if run.batch_depth == 0 && run.flushing == 0 {
           flush()
         }
         setting.val = was
@@ -756,7 +757,7 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
   match node.subs {
     Some(subs) => {
       propagate(subs, run.run_depth != 0)
-      if run.batch_depth == 0 {
+      if run.batch_depth == 0 && run.flushing == 0 {
         flush()
       }
     }
