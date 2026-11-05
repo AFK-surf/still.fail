@@ -37,6 +37,8 @@ priv struct AnchoredIn[K] {
   tucked : K?
   /// the row last asked to be brought into sight, and how often one was
   reveal : (K?, Int)
+  /// said to follow its end again while short of it, not there yet (Scroll::to_end_told)
+  to_end : Bool
 }
 
 ///|
@@ -54,7 +56,8 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.fresh == b.fresh &&
   a.cover == b.cover &&
   a.tucked == b.tucked &&
-  a.reveal == b.reveal
+  a.reveal == b.reveal &&
+  a.to_end == b.to_end
 }
 
 ///|
@@ -260,6 +263,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let was_follows = Ref(@signals.untracked(fn() { follows.get() }))
   self.reacts(fn() { follows.get() }, fn(now) {
     end_asked.val = from_end && now && !was_follows.val
+    s.to_end.set(end_asked.val)
     end_glided.val = None
     if end_asked.val {
       reading.val = None
@@ -364,6 +368,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           cover: cover(),
           tucked: tucked(),
           reveal: reveal_said.get(),
+          to_end: s.to_end.get(),
         }
       }),
       fn(l, c) {
@@ -862,11 +867,15 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             _ =>
               if at_end || !@signals.untracked(fn() { follows.get() }) {
                 end_asked.val = false
+                s.to_end.set(false)
               } else if end_asked.val && to_end_open > 0.5 {
                 let to = c.x + to_end_open
                 match end_glided.val {
                   // (glided there already and at rest short of it: as near as it comes, asked no more)
-                  Some(was) if s.glides_till() is None && (was - to).abs() < 1.0 => end_asked.val = false
+                  Some(was) if s.glides_till() is None && (was - to).abs() < 1.0 => {
+                    end_asked.val = false
+                    s.to_end.set(false)
+                  }
                   // (on its way there: where its end is now only where that moved)
                   Some(was) if (was - to).abs() < 1.0 => ()
                   _ => {

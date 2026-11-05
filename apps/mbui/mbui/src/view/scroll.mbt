@@ -101,6 +101,9 @@ pub struct Scroll {
   /// how far its last row's foot is below where it shows to (a list laid out from its end: View::scrolls_anchored; as
   /// far as can be while its last row is laid out nowhere, or it is no such list), told once laid out
   priv end_below : @signals.Signal[Double]
+  /// a list laid out from its end said to follow its end again while short of it (View::scrolls_anchored): on its way
+  /// there by itself, till it is there or the hand takes it away, followed
+  priv to_end : @signals.Signal[Bool]
   /// a page's list's blocks (View::scrolls_window): the first and last of them in sight, by their places, it put with
   /// one of them at its top, by its place, and how far past the first in sight's top it is (what a test reads and asks
   /// of an old view's list)
@@ -174,6 +177,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     reveal: fn(_, _) { },
     extent_told: fn() { },
     end_below: @signals.signal(@double.infinity, same=fn(a, b) { a == b }),
+    to_end: @signals.signal(false, same=fn(a, b) { a == b }),
     rows: None,
   }
 }
@@ -1038,5 +1042,13 @@ pub fn Tree::in_scroller(self : Tree, id : NodeId) -> Bool {
 /// far from it) or this is no such list. What it reads is only what was laid out: the rows in sight and near.
 pub fn Scroll::end_below_told(self : Scroll) -> Double {
   self.end_below.get()
+}
+
+///|
+/// Whether a list laid out from its end (View::scrolls_anchored) is on its way to its end by itself, sent there by what
+/// said it follows its end again while short of it: till it is there, nearest it comes or the hand takes it away (a drag,
+/// a fling, the wheel); none of a hand's fling toward it. Followed.
+pub fn Scroll::to_end_told(self : Scroll) -> Bool {
+  self.to_end.get()
 }
 
