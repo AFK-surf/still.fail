@@ -74,6 +74,11 @@ pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, o
   // (the old view it is in, built in no layer of its own: what a modal layer of the window's tree asks of it, as it is
   // used: island_allows)
   let island = if self.layer_cur == 0 { island_building.val } else { None }
+  // (what old view it was built in last: its field let go as that one is, whatever frame built it before, old's)
+  match island {
+    Some(i) => built_in_island[id] = i
+    None => ()
+  }
   let f = { id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press, island }
   // (held by its node, docs/retained.md the way there's 1: by `node`, else by the id's, made or to be: Ctx::id_built)
   let i = if node >= 0 {
@@ -493,6 +498,36 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
     !self.editors.contains(self.focus) &&
     !self.dev.catchers.contains(self.focus) {
     self.focus_moved(0)
+  }
+}
+
+///|
+/// The old view each focusable id was built in last (Ctx::focusable): its field let go as that one is (old's), none
+/// built in another since.
+// kept across runs: said as each is built, let go with its old view
+let built_in_island : Map[Int, @view.NodeId] = {}
+
+///|
+/// Old view `island` let go, at that moment: the fields last built in it fields of nothing from now, as a field of the
+/// tree's let go is (tree_field.mbt); the focus on one let go of with it, what of the old views reads it told then.
+fn island_fields_let_go(island : @view.NodeId) -> Unit {
+  let c = g()
+  let gone : Array[Int] = []
+  for id, i in built_in_island {
+    if i == island {
+      gone.push(id)
+    }
+  }
+  for id in gone {
+    built_in_island.remove(id)
+    if !tree_said_ids.contains(id) {
+      c.editors.remove(id)
+    }
+    if c.focus == id {
+      c.focus = 0
+      hand_focus_said(c)
+      h_frame_owed()
+    }
   }
 }
 
