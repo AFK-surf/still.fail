@@ -188,7 +188,8 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
         hosted: n.hosted,
         allowed: self.allows(id),
         hidden: hid,
-        disabled: self.pressless_at(at),
+        // (said to take no press itself (View::turned_off): it alone, not what it holds that does on its own)
+        disabled: self.pressless_at(at) || n.turned_off,
         rect: place(),
         parent,
         depth,

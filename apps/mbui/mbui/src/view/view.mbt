@@ -468,6 +468,9 @@ struct Node {
   mut wheel_said : Int
   /// what a key does to it (View::on_key): true where it took the key
   mut on_key : ((Key) -> Bool)?
+  /// the keys (a code, the modifiers held) its on_key is told of while a field has the focus too, as the field takes them
+  /// (View::keys_in_fields)
+  mut keys_in_fields : Array[(Int, Int)]
   /// how many times what a key does to it was said (View::on_key): a key asked of it as it was said then, asked only
   /// while it still is so (Tree::key_at)
   mut key_said : Int
@@ -1260,6 +1263,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_menu = None
       n.on_wheel = None
       n.on_key = None
+      n.keys_in_fields = []
       n.on_back = None
       n.on_back_step = None
       n.pressed_cell = None
@@ -1354,6 +1358,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_menu: None,
         on_wheel: None,
         on_key: None,
+        keys_in_fields: [],
         key_said: 0,
         wheel_said: 0,
         on_back: None,
@@ -4399,6 +4404,56 @@ pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
   n.key_said = n.key_said + 1
   self.tree.keys_said_at.add(self.at)
   self
+}
+
+///|
+/// The keys (`keys`: a code and the modifiers held) what a key does to it (View::on_key) is told of while a field has the
+/// focus too, at the key's moment, as the field takes them as its own (an arrow its caret moves by): a shortcut that
+/// goes on in a field (⌥↑ to the chat before, the field's caret moved by it as well), as the old frame's keys read
+/// with `in_field`. Only those said; any other key a field takes is the field's alone.
+pub fn View::keys_in_fields(self : View, keys : Array[(Int, Int)]) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.keys_in_fields = keys
+  self.tree.keys_said_at.add(self.at)
+  self
+}
+
+///|
+/// A key (`code`, `mods` held) at `at` that a field with the focus takes as its own, told also those that said it goes on
+/// in a field (View::keys_in_fields), the topmost first, till one takes it, as one event of that moment (the tree
+/// brought there first where it is in none). True where one did; the field takes it either way.
+pub fn Tree::key_in_field(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return false
+  }
+  let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
+  if self.cause_at < 0.0 {
+    self.bring_to(t)
+  }
+  let took = Ref(false)
+  self.event(t, fn() {
+    let said : Array[Int] = []
+    for i in self.keys_said_at {
+      let n = self.nodes[i]
+      if n.live && n.on_key is Some(_) && self.held_by_root(i) && n.keys_in_fields.contains((code, mods)) {
+        said.push(i)
+      }
+    }
+    said.sort_by(fn(a, b) { if a == b { 0 } else if self.topmost_before(a, b) { -1 } else { 1 } })
+    for i in said {
+      let n = self.nodes[i]
+      guard n.live && !self.pressless_at(i) && self.allows_at(i) else { continue }
+      match n.on_key {
+        Some(f) =>
+          if @signals.untracked(fn() { f({ code, mods, at: t }) }) {
+            took.val = true
+            break
+          }
+        None => ()
+      }
+    }
+  })
+  took.val
 }
 
 ///|
@@ -8148,7 +8203,8 @@ pub fn Tree::activate_at(self : Tree, id : NodeId, at : Double) -> Bool {
   self.event(at, fn() {
     // (what it says as of then: its bindings marked worked out first, Tree::pull)
     self.pull()
-    if !self.takes_presses(id) || !self.allows(id) || self.leaving_at(id.at) || !self.said_now(id.at) {
+    if !self.takes_presses(id) || !self.allows(id) || self.leaving_at(id.at) || !self.said_now(id.at) ||
+      self.nodes[id.at].turned_off {
       return
     }
     match self.nodes[id.at].on_press {
@@ -8902,7 +8958,9 @@ fn Tree::blocks_at(self : Tree, c : Content, cx : Double, cy : Double, s : Doubl
 /// cannot be opened): where it is drawn it takes a press and does nothing with it, what lies under it (a field's
 /// ground) not reached, the pointer an arrow over it, as an old view's control turned off is (its target kept, its
 /// press taking nothing). Unlike View::presses(false), which lets presses through to what lies under it (a page laid
-/// over another, a part that is only shown). Said at the moment it changes. Input's: nothing laid out or drawn again.
+/// over another, a part that is only shown). Read out as turned off (disabled), a screen reader's press of it
+/// refused; what it holds that takes presses of its own (a retry on a card) read and pressed as ever. Said at the
+/// moment it changes. Input's: nothing laid out or drawn again.
 pub fn View::turned_off(self : View, on : Live[Bool]) -> View {
   self.bind(TurnedOff, on, Said, fn(on) { self.tree.nodes[self.at].turned_off = on })
   self
