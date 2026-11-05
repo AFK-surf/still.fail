@@ -211,7 +211,6 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(env.CLAUDE_CONFIG_DIR, o.profile.home);
     assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");
     assert.equal(env.STILLFAIL_RUNTIME_SESSION_ID, session.id());
-    assert.equal(env.EMBER_RUNTIME_SESSION_ID, session.id());
     assert.equal(env.CLAUDE_CODE_CERT_STORE, "bundled");
     assert.equal(env.CLAUDE_CODE_SILENT_TURN_REMINDER, "0");
     assert.equal(env.CLAUDECODE, undefined);

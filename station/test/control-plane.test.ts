@@ -98,19 +98,19 @@ test("still.fail cloud: enrollment, presence, notices, traces and releases as th
   assert.deepEqual([again.peersCurrent, again.reached], [true, false]);
   again.close();
   const connected = fake.asked.find((a) => a.path === "/v1/stations/connect")!;
-  // Signed under both names, each its own proof.
-  assert.deepEqual(connected.verified, ["stillfail", "ember"]);
-  assert.equal(connected.headers["x-stillfail-version"], connected.headers["x-ember-version"]);
+  // Signed under its name alone.
+  assert.deepEqual(connected.verified, ["stillfail"]);
+  assert.equal(connected.headers["x-ember-version"], undefined);
   assert.equal(state.state!.gateway_keys, undefined);
 
   await Effect.runPromise(plane.notify([{ email: "a@x", title: "t", body: "b" } as any]));
   const notified = fake.asked.find((a) => a.path === "/v1/stations/notify")!;
-  assert.deepEqual(notified.verified, ["ember-station-notify-v1", "ember:ember-station-notify-v1"]);
+  assert.deepEqual(notified.verified, ["stillfail-station-notify-v1"]);
   assert.deepEqual(JSON.parse(notified.body.toString()), { notices: [{ email: "a@x", title: "t", body: "b" }] });
 
   await Effect.runPromise(plane.traces([{ name: "span" }]));
   const traced = fake.asked.find((a) => a.path === "/v1/telemetry/traces")!;
-  assert.deepEqual(traced.verified, ["stillfail-station-telemetry-v1", "ember:ember-station-telemetry-v1"]);
+  assert.deepEqual(traced.verified, ["stillfail-station-telemetry-v1"]);
   assert.equal(JSON.parse(traced.body.toString()).resourceSpans[0].resource.attributes[1].value.stringValue, key.id);
 
   assert.equal(plane.releaseBase(), origin);

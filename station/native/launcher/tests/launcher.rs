@@ -86,9 +86,7 @@ impl Station {
             .env("STILLFAIL_NODE", node())
             .env("STILLFAIL_LAUNCHER_TIMES", times)
             .env_remove("STILLFAIL_DATA")
-            .env_remove("EMBER_DATA")
             .env_remove("STILLFAIL_CONFIG")
-            .env_remove("EMBER_CONFIG")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("launcher.log")).unwrap());
@@ -621,9 +619,7 @@ fn with_parent_it_stops_once_the_parent_is_gone() {
             .env("STILLFAIL_NODE", node())
             .env("STILLFAIL_LAUNCHER_TIMES", "parent=200")
             .env_remove("STILLFAIL_DATA")
-            .env_remove("EMBER_DATA")
             .env_remove("STILLFAIL_CONFIG")
-            .env_remove("EMBER_CONFIG")
             .stdout(Stdio::piped()),
     );
     let mut line = String::new();

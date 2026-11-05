@@ -5,9 +5,9 @@ type Json = any;
 
 export const SLACK_API = "https://slack.com/api";
 
-/// Where Slack's Web API is: $STILLFAIL_SLACK_API (or the old $EMBER_SLACK_API), else Slack itself.
+/// Where Slack's Web API is: $STILLFAIL_SLACK_API, else Slack itself.
 export function apiBase(): string {
-  return process.env.STILLFAIL_SLACK_API || process.env.EMBER_SLACK_API || SLACK_API;
+  return process.env.STILLFAIL_SLACK_API || SLACK_API;
 }
 
 /// Form fields, in order.

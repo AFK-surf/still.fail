@@ -10,7 +10,7 @@
 // that writes no file (its shell killed) — Node has no exit event for a process that is not its child.
 import { randomBytes } from "node:crypto";
 import {
-  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
+  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync,
   statSync, watch, writeFileSync,
 } from "node:fs";
 import { availableParallelism } from "node:os";
@@ -22,7 +22,6 @@ import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
-import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
@@ -71,7 +70,6 @@ const quoted = (word: string) => `'${word.replace(/'/g, `'\\''`)}'`;
 /// window does not come up under another task's work, then gives the screen back at once and runs the command,
 /// holding nothing however long it lasts. A job of a station from before it (no
 /// STILLFAIL_JOB_SCREEN) runs the command as it is; one whose station has not answered for a minute runs it, said.
-/// `ember-job`, its name before the rename, is a link to it; a job started then has only the EMBER_JOB_* variables.
 export const JOB_COMMAND = `#!/bin/sh
 # stillfail-job notify <words>: tells the agent that started this job (the words, or stdin's).
 # stillfail-job screen <command>...: runs the command with this machine's screen (windows, a simulator, screenshots),
@@ -79,8 +77,8 @@ export const JOB_COMMAND = `#!/bin/sh
 # minutes; a window kept up for a person is show's.
 # stillfail-job show <command>...: puts up a window for a person (a virtual machine, a simulator to look at) and leaves
 # it: waits for the screen to be free, then runs the command holding nothing.
-token=\${STILLFAIL_JOB_TOKEN:-\${EMBER_JOB_TOKEN:-}}
-notify=\${STILLFAIL_JOB_NOTIFY:-\${EMBER_JOB_NOTIFY:-}}
+token=\${STILLFAIL_JOB_TOKEN:-}
+notify=\${STILLFAIL_JOB_NOTIFY:-}
 case "$1" in
   notify)
     shift
@@ -136,7 +134,6 @@ case "$1" in
 esac
 `;
 export const JOB_COMMAND_NAME = "stillfail-job";
-const FORMER_JOB_COMMAND_NAME = "ember-job";
 
 /// Tells a session's agent something (the hub's notify).
 export type Notify = (session: string, text: string) => void;
@@ -327,19 +324,6 @@ export class Jobs {
       // The script is there for a POSIX shell; only another shell's way to it (no Git's sh on Windows) is missing.
       if (!existsSync(script)) throw error;
       log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
-    }
-    // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
-    const former = join(dir, "bin", FORMER_JOB_COMMAND_NAME);
-    let linked: string | null = null;
-    try {
-      linked = readlinkSync(former);
-    } catch {}
-    if (linked !== JOB_COMMAND_NAME) {
-      const aside = join(dir, "bin", `.${FORMER_JOB_COMMAND_NAME}.${process.pid}`);
-      rmSync(aside, { force: true });
-      // Where links are refused, a copy will do: the script is written afresh at each start.
-      linkSync(JOB_COMMAND_NAME, aside, { copy: true });
-      renameSync(aside, former);
     }
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
@@ -724,12 +708,9 @@ export class Jobs {
     rmSync(this.lostFile(job.id), { force: true });
     // With the variables the station's owners set for what it starts for its agents (ops/agent-env.ts).
     const env: NodeJS.ProcessEnv = { ...platform.prependPath(startEnv(), join(this.dir, "bin")), ...extra };
-    // Under both names: scripts written against the old ones go on working.
-    for (const prefix of ["STILLFAIL_", "EMBER_"]) {
-      env[`${prefix}JOB_ID`] = job.id;
-      env[`${prefix}JOB_TOKEN`] = job.token;
-      env[`${prefix}JOB_NOTIFY`] = this.notifyUrl;
-    }
+    env.STILLFAIL_JOB_ID = job.id;
+    env.STILLFAIL_JOB_TOKEN = job.token;
+    env.STILLFAIL_JOB_NOTIFY = this.notifyUrl;
     // Web services of the workspace's other stations, through the same door (mesh/peer-http.ts).
     if (this.notifyUrl !== "") env.STILLFAIL_PEER_HTTP = this.notifyUrl.replace(/\/jobs\/notify$/, "/peer");
     if (job.port !== null) env.PORT = String(job.port);

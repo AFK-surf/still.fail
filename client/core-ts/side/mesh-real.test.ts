@@ -11,7 +11,7 @@ import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -108,8 +108,8 @@ test("opens_requests_and_streams_the_reply", { skip }, async () => {
   runner.shutdown();
 });
 
-test("reaches_stations_from_before_and_after_the_rename", { skip }, async () => {
-  for (const [alpns, spoken] of [[[FORMER_ALPN], FORMER_ALPN], [[ALPN, FORMER_ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
+test("reaches_a_station_in_its_protocol", { skip }, async () => {
+  for (const [alpns, spoken] of [[[ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
     const { mesh, station, runner } = await setup(await Station.start(alpns));
     const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
     const reply = await request(runner, link, head("/admin/api/overview"));
@@ -464,7 +464,7 @@ test("relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noR
 test("a_faster_entrance_to_the_same_relay_keeps_the_open_link", { skip: noRelay, timeout: 20_000 }, async () => {
   const [relayUrl, relayProcess] = await relay();
   const slowDirect = await slowed(relayUrl, 100);
-  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [relayUrl], discovery: false, relayOnly: true });
+  const station = await Station.bound({ alpns: [Buffer.from(ALPN)], relayUrls: [relayUrl], discovery: false, relayOnly: true });
   await station.endpoint.online();
   const e = env(new FakeHost());
   const mesh = await e.runner.run(Mesh.make(e, [slowDirect]));
@@ -650,7 +650,7 @@ measured("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", 
 /// still.fail's; told the workspace's relays, the device reaches the station through it, and measures it.
 test("reaches_a_station_through_its_workspaces_own_relay", { skip: noRelay }, async () => {
   const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
-  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
+  const station = await Station.bound({ alpns: [Buffer.from(ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
   await station.endpoint.online();
   const id = station.id();
   const e = env(new FakeHost(), new Wakes());

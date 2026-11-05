@@ -52,8 +52,8 @@ export const PAIR_GRACE_MS = 10_000;
 /// How long the new device tries to reach each trusted one.
 export const PAIR_DIAL_MS = 20_000;
 /// Who signs member credentials, and what kind they are (station/src/cloud/provider.ts STILLFAIL `credential`).
-const ISSUERS = ["stillfail-cloud", "ember-cloud"];
-const TYPES = ["stillfail-member+jwt", "ember-member+jwt"];
+const ISSUERS = ["stillfail-cloud"];
+const TYPES = ["stillfail-member+jwt"];
 
 /// One way of a line of JSON at a time, on a stream.
 export type Duplex = { send(message: J): Effect.Effect<void, CoreError>; next(): Effect.Effect<J | null, CoreError>; close(): void };

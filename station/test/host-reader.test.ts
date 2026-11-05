@@ -27,6 +27,12 @@ test("an isolated recording uses a fictional host sample", () => {
   }
 });
 
+test("a host read says its memory under both names, as clients from before the new one require the old", () => {
+  const info = hostInfo(tmpdir(), null).info as { stationRssBytes: number; emberRssBytes: number };
+  assert.equal(typeof info.stationRssBytes, "number");
+  assert.equal(info.emberRssBytes, info.stationRssBytes);
+});
+
 test("an isolated recording does not read the machine's GPUs", async () => {
   const before = process.env.STILLFAIL_TEST_HOST;
   process.env.STILLFAIL_TEST_HOST = "1";

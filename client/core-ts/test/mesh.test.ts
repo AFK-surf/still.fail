@@ -14,7 +14,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh, IrohConnection } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -286,8 +286,8 @@ sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
   await close(s, station, mesh);
 });
 
-sim("reaches_stations_from_before_and_after_the_rename", async (s) => {
-  for (const [alpns, spoken] of [[[FORMER_ALPN], FORMER_ALPN], [[ALPN, FORMER_ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
+sim("reaches_a_station_in_its_protocol", async (s) => {
+  for (const [alpns, spoken] of [[[ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
     const { mesh, station } = await setup(s, await s.station(alpns));
     const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
     assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
@@ -1022,7 +1022,7 @@ async function onLan(s: Sim, quietAfterMs?: number) {
   s.net.lan = { punchMs: 500, quietAfterMs };
   const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
-  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
   await s.settle(station.endpoint.online());
   station.endpoint.keep([b]);
   const e = env(s);
@@ -1107,7 +1107,7 @@ async function onTailnet(s: Sim, ms: number) {
   s.net.direct = { ms };
   const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
-  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
   await s.settle(station.endpoint.online());
   station.endpoint.keep([b]);
   station.tailnet = station.addr().ips;
@@ -1200,7 +1200,7 @@ sim("each_tick_of_a_stations_ways_is_a_line_of_the_record_while_it_is_kept", asy
 sim("reaches_a_station_through_its_workspaces_own_relay", async (s) => {
   const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 5 } });
   const b = s.relay("https://ws.relay.test/", { device: { ms: 20 }, station: { ms: 5 } });
-  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
   await s.settle(station.endpoint.online());
   const id = station.id();
   const mesh = await s.run(Mesh.make(env(s), [a]));

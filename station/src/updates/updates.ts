@@ -18,7 +18,7 @@
 // The TS release (docs/station-ts-native.md) is updated by the same files as the Rust one was:
 // run/update.started (this side's, so the process that runs after a handover or restart follows the update to its
 // end), run/update.step (download | handoff | drain | restart, the installer's), run/update.log and run/update.exit,
-// and the installer is given STILLFAIL_CHANNEL, STILLFAIL_DATA and EMBER_DATA as it was (and now what release.ts
+// and the installer is given STILLFAIL_CHANNEL and STILLFAIL_DATA as it was (and now what release.ts
 // gives it). Where it
 // differs (see also the report in the station-ts work):
 // - The release is `--app` (Paths.app), not two up from dist/admin; BUILD and CHANNEL are read from it the same way.
@@ -1036,8 +1036,7 @@ export class Updates {
     }
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
-    // Under both names, as installers from before the rename read the old one.
-    Object.assign(env, { STILLFAIL_DATA: this.data, EMBER_DATA: this.data }, plan.env);
+    Object.assign(env, { STILLFAIL_DATA: this.data }, plan.env);
     const ok = await startInstaller(plan.script, runDir, env, this.app);
     if (!ok) {
       Object.assign(station, before);

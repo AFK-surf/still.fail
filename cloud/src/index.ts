@@ -1,4 +1,4 @@
-// still.fail cloud's API (the Worker ember-cloud): accounts and sign-in, workspaces and their stations, the operator's
+// still.fail cloud's API (the Worker stillfail-cloud): accounts and sign-in, workspaces and their stations, the operator's
 // console API, and installing a station. It answers only the paths routed to it (wrangler.jsonc) on PUBLIC_ORIGIN's
 // and ADMIN_ORIGIN's hosts; the web apps are static Workers of their own on those hosts' Custom Domains (routes take
 // precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
@@ -222,11 +222,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself. Both the app from
- * before the rename (dev.ember.android) and the new one (fail.still.android), on every host: each says in its
- * manifest which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
+ * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself, on every host: its
+ * manifest says which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
  */
-const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android", "dev.ember.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
+const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
   relation: ["delegate_permission/common.handle_all_urls"],
   target: {
     namespace: "android_app",

@@ -200,7 +200,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.deepEqual(zen.runtimes, ["claude", "codex", "dsh"]);
     assert.equal(profileEnv(zen, "claude").ANTHROPIC_BASE_URL, "https://opencode.ai/zen");
     assert.equal(profileEnv(zen, "claude").ANTHROPIC_CUSTOM_HEADERS, "x-opencode-session: {route}");
-    assert.equal(profileEnv(zen, "codex").EMBER_API_KEY, "oc-key-1");
+    assert.equal(profileEnv(zen, "codex").STILLFAIL_API_KEY, "oc-key-1");
     // A second key on the same provider is a profile of its own.
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq", key: "gsk-other" } }))[0], 200);
     assert.equal(t.accounts.profiles().filter((p) => (p.access as any)?.provider === "groq").length, 2);

@@ -11,6 +11,7 @@ import * as css from "./Marks.css.ts";
 import { Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
+import { fromPreview } from "../previewBridge.ts";
 
 interface Mark { picked: Picked; comment: string }
 interface Box { x: number; y: number; width: number; height: number }
@@ -64,7 +65,7 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
     if (!origin) return;
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== origin || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
-      if (event.data?.type !== "ember-preview-annotated") return;
+      if (!fromPreview(event.data, "annotated")) return;
       const said = event.data as Said;
       if (said.event === "picked") {
         setMarks((all) => [...all, { picked: said.mark, comment: "" }]);

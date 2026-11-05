@@ -1207,7 +1207,7 @@ function joinUnder(dir: string, under: string): string {
 
 /// The station's environment, without what would let a command act as the station or its agents' accounts.
 const baseEnv = (): Record<string, string> =>
-  Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !/^(STILLFAIL_|EMBER_|ANTHROPIC_|CLAUDE_|OPENAI_|CODEX_)/.test(e[0])));
+  Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !/^(STILLFAIL_|ANTHROPIC_|CLAUDE_|OPENAI_|CODEX_)/.test(e[0])));
 
 function said(r: Ran): string {
   const end = r.timedOut ? "stopped: it ran too long" : r.code !== null ? `exit code ${r.code}` : `ended by ${r.signal}`;
