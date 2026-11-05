@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import { join } from "node:path";
 import { test } from "node:test";
 import { indexedLatestThread, installLatestThreadIndex, LATEST_THREAD_INDEXED, latestThreadReady, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
@@ -116,6 +119,47 @@ test("a membership replaced behind an old-session cursor is not missed", () => {
     const expected = db.prepare("SELECT m.rowid AS member_rowid,m.thread FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session='s' ORDER BY m.rowid").all();
     assert.deepEqual(actual, expected);
   } finally { store.close(); }
+});
+
+test("readiness and the selected conversation share a snapshot with another writer", () => {
+  const dir = mkdtempSync(join(process.cwd(), ".latest-thread-snapshot-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let writer: DatabaseSync | undefined;
+  try {
+    const a = store.openThread("slack", "C", "a", null, null);
+    const b = store.openThread("slack", "C", "b", null, null);
+    store.joinThread(a.id, "s", "a"); store.joinThread(b.id, "s", "b");
+    db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(a.id);
+    installLatestThreadIndex(db); prepare(store, "s");
+    writer = new DatabaseSync(path);
+    let interleaved = false;
+    const observed = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!sql.startsWith("SELECT complete FROM latest_thread_scopes")) return statement;
+          return new Proxy(statement, {
+            get(s, p) {
+              if (p === "get") return (...args: any[]) => {
+                const row = s.get(...args);
+                writer!.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(b.id);
+                interleaved = true;
+                return row;
+              };
+              const value = Reflect.get(s, p, s);
+              return typeof value === "function" ? value.bind(s) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.equal(indexedLatestThread(observed, "s")?.id, a.id);
+    assert.equal(interleaved, true);
+    assert.equal(indexedLatestThread(db, "s")?.id, b.id);
+    assert.equal(store.latestThread("s")?.thread.id, b.id);
+  } finally { writer?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a changed thread does not inspect memberships of unprepared sessions", () => {
