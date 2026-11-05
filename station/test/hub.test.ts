@@ -1639,9 +1639,9 @@ test("a chat opened on the admin page reaches the session like Slack, and the ag
   sayIn(r.hub, thread.id, "local", "现在进展如何？");
   await settle();
   const prompt = r.claude.last().prompts.at(-1)!;
-  assert.ok(prompt.includes(`<message via="web" connect="ember" thread="EMBER/${thread.threadTs}" from="管理员 (local)"`), prompt);
+  assert.ok(prompt.includes(`<message via="web" connect="ember" thread="CHAT/${thread.threadTs}" from="管理员 (local)"`), prompt);
   assert.ok(prompt.includes("现在进展如何"));
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   assert.equal(await r.call(key, "chat_post", { to, text: "快好了", kind: "all_done", done: "答了进展：快好了，没有别的要做" }), `Posted to ${to}, and recorded state all_done.`);
   assert.deepEqual(
     r.said(thread.id).map((x) => [x.authorKind, x.text]),
@@ -1815,7 +1815,7 @@ test("idle chats that are done are archived by the station; busy, blocked, unrea
   sayIn(r.hub, thread.id, "local", "hi");
   await settle();
   // The agent's answer is unread: the chat stays.
-  await r.call(web, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "hello", kind: "final" });
+  await r.call(web, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "hello", kind: "final" });
   r.claude.last().complete();
   await settle();
   await r.accept(say("<@UBOT> hi"), "team");
@@ -2366,7 +2366,7 @@ test("in a chat on the station's page with several agents, what one posts reache
   r.claude.last().complete();
   r.codex.last().complete();
   await settle();
-  await r.call(one[0], "chat_post", { to: `EMBER/${one[1].threadTs}`, text: "我来写接口" });
+  await r.call(one[0], "chat_post", { to: `CHAT/${one[1].threadTs}`, text: "我来写接口" });
   await settle();
   const heard = r.codex.last().prompts.at(-1)!;
   assert.ok(matches(heard, ['from="Claude Code" bot ts="', '">\n我来写接口']), heard);

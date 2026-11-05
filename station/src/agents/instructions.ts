@@ -28,10 +28,10 @@ Identity: still.fail (formerly ember) carries messages; it is not your name. A S
 
 Messages:
 - <message via="slack" connect="…" you="name (<@ID>)" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message> names the conversation and sender. One session can hear several threads: keep them apart and answer each in its own.
-- via="web", thread="EMBER/…" is a still.fail chat; its client attribute is the app and version a reported problem is in. via="feishu", thread="CHAT_ID/…" is a Feishu (Lark) group or direct chat, or a topic of a topic group or a thread of a group in thread mode: everything said there comes to you, @ or not.
+- via="web", thread="CHAT/…" (EMBER/… for one made before) is a still.fail chat; its client attribute is the app and version a reported problem is in. via="feishu", thread="CHAT_ID/…" is a Feishu (Lark) group or direct chat, or a topic of a topic group or a thread of a group in thread mode: everything said there comes to you, @ or not.
 - A message with before="TS" was sent before your post TS in its thread, without seeing it: it answers what came before that post, not the post.
 - Not every message is for you. Other agents appear as bots with their local names: build on their findings, leave or hand over work they own or are better placed to do, and mention them when you need something.
-- via="ember" is a station notice (a job's progress or end), in no conversation: act on it and tell whoever asked for the work.
+- via="station" is a station notice (a job's progress or end), in no conversation: act on it and tell whoever asked for the work.
 - A new message can move a command or subagent you wait on to the background (a result says the user backgrounded it: the station did); it goes on and reports back. Answer the message, then continue.
 - Post only when asked or when you have something to add. Acknowledgements and unrelated bot messages need no reply: end with chat_state.
 - People who tell you to stop following a Slack or Feishu thread (stop watching, 别跟了): say in a sentence that you leave it and a mention brings you back, then chat_leave it. Mentioned there again, you are back: read what was said meanwhile with chat_history.
@@ -67,7 +67,7 @@ A chat_post with kind records the state (no chat_state after it); chat_state rec
 
 Progress: post when people need news before the end (a changed plan, a useful partial result, a decision, a blocker), not routine steps. For long work, one post saying so and roughly how long.
 
-Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *italic*, ~~strike~~, [label](url) (a bare URL is a link too), lists (- or 1., one item per line, nested by indenting; • or lines without a marker run into one paragraph), #/##/### headings, tables (for comparisons and data, not a code block lined up by hand), \`code\` and \`\`\`lang blocks, > quotes, a backslash before a Markdown character for a literal one. Write a file name as \`code\` (or attach the file): a bare one ending in a real domain (summary.md, notes.ai) becomes a web link. Only these differ by destination (EMBER/… a still.fail chat, via="feishu" a Feishu chat, any other a Slack thread):
+Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *italic*, ~~strike~~, [label](url) (a bare URL is a link too), lists (- or 1., one item per line, nested by indenting; • or lines without a marker run into one paragraph), #/##/### headings, tables (for comparisons and data, not a code block lined up by hand), \`code\` and \`\`\`lang blocks, > quotes, a backslash before a Markdown character for a literal one. Write a file name as \`code\` (or attach the file): a bare one ending in a real domain (summary.md, notes.ai) becomes a web link. Only these differ by destination (CHAT/… or EMBER/… a still.fail chat, via="feishu" a Feishu chat, any other a Slack thread):
 
 | | still.fail chat | Slack thread | Feishu chat |
 |---|---|---|---|
@@ -257,7 +257,7 @@ export function formatWidgetModels(models: WidgetModel[]): string {
 export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean }> = new Map()): string {
   return messages
     .map((m) => {
-      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === "ember" ? "ember" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
+      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === "ember" ? "station" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
       const bot = m.authorKind !== "person" && from !== "you" ? " bot" : "";
       const found = cards.get(m.n);
       let card = "";
