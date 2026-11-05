@@ -118,3 +118,25 @@ for (const recursive of [false, true]) for (const how of ["insert", "update"] as
     } finally { store.close(); }
   });
 }
+
+for (const recursive of [false, true]) test(`an unrelated new chat does not delay a ready workspace (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["one", "here"], ["two", "elsewhere"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    installRecentScopeJournal(db);
+    for (const ws of ["here", "elsewhere"]) {
+      trackRecentScope(db, { kind: "workspace", workspace: ws });
+      while (!scanRecentWorkspaceStep(db, ws, 2).sourceDone) { /* Prepare empty scopes. */ }
+    }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+    const empty = { ids: [], total: 0 };
+    const thread = store.openThread("ember", "EMBER", "new-chat", "New", null).id;
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), empty, "an orphan affects the default home only");
+    db.prepare("UPDATE threads SET home = 'two' WHERE id = ?").run(thread);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), empty, "the named home is in another workspace");
+    assert.equal(readPreparedRecentWorkspace(db, "elsewhere", 5), null, "the new home has not yet been added");
+  } finally { store.close(); }
+});
