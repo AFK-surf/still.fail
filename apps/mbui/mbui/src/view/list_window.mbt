@@ -134,6 +134,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let laid_words = Ref(-1)
   let laid_vh = Ref(-1.0)
   let laid_total = Ref(-1.0)
+  // (how tall what holds them was last said to be: as far as they reach, View::scrolls_window's holder)
+  let laid_reach = Ref(-1.0)
   let laid_once = Ref(false)
   let last_moving : Ref[Array[K]] = Ref([])
   // (those in sight as last laid out, in order; the first in sight and where its top was counted then: what shows
@@ -743,6 +745,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       laid_total.val = total
       laid_vh.val = vh
       tell_extent()
+    }
+    // (what holds them as tall as they reach, with the room at its foot; from its end, at least as tall as what shows,
+    // they at its foot: laid out so, what asks how far what it holds goes finds it there, as for any that scrolls
+    // (whether it scrolls, whether what it holds ends above its foot: Tree::scrolls_now, the corner rule))
+    let reach = if from_end { dmax(vh, extent_now()) } else { extent_now() }
+    if reach != laid_reach.val {
+      laid_reach.val = reach
+      hn.flex.style.set_height(Pt(reach))
+      tree.layout_marked_at(h.at)
     }
     // (those in sight told, as they change)
     if !(sight == in_sight.val) {
