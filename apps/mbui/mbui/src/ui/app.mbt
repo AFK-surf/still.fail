@@ -1061,12 +1061,10 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         c.edge = 0
       }
     }
-    // a desktop's page: the mouse drags no list and swipes no page back (the wheel scrolls; Ctx::mouse_drags_lists)
+    // a desktop's page: the mouse swipes no page back (and drags no list: none under the press waits for it,
+    // claim_down; the wheel scrolls; Ctx::mouse_drags_lists)
     if !desk.mouse_drags {
       c.edge = 0
-      if c.lists.contains(c.drag_scroll) {
-        c.drag_scroll = 0
-      }
     }
     c.press_late = h_feel() == 2 && c.drag_scroll != 0
     // a list moving on its own (flung, springing back from an end) is caught wherever on it the finger lands, and the
