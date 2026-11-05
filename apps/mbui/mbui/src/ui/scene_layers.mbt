@@ -1752,17 +1752,6 @@ fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
 fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -> Bool {
   guard scene_alone_may() else { return false }
   let due = scene_alone_due()
-  // (each drawn where it is put now, as it keeps how it is drawn or drawn again there, in what it was drawn in (a row
-  // changed as its list scrolls): one put nowhere, the old frame paints it, all it is in gone through)
-  for id in due {
-    match scene.layers.get(id) {
-      Some(l) if scene_place_now(tree, l) is None => {
-        scene.alone_why = "layer \{id.at}: put nowhere"
-        return false
-      }
-      _ => ()
-    }
-  }
   let (recorded0, parts0) = (scene_work.recorded, scene.parts.work())
   // (those held by none other drawn again: each draws what it holds)
   let todo : Array[SceneLayer] = []
@@ -1822,7 +1811,16 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   let glass_was = { ..glass_paint }
   for l in todo {
     let (start, seg_from, count, seg_count) = (l.start, l.seg_from, l.count, l.seg_count)
-    let place = scene_place_now(tree, l).unwrap_or(l.held)
+    // (each drawn where it is put now, as it keeps how it is drawn or drawn again there, in what it was drawn in (a row
+    // changed as its list scrolls); what it holds drawn with it, where that puts it: one put nowhere, the old frame
+    // paints it, all it is in gone through)
+    guard scene_place_now(tree, l) is Some(place) else {
+      scene.alone_why = "layer \{l.id.at}: put nowhere"
+      scene.trying = false
+      scene_undo()
+      glass_put_back(glass_was)
+      return false
+    }
     let (inst, n, segs, owners) = self.scene_redrawn(tree, l, place, before_old~, into=drawn.length())
     // (one come to another number of instances or of pieces: the frame's put together anew round it, scene_spliced;
     // not before the old frame paints)
