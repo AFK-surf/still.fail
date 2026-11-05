@@ -975,6 +975,13 @@ pub fn chat_list_node(
   // the way to the newest (ToLatest): over the list right over the send button, the composer's room under it, a round
   // button with ↓ (and, short of the chat's end, how many new messages wait there); pressed, the list to its end, or,
   // short of the chat's end, the chat's latest page asked for
+  let latest_coming = fn() {
+    let thread = match view() {
+      Some(cv) => cv.thread.map(fn(th) { th.to_int().to_string() }).unwrap_or("")
+      None => ""
+    }
+    core_doing(src, ["chat.latest"], [("station", r.station), ("thread", thread)])
+  }
   v.box(fn(f) {
     f
     .over(Is(true))
@@ -1003,6 +1010,9 @@ pub fn chat_list_node(
       .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.chat.toLatest"))) }))
       |> ignore
       @sf.presses_node(b, fn() {
+        if @signals.untracked(latest_coming) {
+          return
+        }
         match @signals.untracked(view) {
           Some(cv) if cv.newer =>
             match cv.thread {
@@ -1018,7 +1028,13 @@ pub fn chat_list_node(
           _ => to_end()
         }
       })
-      @sf.icon_node(b, "arrow-down", float_icon, By(fn() { @sf.theme().p.text })) |> ignore
+      b.pick(latest_coming, fn(icon, coming) {
+        if coming {
+          @sf.spinner_node(icon, size=float_icon) |> ignore
+        } else {
+          @sf.icon_node(icon, "arrow-down", float_icon, By(fn() { @sf.theme().p.text })) |> ignore
+        }
+      })
       b.show(fn() { view().map(fn(cv) { cv.newer && cv.unread > 0.0 }).unwrap_or(false) }, fn(n) {
         @sf.words_node(n, fn() {
           @sf.t("web-main.chat.newMessages", args=[("n", view().map(fn(cv) { cv.unread.to_int() }).unwrap_or(0).to_string())])
