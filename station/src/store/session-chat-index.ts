@@ -46,23 +46,11 @@ export function installSessionChatIndex(db: DatabaseSync): void {
   CREATE TRIGGER session_chat_scope_drop AFTER DELETE ON session_chat_scopes BEGIN
     DELETE FROM session_chat_rows WHERE session=OLD.session;
   END;
-  CREATE TRIGGER session_chat_cc_add AFTER INSERT ON cc_session_rows
-    WHEN EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session) BEGIN
-      ${refresh("NEW.session", "NEW.thread")}
-  END;
-  CREATE TRIGGER session_chat_cc_change AFTER UPDATE ON cc_session_rows
-    WHEN (OLD.session IS NOT NEW.session OR OLD.thread IS NOT NEW.thread OR OLD.surface IS NOT NEW.surface
-      OR OLD.last_at IS NOT NEW.last_at OR OLD.created_at IS NOT NEW.created_at)
-      AND (EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session)
-        OR EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=OLD.session)) BEGIN
-      DELETE FROM session_chat_rows WHERE session=OLD.session AND thread=OLD.thread
-        AND (OLD.session IS NOT NEW.session OR OLD.thread IS NOT NEW.thread);
-      ${refresh("NEW.session", "NEW.thread")}
-  END;
   CREATE TRIGGER session_chat_cc_drop AFTER DELETE ON cc_session_rows BEGIN
     DELETE FROM session_chat_rows WHERE session=OLD.session AND thread=OLD.thread;
   END;
-  -- A reconciliation can leave the copy row unchanged while the last real entry changed (e.g. old partial deletion).
+  -- Name scopes are created only after copy tracking is complete. Later changes become dirty before their copy row
+  -- changes; refresh once as that work settles, even if the copy row itself was unchanged (an old partial deletion).
   CREATE TRIGGER session_chat_cc_settled AFTER DELETE ON cc_session_dirty
     WHEN EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=OLD.session) BEGIN
       ${refresh("OLD.session", "OLD.thread")}
