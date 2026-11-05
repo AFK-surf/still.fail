@@ -179,10 +179,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     // (where it is laid out, as if it went beside nothing: never where it went last)
     let n = self.nodes[at]
     let (lx, ly) = (n.lx, n.ly)
+    // (composed again there as it is placed: Tree::place)
     self.place(at)
     if n.lx != lx || n.ly != ly {
-      self.work.composed = self.work.composed + 1
-      self.composed.push({ at, gen: n.gen })
       self.hits = self.hits + 1
     }
   }
@@ -206,8 +205,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
             n.ly = ly
             n.lpx = px
             n.lpy = py
-            self.work.composed = self.work.composed + 1
-            self.composed.push({ at, gen: n.gen })
+            self.composed_again(at)
             self.hits = self.hits + 1
           }
         None => ()
@@ -302,8 +300,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       n.ly = ly
       n.lpx = px
       n.lpy = py
-      self.work.composed = self.work.composed + 1
-      self.composed.push({ at, gen: n.gen })
+      self.composed_again(at)
       self.hits = self.hits + 1
     }
     state[at] = 2

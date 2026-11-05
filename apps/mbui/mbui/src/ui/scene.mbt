@@ -465,6 +465,23 @@ fn push_round_clip(n : Node) -> Unit {
 /// the padding box), its corners concentric with the box's there; within the clip it is in. An old view's box's
 /// (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
 fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double, bw : Double) -> Unit {
+  push_inset_clip_r(x, y, w, h, radius_at(0), radius_at(1), radius_at(2), radius_at(3), bw)
+}
+
+///|
+/// push_inset_clip, its corners' radii given each (top left, then round it): a node of the window's tree's, nothing
+/// made to ask them.
+fn push_inset_clip_r(
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
+  bw : Double,
+) -> Unit {
   let bw = dmax(0.0, dmin(bw, dmin(w, h) / 2.0))
   let x = x + bw
   let y = y + bw
@@ -480,21 +497,35 @@ fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (
   // smooth it as far as the box has room for); drawn where the box has them, however little of it the clip keeps (a
   // card mostly past the window's edge: its far corners as round as its line, sd_clip)
   let room = dmin(w, h) / 2.0
-  // where a corner is both's, the rounder
-  let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
-    let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(concentric(radius_at(j), bw), room), 0.0)
-    if r > 0.0 && cx == ox && cy == oy && r >= pr {
-      (r, smoothness(r, room))
-    } else {
-      (pr, ps)
-    }
-  }
-  let (tl, stl) = corner(0, x0, y0, x, y)
-  let (tr, s_tr) = corner(1, x1, y0, x + w, y)
-  let (br, sbr) = corner(2, x1, y1, x + w, y + h)
-  let (bl, sbl) = corner(3, x0, y1, x, y + h)
+  let (tl, stl) = inset_corner(k, 0, r0, bw, room, x0, y0, x, y)
+  let (tr, s_tr) = inset_corner(k, 1, r1, bw, room, x1, y0, x + w, y)
+  let (br, sbr) = inset_corner(k, 2, r2, bw, room, x1, y1, x + w, y + h)
+  let (bl, sbl) = inset_corner(k, 3, r3, bw, room, x0, y1, x, y + h)
   push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
+}
+
+///|
+/// Corner `j` of a clip push_inset_clip pushes, at (`cx`, `cy`) where the box's own is at (`ox`, `oy`), its box's
+/// corner `radius` round, cut `bw` in, `room` its half shorter side, within the clip at `k`: where a corner is both's,
+/// the rounder (its radius, how smooth).
+fn inset_corner(
+  k : Int,
+  j : Int,
+  radius : Double,
+  bw : Double,
+  room : Double,
+  cx : Double,
+  cy : Double,
+  ox : Double,
+  oy : Double,
+) -> (Double, Double) {
+  let (pr, ps) = clip_corner_r(k, j, cx, cy)
+  let r = dmax(dmin(concentric(radius, bw), room), 0.0)
+  if r > 0.0 && cx == ox && cy == oy && r >= pr {
+    (r, smoothness(r, room))
+  } else {
+    (pr, ps)
+  }
 }
 
 ///|
