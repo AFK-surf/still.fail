@@ -66,3 +66,58 @@ test("a prepared session reads one ordered candidate as old memberships grow", (
   }
   assert.deepEqual(counts, [1, 1]);
 });
+
+test("a prepared order follows deliveries, membership changes and missing threads", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const a = store.openThread("slack", "C", "a", null, null);
+    const b = store.openThread("slack", "C", "b", null, null);
+    const c = store.openThread("slack", "C", "c", null, null);
+    store.joinThread(a.id, "s", "a");
+    store.joinThread(b.id, "s", "b");
+    installLatestThreadIndex(db);
+    prepare(store, "s");
+    const check = () => assert.equal(indexedLatestThread(db, "s")?.id ?? null, store.latestThread("s")?.thread.id ?? null);
+    check();
+    const add = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,1,'s',NULL)");
+    add.run(100, a.id); check();
+    add.run(101, b.id); check();
+    db.prepare("DELETE FROM deliveries WHERE rowid=101").run(); check();
+    store.joinThread(c.id, "s", "c"); check();
+    add.run(102, c.id); check();
+    db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session='s'").run(c.id); check();
+    db.prepare("DELETE FROM threads WHERE id=?").run(a.id); check();
+    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C','a-restored',1)").run(a.id); check();
+    db.prepare("UPDATE thread_sessions SET joined_at=1000 WHERE thread=? AND session='s'").run(b.id); check();
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
+  test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? 1 : 0}`);
+      const a = store.openThread("slack", "C", "a", null, null);
+      const b = store.openThread("slack", "C", "b", null, null);
+      store.joinThread(a.id, "s1", "a"); store.joinThread(b.id, "s1", "b");
+      store.joinThread(a.id, "s2", "a"); store.joinThread(b.id, "s2", "b");
+      const add = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,? ,?,NULL)");
+      add.run(100, a.id, 1, "s1"); add.run(101, b.id, 1, "s2");
+      installLatestThreadIndex(db); prepare(store, "s1"); prepare(store, "s2");
+      const check = () => { for (const s of ["s1", "s2"])
+        assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null); };
+      check();
+      db.exec("BEGIN");
+      db.prepare(`INSERT OR REPLACE INTO deliveries(${alias},thread,n,session,delivered_at) VALUES(100,?,2,'s2',NULL)`).run(a.id);
+      check();
+      db.exec("ROLLBACK");
+      check();
+      db.prepare(`INSERT OR REPLACE INTO deliveries(${alias},thread,n,session,delivered_at) VALUES(100,?,2,'s2',NULL)`).run(a.id);
+      check();
+      db.prepare("INSERT OR IGNORE INTO deliveries(thread,n,session,delivered_at) VALUES(?,2,'s2',NULL)").run(a.id);
+      check();
+      add.run(102, b.id, 2, "s1");
+      check();
+    } finally { store.close(); }
+  });
+}
