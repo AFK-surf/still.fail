@@ -43,6 +43,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
       ["read/said-worker.js", { session: "old-turn" }],
+      ["read/recent-chat-worker.js", { scope: JSON.stringify([null, null]) }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
