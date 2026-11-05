@@ -20,7 +20,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
+  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, type Membership, type MessageRow, OPTIONS_BEFORE,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -394,7 +394,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
 
 /// The thread's latest message as merged, for lists.
 export function lastMessage(s: Store, thread: number): MessageRow | null {
-  const r = one(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1", thread);
+  const r = one(s, LAST_MESSAGE, thread);
   return r ? toMessage(r) : null;
 }
 
