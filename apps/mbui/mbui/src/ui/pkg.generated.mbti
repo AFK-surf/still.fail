@@ -668,6 +668,8 @@ pub fn take_picture(String, Double, (Ctx) -> Unit, (Bytes?) -> Unit, scale? : Do
 
 pub fn takes_drops() -> Bool
 
+pub fn takes_let_go(@view.View, (Double, Double) -> Bool) -> Unit
+
 pub let tap_indication_ms : Double
 
 pub let tester_wall : Double

@@ -7960,6 +7960,21 @@ pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
 }
 
 ///|
+/// The nodes drawn at (x, y) that would take a finger there (Tree::finger_on: within what bounds them, taking presses,
+/// where they take it in their own terms), in the order drawn, the topmost last; as of the logic's moment (an event's,
+/// Tree::bring_to): what is under what is let go there, whatever of them does anything with a press.
+pub fn Tree::under(self : Tree, x : Double, y : Double) -> Array[NodeId] {
+  let at = self.logic_at()
+  let out : Array[NodeId] = []
+  self.walk_taken(x, y, fn(c, cx, cy, _, s) {
+    if self.finger_on(c, cx, cy, s, x, y, at, tracked=false) {
+      out.push(c.id)
+    }
+  })
+  out
+}
+
+///|
 /// Whether a finger at (x, y) in the window is on what content `c` draws (drawn at (cx, cy), `s` as big: as the scene is
 /// composed, Tree::projected) and is taken there: it is drawn there, takes presses (neither leaving nor held by what
 /// is, nor said to take none), and takes it where it is in its own terms (View::takes, read `tracked` or not, as of
