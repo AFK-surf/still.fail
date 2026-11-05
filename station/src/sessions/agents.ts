@@ -62,6 +62,7 @@ import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
+import { followLatestThreadRequests } from "../read/latest-thread-requests.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
@@ -539,6 +540,8 @@ export const AgentsLive = (control: Control) =>
       hub.prepareSessionUpJobs = (session) => readers.prepareSessionUpJobs([session]);
       hub.prepareWidgetSources = (threads, signal) => readers.prepareWidgetSources(threads, signal);
       hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
+      const stopLatestThreadRequests = followLatestThreadRequests(store, readers);
+      yield* Effect.addFinalizer(() => Effect.sync(stopLatestThreadRequests));
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
