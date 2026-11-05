@@ -207,8 +207,10 @@ test("old widget preparation seeks the ordinary and legacy message indexes", () 
       [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 2]],
     ] as const) {
       const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join("\n");
+      assert.match(plan, /MERGE \(UNION ALL\)/);
       assert.match(plan, /SEARCH entries USING (?:COVERING )?INDEX entries_said \(thread=\?/);
       assert.match(plan, /SEARCH entries USING (?:COVERING )?INDEX entries_letters \(thread=\?/);
+      assert.doesNotMatch(plan, /USE TEMP B-TREE FOR ORDER BY/);
     }
   } finally { store.close(); }
 });
