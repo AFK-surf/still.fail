@@ -776,6 +776,26 @@ test "an agent driving it: only looking, who drives said with 接管; 接管 ask
 }
 
 ///|
+test "made to only look from elsewhere: 只看 chosen for it, input not sent, 控制 a tap away" {
+  let r = screen_rig()
+  r.state("live", control=true)
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.sess().controlling())
+  r.state("live", control=false, line="只看 · 还开在 still.fail iOS", more={ "watchOnly": Json::number(1.0) })
+  assert_false(r.sess().controlling())
+  assert_true(r.t.find("只看 · 还开在 still.fail iOS") is Some(_))
+  r.tap_at(0.5, 0.5)
+  assert_eq(r.inputs().length(), 0)
+  r.t.tap_text("控制")
+  let asked = r.told("screen.control")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0]), "control"), Some(Json::boolean(true)))
+  r.t.run_for(@ui.cover_slide_ms)
+  screen_done(r.t)
+}
+
+///|
 test "read only: no 只看/控制 to choose, no keyboard, a tap not sent" {
   let r = screen_rig()
   r.state("live", control=false, may=false)
@@ -1265,6 +1285,8 @@ test "files go onto the machine one after another, the first beside the one of i
 /// A test's end: what moves when it ends run to its declared rest (the bar's springs as the viewer comes and goes, a
 /// toast's time out then its leaving), then nothing left moving or waited on.
 fn screen_done(t : @ui.Tester) -> Unit {
+  // (只看/控制's thumb at rest, gone over where a state turned the view to only looking)
+  t.run_for(@ui.cover_slide_ms)
   to_sheet_rest(t)
   if @kit.toast_rest("toast") != -1.0 {
     t.run_for(@sf.toast_ms)

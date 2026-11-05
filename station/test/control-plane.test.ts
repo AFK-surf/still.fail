@@ -179,6 +179,7 @@ test("each provider's credentials are taken only where it is the control plane",
 
 test("a viewer reads and keeps their own marks, and changes nothing else", () => {
   assert.ok(readOnlyMay({ method: "GET", path: "/chats" }));
+  for (const path of ["/screens/desktop/views/end", "/screens/desktop/views/v1/end", "/screens/desktop/views/v1/watch"]) assert.equal(readOnlyMay({ method: "POST", path }), false, path);
   assert.ok(readOnlyMay({ method: "GET", path: "/events" }));
   assert.ok(readOnlyMay({ method: "PUT", path: "/threads/3/read" }));
   // A list read with what the client holds.

@@ -192,6 +192,9 @@ export class Admin {
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
             // A person closes one (a tab of the browser): it leaves the list as it goes (`screens` on the event stream).
             { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/end$/, handle: async (r: Request, [raw]: string[]) => screenViews(r, raw!, (id) => ({ ended: deps.screens!.endViews(id, byOf(r)) })) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/end$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.endView(id, decodeURIComponent(view!), byOf(r)), {})) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/watch$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.watchOnly(id, decodeURIComponent(view!)), {})) },
             // A person debugging an app on a simulator: its apps' logs (a poll, `after` from the last answer's `next`) and restart.
             { method: "GET", pattern: /^\/screens\/([^/]+)\/logs$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => d.logs(Math.max(0, Number(r.query.find(([k]) => k === "after")?.[1]) || 0))) },
             { method: "GET", pattern: /^\/screens\/([^/]+)\/apps$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ apps: await d.apps() })) },
@@ -453,6 +456,21 @@ async function screenChrome(screens: ScreenHub, r: Request, raw: string, panel: 
   } catch (e) {
     if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
     return error(502, tr(r.lang, "station.screen.debugFailed", { said: (e as Error).message.split("\n").at(-1) ?? "" }));
+  }
+}
+
+/// Who a view's person is told ended it.
+const byOf = (r: Request) => r.viewer.name || r.viewer.email;
+
+/// POST /screens/<id>/views/…: a view ended or made to only look, by a member who may drive the screen (a read-only one
+/// is refused with every other write, Admin's own check). 404 no such screen or view (it ended meanwhile), 405 an agent's.
+async function screenViews(r: Request, raw: string, act: (id: string) => unknown): Promise<Answer> {
+  try {
+    return json(200, JSON.stringify(act(decodeURIComponent(raw))));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    if (e instanceof URIError) return error(404, tr(r.lang, "station.screen.notFound"));
+    throw e;
   }
 }
 

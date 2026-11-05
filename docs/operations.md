@@ -67,14 +67,14 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 - `@名字 <任务>`：开始一个会话（单会话连接则把这个 thread 带进它的会话）。
 - 同一个 thread 里可以 @ 多个连接，它们各自有独立的会话。
 - Slack 的运行状态条可点停止：只中断点中的 bot 在这个 thread 的当前 turn；真正结束后 station 说「已停止当前任务」。新 Slack app 自带此事件订阅；已有 app 在连接拥有者配置了可管理该 app 的 Slack 配置 token 后由 station 自动加上。也可以在连接页保存 app 设置时加上。
-- 让 agent 别再跟某个 thread（例如说「别跟了」）：它回一句，然后调 `chat_leave` 离开这个 thread。之后这里的消息照样记下，但不再交给它；有人再 @ 它，它就回来，之后的回复又都能收到。它仍能读这个 thread、在里面发消息。still.fail 自己的对话不能这样离开。
+- 让 agent 别再跟某个 thread（例如说「别跟了」）：它回一句，然后调 `chat_leave` 离开这个 thread。之后这里的消息照样记下，但不再交给它；有人再 @ 它，它就回来，之后的回复又都能收到。它仍能读这个 thread、在里面发消息。离开后，Slack thread 末尾那行灰色小字会写「🔕 已退出这个 thread，@ 我即可回来」（下面讲 thread 末尾状态的那条），一看就知道它不再跟；被 @ 回来开始干活时这行就去掉。飞书没有这行。still.fail 自己的对话不能这样离开。
 - `-stop`：中断当前 turn；同一 thread 有多个代理时，它们都会收到停止请求。
 - `-compact`：在两轮之间压缩 agent 的上下文（Claude Code 的 `/compact`、Codex 的 `thread/compact/start`），完成后 station 在 thread 里说一声。
 - `-clear`：在两轮之间清空上下文：进程结束，下一条消息开始新的 runtime 会话；之前的会话仍在执行历史里。
 - 这两件事在 still.fail 的 agent 卡片（手机）和会话详情（桌面）里也能点。
 - agent 的消息以 `markdown` 块发出：Slack 照 still.fail chat 的 Markdown 画（粗体、链接、多级列表、标题、表格、带语言的代码块），agent 不再写 mrkdwn；@人仍是 `<@USER_ID>`。消息的 `text` 是同一段原文，通知和读回历史用它。
 - 问题卡片（chat_post 的 `card`，`options` 或 `text`）：一条消息，正文下面是单选（推荐的排最后、默认选中，`detail` 是选项下的灰字；有一项超过 75 字时，全部选项连同说明列在正文后，单选里只留标题）加「确定」；文字卡片（`text`）不放输入框，正文上面是标题「✍️ 需要你回答」，下面一行「在这个线程里回复作答」（有 placeholder 时跟在后面），在 thread 里回复就是回答。按下后经 Socket Mode 的 `interactive` 信封送来（不需要公网地址），当作这个人在 thread 里说了选中的标签（addressed，ts 是这次操作的 `action_ts`），卡片改成「✓ 谁 回答：什么」不再能点；没选就按、或卡片已答过，只回一条他自己看得到的消息。app 要打开 interactivity：新建的 app 自带，旧 app 在连接页保存一次设置就会加上。login 卡片只在 Slack 里出一种：这台 station 上、等着填登录页给的码的登录（login 工具的 `paste`；2026-11-03 Peng Xiao 定：原来让人把码贴进 thread，链接打开的卡片又不在了，看起来像没发起登录）。消息是正文（带登录页链接）、一个输入框「登录页给的码」和「提交」按钮；按下后码只交给这个登录的命令（核对这条消息确实是这个登录的卡片），不作为 thread 里的消息记下，卡片改成「✓ 谁 已填码，正在校验」；没填、或登录已结束，只回一条他自己看得到的消息。设备码、回环登录和别的 station 的登录在 Slack 里仍只发链接；飞书只发链接。
-- agent 一轮结束在 all_done 或 need_human 时，thread 末尾用一行灰色小字（`context` 块）说它现在的状态，和 still.fail 对话末尾那行一样：「✓ 已完成：…」或「🔔 需要你处理：…」。最后一条是 bot 自己的消息时，用 `chat.update` 加在那条下面，不发新消息，跟这个 thread 的人不会再收到一次通知；最后一条是别人的（agent 这轮没说话）时，单独发一条只有这行字的消息。thread 里最多留一行：agent 再开始干活，或者一轮以等待、出错、停下结束，这行就去掉（改回原消息，或删掉那条单独的消息）。最后一条是还没回答的问题卡片时，need_human 不再加这行。station 重启后不记得上一行加在哪，旧的那行会留着。
+- agent 一轮结束在 all_done 或 need_human 时，thread 末尾用一行灰色小字（`context` 块）说它现在的状态，和 still.fail 对话末尾那行一样：「✓ 已完成：…」或「🔔 需要你处理：…」；它在这一轮离开了这个 thread（`chat_leave`）时，不管这一轮怎么结束，都写「🔕 已退出这个 thread，@ 我即可回来」。最后一条是 bot 自己的消息时，用 `chat.update` 加在那条下面，不发新消息，跟这个 thread 的人不会再收到一次通知；最后一条是别人的（agent 这轮没说话）时，单独发一条只有这行字的消息。thread 里最多留一行：agent 再开始干活，或者一轮以等待、出错、停下结束，这行就去掉（改回原消息，或删掉那条单独的消息）。最后一条是还没回答的问题卡片时，need_human 不再加这行。station 重启后不记得上一行加在哪，旧的那行会留着。
 
 ## 开发
 

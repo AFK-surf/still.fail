@@ -12,6 +12,68 @@ fn station_tester(address : String, part? : String = "overview", w? : Double = 3
 }
 
 ///|
+test "who is on a screen: each view's device and mode; a member lets one go or all, an agent's and a reader's not" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let calls : Array[(String, Json)] = []
+    let base = @sffixture.fixture("settings")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        if name.has_prefix("screen.") { calls.push((name, params)) }
+        done(Ok(Json::null()))
+      },
+    }
+    let view = fn(id : String, name : String, control : Bool, more : Map[String, Json]) -> Json {
+      let m : Map[String, Json] = {
+        "id": Json::string(id),
+        "name": Json::string(name),
+        "device": Json::string("still.fail 桌面版 · 书房"),
+        "ago": Json::string("13 小时前"),
+        "control": Json::boolean(control),
+      }
+      more.each(fn(k, v) { m[k] = v })
+      Json::object(m)
+    }
+    let may : Map[String, Json] = { "may": Json::boolean(true) }
+    let screen : Json = {
+      "id": Json::string("desktop"),
+      "views": Json::array([
+        view("v1", "Willow", true, may),
+        view("v2", "Bob", false, may),
+        view("v3", "Agent「部署」", true, { "agent": Json::boolean(true) }),
+      ]),
+    }
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        let core = @sfbase.settings_core(src, rig_workspace)
+        screen_views(c, core, @settings.here_of(core, rig_workspace.id, rig_workspace.name), "ws1/st1", Some(screen))
+      })
+    }, w~, h=500.0, platform~)
+    t.draw()
+    assert_true(t.find("still.fail 桌面版 · 书房 · 控制中 · 13 小时前") is Some(_), msg="\{w} platform \{platform}")
+    assert_true(t.find("still.fail 桌面版 · 书房 · 只看 · 13 小时前") is Some(_))
+    // 转为只看 for the one that drives; 断开 for both people's; the agent's has neither
+    let said = fn(word : String) { t.words().filter(fn(w) { w.0 == word }).length() }
+    assert_eq(said("转为只看"), 1)
+    assert_eq(said("断开"), 2)
+    t.click(Button, label="转为只看")
+    t.click(Button, label="全部断开")
+    t.draw()
+    assert_eq(calls.map(fn(c) { c.0 }), ["screen.watchOnly", "screen.endViews"])
+    assert_eq(text(Some(calls[0].1), "view"), "v1")
+    assert_eq(text(Some(calls[0].1), "screen"), "desktop")
+    assert_eq(text(Some(calls[0].1), "station"), "ws1/st1")
+  }
+}
+
+///|
 test "an incomplete Codex offers its manager an explicit npm repair" {
   for (w, platform) in page_cases {
     @sfbase.reset()

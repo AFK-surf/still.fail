@@ -63,6 +63,9 @@ fn finger_frame_end() -> Unit {
 /// layer a press there goes to, its old view open to presses (Ctx::sel_at's, whether lists are dragged by a mouse or
 /// not).
 fn Ctx::sel_finger_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
+  if self.selection_blocked(x, y) {
+    return None
+  }
   let layer = self.layer_at(x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {

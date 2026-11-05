@@ -12,7 +12,7 @@
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { tr } from "../ops/i18n.ts";
-import { type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
+import { type ScreenHub, ScreenRefused, accessShown, viewOn } from "../screens/hub.ts";
 import { treeText } from "../screens/ui.ts";
 import type { Frame, ScreenInput, ScreenSource, ScreenView } from "../screens/source.ts";
 import type { Content, Tool, ToolReply } from "./mcp.ts";
@@ -40,7 +40,7 @@ export const MODS = { alt: 1, ctrl: 2, meta: 4, shift: 8 } as const;
 export const COMPUTER = {
   name: "computer",
   description:
-    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>, an iOS Simulator booted here, touched where you click): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. On the desktop prefer an app's accessibility tree: action=tree with app (no app: the apps running) gives its window as text, an element a line with its ref (e12); then click, type, set (replace a field's value with text; on Windows type by ref is refused, as it needs the focus: use set) or scroll with ref act on that element without the pointer or the focus (also behind other windows, and while a person drives the screen), and key with app sends keys to that app; each answers with the app's tree again. A big window: tree with skeleton=true first, then tree with ref for one part. Use screenshots for what has no tree (a canvas, a game, a picture). For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input by coordinates is refused: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
+    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>, an iOS Simulator booted here, touched where you click): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. On the desktop prefer an app's accessibility tree: action=tree with app (no app: the apps running) gives its window as text, an element a line with its ref (e12); then click, type, set (replace a field's value with text; on Windows type by ref is refused, as it needs the focus: use set) or scroll with ref act on that element without the pointer or the focus (also behind other windows, and while a person drives the screen), and key with app sends keys to that app; each answers with the app's tree again. A big window: tree with skeleton=true first, then tree with ref for one part. Use screenshots for what has no tree (a canvas, a game, a picture). For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input by coordinates is refused, with the device they hold it from: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
   inputSchema: {
     type: "object",
     properties: {
@@ -361,15 +361,16 @@ export class Computer {
     return `A person can do it on this screen from their still.fail app: ${base}/screen/${encodeURIComponent(id)} — post that link on a line of its own (it shows as the screen's card) with chat_post kind=need_human, saying what to do there, and end your turn.`;
   }
 
-  /// The people driving `id` now, other than the agents' own views.
+  /// The people driving `id` now, other than the agents' own views: each with the device they drive it from.
   #persons(id: string): string[] {
-    const others = [...this.#p.hub.people(id).controlledBy];
-    for (const v of this.#views.values()) {
-      if (v.id !== id) continue;
-      const i = others.indexOf(v.name);
-      if (i >= 0) others.splice(i, 1);
-    }
-    return others;
+    return this.#p.hub.people(id).views.filter((v) => v.control && !v.agent).map((v) => `${v.name} (${viewOn(v)})`);
+  }
+
+  /// What to tell the person holding `id` for the agent to go on: where a view is let go of.
+  #letGo(id: string): string {
+    const base = this.#p.base();
+    const page = base === null ? "the station's page in the still.fail app" : `the station's page (${base})`;
+    return `Ask them in the chat to leave it to you, naming that device: they close ${id} there, or from any device disconnect that view or make it watch-only, under Screens on ${page}. If a person has asked you to take over, the \`screen\` tool's action take_control makes it so.`;
   }
 
   async #view(session: string, source: ScreenSource): Promise<AgentView> {
@@ -431,7 +432,7 @@ export class Computer {
     if (acting) {
       const persons = this.#persons(id);
       if (persons.length > 0)
-        throw new Refused(`${persons.join(", ")} ${persons.length > 1 ? "are" : "is"} controlling ${id} right now, so your input was not sent: do not fight them. Wait and take a screenshot later (\`screen\` shows who is on it), or ask them in the chat to leave it to you.`);
+        throw new Refused(`${persons.join(", ")} ${persons.length > 1 ? "are" : "is"} controlling ${id} right now, so your input was not sent: do not fight them. Wait and take a screenshot later (\`screen\` shows who is on it). ${this.#letGo(id)}`);
     }
     if (source.access) {
       await hub.refresh();

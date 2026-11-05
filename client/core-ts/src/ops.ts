@@ -157,6 +157,9 @@ export const PARAMS: Record<string, string> = {
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
   "screen.close": "screen:string",
+  "screen.endView": "screen:string view:string",
+  "screen.watchOnly": "screen:string view:string",
+  "screen.endViews": "screen:string",
   "screen.logs": "screen:string after:number",
   "screen.apps": "screen:string",
   "screen.relaunch": "screen:string app:string",
@@ -578,6 +581,14 @@ function stationOp(name: string, params: unknown): Request | null {
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
+    // A person's view of a screen, wherever it is, ended or made to only look (docs/remote-screens.md "Who is on a
+    // screen"); it changes on the station's list as the station tells it.
+    case "screen.endView":
+      return op("POST", () => `/screens/${p.at("screen")}/views/${p.at("view")}/end`, null, NONE);
+    case "screen.watchOnly":
+      return op("POST", () => `/screens/${p.at("screen")}/views/${p.at("view")}/watch`, null, NONE);
+    case "screen.endViews":
+      return op("POST", () => `/screens/${p.at("screen")}/views/end`, null, NONE);
     // An app debugged on a simulator (docs/remote-screens.md "Simulators"): its log's lines after `after` (`{next, lines}`),
     // the apps installed there (`{apps}`), one of them started again.
     case "screen.logs":

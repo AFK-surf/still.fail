@@ -2606,7 +2606,13 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
             tree.event(at, fn() { tree.hold_press(id) })
             // (a field of the tree's that takes it as it goes down (its caret put there, what is picked dragged on from
             // there): its own from here, nothing of the tree's taking it over, as an old view's field's: view_old_moved)
-            if tree_field_bar_down(id, x, y, at) || tree_field_down(id, x, y, at) {
+            if tree_field_bar_down(id, x, y, at) {
+              view_down.val = None
+            } else if tree_field_down(id, x, y, at) {
+              // As on an old view's field, a mouse press lets go of words picked on the page.
+              if pointing() is Mouse && picked.from.base != NoSel {
+                select_none()
+              }
               view_down.val = None
             }
           }

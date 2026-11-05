@@ -980,6 +980,10 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     Some(Object(_) as s) => {
       // the pointer alone moved, drawn on a picture's layer: the host told, nothing built (screen_value_quiet)
       let moved = self.pointer_layer is Some(_) && cursor_moved_only(self.state, s)
+      // made to only look from elsewhere (docs/remote-screens.md "Who is on a screen"): 只看 as if chosen, 控制 a tap away
+      if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
+        self.wants_control = Some(false)
+      }
       self.state = Some(s)
       self.heard = true
       if moved {

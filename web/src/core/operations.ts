@@ -92,6 +92,9 @@ export interface OperationParams {
   "job.log": { id: string; lines: number };
   "job.stop": { id: string };
   "screen.close": { screen: string };
+  "screen.endView": { screen: string; view: string };
+  "screen.watchOnly": { screen: string; view: string };
+  "screen.endViews": { screen: string };
   "screen.logs": { screen: string; after: number };
   "screen.apps": { screen: string };
   "screen.relaunch": { screen: string; app: string };
@@ -267,6 +270,9 @@ export function bindStationOperations(call: Call) {
     jobLog: <T = unknown>(params: OperationParams["job.log"]) => call("job.log", params) as Promise<T>,
     jobStop: <T = unknown>(params: OperationParams["job.stop"]) => call("job.stop", params) as Promise<T>,
     screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
+    screenEndView: <T = unknown>(params: OperationParams["screen.endView"]) => call("screen.endView", params) as Promise<T>,
+    screenWatchOnly: <T = unknown>(params: OperationParams["screen.watchOnly"]) => call("screen.watchOnly", params) as Promise<T>,
+    screenEndViews: <T = unknown>(params: OperationParams["screen.endViews"]) => call("screen.endViews", params) as Promise<T>,
     screenLogs: <T = unknown>(params: OperationParams["screen.logs"]) => call("screen.logs", params) as Promise<T>,
     screenApps: <T = unknown>(params: OperationParams["screen.apps"]) => call("screen.apps", params) as Promise<T>,
     screenRelaunch: <T = unknown>(params: OperationParams["screen.relaunch"]) => call("screen.relaunch", params) as Promise<T>,

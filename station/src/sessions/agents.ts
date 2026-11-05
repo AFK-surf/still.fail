@@ -419,6 +419,13 @@ export const AgentsLive = (control: Control) =>
       hub.onOutsideChats((ws) => xshare.borrowed(ws));
       remote.setOutside({ inside: (peer, request, ws) => xshare.inside(peer, request, ws), outside: (peer, request, ws) => xshare.outside(peer, request, ws) });
 
+      const agentName = (session: string) => {
+        let title = session;
+        try {
+          title = sender(hub, session)[0];
+        } catch {}
+        return `agent: ${title}`;
+      };
       // The agents' own hands on the screens: a session's view of one shows among its people as its chat.
       const computer = new Computer({
         hub: screens,
@@ -426,13 +433,7 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         },
-        name: (session) => {
-          let title = session;
-          try {
-            title = sender(hub, session)[0];
-          } catch {}
-          return `agent: ${title}`;
-        },
+        name: agentName,
       });
       // The profiles' homes elsewhere and the machine's runtime logins are the station's own too (ops/own.ts): never
       // reached through the drive, the device tools or a search.
@@ -446,7 +447,7 @@ export const AgentsLive = (control: Control) =>
         ...screenTools(screens, () => {
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
-        }),
+        }, agentName),
         // What macOS lets still.fail Helper do here, and a grant asked of a person (docs/remote-screens.md "Grants").
         ...permissionTools(grants, () => {
           const s = place();

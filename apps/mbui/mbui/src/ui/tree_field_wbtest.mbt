@@ -1598,3 +1598,36 @@ test "words typed into a field of the tree's: the field alone told, no old view 
   step("Backspace")
   assert_eq((f.text(), f.selection()), ("ad", (1, 1)))
 }
+
+///|
+test "a mouse press in either kind of field lets go of page words picked before it, and the field can be edited" {
+  for tree in [false, true] {
+    let f = Field::new(text="draft")
+    let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+    t.check_looks(false)
+    set_view_app(fn(root) {
+      root.box(fn(page) {
+        page.height(Is(Some(40.0))) |> ignore
+        old(page, fn(c) {
+          c.mouse_drags_lists(false)
+          c.selectable(fn() { c.rich([plain("page words to pick")], size=15.0) |> ignore })
+        }).grow(Is(1.0)) |> ignore
+      }) |> ignore
+      root.box(fn(box) {
+        box.width(Is(Some(200.0))).height(Is(Some(40.0))) |> ignore
+        if tree {
+          field(box, f, font_size=15.0, max_lines=1) |> ignore
+        } else {
+          old(box, fn(c) { c.editor("field", field=f, font_size=15.0, max_lines=1) |> ignore }).grow(Is(1.0)) |> ignore
+        }
+      }) |> ignore
+    })
+    t.draw()
+    t.drag(1.0, 10.0, 180.0, 10.0)
+    assert_true(t.ctx().selected_text() != "", msg="page selected, tree=\{tree}")
+    t.tap(15.0, 50.0)
+    assert_eq(t.ctx().selected_text(), "", msg="page selection cleared, tree=\{tree}")
+    t.type_text("X")
+    assert_true(f.text().contains("X"), msg="field edited, tree=\{tree}")
+  }
+}

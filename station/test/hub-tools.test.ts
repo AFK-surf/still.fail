@@ -102,6 +102,8 @@ test("chat_leave stops a thread's messages reaching its agent until someone ment
   assert.ok((await r.call(key, "chat_leave", { to })).startsWith(`Left ${to}:`));
   r.claude.last().complete();
   await settle();
+  // The thread is told it left, in place of done.
+  assert.deepEqual(r.chat.stands.filter(([t]) => t === to).at(-1)?.[1], { kind: "left", words: null });
   // Chatter there is still recorded, but no longer handed to it.
   await r.accept({ ...say("we can take it from here", { addressed: false }), threadTs: m.threadTs });
   await settle();
@@ -118,6 +120,8 @@ test("chat_leave stops a thread's messages reaching its agent until someone ment
   await r.call(key, "chat_post", { to, text: "ok", kind: "all_done", done: "回答了他补充的问题，见 ok 这条回复" });
   r.claude.last().complete();
   await settle();
+  // Back: its end says done again.
+  assert.equal(r.chat.stands.filter(([t]) => t === to).at(-1)?.[1]?.kind, "done");
   await r.accept({ ...say("and this", { addressed: false }), threadTs: m.threadTs });
   await settle();
   assert.equal(r.claude.last().prompts.length, 3);
