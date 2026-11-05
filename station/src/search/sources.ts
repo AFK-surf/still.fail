@@ -41,6 +41,20 @@ export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null;
 
 const MESSAGE_BATCH = 256;
 
+/// The next message numbers, in order, before the end captured for this search. The two indexes are merged before
+/// fetching the messages and their edits, so a batch does not walk intervening edits. As with LAST_MESSAGE, a missing
+/// entries_letters index or old letter metadata on non-messages can make the legacy lookup walk more entries.
+const searchMessages = (range: string, limit: string) => `SELECT * FROM merged WHERE thread = ?1 AND n IN (
+  SELECT n FROM entries INDEXED BY entries_said
+    WHERE thread = ?1 AND ${range} AND kind = 'message' AND letter IS NULL
+  UNION ALL
+  SELECT n FROM entries
+    WHERE thread = ?1 AND ${range} AND kind = 'message' AND letter IS NOT NULL
+  ORDER BY n LIMIT ${limit}
+) ORDER BY n`;
+export const SEARCH_FIRST_MESSAGES = searchMessages("n <= ?2", "?3");
+export const SEARCH_NEXT_MESSAGES = searchMessages("n > ?2 AND n <= ?3", "?4");
+
 /// A thread's documents, with a yield after each batch even when none of its messages is searchable.
 function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null, onlyArchived = false): Generator<Doc | undefined> {
   const row = store.getThread(s, id);
@@ -63,8 +77,8 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
   const origins = new Map<string, string | null>();
   for (;;) {
     const messages: MessageRow[] = end === null ? [] : (after === null
-        ? all(s, "SELECT * FROM merged WHERE thread = ? AND n <= ? ORDER BY n LIMIT ?", id, end, MESSAGE_BATCH)
-        : all(s, "SELECT * FROM merged WHERE thread = ? AND n > ? AND n <= ? ORDER BY n LIMIT ?", id, after, end, MESSAGE_BATCH)).map(toMessage);
+        ? all(s, SEARCH_FIRST_MESSAGES, id, end, MESSAGE_BATCH)
+        : all(s, SEARCH_NEXT_MESSAGES, id, after, end, MESSAGE_BATCH)).map(toMessage);
     if (messages.length === 0) break;
     for (const m of messages) {
       const at = m.createdAt ?? 0;
