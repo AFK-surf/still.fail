@@ -165,6 +165,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let sighted_width : Ref[Double] = Ref(-1.0)
   // (where those in sight were told to be: told again as they move, the frame painted where they are)
   let sighted_rows : Ref[Array[(K, Double, Double)]] = Ref([])
+  let sighted_h : Ref[Double] = Ref(-1.0)
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -824,8 +825,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               sighted_last.add(k)
             }
             let rows = Array::makei(r.keys.length(), fn(q) { (r.keys[q], r.tops[q], r.heights[q]) })
-            let moved = rows != sighted_rows.val
+            let moved = rows != sighted_rows.val || h != sighted_h.val
             sighted_rows.val = rows
+            sighted_h.val = h
             if !fresh_in.is_empty() || !left.is_empty() || moved {
               let s : Sighted[K] = { came: fresh_in, left, width: l.width, rows, height: h }
               self.tree.said_after_paint(fn() { tell(s) })

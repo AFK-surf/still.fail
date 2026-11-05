@@ -199,3 +199,36 @@ test "scrolls_anchored: rows moved in sight, none come or gone: told again where
   assert_eq(last.came, [])
   assert_eq(last.rows[last.rows.length() - 1], (29, 64.0, 40.0))
 }
+
+///|
+test "scrolls_anchored: a short list's window grown or shrunk, its rows where they were: told again with its height" {
+  let told : Array[@view.Sighted[Int]] = []
+  let tall = @signals.signal(200.0, same=fn(a, b) { a == b })
+  let scroll = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(By(fn() { Some(tall.get()) })) |> ignore
+      // (from its top: two rows of 40, the rest of the window under them empty)
+      o.scrolls_anchored(scroll, fn() { [0, 1] }, est=40.0, from_end=false, ahead=0.0, sighted=fn(s) { told.push(s) }, fn(b, _) {
+        b.height(Is(Some(40.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let frame = fn(t : Double) {
+    tree.frame(390.0, 844.0, now=t) |> ignore
+    for f in tree.take_after_paint() {
+      f()
+    }
+  }
+  frame(0.0)
+  let rows = told[told.length() - 1].rows
+  tall.set(300.0)
+  frame(16.0)
+  let grown = told[told.length() - 1]
+  tall.set(150.0)
+  frame(32.0)
+  let shrunk = told[told.length() - 1]
+  assert_eq((grown.height, grown.rows, shrunk.height, shrunk.rows), (300.0, rows, 150.0, rows))
+}
