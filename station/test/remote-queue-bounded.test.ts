@@ -6,7 +6,13 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { REMOTE_QUEUE_JOBS, installRemoteQueueIndex } from "../src/store/active-jobs.ts";
-import { JOBS_RUNNING, Store } from "../src/store/store.ts";
+import { JOBS_RUNNING, Store, type JobRow } from "../src/store/store.ts";
+
+const queueFields = (j: JobRow) => ({
+  id: j.id, sessionKey: j.sessionKey, startedAt: j.startedAt,
+  ...(j.queued === true ? { queued: true } : {}), ...(j.screen === true ? { screen: true } : {}),
+  ...(j.small === true ? { small: true } : {}),
+});
 
 test("a remote task's queue position does not read unrelated running jobs", async () => {
   const reads: { all: number; queue: number }[] = [];
@@ -59,7 +65,7 @@ for (const recursive of [false, true]) test(`remote queue lookup follows old wri
     const oldReplace = db.prepare(`INSERT OR REPLACE INTO jobs
       (id, session_key, name, command, cwd, token, state, started_at, log, watch) VALUES (?, ?, ?, 'true', '/', ?, ?, ?, '/dev/null', ?)`);
     installRemoteQueueIndex(db);
-    const compare = () => assert.deepEqual(store.remoteQueueJobs(), store.jobsRunning().filter((job) => job.id.startsWith("remote_")));
+    const compare = () => assert.deepEqual(store.remoteQueueJobs(), store.jobsRunning().filter((job) => job.id.startsWith("remote_")).map(queueFields));
     compare();
     oldWrite.run("running", 1, "moved", "remote_old");
     oldWrite.run("running", 0, "another", "remote_a");
@@ -93,7 +99,7 @@ for (const recursive of [false, true]) test(`remote queue lookup agrees with cha
     const ids = ["remote_", "remote_a", "remote_b", "remote_雪", "remote`other", "local_a", "local_b"];
     let seed = 0x3571;
     const rand = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
-    const check = () => assert.deepEqual(store.remoteQueueJobs(), store.jobsRunning().filter((job) => job.id.startsWith("remote_")));
+    const check = () => assert.deepEqual(store.remoteQueueJobs(), store.jobsRunning().filter((job) => job.id.startsWith("remote_")).map(queueFields));
     for (let i = 0; i < 400; i++) {
       const id = ids[rand(ids.length)]!, token = `token-${rand(5)}`, state = rand(3) ? "running" : "exited";
       const watch = rand(3) - 1, at = rand(3), session = `s${rand(4)}`, queued = rand(3), screen = rand(3), small = rand(3);

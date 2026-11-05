@@ -38,10 +38,10 @@ export const OTHER_JOBS_AT_INSTALL = "SELECT session_key, id FROM jobs INDEXED B
 /// The remote queue's running and waiting jobs. Both lookups seek the remote id prefix, including watched tasks;
 /// rowid preserves the former running-jobs query's order when several jobs have the same start time.
 export const REMOTE_QUEUE_JOBS = `SELECT * FROM (
-  SELECT j.*, j.rowid AS queue_rowid FROM active_watch_jobs w
+  SELECT j.id, j.session_key, j.started_at, j.queued, j.screen, j.small, j.rowid AS queue_rowid FROM active_watch_jobs w
     CROSS JOIN jobs j ON j.id = w.job WHERE w.job >= 'remote_' AND w.job < 'remote\`'
   UNION ALL
-  SELECT j.*, j.rowid AS queue_rowid FROM active_other_jobs a INDEXED BY active_other_remote_jobs
+  SELECT j.id, j.session_key, j.started_at, j.queued, j.screen, j.small, j.rowid AS queue_rowid FROM active_other_jobs a INDEXED BY active_other_remote_jobs
     CROSS JOIN jobs j ON j.id = a.job WHERE a.job >= 'remote_' AND a.job < 'remote\`'
 ) ORDER BY started_at DESC, queue_rowid`;
 

@@ -2588,8 +2588,12 @@ export class Store {
   }
 
   /// The remote queue's running jobs, in the same order, without unrelated running jobs.
-  remoteQueueJobs(): JobRow[] {
-    return this.#all(REMOTE_QUEUE_JOBS).map(toJob);
+  remoteQueueJobs(): Pick<JobRow, "id" | "sessionKey" | "startedAt" | "queued" | "screen" | "small">[] {
+    return this.#all(REMOTE_QUEUE_JOBS).map((r) => ({
+      id: r.id, sessionKey: r.session_key, startedAt: r.started_at,
+      ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
+      ...(r.small === 1 ? { small: true } : {}),
+    }));
   }
 
   /// The running commands and watches that can keep the machine awake, without unrelated services on ports.
