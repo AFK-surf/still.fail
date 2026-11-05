@@ -3037,6 +3037,8 @@ pub fn old(
       held_box: -1,
     })
     n.owns(fn() {
+      // (its fields let go with it, at this moment: island_fields_let_go)
+      island_fields_let_go(id)
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
           let o = old_islands.remove(i)
@@ -3961,6 +3963,10 @@ fn view_key(code : Int, mods : Int) -> Bool {
   // as any focus's: the layers', what holds it, the root's)
   let field = c.editors.contains(focus)
   if field && field_takes(code, mods) {
+    // (and told those that said it goes on in a field too: View::keys_in_fields, ⌥↑ to the chat before)
+    if tree.key_in_field(code, mods, view_moment()) {
+      h_frame_owed()
+    }
     return false
   }
   // (the old frame's layers take the keys; where the focus is on what of the tree is over all of them (View::over_all),

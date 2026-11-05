@@ -142,3 +142,76 @@ test "a layer said to give the focus back to what opened it: closed, the focus o
   t.draw()
   assert_eq((opened, closed, said()), ("层里的", "打开的", "原来的"))
 }
+
+///|
+test "an old view's field with the focus, its old view let go: a field of nothing, the focus let go of, a key to the tree from its root" {
+  let field = Field::new()
+  let shown = @signals.signal(true)
+  let took : Array[Int] = []
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.on_key(fn(k) {
+      took.push(k.code)
+      true
+    })
+    |> ignore
+    root.show(fn() { shown.get() }, fn(b) {
+      old(b, fn(c) { c.editor("gone/field", placeholder="旧字段", field~) |> ignore }).height(Is(Some(60.0))) |> ignore
+    })
+  })
+  t.draw()
+  t.tap_text("旧字段")
+  t.draw()
+  let field_id = t.ctx().focus
+  shown.set(false)
+  t.draw()
+  // (its field no field of anything now: nothing has the focus, no field's place told for the keyboard or its caret)
+  let after = (t.ctx().focus, t.ctx().editors.contains(field_id), focused_field_in() is None)
+  t.key(key_code_up, mods=mod_alt)
+  assert_eq((after, took), ((0, false, true), [key_code_up]))
+}
+
+///|
+test "a key a field takes, said to go on in a field: told the tree's node that said so as well; one not said, the field's alone" {
+  let field = Field::new()
+  let took : Array[Int] = []
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root
+    .keys_in_fields([(key_code_up, mod_alt)])
+    .on_key(fn(k) {
+      took.push(k.code)
+      true
+    })
+    |> ignore
+    old(root, fn(c) { c.editor("in/field", placeholder="字段", field~) |> ignore }).height(Is(Some(60.0))) |> ignore
+  })
+  t.draw()
+  t.tap_text("字段")
+  t.draw()
+  t.key(key_code_up, mods=mod_alt)
+  t.key(key_code_down, mods=mod_alt)
+  assert_eq(took, [key_code_up])
+}
+
+///|
+test "an old view's field with the focus: its old view let go, the focus let go of at that moment, before any frame" {
+  let field = Field::new()
+  let shown = @signals.signal(true)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(b) {
+      old(b, fn(c) { c.editor("now/field", placeholder="旧字段", field~) |> ignore }).height(Is(Some(60.0))) |> ignore
+    })
+  })
+  t.draw()
+  t.tap_text("旧字段")
+  t.draw()
+  let field_id = t.ctx().focus
+  // (let go as a change ends, no frame drawn after it)
+  shown.set(false)
+  assert_eq((field_id != 0, t.ctx().focus, t.ctx().editors.contains(field_id)), (true, 0, false))
+}
