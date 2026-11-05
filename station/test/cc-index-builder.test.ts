@@ -11,6 +11,8 @@ import { Store } from "../src/store/store.ts";
 
 function oldSessions(store: Store): void {
   const db = store.db;
+  for (const key of ["long", "short"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+    workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
   const thread = db.prepare("INSERT INTO threads(surface,channel,thread_ts,created_at) VALUES('slack:one','C',?,1)");
   const member = db.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(?,?,'slack',1)");
   db.exec("BEGIN");
@@ -122,4 +124,19 @@ test("a stopped shared worker resumes latest conversation preparation", async ()
     assert.ok(existsSync(marker));
     assert.equal(latestThreadReady(store.db, "short"), true);
   } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a session removed before handover does not regain latest conversation state", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "latest-thread-removed-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store); installLatestThreadIndex(store.db);
+    const ready = builder.readyLatest(["short"]);
+    store.db.prepare("DELETE FROM sessions WHERE key='short'").run();
+    previous.resolve(); await ready;
+    assert.equal(latestThreadReady(store.db, "short"), false);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM latest_thread_scopes WHERE session='short'").get()?.n, 0);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
