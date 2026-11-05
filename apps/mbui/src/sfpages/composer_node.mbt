@@ -58,6 +58,9 @@ pub fn composer_node(
   let root = parent.box(fn(root) {
     let w = @sfbase.writing_in(root, src, draft)
     w_at.val = Some(w)
+    // (the composer on this draft now, as the old one says it as its draft changes: a composer made after it (the home's,
+    // gone back to) finds its draft another, the cursor in it with keyboard and mouse: composer.mbt's entry rule)
+    composing.draft = "\u{1}" + @signals.untracked(spec).session
     // A chat replacing an existing composer starts with the cursor it will take on a keyboard-driven screen.
     if origin is Some(_) && active() && !spec().locked && !@sf.soft_keyboard() && !@ui.current().field_focused() {
       w.field.focus()
