@@ -41,7 +41,7 @@ const trackedInsert = `EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thre
   OR EXISTS (SELECT 1 FROM entries e JOIN widget_source_scopes s ON s.thread=e.thread WHERE e.rowid=NEW.rowid)
   OR EXISTS (SELECT 1 FROM widget_source_changed)`;
 const trackedUpdate = `(${trackedInsert}) OR EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=OLD.thread)`;
-const stage = (updating: boolean) => `DELETE FROM widget_source_changed;
+const stage = (updating: boolean) => `DELETE FROM widget_source_changed WHERE thread IS NOT NULL;
   INSERT INTO widget_source_changed (thread, n, existed, attachments, at, dirty)
     SELECT k.thread, k.n, m.n IS NOT NULL, m.attachments, m.created_at, 0
     FROM (${candidates("NEW")} UNION ${conflicts}${updating ? ` UNION ${candidates("OLD")}` : ""}) k
@@ -71,7 +71,7 @@ const insertInvalid = (messages: string) => `INSERT INTO widget_source_invalid (
 const reconcile = `UPDATE widget_source_changed SET dirty=1 WHERE (thread,n) IN (${changes});
   DELETE FROM widget_source_rows WHERE (thread,n) IN (${affected});
   DELETE FROM widget_source_invalid WHERE (thread,n) IN (${affected});
-  ${insertRows(affected)} ${insertInvalid(affected)} DELETE FROM widget_source_changed;`;
+  ${insertRows(affected)} ${insertInvalid(affected)} DELETE FROM widget_source_changed WHERE thread IS NOT NULL;`;
 const oldMessages = `SELECT OLD.thread AS thread, OLD.n AS n WHERE OLD.kind = 'message'
   UNION SELECT OLD.thread, OLD.target WHERE OLD.target IS NOT NULL`;
 const newMessage = "SELECT NEW.thread AS thread, NEW.n AS n";
