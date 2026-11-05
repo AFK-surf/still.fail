@@ -216,6 +216,10 @@ export class Secrets {
   readonly #postingSaves = new Map<string, Request>();
   /// Saves whose fields have gone and which have no sealed copy, by workspace; built once after the previous process exits.
   readonly #lostSaves = new Map<string, { ids: Set<string>; ready: boolean }>();
+  /// The same lost ids in reverse, so taking a carried save does not traverse unrelated workspaces.
+  readonly #lostScopes = new Map<string, Set<string>>();
+  /// An older, unscoped carry can restore a lost save before its workspace has otherwise been recovered.
+  readonly #carriedLostScopes = new Map<string, Set<string>>();
   readonly #preparingPending = new Map<string, Promise<void>>();
   /// Carried saves to reconcile after the old process can no longer write their requests.
   readonly #carriedSaves = new Set<string>();
@@ -289,8 +293,32 @@ export class Secrets {
     this.#savesByOwner.set(ws, owners);
   }
 
-  #forgetSave(id: string) {
+  #markLost(ws: string, id: string, lost: boolean) {
+    const state = this.#lostSaves.get(ws);
+    if (state === undefined) return;
+    if (lost) {
+      state.ids.add(id);
+      const scopes = this.#lostScopes.get(id) ?? new Set<string>();
+      scopes.add(ws);
+      this.#lostScopes.set(id, scopes);
+    } else {
+      state.ids.delete(id);
+      const scopes = this.#lostScopes.get(id);
+      scopes?.delete(ws);
+      if (scopes?.size === 0) this.#lostScopes.delete(id);
+    }
+  }
+
+  #forgetSave(id: string, settledWs?: string) {
+    const recheck = new Set((this.#saveScopes.get(id) ?? []).map((s) => s.ws));
+    for (const ws of this.#carriedLostScopes.get(id) ?? []) recheck.add(ws);
     this.#unsaved.delete(id);
+    for (const ws of recheck) {
+      if (!this.#lostSaves.has(ws)) continue;
+      const kept = ws === settledWs ? null : this.#kept(ws, id);
+      this.#markLost(ws, id, kept?.request.status === "pending" && !this.#recoverable(kept.request));
+    }
+    this.#carriedLostScopes.delete(id);
     this.#unscopedSaves.delete(id);
     this.#carriedSaves.delete(id);
     for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
@@ -317,7 +345,12 @@ export class Secrets {
     for (const [id, fields, scopes] of c.unsaved ?? []) {
       if (this.#unsaved.has(id)) continue;
       this.#unsaved.set(id, fields);
-      for (const waiting of this.#lostSaves.values()) waiting.ids.delete(id);
+      const wasLost = this.#lostScopes.get(id);
+      if (wasLost !== undefined) {
+        const carried = this.#carriedLostScopes.get(id) ?? new Set<string>();
+        for (const ws of [...wasLost]) { carried.add(ws); this.#markLost(ws, id, false); }
+        this.#carriedLostScopes.set(id, carried);
+      }
       for (const scope of scopes ?? []) if (typeof scope.ws === "string" && typeof scope.owner === "string") this.#scopeSave(id, scope.ws, scope.owner);
       if (!this.#saveScopes.has(id)) this.#unscopedSaves.add(id);
       this.#carriedSaves.add(id);
@@ -426,10 +459,7 @@ export class Secrets {
       .prepare("INSERT INTO vault_requests (ws, id, session, status, body, thread, card_ts) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET status = excluded.status, body = excluded.body, thread = excluded.thread, card_ts = excluded.card_ts")
       .run(r.ws, r.id, r.session, r.status, JSON.stringify(r), k.thread, k.cardTs);
     const lost = this.#lostSaves.get(r.ws);
-    if (lost !== undefined) {
-      if (r.status === "pending" && !this.#recoverable(r)) lost.ids.add(r.id);
-      else lost.ids.delete(r.id);
-    }
+    if (lost !== undefined) this.#markLost(r.ws, r.id, r.status === "pending" && !this.#recoverable(r));
   }
 
   #audit(r: Request, kind: string, detail: string) {
@@ -517,8 +547,7 @@ export class Secrets {
             : this.#d.db.prepare(PENDING_SEED).all(ws, after, 32)) as { id: string; body: string }[];
           for (const row of rows) {
             const request = JSON.parse(row.body) as Request;
-            if (!this.#recoverable(request)) state.ids.add(row.id);
-            else state.ids.delete(row.id);
+            this.#markLost(ws, row.id, !this.#recoverable(request));
           }
           if (rows.length < 32) break;
           after = rows.at(-1)!.id;
@@ -526,7 +555,10 @@ export class Secrets {
         }
         state.ready = true;
       } catch (error) {
-        if (this.#lostSaves.get(ws) === state) this.#lostSaves.delete(ws);
+        if (this.#lostSaves.get(ws) === state) {
+          for (const id of state.ids) this.#markLost(ws, id, false);
+          this.#lostSaves.delete(ws);
+        }
         throw error;
       }
     })();
@@ -556,7 +588,7 @@ export class Secrets {
       if (this.#d.coming?.() !== true) for (const id of lost!.ids) {
         const kept = this.#kept(ws, id);
         if (kept?.request.status === "pending") selected.set(id, JSON.stringify(kept.request));
-        else lost!.ids.delete(id);
+        else this.#markLost(ws, id, false);
       }
       rows = [...selected].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, body]) => ({ body }));
     }
@@ -1106,7 +1138,7 @@ export class Secrets {
     k.request.status = status;
     if (into !== undefined) k.request.vault = into;
     this.#save(k);
-    this.#forgetSave(r.id);
+    this.#forgetSave(r.id, r.ws);
     if (status !== "granted") this.keeper.drop(r.id);
     if (k.thread !== null && k.cardTs !== null) {
       this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);
