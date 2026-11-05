@@ -26,7 +26,7 @@ test "a chat keeps its editor through notices and copy choices, then sends once 
     built.val += 1
     root.lies_along(Is(End)) |> ignore
     made.val = Some(chat_composer_node(root, src, r, fn() { Some(state.get()) }, fn() { 12.0 }, fn() { 900.0 },
-      fn() { 12.0 }, fn() { composer_alone }, fn(row) { sent.push(row) }))
+      fn(_) { 12.0 }, fn() { composer_alone }, fn(row) { sent.push(row) }))
   })
   t.draw()
   let n = made.val.unwrap()

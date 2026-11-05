@@ -66,7 +66,7 @@ pub fn changelog_news_node(@view.View, @sfbase.Source, @sf.TipLayer) -> Unit
 
 pub fn changelog_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
-pub fn chat_composer_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, () -> Double, () -> ComposerPlace, (String) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ChatComposerNode
+pub fn chat_composer_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, (Double) -> Double, () -> ComposerPlace, (String) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View, place_in? : (Double) -> ComposerPlace) -> ChatComposerNode
 
 pub fn chat_extra_items(@sfbase.Source, @sfbase.ChatRef, @json.Json?) -> Array[@sf.MenuItem?]
 
@@ -128,7 +128,7 @@ pub fn composer_foot_room(@ui.Ctx, String, Double, let_go~ : Bool) -> Double
 
 pub fn composer_geometry(Double, FixedArray[Double]?) -> (Double, Double, ComposerPlace)
 
-pub fn composer_node(@view.View, @sfbase.Source, String, () -> ComposerSpec, (@sfbase.Writing) -> Unit, () -> Double, (@view.View, @sfbase.Writing, () -> Double, (@view.View) -> Unit) -> Unit, place? : () -> ComposerPlace, toolbar? : (@view.View) -> Unit, tail? : (@view.View) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ComposerNode
+pub fn composer_node(@view.View, @sfbase.Source, String, () -> ComposerSpec, (@sfbase.Writing) -> Unit, () -> Double, (@view.View, @sfbase.Writing, () -> Double, (@view.View) -> Unit) -> Unit, place? : () -> ComposerPlace, place_in? : (@view.View, (Double) -> ComposerPlace), toolbar? : (@view.View) -> Unit, tail? : (@view.View) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ComposerNode
 
 pub fn composer_on_page(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
 

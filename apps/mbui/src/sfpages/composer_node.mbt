@@ -24,6 +24,7 @@ pub fn composer_node(
   height : () -> Double,
   extras : (@view.View, Writing, () -> Double, (@view.View) -> Unit) -> Unit,
   place? : () -> ComposerPlace = fn() { composer_alone },
+  place_in? : (@view.View, (Double) -> ComposerPlace),
   toolbar? : (@view.View) -> Unit = fn(_) {  },
   tail? : (@view.View) -> Unit = fn(_) {  },
   tips? : @sf.TipLayer,
@@ -161,6 +162,7 @@ pub fn composer_node(
       ground=fn(read) { ground.val = read },
       from~, arrival=if flight_carried(draft) { @motion.tween(flight_desk_ms, ease=Flight) } else { @motion.move() },
       positions=fn(read) { positions.val = read },
+      place_in?=place_in,
     )
     cap_at.val = Some(cap)
     cap.min_height(By(fn() { if held_box() > 0.0 { Some(held_box()) } else { None } }))

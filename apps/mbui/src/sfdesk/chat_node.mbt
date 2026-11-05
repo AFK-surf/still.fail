@@ -145,11 +145,13 @@ fn chat_talk_node(
       view,
       fn() { @sfpages.composer_side_in(radii()) },
       height,
-      fn() { geometry().1 },
+      fn(pane) { @sfpages.composer_geometry(pane, radii()).1 },
       fn() { geometry().2 },
       fn(_key) { (latest.val)() },
       active=fn() { app.nav.drawn_stay().0 == k },
       drops=talk,
+      // (its shape as the talk it stands in is laid out, in the same layout: composer_box_node's)
+      place_in=fn(pane) { @sfpages.composer_geometry(pane, radii()).2 },
     )
     room.set(Some(made.room))
     f.owns(fn() { room.set(None) }) |> ignore
