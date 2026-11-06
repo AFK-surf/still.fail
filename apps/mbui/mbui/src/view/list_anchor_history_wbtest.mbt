@@ -16,6 +16,20 @@ priv struct HistRun {
 }
 
 ///|
+/// The list flung: laid out from its end or its top, how many rows, the wheel that brings it where it is flung from
+/// (none: the default, `up` toward its start), room kept under its last row, and where the hand presses.
+priv struct HistShape {
+  from_end : Bool
+  n : Int
+  wheel : Double?
+  foot_room : Double
+  press_y : Double
+}
+
+///|
+let hist_long : HistShape = { from_end: true, n: 400, wheel: None, foot_room: 0.0, press_y: 90.0 }
+
+///|
 priv struct HistSeen {
   past : Double
   hit : Int?
@@ -49,9 +63,9 @@ fn hist_look(
   let told : Array[String] = []
   faults_stop.val = false
   fault_told.val = Some(fn(said) { told.push("fault: " + said) })
-  let keys = @signals.signal(Array::makei(400, fn(i) { i }))
+  let keys = @signals.signal(Array::makei(n, fn(i) { i }))
   let heights : Map[Int, @signals.Signal[Double]] = {}
-  for k in 0..<401 {
+  for k in 0..<(n + 1) {
     heights[k] = @signals.signal(tall(k))
   }
   let wide = @signals.signal(300.0)
@@ -78,7 +92,7 @@ fn hist_look(
     root.box(fn(o) {
       o.width(By(fn() { Some(wide.get()) })).height(Is(Some(100.0))) |> ignore
       list.val = Some(o)
-      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead=0.0, rooms~, fn(b, k) {
+      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead=0.0, from_end=shape.from_end, foot_room=fn() { shape.foot_room }, rooms~, fn(b, k) {
         made[k] = b
         opened.val += 1
         let h = heights[k]
@@ -105,7 +119,8 @@ fn hist_look(
   }
   tree.lists_feel(fn() { (ListFeel::Android, 3.0) })
   tree.frame(390.0, 844.0, now=0.0) |> ignore
-  if !tree.wheel_at(150.0, 50.0, 0.0, -up, 0, 10.0) {
+  let wheel = shape.wheel.unwrap_or(-up)
+  if wheel != 0.0 && !tree.wheel_at(150.0, 50.0, 0.0, wheel, 0, 10.0) {
     told.push("the wheel not taken")
   }
   // (the same frames before the press in each: the wheel's way drawn at 60 a second)
@@ -129,20 +144,20 @@ fn hist_look(
   }
   // (the hand: brought to its moment, no frame drawn; found on a row, taken by the list, each step of it taken)
   tree.bring_to(1500.0)
-  let grabbed = row_at(150.0, 90.0)
+  let grabbed = row_at(150.0, py)
   if room_below {
     room_key.val = grabbed.map_or(-1, fn(g) { g + 3 })
   }
   if grabbed is None {
     told.push("the press at (150, 90) finds no row")
   }
-  match tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -by) {
+  match tree.claimer_of(tree.claimers_at(150.0, py), 0.0, -by) {
     Some(id) => {
       let steps = [
-        ("down", Down, 90.0, 1500.0),
-        ("moved", Moved, 90.0 - by / 2.0, 1505.0),
-        ("moved", Moved, 90.0 - by, 1510.0),
-        ("up", Up, 90.0 - by, 1510.0),
+        ("down", Down, py, 1500.0),
+        ("moved", Moved, py - by / 2.0, 1505.0),
+        ("moved", Moved, py - by, 1510.0),
+        ("up", Up, py - by, 1510.0),
       ]
       for s in steps {
         moment(s.3, s.0)
@@ -166,7 +181,7 @@ fn hist_look(
         0 => keys.set(keys.get()[0:keys.get().length() - 1].to_array())
         1 => {
           let ks = keys.get().copy()
-          ks.push(400)
+          ks.push(n)
           keys.set(ks)
         }
         2 => heights[396].set(tall(396) + 100.0)
@@ -326,10 +341,11 @@ fn hist_compare(
   regrab? : Bool = false,
   rest_by? : Double = 1.0e9,
   room_below? : Bool = false,
+  shape? : HistShape = hist_long,
 ) -> Array[String] {
   let wrong = []
   for at in moments {
-    let look = fn(run) { hist_look(run, up, by, tall, change, change_at, at, regrab~, rest_by~, room_below~) }
+    let look = fn(run) { hist_look(run, up, by, tall, change, change_at, at, regrab~, rest_by~, room_below~, shape~) }
     let base = look(hist_runs[0])
     let tail = base.rows[if base.rows.length() > 2 { base.rows.length() - 2 } else { 0 }:].to_array()
     println("HIST \{what} at \{at}, 60 a second: rests at \{base.rests}, past its end \{base.past}, a press finds \{base.hit}, grabbed \{base.grabbed}, last rows \{tail}, living \{base.live}, opened \{base.opened} dropped \{base.dropped} laid \{base.laid}")
@@ -418,6 +434,47 @@ test "scrolls_anchored flung to its foot, pressed again after its glide and its 
   let wrong = []
   wrong.append(hist_compare("pressed again", 2500.0, 140.0, hist_tall, -1, 0.0, [4000.0], regrab=true, rest_by=4000.0))
   wrong.append(hist_compare("pressed again, a row 100 taller at 1545", 2500.0, 140.0, hist_tall, 2, 1545.0, [4000.0], regrab=true, rest_by=4000.0))
+  hist_say(wrong)
+  assert_true(wrong.is_empty(), msg="\{wrong.length()}:\n" + wrong.iter().take(8).collect().join("\n"))
+}
+
+///|
+/// All of a list of rows of many heights, as tall as they are.
+fn hist_all(n : Int, tall : (Int) -> Double) -> Double {
+  let mut s = 0.0
+  for k in 0..<n {
+    s = s + tall(k)
+  }
+  s
+}
+
+///|
+test "scrolls_anchored laid out from its top or its end, long or short, one row, room under its last row: flung to either end by the hand, the same whatever frames are drawn" {
+  let moments = [1530.0, 1600.0, 1700.0, 1850.0, 2100.0, 2600.0, 4000.0]
+  let forty = fn(_k : Int) { 40.0 }
+  let wrong = []
+  let top_long = { from_end: false, n: 400, wheel: Some(hist_all(400, hist_tall) - 100.0 - 2500.0), foot_room: 0.0, press_y: 90.0 }
+  wrong.append(hist_compare("from its top, to its foot", 0.0, 140.0, hist_tall, -1, 0.0, moments, rest_by=4000.0, shape=top_long))
+  wrong.append(hist_compare("from its top, to its top", 0.0, -140.0, hist_tall, -1, 0.0, moments, rest_by=4000.0, shape={ ..top_long, wheel: Some(2500.0), press_y: 10.0 }))
+  wrong.append(hist_compare("from its top, a row gone at its foot on the way", 0.0, 140.0, hist_tall, 0, 1545.0, moments, rest_by=4000.0, shape=top_long))
+  for from_end in [false, true] {
+    for n in [1, 2] {
+      let y = if from_end { 80.0 } else { 20.0 }
+      for by in [140.0, -140.0] {
+        wrong.append(hist_compare("from its \{if from_end { "end" } else { "top" }}, \{n} rows of 40, flung \{by}", 0.0, by, forty, -1, 0.0, moments, rest_by=4000.0, shape={ from_end, n, wheel: Some(0.0), foot_room: 0.0, press_y: y }))
+      }
+    }
+  }
+  wrong.append(hist_compare("room of 56 under its last row, to its foot", 2500.0, 140.0, hist_tall, -1, 0.0, moments, rest_by=4000.0, shape={ ..hist_long, foot_room: 56.0 }))
+  hist_say(wrong)
+  assert_true(wrong.is_empty(), msg="\{wrong.length()}:\n" + wrong.iter().take(8).collect().join("\n"))
+}
+
+///|
+test "scrolls_anchored flung toward a foot it counts further than it is (its last rows short): met before a press that comes after its going back is over, no frame drawn since it was let go; the same whatever frames were drawn" {
+  let short_tail = fn(k : Int) { if k >= 380 { 20.0 } else { hist_tall(k) } }
+  let wrong = []
+  wrong.append(hist_compare("its last rows short, pressed again", 2500.0, 140.0, short_tail, -1, 0.0, [1700.0, 1900.0, 2100.0, 2400.0, 4000.0], regrab=true, rest_by=4000.0))
   hist_say(wrong)
   assert_true(wrong.is_empty(), msg="\{wrong.length()}:\n" + wrong.iter().take(8).collect().join("\n"))
 }
