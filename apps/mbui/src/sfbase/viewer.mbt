@@ -2599,6 +2599,8 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   // flying (from the thumbnail's box to the picture's place, or back from where the player last drew it: the window's
   // tree's, viewer_tree.mbt's viewer_player, its bars coming with it there): the player not up yet, drawing no ground
   // of its own, its Esc not read: the viewer's, as it is over an image in flight
+  // (its landing told: it flies no more as its thumbnail is shown again, image_ends; drawn so the frame it lands in)
+  pv_hidden.get() |> ignore
   let flying = v.flies && (!v.closing || !v.leaving_grab)
   if flying {
     v.shut_on_escape(c)

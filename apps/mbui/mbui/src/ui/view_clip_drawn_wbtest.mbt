@@ -130,3 +130,59 @@ test "a node's clip as painted rounds its corners as its own are; square where i
   t.frame()
   assert_eq(corners(), (0.0, 0.0, 0.0, 0.0))
 }
+
+///|
+test "a node's clip as painted, round: what its round corners cut away pressed nowhere, as an old view's round clip; within them pressed; a still pointer worked out again as its corners alone are said again" {
+  let radius = @signals.signal(8.0, same=fn(a, b) { a == b })
+  let pressed = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0, platform=0)
+  let key : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(p) { p.height(Is(Some(200.0))) |> ignore }) |> ignore
+    root.box(fn(b) {
+      b
+      .width(Is(Some(200.0)))
+      .height(Is(Some(56.0)))
+      .radius(By(fn() { radius.get() }))
+      .clip_drawn(Is(Some((10.0, 5.0, 50.0, 20.0))))
+      |> ignore
+      b.box(fn(k) {
+        key.val = Some(k)
+        k
+        .width(Is(Some(200.0)))
+        .height(Is(Some(56.0)))
+        .ground(Is(0xFFFFFFFFL))
+        .presses(Is(true))
+        .on_press(fn() { pressed.val += 1 })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame()
+  // (in its rect's corner, where its round corner cuts it away: not)
+  t.tap(10.5, 205.5)
+  t.frame()
+  assert_eq(pressed.val, 0)
+  // (within its round corners: pressed)
+  t.tap(16.0, 211.0)
+  t.frame()
+  assert_eq(pressed.val, 1)
+  // (the pointer still at the corner: over it once its corners are square, not once they are round again)
+  let k = key.val.unwrap()
+  t.move(10.5, 205.5)
+  t.frame()
+  assert_false(k.pointed())
+  t.record_host()
+  radius.set(0.0)
+  t.frame_at(t.next_frame_time())
+  assert_true(k.pointed(), msg="over it as its clip's corners are square")
+  t.tap_once(10.5, 205.5)
+  assert_eq(pressed.val, 2)
+  t.move(10.5, 205.5)
+  radius.set(8.0)
+  t.frame_at(t.next_frame_time())
+  assert_false(k.pointed(), msg="not as they are round")
+}
