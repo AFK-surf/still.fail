@@ -205,14 +205,15 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
     "device" if code != "" => {
       login_said(c, @sf.t("web-main.logins.device", args=[("domain", text(l, "domain"))]))
       login_code(c, core, code)
+      let page = match text(l, "codeUrl") {
+        "" => url
+        u => u
+      }
       // one press: the code copied first, then its page; the code stays on show for a clipboard that refused it
-      if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=elsewhere) {
+      if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=login_page_ways(page, elsewhere)) {
         logins_here.pressed[id] = true
         c.copy_text(code)
-        login_open(core, match text(l, "codeUrl") {
-          "" => url
-          u => u
-        })
+        login_open(core, page)
       }
     }
     // this device cannot take the browser's callback (a web page), or its port was taken just now: the station's
@@ -263,7 +264,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       if domain != "" {
         login_said(c, domain)
       }
-      if login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=elsewhere) {
+      if login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=login_page_ways(url, elsewhere)) {
         logins_here.pressed[id] = true
         login_open(core, url)
       }
@@ -295,6 +296,12 @@ fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (
       },
     ),
   )
+}
+
+///|
+/// What a ⋯ beside a login page's button offers: its address copied (for a browser elsewhere), then `elsewhere`.
+fn login_page_ways(url : String, elsewhere : Array[(String, () -> Unit)]) -> Array[(String, () -> Unit)] {
+  [(@sf.t("common.link.copy"), fn() { copy_link(@ui.current(), url) }), ..elsewhere]
 }
 
 ///|
@@ -390,7 +397,7 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
     Some(way) => [way]
     None => []
   }
-  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=elsewhere, last=false) {
+  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=login_page_ways(text(l, "url"), elsewhere), last=false) {
     logins_here.pressed[id] = true
     login_open(core, text(l, "url"))
   }

@@ -999,6 +999,8 @@ let en : Map[String, String] = {
   "common.language.en": "English",
   "common.language.system": "System",
   "common.language.zh": "中文",
+  "common.link.copied": "Link copied",
+  "common.link.copy": "Copy link",
   "common.login.backToStation": "Back to {station}'s browser",
   "common.login.openInStation": "Open in {station}'s browser",
   "common.login.otherWays": "Other ways",

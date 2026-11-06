@@ -440,17 +440,20 @@ pub fn login_steps(
 ) -> Unit {
   let state = text(job, "state")
   let url = text(job, "url")
-  // the same page in the station's browser (回到 … while its tab is open), in a ⋯ after the page's button
-  let station_more = fn() {
-    match in_station {
-      Some((name, busy, open)) if flag(job, "browser") => {
-        let label = @sf.t(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
-        let mkey = "profile-station/" + key
-        if @sf.icon_button(c, "more", key=mkey, label=@sf.t("common.login.otherWays"), disabled=busy) {
-          @sf.menu([Some(@sf.menu_item_of(label, fn() { open(label) }))], from=Of(c.id(mkey)))
+  // in a ⋯ after the page's button: its address copied (for a browser elsewhere), and where the station has one, the
+  // same page in the station's browser (回到 … while its tab is open)
+  let page_more = fn() {
+    let mkey = "profile-more/" + key
+    if @sf.icon_button(c, "more", key=mkey, label=@sf.t("common.login.otherWays")) {
+      let items = [Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { copy_link(@ui.current(), url) }))]
+      match in_station {
+        Some((name, busy, open)) if flag(job, "browser") => {
+          let label = @sf.t(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
+          items.push(Some(@sf.menu_item_of(label, disabled=busy, fn() { open(label) })))
         }
+        _ => ()
       }
-      _ => ()
+      @sf.menu(items, from=Of(c.id(mkey)))
     }
   }
   let waiting = fn(words : String) {
@@ -476,7 +479,7 @@ pub fn login_steps(
           if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external") {
             (core.open_link)(url)
           }
-          station_more()
+          page_more()
         })
         |> ignore
       })
@@ -544,7 +547,7 @@ pub fn login_steps(
             }
             (core.open_link)(url)
           }
-          station_more()
+          page_more()
         })
         |> ignore
         c.text(

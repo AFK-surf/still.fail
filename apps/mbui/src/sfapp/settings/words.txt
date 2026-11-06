@@ -968,6 +968,8 @@ common.language
 common.language.en
 common.language.system
 common.language.zh
+common.link.copied
+common.link.copy
 common.login.backToStation
 common.login.openInStation
 common.login.otherWays
