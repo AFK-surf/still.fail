@@ -6246,7 +6246,7 @@ export interface PrefsView {
 	stationUpdatesDismissed?: Record<string, string>;
 	/**
 	 * What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
-	 * theirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead.
+	 * theirs that went wrong), all (those and the unread; none: this). `badgeKinds`, when kept, says it instead.
 	 */
 	badge?: string;
 	/** What the app's badge counts, kind by kind (the notifications page); none: as `badge` says. */

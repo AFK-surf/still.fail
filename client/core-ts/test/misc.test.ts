@@ -225,13 +225,15 @@ test("only_a_row_its_person_takes_part_in_wants_them", () => {
 
 test("the_badge_counts_as_the_prefs_say", () => {
   const c = new Counts(1, 2, 4);
-  assert.equal(badgeOf({}, c), 3);
-  assert.equal(badgeOf(null, c), 3);
+  assert.equal(badgeOf({}, c), 7);
+  assert.equal(badgeOf(null, c), 7);
   assert.equal(badgeOf({ badge: "decisions" }, c), 2);
+  assert.equal(badgeOf({ badge: "attention" }, c), 3);
   assert.equal(badgeOf({ badge: "all" }, c), 7);
   // Kind by kind (the notifications page): what is not said as `badge` says; someone else's unread apart (1 of the 4).
   assert.equal(badgeOf({ badgeKinds: { wait: true, failed: false, done: false, message: false } }, c, 1), 2);
-  assert.equal(badgeOf({ badgeKinds: { message: true } }, c, 1), 4, "the cards, what went wrong, someone else's unread");
+  assert.equal(badgeOf({ badge: "attention", badgeKinds: { message: true } }, c, 1), 4, "the cards, what went wrong, someone else's unread");
+  assert.equal(badgeOf({ badgeKinds: { done: false } }, c, 1), 4, "all but the unread an agent said last");
   assert.equal(badgeOf({ badge: "all", badgeKinds: { message: false } }, c, 1), 6, "all but someone else's unread");
   assert.equal(badgeOf({ badge: "all", badgeKinds: { on: false } }, c, 1), 0, "no badge at all");
 });
