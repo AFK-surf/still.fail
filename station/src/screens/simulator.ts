@@ -21,8 +21,8 @@ import { type ChromeSource, chromeOf, displaysOf } from "./sim-chrome.ts";
 import { type Panel, panelOf } from "./sim-mask.ts";
 import { type ScreenSource, type ScreenView, type Screens, type ViewOptions, codecFor } from "./source.ts";
 
-/// A booted device as simctl lists it.
-export type Booted = { udid: string; name: string; runtime: string; type: string };
+/// A booted device as simctl lists it: `bootedAt` its `lastUsedAt` (ms), which CoreSimulator sets as it boots.
+export type Booted = { udid: string; name: string; runtime: string; type: string; bootedAt?: number };
 
 /// The booted devices of `simctl list -j devices`: each with its runtime's name ("iOS 26.2", from its identifier).
 export function bootedOf(listed: unknown): Booted[] {
@@ -33,7 +33,8 @@ export function bootedOf(listed: unknown): Booted[] {
     if (!Array.isArray(list)) continue;
     for (const d of list) {
       if (d?.state !== "Booted" || typeof d.udid !== "string" || !/^[0-9A-F-]{36}$/i.test(d.udid)) continue;
-      out.push({ udid: d.udid, name: typeof d.name === "string" ? d.name : d.udid, runtime: runtimeName(runtime), type: typeof d.deviceTypeIdentifier === "string" ? d.deviceTypeIdentifier : "" });
+      const at = typeof d.lastUsedAt === "string" ? Date.parse(d.lastUsedAt) : Number.NaN;
+      out.push({ udid: d.udid, name: typeof d.name === "string" ? d.name : d.udid, runtime: runtimeName(runtime), type: typeof d.deviceTypeIdentifier === "string" ? d.deviceTypeIdentifier : "", ...(Number.isFinite(at) ? { bootedAt: at } : {}) });
     }
   }
   return out;
@@ -244,6 +245,9 @@ export class Simulator implements ScreenSource {
   readonly chrome: ChromeSource[];
   readonly #device: Booted;
   readonly #helper: HelperApp;
+  readonly #simctl: Run;
+  /// When it was listed: its boot where simctl does not say it.
+  readonly #listedAt = wall.now();
   #size: { width: number; height: number };
   readonly #views = new Set<HelperView>();
 
@@ -255,11 +259,22 @@ export class Simulator implements ScreenSource {
     this.chrome = chrome;
     this.#device = device;
     this.#helper = helper;
+    this.#simctl = simctl;
     this.#size = size;
   }
 
   title(): string {
     return `${this.#device.name} · ${this.#device.runtime}`;
+  }
+
+  since(): number {
+    return this.#device.bootedAt ?? this.#listedAt;
+  }
+
+  /// Shut down from a person's app (one left running, the core's `longJobs`): it leaves the list as CoreSimulator says
+  /// it shut down.
+  async discard(): Promise<void> {
+    await this.#simctl(SIMCTL, ["shutdown", this.#device.udid]);
   }
 
   size(): { width: number; height: number } {

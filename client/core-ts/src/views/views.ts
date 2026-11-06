@@ -787,6 +787,7 @@ export class Views implements Owner {
         // With the sidebar rows of the stations whose chats run tasks there (`#ranFrom`).
         perStation = (s) => [
           { topic: "jobs", station: s },
+          { topic: "screens", station: s },
           ...arr(this.ok({ topic: "jobs", station: s })).flatMap((j) => {
             const owner = jobs.remoteOwner(str(get(j, "session")) ?? "");
             return owner === null ? [] : [{ topic: "chatRows", station: owner.station }];
@@ -1365,9 +1366,15 @@ export class Views implements Owner {
           return found === undefined ? j : { ...j, chat: { id: get(found.row, "id") ?? null, title: get(found.row, "title") ?? null, archived: found.archived } };
         };
         const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address })).map((j) => named(s.address, j as J))] as [string, string | null, J[]]);
+        // Their simulators and the views of their screens too (jobs.ts `longScreens`).
+        const screens = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(get(this.ok({ topic: "screens", station: s.address }), "screens"))] as jobs.HeldScreens);
         const prefs = this.ok({ topic: "prefs" }) ?? null;
         const bell = { on: badgeKindsOf(prefs).services, seen: jobsSeenOf(prefs, view.scope as string) };
-        return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session), bell) };
+        const clock = this.#clock();
+        // Asked again as the next of them has been up an hour (nothing else would say it).
+        const next = jobs.longNext(open, screens, clock.now);
+        if (next !== null) this.#againIn(view, next);
+        return { ok: jobs.longJobs(open, clock, (session) => this.#ranFrom(stations, session), bell, screens) };
       }
     }
     return undefined;

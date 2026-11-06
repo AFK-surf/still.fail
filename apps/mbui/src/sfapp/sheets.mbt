@@ -1491,13 +1491,9 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let stop = c.id("open-job-stop/" + station + "/" + id)
   if !doing(skey) && c.clicked(stop) {
     @ui.haptic(Confirm)
-    act(
-      src,
-      fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]),
-      skey,
-      "job.stop",
-      { "station": Json::string(station), "id": Json::string(id) },
-    )
+    // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
+    let (call, params, _) = long_stop(station, job)
+    act(src, fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]), skey, call, params)
   }
   c.box(
     dir=Row,

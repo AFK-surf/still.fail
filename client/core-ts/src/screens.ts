@@ -423,6 +423,8 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       // Its case and buttons as Xcode has them, each panel's (a station from before them, or a Mac without them: `panels`).
       ...(Array.isArray(get(s, "chrome")) ? { chrome: get(s, "chrome") } : {}),
       ...(chat ? { chat } : {}),
+      // Since when it has been up (a simulator's boot, an emulator's start: jobs.ts `longScreens`).
+      ...(finite(get(s, "since")) ? { since: get(s, "since") } : {}),
     };
     const access = accessOf(get(s, "access"));
     const clipboard = clipTypesOf(get(s, "clipboard"));

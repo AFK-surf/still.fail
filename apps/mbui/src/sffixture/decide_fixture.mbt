@@ -12,7 +12,8 @@
 // 任务), "chat-model-pop" (its agent's model control's panel
 // open), "chat-model-accounts" (its accounts open over it), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
-// (Home with the jobs left up a long while at its top); "home-attention" (the wide frame's 待处理 open: a decision to let
+// (Home with the jobs left up a long while at its top); "home-jobs-screens" (and simulators and views of screens
+// left up long, each with its 关闭 or 断开); "home-attention" (the wide frame's 待处理 open: a decision to let
 // go, a failure looked at, a station offline); "home-syncing" (Home catching up on what changed while away: the line
 // over the rows); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
@@ -22,7 +23,7 @@
 pub fn decide_mode(mode : String) -> Bool {
   [
     "history", "history-reading", "history-details",
-    "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "home-jobs-screens", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
     "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-model-accounts", "chat-find", "chat-agent-card",
@@ -428,7 +429,9 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
         }),
       )
     "longJobs" =>
-      if f.mode == "home-jobs" {
+      if f.mode == "home-jobs-screens" {
+        Some(Some(long_screens_view()))
+      } else if f.mode == "home-jobs" {
         Some(
           Some({
             "groups": [
@@ -461,6 +464,54 @@ pub fn long_job() -> Json {
   m["age"] = Json::string("3 小时")
   m["chat"] = { "id": "s-c1", "title": "整理发布清单", "archived": false }
   Json::object(m)
+}
+
+///|
+/// The `longJobs` view with simulators and views of screens left up long besides a service (home-jobs-screens).
+pub fn long_screens_view() -> Json {
+  {
+    "groups": [
+      { "key": "services", "head": "长时间运行的网页服务 · 1", "jobs": [long_job()] },
+      {
+        "key": "simulators",
+        "head": "长时间开着的模拟器 · 2",
+        "jobs": [
+          long_screen("screen:simulator:A", "Demo iPhone · iOS 27.2", "Willow · iOS 模拟器", "5 小时", "screen.close", "simulator:A", "", "关闭"),
+          long_screen("screen:android:emulator-5580", "comma-findn6-fold · Android 16", "Willow · 安卓模拟器", "4 小时", "screen.close", "android:emulator-5580", "", "关闭"),
+        ],
+      },
+      {
+        "key": "views",
+        "head": "长时间开着的远程连接 · 1",
+        "jobs": [
+          long_screen("view:desktop/v1", "Willow 的桌面", "Willow · Peng · iPhone", "2 小时", "screen.endView", "desktop", "v1", "断开"),
+        ],
+      },
+    ],
+    "lit": true,
+    "ids": ["ws1/st1/j-web", "ws1/st1/screen:simulator:A", "ws1/st1/screen:android:emulator-5580", "ws1/st1/view:desktop/v1"],
+  }
+}
+
+///|
+/// A simulator or a view of a screen left up a long while, as the `longJobs` view has it (a job's shape, its `stop`).
+pub fn long_screen(id : String, name : String, where_text : String, age : String, call : String, screen : String, view : String, word : String) -> Json {
+  let stop : Map[String, Json] = { "call": Json::string(call), "screen": Json::string(screen), "word": Json::string(word) }
+  if view != "" {
+    stop["view"] = Json::string(view)
+  }
+  {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "state": "running",
+    "startedAt": 0,
+    "tone": "live",
+    "service": false,
+    "age": Json::string(age),
+    "station": "ws1/st1",
+    "whereText": Json::string(where_text),
+    "stop": Json::object(stop),
+  }
 }
 
 ///|

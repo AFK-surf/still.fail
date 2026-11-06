@@ -1917,6 +1917,7 @@ export const SHAPES: Record<string, Shape> = {
     ["panels", vec("ScreenPanel"), { default: true, doc: "A simulator's panels (an iPhone Duo's two), for the device body drawn round its picture." }],
     ["chrome", vec("ScreenChrome"), { default: true, doc: "Its case and buttons as Xcode has them, a panel's each (`screen.chrome`); none from a station before them or a Mac without them: `panels`." }],
     ["chat", opt("ScreenChat"), { doc: "The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station." }],
+    ["since", opt("f64"), { doc: "Since when it has been up, in ms since 1970: a simulator's boot, an emulator's start; none for the rest or from a station before it." }],
     ["line", "String", { said: true, doc: "What the core says of it under its title: what it is, its size, the chat that opened it, who is on it; or, while its\nstation lacks a grant for it, what cannot be done now (core)." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it." }],
   ], { doc: "A screen of a station a person can see and drive (docs/remote-screens.md)." }),
@@ -2863,7 +2864,14 @@ export const SHAPES: Record<string, Shape> = {
     ["stationName", opt("String"), { said: true }],
     ["chat", opt("JobChat")],
     ["whereText", opt("String"), { said: true }],
+    ["stop", opt("JobStop"), { doc: "Among the open ones (`longJobs`), a simulator or a view of a screen in a job's shape: how it is stopped, in place of `job.stop`." }],
   ], { doc: "A background job an agent started (a web service when it has a port): shown by its name; the port is how the\nstation reaches a service, not for people." }),
+  JobStop: struct([
+    ["call", "String", { doc: "`screen.close` (a simulator shut down) or `screen.endView` (a person's view ended), with its station and these." }],
+    ["screen", "String"],
+    ["view", opt("String")],
+    ["word", "String", { said: true, doc: "What its button says: 关闭, 断开." }],
+  ], { doc: "How one of the open ones that is not a job is stopped (`Job.stop`)." }),
   JobPart: struct([
     ["text", "String", { said: true }],
     ["kind", opt("String")],
@@ -3012,7 +3020,7 @@ export const SHAPES: Record<string, Shape> = {
     ["ids", vec("String"), { default: true, doc: "Each of them as `<station>/<id>`: what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`)\nonce the bell opens." }],
   ], { doc: "The services and jobs left up a long while (an hour) on a scope's stations that are up (the `longJobs` view),\noldest first, in groups: web services, then background jobs; none while empty.", keepNone: true }),
   LongJobsGroup: struct([
-    ["key", "String", { doc: "services | jobs" }],
+    ["key", "String", { doc: "services | jobs | simulators | views" }],
     ["head", "String", { doc: "开了很久的网页服务 · 3" }],
     ["jobs", vec("Job")],
   ], { keepNone: true }),

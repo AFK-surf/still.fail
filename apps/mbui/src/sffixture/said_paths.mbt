@@ -156,6 +156,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "agents.*.jobs.*.stationName",
     "agents.*.jobs.*.chat.title",
     "agents.*.jobs.*.whereText",
+    "agents.*.jobs.*.stop.word",
     "messages.*.authorName",
     "messages.*.attachments.*.name",
     "messages.*.quotes.*.text",
@@ -261,6 +262,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "jobs.*.stationName",
     "jobs.*.chat.title",
     "jobs.*.whereText",
+    "jobs.*.stop.word",
   ],
   "chatLetters": [
     "title",
@@ -706,6 +708,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "stationName",
     "chat.title",
     "whereText",
+    "stop.word",
   ],
   "jobLog": [
     "last",
@@ -770,6 +773,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "groups.*.jobs.*.stationName",
     "groups.*.jobs.*.chat.title",
     "groups.*.jobs.*.whereText",
+    "groups.*.jobs.*.stop.word",
   ],
   "machineLogin": [
     "stationName",

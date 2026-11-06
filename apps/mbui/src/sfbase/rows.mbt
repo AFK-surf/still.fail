@@ -361,6 +361,30 @@ pub fn long_jobs(src : Source, w : Workspace) -> Int {
 }
 
 ///|
+/// How one left up long (a row of the `longJobs` topic) is stopped: the core's call, its params and what they name
+/// (for `core_doing`): a job's `job.stop`, a simulator's or a view's as its `stop` says (`screen.close`,
+/// `screen.endView`).
+pub fn long_stop(station : String, job : Json?) -> (String, Json, Array[(String, String)]) {
+  match field(job, "stop") {
+    Some(Object(_)) as stop => {
+      let on = [("station", station), ("screen", text(stop, "screen"))]
+      if text(stop, "view") != "" {
+        on.push(("view", text(stop, "view")))
+      }
+      let m : Map[String, Json] = {}
+      for kv in on {
+        m[kv.0] = Json::string(kv.1)
+      }
+      (text(stop, "call"), Json::object(m), on)
+    }
+    _ => {
+      let id = text(job, "id")
+      ("job.stop", { "station": Json::string(station), "id": Json::string(id) }, [("station", station), ("id", id)])
+    }
+  }
+}
+
+///|
 /// Whether those left up long light the rail's bell (the `longJobs` topic's `lit`: one it has not shown yet, and the
 /// bell lit by them).
 pub fn long_jobs_lit(src : Source, w : Workspace) -> Bool {

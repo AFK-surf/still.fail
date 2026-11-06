@@ -461,6 +461,10 @@ pub fn long_chat(Int32) -> Json
 
 pub fn long_job() -> Json
 
+pub fn long_screen(String, String, String, String, String, String, String, String) -> Json
+
+pub fn long_screens_view() -> Json
+
 pub let long_reply : String
 
 pub fn made_chat(String) -> Json

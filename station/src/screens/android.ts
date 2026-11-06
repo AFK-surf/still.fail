@@ -2,7 +2,7 @@
 // "Android"): a touchscreen as an iOS Simulator is (kind `simulator`), its pictures and input through scrcpy's program
 // on the device (./scrcpy-server, its version pinned: its protocol is its own and changes between releases). A phone
 // lent to a chat is in that grant's adb server (adb/servers.ts), not here.
-import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcess, type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
@@ -548,10 +548,16 @@ export class AndroidScreen implements ScreenSource {
   readonly #changed: () => void;
   readonly #views = new Set<AndroidView>();
   readonly #peeks: PeekCount;
+  /// An emulator's start (ms); none: a phone, which costs this machine nothing while nobody uses it.
+  readonly #since: number | undefined;
   #size: { width: number; height: number };
+  readonly discard?: () => Promise<void>;
 
-  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void; peeks?: PeekCount }) {
+  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void; peeks?: PeekCount; emulator?: { since: number } }) {
     this.id = o.id;
+    this.#since = o.emulator?.since;
+    // An emulator is closed from a person's app (one left running, the core's `longJobs`): it leaves adb, and the list.
+    if (o.emulator) this.discard = async () => void (await o.adb.run(["emu", "kill"]));
     this.#peeks = o.peeks ?? new PeekCount();
     this.panels = o.panels;
     this.#title = o.title;
@@ -563,6 +569,10 @@ export class AndroidScreen implements ScreenSource {
 
   title(): string {
     return this.#title;
+  }
+
+  since(): number | undefined {
+    return this.#since;
   }
 
   size(): { width: number; height: number } {
@@ -598,6 +608,32 @@ export class AndroidScreen implements ScreenSource {
     for (const view of [...this.#views]) view.close();
   }
 }
+
+/// When the emulator of `serial` (`emulator-<port>`) started (ms): its qemu's start, where `ps` says it (macOS, Linux);
+/// none elsewhere (Windows) or when it is not found, and the station takes when it listed it.
+export async function emulatorStart(serial: string, ps: () => Promise<string> = psStarts): Promise<number | undefined> {
+  const port = /^emulator-(\d+)$/.exec(serial)?.[1];
+  if (port === undefined || platform.os === "windows") return undefined;
+  const lines = await ps().catch(() => "");
+  return startOf(lines, port);
+}
+
+/// The start of the qemu run with `-port <port>` in `ps -Ao lstart=,args=`'s lines (its start the first five words, a
+/// local time: `Fri Nov  6 16:34:52 2026`).
+export function startOf(lines: string, port: string): number | undefined {
+  for (const line of lines.split("\n")) {
+    const words = line.trim().split(/\s+/);
+    const args = words.slice(5);
+    const at = args.indexOf("-port");
+    if (at < 0 || args[at + 1] !== port || !/qemu-system|emulator/.test(args[0] ?? "")) continue;
+    const t = Date.parse(words.slice(0, 5).join(" "));
+    if (Number.isFinite(t)) return t;
+  }
+  return undefined;
+}
+
+const psStarts = () =>
+  new Promise<string>((resolve, reject) => execFile("ps", ["-Ao", "lstart=,args="], { timeout: 10_000, maxBuffer: 16 << 20 }, (error, out) => (error ? reject(error) : resolve(out))));
 
 /// Whether a device on adb is a screen: an emulator, a phone on USB or one someone connected to by its address. Not one
 /// adb found on the network by itself (`adb-<serial>._adb-tls-connect._tcp`: any phone paired with this key that is on
@@ -763,6 +799,7 @@ export class AndroidScreens {
       file: this.#file,
       changed: () => this.#screens.changed(),
       peeks: this.#peeks,
+      ...(emulator ? { emulator: { since: (await emulatorStart(serial)) ?? wall.now() } } : {}),
     });
   }
 

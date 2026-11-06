@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import * as fp from "../src/footprint.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ago, chatJobs, type From, LONG, log, longJobs, nextChange, remoteOwner, shown, span } from "../src/jobs.ts";
+import { ago, chatJobs, type From, LONG, log, longJobs, longNext, nextChange, remoteOwner, shown, span } from "../src/jobs.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -110,6 +110,33 @@ test("those_up_long_light_the_bell_until_it_has_shown_them", () => {
   assert.equal(longJobs(st, c(), undefined, { on: true, seen: new Set(["w/s1/a"]) }).lit, true, "a new one since");
   assert.equal(longJobs(st, c(), undefined, { on: false, seen: new Set() }).lit, false, "the bell not lit by them");
   assert.equal(longJobs(st, c(), undefined, { on: false, seen: new Set() }).groups[0].jobs.length, 2, "still listed");
+});
+
+test("simulators_and_peoples_views_up_long_are_listed_with_how_each_is_stopped", () => {
+  const view = (id: string, patch: J = {}): J => ({ id, name: "Peng", device: "MacBook", at: NOW - 2 * LONG, may: true, ...patch });
+  const screens: J[] = [
+    { id: "simulator:A", title: "Demo iPhone · iOS 27.2", since: NOW - 3 * LONG, closable: true, views: [view("v1"), view("v2", { here: true }), view("v3", { agent: true, may: false }), view("v4", { at: NOW - 60_000 })] },
+    { id: "android:emulator-5580", title: "fold · Android 16", since: NOW - 2 * LONG, closable: true },
+    { id: "simulator:B", title: "new", since: NOW - 60_000, closable: true },
+    // A phone (no `since`), the desktop (not closable), one the viewer may not close
+    { id: "android:R5", title: "Pixel", closable: false },
+    { id: "desktop", title: "Mac", views: [view("v5", { may: false })] },
+    { id: "simulator:C", title: "theirs", since: NOW - 3 * LONG },
+  ];
+  const v = longJobs([], c(), undefined, undefined, [["w/s1", "orchard", screens]]);
+  const [sims, views] = v.groups;
+  assert.deepEqual([sims.key, sims.head, views.key, views.head], ["simulators", "长时间开着的模拟器 · 2", "views", "长时间开着的远程连接 · 1"]);
+  assert.deepEqual(sims.jobs.map((j: J) => [j.id, j.whereText, j.age, j.stop]), [
+    ["screen:simulator:A", "orchard · iOS 模拟器", "3 小时", { call: "screen.close", screen: "simulator:A", word: "关闭" }],
+    ["screen:android:emulator-5580", "orchard · 安卓模拟器", "2 小时", { call: "screen.close", screen: "android:emulator-5580", word: "关闭" }],
+  ]);
+  assert.deepEqual([views.jobs[0].id, views.jobs[0].name, views.jobs[0].whereText, views.jobs[0].stop], ["view:simulator:A/v1", "Demo iPhone · iOS 27.2", "orchard · Peng · MacBook", { call: "screen.endView", screen: "simulator:A", view: "v1", word: "断开" }]);
+  assert.deepEqual(v.ids, ["w/s1/screen:simulator:A", "w/s1/screen:android:emulator-5580", "w/s1/view:simulator:A/v1"]);
+  assert.equal(v.lit, true);
+  // Asked again as the next is up an hour: simulator:B's, a minute in; v4 the same.
+  assert.equal(longNext([], [["w/s1", null, screens]], NOW), LONG - 60_000);
+  assert.equal(longNext([["w/s1", null, [job("j", { startedAt: NOW - LONG + 5_000 })]]], [], NOW), 5_000);
+  assert.equal(longNext([], [], NOW), null);
 });
 
 test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
