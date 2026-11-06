@@ -48,12 +48,12 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
         } }
     })
     let at = "\{w} platform \{platform}"
-    let titles = t.boxes().filter(fn(b) { b.text == "震动" })
+    let titles = t.words().filter(fn(b) { b.0 == "震动" && b.5 > 0.5 })
     assert_eq(titles.length(), 1, msg=at)
     let (x, y, _, sh) = t.get(Switch, label="震动").rect
-    assert_true(x >= titles[0].x + titles[0].w, msg="\{at}: switch follows its title")
+    assert_true(x >= titles[0].1 + titles[0].3, msg="\{at}: switch follows its title")
     if !laid_wide(w) {
-      let title_mid = titles[0].y + titles[0].h / 2.0
+      let title_mid = titles[0].2 + titles[0].4 / 2.0
       assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line")
     }
     assert_eq(t.get(Switch, label="震动").check, Some(On), msg=at)
@@ -71,6 +71,55 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
     t.frame()
     let on = calls.filter(fn(call) { call.0 == "prefs.set" })
     assert_true(field(Some(on[on.length() - 1].1), "haptics") is Some(Null), msg=at)
+  }
+}
+
+///|
+test "外观's choice follows an outstanding pref immediately and returns to the core's value if it fails" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    let calls : Array[(String, Json)] = []
+    let pending : Array[(Result[Json, Json]) -> Unit] = []
+    let t = setting_tester(Appearance, w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          if name == "prefs.set" {
+            calls.push((name, params))
+            pending.push(done)
+          } else {
+            (s.call)(name, params, done)
+          }
+        } }
+    })
+    t.click(Radio, label="减少")
+    t.frame()
+    assert_eq(calls.length(), 1, msg="\{w}: one choice, one request")
+    assert_eq(text(Some(calls[0].1), "motion"), "reduce", msg="\{w}")
+    assert_eq(t.get(Radio, label="减少").check, Some(On), msg="\{w}: the pending choice")
+    pending[0](Err(Json::string("failed")))
+    t.frame()
+    assert_eq(t.get(Radio, label="减少").check, Some(Off), msg="\{w}: the core's value again")
+  }
+}
+
+///|
+test "外观's theme radios keep keyboard focus as an arrow chooses the next theme" {
+  for w in [390.0, 1280.0] {
+    let calls : Array[(String, Json)] = []
+    let t = setting_tester(Appearance, w, platform=0, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          calls.push((name, params))
+          (s.call)(name, params, done)
+        } }
+    })
+    t.click(Radio, label="浅色")
+    t.frame()
+    t.act(Radio, Focus, label="浅色")
+    t.frame()
+    t.key(@ui.key_code_right)
+    t.frame()
+    let set = calls.filter(fn(call) { call.0 == "prefs.set" })
+    assert_eq(text(Some(set[set.length() - 1].1), "appearance"), "dark", msg="\{w}: the arrow chooses dark")
+    assert_eq(t.get(Radio, label="深色").check, Some(On), msg="\{w}: the choice is read out")
+    assert_eq(t.focused().map(fn(s) { s.label }), Some("深色"), msg="\{w}: focus follows the choice")
   }
 }
 

@@ -36,7 +36,7 @@ pub fn agent_work_line(@ui.Ctx, @json.Json?, Int32, inset? : Bool) -> Unit
 
 pub fn answer_invitation(@sfbase.Source, @json.Json?, String, Bool, String, () -> Unit) -> Unit
 
-pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
+pub fn appearance_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 

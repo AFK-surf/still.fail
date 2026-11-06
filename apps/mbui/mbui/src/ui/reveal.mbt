@@ -128,14 +128,17 @@ fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit 
     view()
     return
   }
+  // A retained window paints its tree outside the old frame's root. Its previous picture and the circle for its new
+  // tree are composed by view_paint; the old view is still built here for any islands and layers it hosts.
+  if view_app.val is Some(_) {
+    view()
+    self.reveal_start()
+    return
+  }
   // the window as it was, under (drawn again once it sets out); the window as it is, over it
   let was = self.layer(fn() { self.box(style=reveal_view, fn() {  }) |> ignore })
   let now = self.layer(fn() { self.box(style=reveal_view, fn() { view() }) |> ignore })
-  if reveal.start < 0.0 && (reveal.dark_now)() != reveal.dark {
-    reveal.start = self.clock
-    let run : RevealRun = { end: self.clock + reveal_ms }
-    self.moving(reveal.mover, run as &Moving, what="the theme's reveal")
-  }
+  self.reveal_start()
   let p = if reveal.start < 0.0 { 1.0 } else { (self.now() - reveal.start) / reveal_ms }
   if p >= 1.0 {
     // not set out: the view as it is
@@ -149,6 +152,32 @@ fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit 
   let fy = dmax(reveal.y, h - reveal.y)
   let r = dmax(0.5, (fx * fx + fy * fy).sqrt() * e)
   self.look(now, look(ox=reveal.x / w, oy=reveal.y / h, circle=r))
+}
+
+///|
+/// Start once the view has said its new theme, for either the old frame or the retained tree.
+fn Ctx::reveal_start(self : Ctx) -> Unit {
+  if reveal.start < 0.0 && (reveal.dark_now)() != reveal.dark {
+    reveal.start = self.clock
+    let run : RevealRun = { end: self.clock + reveal_ms }
+    self.moving(reveal.mover, run as &Moving, what="the theme's reveal")
+  }
+}
+
+///|
+/// The retained window's circle at this paint. Its old picture is drawn beneath it; the moving clock is read here so
+/// a paint-only frame advances the circle too. The last paint drops the saved picture.
+fn Ctx::reveal_tree_circle(self : Ctx) -> (Double, Double, Double)? {
+  guard reveal_spreading() else { return None }
+  let p = (self.now() - reveal.start) / reveal_ms
+  if p >= 1.0 {
+    reveal_drop()
+    return None
+  }
+  let e = 1.0 - (1.0 - p) * (1.0 - p) * (1.0 - p)
+  let fx = dmax(reveal.x, self.width - reveal.x)
+  let fy = dmax(reveal.y, self.height - reveal.y)
+  Some((reveal.x, reveal.y, dmax(0.5, (fx * fx + fy * fy).sqrt() * e)))
 }
 
 ///|

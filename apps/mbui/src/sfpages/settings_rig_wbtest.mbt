@@ -38,7 +38,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
+  let made = route is (Appearance | About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -99,6 +99,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
   let frame = fn() -> PageFrame { { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false } }
   p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   match route {
+    Appearance => appearance_node(p, core, on_back=core.pop, frame~, width~)
     About => about_node(p, core, on_back=core.pop, frame~, width~)
     Changelog => changelog_node(p, core, on_back=core.pop, frame~, width~)
     Memories => memories_node(p, core, here, on_back=core.pop, frame~, width~)
@@ -134,7 +135,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
   @settings.frame(core, here)
   let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
   match route {
-    Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
     BarSettings => bars_page(c, core, frame)
     Permissions => permissions_page(c, core, frame)

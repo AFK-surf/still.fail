@@ -535,6 +535,7 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
       .radius(Is(corner))
       .ground(By(fn() { @ui.tree_theme().color(Card) }))
       .clips(Is(true))
+      .lends(part_at, { ..at, list: true })
       |> ignore
       rows(card)
     })
@@ -600,6 +601,7 @@ pub fn link_row_node(
   folds? : () -> Bool,
   tail? : (@view.View) -> Unit,
   tail_shown? : () -> Bool = fn() { true },
+  title_style? : () -> @ui.TextStyle,
 ) -> Unit {
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -622,7 +624,7 @@ pub fn link_row_node(
     }
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, title_after_shown, folds, tail, tail_shown,
+      note_cut, title_after, title_after_shown, folds, tail, tail_shown, title_style,
     )
     return
   }
@@ -690,7 +692,12 @@ pub fn link_row_node(
             // beside what it says, its words' own (pg_row_title_in), the line's room left between them: its line's ends
             // the title's and what it says')
             t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-            let plain = fn() { if under() && value() != "" { titled_in } else { titled } }
+            let plain = fn() {
+              match title_style {
+                Some(style) => if strong { style().then(row_strong) } else { style() }
+                None => if under() && value() != "" { titled_in } else { titled }
+              }
+            }
             // (what follows its title on its line while it is said, 8 apart across their middle: the title cut short
             // where the line leaves it less, link_row's title_line; its title the same words all along)
             let after_now = fn() { title_after is Some(_) && title_after_shown() }

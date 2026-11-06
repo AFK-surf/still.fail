@@ -168,8 +168,12 @@ fn pane_made(
   page : Page,
   tips : @sf.TipLayer,
 ) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
-  // (a chat's made once whatever: its old view is gone; the library's pages by pane_makes)
-  guard pane_makes.val || page is (Chat(_) | History(_, _, _)) else { return None }
+  // (a chat and 外观 are made once whatever: their old views are gone; the other pages by pane_makes)
+  let appearance_place = match page {
+    Place(name) => @settings.route_of(name) is Some(Appearance)
+    _ => false
+  }
+  guard pane_makes.val || appearance_place || page is (Chat(_) | History(_, _, _) | Setting(Appearance)) else { return None }
   // (made in the workspace in view, its settings' core, under what it was opened from, as wide as the frame gives it)
   let made = fn(
     kind : String,
@@ -241,6 +245,10 @@ fn pane_made(
           },
         ),
       )
+    Setting(Appearance) =>
+      made("appearance", fn(a, core, _here, _stint, frame, width) {
+        @sfpages.appearance_node(a, core, on_back=core.pop, frame~, width~)
+      })
     Setting(About) =>
       made("about", fn(a, core, _here, _stint, frame, width) {
         @sfpages.about_node(a, core, on_back=core.pop, frame~, width~)
@@ -258,7 +266,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if r is (Appearance | About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
