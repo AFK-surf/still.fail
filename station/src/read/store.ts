@@ -19,11 +19,12 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
+import { hasLegacySaid, LEGACY_HAS_UNREAD, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -83,11 +84,13 @@ export type Store = {
   clientKeys: Map<string, string>;
   /// An old session whose up-job lookup should be prepared after this read returns.
   prepareUpJobs: string | null;
+  /// This connection uses the already-published lookup on an older database.
+  legacySaid: boolean;
 };
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null };
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null, legacySaid: hasLegacySaid(db) };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
@@ -409,7 +412,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
 
 /// The thread's latest message as merged, for lists.
 export function lastMessage(s: Store, thread: number): MessageRow | null {
-  const r = one(s, LAST_MESSAGE, thread);
+  const r = one(s, s.legacySaid ? LEGACY_LAST_MESSAGE : LAST_MESSAGE, thread);
   return r ? toMessage(r) : null;
 }
 
@@ -468,7 +471,7 @@ export class SaidUnavailable extends Refused {
 }
 
 export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
-  const r = one(s, SAID_LATEST, thread);
+  const r = one(s, s.legacySaid ? LEGACY_SAID_LATEST : SAID_LATEST, thread);
   if (!r) return null;
   const state = r.author_kind === "person" ? one(s, SAID_STATE, thread) : null;
   const boundary = saidBoundary(state, r);
@@ -476,7 +479,7 @@ export function saidOf(s: Store, thread: number): { n: number; authorKind: strin
   if (!boundary.known) {
     // Most old chats can answer from a few nearby messages without recording any history at all. For a longer run,
     // leave the reader and prepare only this chat in bounded slices before trying the snapshot again.
-    const nearby = all(s, SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
+    const nearby = all(s, s.legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
     const previous = nearby.find((p) => p.author_kind !== "person" || p.author !== r.author);
     if (previous) other = previous.n;
     else if (nearby.length === SAID_BATCH_SIZE) throw new SaidUnavailable([thread]);
@@ -510,7 +513,8 @@ export function mutedViewers(s: Store, thread: number, viewers: string[]): Set<s
 }
 
 function unreadOf(s: Store, thread: number, read: number, selves: string[], mode: "count" | "exists" = "count"): number {
-  return one(s, mode === "exists" ? HAS_UNREAD : UNREAD, thread, read, JSON.stringify(selves)).c;
+  const sql = s.legacySaid ? (mode === "exists" ? LEGACY_HAS_UNREAD : LEGACY_UNREAD) : (mode === "exists" ? HAS_UNREAD : UNREAD);
+  return one(s, sql, thread, read, JSON.stringify(selves)).c;
 }
 
 /// A chat's messages after where a viewer read (`?2`) but their own (`?3`, a JSON list) and letters, counted from the
@@ -561,7 +565,7 @@ export function entriesBetween(s: Store, thread: number, from: bigint, to: bigin
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
-  return all(s, MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
+  return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
 }
 
 // ── the archive review ──
