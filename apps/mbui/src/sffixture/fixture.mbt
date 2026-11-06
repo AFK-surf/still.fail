@@ -1378,6 +1378,8 @@ pub fn fixture(mode : String) -> Source {
         // a visualization's widget kept nothing yet; what it keeps is taken (viz.mbt)
         "widget.state" => done(Ok({ "state": Json::null() }))
         "widget.setState" => done(Ok(Json::object({})))
+        // (chat-older-failed: the page before does not come, its station away)
+        "chat.older" if f.mode == "chat-older-failed" => done(Err({ "code": "mesh", "message": "unreachable" }))
         "chat.older" => {
           f.older += 1
           f.changed()

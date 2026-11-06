@@ -50,6 +50,9 @@ pub(all) struct Reading {
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
+  /// the window's first entry and whether it was short of the chat's end, as its rows were last given (paged_in)
+  mut first_was : Double
+  mut newer_was : Bool
   /// put in place once (the unread line, where it was opened, or the end)
   mut placed : Bool
   mut put : Bool
@@ -59,6 +62,10 @@ pub(all) struct Reading {
   /// the first message when the page before was asked for (once per page)
   asked : @signals.Signal[Double]
   asked_newer : @signals.Signal[Double]
+  /// the page before (after) asked for did not come (its station away, its answer short of it): its row offers it
+  /// again (a press, pages_coming), not asked again by itself each frame
+  older_failed : @signals.Signal[Bool]
+  newer_failed : @signals.Signal[Bool]
   /// the chat's latest page asked for in place of a window short of its end (chat_latest): the list goes to its end
   /// as it comes
   mut latest_asked : Bool
@@ -219,11 +226,15 @@ pub fn reading_of(key : String) -> Reading {
         sent_foot: "",
         head: "",
         head_at: -1,
+        first_was: -1.0,
+        newer_was: false,
         placed: false,
         put: false,
         lined: false,
         asked: @signals.signal(-1.0),
         asked_newer: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+        older_failed: @signals.signal(false),
+        newer_failed: @signals.signal(false),
         latest_asked: false,
         end_asked: false,
         told: "",
@@ -960,6 +971,9 @@ pub fn row_keys(
   }
   rd.list_read = Some(c.list_reader(key))
   rd.foot_sign = if ask_clears(v) { "+ask" } else { "" }
+  // (a page read in, before the window or reaching the chat's end: what it brings was said long ago, there at once,
+  // the rows it joins as they are now; only what is said while the list is at the chat's end comes and changes)
+  let watched = !v.newer && !paged_in(rd, v)
   // the same entries of the same view as the last frame's, the list following as it did, nothing sent from here
   // waiting for its row and no row for its turn (then and now): what it made then, its rows not gone over again
   let sending = sending_of(rk)
@@ -971,7 +985,7 @@ pub fn row_keys(
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight)
+      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, watched, flight)
     _ => ()
   }
   let made_whole = sending.is_empty() && turns.waiting.is_empty()
@@ -1205,7 +1219,37 @@ pub fn row_keys(
   // (what changes comes, goes and changes on the list's way whether the list follows its end or is read up it: the
   // row read from stays where it shows, what is over and under it moving away from it, docs/list-motion.md; nothing
   // at once in view, 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」)
-  shown_rows(c, rd, list, keys, !v.newer, flight)
+  shown_rows(c, rd, list, keys, watched, flight)
+}
+
+///|
+/// The page before (`older`) or after a chat's window that did not come asked for again (its row's 重试).
+pub fn page_again(rd : Reading, older : Bool) -> Unit {
+  if older {
+    rd.older_failed.set(false)
+    rd.asked.set(-1.0)
+  } else {
+    rd.newer_failed.set(false)
+    rd.asked_newer.set(-1.0)
+  }
+}
+
+///|
+/// Whether chat `v`'s window took in a page since its rows were last given: the page before it (its first entry
+/// earlier), or the page that reaches the chat's end (short of it till now).
+fn paged_in(rd : Reading, v : ChatView) -> Bool {
+  let first = match v.first_entry {
+    Some(f) => f
+    None =>
+      match v.messages.get(0) {
+        Some(m) => m.seq
+        None => -1.0
+      }
+  }
+  let paged = (first >= 0.0 && rd.first_was >= 0.0 && first < rd.first_was) || (rd.newer_was && !v.newer)
+  rd.first_was = first
+  rd.newer_was = v.newer
+  paged
 }
 
 ///|
@@ -1837,7 +1881,7 @@ pub fn list_after(
     let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows) })
     // near the top: the page before comes in, once per page
     match (info, v.thread) {
-      (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
+      (Some(i), Some(thread)) if v.more && rd.placed && !rd.older_failed.get() && i.first >= 0 && i.first <= 3 => {
         // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
         let first = match v.first_entry {
           Some(f) => f
@@ -1860,7 +1904,7 @@ pub fn list_after(
               fn(res) {
                 match res {
                   Err(e) => {
-                    rd.asked.set(-1.0)
+                    rd.older_failed.set(true)
                     @hostapi.log("chat.older failed: " + text(Some(e), "message"))
                   }
                   _ => ()
@@ -1884,7 +1928,7 @@ pub fn list_after(
     }
     // near the end of a window short of the chat's: the page after
     match (info, v.thread) {
-      (Some(i), Some(thread)) if v.newer && rd.placed && i.last >= n - 4 => {
+      (Some(i), Some(thread)) if v.newer && rd.placed && !rd.newer_failed.get() && i.last >= n - 4 => {
         let last = match v.last_entry {
           Some(l) => l
           None =>
@@ -1902,7 +1946,7 @@ pub fn list_after(
             (src.call)(
               "chat.newer",
               { "station": Json::string(r.station), "thread": Json::number(thread) },
-              fn(res) { if res is Err(_) { rd.asked_newer.set(-1.0) } },
+              fn(res) { if res is Err(_) { rd.newer_failed.set(true) } },
             )
           })
         }
