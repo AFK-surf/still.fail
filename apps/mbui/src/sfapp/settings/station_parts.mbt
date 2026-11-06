@@ -712,16 +712,15 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
           let on = flag(view, "on")
           // (the library's switch row, as every setting's: its title as strong as 默认最长授权's under it, the switch alone
           // answering; 2026-11-06 左子健: 共享调试的标题为啥没有加粗，为啥跟别的设置项不一样)
-          let now = @sf.switch_row(c, "adb-on-switch", tr("android-misc.adb.title"), on, note=tr("android-misc.adb.on.note"))
-          if now != on {
+          if @sf.switch_row(c, "adb-on-switch", tr("android-misc.adb.title"), on, note=tr("android-misc.adb.on.note")) != on {
             // (turned on: the notification it shows allowed, and Wireless debugging on where the app may)
-            if now {
+            if !on {
               if @ui.notice_permission() != "granted" {
                 @ui.notice_ask() |> ignore
               }
               adb_switch_on()
             }
-            act(core, tr(if on { "android-misc.adb.turnOff" } else { "android-misc.adb.step.on" }), "adb.on", obj([("on", Json::boolean(now))]))
+            act(core, tr(if on { "android-misc.adb.turnOff" } else { "android-misc.adb.step.on" }), "adb.on", obj([("on", Json::boolean(!on))]))
           }
           lasts_row()
         })
