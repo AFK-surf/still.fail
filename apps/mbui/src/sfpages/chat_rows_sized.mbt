@@ -43,7 +43,9 @@ fn rows_sized(
       (last.val, n)
     },
     key: fn(i) { now().key(i) },
-    find: fn(k, near) { now().find(k, near) },
+    // (from where it was last read, where it was: a row far from the end found again where it is, not past every row
+    // after it, as each frame and each event reads it)
+    find: fn(k, near) { now().find_read(k, near) },
     removed_since: fn(since) {
       if since < base.val {
         None
