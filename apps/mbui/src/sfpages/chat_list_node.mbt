@@ -226,7 +226,9 @@ pub fn chat_list_node(
     }
     foot_said.val = true
   })
-  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
+  // The row rooms share the reply owner's navigation cause. Last layout's omissions can still describe the
+  // covered page when its return has already delivered replies, or the shown page before it is covered.
+  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { shown_by() && !view().map_or(false, fn(cv) { cv.newer }) },
     from=fn(_) {
       match leaving() {
         Some(f) if !f.carried => {
