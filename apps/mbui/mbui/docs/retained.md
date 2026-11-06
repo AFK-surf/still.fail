@@ -276,6 +276,10 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
 
 Where mbui is not yet so (2026-11-04):
 
+- ui's `ListRows::in_node`, whose rooms are read as each block is worked out, still goes through the old windowed list
+  (view's `scrolls_window_rooms`): it works the rows' tops out from the first and goes through them as it is scrolled;
+  its end is followed and what is read held by reactions reading layout's results. It is made again as rule 11 says,
+  its rooms read before the layout as `in_node_indexed`'s are, its motions as paint's.
 - Layout's results are signals (`laid_size_told`, `laid_window_told`, `sizes_told`) read where they change what is
   made, and `Tree::laid_out` calls itself again where what they told marked more (rule 10); a change settled as of its
   logical moment turns the clock there and back in the middle of layout. Each reader goes to paint's, the next event's,
