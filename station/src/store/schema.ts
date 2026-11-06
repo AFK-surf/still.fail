@@ -36,12 +36,11 @@ CREATE TABLE IF NOT EXISTS decision_checks (
   created_at INTEGER NOT NULL,
   result TEXT NOT NULL
 );
--- A session's latest check (review.ts undecided, for every done chat) and those of the last days (the archive policy's
--- view, in every overview): without them each scanned every check.
+-- A session's latest check (review.ts undecided, for every done chat).
 CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
-CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
 -- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
--- rows of those latest (a station: many checks of many sessions in a week).
+-- rows of those latest (a station: many checks of many sessions in a week). Existing decision_checks_at indexes stay
+-- for older connections, but need not be created: this index also covers searches by created_at alone.
 CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
