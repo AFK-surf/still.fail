@@ -788,8 +788,6 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// there, nothing later: no step or end taken past it), what is drawn sampled at `shown` (a moment later, as a host's
 /// frame is drawn for its vsync). The next events may come at any moment from `now`.
 pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
-  // (what was done since the frame before, outside it, as its host would count it: tester_host.mbt)
-  host_frame_begin()
   fake_op_look()
   let at = now
   self.fake.time = at
@@ -814,7 +812,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     Some(f) => f()
     None => ()
   }
+  // The host answers and renderer setup above are between frames. Only on_frame is the frame being counted.
+  host_frame_begin()
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
+  host_frame_drawn(if shown > at { shown } else { at })
   self.frames = self.frames + 1
   if !measured_as_host.val {
     self.hold_words_over()
@@ -828,8 +829,6 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
-  // (as its host got it, where a test records that: tester_host.mbt)
-  host_frame_drawn(if shown > at { shown } else { at })
 }
 
 ///|
