@@ -41,7 +41,9 @@
 /* The QR code is for a phone to scan from a screen: never shown on the phone itself. */
 @media (pointer: coarse), (max-width: 899px) { .fpanel .qr { display: none; } }
 /* The pictures' own loops (spinners, the notification sliding in) run only on the card in view, while it is on screen. */
-.dv-swipe .fpanel:not([data-on]) *, .dv-swipe:not(.play) * { animation-play-state: paused; }
+.dv-swipe .fpanel:not([data-on]) *, .dv-swipe .fpanel:not([data-on]) *::after,
+.dv-swipe:not(.play) *, .dv-swipe:not(.play) *::after,
+.dv-swipe:not(.play) .mk-av.ag::after, .dv-swipe .fpanel:not([data-on]) .mk-av.ag::after { animation-play-state: paused; }
 
 /* Below: dots that follow the swipe (a pill slides between them as the cards move), the count, and, for a mouse, arrows. */
 .dv-nav { display: flex; align-items: center; gap: 12px; margin-top: 12px; }

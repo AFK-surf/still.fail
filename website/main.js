@@ -33,7 +33,7 @@
   let under = false;
   const edge = () => { const s = scrollY > 1; if (s !== under) { under = s; nav.toggleAttribute("data-scrolled", s); } };
   addEventListener("scroll", edge, { passive: true });
-  edge();
+  requestAnimationFrame(edge); // first read in the frame's own layout, not a forced one while the page parses
 
   // ---- Mobile menu: a sheet from under the bar. Escape or the dimmed page closes it; Tab stays inside while open ----
   const menu = $(".menu-btn", nav);
@@ -155,7 +155,7 @@
   // The bar's height is read when its row is laid out (WebKit can run this before the imported sheets have styled it).
   new ResizeObserver(() => { barH = nav.offsetHeight; tone(); }).observe($(".w", nav));
   new ResizeObserver(() => tone()).observe($("main"));
-  tone();
+  requestAnimationFrame(tone);
   new ResizeObserver(() => placeInd(false)).observe(sheet);
   document.fonts?.ready.then(() => placeInd(false));
   setLang(root.dataset.lang === "en" ? "en" : "zh", false);
@@ -289,8 +289,7 @@
       if (step && e.target === track) { e.preventDefault(); go(on + step); }
     });
     new IntersectionObserver(([e]) => swipe.classList.toggle("play", e.isIntersecting)).observe(swipe);
-    new ResizeObserver(follow).observe(track);
-    follow();
+    new ResizeObserver(follow).observe(track); // also its first state, once the track is laid out (no forced layout)
   }
 
   // ---- Every device, as one scene played by scrolling (large screens with motion allowed: html.scrolly, set in the head) ----
@@ -510,8 +509,10 @@
       step = s; cell.dataset.step = s;
       for (const p of parts) p.classList.toggle("is-in", s >= +p.dataset.in && s < +(p.dataset.out ?? hold.length));
       if (follow) {
+        const shown = parts.filter((p) => p.classList.contains("is-in") && follow.contains(p));
+        if (!shown.length) { follow.style.transform = "translateY(0px)"; return; } // nothing to follow: no measuring
         let end = 0;
-        for (const p of parts) if (p.classList.contains("is-in") && follow.contains(p)) end = Math.max(end, p.offsetTop + p.offsetHeight);
+        for (const p of shown) end = Math.max(end, p.offsetTop + p.offsetHeight);
         follow.style.transform = `translateY(${-Math.max(0, follow.offsetTop + end + 12 - follow.parentElement.clientHeight)}px)`;
       }
     };
@@ -523,10 +524,20 @@
       cell.classList.toggle("play", on);
       if (!on) { clearTimeout(timer); timer = 0; } else if (!timer) timer = setTimeout(tick, hold[step] / 2);
     };
-    set(reduce ? still : 0);
+    requestAnimationFrame(() => set(reduce ? still : 0)); // measures (data-follow): in the frame, not while parsing
   }
   const play = new IntersectionObserver((entries) => { for (const e of entries) e.target.play(e.isIntersecting); }, { threshold: .35 });
   for (const c of cells) play.observe(c);
+  // The pool's layers and the security picture loop only while on screen (40-pool.css: .play; 70-security.css: .off).
+  {
+    const loops = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.target.matches(".sec-net")) e.target.classList.toggle("off", !e.isIntersecting);
+        else e.target.classList.toggle("play", e.isIntersecting);
+      }
+    });
+    for (const el of $$(".pool-fig, .sec-net")) loops.observe(el);
+  }
   // On a phone the grid is a swiper (native scroll, 50-teams.css). The script only follows it: the dots' pill tracks the
   // scroll once a frame while it moves, the count names the card at the snap line, and a dot or an arrow key jumps.
   {
@@ -555,8 +566,7 @@
       const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (step && e.target === track && swiper()) { e.preventDefault(); go(on + step); }
     });
-    new ResizeObserver(follow).observe(track);
-    follow();
+    new ResizeObserver(follow).observe(track); // also its first state, once the track is laid out (no forced layout)
   }
 
   // ---- Copy the install command ----
