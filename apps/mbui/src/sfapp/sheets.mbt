@@ -682,13 +682,12 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       } else {
         fill("android-chat.agent.account.auto", [("name", name)])
       }
-      // changing how it runs is a page of its own (History.kt RunSettingsScreen)
+      // The same model picker as the chat's history and a new chat: every way to the run offers the same choices.
       if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
           allowance_line(c, field(account, "quota"))
         }) {
         close()
-        @sfbase.history_push()
-        app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
+        @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
       }
       if agent_row(
           c,
