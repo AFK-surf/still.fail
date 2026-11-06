@@ -200,14 +200,12 @@ pub fn composer_node(
         // answers are handed on; done before any change of the tree's after it, so before one letting this composer go.
         // This composer gone before the picker answers, this is asked no more: what it gave waits, taken by the draft's
         // next composer as it comes)
-        if !@signals.untracked(no_files) {
-          let list = @sfbase.shared_into.get(w.key).unwrap_or([])
-          for f in files {
-            list.push(f)
-          }
-          @sfbase.shared_into[w.key] = list
-          @sfbase.draft_take_at(w.key)
+        let list = @sfbase.shared_into.get(w.key).unwrap_or([])
+        for f in files {
+          list.push(f)
         }
+        @sfbase.shared_into[w.key] = list
+        @sfbase.draft_take_at(w.key)
       },
     )
     // (a video's first frame made from its bytes: followed as its files change and as the player made for it says its

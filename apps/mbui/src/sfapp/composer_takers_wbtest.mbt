@@ -196,3 +196,63 @@ test "a file quoted and a file shared into a chat while its station is offline: 
   assert_eq(w.quotes.get().length(), quotes + 1, msg="not again")
   assert_eq(adds(), adds_before + 1, msg="not again")
 }
+
+///|
+test "a station file sent to a chat while it is offline: left for its composer and taken once when it is back" {
+  let calls : Array[Made] = []
+  let off = @signals.signal(true)
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !off.get() {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["offline"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  let draft = "ws1/st1:s-c1"
+  let w = @sfbase.writings.get(draft).unwrap()
+  let named_file = fn() { w.files.get().filter(fn(f) { text(Some(f), "name") == "later.md" }).length() }
+  @sfbase.files_into(draft, row_dragged("later.md"))
+  assert_eq(named_file(), 0, msg="the file is not added while offline")
+  off.set(false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named_file(), 1, msg="the file is added when the station is back")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named_file(), 1, msg="the file is not added again")
+}
+
+///|
+test "a picker answering after its chat went offline: its file is kept and taken once when it is back" {
+  let calls : Array[Made] = []
+  let off = @signals.signal(false)
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !off.get() {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["offline"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  let w = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
+  let named_file = fn() { w.files.get().filter(fn(f) { text(Some(f), "name") == "picked.png" }).length() }
+  t.picks([("picked.png", b"\x89PNG\r\n\x1a\n")])
+  @sfpages.pick_files(w)
+  off.set(true)
+  t.frame()
+  assert_eq(named_file(), 0, msg="the file is not added while offline")
+  off.set(false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named_file(), 1, msg="the file is added when the station is back")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named_file(), 1, msg="the file is not added again")
+}

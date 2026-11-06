@@ -523,7 +523,13 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
       match picker.files() {
         Some(files) => {
           composing.picking.set(None)
-          if !no_files {
+          if no_files {
+            let list = shared_into.get(w.key).unwrap_or([])
+            for f in files {
+              list.push(f)
+            }
+            shared_into[w.key] = list
+          } else {
             for f in files {
               writing_add_picked(src, w, spec.station, f)
             }
@@ -619,9 +625,11 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     }
     _ => ()
   }
-  let sent = @sfbase.files_taken(w.key)
-  if !sent.is_empty() && !no_files {
-    writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+  if !no_files {
+    let sent = @sfbase.files_taken(w.key)
+    if !sent.is_empty() {
+      writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+    }
   }
 }
 
