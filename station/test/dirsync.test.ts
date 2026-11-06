@@ -134,7 +134,7 @@ async function pair(options: { queue?: boolean; before?: boolean } = {}) {
   b.remote.attach(peerCall(target, targetCloud, (id) => ({ id, ips: [`127.0.0.1:${sourcePort}`] })));
   /// `hold`: the methods held before they are asked, until `release`d. `bulk`/`most`: the bulk requests (contents,
   /// files' chunks) under way now, and the most there were at once.
-  const state = { old: false, asked: [] as string[], hold: new Set<string>(), held: [] as (() => void)[], bulk: 0, most: 0 };
+  const state = { old: false, failFileGet: false, asked: [] as string[], hold: new Set<string>(), held: [] as (() => void)[], bulk: 0, most: 0 };
   const release = () => {
     state.hold.clear();
     for (const go of state.held.splice(0)) go();
@@ -142,6 +142,7 @@ async function pair(options: { queue?: boolean; before?: boolean } = {}) {
   const transport: PeerCall = async (to, workspace, request) => {
     if (to !== "") state.asked.push(request.method);
     if (state.hold.has(request.method)) await new Promise<void>((go) => state.held.push(go));
+    if (state.failFileGet && request.method === "file.get") throw new Refused("artifact temporarily unavailable");
     if (/^(sync\.put|file\.put|file\.get)$/.test(request.method)) {
       state.most = Math.max(state.most, ++state.bulk);
       try {
@@ -165,6 +166,7 @@ async function pair(options: { queue?: boolean; before?: boolean } = {}) {
     const prepared = await use("station_task", { key, action: "prepare", command, dir, ...more });
     const started = await use("station_task", { key, action: "start" });
     await until("it ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith(`Remote task ${key} on `) && text.includes('"state":"exited"')));
     return { prepared, started, sync: started.sync };
   };
   const mirror = (name: string) => join(b.remote.room("ws", source.id(), "s1"), "work", name);
@@ -247,12 +249,12 @@ describe("dirsync", { concurrency: true }, () => {
     // Nothing changed: nothing goes.
     const third = await p.run("k3", repo, "true");
     assert.deepEqual([third.sync.sent.files, third.sync.written, third.sync.removed, third.sync.sent.requests], [0, 0, 0, 0]);
-    // A synced file a command changed is put back by the next sync (and only that one).
+    // A synced file a command changed is kept when its source did not change.
     const fourth = await p.run("k4", repo, "echo local > src/a.txt");
     assert.equal(fourth.sync.sent.files, 0);
     const fifth = await p.run("k5", repo, "true");
-    assert.deepEqual([fifth.sync.sent.files, fifth.sync.written], [1, 1]);
-    assert.equal(readFileSync(join(m, "src", "a.txt"), "utf8"), "alpha, again\n");
+    assert.deepEqual([fifth.sync.sent.files, fifth.sync.written], [0, 0]);
+    assert.equal(readFileSync(join(m, "src", "a.txt"), "utf8"), "local\n");
     // Starting a started key again syncs nothing and returns its job.
     const again = await p.use("station_task", { key: "k5", action: "start" });
     assert.equal(again.job.id, fifth.started.job.id);
@@ -306,8 +308,13 @@ describe("dirsync", { concurrency: true }, () => {
     writeFileSync(join(dir, "input"), "input\n");
     p.state.hold.add("file.get");
     try {
-      await p.run("first", dir, "echo first > trace", { back: ["trace"] });
+      await p.use("station_task", { key: "first", action: "prepare", command: "echo first > trace", dir, back: ["trace"] });
+      const first = await p.use("station_task", { key: "first", action: "start" });
+      await until("the first task ends", () => p.b.store.getJob(first.job.id)!.state !== "running");
       await until("the first result is being downloaded", () => p.state.held.length > 0);
+      const mirrors = await p.use("station_task", { action: "mirrors" });
+      assert.equal(mirrors.mirrors.find((m: Json) => m.name === "back-race").busy, true);
+      await assert.rejects(p.use("station_task", { action: "clean", mirror: "back-race" }), /in use/);
       await p.use("station_task", { key: "second", action: "prepare", command: "echo second > trace", dir, back: ["trace"] });
       await assert.rejects(p.use("station_task", { key: "second", action: "start" }), /first.*(collect|bring|result)/i);
     } finally {
@@ -319,6 +326,41 @@ describe("dirsync", { concurrency: true }, () => {
     await until("the second task ends", () => p.b.store.getJob(started.job.id)!.state !== "running");
     await rounds(p.clock, "5 seconds", () => p.a.told.length === 2);
     assert.equal(readFileSync(join(p.home, "station-back", "second", "trace"), "utf8"), "second\n");
+  });
+
+  test("a failed result download keeps the mirror until the result is saved and released", async () => {
+    const p = await pair();
+    const dir = join(p.home, "failed-back");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "input"), "input\n");
+    p.state.failFileGet = true;
+    await p.run("first", dir, "echo first > trace", { back: ["trace"] });
+    const notice = p.a.told.find(([, text]) => text.startsWith("Remote task first on "))![1];
+    assert.match(notice, /not brought back.*station_file.*release/);
+    await p.use("station_task", { key: "next", action: "prepare", command: "echo second > trace", dir });
+    await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /first.*(collect|bring|result)/i);
+    await assert.rejects(p.use("station_task", { action: "clean", mirror: "failed-back" }), /in use/);
+    p.state.failFileGet = false;
+    await p.use("station_file", { key: "first", direction: "download", path: "failed-back/trace", local: "saved-trace" });
+    assert.equal(readFileSync(join(p.home, "saved-trace"), "utf8"), "first\n");
+    await p.use("station_task", { key: "first", action: "release" });
+    const next = await p.use("station_task", { key: "next", action: "start" });
+    await until("the next task ends", () => p.b.store.getJob(next.job.id)!.state !== "running");
+    assert.equal(readFileSync(join(p.mirror("failed-back"), "trace"), "utf8"), "second\n");
+  });
+
+  test("matching source and remote changes become the base for a later sync", async () => {
+    const p = await pair();
+    const dir = join(p.home, "adopt");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "trace"), "original\n");
+    await p.run("first", dir, "echo remote > trace");
+    writeFileSync(join(dir, "trace"), "remote\n");
+    const same = await p.run("same", dir, "true");
+    assert.equal(same.sync.written, 0);
+    writeFileSync(join(dir, "trace"), "new local\n");
+    await p.run("new", dir, "true");
+    assert.equal(readFileSync(join(p.mirror("adopt"), "trace"), "utf8"), "new local\n");
   });
 
   test("a directory outside Git: all its files but dependencies and build output", async () => {
@@ -397,6 +439,7 @@ describe("dirsync", { concurrency: true }, () => {
     const stopping = p.use("station_task", { key: "long", action: "stop" }).finally(() => (stopped = true));
     await rounds(queueClock, `${STOP_LOOK_MS} millis`, () => stopped);
     await stopping;
+    await rounds(p.clock, "5 seconds", () => p.a.told.some(([, text]) => text.startsWith("Remote task long on ")));
     const next = await p.use("station_task", { key: "next", action: "start" });
     assert.equal(next.sync.sent.files, 1);
     assert.equal(readFileSync(join(p.mirror("busy"), "f"), "utf8"), "2\n");
@@ -440,6 +483,7 @@ describe("dirsync", { concurrency: true }, () => {
     assert.equal(p.state.asked.filter((m) => m === "sync.put").length, 3, "each directory's contents after one request");
     assert.equal(p.state.most, 1, "never two contents' requests under way at once");
     for (const s of started) await until("it ends", () => p.b.store.getJob(s.job.id)!.state !== "running");
+    await until("the first mirror's results are delivered", () => p.a.told.some(([, text]) => text.startsWith("Remote task k0 on ") && text.includes('"state":"exited"')));
     // A file uploaded meanwhile waits its turn the same way.
     const input = join(p.home, "input.bin");
     writeFileSync(input, randomBytes(700 * 1024));

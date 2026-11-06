@@ -704,7 +704,7 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("a chat can ask the target station to remove its own unused mirror while a busy one stays", async () => {
-    const { b, home, use } = pair();
+    const { a, b, home, use } = pair();
     const idle = join(home, "idle");
     const busy = join(home, "busy");
     mkdirSync(idle);
@@ -717,6 +717,7 @@ describe("remote", { concurrency: true }, () => {
     };
     const first = await run("one", idle, "echo output > built.txt");
     await until("the first task ends", () => b.store.getJob(first.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task one on ") && text.includes('"state":"exited"')));
     const second = await run("two", busy, FOREVER);
     const room = b.remote.room("ws", "A", "s1");
     const idlePath = join(room, "work", "idle");
@@ -759,7 +760,7 @@ describe("remote", { concurrency: true }, () => {
     let release!: () => void;
     let entered = 0;
     const gate = new Promise<void>((resolve) => void (release = resolve));
-    const { b, home, use, clock } = pair(undefined, { removeMirror: async (path) => {
+    const { a, b, home, use, clock } = pair(undefined, { removeMirror: async (path) => {
       entered++;
       await gate;
       await rm(path, { recursive: true, force: true });
@@ -770,6 +771,7 @@ describe("remote", { concurrency: true }, () => {
     await use("station_task", { station: "B", key: "slow", action: "prepare", dir, command: "true" });
     const started = await use("station_task", { station: "B", key: "slow", action: "start" });
     await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task slow on ") && text.includes('"state":"exited"')));
     const sleeps = clock.asked();
     const first = use("station_task", { station: "B", action: "clean", mirror: "slow" });
     await until("removal starts", () => entered === 1);
@@ -790,7 +792,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("an interrupted cleanup leaves a prepared task needing a sync before it can start", async () => {
     let fail = true;
-    const { b, home, use } = pair(undefined, { removeMirror: async (path) => {
+    const { a, b, home, use } = pair(undefined, { removeMirror: async (path) => {
       if (fail) throw new Error("removal interrupted");
       await rm(path, { recursive: true, force: true });
     } });
@@ -800,6 +802,7 @@ describe("remote", { concurrency: true }, () => {
     await use("station_task", { station: "B", key: "one", action: "prepare", dir, command: "true" });
     const started = await use("station_task", { station: "B", key: "one", action: "start" });
     await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task one on ") && text.includes('"state":"exited"')));
     const record = join(b.remote.root, "incoming", hash(["ws", "A", "s1", "one"]), "task.json");
     assert.equal(readJson(record).synced, true);
     await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "interrupted" }), /could not be removed/);
