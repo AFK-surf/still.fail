@@ -12,7 +12,7 @@ pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
   /// the rooms sampled before a windowed list lays them out; pass this to `scrolls_window` as `rooms`
-  room_now : () -> (String, Double) -> @view.ListRoom
+  room_now : () -> (String, Double, Double) -> @view.ListRoom
   /// the keys whose rooms are on their way now (those with a cause, those leaving, those moved on the same curve by
   /// their contents while anything is): what a windowed list asks `room` of again as it moves, the rest as they were
   moving : () -> Array[String]
@@ -194,11 +194,11 @@ pub fn[T] ListRows::in_node(
     room_with(k, natural, now, (middle(items[i]), lead(items[i], i), grown(items[i]), own(items[i])))
   }
   // Capture only rows on the way before layout; unchanged rows need no per-frame scan.
-  let room_now = fn() -> (String, Double) -> @view.ListRoom {
+  let room_now = fn() -> (String, Double, Double) -> @view.ListRoom {
     let (items, _) = all.get()
     let c = self.causes
     c.read()
-    if c.by.is_empty() && self.going.is_empty() { return still }
+    if c.by.is_empty() && self.going.is_empty() { return fn(k, natural, _) { still(k, natural) } }
     let indices = key_at.get()
     let properties : Map[String, (Bool, Double, Bool, Bool)] = {}
     let note = fn(k : String) {
@@ -213,7 +213,7 @@ pub fn[T] ListRows::in_node(
     c.own.each(note)
     for k in own_keys.get() { note(k) }
     let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
-    fn(k, natural) {
+    fn(k, natural, _width) {
       match properties.get(k) {
         Some(p) => room_with(k, natural, now, p)
         None => still(k, natural)

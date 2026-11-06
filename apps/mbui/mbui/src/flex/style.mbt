@@ -1025,6 +1025,16 @@ pub(all) struct Node {
   // what of what it holds is said by that (a title no wider than a share of a page's width), set before what it
   // holds is laid out, in the same compute
   mut on_room : ((Double, Double) -> Unit)?
+  // the room it was last laid out in (sized and placed, not a probe: `room_said`, either NaN where that is unbounded):
+  // what says something by it after that, in the same compute or a later one where it is not laid out again, is told
+  // that room at once
+  mut room_said : Bool
+  mut room_w : Double
+  mut room_h : Double
+  // being sized now, a probe or not, in this room (size_node's call under way)
+  mut sizing : Bool
+  mut sizing_w : Double
+  mut sizing_h : Double
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1093,6 +1103,12 @@ pub fn Node::new() -> Node {
     layout_children: None,
     sized_by_children: false,
     on_room: None,
+    room_said: false,
+    room_w: 0.0 / 0.0,
+    room_h: 0.0 / 0.0,
+    sizing: false,
+    sizing_w: 0.0 / 0.0,
+    sizing_h: 0.0 / 0.0,
     left: 0.0,
     top: 0.0,
     width: 0.0,
@@ -1151,4 +1167,17 @@ pub fn computes() -> Int {
 ///|
 pub fn Node::add(self : Node, child : Node) -> Unit {
   self.children.push(child)
+}
+
+///|
+/// The room what is said by it now is told (Live's Roomed said under it as it is laid out): the room of its sizing under
+/// way, a probe's or not; else the room it was last laid out in; None where it never was.
+pub fn Node::room_now(self : Node) -> (Double, Double)? {
+  if self.sizing {
+    Some((self.sizing_w, self.sizing_h))
+  } else if self.room_said {
+    Some((self.room_w, self.room_h))
+  } else {
+    None
+  }
 }

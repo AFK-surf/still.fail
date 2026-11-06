@@ -87,7 +87,7 @@ pub fn View::list_room_ground(self : View) -> View {
 /// only as far as its top under that, read from its top (Follow.kt), and it follows its end no more. `read_from_top`
 /// may say false for a block whose end should stay in view even when tall, such as the reader's own message.
 /// `rooms`: the blocks' rooms as they are now (read before the column is laid out: a block's room by its key and the
-/// height it measured in that layout), where heights themselves follow a shared motion; the list follows those rooms
+/// height and width it measured in that layout), where heights themselves follow a shared motion; the list follows those rooms
 /// directly, without another glide over their motion. `room_transforms=false` leaves displacement, scale and opacity
 /// to `list_room_content` on the content; `list_room_ground` keeps a separate ground clear of the room's soft edge.
 /// `kept_keys`: blocks needed outside the visible window too, such
@@ -111,7 +111,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
-  rooms? : () -> (K, Double) -> ListRoom,
+  rooms? : () -> (K, Double, Double) -> ListRoom,
   room_transforms? : Bool = true,
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },

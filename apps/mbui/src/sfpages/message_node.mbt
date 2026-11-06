@@ -348,7 +348,9 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
         tree=fn() { m().md },
         size=fn() { body_size },
         found=fn() { marked_of(here(), m().ts) },
+        // (out into its row's way in from the pane's sides, as its row is laid out: chat_row_bleed; else as said)
         bleed=@signals.untracked(fn() { here().gutter }),
+        bleed_by?=body.lent(chat_row_bleed),
         // (a file its agent names by its path: itself, as it is now, in the preview; any other link, opened)
         on_link=fn(h) {
           let now = here()

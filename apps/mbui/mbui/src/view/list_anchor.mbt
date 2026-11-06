@@ -36,7 +36,7 @@ priv struct AnchoredIn[K] {
   fraction : (K, Double, Double)?
   fraction_n : Int
   kept : Array[K]
-  rooms : Same[(K, Double) -> ListRoom]
+  rooms : Same[(K, Double, Double) -> ListRoom]
   /// of the rows the list ends with (the last `tail`), those new to it that `fresh` says are, and of those whether each
   /// is read from its top; what covers its top
   fresh : Array[(K, Bool)]
@@ -155,8 +155,8 @@ pub fn[K] AnchoredPosition::get(self : AnchoredPosition[K]) -> (K, Double)? {
 /// `put_fraction_lead_within_row`, the lead is capped at the point's distance from its row's top, using its measured
 /// height on each layout. `put_passage` (a row, a name, a share) puts the part of the
 /// row it reports by that name (Layout::report_span) in the window's middle where its middle is further down than that
-/// share of the window, as it is laid out, held there as a put row is; `room` is a
-/// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
+/// share of the window, as it is laid out, held there as a put row is; `rooms` gives a
+/// row's room by its measured height and the list's current width; `kept_keys` are rows made and laid out
 /// though not in sight (a send's landing). `room_transforms=false` leaves its displacement, scale and opacity to
 /// `list_room_content` on the row's content; `list_room_ground` keeps a separate ground clear of the row's soft edge.
 /// `foot_room` is room under the last row. `foot_cover` what covers its foot (a composer over
@@ -183,7 +183,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   put? : @signals.Signal[(K, Double)?],
   put_fraction? : @signals.Signal[(K, Double, Double)?],
   put_fraction_lead_within_row? : Bool = false,
-  rooms? : () -> (K, Double) -> ListRoom,
+  rooms? : () -> (K, Double, Double) -> ListRoom,
   room_transforms? : Bool = true,
   put_passage? : @signals.Signal[(K, String, Double)?],
   fresh? : (K) -> Bool = fn(_) { false },
@@ -224,7 +224,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   put? : @signals.Signal[(K, Double)?],
   put_fraction? : @signals.Signal[(K, Double, Double)?],
   put_fraction_lead_within_row? : Bool = false,
-  rooms? : () -> (K, Double) -> ListRoom,
+  rooms? : () -> (K, Double, Double) -> ListRoom,
   room_transforms? : Bool = true,
   put_passage? : @signals.Signal[(K, String, Double)?],
   fresh? : (K) -> Bool = fn(_) { false },
@@ -381,7 +381,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       }
     }
   }
-  let natural_room = fn(_k : K, h : Double) { list_room(h) }
+  let natural_room = fn(_k : K, h : Double, _w : Double) { list_room(h) }
   // Keep the captured room function until one of its own inputs changes. Clearing a completed placement request
   // must not make an otherwise identical room look new while the layout result is being published.
   let current_rooms = @signals.computed(fn(_) {
@@ -743,7 +743,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             None => known_sum.val = known_sum.val + natural
           }
           heights[k] = natural
-          let r = (c.rooms.v)(k, natural)
+          let r = (c.rooms.v)(k, natural, l.width)
           rooms_laid[k] = r
           let room_h = on_grid(r.height)
           if (room_h - measured).abs() > 0.001 {
@@ -1284,7 +1284,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           for i in (r.last + 1)..<n {
             let k = key_at(i)
             let natural = heights.get(k).unwrap_or(mean())
-            tail_end += (c.rooms.v)(k, natural).height
+            tail_end += (c.rooms.v)(k, natural, l.width).height
           }
         }
         let to_tail = dmax(0.0, tail_end - h)

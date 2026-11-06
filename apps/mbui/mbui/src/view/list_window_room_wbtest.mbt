@@ -12,7 +12,7 @@ test "windowed row rooms keep the ground whole and clip it while transforming on
       Scroll::list(), fn() { keys }, est=80.0, room_transforms=false,
       rooms=fn() {
         let current = moving.get()
-        fn(k, h) {
+        fn(k, h, _) {
           if current == k {
             { height: h / 2.0, offset: -h / 4.0, clip: true, soft: true, scale: 0.5, alpha: 0.5, presses: false }
           } else {

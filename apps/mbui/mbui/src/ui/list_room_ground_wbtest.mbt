@@ -8,7 +8,7 @@ test "a row's ground stays solid under its softly cut opening content" {
   set_view_app(fn(root) {
     root.height(Is(Some(100.0))).scrolls_window(@view.Scroll::list(), fn() { ["row"] }, est=80.0,
       room_transforms=false, rooms=fn() {
-        fn(_, h) { { height: h / 2.0, offset: -h / 4.0, clip: true, soft: true, scale: 0.5, alpha: 0.5, presses: true } }
+        fn(_, h, _) { { height: h / 2.0, offset: -h / 4.0, clip: true, soft: true, scale: 0.5, alpha: 0.5, presses: true } }
       }, fn(row, _) {
         row.width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
         row.box(fn(g) {

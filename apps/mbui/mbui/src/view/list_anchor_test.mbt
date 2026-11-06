@@ -14,7 +14,7 @@ priv struct AnchoredCase {
 }
 
 ///|
-fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double) -> @view.ListRoom, tall_of? : (Int) -> Double = fn(_) { 40.0 }) -> AnchoredCase {
+fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double, Double) -> @view.ListRoom, tall_of? : (Int) -> Double = fn(_) { 40.0 }) -> AnchoredCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
@@ -54,7 +54,7 @@ test "scrolls_anchored: a placement with moving rooms is consumed without relayi
   let extra = @signals.signal(0)
   let c = anchored_case(100, rooms=fn() {
     let n = extra.get()
-    fn(_, h) { @view.list_room(h + n.to_double()) }
+    fn(_, h, _) { @view.list_room(h + n.to_double()) }
   })
   c.put.set(Some((50, 10.0)))
   c.tree.frame(390.0, 844.0, now=10.0) |> ignore
