@@ -49,6 +49,8 @@ priv struct SceneLayer {
   /// scrim, glass and what captures for it, a native view, the old frame's layers under it. Never copied, and never
   /// drawn again by the tree alone (scene_alone).
   mut own_only : Bool
+  /// what of it was drawn so first (scene_own_only), for a test to say
+  mut own_why : String
   /// what it holds is drawn again each frame that draws what holds it (a field: its caret, its words picked, as its
   /// editor has them): never copied, never drawn again alone
   mut each : Bool
@@ -820,9 +822,14 @@ fn scene_node_drawn(id : @view.NodeId) -> Unit {
 ///|
 /// Something drawn now otherwise than by the tree alone (an old view, glass, a native view, the old frame's layers):
 /// the layer being drawn is never copied nor drawn again alone.
-fn scene_own_only() -> Unit {
+fn scene_own_only(why : String) -> Unit {
   match scene.drawing {
-    Some(l) => l.own_only = true
+    Some(l) => {
+      if !l.own_only {
+        l.own_why = why
+      }
+      l.own_only = true
+    }
     None => ()
   }
 }
@@ -1273,7 +1280,7 @@ fn Ctx::scene_copied(
   ignore(forced)
   guard scene.layers.get(id) is Some(l) else { return copy_not(id, "not kept") }
   guard l.seen >= 0 && l.seen >= scene.frame - 1 else { return copy_not(id, "not drawn the frame before") }
-  guard !l.own_only else { return copy_not(id, "own only") }
+  guard !l.own_only else { return copy_not(id, "own only: \{l.own_why}") }
   guard !l.each else { return copy_not(id, "drawn each frame") }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked or told") }
   // (what it was drawn in, as it is drawn in now, but where: its key; another, drawn anew)
@@ -1404,6 +1411,7 @@ fn Ctx::scene_drawn(
         watch: None,
         told: false,
         own_only: false,
+        own_why: "",
         each: false,
         plots: [],
         images: [],
@@ -1560,6 +1568,7 @@ fn scene_drawn_begin(
   l.held = held
   l.scrim = !dr.scrims.is_empty()
   l.own_only = false
+  l.own_why = ""
   l.each = false
   l.told = false
   l.inner.clear()
@@ -1618,16 +1627,15 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
       l.inner_cuts.add(x0 + l.origin.0, y0 + l.origin.1, x1 + l.origin.0, y1 + l.origin.1)
     }
   }
-  // (what holds it: as own only as anything it holds, and what it holds below it)
+  // (what holds it: what it holds below it, and drawn each frame as anything it holds is; what is drawn otherwise
+  // than by the tree its own, what holds it put together round it, it drawn again where its reference is,
+  // Ctx::scene_redrawn_in)
   match outer {
     Some(o) => {
       o.inner.push(l.id)
       o.inner_cuts.take(l.inner_cuts)
       if l.fades_inside {
         o.fades_inside = true
-      }
-      if l.own_only {
-        o.own_only = true
       }
       if l.each {
         o.each = true
@@ -2414,7 +2422,17 @@ fn Ctx::scene_emitted(
             None => {
               let (k, s) = (self.ninst, self.segs.length() / 4)
               // (why, told a Tester as the walk tells why one is not copied)
-              copy_not(c.id, if c.told || scene.marked.contains(c.id) { "marked or told" } else { "drawn again where its reference is" }) |> ignore
+              copy_not(
+                c.id,
+                if c.told || scene.marked.contains(c.id) {
+                  "marked or told"
+                } else if c.own_only {
+                  "own only: \{c.own_why}"
+                } else {
+                  "drawn again where its reference is"
+                },
+              )
+              |> ignore
               self.scene_redrawn_in(p, l, c)
               self.scene_put_then_out(c, k, s, true)
             }
@@ -2746,9 +2764,6 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
     l.fades_inside = true
   }
   // (what holds it as own only, as drawn each frame, as it now is: put in as kept no more)
-  if c.own_only {
-    l.own_only = true
-  }
   if c.each {
     l.each = true
   }

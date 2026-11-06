@@ -823,7 +823,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   // (by build: a frame built again paints again, and what the last build did not paint is not shown; what draws it drawn
   // as the old frame paints, scene_layers.mbt)
   v.painted = self.build_no
-  scene_own_only()
+  scene_own_only("a native view")
   v.seq = self.ninst
   // (where it is among the frame's targets: what is over it after it, its covers; found with them where they are found
   // alone, Ctx::node_targets)

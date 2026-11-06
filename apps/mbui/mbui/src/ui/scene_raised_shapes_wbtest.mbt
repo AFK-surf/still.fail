@@ -5,7 +5,9 @@
 ///|
 /// Outlines side by side from the left, each 10 across, `n` of them: squares (`square`), else triangles.
 fn raised_outlines(n : Int, square : Bool, fill : Int64) -> Array[@paint.Shape] {
-  Array::makei(n, fn(i) {
+  // (and one of no outline first: a band of no pieces, if any, between others' pieces)
+  let none = [@paint.shape_of([([], true)], fill~)]
+  none + Array::makei(n, fn(i) {
     let x0 = i.to_double() * 12.0
     let points = if square {
       [x0, 0.0, x0 + 10.0, 0.0, x0 + 10.0, 10.0, x0, 10.0]
@@ -132,7 +134,8 @@ test "a layer put over the scrim after its sibling, both drawn again longer, the
     let top = bands.filter(fn(b) { b.1 < 20.0 }).map(fn(b) { b.2 })
     let below = bands.filter(fn(b) { b.1 >= 20.0 }).map(fn(b) { b.2 })
     let raised = top.length() > 0 && below.length() > 0 && top[0] > below[below.length() - 1]
-    said.push("\{when}: raised \{raised}, layers drawn \{work.layers - before.layers}, copied \{work.copied - before.copied}")
+    let empty = bands.filter(fn(b) { b.3.is_empty() }).length()
+    said.push("\{when}: raised \{raised}, \{bands.length()} bands, \{empty} of no pieces, layers drawn \{work.layers - before.layers}, copied \{work.copied - before.copied}")
     assert_eq(raised, m, msg="\{when}: \{said}")
     assert_eq(bands.map(fn(b) { (b.0, b.1, b.3) }), anew, msg="\{when}: \{said}")
   }

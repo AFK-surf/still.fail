@@ -197,7 +197,7 @@ fn Ctx::glass_inst(
 /// a node of the window's tree's as its instances are composed: never kept with them).
 fn Ctx::glass_capture(self : Ctx, k : Int, liquid : Bool, shares : Bool) -> Unit {
   // (a capture's place among the frame's is the frame's: what draws it drawn as the old frame paints, scene_layers.mbt)
-  scene_own_only()
+  scene_own_only("glass")
   perf_glass.val = perf_glass.val + 1
   let b = k * inst_size
   let a = self.inst

@@ -1259,7 +1259,7 @@ fn Ctx::paint_layers_under(self : Ctx, p : TreePaint, stack : Int, rest : Bool) 
     ch = n.next
   }
   if self.ninst > k0 {
-    scene_own_only()
+    scene_own_only("the old frame's layers under it")
     self.scene_old_drawn(None, k0)
   }
 }
@@ -1628,7 +1628,7 @@ fn Ctx::tree_draw_node(
     p.raising = Some((c.id, self.ninst))
     p.raising_depth = depth
     // (moved over the old frame's scrim as it is painted: drawn otherwise than by the tree alone)
-    scene_own_only()
+    scene_own_only("put over the scrim")
   }
   let k0 = self.ninst
   // (where the host puts a control of its own: a rect of no opacity drawn as it is, kept by its layer, native_anchor.mbt)
@@ -1803,7 +1803,7 @@ fn Ctx::tree_draw_own(
   }
   if c.hosted {
     // (the old frame's: drawn otherwise than by the tree alone, what it reaches the old view's)
-    scene_own_only()
+    scene_own_only("an old view")
     if p.alone || p.root < 0 {
       return -1
     }
