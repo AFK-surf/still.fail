@@ -209,6 +209,9 @@ let scene : Scene = {
 }
 
 ///|
+pub let scroll_scene_probe : Ref[Bool] = Ref(false)
+
+///|
 /// What drawing the window's tree did, counted from its making (rule 14: a frame's cost is what changed): layers drawn
 /// and their instances made into the frame (`recorded`), layers and instances kept, copied where they are put
 /// (`copied`, `copied_insts`), frames of the tree alone (`alone`) and frames the old frame painted (`full`), and how much saying where the window changed took
@@ -400,6 +403,10 @@ fn scene_told(
     }
   }
   let tell = fn(id : @view.NodeId, moved : Bool) {
+    if scroll_scene_probe.val {
+      let node = tree.drawn_of(id).map(fn(d) { (d.x, d.y, d.w, d.h, d.words, d.glass is Some(_)) })
+      println("SCENEPROBE CAUSE frame=\{scene.frame} id=\{id.at} moved=\{moved} node=\{node} reach=\{scene.reach.get(id)} layer=\{tree.layer_of(id).map(fn(n) { n.at })}")
+    }
     match scene.reach.get(id) {
       Some(r) => scene.parts.add(r)
       None => ()
@@ -909,6 +916,11 @@ fn Ctx::scene_copied(
   glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
 ) -> Bool {
   let not = fn(why : String) {
+    if scroll_scene_probe.val {
+      let d = view_tree().bind(fn(tree) { tree.drawn_of(id) }).map(fn(d) { (d.x, d.y, d.w, d.h, d.words, d.glass is Some(_)) })
+      let old = scene.layers.get(id).map(fn(l) { (l.outer.map(fn(n) { n.at }), l.count, l.held, l.reach, l.own_only, l.each, l.told) })
+      println("SCENEPROBE NOCOPY frame=\{scene.frame} id=\{id.at} why=\{why} node=\{d} old=\{old} held=\{held}")
+    }
     if scene.copy_why == "" {
       scene.copy_why = "\{id.at}: \{why}"
     }
@@ -1226,6 +1238,9 @@ fn Ctx::scene_drawn(
     }
   }
   scene_work.recorded = scene_work.recorded + own
+  if scroll_scene_probe.val {
+    println("SCENEPROBE DRAW frame=\{scene.frame} id=\{id.at} outer=\{l.outer.map(fn(n) { n.at })} own=\{own} total=\{l.count} reach=\{l.reach} own_only=\{l.own_only}")
+  }
   l
 }
 
@@ -1348,7 +1363,11 @@ fn Ctx::scene_parts_taken(self : Ctx) -> Array[(Double, Double, Double, Double)]
   for r in scene.streams {
     scene.parts.add(r)
   }
+  let prior = if scroll_scene_probe.val { scene.parts.probe() } else { [] }
   let parts = scene.parts.take(self.window_w, self.window_h, scene.captures.map(fn(c) { c.1 }))
+  if scroll_scene_probe.val {
+    println("SCENEPROBE DAMAGE frame=\{scene.frame} raw=\{prior} captures=\{scene.captures} parts=\{parts} why=\{scene.parts.why()}")
+  }
   if !parts.is_empty() {
     scene.told_parts = parts
   }

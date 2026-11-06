@@ -157,6 +157,11 @@ pub fn Parts::any(self : Parts) -> Bool {
 }
 
 ///|
+pub fn Parts::probe(self : Parts) -> Array[(Double, Double, Double, Double)] {
+  self.parts.map(fn(p) { (p.x0, p.y0, p.x1, p.y1) })
+}
+
+///|
 /// The parts said since the last taken, in a window `w` × `h`, what `captures` of glass copy (capture_of's, each
 /// group's together) taken in where a part reaches one: each (x, y, w, h), at most four, apart; one with w < 0 all of
 /// it; none, nothing. Said anew from here.
