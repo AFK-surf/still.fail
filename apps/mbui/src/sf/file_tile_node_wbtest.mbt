@@ -1,24 +1,41 @@
 // A file tile keeps its shape while the file, upload and theme change.
 
 ///|
-test "a file tile node draws the original sheet, extension, upload and folder in both themes" {
+test "a file tile node shows each file state in both themes" {
   for dark in [false, true] {
     set_dark(Some(dark))
     for sample in [
-      ("README", false, None, false),
-      ("file.txt", false, None, false),
-      ("file.abcde", false, Some(0.5), false),
-      ("file.abcdef", false, Some(1.0), false),
-      ("failed.pdf", false, Some(0.3), true),
-      ("folder", true, Some(0.5), true),
+      ("README", false, None, false, ""),
+      ("file.txt", false, None, false, "TXT"),
+      ("file.abcde", false, Some(0.5), false, "ABCDE"),
+      ("file.abcdef", false, Some(1.0), false, ""),
+      ("failed.pdf", false, Some(0.3), true, "PDF"),
+      ("folder", true, Some(0.5), true, ""),
     ] {
-      let (name, dir, progress, error) = sample
-      let (old, made) = drawn_both(
-        fn(c) { file_tile(c, name, dir~, progress~, error~) },
-        fn(parent) { file_tile_node(parent, fn() { name }, dir=fn() { dir },
-          progress=fn() { progress }, error=fn() { error }) |> ignore },
-      )
-      assert_eq(made, old, msg="\{sample}, dark=\{dark}")
+      let (name, dir, progress, error, extension) = sample
+      let tile : Ref[@view.View?] = Ref(None)
+      let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=120.0, h=120.0)
+      @ui.set_view_app(fn(root) {
+        @ui.set_tree_theme(ui_theme_now)
+        root.padding(Is((40.0, 40.0, 0.0, 0.0))) |> ignore
+        tile.val = Some(file_tile_node(root, fn() { name }, dir=fn() { dir },
+          progress=fn() { progress }, error=fn() { error }))
+      })
+      t.draw()
+      assert_eq(tile.val.unwrap().laid_window_now(), (40.0, 40.0, 30.0, 36.0))
+      assert_true(t.drawn_shapes().iter().any(fn(shape) { shape.5 == theme().p.muted }), msg="\{name}: outline")
+      if extension != "" {
+        assert_true(t.find(extension) is Some(_), msg="\{name}: uppercase extension")
+        assert_eq(t.all(Text, label=extension).length(), 1, msg="\{name}: extension read once")
+      } else if !dir {
+        assert_true(t.shape_cover(50.0, 59.0) > 0.0, msg="\{name}: lines in the sheet")
+      }
+      if dir {
+        assert_false(t.drawn_shapes().iter().any(fn(shape) { shape.5 == alpha(theme().p.accent, tile_fill_share) }), msg="folder has no upload fill")
+      } else if progress is Some(_) {
+        assert_true(t.drawn_shapes().iter().any(fn(shape) { shape.5 == alpha(theme().p.accent, tile_fill_share) }), msg="\{name}: upload fill")
+      }
+      assert_true(t.all(Button).is_empty(), msg="the file tile is not a control")
     }
   }
   set_dark(None)
