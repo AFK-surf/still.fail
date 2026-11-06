@@ -4785,12 +4785,12 @@ fn tree_said_id(id : @view.NodeId) -> Int {
 /// `action` asked of what is read out as `id` (a screen reader's, a test's), where it is a node of the window's tree:
 /// done as it is done by hand, at the moment it is asked (Activate: its on_press, as a press on it runs it; one let go
 /// or taking no presses, nothing). Whether it was one.
-fn tree_said_action(id : Int, action : Action) -> Bool {
+fn tree_said_action(id : Int, action : Action, built? : Bool = false) -> Bool {
   match (tree_said_ids.get(id), view_app.val) {
     (Some(nid), Some(tree)) => {
       // (what the old frame put over all of it, modal, keeps it from input as from being read out; not what is over all
       // else of the window, View::over_all)
-      let free = tree.stack_of(nid) > g().old_modal_stack()
+      let free = tree.stack_of(nid) > g().old_modal_stack(built~)
       match action {
         Activate if free => {
           // (taken, its press found and done as one event of this moment: Tree::activate_at)
@@ -5001,7 +5001,7 @@ fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
 /// in: Ctx::ask_action): the node hosting the old view it says itself in (by what it said of its node:
 /// Ctx::said_owner) read out and taking presses (Tree::acts_on); what the old frame put over all of it, always (its
 /// own). Where there is no tree, or nothing said by that id, as ever.
-fn old_said_allowed(c : Ctx, id : Int) -> Bool {
+fn old_said_allowed(c : Ctx, id : Int, built? : Bool = false) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return true
@@ -5015,9 +5015,9 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
     // (of a layer the old frame put over all of it: where none over it in the window's stack of layers is modal, the
     // tree's or the old frame's own; Ctx::layer_stack_at)
     -2 => {
-      if c.layer_inert(c.layer_of(node)) { return false }
+      if c.layer_inert(c.layer_of(node), built~) { return false }
       let at = c.root_layer_stack(node)
-      return at >= tree.modal_stack() && at >= c.old_modal_stack()
+      return at >= tree.modal_stack() && at >= c.old_modal_stack(built~)
     }
     -1 => tree.hosting()
     at => old_boxes.keys().find_first(fn(k) { k.at == at })
@@ -5782,8 +5782,8 @@ fn old_hit_stack(k : Int) -> Int {
 ///|
 /// Where the old frame's topmost modal layer is in the window's stack of layers (Ctx::old_layer_stack), -2 none: what of
 /// the tree is not over it takes no input (Tree::hold_under).
-fn Ctx::old_modal_stack(self : Ctx) -> Int {
-  let m = self.modal_node()
+fn Ctx::old_modal_stack(self : Ctx, built? : Bool = false) -> Int {
+  let m = self.modal_node(built~)
   if m < 0 {
     return -2
   }

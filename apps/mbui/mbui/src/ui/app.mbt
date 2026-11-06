@@ -402,6 +402,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.layers_focus()
     // (and into the first of what a layer of the window's tree holds that takes it, as this pass built it: view_host.mbt)
     view_layers_first(c)
+    // A label may name a field built after it. Resolve that request from the complete declarations of this pass,
+    // before leaving the build for callbacks or later host input, with the same visibility and modal checks.
+    c.focus_built()
     hand_focus_said(c)
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)

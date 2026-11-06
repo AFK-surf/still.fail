@@ -142,9 +142,15 @@ fn Ctx::said_node(self : Ctx, id : Int) -> Int? {
 
 ///|
 /// Focus is declared by the same registration the keyboard uses, with its layer and host judged at the input.
-fn Ctx::said_focusable(self : Ctx, id : Int) -> Bool {
-  match self.last_focus_ids.get(id) {
-    Some(f) => !self.layer_inert(f.layer) && island_allows(f.island)
+/// `built` reads the completed current build for a forward request, before it becomes last_focus_ids.
+fn Ctx::said_focusable(self : Ctx, id : Int, built? : Bool = false) -> Bool {
+  let found = if built {
+    self.focusables.iter().find_first(fn(f) { f.id == id })
+  } else {
+    self.last_focus_ids.get(id)
+  }
+  match found {
+    Some(f) => !self.layer_inert(f.layer, built~) && island_allows(f.island)
     None => false
   }
 }
@@ -153,7 +159,8 @@ fn Ctx::said_focusable(self : Ctx, id : Int) -> Bool {
 /// An immediate old action uses the last build's declaration and the current host/layer state. Walking only its
 /// ancestors applies the visibility rules of semantics_old without allocating labels, rectangles or a whole tree.
 /// A business condition inside an old build closure is still that build's; this does not re-run it for input.
-fn Ctx::said_action_allowed(self : Ctx, id : Int, action : Action) -> Bool {
+/// `built` is only for focus_built, after this build's declarations and layout are complete.
+fn Ctx::said_action_allowed(self : Ctx, id : Int, action : Action, built? : Bool = false) -> Bool {
   let node = match self.said_node(id) {
     Some(i) => i
     None => return false
@@ -169,8 +176,8 @@ fn Ctx::said_action_allowed(self : Ctx, id : Int, action : Action) -> Bool {
       action == Activate
     }
   }
-  if !declared && !(action == Focus && self.said_focusable(id)) { return false }
-  let modal = self.modal_node()
+  if !declared && !(action == Focus && self.said_focusable(id, built~)) { return false }
+  let modal = self.modal_node(built~)
   let modal_id = if modal >= 0 { self.layer_of(modal) } else { 0 }
   let mut in_modal = modal < 0
   let mut i = node
@@ -179,14 +186,19 @@ fn Ctx::said_action_allowed(self : Ctx, id : Int, action : Action) -> Bool {
     let p = n.parent
     if n.sem_hid || n.bones != 0L ||
       (p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits) ||
-      (n.portal && n.portal_id != 0 && self.layer_inert(n.portal_id)) {
+      (n.portal && n.portal_id != 0 && self.layer_inert(n.portal_id, built~)) {
       return false
     }
     match n.sem {
       Some(s) if s.hidden || !island_allows(n.island) => return false
       _ => ()
     }
-    if i == modal || (n.portal && modal_id != 0 && self.layer_within(n.portal_id, modal_id)) {
+    let nested = if n.portal && modal_id != 0 {
+      if built { self.layer_built_in(n.portal_id, modal_id) } else { self.layer_within(n.portal_id, modal_id) }
+    } else {
+      false
+    }
+    if i == modal || nested {
       in_modal = true
     }
     i = p
@@ -207,12 +219,10 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 /// event, as a pointer release does; a widget still reading actions in its build sees those in the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   // A legacy label may ask for a field built after it. The build's indices are incomplete until published;
-  // keep this forward request for the next frame's input phase, where the complete declaration is validated.
+  // finish this forward request when this build publishes its complete declaration, before another input can run.
   // Host requests outside a build still act now and never gain this deferred path.
   if building.val && action == Focus {
     self.asked_actions.push((id, action))
-    hand_event()
-    input_came()
     return
   }
   // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
@@ -230,6 +240,23 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
     }
     None => self.asked(id, action)
   }
+}
+
+///|
+/// Forward focus requests made while building use this build's complete declarations and layers. They finish
+/// before build callbacks or the host's next input, never in a later frame after a newer focus or key event.
+fn Ctx::focus_built(self : Ctx) -> Unit {
+  if !self.asked_actions.iter().any(fn(a) { a.1 == Focus }) { return }
+  let asked = self.asked_actions.filter(fn(a) { a.1 == Focus })
+  self.asked_actions.retain(fn(a) { a.1 != Focus })
+  let before = self.focus
+  for a in asked {
+    if tree_said_action(a.0, Focus, built=true) { continue }
+    if old_said_allowed(self, a.0, built=true) && self.said_action_allowed(a.0, Focus, built=true) {
+      self.focus_moved(a.0)
+    }
+  }
+  if self.focus != before { self.read_changed("the focus asked of this build") }
 }
 
 ///|

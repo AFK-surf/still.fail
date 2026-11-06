@@ -313,12 +313,14 @@ fn Ctx::layer_within(self : Ctx, l : Int, outer : Int) -> Bool {
 }
 
 ///|
-/// Whether layer `l` (or one it was built in) was leaving the last frame.
-fn Ctx::layer_inert(self : Ctx, l : Int) -> Bool {
+/// Whether layer `l` (or one it was built in) takes no input. `built` uses this build's completed declarations when
+/// resolving a forward focus request; ordinary input uses the published layers.
+fn Ctx::layer_inert(self : Ctx, l : Int, built? : Bool = false) -> Bool {
   let mut at = l
   let mut steps = 0
   while at != 0 && steps < 64 {
-    match self.last_layer(at) {
+    let layer = if built { self.layers.iter().find_first(fn(x) { x.id == at }) } else { self.last_layer(at) }
+    match layer {
       Some(x) => {
         if !self.layer_takes(x) {
           return true
@@ -333,11 +335,13 @@ fn Ctx::layer_inert(self : Ctx, l : Int) -> Bool {
 }
 
 ///|
-/// The node of the topmost modal layer the last frame built (-1 none): what is outside it is hidden.
-fn Ctx::modal_node(self : Ctx) -> Int {
-  let mut k = self.last_layers.length() - 1
+/// The node of the topmost modal layer (-1 none): published for input, this build's completed layers for a forward
+/// focus request (`built`). What is outside it is hidden.
+fn Ctx::modal_node(self : Ctx, built? : Bool = false) -> Int {
+  let layers = if built { self.layers } else { self.last_layers }
+  let mut k = layers.length() - 1
   while k >= 0 {
-    let l = self.last_layers[k]
+    let l = layers[k]
     if l.modal && self.layer_takes(l) && l.node < self.count {
       return l.node
     }
