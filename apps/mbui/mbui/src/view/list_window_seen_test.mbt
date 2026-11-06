@@ -255,3 +255,66 @@ test "scrolls_window: put where rows 10 to 12 show in an event and laid out ther
     assert_eq(runs[1], runs[0], msg="same event \{same_event}")
   }
 }
+
+///|
+test "scrolls_window: two lists' blocks come in sight in one layout, the first's telling putting it on and laying the tree out at once: what that layout finds told after the second's telling, not within the first's, each of the event's moment" {
+  let log : Array[(Int, Int, Double?)] = []
+  let one = @view.Scroll::list()
+  let two = @view.Scroll::list()
+  let held : Ref[@view.Tree?] = Ref(None)
+  let put_on = Ref(false)
+  let keys = fn() { Array::makei(400, fn(i) { i }) }
+  let row = fn(b : @view.View, _k : Int) { b.height(Is(Some(40.0))) |> ignore }
+  // (each telling: which list, the first block it told, the moment it was told at)
+  let said = fn(list : Int, came : Array[Int]) {
+    let at = match held.val {
+      Some(t) => t.moment()
+      None => None
+    }
+    log.push((list, came[0], at))
+  }
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(600.0))).height(Is(Some(100.0))).row(Is(true)) |> ignore
+      o.box(fn(p) {
+        p.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+        p.scrolls_window(
+          one,
+          keys,
+          est=40.0,
+          seen=fn(came) {
+            said(1, came)
+            // (rows 10 on come in sight: put on to 20 and laid out at once, as an event reads where things are)
+            if !put_on.val && came.contains(10) {
+              put_on.val = true
+              one.put(800.0)
+              match held.val {
+                Some(t) => t.laid_as_now()
+                None => ()
+              }
+            }
+          },
+          row,
+        )
+        |> ignore
+      })
+      |> ignore
+      o.box(fn(p) {
+        p.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+        p.scrolls_window(two, keys, est=40.0, seen=fn(came) { said(2, came) }, row) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  held.val = Some(tree)
+  tree.frame(600.0, 100.0, now=0.0) |> ignore
+  let first = log.length()
+  tree.event_said(5.0, fn() {  }, fn() {
+    one.put(400.0)
+    two.put(400.0)
+    tree.laid_as_now()
+  })
+  assert_eq(log[first:].to_array(), [(1, 10, Some(5.0)), (2, 10, Some(5.0)), (1, 20, Some(5.0))])
+  tree.dispose()
+}
