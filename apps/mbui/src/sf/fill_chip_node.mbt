@@ -67,7 +67,7 @@ pub fn fill_chip_node(
       |> ignore
       w.show(fn() { mark() != "" }, fn(m) {
         m.words(By(mark)).words_look(By(fn() { @ui.style_words(chip_text) })).ink(By(fn() { @ui.style_ink(chip_text) }))
-        .cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true))
+        .shrink(Is(0.0))
         |> ignore
       })
       w.box(fn(n) {

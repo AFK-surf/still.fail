@@ -116,6 +116,7 @@ test "station meter alerts give way inside a narrow row and keep their full acce
   let (mx, _, mw, _) = m.rect
   let (dx, _, dw, _) = d.rect
   assert_true(mx >= 0.0 && mw > 0.0 && dx > mx && dx + dw <= 180.0, msg=t.semantics_dump())
+  assert_true(t.find("Memory") is Some(_) && t.find("Disk") is Some(_), msg="the alert names remain visible")
   room.set(500.0)
   t.draw()
   assert_true(t.find("left 5.0 GB") is Some(_) && t.find("left 1.0 GB") is Some(_), msg=t.drawn_text())
