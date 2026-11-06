@@ -442,7 +442,19 @@ fn emit_moment(c : @ui.Ctx) -> Double {
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
-pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], turns : Turns, sending : Double, at? : Double) -> Unit {
+/// `place` reads one placement prepared at this cause by the owner; it must not lay out per lookup. With no causal
+/// source (the old frame-built entry), geometry is unknown: fixed phase durations and no saved endpoint. An old
+/// drawing may still sample its measured boxes, but those past boxes cannot set a phase's handover or duration.
+pub fn emit_step(
+  c : @ui.Ctx,
+  key : String,
+  e : Emits,
+  agents : Array[String],
+  turns : Turns,
+  sending : Double,
+  place? : (String) -> (Double, Double, Double, Double)? = fn(_) { None },
+  at? : Double,
+) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
   let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
   // the words of what came out all in: drawn as laid out from here, what showed them built again (emit_out)
@@ -529,7 +541,7 @@ pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], t
         e.held_until = -1.0
         // The same endpoint selection as the picture, including its fallback if the row is absent. This cause
         // keeps it for this seq; a missing endpoint never retains another message's point.
-        e.aimed = emit_landing_by(key, e, t, agents, emit_place_now)
+        e.aimed = emit_landing_by(key, e, t, agents, place)
         e.aimed_at = t.seq
         e.out_at[seq_s(t.seq)] = pose_clock(emit_out_ms_most, Some(at))
         let clock = pose_clock(Spit.ms(), Some(at))
@@ -539,7 +551,7 @@ pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], t
         match e.queue.get(0) {
           // the same agent's next message is waiting: the avatar drops on to it from here, not going home to hop
           Some(next) if next.2 == t.agent => {
-            let from_at = emit_landing_by(key, e, t, agents, emit_place_now)
+            let from_at = emit_landing_by(key, e, t, agents, place)
             e.queue.remove(0) |> ignore
             e.done[seq_s(t.seq)] = true
             e.current = Some({
@@ -558,8 +570,8 @@ pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], t
           }
           _ => {
             // Both ends belong to this phase's cause, not to whichever pictures happened to sample Spit.
-            let landed = emit_landing_by(key, e, t, agents, emit_place_now)
-            let home = emit_place_now("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
+            let landed = emit_landing_by(key, e, t, agents, place)
+            let home = place("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
             let span = return_ms(landed, home)
             e.aimed = landed
             e.aimed_at = t.seq
@@ -927,14 +939,13 @@ pub fn emit_place_drawn(laid : @view.Laid, key : String) -> (Double, Double, Dou
 }
 
 ///|
-/// A phase's endpoint at its logical cause. Place what that cause has said so far, without advancing deadlines or
-/// asking for a frame. Re-read the registration after layout: it may have replaced or released that row. An absent,
-/// hidden or unplaced node has no point; an old view's last measured rectangle is never a causal endpoint.
-pub fn emit_place_now(key : String) -> (Double, Double, Double, Double)? {
+/// A phase's endpoint from the owner's one placement at this cause. The caller prepares that placement once before
+/// reading any key. Look up the registration afterwards: layout may have replaced or released the row. The lookup
+/// itself never samples a clock or lays out; absent, hidden, unplaced or foreign nodes have no causal point.
+pub fn emit_place_now(owner : @view.View, key : String) -> (Double, Double, Double, Double)? {
   @signals.untracked(fn() {
-    guard emit_places.get(key) is Some(p) && p.node.alive() else { return None }
-    p.node.tree.laid_as_now()
-    guard emit_places.get(key) is Some(now) && now.node.alive() && !now.node.shown_nowhere() else { return None }
+    guard owner.alive() && emit_places.get(key) is Some(now) && physical_equal(now.node.tree, owner.tree) &&
+      now.node.alive() && !now.node.shown_nowhere() else { return None }
     let r = now.node.placed_window_now(drawing=true)
     if r.2 > 0.0 && r.3 > 0.0 { Some((r.0, r.1 + now.dy, r.2, r.3)) } else { None }
   })

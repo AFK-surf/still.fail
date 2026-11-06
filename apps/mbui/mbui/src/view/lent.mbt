@@ -180,6 +180,40 @@ pub fn Tree::laid_as_now(self : Tree) -> Unit {
 }
 
 ///|
+/// Finish `f` at this cause, outside any layout already under way. With none under way it runs now; a change told
+/// by a layout finishes as that layout returns, before the next event, never by asking for another frame. This is
+/// for a cause that must read placement: it may place once there, then read all of its endpoints without reentering
+/// the layout that told it. A drawing sample's clock is not a new cause. The caller keeps its own lifetime guard.
+pub fn Tree::outside_layout(self : Tree, f : () -> Unit) -> Unit {
+  if self.laying == 0 && self.layouts_active == 0 {
+    f()
+    return
+  }
+  let at = self.logic_at()
+  let done = fn() {
+    let was = self.cause_at
+    self.cause_at = at
+    defer { self.cause_at = was }
+    @signals.start_batch()
+    @signals.untracked(f)
+    @signals.end_batch()
+    // The callback can change what the completed layout draws. Finish those marks in this same sample too;
+    // neither another frame nor a second advance of the timeline is needed to see this cause's result.
+    @signals.untracked(fn() {
+      self.pull()
+      self.laid_out(self.clock.get())
+    })
+  }
+  if self.laying > 0 {
+    self.said_after_laid(done)
+  } else {
+    // A standalone measurement has no outer laid_out to drain after_laid. laid_out_now holds these callbacks
+    // through its compute and its `then`; the measurement completes in this change, without a frame.
+    @signals.after_flush(done)
+  }
+}
+
+///|
 /// The node that scrolls by it now (View::scrolls: its column, its row), while it does; None where none does (not said
 /// yet, or let go).
 pub fn Scroll::shown_by(self : Scroll) -> View? {

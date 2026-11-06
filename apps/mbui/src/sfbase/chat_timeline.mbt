@@ -15,79 +15,92 @@ pub fn chat_timeline(
   let due = Ref(@double.infinity)
   let lingering : Map[String, (Int, Double)] = {}
   let advancing = Ref(false)
-  owner.owns(fn() { (stop.val)() }) |> ignore
+  let pending = Ref(false)
+  owner.owns(fn() {
+    (stop.val)()
+    pending.val = false
+  }) |> ignore
   fn advance() {
-    if advancing.val || !owner.alive() { return }
-    guard read() is Some(cv) else { return }
-    advancing.val = true
-    let c = @ui.current()
-    let now = owner.cause_at()
-    let showing = shown()
-    chat_take(c, rk, rd, cv, shown=showing, in_front=in_front())
-    if showing {
-      match em.current {
-        Some(t) if (t.pose == Float || t.pose == Spit) && now >= t.clock.end() => {
-          // The previous phase's row changes have been committed at their cause. Mount and place the endpoints
-          // at this deadline before looking up their keys, even if no picture has visited those rows yet.
-          owner.tree.laid_as_now()
-        }
-        _ => ()
-      }
-      emit_step(c, rk, em, cv.agents.map(fn(a) { a.key }), turns_of(rk), rd.landing.get(), at=now)
-    }
-    let keeps = emit_keeps(em)
-    let gone : Array[String] = []
-    let mut next = @double.infinity
-    for k, l in rd.linger {
-      if rd.running.contains(k) {
-        gone.push(k)
-      } else if keeps.contains(k) {
-        lingering.remove(k) |> ignore
-      } else {
-        let until = match lingering.get(k) {
-          Some((id, until)) if id == l.id => until
-          _ => {
-            let ended = emit_ended(em, k)
-            let until = dmax(now, ended) + linger_ms
-            lingering[k] = (l.id, until)
-            until
+    if advancing.val || pending.val || !owner.alive() { return }
+    pending.val = true
+    owner.tree.outside_layout(fn() {
+      pending.val = false
+      if advancing.val || !owner.alive() { return }
+      guard read() is Some(cv) else { return }
+      advancing.val = true
+      defer { advancing.val = false }
+      let c = @ui.current()
+      let now = owner.cause_at()
+      let showing = shown()
+      chat_take(c, rk, rd, cv, shown=showing, in_front=in_front())
+      if showing {
+        let placed = Ref(false)
+        let place = fn(k) {
+          if !placed.val {
+            placed.val = true
+            // Only the first endpoint asks for placement, including when this cause catches up across Fold.
+            // Re-read each registration after it: layout may have mounted, replaced or released the row.
+            owner.tree.laid_as_now()
           }
+          emit_place_now(owner, k)
         }
-        if until <= now { gone.push(k) } else { next = dmin(next, until) }
+        // The remaining endpoint reads use that placement without changing the clock or running another layout.
+        emit_step(c, rk, em, cv.agents.map(fn(a) { a.key }), turns_of(rk), rd.landing.get(),
+          place~, at=now)
       }
-    }
-    for k in gone {
-      rd.linger.remove(k)
-      lingering.remove(k) |> ignore
-    }
-    if !gone.is_empty() {
-      rd.linger_said.set(@signals.untracked(fn() { rd.linger_said.get() }) + 1)
-    }
-    if showing {
-      match em.current {
-        Some(t) => {
-          let at = dmax(t.clock.end(), em.held_until)
-          // An unknown sent row's landing is supplied by its geometry input,
-          // not by polling an expired phase with another frame.
-          if at > now { next = dmin(next, at) }
+      let keeps = emit_keeps(em)
+      let gone : Array[String] = []
+      let mut next = @double.infinity
+      for k, l in rd.linger {
+        if rd.running.contains(k) {
+          gone.push(k)
+        } else if keeps.contains(k) {
+          lingering.remove(k) |> ignore
+        } else {
+          let until = match lingering.get(k) {
+            Some((id, until)) if id == l.id => until
+            _ => {
+              let ended = emit_ended(em, k)
+              let until = dmax(now, ended) + linger_ms
+              lingering[k] = (l.id, until)
+              until
+            }
+          }
+          if until <= now { gone.push(k) } else { next = dmin(next, until) }
         }
-        None => ()
       }
-      for _, way in em.out_at {
-        if way.end() > now { next = dmin(next, way.end()) }
+      for k in gone {
+        rd.linger.remove(k)
+        lingering.remove(k) |> ignore
       }
-    }
-    if next != due.val {
-      (stop.val)()
-      due.val = next
-      if next < @double.infinity {
-        stop.val = owner.at_moment(next, fn() {
-          due.val = @double.infinity
-          advance()
-        })
+      if !gone.is_empty() {
+        rd.linger_said.set(@signals.untracked(fn() { rd.linger_said.get() }) + 1)
       }
-    }
-    advancing.val = false
+      if showing {
+        match em.current {
+          Some(t) => {
+            let at = dmax(t.clock.end(), em.held_until)
+            // An unknown sent row's landing is supplied by its geometry input,
+            // not by polling an expired phase with another frame.
+            if at > now { next = dmin(next, at) }
+          }
+          None => ()
+        }
+        for _, way in em.out_at {
+          if way.end() > now { next = dmin(next, way.end()) }
+        }
+      }
+      if next != due.val {
+        (stop.val)()
+        due.val = next
+        if next < @double.infinity {
+          stop.val = owner.at_moment(next, fn() {
+            due.val = @double.infinity
+            advance()
+          })
+        }
+      }
+    })
   }
   advance
 }

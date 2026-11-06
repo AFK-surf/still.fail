@@ -748,7 +748,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     // words sent from here: their landing as declared (-2: not laid out yet, -1 none), kept once they are there
     // (emit_step)
     let sending = rd.landing.get()
-    emit_step(c, rk, em, v.agents.map(fn(a) { a.key }), turns, sending)
+    // This old frame-built entry has no current causal placement provider. Its drawing can still find measured
+    // boxes, but they belong to a previous build and cannot choose a handover point or a distance-based duration.
+    emit_step(c, rk, em, v.agents.map(fn(a) { a.key }), turns, sending, place=fn(_) { None })
   }
   if lingered {
     return
