@@ -64,8 +64,9 @@ pub fn View::list_room(self : View) -> ListRoom? {
 /// there at once; one come that is taller than what shows under `cover` (what lies over its top: a bar) is glided to
 /// only as far as its top under that, read from its top (Follow.kt), and it follows its end no more. `read_from_top`
 /// may say false for a block whose end should stay in view even when tall, such as the reader's own message.
-/// `rooms`: the blocks' rooms as they are now (read before the column is laid out: a block's room by its key and the
-/// height it measured in that layout), where heights themselves follow a shared motion; the list follows those rooms
+/// `rooms`: the blocks' rooms as they are now (read before the column is laid out: a block's room by its key, the
+/// height it measured in that layout and the width the list is laid out at in it, as View::scrolls_anchored's), where
+/// heights themselves follow a shared motion; the list follows those rooms
 /// directly, without another glide over their motion. `kept_keys`: blocks needed outside the visible window too, such
 /// as a send's landing while the list glides towards it, laid out in their own slots, still cut by the list, not among
 /// those `shown` reports in sight. `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last
@@ -86,7 +87,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
-  rooms? : () -> (K, Double) -> ListRoom,
+  rooms? : () -> (K, Double, Double) -> ListRoom,
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
