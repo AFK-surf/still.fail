@@ -200,3 +200,87 @@ test "shared folder picker favorite dialog cancels an in-flight read before it i
   assert_eq(@sfdesk.folder_browse_here(), "")
   assert_false(@sf.presenting())
 }
+
+///|
+/// The places and folders' relation at the same width, from either the old or the tree body.
+fn picker_places_beside(width : Double, tree : Bool) -> Bool {
+  new_run()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) {
+    @sf.begin(c) |> ignore
+    if !tree {
+      c.with_theme(@sf.ui_theme(), fn() { @sfdesk.folder_browse_body(c, src, "ws1/st1") })
+    }
+  }, w=width, h=800.0, platform=0)
+  @sfdesk.folder_browse_open("ws1/st1")
+  if tree {
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      // The body follows the old presenter's window width, even when its parent lends another look.
+      @sf.look_lent(root, Wide)
+      @sfdesk.folder_browse_node(root, src, "ws1/st1")
+    })
+  }
+  t.draw()
+  t.draw()
+  let (x, y, _, _) = t.get(Button, label="外接硬盘").rect
+  let (fx, fy, _, _) = t.get(Button, label="项目").rect
+  @sfdesk.folder_browse_close()
+  x < fx && y > fy - 40.0
+}
+
+///|
+test "shared folder picker keeps the old arrangement at the window-width boundary" {
+  for width in [390.0, 620.0, 639.0, 640.0, 700.0, 900.0] {
+    assert_eq(picker_places_beside(width, true), picker_places_beside(width, false), msg="width \{width}")
+  }
+}
+
+///|
+test "shared folder picker in a narrow dialog follows the window as the old picker did" {
+  new_run()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=800.0, platform=0)
+  @sfdesk.folder_browse_open("ws1/st1")
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(parent) {
+      parent.width(Is(Some(500.0))) |> ignore
+      @sfdesk.folder_browse_node(parent, src, "ws1/st1")
+    }) |> ignore
+  })
+  t.draw()
+  t.draw()
+  let (x, y, _, _) = t.get(Button, label="外接硬盘").rect
+  let (fx, fy, _, _) = t.get(Button, label="项目").rect
+  assert_true(x < fx && y > fy - 40.0)
+  @sfdesk.folder_browse_close()
+}
+
+///|
+test "shared folder picker keeps the filter focus and words as the window crosses the layout boundary" {
+  new_run()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=900.0, h=800.0, platform=0)
+  @sfdesk.folder_browse_open("ws1/st1")
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    @sf.look_lent(root, Wide)
+    @sfdesk.folder_browse_node(root, src, "ws1/st1")
+  })
+  t.draw()
+  t.draw()
+  let label = @sf.t("web-pages.drive.pickFilter")
+  let (x, y, w, h) = t.get(TextField, label~).rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.type_text("项目")
+  assert_eq(t.focused().map(fn(s) { s.label }), Some(label))
+  t.resize(390.0, 800.0)
+  t.draw()
+  assert_eq(t.focused().map(fn(s) { s.label }), Some(label))
+  assert_eq(t.get(TextField, label~).value, "项目")
+  let (_, disk_y, _, _) = t.get(Button, label="外接硬盘").rect
+  let (_, folder_y, _, _) = t.get(Button, label="项目").rect
+  assert_true(disk_y < folder_y)
+  @sfdesk.folder_browse_close()
+}
