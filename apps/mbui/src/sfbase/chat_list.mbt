@@ -750,7 +750,7 @@ pub fn chat_play(c : @ui.Ctx, rk : String, rd : Reading, shown~ : Bool) -> Doubl
     emit_step(c, rk, em, [], turns, sending)
     match em.current {
       Some(t) => {
-        let at = dmax(t.clock.end(), em.held_until)
+        let at = dmax(turn_end(t), em.held_until)
         if at > now { due = dmin(due, at) }
       }
       None => ()
