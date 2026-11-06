@@ -1259,15 +1259,55 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
     return None
   }
   let layer = self.layer_at(x, y)
+  // (what floats over what scrolls there, a page's bar, its buttons: its own words alone, never those scrolled under it)
+  let over = self.float_at(layer, x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if t.layer == OldLayer(layer) && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 && old_owner_open(t.island) {
+    if t.layer == OldLayer(layer) &&
+      x >= t.x0 &&
+      x < t.x1 &&
+      y >= t.y0 &&
+      y < t.y1 &&
+      old_owner_open(t.island) &&
+      (over is None || over.map(fn(o) { has_prefix(t.at, o) }) == Some(true)) {
       return Some(t)
     }
     k = k - 1
   }
   None
+}
+
+///|
+/// Where in the page the topmost box floating over what scrolls (Ctx::floats_over) in layer `layer` holding (x, y)
+/// stands (Ctx::page_order), as last laid out; none there.
+fn Ctx::float_at(self : Ctx, layer : Int, x : Double, y : Double) -> Array[Int]? {
+  let mut k = self.floating.length() - 1
+  while k >= 0 {
+    let i = self.floating[k]
+    if i < self.count {
+      let n = self.nodes[i]
+      if x >= n.x && x < n.x + n.fw && y >= n.y && y < n.y + n.fh && self.layer_of(i) == layer {
+        return Some(self.page_order(i))
+      }
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// Whether place `at` lies within place `p` (Ctx::page_order): `p`, or below it.
+fn has_prefix(at : Array[Int], p : Array[Int]) -> Bool {
+  if at.length() < p.length() {
+    return false
+  }
+  for i, v in p {
+    if at[i] != v {
+      return false
+    }
+  }
+  true
 }
 
 ///|
