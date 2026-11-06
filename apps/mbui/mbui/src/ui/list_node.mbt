@@ -3,11 +3,16 @@
 // row stays in that room until it closes. Neither its contents nor its list are built again as its height moves.
 
 ///|
-/// Rows kept by a node, including those whose rooms are closing. `room` is the layout of their windowed list;
-/// `lend` gives each row's contents the common way for changes of height within the row.
+/// Rows kept by a node, including those whose rooms are closing. `read` returns the values and display keys in the
+/// same order; a departure or old-position copy holds the value it last had. The caller supplies immutable values
+/// if it needs their contents preserved. A copy's display key differs from the value's business key: use the display
+/// key to find that value again. `room` is the layout of their windowed list; `lend` gives each row's contents the
+/// common way for changes of height within the row.
 pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
+  /// the rooms sampled before a windowed list lays them out; pass this to `scrolls_window` as `rooms`
+  room_now : () -> (String, Double) -> @view.ListRoom
   /// the keys whose rooms are on their way now (those with a cause, those leaving, those moved on the same curve by
   /// their contents while anything is): what a windowed list asks `room` of again as it moves, the rest as they were
   moving : () -> Array[String]
@@ -52,7 +57,10 @@ pub fn row_way_node(v : @view.View) -> (Double, Double)? {
 /// Keep these rows in `v` by their keys and versions, with the same causes as ListRows::rows. `middle` marks rows
 /// coming in place (no flight brings them), `grown` whether their content scales and fades with their opening room,
 /// and `lead` the gap over their content. A departing row always closes in place. `own` is for a room already moved
-/// on this same curve by its contents, such as a composer's room under the messages.
+/// on this same curve by its contents, such as a composer's room under the messages. `continuity` identifies the list
+/// being read: None while it has not been read, Some(identity) once it has. The first read and a change of identity
+/// appear at once; changes between two readings of the same identity move. Read it and `items` from the same snapshot,
+/// so an identity and its first items are said together. Its default is one always-read list.
 pub fn[T] ListRows::in_node(
   self : ListRows[T],
   v : @view.View,
@@ -68,6 +76,7 @@ pub fn[T] ListRows::in_node(
   grown? : (T) -> Bool = fn(_) { true },
   lead? : (T, Int) -> Double = fn(_, _) { 0.0 },
   own? : (T) -> Bool = fn(_) { false },
+  continuity? : () -> String? = fn() { Some("") },
 ) -> NodeRows[T] {
   let ended = @signals.signal(0)
   let due : Ref[() -> Unit] = Ref(fn() { })
@@ -83,13 +92,17 @@ pub fn[T] ListRows::in_node(
   let motion = NodeRowSizes::{ causes: self.causes, live }
   v.owns(fn() { live.val = false; (due.val)() }) |> ignore
   let all : @signals.Signal[(Array[T], Array[String])] = @signals.signal(([], []))
+  let previous : Ref[String?] = Ref(None)
   // Changing the row set also tells its height causes. Publish the rows after that change has been worked out,
   // in one reaction; a lazy computed would tell readers of its causes while it was still replacing its value.
   v.reacts(fn() {
     ended.get() |> ignore
     let given = items()
+    let identity = continuity()
+    let continuous = identity is Some(_) && identity == previous.val
+    previous.val = identity
     let rows = self.rows_at(v.cause_at(), given.map(key), given, version,
-      watched=watched() && !v.shown_nowhere(), ms~, from~, comes~, moves~)
+      watched=watched() && !v.shown_nowhere() && continuous, ms~, from~, comes~, moves~)
     NodeRowsChange::{ rows, revision: self.causes.n }
   }, fn(change) {
     let rows = change.rows
@@ -120,38 +133,45 @@ pub fn[T] ListRows::in_node(
     }
     m
   })
-  let room = fn(k : String, natural : Double) -> @view.ListRoom {
-    let (items, _) = all.get()
-    self.rooms += 1
-    let c = self.causes
-    c.read()
-    // (nothing of the list on its way, nothing leaving: each row as tall as it is, its height kept for a way that may
-    // start from it; nothing more asked of each of a long chat's three thousand as their list is laid out, 2026-11-04)
-    if c.by.is_empty() && self.going.is_empty() {
-      shown[k] = natural
-      return @view.list_room(natural)
+  // (those moved by their contents, by the rows as they are now)
+  let own_keys = @signals.computed(fn(_) {
+    let (items, keys) = all.get()
+    let out = []
+    for i, it in items {
+      if own(it) && i < keys.length() {
+        out.push(keys[i])
+      }
     }
-    let i = key_at.get().get(k).unwrap_or(-1)
-    guard i >= 0 else { return @view.list_room(natural) }
+    out
+  })
+  let still = fn(k : String, natural : Double) -> @view.ListRoom {
+    self.rooms += 1
+    shown[k] = natural
+    @view.list_room(natural)
+  }
+  // The row's properties are read before layout; the same calculation also serves the older room callback.
+  let room_with = fn(k : String, natural : Double, now : Double, properties : (Bool, Double, Bool, Bool)) -> @view.ListRoom {
+    self.rooms += 1
+    let (in_middle, over, grows, owns) = properties
+    let c = self.causes
     let going = self.going.contains(k)
-    let by_room = going || middle(items[i])
+    let by_room = going || in_middle
     if by_room {
       c.by_room.add(k)
-      c.leads[k] = lead(items[i], i)
+      c.leads[k] = over
     }
-    if own(items[i]) {
+    if owns {
       c.own.add(k)
     }
-    let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
     if room_at.val != Some(now) {
       room_at.val = Some(now)
       room_frame.val += 1
     }
-    let h = dmax(0.0, c.height(sizes, shown, k, natural, now, room_frame.val))
+    let h = dmax(0.0, c.height(sizes, shown, k, natural, now, room_frame.val, told=false))
     shown[k] = h
     let open = c.opened.contains(k)
     let fraction = if open && natural > 0.0 { dmax(0.0, dmin(1.0, h / natural)) } else { 1.0 }
-    let scaled = open && (going || grown(items[i]))
+    let scaled = open && (going || grows)
     let clipped = (h - natural).abs() > 0.001 || (now < c.end && c.own.contains(k))
     {
       height: h,
@@ -161,6 +181,43 @@ pub fn[T] ListRows::in_node(
       scale: if scaled { fraction } else { 1.0 },
       alpha: if scaled { dmax(0.0, (fraction - row_gone_at) / (1.0 - row_gone_at)) } else { 1.0 },
       presses: !going,
+    }
+  }
+  let room = fn(k : String, natural : Double) -> @view.ListRoom {
+    let (items, _) = all.get()
+    let c = self.causes
+    c.read()
+    if c.by.is_empty() && self.going.is_empty() { return still(k, natural) }
+    let i = key_at.get().get(k).unwrap_or(-1)
+    guard i >= 0 else { return still(k, natural) }
+    let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
+    room_with(k, natural, now, (middle(items[i]), lead(items[i], i), grown(items[i]), own(items[i])))
+  }
+  // Capture only rows on the way before layout; unchanged rows need no per-frame scan.
+  let room_now = fn() -> (String, Double) -> @view.ListRoom {
+    let (items, _) = all.get()
+    let c = self.causes
+    c.read()
+    if c.by.is_empty() && self.going.is_empty() { return still }
+    let indices = key_at.get()
+    let properties : Map[String, (Bool, Double, Bool, Bool)] = {}
+    let note = fn(k : String) {
+      if properties.contains(k) { return }
+      match indices.get(k) {
+        Some(i) => properties[k] = (middle(items[i]), lead(items[i], i), grown(items[i]), own(items[i]))
+        None => ()
+      }
+    }
+    c.by.each(fn(k, _) { note(k) })
+    self.going.each(fn(k, _) { note(k) })
+    c.own.each(note)
+    for k in own_keys.get() { note(k) }
+    let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
+    fn(k, natural) {
+      match properties.get(k) {
+        Some(p) => room_with(k, natural, now, p)
+        None => still(k, natural)
+      }
     }
   }
   let lend = fn(row : @view.View, k : String) {
@@ -182,17 +239,6 @@ pub fn[T] ListRows::in_node(
     self.causes.read()
     self.causes.end > v.logic_at() && self.causes.by.values().any(fn(cm) { cm.0 is Comes(_) })
   }
-  // (those moved by their contents, by the rows as they are now)
-  let own_keys = @signals.computed(fn(_) {
-    let (items, keys) = all.get()
-    let out = []
-    for i, it in items {
-      if own(it) && i < keys.length() {
-        out.push(keys[i])
-      }
-    }
-    out
-  })
   let moving = fn() -> Array[String] {
     all.get() |> ignore
     let c = self.causes
@@ -209,5 +255,5 @@ pub fn[T] ListRows::in_node(
     out.append(own_keys.get())
     out
   }
-  { read: fn() { all.get() }, room, moving, lend, opening }
+  { read: fn() { all.get() }, room, room_now, moving, lend, opening }
 }

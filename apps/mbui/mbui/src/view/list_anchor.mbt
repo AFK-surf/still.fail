@@ -108,7 +108,9 @@ pub(all) struct AnchoredSource[K] {
 /// row it reports by that name (Layout::report_span) in the window's middle where its middle is further down than that
 /// share of the window, as it is laid out, held there as a put row is; `room` is a
 /// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
-/// though not in sight (a send's landing); `foot_room` room under the last row. `foot_cover` what covers its foot (a composer over
+/// though not in sight (a send's landing). `room_transforms=false` leaves its displacement, scale and opacity to
+/// `list_room_content` on the row's content; `list_room_ground` keeps a separate ground clear of the row's soft edge.
+/// `foot_room` is room under the last row. `foot_cover` what covers its foot (a composer over
 /// it): nothing laid out by it, told in `sighted` (what of the window is in sight). Both given by what holds it as it
 /// measures it (Layout::measure's `foot`), those in place of these. An indexed source supplies its
 /// keys by position instead of `keys`. `sighted` is told, once each frame is painted, the rows that came in sight or
@@ -130,6 +132,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
   rooms? : () -> (K, Double) -> ListRoom,
+  room_transforms? : Bool = true,
   put_passage? : @signals.Signal[(K, String, Double)?],
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
@@ -144,7 +147,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
-    put?=put, put_passage?=put_passage, rooms?=rooms, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
+    put?=put, put_passage?=put_passage, rooms?=rooms, room_transforms~, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
     bar_clear~, foot_room~, foot_cover~, indexed?=indexed, sighted?=sighted,
   )
 }
@@ -167,6 +170,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
   rooms? : () -> (K, Double) -> ListRoom,
+  room_transforms? : Bool = true,
   put_passage? : @signals.Signal[(K, String, Double)?],
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
@@ -585,7 +589,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             })
             |> ignore
             let room_now = fn() { room_told(k).get() }
-            slot.lends(windowed_room, room_now) |> ignore
+            slot.lends(windowed_room, (slot, room_now, rooms is Some(_))) |> ignore
             slot.shrink(Is(0.0)) |> ignore
             if rooms is Some(_) {
               slot
@@ -597,12 +601,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             }
             slot.box(fn(v) {
               v.shrink(Is(0.0)) |> ignore
-              if rooms is Some(_) {
-                v
-                .offset(By(fn() { (0.0, room_now().offset) }))
-                .scale(By(fn() { room_now().scale }), about=Drawn)
-                .alpha(By(fn() { room_now().alpha }))
-                |> ignore
+              if rooms is Some(_) && room_transforms {
+                v.list_room_content() |> ignore
               }
               make(v, k)
             })

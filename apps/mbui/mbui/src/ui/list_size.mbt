@@ -542,7 +542,8 @@ fn RowCauses::read(self : RowCauses) -> Unit {
 priv struct GoingRow[T] {
   item : T
   at : Double
-  after : String
+  mut after : String
+  mut rank : Int
 }
 
 ///|
@@ -708,25 +709,46 @@ fn[T] ListRows::rows_at(
         }
       }
     }
+    // Walk the whole previously displayed sequence, including rows already leaving. A second removal can then
+    // follow one still closing, and a row whose predecessor moves stays by its predecessor's old-position copy.
+    let old : Map[String, T] = {}
+    for (k, item) in self.order { old[k] = item }
     let mut prev = ""
-    for r in self.order {
-      let (k, item) = r
-      if ahead.contains(k) {
-        let copy = k + row_moved_mark
-        let at = from(k).unwrap_or(now)
-        self.going[copy] = { item, at, after: prev }
-        self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-        prev = copy
-        continue
-      }
-      if !here.contains(k) && !self.going.contains(k) {
-        let at = from(k).unwrap_or(now)
-        self.going[k] = { item, at, after: prev }
-        self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-        began = true
-      }
-      if here.contains(k) || self.going.contains(k) {
-        prev = k
+    let mut rank = 0
+    for k in self.causes.keys {
+      match self.going.get(k) {
+        Some(g) => {
+          g.after = prev
+          g.rank = rank
+          rank += 1
+          prev = k
+        }
+        None =>
+          match old.get(k) {
+            Some(item) if ahead.contains(k) => {
+              // The same row may move again before its earlier copy has gone.
+              let mut copy = k + row_moved_mark
+              let mut n = 1
+              while self.going.contains(copy) || here.contains(copy) {
+                copy = k + row_moved_mark + n.to_string()
+                n += 1
+              }
+              let at = from(k).unwrap_or(now)
+              self.going[copy] = { item, at, after: prev, rank }
+              self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+              rank += 1
+              prev = copy
+            }
+            Some(item) if !here.contains(k) => {
+              let at = from(k).unwrap_or(now)
+              self.going[k] = { item, at, after: prev, rank }
+              self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+              began = true
+              rank += 1
+              prev = k
+            }
+            _ => if here.contains(k) { prev = k }
+          }
       }
     }
   } else if !self.going.is_empty() || !self.causes.by.is_empty() {
@@ -792,7 +814,7 @@ fn[T] ListRows::rows_at(
   let all_items = items.copy()
   {
     let order = self.going.to_array()
-    order.sort_by(fn(a, b) { a.1.at.compare(b.1.at) })
+    order.sort_by(fn(a, b) { a.1.rank.compare(b.1.rank) })
     for g in order {
       let (k, go) = g
       let mut at = 0
