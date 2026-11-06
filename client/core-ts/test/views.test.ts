@@ -2039,7 +2039,7 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
 // An image sent while it was going up and opened then is named by its upload (`upload:<id>`, its path till it is up);
 // once up, its message names it by where its station keeps it. The preview, opened before, still asks for the ones
 // beside it by its upload: they are the same file's (its `upload` the same before and after), so beside it the same.
-test("an_image_opened_while_going_up_has_the_same_ones_beside_it_once_up", async () => {
+test("an_image_opened_while_going_up_has_the_same_ones_beside_it_going_up_and_once_up", async () => {
   const t = setup();
   const u = ui();
   t.subscribe(1, chatTopic("ws/a", 7));
@@ -2064,9 +2064,9 @@ test("an_image_opened_while_going_up_has_the_same_ones_beside_it_once_up", async
     const v = shown.value;
     return [v.before?.name ?? null, v.beforeAt ?? null, v.after?.name ?? null, v.afterAt ?? null, v.index ?? null, v.count];
   };
-  // Going up: none of its own beside it (nor it among them): one beside it would be opened by where its station keeps
-  // it, and it is on none yet.
-  assert.deepEqual(await beside(), [null, null, null, null, null, 1]);
+  // Going up: among the others already, and the one going up with it beside it, each by its upload (on no station yet).
+  assert.deepEqual(await beside(), ["before.png", "m:1.0/f", "next.png", at, 1, 3]);
+  assert.deepEqual([shown.value.after.path, shown.value.after.upload, shown.value.after.owner], ["upload:u2", "u2", undefined]);
   // Up: where its station keeps it now in its message, the preview asking by its upload still.
   t.views.local.outboxUploaded("ws/a", 7, id, [
     { name: "shot.png", path: "ws/k/uploads/shot.png", size: 300, width: 1200, height: 800 },
