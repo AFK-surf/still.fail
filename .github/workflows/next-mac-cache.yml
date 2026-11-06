@@ -1,0 +1,137 @@
+# A branch can restore its own Actions caches and main's, but not arch/next's. Keep arch/next's Mac compiler units
+# and core bytecode on main's ref, as preview-arch.yml does for Linux and Windows. Nothing here is packaged or published.
+name: next-mac-cache
+on:
+  workflow_run:
+    workflows: [preview]
+    types: [completed]
+    branches: [arch/next]
+  workflow_dispatch:
+# Finish the one already building: frequent arch/next merges must not cancel every attempt before it saves its units.
+concurrency:
+  group: next-mac-cache
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read # an arch/next pipeline may have built its shell as a run artifact rather than publishing it
+jobs:
+  mac:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: macos-26
+    timeout-minutes: 5
+    env:
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/apps/mbui/out/core-target-macos12.0
+    steps:
+      # workflow_run and workflow_dispatch execute on main's ref, while the checkout is arch/next's source.
+      - uses: actions/checkout@v5
+        with: { ref: "${{ github.event.workflow_run.head_sha || 'arch/next' }}", fetch-depth: 0, filter: "blob:none" }
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-mac-${{ github.sha }}
+          restore-keys: mbui-mac-
+      - run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
+      - uses: actions/cache/restore@v4
+        id: own
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-next-mac-${{ github.event.workflow_run.head_sha || github.sha }}
+          restore-keys: mbui-next-mac-
+      - run: |
+          mkdir -p .ci && rsync -a --ignore-existing "$RUNNER_TEMP/ci-main/" .ci/
+          rm -rf "$RUNNER_TEMP/ci-main"
+      - id: hermes
+        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/Library/Caches/stillfail-build
+            apps/mbui/out/core/hermesc
+          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The macOS shell's key
+        id: shell-key
+        run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: shell
+        with:
+          path: ~/Library/Caches/stillfail-native/shell-apple
+          key: ${{ steps.shell-key.outputs.key }}
+      - name: The matching pipeline's native parts, if it built them
+        if: steps.shell.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow pipeline.yml --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run" ]; then
+            gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "natives-$sha" --dir "$RUNNER_TEMP/natives" ||
+              echo "The pipeline has no native artifact ready; the native store will be used."
+          fi
+      - name: The shell prebuilt for these sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STILLFAIL_NATIVE_INBOX: ${{ runner.temp }}/natives
+        run: node scripts/native.ts fetch shell-apple darwin-arm64
+      - uses: actions/cache/restore@v4
+        id: moon-next
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-next-moon-mac-${{ github.event.workflow_run.head_sha || github.sha }}
+          restore-keys: mbui-next-moon-mac-
+      - uses: actions/cache/restore@v4
+        if: steps.moon-next.outputs.cache-matched-key == ''
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-mac-moon-${{ github.sha }}
+          restore-keys: mbui-mac-moon-
+      - run: |
+          # Match mac-app.sh: objects built for another minimum system cannot be reused.
+          if [ "$(cat apps/mbui/_build/.macos-min 2>/dev/null)" != "$MACOSX_DEPLOYMENT_TARGET" ]; then
+            rm -rf apps/mbui/_build apps/mbui/out/mbc apps/mbui/out/core/aarch64-apple-darwin
+            mkdir -p apps/mbui/_build
+            echo "$MACOSX_DEPLOYMENT_TARGET" > apps/mbui/_build/.macos-min
+          fi
+          bash apps/mbui/scripts/moon-mtimes.sh
+          touch "$RUNNER_TEMP/start"
+      - name: Build the app and its core (no package or release)
+        id: build
+        timeout-minutes: 3
+        run: APP=stillfail MODE=release bash apps/mbui/scripts/mac.sh build
+      # If a cold build ran out of its step's time, keep the units it did finish for the next run.
+      - name: The caches' keys, by what they hold
+        if: always() && steps.build.outcome != '' && steps.build.outcome != 'skipped'
+        run: |
+          [ "${{ steps.build.outcome }}" != success ] || sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          find .ci/mbc-store -name '*.lock' -delete 2>/dev/null || true
+          echo "STORE_KEY=mbui-next-mac-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+          if [ "${{ steps.build.outcome }}" = success ]; then
+            c=apps/mbui/_build/native/release/build/stillfail/stillfail/stillfail.c
+            echo "MOON_KEY=mbui-next-moon-mac-$(shasum -a 256 "$c" | cut -c1-16)" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/cache/save@v4
+        if: always() && env.STORE_KEY != '' && env.STORE_KEY != steps.own.outputs.cache-matched-key
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: ${{ env.STORE_KEY }}
+      - uses: actions/cache/save@v4
+        if: always() && env.MOON_KEY != '' && env.MOON_KEY != steps.moon-next.outputs.cache-matched-key
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: ${{ env.MOON_KEY }}
