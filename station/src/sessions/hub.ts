@@ -28,7 +28,7 @@ import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
 import { RUNTIME_KINDS, type AgentDriver, type AgentSession, type RuntimeKind } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
-import { allLeft, existingRunners } from "../agents/runner.ts";
+import { allLeft, liveRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
@@ -436,7 +436,7 @@ export class Hub {
     }
     await this.adopt(handed);
     // A crash left runners without a snapshot: what they keep is taken up as it stands.
-    const runners = new Set(this.options.runners ? this.options.runners() : existingRunners(this.config().dataDir).map((r) => r.id));
+    const runners = new Set(this.options.runners ? this.options.runners() : (await liveRunners(this.config().dataDir, { strict: true })).map((r) => r.id));
     const taken = new Set(handed.sessions.map((s) => s.key));
     // A shared Codex host can only have a session to recover when that session was marked running. Without a
     // session-owned runner there is no reason to load the station's idle and archived sessions.
