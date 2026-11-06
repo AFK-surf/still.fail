@@ -202,10 +202,29 @@ test "an image told again at another path, pressed: the preview flies out of it 
 }
 
 ///|
-/// 乙 (row_told's, as first told) pressed, told again at its other path a quarter of the way out, the preview closed
-/// when it is in; each of `frames` (ms from the press) drawn and looked at on the way: what is seen at the moments
-/// said, the same whichever frames are drawn between.
-fn row_told_while_open(frames : Array[Double]) -> Array[String] raise {
+/// The pictures drawn whole between `a` and `b`: their width between theirs, their middle between theirs either way.
+fn drawn_between(
+  t : @ui.Tester,
+  a : (Double, Double, Double, Double),
+  b : (Double, Double, Double, Double),
+) -> Array[(Double, Double, Double, Double)] {
+  let within = fn(v : Double, p : Double, q : Double) { v > dmin(p, q) + 0.5 && v < dmax(p, q) - 0.5 }
+  t
+  .drawn_images()
+  .filter(fn(i) {
+    i[8] > 0.5 &&
+    within(i[2], a.2, b.2) &&
+    within(i[0] + i[2] / 2.0, a.0 + a.2 / 2.0, b.0 + b.2 / 2.0) &&
+    within(i[1] + i[3] / 2.0, a.1 + a.3 / 2.0, b.1 + b.3 / 2.0)
+  })
+  .map(fn(i) { (i[0], i[1], i[2], i[3]) })
+}
+
+///|
+/// 乙 (row_told's, as first told) pressed, told again at its other path `told_at` ms after (on the way out, or after
+/// the preview is closed on its way back), the preview closed when it is in; each of `frames` (ms from the press)
+/// drawn and looked at on the way: what is seen at the moments said, the same whichever frames are drawn between.
+fn row_told_while_open(told_at : Double, frames : Array[Double]) -> Array[String] raise {
   let (t, image_of, _, b, told) = row_told(again=false)
   let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
   let rect = fn(r : (Double, Double, Double, Double)) { (r2(r.0), r2(r.1), r2(r.2), r2(r.3)) }
@@ -215,7 +234,11 @@ fn row_told_while_open(frames : Array[Double]) -> Array[String] raise {
   assert_eq(v.file.path, "work/s-c1/row-b.png")
   let was_id = v.thumb_id()
   let now_id = was_id.replace(old="work/s-c1/row-b.png", new="work/s-c1/kept/row-b.png")
-  // (the id 乙's thumbnail is under now)
+  let from = match thumb_of(t.ctx(), was_id) {
+    Some(th) => (th.x, th.y, th.w, th.h)
+    None => fail("no thumbnail of 乙")
+  }
+  // (the id 乙's thumbnail is under now, and where it is)
   let held = fn() {
     if thumb_of(t.ctx(), now_id) is Some(_) {
       "now"
@@ -223,6 +246,12 @@ fn row_told_while_open(frames : Array[Double]) -> Array[String] raise {
       "was"
     } else {
       "none"
+    }
+  }
+  let held_at = fn() raise {
+    match thumb_of(t.ctx(), if held() == "now" { now_id } else { was_id }) {
+      Some(th) => (th.x, th.y, th.w, th.h)
+      None => fail("no thumbnail of 乙")
     }
   }
   let named = fn(id : String) { if id == now_id { "now" } else if id == was_id { "was" } else { id } }
@@ -236,38 +265,67 @@ fn row_told_while_open(frames : Array[Double]) -> Array[String] raise {
       assert_eq(pv_hidden.get(), "", msg="\{at}: 乙 shown")
     }
   }
-  let through = fn(from : Double, to : Double) raise {
+  let seen : Array[String] = []
+  let last = Ref(0.0)
+  // (to `ms` after the press, each of `frames` before it drawn and looked at)
+  let reach = fn(ms : Double, at : String) raise {
     for f in frames {
-      if f > from && f < to {
+      if f > last.val && f < ms {
         t.frame_at(t0 + f)
         look("\{f} ms")
       }
     }
+    t.frame_at(t0 + ms)
+    look(at)
+    last.val = ms
   }
-  let quarter = @ui.move_most_ms / 4.0
+  let tell = fn() raise {
+    reach(told_at, "told at \{told_at}")
+    // (its message tells it again, upright where it is kept now)
+    told.set(2)
+    t.frames_owed()
+    look("told again")
+    seen.push("told again: thumbnail \{held()}, preview's \{named(v.thumb_id())}, hidden \{named(pv_hidden.get())}")
+  }
+  let half = @ui.move_most_ms / 2.0
   let open = @ui.move_most_ms * 1.5
   let close = @ui.move_most_ms * 2.0
   let landed = close + @ui.move_most_ms
-  let seen : Array[String] = []
   look("pressed")
-  through(0.0, quarter)
-  t.frame_at(t0 + quarter)
-  // (a quarter of the way out, its message tells it again, upright where it is kept now)
-  told.set(2)
-  t.frames_owed()
-  look("told again")
-  seen.push("told again: thumbnail \{held()}, preview's \{named(v.thumb_id())}, hidden \{named(pv_hidden.get())}")
-  through(quarter, open)
-  t.frame_at(t0 + open)
-  look("in")
-  through(open, close)
+  if told_at < half {
+    tell()
+  }
+  reach(half, "halfway out")
+  let to = v.zoom.rect().unwrap()
+  // (halfway out still flying: its one picture between where 乙 was pressed and its place on the stage)
+  assert_true(v.flies && !v.fly_back, msg="halfway out: not flying")
+  let out = drawn_between(t, from, to)
+  assert_eq(out.length(), 1, msg="halfway out between \{from} and \{to}: \{out}")
+  seen.push("halfway out: \{out.map(rect)}")
+  reach(open, "in")
+  assert_true(drawn_at(t, to), msg="in: \{to}")
+  for f in frames {
+    if f > last.val && f < close {
+      t.frame_at(t0 + f)
+      look("\{f} ms")
+    }
+  }
   t.advance(t0 + close - t.time())
+  last.val = close
   t.back()
   look("closed")
   assert_true(v.fly_back, msg="the preview flies back into 乙, not faded out")
-  through(close, landed)
-  t.frame_at(t0 + landed)
-  look("landed")
+  if told_at > close {
+    tell()
+  }
+  reach(close + half, "halfway back")
+  // (halfway back still flying: its one picture between its place on the stage and where 乙 is now)
+  let home_at = held_at()
+  assert_true(pv_leaving.get() is Some(_), msg="halfway back: not flying")
+  let back = drawn_between(t, to, home_at)
+  assert_eq(back.length(), 1, msg="halfway back between \{to} and \{home_at}: \{back}")
+  seen.push("halfway back: \{back.map(rect)} towards \{held()} \{rect(home_at)}")
+  reach(landed, "landed")
   assert_true(pv_leaving.get() is None && viewer.get() is None)
   let home = image_of("row-b.png")
   let home_r = (home.rect.0, home.rect.1, home.rect.2, home.rect.3)
@@ -278,13 +336,15 @@ fn row_told_while_open(frames : Array[Double]) -> Array[String] raise {
 }
 
 ///|
-test "an image opened, then told again at another path while its preview is open: the preview flies on from it and back into it where it is now, it hidden while the picture flies; the same at 60 Hz, 120 Hz or in one jump" {
+test "an image opened, then told again at another path while its preview flies out or back: the preview flies on from it and back into it where it is now, it hidden while the picture flies; the same at 60 Hz, 120 Hz or in one jump" {
   let hz = fn(period : Double) {
     Array::makei(((@ui.move_most_ms * 3.0) / period).to_int(), fn(i) { (i + 1).to_double() * period })
   }
-  let one = row_told_while_open([])
-  let at60 = row_told_while_open(hz(1000.0 / 60.0))
-  let at120 = row_told_while_open(hz(1000.0 / 120.0))
-  assert_eq(at60, one)
-  assert_eq(at120, one)
+  for told_at in [@ui.move_most_ms / 4.0, @ui.move_most_ms * 2.25] {
+    let one = row_told_while_open(told_at, [])
+    let at60 = row_told_while_open(told_at, hz(1000.0 / 60.0))
+    let at120 = row_told_while_open(told_at, hz(1000.0 / 120.0))
+    assert_eq(at60, one, msg="told at \{told_at}")
+    assert_eq(at120, one, msg="told at \{told_at}")
+  }
 }
