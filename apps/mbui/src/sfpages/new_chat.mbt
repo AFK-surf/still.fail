@@ -848,6 +848,38 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
 }
 
 ///|
+/// The same from the old view's page (new_composer_place): what it measured of itself as it was last laid out, its
+/// words taking off from its old view's field.
+fn new_send(c : @ui.Ctx, src : Source, frame : NewChatFrame, v : Json?, station : String, name : String, d : Writing) -> Unit {
+  new_send_now(
+    src,
+    frame,
+    v,
+    station,
+    name,
+    d,
+    box=@motion.measured(c, "composer/content").unwrap_or(0.0),
+    room=@motion.measured(c, "new/composer").unwrap_or(0.0),
+    foot=@motion.measured(c, "new/foot").unwrap_or(0.0),
+    focused=c.editor_focused(composer_field_key),
+    takeoff=fn(words, marks, runs, hold) {
+      @sfbase.flight_carry_start(
+        c,
+        d.key,
+        words,
+        flying_quotes(c, src, d, station) + flying_files(c, src, d),
+        field=composer_field_key,
+        hold~,
+        // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
+        desk=!frame.in_place,
+        marks~,
+        runs~,
+      )
+    },
+  )
+}
+
+///|
 /// The new chat's first message (draft.ts send with `first`, NewChat.tsx useEnsureChat, onSending, onSent): the page
 /// becomes the chat the frame it is sent, by the key the core keeps for the next one made (the `newChat` topic's
 /// `next`; the one made for it already while the picks are the same), its first words in its list from then and
@@ -856,14 +888,18 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
 /// `chat.send`) goes on behind it in that order, nothing on screen waiting for any of it. What is written meanwhile
 /// goes on into the chat's draft (`composer.carry`). The chat not made: the page the new chat again, what was taken
 /// back in its composer, saying why; the message not taken in: back in the chat's composer.
-fn new_send(
-  c : @ui.Ctx,
+fn new_send_now(
   src : Source,
   frame : NewChatFrame,
   v : Json?,
   station : String,
   name : String,
   d : Writing,
+  box~ : Double,
+  room~ : Double,
+  foot~ : Double,
+  focused~ : Bool,
+  takeoff~ : (String, Array[(Int, Int)], Json?, (Double) -> Unit) -> Unit,
 ) -> Unit {
   let fresh = @sfbase.fresh
   if src.read_only {
@@ -897,19 +933,7 @@ fn new_send(
   // its words, its quotes and its files from where they were typed, their cards and their tiles, into their row in
   // the chat's list, in it from now (sent_local), the list coming up with them, the composer held as tall as it is
   // till they set out
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
-  @sfbase.flight_carry_start(
-    c,
-    d.key,
-    words,
-    flying_quotes(c, src, d, station) + flying_files(c, src, d),
-    field=composer_field_key,
-    hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
-    // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
-    desk=!frame.in_place,
-    marks~,
-    runs~,
-  )
+  takeoff(words, marks, runs, fn(ms) { composer_hold(d.key, 0.0, box, ms) })
   let row = sent_local(rk, None, words, up, going~, quotes~, runs~)
   @sfbase.flight_carry_into(d.key, draft, rk, row, hold=fn(ms) { composer_hold(draft, 0.0, box, ms) })
   let sig = @sfbase.picked_sig(v)
@@ -922,10 +946,10 @@ fn new_send(
   fresh.scene.set(v)
   // The new page has another draft's field. Carry the cursor with the composer even while the old field still
   // owns it in this navigation batch; merely focusing when no field has it would lose this handover.
-  if c.editor_focused(composer_field_key) { composer_take_focus() }
+  if focused { composer_take_focus() }
   fresh.became.set(Some(r))
-  fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
-  fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
+  fresh.room.set(room)
+  fresh.foot.set(foot)
   @sfbase.became_starts(wide=!frame.in_place)
   @sfbase.writing_starting(src, d, true)
   // what the core does, in order: the words taken, the chat made, what is written meanwhile on into its draft; then

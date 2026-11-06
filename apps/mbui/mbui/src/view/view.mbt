@@ -2594,7 +2594,8 @@ pub fn View::cut_across(self : View, across : Live[(Double, Double)?]) -> View {
 /// The rect it cuts what it holds to, as it changes (x, y, w, h in its own terms, anywhere of it or beyond it; None: none
 /// of its own), whether or not it clips to itself (View::clips: both, where it does): what shows of a thing on its way
 /// cut as each frame is painted (a picture flying out of its thumbnail, cut where the list it was in leaves it seen),
-/// nothing laid out for it; what it cuts away pressed nowhere. Paint's: what it holds drawn again, all of it.
+/// nothing laid out for it; its corners round as its own are (View::radius, View::corners); what it cuts away pressed
+/// nowhere. Paint's: what it holds drawn again, all of it.
 pub fn View::clip_drawn(self : View, rect : Live[(Double, Double, Double, Double)?]) -> View {
   self.bind(ClipDrawn, rect, Paint, fn(r) { self.tree.nodes[self.at].look.clip_drawn = r })
   self
@@ -7459,6 +7460,79 @@ fn Tree::each_taken(self : Tree, f : (Content, Double, Double, Double, Double) -
 /// where they are laid out, then its looks).
 pub fn Tree::each_drawn_laid(self : Tree, f : (Content, Double, Double, Double, Double, Double, Double) -> Unit) -> Unit {
   self.each_drawn_in_order(fn(_, _, c, x, y, a, s, ux, uy) { f(c, x, y, a, s, ux, uy) })
+}
+
+///|
+/// Each of the nodes `ids` names as Tree::walk_drawn finds it (where it is drawn, as opaque and as big as it is, and
+/// where it would be were nothing grown or shrunk: each_drawn_laid's), those it would find none of (let go, laid out
+/// nowhere, in one that is, drawing nothing of their own) left out, in the order it goes through them: what reads a few
+/// nodes of the scene (the old views hosted in it) reads them so, the tree not gone through for them. Each composed from
+/// the root down as the walk composes it.
+pub fn Tree::drawn_each(
+  self : Tree,
+  ids : Array[NodeId],
+  drawing? : Bool = true,
+) -> Array[(Content, Double, Double, Double, Double, Double, Double)] {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return []
+  }
+  let roots = self.root_layers()
+  let found : Array[(Array[Int], (Content, Double, Double, Double, Double, Double, Double))] = []
+  for id in ids {
+    guard self.alive_id(id) && self.nodes[id.at].content is Some(c) else { continue }
+    // (what holds it, from the root down)
+    let chain : Array[Int] = []
+    let mut i = id.at
+    while i >= 0 {
+      chain.push(i)
+      i = self.nodes[i].parent
+    }
+    chain.rev_in_place()
+    // (where it is gone through: by its place among what the root holds in the window's stack of layers, then among
+    // what each that holds it holds)
+    let key : Array[Int] = []
+    let mut ok = true
+    let mut ux = 0.0
+    let mut uy = 0.0
+    // (the first of its own the root holds it in: what is in a slot the root holds is the root's own, Tree::root_layers)
+    let mut top = -1
+    for k, at in chain {
+      let n = self.nodes[at]
+      if k > 0 && top < 0 && !n.slot {
+        top = k
+        match roots.search(at) {
+          Some(j) => key.push(j)
+          None => ok = false
+        }
+      } else if top >= 0 {
+        match self.nodes[chain[k - 1]].kids.search(at) {
+          Some(j) => key.push(j)
+          None => ok = false
+        }
+      }
+      if !n.slot {
+        ux = ux + n.lx
+        uy = uy + n.ly
+      }
+    }
+    // (where it is drawn composed as the walk composes it, the one way: Tree::projected)
+    if ok && !self.out_at(id.at) {
+      let (x, y, a, s) = self.projected(id.at, drawing~)
+      found.push((key, (c, x, y, a, s, ux, uy)))
+    }
+  }
+  // (as the walk goes: by each place in turn, one that holds another before it, never by how deep)
+  found.sort_by(fn(p, q) {
+    let (a, b) = (p.0, q.0)
+    let n = if a.length() < b.length() { a.length() } else { b.length() }
+    for i in 0..<n {
+      if a[i] != b[i] {
+        return a[i].compare(b[i])
+      }
+    }
+    a.length().compare(b.length())
+  })
+  found.map(fn(f) { f.1 })
 }
 
 ///|

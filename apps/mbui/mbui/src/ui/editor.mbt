@@ -716,7 +716,13 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
 /// line where there can be one and the keyboard has no key of its own for the field (a message's: Send is a button),
 /// else it is that key (a search's, an address's go) or the one line's end, giving them up.
 pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
-  pointing() is Mouse || max_lines <= 1 || ime_action != 0
+  enter_sends_wrapping(max_lines > 1, ime_action)
+}
+
+///|
+/// enter_sends_by for a field whose words wrap onto more lines than one (`wraps`) or not, however many it shows.
+fn enter_sends_wrapping(wraps : Bool, ime_action : Int) -> Bool {
+  pointing() is Mouse || !wraps || ime_action != 0
 }
 
 ///|

@@ -18,7 +18,7 @@ test "only the active retained chat receives a requested cursor and its empty dr
     n.val = Some(composer_node(root, src, "focus-draft", fn() {
       { station: "workspace/station", draft: "focus-draft", session: "chat", placeholder: "Write",
         toolbar: None, toolbar_node: None, note: [], tail: None, roomy: false, locked: false, offline: false, warm_agent: true }
-    }, fn(_) {  }, fn() { 900.0 }, fn(_, _, _, _) {  }, active=fn() { active.get() }, neighbour=fn(by) { moved.push(by) }))
+    }, fn(_) {  }, (root, fn(_, _) { 900.0 }), fn(_, _, _, _) {  }, active=fn() { active.get() }, neighbour=fn(by) { moved.push(by) }))
   })
   t.draw()
   let c = n.val.unwrap()

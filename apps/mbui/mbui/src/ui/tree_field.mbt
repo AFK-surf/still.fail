@@ -17,7 +17,8 @@ priv struct TreeField {
   /// its words' size, as said (followed: its paint and its measure read it)
   font_size : () -> Double
   line : () -> Double
-  max_lines : () -> Int
+  /// whether its words wrap onto more lines than one (its paint and its scroll read it)
+  wraps : () -> Bool
   /// what it says it is while empty, as it is now (followed: its paint and what it says read it)
   hint : () -> String
   shorter : Array[String]
@@ -84,8 +85,10 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
 /// is now, followed (in place of `placeholder`). `line_by`, `max_lines_by`, `enter_by` and `paste_limit_by`: those
-/// options as they change, keeping the same editor, selection and undo. `files_when`: whether it takes files at the
-/// paste's moment (else its words, like a field without `files`). The node made.
+/// options as they change, keeping the same editor, selection and undo. `max_lines_in`: the most lines it shows worked
+/// out by how big `holder` (what holds it) is laid out, as that is laid out (a Roomed rule: nothing of it read back),
+/// in place of `max_lines`; such a field wraps. `files_when`: whether it takes files at the paste's moment (else its
+/// words, like a field without `files`). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -112,6 +115,7 @@ pub fn field(
   size_by? : () -> Double,
   line_by? : () -> Double,
   max_lines_by? : () -> Int,
+  max_lines_in? : (@view.View, (Double, Double) -> Int),
   enter_by? : () -> Bool,
   paste_limit_by? : () -> Int,
   files_when? : () -> Bool = fn() { true },
@@ -127,7 +131,9 @@ pub fn field(
   }
   let line_now = line_by.unwrap_or(fn() { line })
   let lines_now = max_lines_by.unwrap_or(fn() { max_lines })
-  let enter_now = enter_by.unwrap_or(fn() { enter_sends.unwrap_or(enter_sends_by(lines_now(), ime_action)) })
+  // (wrapping onto more lines than one: as many as said, or as many as its holder's room leaves it)
+  let wraps = fn() { max_lines_in is Some(_) || lines_now() > 1 }
+  let enter_now = enter_by.unwrap_or(fn() { enter_sends.unwrap_or(enter_sends_wrapping(wraps(), ime_action)) })
   let limit_now = paste_limit_by.unwrap_or(fn() { paste_limit })
   // (what it says it is while empty as said once, or followed as it changes (`placeholder_by`: in the words as they
   // are now), its node and its editor kept
@@ -177,7 +183,7 @@ pub fn field(
       st,
       font_size: size,
       line: line_now,
-      max_lines: lines_now,
+      wraps,
       hint,
       shorter,
       trim,
@@ -211,7 +217,7 @@ pub fn field(
     }) |> ignore
     // (more lines than it shows: its words scroll in it as an old view's field's do, the wheel, a finger (Ctx::editor's
     // scroll_state), how far the layout's (Ctx::lay_out_field))
-    if lines_now() > 1 {
+    if wraps() {
       let sw = g().scroll_state(tree_said_id(id), true)
       sw.field = true
     }
@@ -220,15 +226,22 @@ pub fn field(
     // the look reads change: the one working out its layout and its drawing take (EditorState::look_of's, kept);
     // where only its look's colours change, a frame for them all the same)
     .measured(
-      By(fn() {
-        let laid = field.laid(font_size=size(), line=line_now(), min_lines~, max_lines=lines_now(), trim~)
-        // (its words as written followed as well as with what is composed: what is composed put in as written shows
-        // the same, its look's not, EditorState::look_shown)
-        field.text() |> ignore
-        st.looked = None
-        let (shown, spans) = st.look_shown()
-        ({ ..laid, words: if secret { st.shown() } else { shown } }, spans)
-      }),
+      {
+        let laid_of = fn(lines : Int) {
+          let laid = field.laid(font_size=size(), line=line_now(), min_lines~, max_lines=lines, trim~)
+          // (its words as written followed as well as with what is composed: what is composed put in as written shows
+          // the same, its look's not, EditorState::look_shown)
+          field.text() |> ignore
+          st.looked = None
+          let (shown, spans) = st.look_shown()
+          ({ ..laid, words: if secret { st.shown() } else { shown } }, spans)
+        }
+        match max_lines_in {
+          // (as many lines at most as its holder's room leaves it, worked out as that is laid out)
+          Some((holder, most)) => Roomed(holder, fn(w, h) { laid_of(imax(1, most(w, h))) })
+          None => By(fn() { laid_of(lines_now()) })
+        }
+      },
       fn(k, w) { k.0.size(w) },
     )
     .focusable(Is(true), keys=0, typing=true)
@@ -247,10 +260,13 @@ pub fn field(
     .owns(fn() { tree_field_gone(id) })
     |> ignore
     // A focused field can be fully transparent on the first frame of its entrance. Its input method needs the
-    // laid-out words then too; layout for input cannot wait for painting to have anything visible to draw.
+    // laid-out words then too; layout for input cannot wait for painting to have anything visible to draw. (Laid out
+    // again for it as where the field is laid out or what its words are set by changes: its words as composed, their
+    // size and line, whether they wrap: what tree_field_box and lay_out_field read; how many lines it shows is its
+    // rect's)
     f.reacts(fn() {
       if f.focused() {
-        Some((f.laid_window_told(), field.laid(font_size=size(), line=line_now(), max_lines=lines_now(), trim~)))
+        Some((f.laid_window_told(), (field.composed_said(), size(), line_now(), wraps())))
       } else {
         None
       }
@@ -929,7 +945,8 @@ fn tree_field_told(tf : TreeField) -> Unit {
 ///|
 /// The same word layout for input and painting, in the field's laid-out rectangle.
 fn Ctx::tree_field_box(self : Ctx, id : @view.NodeId, tf : TreeField, rect : (Double, Double, Double, Double)) -> FieldBox {
-  let z = self.editor_sizing((tf.font_size)(), (tf.line)(), (tf.max_lines)(), true, tree_theme().text_line)
+  // (its words' size, line and padding: how many lines it shows is its rect's, whether they wrap its own)
+  let z = self.editor_sizing((tf.font_size)(), (tf.line)(), 1, true, tree_theme().text_line)
   {
     id: tree_said_id(id),
     x: rect.0,
@@ -943,7 +960,7 @@ fn Ctx::tree_field_box(self : Ctx, id : @view.NodeId, tf : TreeField, rect : (Do
     font_size: z.font_size,
     weight: Node::new().weight,
     line_h: z.line,
-    wrap: z.wrap,
+    wrap: (tf.wraps)(),
     trim: tf.trim,
     hint: (tf.hint)(),
     shorter: tf.shorter,
@@ -979,7 +996,7 @@ fn Ctx::paint_tree_field(
   // (more lines than it shows: its words' scroll brought to this frame as an old view's field's is as it is built
   // (Ctx::editor: Ctx::scroll_state, its fling stepped, its bar's and its fling's motion told), kept as this frame's;
   // painted again with the clock while it is flung)
-  if (tf.max_lines)() > 1 {
+  if (tf.wraps)() {
     let sw = self.scroll_state(fb.id, true)
     sw.field = true
     sw.theme = self.theme
@@ -1059,7 +1076,7 @@ pub fn Tester::drawn_words_found(self : Tester) -> Array[(@view.Drawn, Int, Bool
   .map(fn(e) {
     let (d, holder, presses) = e
     let size = match tree_fields.get(d.id) {
-      Some(tf) => c.editor_sizing((tf.font_size)(), (tf.line)(), (tf.max_lines)(), true, tree_theme().text_line).font_size
+      Some(tf) => c.editor_sizing((tf.font_size)(), (tf.line)(), 1, true, tree_theme().text_line).font_size
       None => d.words_look.size
     }
     (d, holder, presses, view_words_found(d), size)

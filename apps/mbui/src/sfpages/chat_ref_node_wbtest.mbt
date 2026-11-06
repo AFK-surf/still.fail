@@ -33,7 +33,7 @@ fn retained_ref_tester() -> (@ui.Tester, ComposerNode, Array[(String, Json)], Re
     made.val = Some(composer_node(root, src, "refs", fn() {
       { station: "ws/st", draft: "refs", session: "chat", placeholder: "Write", toolbar: None, toolbar_node: None, note: [], tail: None,
         roomy: false, locked: false, offline: false, warm_agent: false }
-    }, fn(_) { sent.val += 1 }, fn() { 900.0 }, fn(_, _, _, _) {  }))
+    }, fn(_) { sent.val += 1 }, (root, fn(_, _) { 900.0 }), fn(_, _, _, _) {  }))
   })
   t.draw()
   let n = made.val.unwrap()

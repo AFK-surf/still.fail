@@ -103,7 +103,6 @@ fn chat_talk_node(
   ground : (@view.View) -> Int64,
 ) -> Unit {
   let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
-  let height = fn() { talk.laid_size_told().map(fn(z) { z.1 }).unwrap_or(talk.window().1) }
   let radii = fn() {
     let roots = @ui.tree_corner_roots_now()
     corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) })
@@ -144,12 +143,15 @@ fn chat_talk_node(
       r,
       view,
       fn() { @sfpages.composer_side_in(radii()) },
-      height,
-      fn() { geometry().1 },
+      // (its lines as many as the talk's height gives them)
+      (talk, fn(_, h) { h }),
+      fn(pane) { @sfpages.composer_geometry(pane, radii()).1 },
       fn() { geometry().2 },
       fn(_key) { (latest.val)() },
       active=fn() { app.nav.drawn_stay().0 == k },
       drops=talk,
+      // (its shape as the talk it stands in is laid out, in the same layout: composer_box_node's)
+      place_in=fn(pane) { @sfpages.composer_geometry(pane, radii()).2 },
     )
     room.set(Some(made.room))
     f.owns(fn() { room.set(None) }) |> ignore
@@ -219,7 +221,7 @@ fn chat_talk_node(
     })
   })
   |> ignore
-  chat_bar_node(talk, src, w, r, k, view, width, corners, ground)
+  chat_bar_node(talk, src, w, r, k, view, corners, ground)
 }
 
 ///|

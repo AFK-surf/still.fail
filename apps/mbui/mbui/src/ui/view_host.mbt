@@ -750,15 +750,17 @@ fn old_place(tree : @view.Tree) -> Unit {
   old_placed_off.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
-  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
-    if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
+  // (the old views alone, each found where the scene has it: the tree not gone through for them, Tree::drawn_each)
+  for d in tree.drawn_each(old_islands.map(fn(o) { o.id })) {
+    let (c, x, y, a, s, ux, uy) = d
+    if c.hosted {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
       old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
       // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
       // there: off where its layout alone puts it by what places it beside another or offsets it)
       old_placed_off[c.id] = (ux - ox, uy - oy)
     }
-  })
+  }
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
@@ -1585,10 +1587,20 @@ fn Ctx::tree_draw_node(
         None => ()
       }
     }
-    // (and to the rect it says, as it is painted, whether or not it clips to itself: View::clip_drawn)
+    // (and to the rect it says, as it is painted, whether or not it clips to itself, its corners round as its own are:
+    // View::clip_drawn)
     match c.clip_drawn {
       Some((cx, cy, cw, ch)) => {
-        push_clip(x + cx * s, y + cy * s, x + (cx + dmax(0.0, cw)) * s, y + (cy + dmax(0.0, ch)) * s)
+        let (r0, r1, r2, r3) = match c.corners {
+          Some((tl, tr, br, bl)) => (tl * s, tr * s, br * s, bl * s)
+          None => (c.radius * s, c.radius * s, c.radius * s, c.radius * s)
+        }
+        let (x0, y0, w0, h0) = (x + cx * s, y + cy * s, dmax(0.0, cw) * s, dmax(0.0, ch) * s)
+        if r0 == 0.0 && r1 == 0.0 && r2 == 0.0 && r3 == 0.0 {
+          push_clip(x0, y0, x0 + w0, y0 + h0)
+        } else {
+          push_inset_clip_r(x0, y0, w0, h0, r0, r1, r2, r3, 0.0)
+        }
         p.clipping.push(c.id)
         p.clip_depth.push(depth)
       }
