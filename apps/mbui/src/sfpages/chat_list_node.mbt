@@ -32,23 +32,21 @@ pub fn chat_list_node(
   }
   // (a card's field with the focus kept in view with the keyboard up, as the window grows shorter under it: out from
   // under the bar and the composer, 16 clear of each, its foot giving way to its top where it does not fit between
-  // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field))
-  v.reacts(fn() { (v.laid_window_told(), top(), clear_foot()) }, fn(now) {
-    guard now.0 is Some((_, ly, _, lh)) &&
-      !@sf.pointer_rests() &&
-      @ui.current().ime_inset() > 0.0 &&
+  // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field)). Asked of the list at its
+  // causes (the keyboard as the host says it, the window, the bar's and the composer's room), the part of the field
+  // with that room round it brought into sight as the list is laid out next (Tree::show_in_sight, Scroll's reveal):
+  // nothing of where it was laid out read back.
+  v.reacts(fn() { (@ui.current().ime_inset(), v.window(), top(), clear_foot()) }, fn(now) {
+    guard !@sf.pointer_rests() &&
+      now.0 > 0.0 &&
       @ui.focused_field_in() is Some((island, (_, fy, _, fh))) &&
-      v.tree.holds(v.id(), island) &&
-      v.tree.view_of(island) is Some(iv) else {
+      v.tree.holds(v.id(), island) else {
       return
     }
-    let (_, iy, _, _) = iv.laid_window_now()
-    let y = iy + fy
-    let d = dmin(ly + lh - now.2 - field_held_room - (y + fh), 0.0)
-    let d = dmax(ly + now.1 + field_held_room - y, d)
-    if d.abs() > 0.5 {
-      scroll.glide_to(scroll.at(v.tree) - d, glide=false)
-    }
+    let (_, _, top_now, foot_now) = now
+    v.tree.show_in_sight(island, within=fn() {
+      Some((fy - field_held_room - top_now, fy + fh + field_held_room + foot_now))
+    })
   })
   // (shown while it is laid out somewhere: what comes out of its avatars played on then, linger_tick)
   let shown_by = fn() { !v.shown_nowhere() }
@@ -628,12 +626,12 @@ pub fn chat_list_node(
         // (what it is: a message (message_node.mbt), what was sent from here, an agent at work, the line over what is new,
         // the pages coming, a chat with nothing in it, where it stands, what was said elsewhere (chat_rows_node.mbt);
         // made again as which of those it is changes)
-        // (arranged by the room the list gives it, in the same layout (by_room): narrow or wide, and in from the pane's
-        // sides as it is made (a message's pictures' bleed); made again where it goes from one to the other)
-        slot.by_room(Is(()), sized=true, fn(_, w, _) { { narrow: w <= chat_narrow_w, gutter: row_side_in(w) } }, fn(
-          holder,
-          room
-        ) {
+        // (arranged by the room the list gives it, in the same layout (by_room): narrow (700 or less) or wide, made
+        // again only where it goes from one to the other; how far in from the pane's sides its column is, what its
+        // messages' tables scroll out into, lent as worked out from how wide it is laid out (Roomed), never kept from
+        // the width it was made at)
+        slot.by_room(Is(()), sized=true, fn(_, w, _) { w <= chat_narrow_w }, fn(holder, narrow) {
+        holder.lends(chat_row_bleed, (holder, row_side_in)) |> ignore
         // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
         // composer under the last)
         holder
@@ -654,8 +652,8 @@ pub fn chat_list_node(
         |> ignore
         let here = fn() {
           match view() {
-            Some(cv) => here_of(r, cv, rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=room.narrow, gutter=room.gutter)
-            None => here_of(r, @sfbase.chat_view_made(Json::object({})), rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=room.narrow, gutter=room.gutter)
+            Some(cv) => here_of(r, cv, rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=narrow)
+            None => here_of(r, @sfbase.chat_view_made(Json::object({})), rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=narrow)
           }
         }
         // (what it is as it was last found: a row going not found among them for a moment, as its list takes its going,
@@ -1407,15 +1405,6 @@ impl Eq for ListedFrom with equal(self, other) {
 let field_held_room : Double = 16.0
 
 ///|
-/// How a chat's row is arranged by the width its list is laid out at (by_room's): narrow (700 or less: the pictures at
-/// their heads' start) or not, the arrangement; and how far in from the pane's sides its column is as it is made (what
-/// a message's pictures may bleed into), which goes with it.
-priv struct RowRoom {
-  narrow : Bool
-  gutter : Double
-}
-
-///|
-impl Show for RowRoom with output(self, logger) {
-  logger.write_string(if self.narrow { "narrow" } else { "wide" })
-}
+/// How far past its column a chat's row lets what it holds scroll across (a message's tables): the row, worked out from
+/// how wide it is laid out (row_side_in), as it is laid out (TableBleed's BleedBy).
+let chat_row_bleed : @view.Lent[(@view.View, (Double) -> Double)] = @view.Lent::new()

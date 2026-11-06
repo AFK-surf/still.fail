@@ -9,7 +9,8 @@
 /// `text` as Markdown in `parent` (markdown's): `tree`, its reading where it is told one (a message's `md`: nothing
 /// asked of the core); `size` its words', as it changes (0: the theme's body), on lines `line` times it high (0: Markdown.kt's 1.65);
 /// `ink` (0: the theme's text); `document`: its headings a document's; `bleed`: how far past its column either side its
-/// tables scroll; `copy`: its tables offer to be copied; `paths`: the files its paths name are a session's (chips);
+/// tables scroll (`bleed_by`: worked out, as it is laid out, from how wide a node holding it is laid out: a chat's row,
+/// its column's way in from the pane's sides); `copy`: its tables offer to be copied; `paths`: the files its paths name are a session's (chips);
 /// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held, `links_made` each paragraph's
 /// links as they are made (its node, its links, its runs: what shows a card over one); `chat_title`, what a bare
 /// link to a chat reads as; `code`, a fenced block of a language drawn another way (what draws it, its code as it
@@ -27,6 +28,7 @@ pub fn markdown_node(
   ink? : () -> Int64 = fn() { 0L },
   document? : Bool = false,
   bleed? : Double = 0.0,
+  bleed_by? : (@view.View, (Double) -> Double),
   copy? : Bool = true,
   paths? : Bool = false,
   found? : () -> Array[String] = fn() { [] },
@@ -66,7 +68,10 @@ pub fn markdown_node(
         if i != 0L { i } else { theme().p.text }
       },
       document,
-      bleed,
+      bleed: match bleed_by {
+        Some((of, f)) => BleedBy(of, f)
+        None => Bleed(bleed)
+      },
       copy,
       paths,
       found,
@@ -98,7 +103,7 @@ priv struct MdNode {
   line : Double
   ink : () -> Int64
   document : Bool
-  bleed : Double
+  bleed : TableBleed
   copy : Bool
   paths : Bool
   found : () -> Array[String]
@@ -357,7 +362,7 @@ fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?
       |> ignore
       p.box(fn(inner) {
         inner.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).padding(Is((md_quote_in, 0.0, 0.0, 0.0))) |> ignore
-        let quoted = { ..md, ink: fn() { web().muted }, bleed: 0.0 }
+        let quoted = { ..md, ink: fn() { web().muted }, bleed: Bleed(0.0) }
         md_blocks_node(inner, quoted, fn() {
           match block() {
             Some(Quote(bs)) => bs
@@ -618,7 +623,7 @@ fn md_line(md : MdNode, size : Double) -> Double {
 /// up to 5 from its words, as wide as the last one's; a disc, a circle, a square by depth), a task's box after it, its
 /// blocks beside them; its tables in its indent.
 fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) -> Unit {
-  let inner_md = { ..md, bleed: 0.0 }
+  let inner_md = { ..md, bleed: Bleed(0.0) }
   let s = md.size
   let ordered = fn() { list().map(fn(l) { l.ordered }).unwrap_or(false) }
   let tight = fn() { list().map(fn(l) { l.tight }).unwrap_or(false) }
