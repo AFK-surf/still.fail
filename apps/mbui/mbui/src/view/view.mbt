@@ -2358,16 +2358,25 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
+  // (in a layout (what it builds as it lays out: a list's rows, a part picked by its room): of that layout's moment,
+  // nothing due done in it nor the clocks moved on, never anything outside what it lays out set going from it)
+  let in_layout = (self.laying > 0 && !self.making_after) || self.layout_owner >= 0
   let at = if self.cause_at >= 0.0 {
     self.cause_at
+  } else if in_layout {
+    self.logic
   } else {
     self.time_now()
   }
-  self.advance_logic(at)
+  if !in_layout {
+    self.advance_logic(at)
+  }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
   @signals.start_batch()
-  self.advance_clock(at)
+  if !in_layout {
+    self.advance_clock(at)
+  }
   let was = self.cause_at
   self.cause_at = at
   self.committing += 1
@@ -2377,8 +2386,15 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
+  // (what it said waits for its change committed whole: in a layout, once the outermost layout is over, at its moment,
+  // as Tree::queued's)
   if was < 0.0 {
-    self.afters_done()
+    if in_layout {
+      self.afters_laid.append(self.afters)
+      self.afters.clear()
+    } else {
+      self.afters_done()
+    }
   }
   self.cause_at = was
   if changed {

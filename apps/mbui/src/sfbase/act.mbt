@@ -25,6 +25,15 @@ pub fn acting_reset() -> Unit {
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
 /// `action`'s words on it doing `run` ("" none).
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
+  // (said in a layout (an answer given at once to what a row asked as the list made it): once that layout is over,
+  // the toast no part of what it lays out)
+  match @ui.view_tree() {
+    Some(t) if t.root().laying_out() => {
+      t.root().made_after_layout(fn() { toast_later(words, action~, run~) })
+      return
+    }
+    _ => ()
+  }
   // (its words, which saying it is, its button and what that does said as one: what reads them never sees one without
   // the others)
   let n = @signals.untracked(fn() { app.toast.get().n }) + 1
