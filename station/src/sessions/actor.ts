@@ -775,13 +775,15 @@ export class SessionActor {
     }).then(() => refused);
   }
 
-  /// Clears it (`clear`), saying `said` in its chat; `by`: who asked, for the log.
-  private async clearNow(readBack: boolean, said = readBack ? "station.notice.afresh" : "station.notice.cleared", by = "by hand"): Promise<string | null> {
+  /// Clears it (`clear`), saying `said` in its chat; `by`: who asked, for the log. `keepJobs`: its jobs go on, as when
+  /// a message or notice starts it afresh by itself: the turn that comes is what its wait was for, and its watches keep
+  /// watching (stopped with it, a watch would end without a word, the fresh agent not knowing it had one).
+  private async clearNow(readBack: boolean, said = readBack ? "station.notice.afresh" : "station.notice.cleared", by = "by hand", keepJobs = false): Promise<string | null> {
     if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row?.runtimeSessionId) return t("station.context.empty");
-    await this.stopWaiting(false);
+    await this.stopWaiting(false, keepJobs);
     const agent = this.agent;
     this.agent = null;
     log.info("session", `clearing its context, asked ${by}`, { session: this.key, left: row.runtimeSessionId, readBack, background: agent?.session.background?.().length ?? 0 });
@@ -1128,10 +1130,10 @@ export class SessionActor {
       this.deps.live?.event(this.key, { kind: "phase", phase: "starting" });
       // Started by a message or a notice, its large context's cache over, where its chat or else its station is set to
       // (`afresh`, config.json `afreshWhenCold`): it goes on afresh, as 换新上下文 has it by hand, not with all of it
-      // sent again (a wait of its own ends with it). Not while it has work going in the background (which would end
+      // sent again (a wait of its own ends with it; its jobs, watches too, go on). Not while it has work going in the background (which would end
       // with its process).
       if ((kind === "input" || kind === "job") && !this.holding() && !this.agent?.session.busy() && this.deps.coldAfresh?.(this.key, this.now()) === true) {
-        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over");
+        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over", true);
       }
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
@@ -1613,7 +1615,8 @@ export class SessionActor {
   }
 
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
-  private async stopWaiting(say = true) {
+  /// `keepJobs`: only the wait ends; its jobs go on (`clearNow` when it goes on afresh by itself).
+  private async stopWaiting(say = true, keepJobs = false) {
     const store = this.deps.store;
     const refill = this.refill !== null;
     const waited = this.waiting !== null || refill;
@@ -1627,7 +1630,7 @@ export class SessionActor {
     log.info("session", "stopped while waiting", { session: this.key });
     // A turn waiting to be tried again waits on no work of its own: its jobs go on. Asked again, it starts over.
     if (last && retrying(last)) this.overloads = 0;
-    else await this.deps.stopJobs(this.key);
+    else if (!keepJobs) await this.deps.stopJobs(this.key);
     this.nudges = 0;
     const agent = this.agent;
     this.agent = null;

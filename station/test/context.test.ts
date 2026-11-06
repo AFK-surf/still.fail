@@ -405,3 +405,41 @@ test("clear is refused while a turn runs", async () => {
   assert.equal(r.claude.last().disposed, false);
   await r.close();
 });
+
+test("started afresh by itself while it waits on its watch, its watch goes on: only its process and wait end", async () => {
+  const r = new Rig();
+  r.hub.setJobs({
+    stop: async (id) => {
+      r.store.jobEnded(id, "stopped", null);
+      return r.store.getJob(id)!;
+    },
+  });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const session = r.claude.last();
+  r.store.insertJob({
+    id: "job_w", sessionKey: key, name: "盯 CI", command: "sleep 600", cwd: "/", port: null, token: "tw", state: "running",
+    pgid: null, exitCode: null, startedAt: Date.now(), endedAt: null, restarts: 0, log: "/dev/null", watch: true,
+  });
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "盯 CI", watch: true });
+  session.complete();
+  await settle();
+  // Its last call wrote an hour's cache of 200K, three hours ago.
+  r.store.recordUsage(`/t/${key}`, { session: key, offset: 1, model: "claude-opus-5-5" }, "claude", [[
+    { id: "c1", at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+    { turn: null, person: null, thread: null, profile: null },
+  ]]);
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+  r.edit((raw) => (raw.afreshWhenCold = true));
+  // What the watch says starts it afresh; the watch that said it is still running.
+  r.hub.notify(key, "CI failed on PR #1");
+  await settle();
+  const fresh = r.claude.last();
+  assert.notEqual(fresh, session);
+  assert.ok(session.disposed);
+  assert.ok(fresh.prompts[0]!.includes("CI failed on PR #1"), fresh.prompts[0]);
+  assert.equal(r.store.getJob("job_w")!.state, "running", "its watch is not stopped with its context");
+  await r.close();
+});
