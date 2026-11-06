@@ -130,9 +130,14 @@ pub fn[T] ListRows::in_node_indexed(
   // Read what changed as the source says it did: in one reaction with the rows' height causes it tells, as in_node.
   v.reacts(fn() {
     // (and as the rows' way ends: what left is gone from them then)
-    (ended.get(), (rows.snapshot)(), watched() && !v.declared_nowhere())
+    // A cause's timing is also an input. Its owner can learn its distance after the new row is placed, without
+    // changing any row key or content. Follow only active causes, and re-arm this read when that set changes;
+    // reading ms/from only in the untracked application left the room on its original duration.
+    self.causes.read()
+    let timing = self.causes.by.keys().map(fn(k) { (k, ms(k), from(k)) }).collect()
+    (ended.get(), (rows.snapshot)(), watched() && !v.declared_nowhere(), timing)
   }, fn(said) {
-    let (_, _, watching) = said
+    let (_, _, watching, _) = said
     let now = v.cause_at()
     let c = self.causes
     let watching = watching && given.val

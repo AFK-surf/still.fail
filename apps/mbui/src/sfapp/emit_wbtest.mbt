@@ -179,6 +179,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let frames : Map[String, Int] = {}
+  let phases : Array[(String, Double, Double, Double)] = []
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {
@@ -186,6 +187,8 @@ test "the answer coming in does not end its own motion: float, spit and return e
     match em.current {
       Some(turn) => {
         let k = turn.pose.to_string()
+        let phase = (k, turn.clock.starts_at(), turn.clock.end(), turn.span)
+        if phases.last() != Some(phase) { phases.push(phase) }
         frames[k] = frames.get(k).unwrap_or(0) + 1
         // the flying copy is drawn in every pose after the fold (emit_flyer)
         if turn.pose != Fold {
@@ -197,9 +200,9 @@ test "the answer coming in does not end its own motion: float, spit and return e
   }
   // 16 ms frames: Float 440 ms, Spit 380 (ChatMotion.kt), Return at least 230 (as long as its way home: 320 over a
   // row or two, a Move's least over none), each to its end
-  assert_true(frames.get("Float").unwrap_or(0) >= 26)
-  assert_true(frames.get("Spit").unwrap_or(0) >= 22)
-  assert_true(frames.get("Return").unwrap_or(0) >= 13)
+  assert_true(frames.get("Float").unwrap_or(0) >= 26, msg="frames \{frames}; declared phases \{phases}")
+  assert_true(frames.get("Spit").unwrap_or(0) >= 22, msg="frames \{frames}; declared phases \{phases}")
+  assert_true(frames.get("Return").unwrap_or(0) >= 13, msg="frames \{frames}; declared phases \{phases}")
   assert_true(em.current is None)
   emit_restore()
 }
