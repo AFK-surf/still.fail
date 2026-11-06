@@ -6,7 +6,7 @@
 // pointed at, its time in that place and 归档 at its top right; right clicked, its menu at the pointer; renamed in
 // place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat is swiped left
 // to archive it. The menu is the presenters' (@sf.menu): 固定,
-// 重命名, 保留, 复制会话链接, 转到频道, 归档, each where the chat has it.
+// 重命名, 保留, 复制会话链接, 转到频道, 归档, 分享给其他 workspace, 分享图片, each where the chat has it.
 
 ///|
 /// What the rows keep: the row whose title is being written in place (a mouse's 重命名, its key; "" none) and its field,
@@ -632,20 +632,22 @@ let row_icon : Double = 16.0
 /// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
 /// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
-/// 转到频道 (a thread with an agent): two groups, a line between. Held by a finger, felt as it
+/// 转到频道 (a thread with an agent), 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 (share_items): two groups, a line
+/// between. Held by a finger, felt as it
 /// opens and from the row (a sheet, or under it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
-  @sf.menu(chat_menu_items(src, item, []), from=if finger { Of(id) } else { @sf.at_point(x, y) })
+  @sf.menu(chat_menu_items(src, item), from=if finger { Of(id) } else { @sf.at_point(x, y) })
   rows.menu_for = @sfbase.row_name(item)
   rows.menu_serial = @sf.last_presented()
 }
 
 ///|
-/// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same): `extra` the page's own, at its
-/// end (sharing it, a picture of it, it in Slack: what a row has not the core's words for).
-fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
+/// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same, 2026-11-06 Peng Xiao: 「这里的...和
+/// 侧边栏右键点击 chat，我感觉需要统一一下」). `page`: the page's own of share_items (chat_extra_items, from its view, which it
+/// has read already), in place of the row's.
+fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
   match item.pinned {
@@ -787,7 +789,23 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       )
     _ => ()
   }
-  items.append(extra)
+  // shared, a picture of it, it in Slack or Feishu: the page's and a row's alike (share_items)
+  items.append(
+    match page {
+      Some(own) => own
+      None =>
+        share_items(
+          src,
+          r,
+          item.thread,
+          may_share=item.may_share,
+          may_publish=item.may_publish,
+          slack_url=item.slack_url,
+          slack_app=item.slack_app,
+          feishu_url=item.feishu_url,
+        )
+    },
+  )
   // (no line closing the menu: nothing after the chat's own group)
   if items.last() is Some(None) {
     items.pop() |> ignore
@@ -1241,7 +1259,7 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
     }
   }
   let items : Array[@sf.MenuItem?] = match found {
-    Some(item) => chat_menu_items(src, item, extra)
+    Some(item) => chat_menu_items(src, item, page=extra)
     None => {
       let link = @sfbase.chat_link(r.station, r.session)
       let items : Array[@sf.MenuItem?] = []
@@ -1262,13 +1280,36 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
 }
 
 ///|
-/// What the chat's page adds to its menu (`chat`, the core's view of it): sharing it with others, a picture of it (for
-/// those who may), it opened where it came from (Slack, Feishu).
+/// What the chat's page's menu has beyond the list's own (`chat`, the core's view of it): as a row's (share_items), from
+/// its page's view.
 pub fn chat_extra_items(src : Source, r : ChatRef, chat : Json?) -> Array[@sf.MenuItem?] {
+  share_items(
+    src,
+    r,
+    opt_number(field(chat, "thread"), "id"),
+    may_share=flag(field(chat, "xshare"), "may"),
+    may_publish=flag(field(chat, "publish"), "may"),
+    slack_url=text(chat, "slackUrl"),
+    slack_app=text(chat, "slackApp"),
+    feishu_url=text(chat, "feishuUrl"),
+  )
+}
+
+///|
+/// What is done with chat `r` (its `thread`) beyond the list's own, in a row's menu and its page's "…" alike: 分享给其他
+/// workspace, 分享图片, 在 Slack 打开 or 在飞书打开, each where the viewer may.
+fn share_items(
+  src : Source,
+  r : ChatRef,
+  thread : Double?,
+  may_share~ : Bool,
+  may_publish~ : Bool,
+  slack_url~ : String,
+  slack_app~ : String,
+  feishu_url~ : String,
+) -> Array[@sf.MenuItem?] {
   let items : Array[@sf.MenuItem?] = []
-  let thread = opt_number(field(chat, "thread"), "id")
-  let share = field(chat, "xshare")
-  if flag(share, "may") {
+  if may_share {
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.xshare"), icon="users", fn() {
@@ -1277,9 +1318,8 @@ pub fn chat_extra_items(src : Source, r : ChatRef, chat : Json?) -> Array[@sf.Me
       ),
     )
   }
-  let publish = field(chat, "publish")
   match thread {
-    Some(th) if flag(publish, "may") =>
+    Some(th) if may_publish =>
       items.push(
         Some(
           @sf.menu_item_of(@sf.t("web-pages.chat.shareImage"), icon="image-upload", fn() { open_publish(src, r, th) }),
@@ -1287,24 +1327,22 @@ pub fn chat_extra_items(src : Source, r : ChatRef, chat : Json?) -> Array[@sf.Me
       )
     _ => ()
   }
-  let slack = text(chat, "slackUrl")
-  if slack != "" {
+  if slack_url != "" {
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.openInSlack"), icon="external", fn() {
-          if !@sfbase.open_slack(text(chat, "slackApp"), slack) {
+          if !@sfbase.open_slack(slack_app, slack_url) {
             @sfbase.say(@ui.current(), @sf.t("android-chat.link.failed"))
           }
         }),
       ),
     )
   }
-  let feishu = text(chat, "feishuUrl")
-  if feishu != "" {
+  if feishu_url != "" {
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.openInFeishu"), icon="external", fn() {
-          if !@ui.open_url(feishu) {
+          if !@ui.open_url(feishu_url) {
             @sfbase.say(@ui.current(), @sf.t("android-chat.link.failed"))
           }
         }),

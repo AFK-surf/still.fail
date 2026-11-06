@@ -1415,7 +1415,11 @@ export class Views implements Owner {
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const data = this.#core.data;
     const me = this.me(scope);
-    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const workspace = this.ok({ topic: "workspace", workspace: scope });
+    const members_ = arr(get(workspace, "members"));
+    // What a row's menu offers besides the list's own (#rowMenu): the viewer's role here, their workspaces (with their role
+    // in each, as sharing reads it: xshare.ts shown).
+    const menu = { role: str(get(workspace, "role")), places: (this.#core.places?.() ?? []).map((p) => [p.id, p.role] as const) };
     const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
     const states: J[] = [];
     const troubles: [string, string, boolean, string][] = [];
@@ -1444,7 +1448,9 @@ export class Views implements Owner {
         const link = this.link(s.address);
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
-        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint]);
+        // (its connects: a Slack or Feishu row's link there, #rowMenu)
+        const connects = arr(get(this.ok({ topic: "overview", station: s.address }), "connects"));
+        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
         for (const raw of [...asked, ...listed]) {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
@@ -1458,6 +1464,7 @@ export class Views implements Owner {
           if (kept && kept.sig === sig) row = kept.row;
           else {
             row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
+            if (row !== null) Object.assign(row, this.#rowMenu(s.address, shown, me, menu, connects));
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
@@ -1677,6 +1684,32 @@ export class Views implements Owner {
     else delete row.opener;
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
+  }
+
+  /// What a row's menu offers besides the list's own, as its page's "…" does from its `ChatView` (`xshare`, `publish`,
+  /// `slackUrl`, `feishuUrl`): a row's menu and the page's are one. Shared with the viewer's other workspaces by its
+  /// starter or an owner or admin (xshare.ts shown); a picture of it published by any but a read-only member (publish.ts
+  /// shown); a Slack or Feishu thread's link there, by its connect (#whereIn).
+  #rowMenu(station: string, raw: J, me: J, menu: { role: string | null; places: (readonly [string, string | null])[] }, connects: J[]): J {
+    const out: J = {};
+    if (get(raw, "pending") === true) return out;
+    const scope = ofAddress(station);
+    const email = str(get(me, "email"));
+    const starter = email !== null && str(get(get(raw, "creator"), "id")) === email;
+    const role = menu.places.find(([id]) => id === scope)?.[1] ?? null;
+    if (menu.places.some(([id]) => id !== scope) && (starter || role === "owner" || role === "admin")) out.mayShare = true;
+    if (typeof raw.thread === "number" && menu.role !== "viewer") out.mayPublish = true;
+    const id = str(get(raw, "connect"));
+    const c = id === null ? undefined : connects.find((x) => str(get(x, "id")) === id);
+    if (c !== undefined && isObject(raw.origin)) {
+      const o = raw.origin as J;
+      const surface = str(get(c, "kind")) === "feishu" ? `feishu:${id}` : "slack";
+      const where = this.#whereIn(station, [{ connect: c }], surface, str(o.channel) ?? "", str(o.channelName) ?? "", str(o.threadTs) ?? "");
+      if (where.slackUrl !== null) out.slackUrl = where.slackUrl;
+      if (where.slackApp !== null) out.slackApp = where.slackApp;
+      if (where.feishuUrl !== null) out.feishuUrl = where.feishuUrl;
+    }
+    return out;
   }
 
   /// The chats a chat's agent opened (its station's row's `opened`), as their lists have them: each on its station, titled

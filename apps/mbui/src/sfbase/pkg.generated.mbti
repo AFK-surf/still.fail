@@ -2018,6 +2018,11 @@ pub(all) struct ChatItem {
   kept : Bool
   client_key : String
   opener : Opener?
+  may_share : Bool
+  may_publish : Bool
+  slack_url : String
+  slack_app : String
+  feishu_url : String
 }
 
 pub(all) struct ChatPick {

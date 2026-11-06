@@ -2185,6 +2185,19 @@ export interface ChatItem {
 	/** The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing. */
 	xshare?: RowShare;
 	/**
+	 * Its menu's 分享给其他 workspace, as its page's (`ChatView.xshare.may`): the viewer is in another workspace and
+	 * started it or is an owner or admin of its own. Absent otherwise.
+	 */
+	mayShare?: boolean;
+	/** Its menu's 分享图片, as its page's (`ChatView.publish.may`): a chat, the viewer not a read-only member. Absent otherwise. */
+	mayPublish?: boolean;
+	/** A Slack thread's link in Slack, as its page's (`ChatView.slackUrl`), while its connect is signed in. Absent otherwise. */
+	slackUrl?: string;
+	/** With `slackUrl`: the same in Slack's app. */
+	slackApp?: string;
+	/** A Feishu chat's link in Feishu, as its page's (`ChatView.feishuUrl`). Absent otherwise. */
+	feishuUrl?: string;
+	/**
 	 * The chat an agent opened it from: its row's way back there. Absent for one a person started, and from a
 	 * station before it.
 	 */

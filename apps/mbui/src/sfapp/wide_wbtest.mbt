@@ -131,6 +131,27 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
 }
 
 ///|
+test "wide: a row's menu offers what its page's \"…\" does besides (分享给其他 workspace, 分享图片, 在 Slack 中打开) where its row says so; 分享图片 asks for the picture" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="home-share")
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  assert_true(t.query(MenuItem, label="分享给其他 workspace") is Some(_), msg=t.drawn_text())
+  assert_true(t.query(MenuItem, label="在 Slack 中打开") is Some(_), msg=t.drawn_text())
+  t.click(MenuItem, label="分享图片")
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "station"), "ws1/st2")
+  // a row that says none of them: none
+  t.key(@ui.key_escape)
+  let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
+  t.right_click(x, y)
+  assert_true(t.query(MenuItem, label="复制会话链接") is Some(_))
+  assert_true(t.query(MenuItem, label="分享图片") is None)
+  assert_true(t.query(MenuItem, label="分享给其他 workspace") is None)
+}
+
+///|
 test "wide: a row's menu keeps its chat out of the archive (保留, chat.keep) and lets it go (取消保留); pinned, none: a pin keeps it already" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="home-pins")
