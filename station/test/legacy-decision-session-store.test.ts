@@ -381,7 +381,7 @@ for (const mode of ["shared", "separate"] as const) test(`the ${mode} decision-s
     const meta = mode === "shared" ? "legacy_decision_time_meta" : "legacy_decision_session_meta";
     const previous = Promise.withResolvers<void>();
     builder = buildLegacyEntryLookups(store, previous.promise);
-    store.waitForDecisionSessions = () => builder!.decisionSessionsReady;
+    store.waitForDecisionSessions = () => builder!.waitForDecisionSessions();
     const waiting = store.prepareDecisionSessions();
     let settled = false;
     void builder.ready.then(() => { settled = true; });
@@ -416,14 +416,14 @@ test("another opener finishing during handover wakes the waiting session reads",
   const store = Store.open(path);
   const previous = Promise.withResolvers<void>();
   const builder = buildLegacyEntryLookups(store, previous.promise);
-  store.waitForDecisionSessions = () => builder.decisionSessionsReady;
+  store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
+  const other = new DatabaseSync(path);
   try {
     const waiting = store.prepareDecisionSessions();
-    while (!decisionSessionIndexStep(store.db, 64).done) { /* another opener finished the shared work */ }
-    previous.resolve();
+    while (!decisionSessionIndexStep(other, 64).done) { /* another opener finished the shared work */ }
     await waiting;
     assert.deepEqual(store.lastDecision("mine"), { n: 129 });
-  } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { previous.resolve(); await builder.close(); other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a stopped session lookup settles its wait and resumes saved work", { timeout: 5000 }, async () => {
@@ -440,14 +440,14 @@ test("a stopped session lookup settles its wait and resumes saved work", { timeo
   try {
     assert.equal(decisionSessionIndexStep(store.db, 7).done, false);
     const cursor = store.db.prepare("SELECT cursor FROM legacy_decision_session_meta").get();
-    store.waitForDecisionSessions = () => builder.decisionSessionsReady;
+    store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
     const waiting = store.prepareDecisionSessions();
     await builder.close();
     await assert.rejects(waiting, DecisionSessionsUnavailable);
     assert.deepEqual(store.db.prepare("SELECT cursor FROM legacy_decision_session_meta").get(), cursor);
     previous.resolve();
     builder = buildLegacyEntryLookups(store, Promise.resolve());
-    store.waitForDecisionSessions = () => builder.decisionSessionsReady;
+    store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
     await store.prepareDecisionSessions();
     assert.deepEqual(store.lastDecision("mine"), { n: 129 });
   } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
@@ -493,7 +493,7 @@ for (const window of ["small", "large"] as const) test(`a ${window} recent windo
   const requested = Promise.withResolvers<void>();
   const builder = buildLegacyEntryLookups(store, previous.promise);
   let waits = 0;
-  store.waitForDecisionSessions = () => { waits++; requested.resolve(); return builder.decisionSessionsReady; };
+  store.waitForDecisionSessions = () => { waits++; requested.resolve(); return builder.waitForDecisionSessions(); };
   const viewer = { sub: "s", email: "p@example.test", name: "P", role: "admin" as const,
     workspace: "mine", device: "d", home: false };
   const accounts: any = { profilesView: () => [], loginsView: () => [], apiProviders: () => [], machineLogins: () => [],
@@ -524,5 +524,104 @@ for (const window of ["small", "large"] as const) test(`a ${window} recent windo
     previous.resolve();
     await builder.close();
     store.close(); old.close(); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an old store uses a native session index installed after it opened", { timeout: 5000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "decision-session-native-late-"));
+  const path = join(dir, "station.db");
+  const first = Store.open(path);
+  try {
+    first.insertSession({ key: "mine", ws: "mine", connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/work", token: "mine", createdAt: 1, lastActiveAt: 1 });
+    const put = first.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES(?,?,?)");
+    put.run("mine", 100, '{"mine":true}');
+    for (let n = 0; n < 129; n++) put.run("other", 100, '{}');
+    first.db.exec("DROP INDEX decision_checks_session");
+  } finally { first.close(); }
+  const store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = buildLegacyEntryLookups(store, previous.promise);
+  store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
+  const old = new DatabaseSync(path);
+  try {
+    assert.equal(decisionSessionIndexStep(store.db, 7).done, false);
+    const cursor = store.db.prepare("SELECT cursor,complete FROM legacy_decision_session_meta").get();
+    store.db.exec("BEGIN");
+    assert.equal(store.decisionSessionsReady(), false);
+    old.exec("CREATE INDEX decision_checks_session ON decision_checks(session,id)");
+    assert.equal(store.decisionSessionsReady(), false);
+    assert.throws(() => store.lastDecision("mine"), DecisionSessionsUnavailable);
+    store.db.exec("COMMIT");
+    assert.equal(store.decisionSessionsReady(), true);
+    assert.deepEqual(store.lastDecision("mine"), { mine: true });
+    assert.equal(store.latestDecisionsSince(0, { workspace: "mine", home: false }).length, 1);
+    await store.prepareDecisionSessions();
+    previous.resolve();
+    assert.equal(await builder.ready, true);
+    assert.deepEqual(store.db.prepare("SELECT cursor,complete FROM legacy_decision_session_meta").get(), cursor);
+  } finally {
+    previous.resolve();
+    await builder.close();
+    old.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a late native session index works while the shared time lookup is preparing", { timeout: 5000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "decision-session-shared-native-")), path = join(dir, "station.db");
+  const first = Store.open(path);
+  try {
+    first.insertSession({ key: "mine", ws: "mine", connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/work", token: "mine", createdAt: 1, lastActiveAt: 1 });
+    const put = first.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES(?,?,?)");
+    put.run("mine", 100, '{"mine":true}');
+    for (let n = 0; n < 129; n++) put.run("other", 100, '{}');
+    first.db.exec("DROP INDEX decision_checks_session; DROP INDEX decision_checks_lately");
+  } finally { first.close(); }
+  const store = Store.open(path), old = new DatabaseSync(path);
+  const previous = Promise.withResolvers<void>(), builder = buildLegacyEntryLookups(store, previous.promise);
+  store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
+  try {
+    assert.equal(decisionTimeIndexStep(store.db, 7).done, false);
+    old.exec("CREATE INDEX decision_checks_session ON decision_checks(session,id)");
+    assert.equal(store.decisionSessionsReady(), true);
+    assert.deepEqual(store.lastDecision("mine"), { mine: true });
+    assert.equal(store.latestDecisionsSince(0, { workspace: "mine", home: false }).length, 1);
+    await store.prepareDecisionSessions();
+    previous.resolve();
+    assert.equal(await builder.ready, true);
+    assert.equal(store.db.prepare("SELECT complete FROM legacy_decision_time_meta").get()?.complete, 1);
+  } finally { previous.resolve(); await builder.close(); old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a pending session read wakes when another opener installs the native index", { timeout: 3000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "decision-session-native-wait-"));
+  const path = join(dir, "station.db");
+  const first = Store.open(path);
+  try {
+    const put = first.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES('other',?,'{}')");
+    for (let n = 0; n < 130; n++) put.run(n);
+    first.db.exec("DROP INDEX decision_checks_session");
+  } finally { first.close(); }
+  const store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = buildLegacyEntryLookups(store, previous.promise);
+  store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
+  const old = new DatabaseSync(path);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const waiting = store.prepareDecisionSessions();
+    old.exec("CREATE INDEX decision_checks_session ON decision_checks(session,id)");
+    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("still waiting after the native index was installed")), 1500); });
+    await Promise.race([waiting, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+    previous.resolve();
+    await builder.close();
+    old.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

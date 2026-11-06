@@ -1816,17 +1816,26 @@ export class Store {
     });
   }
 
-  /// Whether the session lookup has all old checks. The builder only publishes it after its last batch.
-  decisionSessionsReady(): boolean {
-    if (this.#legacyDecisionSession === null) return true;
+  /// Select the lookup visible in this connection's snapshot. Another opener may have built the native index while
+  /// our old lookup was still being prepared; use it without publishing or completing the partial lookup.
+  #decisionSessionLookup(): "native" | "shared" | "separate" | "pending" {
+    if (this.#legacyDecisionSession === null) return "native";
     const table = this.#legacyDecisionSession === "shared" ? "legacy_decision_time_meta" : "legacy_decision_session_meta";
-    return this.#one(`SELECT complete FROM ${table} WHERE id=1`)?.complete === 1;
+    const state = this.#one(`SELECT complete, CASE WHEN complete=0 THEN EXISTS (
+      SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session') ELSE 0 END AS native
+      FROM ${table} WHERE id=1`);
+    if (state?.complete === 1) return this.#legacyDecisionSession;
+    return state?.native === 1 ? "native" : "pending";
   }
+
+  /// Whether a session lookup can answer without reading the old source table.
+  decisionSessionsReady(): boolean { return this.#decisionSessionLookup() !== "pending"; }
 
   async prepareDecisionSessions(): Promise<void> {
     if (this.decisionSessionsReady()) return;
-    if (this.waitForDecisionSessions === null || !await this.waitForDecisionSessions() || !this.decisionSessionsReady())
-      throw new DecisionSessionsUnavailable();
+    if (this.waitForDecisionSessions === null) throw new DecisionSessionsUnavailable();
+    await this.waitForDecisionSessions();
+    if (!this.decisionSessionsReady()) throw new DecisionSessionsUnavailable();
   }
 
   /// A complete small recent range can be read through a time index without the still-preparing session index.
@@ -1851,7 +1860,8 @@ export class Store {
 
   /// The session's latest decision record, if any.
   lastDecision(session: string): Json | null {
-    if (!this.decisionSessionsReady()) {
+    const lookup = this.#decisionSessionLookup();
+    if (lookup === "pending") {
       const recent = this.#one(RECENT_LAST_DECISION, session);
       if (recent?.found === 1) return parsed(recent.result) ?? null;
       if (recent && recent.n < DECISION_SCOPE_BATCH) return null;
@@ -1859,8 +1869,8 @@ export class Store {
     }
     const source = () => this.#one("SELECT result FROM decision_checks WHERE session = ? ORDER BY id DESC LIMIT 1", session);
     let row: Json | undefined;
-    try { row = this.#legacyDecisionSession === null ? source() : this.#one(
-      this.#legacyDecisionSession === "shared" ? LEGACY_LAST_DECISION_SHARED : LEGACY_LAST_DECISION_SEPARATE, session); }
+    try { row = lookup === "native" ? source() : this.#one(
+      lookup === "shared" ? LEGACY_LAST_DECISION_SHARED : LEGACY_LAST_DECISION_SEPARATE, session); }
     catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (!/no such (?:index|table): (?:main\.)?legacy_decision_(?:time|session)(?:_meta|_by_session)?$/.test(message)) throw error;
@@ -1872,7 +1882,8 @@ export class Store {
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
-    if (viewer?.home === false && !this.decisionSessionsReady()) {
+    const lookup = viewer?.home === false ? this.#decisionSessionLookup() : "native";
+    if (viewer?.home === false && lookup === "pending") {
       const small = this.#smallRecentDecisionScope(since, viewer.workspace);
       if (small !== null) return small;
       throw new DecisionSessionsUnavailable();
@@ -1881,8 +1892,8 @@ export class Store {
     try {
       if (viewer === undefined) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS : LATEST_DECISIONS, since);
       else if (viewer.home !== false) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK : LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
-      else rows = this.#all(this.#legacyDecisionSession
-        ? decisionScopedWithSession(this.#legacyDecisionTime, false, this.#legacyDecisionSession)
+      else rows = this.#all(lookup === "shared" || lookup === "separate"
+        ? decisionScopedWithSession(this.#legacyDecisionTime, false, lookup)
         : this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED : LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -1893,8 +1904,8 @@ export class Store {
       if (viewer?.home === false && (/no such index: (decision_checks_lately|legacy_decision_time_at)$/.test(message)
         || /no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message))) {
         // A time index can disappear after this store opened. Keep the bounded session path if its indexes remain.
-        try { rows = this.#all(this.#legacyDecisionSession
-          ? decisionScopedWithSession(false, true, this.#legacyDecisionSession)
+        try { rows = this.#all(lookup === "shared" || lookup === "separate"
+          ? decisionScopedWithSession(false, true, lookup)
           : LATEST_DECISIONS_SCOPED_NO_TIME, since, viewer.workspace, 0); }
         catch (retryError) {
           const retryMessage = retryError instanceof Error ? retryError.message : "";

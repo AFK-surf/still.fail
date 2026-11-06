@@ -104,7 +104,7 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const builder = buildLegacyEntryLookups(store, previous.exited);
-          const wait = () => builder.decisionSessionsReady;
+          const wait = () => builder.waitForDecisionSessions();
           store.waitForDecisionSessions = wait;
           return { builder, wait };
         }),
