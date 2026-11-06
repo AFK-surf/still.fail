@@ -368,7 +368,7 @@
       "src/sfpages/new_connect.mbt": 11,
       "src/sfpages/notifications.mbt": 2,
       "src/sfpages/permissions.mbt": 9,
-      "src/sfpages/security.mbt": 33,
+      "src/sfpages/security.mbt": 16,
       "src/sfpages/slack_app.mbt": 6,
       "src/sfpages/vault.mbt": 5,
       "src/sfpages/vault_dialogs.mbt": 6,

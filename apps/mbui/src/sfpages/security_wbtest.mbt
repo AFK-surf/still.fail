@@ -54,6 +54,63 @@ test "安全码: a wrong code keeps the keyboard for another try; approval puts 
 }
 
 ///|
+test "security pairing uses a fresh field in another workspace and ignores the previous answer" {
+  @sfbase.reset()
+  reset()
+  @settings.reset()
+  @sffixture.fixture_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  let workspace = @signals.signal("ws1")
+  let attempts : Array[Json] = []
+  let answers : Array[(Result[Json, Json]) -> Unit] = []
+  let base = @sffixture.fixture("lock-upgrade")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "lock.pairCode" {
+        attempts.push(params)
+        answers.push(done)
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let core = @sfbase.settings_core(src, rig_workspace)
+  let here = fn() { @settings.here_of(core, workspace.get(), rig_workspace.name) }
+  @settings.frame(core, @signals.untracked(here))
+  let t = @ui.Tester::new(fn(_) {  }, w=390.0, h=900.0, platform=2)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    security_node(root, core, here, on_back=core.pop, frame=fn() {
+      { back: None, top: 0.0, foot: 0.0, named: false }
+    }, width=fn() { 390.0 })
+  }, around=fn(c) {
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      @ui.old_views_here(c)
+      @sf.presented(c)
+    })
+  })
+  t.draw()
+  t.type_text("123456")
+  assert_eq(attempts.length(), 1)
+  assert_eq(text(Some(attempts[0]), "workspace"), "ws1")
+  workspace.set("ws2")
+  t.frame()
+  assert_true(t.ime().0)
+  assert_eq(t.ime().1, "")
+  t.type_text("654")
+  answers[0](Err(Json::string("wrong")))
+  t.frame()
+  assert_eq(t.ime().1, "654")
+  t.type_text("321")
+  assert_eq(attempts.length(), 2)
+  assert_eq(text(Some(attempts[1]), "workspace"), "ws2")
+  assert_eq(text(Some(attempts[1]), "code"), "654321")
+}
+
+///|
 test "安全, at each width and with either hand: its people, devices and stations" {
   for case in page_cases {
     let (w, platform) = case

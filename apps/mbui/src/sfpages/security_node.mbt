@@ -82,7 +82,7 @@ pub fn security_node(
 ///|
 fn security_dot_node(parent : @view.View, on : Bool) -> Unit {
   parent.box(fn(dot) {
-    dot.width(Is(Some(sec_dot_side))).height(Is(Some(sec_dot_side))).radius(Is(sec_dot_side / 2.0))
+    dot.width(Is(Some(sec_dot_side))).height(Is(Some(sec_dot_side))).radius(By(fn() { @ui.tree_theme().corner(Full) }))
     .ground(By(fn() { @ui.tree_theme().color(if on { Positive } else { Warn }) })) |> ignore
   }) |> ignore
 }
@@ -120,9 +120,8 @@ fn security_off_node(parent : @view.View, core : Core, lock : () -> Json?) -> Un
     k.pick(fn() { if !flag(lock(), "owner") { 0 } else if flag(lock(), "canSign") { 1 } else { 2 } }, fn(a, state) {
       match state {
         0 => @sf.words_node(a, fn() { @sf.t("web-pages.security.ownerOnly") }, fn() { sec_note }) |> ignore
-        1 => a.box(fn(line) {
-          line.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))).wraps(Is(Some(10.0))) |> ignore
-          @sf.button_node(line, fn() { @sf.t("web-pages.security.turnOn") }, fn() { (core.push)(SecurityOpen) }, tone=Primary) |> ignore
+        1 => @sf.ask_buttons_node(a, fn(line) {
+          @sf.button_node(line, fn() { @sf.t("web-pages.security.turnOn") }, fn() { (core.push)(SecurityOpen) }, tone=Primary, at_foot=true) |> ignore
           @sf.words_node(line, fn() { @sf.t("web-pages.security.signsHere") }, fn() { sec_note_line }) |> ignore
         }) |> ignore
         _ => @sf.words_node(a, fn() { @sf.t("web-pages.security.webCannotSign") }, fn() { sec_note }) |> ignore

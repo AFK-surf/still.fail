@@ -193,7 +193,7 @@ pub fn security_station_line_node(
   let named = fn() { wide && has_station_mark(emoji(), icon()) }
   security_line_node(parent, fn() { if named() { "" } else { name() } }, note, mark=fn(m) {
     m.box(fn(dot) {
-      dot.width(Is(Some(7.0))).height(Is(Some(7.0))).radius(Is(1000.0))
+      dot.width(Is(Some(7.0))).height(Is(Some(7.0))).radius(By(fn() { @ui.tree_theme().corner(Full) }))
       .ground(By(fn() { @ui.tree_theme().color(if guarded() { Positive } else { Warn }) })) |> ignore
     }) |> ignore
     m.show(named, fn(mark) {
