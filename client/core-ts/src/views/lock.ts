@@ -284,6 +284,7 @@ export function install(inner: Inner): void {
     if (at.get(ws) === says && held(inner, ws) !== null) return;
     at.set(ws, says);
     inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.background, read(inner, ws));
+    pairs.reading(inner, ws);
   });
   inner.router.owners.push(owner(inner));
 }
@@ -654,8 +655,9 @@ export const pairs: {
   deny(inner: Inner, device: string): void;
   hide(inner: Inner, device: string): void;
   moved(inner: Inner, ws: string): void;
+  reading(inner: Inner, ws: string): void;
   run(inner: Inner, name: string, ws: string, params: Record<string, unknown>): Effect.Effect<unknown, CoreError>;
-} = { shown: () => [], mine: () => null, deny: () => {}, hide: () => {}, moved: () => {}, run: () => Effect.fail(CoreError.invalid("no face-to-face approval here")) };
+} = { shown: () => [], mine: () => null, deny: () => {}, hide: () => {}, moved: () => {}, reading: () => {}, run: () => Effect.fail(CoreError.invalid("no face-to-face approval here")) };
 
 /// The draft of turning it on: the devices that asked for credentials, the stations asked whether they understand a
 /// lock (GET /lock: one from before answers 404).

@@ -418,7 +418,7 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
 /// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void };
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -569,6 +569,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
         const finish = () => {
           if (--active === 0) {
             delete y.lockMoved;
+            delete y.lockReading;
             Deferred.doneUnsafe(done, Effect.void);
           }
         };
@@ -577,6 +578,17 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           inner.runner.fork(Effect.ensuring(work, Effect.sync(finish)));
         };
         const credentialWorkspaces = new Set(credentials.map((c) => c.ws as string));
+        const reads = new Set<string>();
+        const watchRead = (ws: string) => {
+          if (!looking(inner, y) || !credentialWorkspaces.has(ws) || !locksToRead(inner, hello).includes(ws)) return;
+          // A later head may arrive while this workspace is already reading. Follow that head too; the scheduler
+          // folds requests for the same read together, while each wait has its own deadline.
+          const key = JSON.stringify([ws, str(get(get(view(inner, ws), "lock"), "hash"))]);
+          if (reads.has(key)) return;
+          reads.add(key);
+          const work = Effect.ignore(Effect.timeoutOption(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws)), PAIR_DIAL_TRIES * PAIR_REDIAL_MS));
+          track(Effect.ensuring(work, Effect.sync(() => { reads.delete(key); })));
+        };
         const refresh = () => {
           if (!looking(inner, y)) return;
           const current = waitingIn(inner, base);
@@ -592,11 +604,10 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           }
         };
         y.lockMoved = (ws) => { if (y.workspaces.includes(ws)) refresh(); };
+        y.lockReading = (ws) => { if (y.workspaces.includes(ws)) watchRead(ws); };
         // If a newer head is already known, wait a bounded time for its read even when the old approvers all answer
         // immediately. A ready workspace can show its code meanwhile, without waiting for another workspace's read.
-        for (const ws of locksToRead(inner, hello)) {
-          track(Effect.ignore(Effect.timeoutOption(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws)), PAIR_DIAL_TRIES * PAIR_REDIAL_MS)));
-        }
+        for (const ws of locksToRead(inner, hello)) watchRead(ws);
         refresh();
         finish();
         yield* Deferred.await(done);
@@ -869,6 +880,7 @@ export function install(_inner: Inner): void {
   pairs.deny = deny;
   pairs.hide = hide;
   pairs.moved = (inner, ws) => tryings.get(inner)?.lockMoved?.(ws);
+  pairs.reading = (inner, ws) => tryings.get(inner)?.lockReading?.(ws);
   pairs.run = (inner, name, _ws, params) => {
     if (name === "pair") return begin(inner);
     if (name === "pairCode") return prove(inner, str(params.code) ?? "");
