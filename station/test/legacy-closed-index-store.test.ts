@@ -27,6 +27,11 @@ function oldStore(dir: string) {
   return { path, threads };
 }
 
+test("an empty answer scope does not query the database", () => {
+  const db = { prepare: () => { throw new Error("unexpected database read"); } } as unknown as DatabaseSync;
+  assert.deepEqual(answersSince({ db } as ReturnType<typeof makeStore>, 50, []), []);
+});
+
 test("old prepared writes and read snapshots agree as requested chats are prepared", async () => {
   const dir = mkdtempSync(join(tmpdir(), "closed-cards-store-"));
   const { path, threads } = oldStore(dir);
@@ -167,6 +172,30 @@ test("the old time index answers a sparse window without preparing a long chat",
   try {
     assert.deepEqual(answersSince(makeStore(store.db, dir), 50, threads), referenceAnswersSince(store, 50));
     assert.equal(store.db.prepare("SELECT count(*) AS n FROM legacy_closed_scopes").get()?.n, 0);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const [field, values] of [
+  ["thread", "9223372036854775806,999,'p',100"],
+  ["number", "unrelated,9223372036854775806,'p',100"],
+  ["time", "unrelated,999,'p',9223372036854775806"],
+  ["rowid", "unrelated,999,'p',100"],
+]) test(`a sparse window does not decode an unrelated 64-bit ${field}`, () => {
+  const dir = mkdtempSync(join(tmpdir(), "closed-cards-unrelated-int64-"));
+  const { path, threads } = oldStore(dir);
+  const old = new DatabaseSync(path);
+  old.exec("CREATE INDEX closed_cards_at ON closed_cards(at)");
+  old.close();
+  const store = Store.open(path);
+  try {
+    const thread = threads[0]!;
+    const expected = referenceAnswersSince(store, 50).filter((answer) => answer.question.thread === thread);
+    assert.equal(expected.length, 1);
+    const columns = field === "rowid" ? "rowid,thread,n,viewer,at" : "thread,n,viewer,at";
+    const rowValues = values!.replace("unrelated", String(threads[1]!));
+    const row = field === "rowid" ? `9223372036854775806,${rowValues}` : rowValues;
+    store.db.exec(`INSERT INTO closed_cards(${columns}) VALUES(${row})`);
+    assert.deepEqual(answersSince(makeStore(store.db, dir), 50, [thread]), expected);
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 

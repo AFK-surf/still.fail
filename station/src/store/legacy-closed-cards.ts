@@ -18,8 +18,17 @@ export const CLOSED_CHAT_SAMPLE = `SELECT * FROM (SELECT c.thread,CASE WHEN c.at
   CASE WHEN c.at>=?2 THEN c.viewer END AS viewer,CASE WHEN c.at>=?2 THEN c.at END AS at,
   CASE WHEN c.at>=?2 THEN c.rowid END AS ordering FROM closed_cards c
   WHERE c.thread=?1 ORDER BY c.n LIMIT ${CLOSED_SAMPLE_LIMIT}) ORDER BY at,ordering`;
-export const CLOSED_TIME_SAMPLE = `SELECT thread,n,viewer,at,rowid AS ordering FROM closed_cards INDEXED BY closed_cards_at
-  WHERE at>=? ORDER BY at,rowid LIMIT ${CLOSED_SAMPLE_LIMIT}`;
+// Count the whole bounded window, but decode values only for requested chats: unrelated old rows can contain
+// 64-bit integers which the Node SQLite driver cannot represent as JavaScript numbers.
+export const CLOSED_TIME_SAMPLE = `WITH recent AS MATERIALIZED (
+  SELECT thread,n,viewer,at,rowid AS ordering FROM closed_cards INDEXED BY closed_cards_at
+  WHERE at>=? ORDER BY at,rowid LIMIT ${CLOSED_SAMPLE_LIMIT}
+), selected AS MATERIALIZED (
+  SELECT *,thread IN (SELECT value FROM json_each(?2)) AS wanted FROM recent
+)
+SELECT CASE WHEN wanted THEN thread END AS thread,CASE WHEN wanted THEN n END AS n,
+  CASE WHEN wanted THEN viewer END AS viewer,CASE WHEN wanted THEN at END AS at,
+  CASE WHEN wanted THEN ordering END AS ordering FROM selected`;
 
 export const hasNativeClosedCards = (db: DatabaseSync) => exists(db, "index", "closed_cards_thread_at");
 export const hasClosedCardsTimeIndex = (db: DatabaseSync) => exists(db, "index", "closed_cards_at");

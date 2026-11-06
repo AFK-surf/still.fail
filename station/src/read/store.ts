@@ -871,6 +871,7 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
   const out: CardAnswer[] = [];
   // Only the requested chats (the items a sidebar change touched) are read.
   const scope = [...new Set(threads)];
+  if (!scope.length) return out;
   const nativeClosed = hasNativeClosedCards(s.db);
   const legacyClosed = !nativeClosed && hasLegacyClosedCards(s.db);
   const smallClosed = new Map<number, Json[]>();
@@ -880,7 +881,7 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
     if (missing.length && hasClosedCardsTimeIndex(s.db)) {
       // An existing older index is useful when the whole recent window is small, but never walk an unbounded window.
       try {
-        const recent = all(s, CLOSED_TIME_SAMPLE, since);
+        const recent = all(s, CLOSED_TIME_SAMPLE, since, JSON.stringify(scope));
         if (recent.length < CLOSED_SAMPLE_LIMIT) {
           const wanted = new Set(scope);
           const byThread = new Map<number, Json[]>();

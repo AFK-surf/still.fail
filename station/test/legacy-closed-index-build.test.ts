@@ -7,7 +7,7 @@ const schema = `CREATE TABLE closed_cards(thread INTEGER NOT NULL,n INTEGER NOT 
   PRIMARY KEY(thread,n));`;
 const make = () => { const db = new DatabaseSync(":memory:"); db.exec(schema); return db; };
 const finish = (db: DatabaseSync, thread: number) => { while (!closedCardsStep(db, thread).done) {} };
-const rows = (db: DatabaseSync, sql: string, ...args: number[]) => db.prepare(sql).all(...args).map((row) => ({ ...row }));
+const rows = (db: DatabaseSync, sql: string, ...args: (number | string)[]) => db.prepare(sql).all(...args).map((row) => ({ ...row }));
 
 test("a requested old chat is prepared in bounded slices and no other chat is read", () => {
   const db = make();
@@ -67,10 +67,10 @@ test("first-read probes have a fixed cost when unrelated or old records grow", (
       const time = CLOSED_TIME_SAMPLE.replace("WHERE at>=?", "WHERE at>=? AND visit_closed_probe(n)");
       assert.notEqual(chat, CLOSED_CHAT_SAMPLE); assert.notEqual(time, CLOSED_TIME_SAMPLE);
       db.prepare(chat).all(1,50); const chatCount = visited; visited = 0;
-      db.prepare(time).all(50); counts.push([chatCount,visited]);
+      db.prepare(time).all(50, "[1]"); counts.push([chatCount,visited]);
       const plan = rows(db, "EXPLAIN QUERY PLAN " + chat, 1, 50).map((r) => r.detail).join(" ");
       assert.match(plan, /SEARCH c USING INDEX .*\(thread=\?\)/);
-      const timePlan = rows(db, "EXPLAIN QUERY PLAN " + time, 50).map((r) => r.detail).join(" ");
+      const timePlan = rows(db, "EXPLAIN QUERY PLAN " + time, 50, "[1]").map((r) => r.detail).join(" ");
       assert.match(timePlan, /SEARCH closed_cards USING INDEX closed_cards_at \(at>\?\)/);
     } finally { db.close(); }
   }
