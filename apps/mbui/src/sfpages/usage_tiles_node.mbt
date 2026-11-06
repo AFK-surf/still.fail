@@ -49,10 +49,11 @@ pub fn usage_tiles_node(
       @sf.style_node(tile, fn() { agent_card_tile }, in_row=true)
       let eligible = fn() { can_open() || !unknown() }
       tile.points(By(eligible)).presses(By(eligible)).focusable(By(eligible))
+      .turned_off(By(fn() { can_open() && busy() }))
       .cursor(By(fn() { if can_open() && !busy() { None } else { Some(Arrow) } }))
       .says(By(fn() {
         if can_open() {
-          Some(@view.said(Button, label=@sf.t("web-pages.chat.contextActions"), disabled=busy()))
+          Some(@view.said(Button, label=@sf.t("web-pages.chat.contextActions")))
         } else if !unknown() {
           Some(@view.said(Text, label=name() + ": " + text(context(), "text")))
         } else {
