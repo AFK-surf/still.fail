@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import { hasLegacySaid, legacySaidLatest, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN } from "./legacy-said-build.ts";
 
 export const SAID_LATEST = "SELECT n, author_kind, author FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL ORDER BY n DESC LIMIT 1";
 export const SAID_STATE = `SELECT s.said_n, s.said_other_n, s.said_other_known,
@@ -34,7 +35,8 @@ export function saidScanStep(db: DatabaseSync, thread: number, scan: SaidScan | 
   mayWrite?: () => boolean): SaidStep {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > SAID_BATCH_SIZE) throw new RangeError("said scan batch must be between 1 and 64");
   if (scan !== null && scan.thread !== thread) throw new Error("said scan belongs to another chat");
-  const latest = () => db.prepare(SAID_LATEST).get(thread) as Latest | undefined;
+  const legacy = hasLegacySaid(db);
+  const latest = () => db.prepare(legacy ? LEGACY_SAID_LATEST : SAID_LATEST).get(thread) as Latest | undefined;
   const state = () => db.prepare(SAID_STATE).get(thread) as State | undefined;
   const done = (): SaidStep => ({ done: true, visited: 0, scan: null });
   if (scan === null) {
@@ -60,7 +62,7 @@ export function saidScanStep(db: DatabaseSync, thread: number, scan: SaidScan | 
   if (guard?.token !== scan.token) return { done: false, visited: 0, scan: null };
   let visited = 0;
   if (scan.found === undefined) {
-    const rows = db.prepare(SAID_SCAN).all(thread, scan.before, limit) as Latest[];
+    const rows = db.prepare(legacy ? LEGACY_SAID_SCAN : SAID_SCAN).all(thread, scan.before, limit) as Latest[];
     visited = rows.length;
     const other = rows.find((row) => row.author_kind !== "person" || row.author !== scan!.author);
     if (other !== undefined) scan.found = { other: other.n };
@@ -96,22 +98,32 @@ export function saidScanStep(db: DatabaseSync, thread: number, scan: SaidScan | 
 // The sidebar needs the latest message not written by the latest person. Keep that boundary in the thread state page
 // already changed by each append; a run of messages from the same person leaves the boundary alone.
 const eligible = "NEW.kind = 'message' AND NEW.letter IS NULL";
-const prior = `(SELECT n FROM entries INDEXED BY entries_said
-  WHERE thread = NEW.thread AND kind = 'message' AND letter IS NULL ORDER BY n DESC LIMIT 1)`;
-const same = `EXISTS (SELECT 1 FROM entries p WHERE p.thread = NEW.thread AND p.n = ${prior}
-  AND p.author_kind = 'person' AND p.author = NEW.author)`;
 const conflict = `(EXISTS (SELECT 1 FROM entries e WHERE e.thread = NEW.thread AND e.n = NEW.n)
   OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = NEW.thread AND e.ts = NEW.ts)))`;
-const appendSame = `(${eligible} AND NEW.author_kind = 'person' AND NEW.n > ${prior} AND ${same})`;
 
-const addState = `CREATE TRIGGER thread_state_add AFTER INSERT ON entries BEGIN
+function stateWriters(legacy: boolean): { addState: string; beforeInsert: string } {
+  const source = legacy ? "legacy_said" : "entries INDEXED BY entries_said";
+  const filter = legacy ? "" : " AND kind = 'message' AND letter IS NULL";
+  const prior = legacy ? `(SELECT n FROM (${LEGACY_SAID_LATEST.replaceAll("?1", "NEW.thread")}))`
+    : `(SELECT n FROM ${source} WHERE thread = NEW.thread${filter} ORDER BY n DESC LIMIT 1)`;
+  const other = legacy ? `EXISTS (SELECT 1 FROM (${legacySaidLatest("NEW.n").replaceAll("?1", "NEW.thread")}))`
+    : `EXISTS (SELECT 1 FROM ${source} WHERE thread = NEW.thread${filter} AND n != NEW.n LIMIT 1)`;
+  const same = `EXISTS (SELECT 1 FROM entries p WHERE p.thread = NEW.thread AND p.n = ${prior}
+    AND p.author_kind = 'person' AND p.author = NEW.author)`;
+  const appendSame = `(${eligible} AND NEW.author_kind = 'person' AND NEW.n > ${prior} AND ${same})`;
+  // An upsert evaluates its proposed values even when it will update the existing row. Only a new state row needs
+  // the other-message lookup; the update arm retains the existing boundary.
+  const initialKnown = legacy
+    ? `CASE WHEN EXISTS (SELECT 1 FROM thread_state WHERE thread=NEW.thread) THEN 0
+        WHEN ${eligible} AND NOT ${other} THEN 1 ELSE 0 END`
+    : `CASE WHEN ${eligible} AND NOT ${other} THEN 1 ELSE 0 END`;
+  const addState = `CREATE TRIGGER thread_state_add AFTER INSERT ON entries BEGIN
   INSERT INTO thread_state (thread, last_n, said_n, person_n, letters, said_other_known)
     VALUES (NEW.thread, NEW.n,
       CASE WHEN NEW.kind = 'message' AND NEW.letter IS NULL THEN NEW.n END,
       CASE WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' THEN NEW.n END,
       CASE WHEN NEW.kind = 'message' AND NEW.letter IS NOT NULL THEN 1 ELSE 0 END,
-      CASE WHEN ${eligible} AND NOT EXISTS (SELECT 1 FROM entries INDEXED BY entries_said
-        WHERE thread = NEW.thread AND kind = 'message' AND letter IS NULL AND n != NEW.n LIMIT 1) THEN 1 ELSE 0 END)
+      ${initialKnown})
   ON CONFLICT (thread) DO UPDATE SET
     last_n = MAX(last_n, excluded.last_n),
     said_n = CASE WHEN excluded.said_n IS NULL THEN said_n WHEN said_n IS NULL THEN excluded.said_n ELSE MAX(said_n, excluded.said_n) END,
@@ -121,13 +133,29 @@ const addState = `CREATE TRIGGER thread_state_add AFTER INSERT ON entries BEGIN
   ON CONFLICT (thread, author) DO UPDATE SET first_n = MIN(first_n, excluded.first_n);
 END;`;
 
-const beforeInsert = `CREATE TRIGGER said_state_before_insert BEFORE INSERT ON entries
-  WHEN ${eligible} OR ${conflict} BEGIN
-  -- A replacement can remove an entry without firing DELETE triggers. An old-history scan stays valid across an
-  -- append by the same person, but any other eligible insertion can change the boundary it is looking for.
-  DELETE FROM said_state_guard WHERE thread = NEW.thread
-    AND (${conflict} OR (${eligible} AND NOT COALESCE(${appendSame}, 0)));
-  UPDATE thread_state SET
+  // The legacy lookup has several arms. Materialize its answer once for both boundary fields instead of repeating
+  // the full lookup in every CASE expression. Native databases retain their existing single-index statements.
+  const updateState = legacy ? `UPDATE thread_state SET (said_other_known,said_other_n) = (
+    WITH previous AS MATERIALIZED (${LEGACY_SAID_LATEST.replaceAll("?1", "NEW.thread")}),
+    previous_context AS MATERIALIZED (
+      SELECT (SELECT n FROM previous) AS n,
+        EXISTS (SELECT 1 FROM entries p WHERE p.thread=NEW.thread AND p.n=(SELECT n FROM previous)
+          AND p.author_kind='person' AND p.author=NEW.author) AS same
+    )
+    SELECT CASE
+      WHEN ${conflict} THEN 0
+      WHEN NOT (${eligible}) THEN said_other_known
+      WHEN p.n IS NOT NULL AND NEW.n <= p.n THEN 0
+      WHEN NEW.author_kind != 'person' OR p.n IS NULL OR NOT p.same THEN 1
+      WHEN said_n = p.n THEN said_other_known ELSE 0 END,
+    CASE
+      WHEN ${conflict} OR NOT (${eligible}) THEN said_other_n
+      WHEN p.n IS NOT NULL AND NEW.n <= p.n THEN said_other_n
+      WHEN NEW.author_kind != 'person' OR p.n IS NULL THEN NULL
+      WHEN NOT p.same THEN p.n
+      WHEN said_n = p.n THEN said_other_n ELSE NULL END
+    FROM previous_context p
+  ) WHERE thread=NEW.thread;` : `UPDATE thread_state SET
     said_other_known = CASE
       WHEN ${conflict} THEN 0
       WHEN NOT (${eligible}) THEN said_other_known
@@ -140,8 +168,17 @@ const beforeInsert = `CREATE TRIGGER said_state_before_insert BEFORE INSERT ON e
       WHEN NEW.author_kind != 'person' OR ${prior} IS NULL THEN NULL
       WHEN NOT ${same} THEN ${prior}
       WHEN said_n = ${prior} THEN said_other_n ELSE NULL END
-    WHERE thread = NEW.thread;
+    WHERE thread = NEW.thread;`;
+  const beforeInsert = `CREATE TRIGGER said_state_before_insert BEFORE INSERT ON entries
+  WHEN ${eligible} OR ${conflict} BEGIN
+  -- A replacement can remove an entry without firing DELETE triggers. An old-history scan stays valid across an
+  -- append by the same person, but any other eligible insertion can change the boundary it is looking for.
+  DELETE FROM said_state_guard WHERE thread = NEW.thread
+    AND (${conflict} OR (${eligible} AND NOT COALESCE(${appendSame}, 0)));
+  ${updateState}
 END;`;
+  return { addState,beforeInsert };
+}
 
 const changed = "OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.kind IS NOT NEW.kind OR OLD.author_kind IS NOT NEW.author_kind OR OLD.author IS NOT NEW.author OR OLD.letter IS NOT NEW.letter OR OLD.ts IS NOT NEW.ts";
 const invalidate = `
@@ -159,9 +196,17 @@ END;`;
 /// what can be known from the immediately preceding message. No old usage or messages are rebuilt here.
 export function installSaidState(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said_state_guard'").get() !== undefined;
-  if (installed()) return;
+  const legacy = hasLegacySaid(db);
+  const current = () => {
+    const source = legacy ? "legacy_said" : "entries_said";
+    const trigger = db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?");
+    return ["said_state_before_insert", "thread_state_add"].every((name) =>
+      ((trigger.get(name) as { sql: string } | undefined)?.sql ?? "").includes(source));
+  };
+  if (installed() && current()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
+    const { addState,beforeInsert } = stateWriters(legacy);
     if (!installed()) {
       db.exec(`ALTER TABLE thread_state ADD COLUMN said_other_n INTEGER;
         ALTER TABLE thread_state ADD COLUMN said_other_known INTEGER NOT NULL DEFAULT 0;
@@ -171,6 +216,9 @@ export function installSaidState(db: DatabaseSync): void {
         ${addState}
         ${beforeInsert}
         ${invalidate}`);
+    } else if (!current()) {
+      db.exec(`DROP TRIGGER IF EXISTS thread_state_add; DROP TRIGGER IF EXISTS said_state_before_insert;
+        ${addState} ${beforeInsert}`);
     }
     db.exec("COMMIT");
   } catch (error) {

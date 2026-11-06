@@ -15,15 +15,21 @@ import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
 import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
+import { CLOSED_CARDS_INDEXED, CLOSED_CARDS_PENDING, CLOSED_CHAT_SAMPLE, CLOSED_SAMPLE_LIMIT, CLOSED_TIME_SAMPLE,
+  LEGACY_CLOSED_CARDS, closedCardsReady, hasClosedCardsTimeIndex, hasLegacyClosedCards, hasNativeClosedCards } from "../store/legacy-closed-cards.ts";
+import { LEGACY_FIRST_PERSON_SINCE, LEGACY_HAS_PEOPLE_SINCE, LEGACY_PEOPLE_AFTER, PEOPLE_TIME_PENDING, PEOPLE_TIME_SAMPLE_LIMIT,
+  SMALL_PEOPLE_AFTER, SMALL_PEOPLE_FIRST, SMALL_PEOPLE_HAS, hasLegacyPeopleSince, hasNativePeopleSince, peopleSinceReady } from "../store/legacy-people-since.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
+import { hasLegacySaid, LEGACY_HAS_UNREAD, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
+import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -83,11 +89,16 @@ export type Store = {
   clientKeys: Map<string, string>;
   /// An old session whose up-job lookup should be prepared after this read returns.
   prepareUpJobs: string | null;
+  /// This connection uses the already-published lookup on an older database.
+  legacySaid: boolean;
+  /// This connection uses the time lookup prepared for an older database.
+  legacyAgent: boolean;
 };
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null };
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null,
+    legacySaid: hasLegacySaid(db), legacyAgent: hasLegacyAgent(db) };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
@@ -409,7 +420,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
 
 /// The thread's latest message as merged, for lists.
 export function lastMessage(s: Store, thread: number): MessageRow | null {
-  const r = one(s, LAST_MESSAGE, thread);
+  const r = one(s, s.legacySaid ? LEGACY_LAST_MESSAGE : LAST_MESSAGE, thread);
   return r ? toMessage(r) : null;
 }
 
@@ -468,7 +479,7 @@ export class SaidUnavailable extends Refused {
 }
 
 export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
-  const r = one(s, SAID_LATEST, thread);
+  const r = one(s, s.legacySaid ? LEGACY_SAID_LATEST : SAID_LATEST, thread);
   if (!r) return null;
   const state = r.author_kind === "person" ? one(s, SAID_STATE, thread) : null;
   const boundary = saidBoundary(state, r);
@@ -476,7 +487,7 @@ export function saidOf(s: Store, thread: number): { n: number; authorKind: strin
   if (!boundary.known) {
     // Most old chats can answer from a few nearby messages without recording any history at all. For a longer run,
     // leave the reader and prepare only this chat in bounded slices before trying the snapshot again.
-    const nearby = all(s, SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
+    const nearby = all(s, s.legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
     const previous = nearby.find((p) => p.author_kind !== "person" || p.author !== r.author);
     if (previous) other = previous.n;
     else if (nearby.length === SAID_BATCH_SIZE) throw new SaidUnavailable([thread]);
@@ -510,7 +521,8 @@ export function mutedViewers(s: Store, thread: number, viewers: string[]): Set<s
 }
 
 function unreadOf(s: Store, thread: number, read: number, selves: string[], mode: "count" | "exists" = "count"): number {
-  return one(s, mode === "exists" ? HAS_UNREAD : UNREAD, thread, read, JSON.stringify(selves)).c;
+  const sql = s.legacySaid ? (mode === "exists" ? LEGACY_HAS_UNREAD : LEGACY_UNREAD) : (mode === "exists" ? HAS_UNREAD : UNREAD);
+  return one(s, sql, thread, read, JSON.stringify(selves)).c;
 }
 
 /// A chat's messages after where a viewer read (`?2`) but their own (`?3`, a JSON list) and letters, counted from the
@@ -561,7 +573,7 @@ export function entriesBetween(s: Store, thread: number, from: bigint, to: bigin
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
-  return all(s, MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
+  return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
 }
 
 // ── the archive review ──
@@ -765,7 +777,7 @@ export const ASKED_DURING = "SELECT max(n) AS n FROM entries WHERE thread = ? AN
 /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
 /// about (`about`), else the agent's latest message during the turn; with the two messages before it.
 export function askingMessage(s: Store, thread: number, about: number | null, during: [number, number | bigint]): [MessageRow, MessageRow[]] | null {
-  const n: number | null = about ?? one(s, ASKED_DURING, thread, during[0], during[1]).n;
+  const n: number | null = about ?? one(s, s.legacyAgent ? LEGACY_ASKED_DURING : ASKED_DURING, thread, during[0], during[1]).n;
   if (n === null) return null;
   const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
   // A post with a card is pending_card's: one no longer pending was answered, closed or withdrawn.
@@ -809,12 +821,36 @@ export const ANSWER_PEOPLE_AFTER = `SELECT thread, n FROM entries INDEXED BY ent
 export const ANSWER_NEXT_PERSON = `SELECT n, at FROM entries INDEXED BY entries_people_by_n
   WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1`;
 
+type PeopleTimeMode = "native" | "legacy" | "small";
+type AnswerMode = PeopleTimeMode | "cards";
+const peopleTimePending = (threads: number[]): never => { throw new Refused(503,PEOPLE_TIME_PENDING + JSON.stringify(threads)); };
+const smallPeople = (s: Store, thread: number, since: number): Json => {
+  const row = one(s,SMALL_PEOPLE_HAS,thread,since)!;
+  if (row.seen >= PEOPLE_TIME_SAMPLE_LIMIT) peopleTimePending([thread]);
+  return row;
+};
+const hasRecentPeople = (s: Store, thread: number, since: number, mode: PeopleTimeMode): boolean =>
+  mode === "small" ? smallPeople(s,thread,since).yes === 1
+    : one(s,mode === "native" ? HAS_ANSWER_PEOPLE_SINCE : LEGACY_HAS_PEOPLE_SINCE,thread,since) !== undefined;
+const firstRecentPerson = (s: Store, thread: number, since: number, mode: PeopleTimeMode): number | null => {
+  const row = one(s,mode === "native" ? FIRST_ANSWER_PERSON_SINCE : mode === "legacy" ? LEGACY_FIRST_PERSON_SINCE : SMALL_PEOPLE_FIRST,thread,since)!;
+  if (mode === "small" && row.seen >= PEOPLE_TIME_SAMPLE_LIMIT) peopleTimePending([thread]);
+  return row.n as number | null;
+};
+const peopleAfter = (s: Store, thread: number, since: number, n: number, mode: PeopleTimeMode): { thread: number; n: number }[] => {
+  const result = all(s,mode === "native" ? ANSWER_PEOPLE_AFTER : mode === "legacy" ? LEGACY_PEOPLE_AFTER : SMALL_PEOPLE_AFTER,thread,since,n);
+  if (mode === "small" && result.some((row) => row.seen >= PEOPLE_TIME_SAMPLE_LIMIT)) peopleTimePending([thread]);
+  return result.filter((row) => row.n !== null).map((row) => ({ thread: row.thread, n: row.n }));
+};
+
 /// The people's messages since `since` (ms) in a thread that each are the first after a card (the last before it), in
 /// order. With many old cards, seek from a person to the next card and its first person, skipping ordinary messages.
-function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
-  if (one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) === undefined) return [];
+function answersOf(s: Store, thread: number, since: number, mode: AnswerMode): { thread: number; n: number }[] {
+  if (mode !== "cards" && !hasRecentPeople(s,thread,since,mode)) return [];
   const cardRows = all(s, CARD_POST_SAMPLE, thread);
   if (cardRows.length >= ANSWER_CARD_SAMPLE_SIZE) {
+    // Direct callers need not hold a read snapshot: a new card could have arrived since the short-card probe.
+    const timeMode: PeopleTimeMode = mode === "cards" ? peopleTimePending([thread]) : mode;
     const nextCard = (n: number): number | null => {
       return (one(s, CARD_POST_NEXT, thread, n)?.n as number | undefined) ?? null;
     };
@@ -824,8 +860,7 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
     if (firstPerson === undefined) return [];
     // If the first answer is already recent, no earlier answer exists. Otherwise find the first recent person by
     // the time index, so old answered cards do not have to be visited. Times need not follow entry order.
-    const first = firstPerson.at >= since ? firstPerson.n as number
-      : one(s, FIRST_ANSWER_PERSON_SINCE, thread, since).n as number | null;
+    const first = firstPerson.at >= since ? firstPerson.n as number : firstRecentPerson(s,thread,since,timeMode);
     if (first === null) return [];
     const out = [{ thread, n: first }];
     let n = first;
@@ -840,7 +875,7 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
       if (person.at >= since) out.push({ thread, n });
       else if (++older >= ANSWER_CARD_SAMPLE_SIZE) {
         // If timestamps are far out of sequence, finish by the time index instead of walking old answers.
-        return out.concat(all(s, ANSWER_PEOPLE_AFTER, thread, since, n) as { thread: number; n: number }[]);
+        return out.concat(peopleAfter(s,thread,since,n,timeMode));
       }
     }
   }
@@ -857,24 +892,81 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
 
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
-export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
+export function answersSince(s: Store, since: number, threads: number[]): CardAnswer[] {
   const out: CardAnswer[] = [];
-  // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
-  // message after each: looking up every recent message in every thread would need work unrelated to the changed items.
-  let said: Json[];
-  if (threads === null) {
-    const people = all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
-    const carded = new Set(threadsWithCards(s, [...new Set(people.map((row) => row.thread as number))]));
-    requireCardPosts(s, [...carded]);
-    said = people.filter((row) => carded.has(row.thread as number));
-  } else {
-    const withPeople = threads.filter((thread) => one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) !== undefined);
-    const carded = new Set(threadsWithCards(s, withPeople));
-    const relevant = withPeople.filter((thread) => carded.has(thread));
-    requireCardPosts(s, relevant);
-    said = relevant.flatMap((thread) => answersOf(s, thread, since));
+  // Only the requested chats (the items a sidebar change touched) are read.
+  const scope = [...new Set(threads)];
+  if (!scope.length) return out;
+  const nativeClosed = hasNativeClosedCards(s.db);
+  const legacyClosed = !nativeClosed && hasLegacyClosedCards(s.db);
+  const smallClosed = new Map<number, Json[]>();
+  let recentClosed: Json[] | null = null;
+  if (!nativeClosed) {
+    const missing = scope.filter((thread) => !closedCardsReady(s.db, thread));
+    if (missing.length && hasClosedCardsTimeIndex(s.db)) {
+      // An existing older index is useful when the whole recent window is small, but never walk an unbounded window.
+      try {
+        const recent = all(s, CLOSED_TIME_SAMPLE, since, JSON.stringify(scope));
+        if (recent.length < CLOSED_SAMPLE_LIMIT) {
+          const wanted = new Set(scope);
+          const byThread = new Map<number, Json[]>();
+          for (const row of recent) if (wanted.has(row.thread)) {
+            const found = byThread.get(row.thread) ?? [];
+            found.push(row); byThread.set(row.thread, found);
+          }
+          recentClosed = scope.flatMap((thread) => byThread.get(thread) ?? []);
+        }
+      } catch (error) {
+        if (!(error as Error).message.includes("no such index: closed_cards_at")) throw error;
+      }
+    }
+    if (recentClosed === null) {
+      const waiting: number[] = [];
+      for (const thread of missing) {
+        const sample = all(s, CLOSED_CHAT_SAMPLE, thread, since);
+        if (sample.length < CLOSED_SAMPLE_LIMIT) smallClosed.set(thread, sample.filter((row) => row.n !== null));
+        else waiting.push(thread);
+      }
+      if (waiting.length) throw new Refused(503, CLOSED_CARDS_PENDING + JSON.stringify(waiting));
+    }
   }
-  const of = threads === null ? null : new Set(threads);
+  const nativePeople = hasNativePeopleSince(s.db);
+  const modes = new Map<number,AnswerMode>();
+  let said: { thread: number; n: number }[];
+  try {
+    let relevant: number[];
+    if (nativePeople) {
+      const withPeople = scope.filter((thread) => hasRecentPeople(s,thread,since,"native"));
+      const carded = new Set(threadsWithCards(s,withPeople));
+      relevant = withPeople.filter((thread) => carded.has(thread));
+      for (const thread of relevant) modes.set(thread,"native");
+    } else {
+      // A cardless chat needs no people lookup. Short chats can answer from at most 65 entries without waiting.
+      const carded = threadsWithCards(s,scope), waiting: number[] = [];
+      relevant = [];
+      for (const thread of carded) {
+        // When the card-post lookup is ready and small, seek the first person after each card. Its cost is bounded
+        // by the cards, even if this chat has a long history and the old people-time lookup is not prepared yet.
+        if (cardPostsReady(s.db,thread) && all(s,CARD_POST_SAMPLE,thread).length < ANSWER_CARD_SAMPLE_SIZE) {
+          modes.set(thread,"cards"); relevant.push(thread); continue;
+        }
+        const mode: PeopleTimeMode = hasLegacyPeopleSince(s.db) && peopleSinceReady(s.db,thread) ? "legacy" : "small";
+        if (mode === "small") {
+          const probe = one(s,SMALL_PEOPLE_HAS,thread,since)!;
+          if (probe.seen >= PEOPLE_TIME_SAMPLE_LIMIT) { waiting.push(thread); continue; }
+          if (probe.yes !== 1) continue;
+        } else if (!hasRecentPeople(s,thread,since,mode)) continue;
+        modes.set(thread,mode); relevant.push(thread);
+      }
+      if (waiting.length) peopleTimePending(waiting);
+    }
+    requireCardPosts(s,relevant);
+    said = relevant.flatMap((thread) => answersOf(s,thread,since,modes.get(thread)!));
+  } catch (error) {
+    // A direct caller need not hold the worker's snapshot; an older connection may have removed the native index.
+    if (nativePeople && (error as Error).message.includes("no such index: entries_people_since")) peopleTimePending(scope);
+    throw error;
+  }
   const askedBefore = (thread: number, n: number): number | null => {
     return one(s, CARD_POST_BEFORE, thread, n).n as number | null;
   };
@@ -899,12 +991,18 @@ export function answersSince(s: Store, since: number, threads: number[] | null =
     const a = toMessage(answer);
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
-  const closedRows = threads === null
-    ? all(s, CLOSED_SINCE, since)
-    : [...new Set(threads)].flatMap((thread) => all(s, CLOSED_THREAD_SINCE, thread, since))
-      .sort((a, b) => a.at - b.at || a.ordering - b.ordering);
+  let closedRows: Json[];
+  try {
+    closedRows = recentClosed ?? scope.flatMap((thread) => nativeClosed ? all(s, CLOSED_CARDS_INDEXED, thread, since)
+      : smallClosed.get(thread) ?? (legacyClosed ? all(s, LEGACY_CLOSED_CARDS, thread, since) : []));
+  } catch (error) {
+    // A direct caller need not hold the reader worker's snapshot; an older connection may have dropped the index.
+    if (nativeClosed && (error as Error).message.includes("no such index: closed_cards_thread_at"))
+      throw new Refused(503, CLOSED_CARDS_PENDING + JSON.stringify(scope));
+    throw error;
+  }
+  closedRows.sort((a, b) => a.at - b.at || a.ordering - b.ordering);
   for (const { thread, n, viewer: by, at } of closedRows) {
-    if (of !== null && !of.has(thread)) continue;
     const found = cardAt(thread, n);
     if (!found) continue;
     // Withdrawn by its own agent: no one answered it.

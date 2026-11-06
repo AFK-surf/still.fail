@@ -130,21 +130,27 @@ pub fn composer_node(
             let before = from["choices"]
             let box = from["box"]
             let fade = @sfbase.new_fade(@ui.current())
+            let ends = fade.ends()
+            // This copy belongs to the departure that made it. A predicted picture can draw its fade finished,
+            // but only that departure's logical end removes its room and releases its nodes.
+            let kept = @signals.signal(p.cause_at() < ends, same=fn(a, b) { a == b })
+            if kept.get() && ends < @double.infinity {
+              p.at_moment(ends, fn() { kept.set(false) }) |> ignore
+            }
             // (the same choices' nodes as the page had them, drawn only: read out by nothing, a press going through to what
             // is under them, as the old frame's draw_only)
             p.over(Is(true)).width(Is(Some(before.2))).height(Is(Some(before.3)))
             .offset(Is((before.0 - box.0, before.1 - box.1)))
-            .laid_nowhere(By(fn() { p.drawn_past(fade.ends()) })) |> ignore
-            p.box(fn(row) {
+            .laid_nowhere(By(fn() { !kept.get() })) |> ignore
+            p.show(fn() { kept.get() }, fn(row) {
               // (the fade as it was told (became_starts: new_fade_spec, to its declared end), where its spec puts it at the
               // moment each frame is drawn, as composer_hint_node's: what reads it painted again, nothing laid out)
-              let ends = fade.ends()
               row.grow(Is(1.0)).presses(Is(false)).hides(Is(true)).alpha(By(fn() {
                 let t = if row.drawn_past(ends) { ends } else { row.drawn_at() }
                 1.0 - @sfbase.new_fade_spec().value_at(t - (ends - @sfbase.new_fade_ms), @sfbase.new_fade_ms, 0.0, 1.0, 0.0).0
               })) |> ignore
               f(row)
-            }).grow(Is(1.0)) |> ignore
+            })
           }
           None => ()
         }

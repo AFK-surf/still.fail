@@ -16,6 +16,7 @@ test("a scoped chat update reads marks and answers only for those chats", () => 
   db.exec(`CREATE TABLE dismissed (viewer TEXT, thread INTEGER, n INTEGER, at INTEGER, PRIMARY KEY (viewer, thread, n));
     CREATE TABLE kept_chats (viewer TEXT, thread INTEGER, PRIMARY KEY (viewer, thread));
     CREATE TABLE closed_cards (thread INTEGER, n INTEGER, viewer TEXT, at INTEGER, PRIMARY KEY (thread, n));
+    CREATE INDEX closed_cards_thread_at ON closed_cards(thread, at);
     CREATE TABLE entries (thread INTEGER, n INTEGER, kind TEXT, author_kind TEXT, at INTEGER, card TEXT, options TEXT);
     CREATE INDEX entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
     CREATE INDEX entries_cards ON entries (thread, n) WHERE card IS NOT NULL;
