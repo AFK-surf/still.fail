@@ -255,6 +255,9 @@ if part ts; then
   if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
     step "CI jobs: 5 minutes at most" python3 scripts/ci-timeouts.py
   fi
+  if touches '^\.githooks/pre-push$|^scripts/pre_push_test\.sh$'; then
+    step "pre-push bases" sh scripts/pre_push_test.sh
+  fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
   # the Wasm side of the native host's calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
