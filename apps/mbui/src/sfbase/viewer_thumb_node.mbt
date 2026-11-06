@@ -45,16 +45,25 @@ pub fn thumb_pressed(node : @view.View, id : String) -> Unit {
 
 ///|
 /// The viewer about to fly back into the thumbnail of `id`, the showing it flew from gone (its node let go, another
-/// showing of the same place still here): the one of those seen on the window now (some of it drawn, not all cut off by
-/// what holds it) first as they read (from the top, then from the left) takes its place; none seen, it fades out as
-/// with no thumbnail.
+/// showing of the same place still here): the one of those seen on the window now (some of it drawn on the window, not
+/// cut off there by what holds it, not wholly see-through) first as they read (from the top, then from the left) takes
+/// its place; none seen, it fades out as with no thumbnail.
 fn thumb_settle(c : @ui.Ctx, id : String) -> Unit {
   let owner = tree_thumb_owner(id)
   guard @signals.untracked(fn() { owner.get() }) is None else { return }
   let mut best : ((Double, Double), (@view.View, () -> ThumbLook))? = None
   for h in pv_thumb_holders.get(id).unwrap_or([]) {
-    match @signals.untracked(fn() { tree_thumb_of(c, h.0, h.1) }) {
-      Some(t) if t.seen is Some((_, _, sw, sh)) && sw > 0.0 && sh > 0.0 =>
+    let seen = @signals.untracked(fn() {
+      guard tree_thumb_of(c, h.0, h.1) is Some(t) && t.seen is Some((sx, sy, sw, sh)) else { return None }
+      // (what is left of it as what holds it cuts it, on the window; drawn some, as opaque as it is drawn)
+      let (left, top) = (dmax(sx, 0.0), dmax(sy, 0.0))
+      let (right, foot) = (dmin(sx + sw, c.width), dmin(sy + sh, c.height))
+      guard right > left && foot > top else { return None }
+      guard @ui.view_tree() is Some(tree) && tree.drawn_of(h.0.id()) is Some(d) && d.alpha > 0.0 else { return None }
+      Some(t)
+    })
+    match seen {
+      Some(t) =>
         match best {
           Some(((y, x), _)) if y < t.y || (y == t.y && x <= t.x) => ()
           _ => best = Some(((t.y, t.x), h))

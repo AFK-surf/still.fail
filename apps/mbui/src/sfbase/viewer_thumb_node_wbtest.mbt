@@ -44,8 +44,9 @@ test "a retained thumbnail follows its moving, scaled, clipped node and leaves w
 
 ///|
 /// One picture shown three times on one place (a, b, c), the viewer open from a: a let go, it flies back into the one
-/// left seen on the window first as they read, it alone hidden; b, left off the window ("off") or on it but all cut off
-/// by what holds it ("cut"), is no place to fly back into, whichever came first.
+/// left seen on the window first as they read, it alone hidden; b, left off the window ("off"), on it but all cut off
+/// by what holds it ("cut"), across its top edge with only what is off the window left as it is cut ("edge") or on it
+/// in a box drawn see-through ("clear"), is no place to fly back into, whichever came first.
 fn three_showings(b_first : Bool, b_is? : String = "off") -> String raise {
   reset()
   let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=300.0)
@@ -68,6 +69,20 @@ fn three_showings(b_first : Bool, b_is? : String = "off") -> String raise {
         root.box(fn(p) {
           p.width(Is(Some(80.0))).height(Is(Some(20.0))).clips(Is(true)) |> ignore
           showing(p, "b", (0.0, 40.0))
+        })
+        |> ignore
+      } else if b_is == "edge" {
+        // (the box from 50 to 10 above the window, b from 30 above it to 30 on it)
+        root.box(fn(p) {
+          p.width(Is(Some(80.0))).height(Is(Some(40.0))).clips(Is(true))
+          .offset(Is((0.0, if b_first { -50.0 } else { -110.0 }))) |> ignore
+          showing(p, "b", (0.0, 20.0))
+        })
+        |> ignore
+      } else if b_is == "clear" {
+        root.box(fn(p) {
+          p.width(Is(Some(80.0))).height(Is(Some(60.0))).alpha(Is(0.0)) |> ignore
+          showing(p, "b", (0.0, 0.0))
         })
         |> ignore
       } else {
@@ -99,7 +114,10 @@ fn three_showings(b_first : Bool, b_is? : String = "off") -> String raise {
 ///|
 test "a showing pressed let go, another showing of it left: the viewer flies back into the one on the window" {
   inspect(
-    [three_showings(true), three_showings(false), three_showings(true, b_is="cut"), three_showings(false, b_is="cut")].join(
+    [three_showings(true), three_showings(false), three_showings(true, b_is="cut"), three_showings(false, b_is="cut"),
+      three_showings(true, b_is="edge"), three_showings(false, b_is="edge"), three_showings(true, b_is="clear"),
+      three_showings(false, b_is="clear"),
+    ].join(
       "\n",
     ),
     content=(
@@ -107,6 +125,10 @@ test "a showing pressed let go, another showing of it left: the viewer flies bac
       #|pressed at Some((20, 30)), b at (20, -340), back to Some((200, 130)), b and c show [1, 0]
       #|pressed at Some((20, 30)), b at (0, 40), back to Some((200, 150)), b and c show [1, 0]
       #|pressed at Some((20, 30)), b at (0, 100), back to Some((200, 130)), b and c show [1, 0]
+      #|pressed at Some((20, 30)), b at (0, -30), back to Some((200, 170)), b and c show [1, 0]
+      #|pressed at Some((20, 30)), b at (0, -30), back to Some((200, 130)), b and c show [1, 0]
+      #|pressed at Some((20, 30)), b at (0, 0), back to Some((200, 190)), b and c show [1, 0]
+      #|pressed at Some((20, 30)), b at (0, 60), back to Some((200, 130)), b and c show [1, 0]
     ),
   )
 }
