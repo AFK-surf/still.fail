@@ -2075,6 +2075,8 @@ fn Ctx::scene_emitted(
     match scene.layers.get(cid) {
       Some(c) if along =>
         if self.scene_layer_put_out(c, moved) {
+          // (moved with what holds it all the same: where it is put, and what it holds, kept so)
+          scene_moved_out(c, moved)
           scene_left_out(c, None, self.ninst, self.segs.length() / 4)
         } else {
           self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
@@ -2671,4 +2673,24 @@ fn scene_left_out(l : SceneLayer, outer : SceneLayer?, k : Int, s : Int) -> Unit
 fn Ctx::scene_drawn_out(self : Ctx, l : SceneLayer, k : Int) -> Bool {
   guard !l.own_only && !l.each && l.count > 0 else { return false }
   self.scene_reach_out(l, 0.0, 0.0, clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3])
+}
+
+///|
+/// Layer `l`, left out as what holds it moves by `moved` with it (Ctx::scene_emitted's `along`), and all it holds:
+/// how far each is put from where it was drawn, and what each reached, moved so all the same, as if put in.
+fn scene_moved_out(l : SceneLayer, moved : (Double, Double)) -> Unit {
+  if moved == (0.0, 0.0) {
+    return
+  }
+  l.shown = (l.shown.0 + moved.0, l.shown.1 + moved.1)
+  scene_reach_moved(l, moved.0, moved.1)
+  for r in l.block_refs {
+    let (_, _, cid, tops) = r
+    if !tops {
+      match scene.layers.get(cid) {
+        Some(c) => scene_moved_out(c, moved)
+        None => ()
+      }
+    }
+  }
 }

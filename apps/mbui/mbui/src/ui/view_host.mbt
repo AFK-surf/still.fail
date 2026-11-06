@@ -1409,9 +1409,10 @@ fn Ctx::tree_step(
     match scene.layers.get(c.id) {
       Some(l) => {
         l.skippable = skippable
-        // (a check's frame, drawn anew: left out by where it reaches as drawn now, wholly outside what it is drawn in and
-        // the window, nothing of what was kept asked: what the frame it checks left out by what it kept is so or not)
-        if scene_checking() && skippable && self.scene_drawn_out(l, clip_top()) {
+        // (drawn now and reaching nothing inside what it is drawn in and the window, as drawn: left out after all, as
+        // in a check's frame, drawn anew, where nothing of what was kept is asked: a layer first drawn, or drawn anew,
+        // left out as one kept and left out by where it reached)
+        if skippable && self.scene_drawn_out(l, clip_top()) {
           self.ninst = l.start
           self.segs.truncate(l.seg_from * 4)
           scene_left_out(l, None, l.start, l.seg_from)
