@@ -40,7 +40,7 @@ describe("which task starts", () => {
     assert.deepEqual(pick(waiting, running, { busy: 0.9, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy", cause: "cpu" });
   });
 
-  test("none starts while the memory is under pressure, not even the first", () => {
+  test("no ordinary task starts while the memory is under pressure, not even the first", () => {
     for (const pressure of ["high", "critical"] as Pressure[]) {
       assert.deepEqual(pick([w("a", "s", 1)], [], { busy: 0, pressure }, 0, null, never), { wait: "memory" });
     }

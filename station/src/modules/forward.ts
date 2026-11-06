@@ -16,7 +16,7 @@ export type Forwarded = { method: string; path: string; headers: Record<string, 
 
 /// `r` asked of what listens at `socket`, for the viewer `viewer` says (modules.ts viewerHeader; none: the station asks
 /// for itself). Throws when it does not answer (not listening, gone before its answer's head).
-export function forward(socket: string, r: Forwarded, viewer: string | null): Promise<Answer> {
+export function forward(socket: string, r: Forwarded, viewer: string | null, signal?: AbortSignal): Promise<Answer> {
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(r.headers)) {
     const lower = name.toLowerCase();
@@ -26,7 +26,7 @@ export function forward(socket: string, r: Forwarded, viewer: string | null): Pr
   const whole = Buffer.isBuffer(r.body) ? r.body : null;
   if (whole !== null) headers["content-length"] = String(whole.length);
   return new Promise<Answer>((resolve, reject) => {
-    const req = request({ socketPath: socket, method: r.method, path: r.path, headers }, (res) => {
+    const req = request({ socketPath: socket, method: r.method, path: r.path, headers, signal }, (res) => {
       const joined: Record<string, string> = {};
       for (const [name, value] of Object.entries(res.headers)) {
         if (value === undefined || HOP.has(name)) continue;
@@ -52,8 +52,8 @@ export function forward(socket: string, r: Forwarded, viewer: string | null): Pr
 }
 
 /// A GET of the module's own (its manifest): status and body, whole.
-export async function ask(socket: string, path: string): Promise<{ status: number; body: Buffer }> {
-  const answer = await forward(socket, { method: "GET", path, headers: {}, body: Buffer.alloc(0) }, null);
+export async function ask(socket: string, path: string, signal?: AbortSignal): Promise<{ status: number; body: Buffer }> {
+  const answer = await forward(socket, { method: "GET", path, headers: {}, body: Buffer.alloc(0) }, null, signal);
   const parts: Buffer[] = [];
   for await (const chunk of answer.body as AsyncIterable<Buffer>) parts.push(chunk);
   return { status: answer.status, body: Buffer.concat(parts) };

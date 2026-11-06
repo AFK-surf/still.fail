@@ -186,7 +186,13 @@ pub fn Tree::laid_as_now(self : Tree) -> Unit {
 /// here. The caller keeps its own lifetime guard.
 pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
   if self.gone { return }
-  self.changes.push((self.logic_at(), f))
+  // The layout that requested this completion can have returned before publication finishes. Keep its pass
+  // ancestry and stop flag with the callback, rather than borrowing a later caller's or resetting them.
+  let budget = match self.brought_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  self.changes.push((self.logic_at(), f, budget))
   // Every request has a batch-end wake, including one made inside a tree commit nested in a raw signal batch.
   // A tree event's own end also drains it, before the next deadline, once all its readers have returned.
   @signals.after_flush(fn() { self.changes_done() |> ignore })
@@ -203,15 +209,18 @@ fn Tree::changes_done(self : Tree) -> Bool {
   }
   self.changes_running = true
   let was = self.cause_at
+  let was_budget = self.brought_budget
   defer {
     self.cause_at = was
+    self.brought_budget = was_budget
     self.changes_running = false
   }
   let mut i = 0
   while i < self.changes.length() && !self.gone {
-    let (at, f) = self.changes[i]
+    let (at, f, budget) = self.changes[i]
     i += 1
     self.cause_at = at
+    self.brought_budget = Some(budget)
     self.committing += 1
     @signals.start_batch()
     @signals.untracked(f)

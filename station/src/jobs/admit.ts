@@ -7,7 +7,9 @@
 //   ended has nothing more to show), were busy less than BUSY_MAX: tasks come in one by one while there is room.
 //   (A flat 30 s after each start held a task of an idle machine back minutes when several sessions each had one
 //   waiting, 2026-10-24: two a minute, the CPUs at 5%.)
-// - None starts while the system says its memory is under pressure (high or critical).
+// - None starts while the system says its memory is under pressure (high or critical), but a small task while it is only
+//   high: there is always a way to look at a machine short of running out (a small diagnostic waited with the rest
+//   over 40 minutes, nothing else able to reach it, #4355).
 // - A task that uses the screen (windows, a simulator, screenshots) throughout starts only while no other task has the
 //   screen, and none of the commands that asked for it before it came waits for it.
 // - Which one: of the sessions that have tasks waiting, the one whose task last started longest ago (one never started
@@ -27,7 +29,7 @@
 // holds it goes on.
 //
 // One explicitly small offscreen task may run beside busy builds. Its own slot is bounded to one task, it is told to
-// use one CPU, and the memory check still applies. This is for brief work such as drawing with a prebuilt renderer.
+// use one CPU, and it waits only when memory is critical. This is for brief work such as drawing with a prebuilt renderer.
 // Other tasks started with others running are told how many CPUs are free (STILLFAIL_CPUS and build tools' variables).
 import type { Ticks } from "../read/host.ts";
 
@@ -130,11 +132,14 @@ export function pick(
   claims: Claims = { held: false, asked: null },
 ): { start: Waiting } | { wait: Why; cause?: BusyCause } | null {
   if (waiting.length === 0) return null;
-  if (room.pressure === "high" || room.pressure === "critical") return { wait: "memory" };
+  if (room.pressure === "critical") return { wait: "memory" };
+  const roomy = room.pressure !== "high";
+  if (!roomy && !waiting.some((w) => w.small === true)) return { wait: "memory" };
   // (the screen another task's, a person's, or asked for by a command before this task came)
   const screenBusy = running.some((r) => r.screen) || claims.held;
   const person = room.person === true;
-  const able = waiting.filter((w) => !(w.screen && (screenBusy || person || (claims.asked !== null && claims.asked <= w.queuedAt))));
+  const able = waiting.filter((w) => (roomy || w.small === true) && !(w.screen && (screenBusy || person || (claims.asked !== null && claims.asked <= w.queuedAt))));
+  if (!roomy && able.length === 0) return { wait: "memory" };
   if (able.length === 0) return { wait: !screenBusy && person ? "person" : "screen" };
   const smallBusy = running.some((r) => r.small === true);
   const busy: BusyCause | null = running.length === 0 ? null
