@@ -11,6 +11,7 @@
 #   scripts/win.sh core                    the core's bytecode (out/core/core.hbc)
 #   scripts/win.sh put                     the core's bytecode, the engine and the shell put beside the app
 #   scripts/win.sh collate                 the host's order of names (src/host/win_collate.h) checked
+#   scripts/win.sh engine-sync             synchronous host answers across the engine DLL checked
 #   scripts/win.sh sealed                  the desktop app's sealed values opened (src/host/win_electron_sealed.h) checked
 #   scripts/win.sh setup                   the installer (windows/setup.c) with the app built and put packed after it
 #   scripts/win.sh setup-bare              the installer's own program alone (out/setup-bare), which setup packs the app with
@@ -132,6 +133,15 @@ collate() {
     -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
   "$out/collate_test_win.exe"
 }
+# The real engine DLL takes host answers through its C ABI (the host and the engine have separate CRTs).
+engine_sync() {
+  . "$MBUI_DIR/scripts/env.sh"
+  local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=$A/out/engine-sync
+  mkdir -p "$out/data"
+  (cd "$A" && cl.exe -nologo -O2 -W3 -Iengine -Isrc/host core/engine_sync_test_win.c \
+    -Fe"$(cygpath -w "$built/engine_sync_test.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
+  "$built/engine_sync_test.exe" "$(cygpath -m "$out/data")"
+}
 # sealed: the desktop app's sealed values opened in its place (src/host/win_electron_sealed.h), checked by
 # core/sealed_test_win.c
 sealed() {
@@ -157,6 +167,21 @@ setup_bare() {
   mv -f "$out/setup-bare.exe.tmp.exe" "$out/setup-bare.exe"
   echo "win.sh: setup.c compiled in $((SECONDS - t0)) s"
 }
+# Check the actual programs that will be installed, not just the compiler options: a prebuilt DLL can bring its own
+# runtime dependency. Windows 10 includes the UCRT, but not the Visual C++ redistributable.
+check_crt() {
+  local file deps bad=0
+  for file in "$@"; do
+    [ -f "$file" ] || { echo "win.sh: no $file to check" >&2; return 1; }
+    deps=$(dumpbin.exe -nologo -dependents "$(cygpath -w "$file")") || return 1
+    printf '%s\n%s\n' "Dependencies of $(basename "$file"):" "$deps"
+    if printf '%s\n' "$deps" | grep -Eiq '(^|[[:space:]])(MSVCP|VCRUNTIME)[0-9_]*\.dll([[:space:]]|$)'; then
+      echo "win.sh: $(basename "$file") needs the Visual C++ redistributable" >&2
+      bad=1
+    fi
+  done
+  return "$bad"
+}
 setup() {
   local n=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
   variant || return 1
@@ -165,6 +190,7 @@ setup() {
   [ -f "$built/stillfail.exe" ] || { echo "win.sh: no app built (win.sh build, put)" >&2; return 1; }
   rm -rf "$out" && mkdir -p "$out/files"
   setup_bare || return 1
+  check_crt "$A/out/setup-bare/setup-bare.exe" "$built/stillfail.exe" "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" || return 1
   cp "$A/out/setup-bare/setup-bare.exe" "$out/setup-bare.exe"
   cp "$built/stillfail.exe" "$out/files/$exe.exe"
   cp "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" "$built/core.hbc" "$out/files/"
@@ -178,6 +204,7 @@ case "${1:-build}" in
   core) core; exit $? ;;
   put) put core; exit $? ;;
   collate) collate; exit $? ;;
+  engine-sync) engine_sync; exit $? ;;
   sealed) sealed; exit $? ;;
   setup) setup; exit $? ;;
   setup-bare) setup_bare; exit $? ;;
