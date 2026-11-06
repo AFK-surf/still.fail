@@ -568,9 +568,9 @@ pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
 
 ///|
 /// The thumbnail of `id` where it was last laid out, while some of it is on the screen.
-pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
+pub fn thumb_of(c : @ui.Ctx, id : String, laid? : @view.Laid) -> Thumb? {
   match tree_thumb_owner(id).get() {
-    Some((node, look)) => return tree_thumb_of(c, node, look)
+    Some((node, look)) => return tree_thumb_of(c, node, look, laid?)
     None => ()
   }
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
@@ -2088,9 +2088,9 @@ fn flight_box(
 /// The thumbnail the picture flies from and back into as `c` has it now: where the chat lays it out now (it may move
 /// under the viewer: the keyboard let go as it opened, a message come), what showed of it as it was last drawn moved
 /// with it where it is drawn nowhere now (hidden while the picture is out); where it is not on the screen, where it was
-/// last (Viewer's fly_from). Read only.
-pub fn Viewer::flight_from(self : Viewer, c : @ui.Ctx) -> Thumb? {
-  match (thumb_of(c, self.thumb_id()), self.fly_from) {
+/// last (Viewer's fly_from); as a frame is painted, `laid`'s, where it is drawn in that frame. Read only.
+pub fn Viewer::flight_from(self : Viewer, c : @ui.Ctx, laid? : @view.Laid) -> Thumb? {
+  match (thumb_of(c, self.thumb_id(), laid?), self.fly_from) {
     // (hidden while the picture is out, it is drawn nowhere: what showed of it as it was last drawn, moved with it)
     (Some(t), Some({ seen: Some((sx, sy, sw, sh)), x, y, .. })) if t.seen is None =>
       Some({ ..t, seen: Some((sx + t.x - x, sy + t.y - y, sw, sh)) })
