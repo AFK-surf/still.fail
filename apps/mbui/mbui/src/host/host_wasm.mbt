@@ -597,6 +597,9 @@ fn local_station_act(a : String) -> Unit {
 fn ffi_mods_held() -> Int = "mbhost" "mb_host_mods_held"
 
 ///|
+fn set_modifiers(f : FuncRef[(Int) -> Unit]) = "mbhost" "mb_host_set_modifiers"
+
+///|
 fn mods_held() -> Int {
   ffi_mods_held()
 }

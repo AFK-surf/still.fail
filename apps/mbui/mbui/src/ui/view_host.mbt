@@ -2518,6 +2518,16 @@ fn Ctx::view_blit(
 let island_building : Ref[@view.NodeId?] = Ref(None)
 
 ///|
+/// The tree node hosting the old view currently being built; None outside one or in an old root layer. The node's
+/// lifetime is the old view's, so registrations made on it are removed with it.
+pub fn old_building_view() -> @view.View? {
+  match (g().island_said(), view_app.val) {
+    (Some(id), Some(tree)) => tree.view_of(id)
+    _ => None
+  }
+}
+
+///|
 /// What an old view's build asked that cannot be done as asked (@view.Tree::fault): told to the boundary round the old
 /// view being built (each old view is one: `old`), its build going on as what asked it says.
 fn old_fault(said : String) -> Unit {
@@ -4624,6 +4634,7 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
     (None, None) => false
   }
   view_point_seen.val = (tree.hits_said(), over, yields_said.val)
+  let_go_hits_changed()
   match view_point.val {
     // (gone, or under the old frame's layer: nothing of the tree's followed; the old views' as they have it)
     None => {

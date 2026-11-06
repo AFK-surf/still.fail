@@ -36,6 +36,7 @@ pub(open) trait Host {
   local_station(Self) -> String = _
   local_station_act(Self, String) -> Unit = _
   mods_held(Self) -> Int = _
+  set_modifiers(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
@@ -596,6 +597,11 @@ impl Host with env(_, _) {
 
 ///|
 impl Host with set_app_state(_, _) {
+  ()
+}
+
+///|
+impl Host with set_modifiers(_, _) {
   ()
 }
 
@@ -1548,6 +1554,12 @@ pub fn local_station_act(action : String) -> Unit {
 /// key's own modifiers are told): what a drag let go does by them (Finder's ⌥ a copy). None where there is no keyboard.
 pub fn mods_held() -> Int {
   current.val.mods_held()
+}
+
+///|
+/// Who is told as the host's currently held modifier keys change, on the app's thread.
+pub fn set_modifiers(f : FuncRef[(Int) -> Unit]) -> Unit {
+  current.val.set_modifiers(f)
 }
 
 ///|
