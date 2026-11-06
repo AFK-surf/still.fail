@@ -2335,10 +2335,10 @@ fn resolve_flexible(
   if !flexible {
     return
   }
-  let mut rounds = 0
+  // (each round freezes one at least: where what they were clamped by adds up to more than none, one was clamped up;
+  // to less, one down; to none, all of them: as many rounds as items at most, CSS's resolve flexible lengths)
   let mut left = true
-  while rounds < 64 && left {
-    rounds = rounds + 1
+  while left {
     let mut sum_factors = 0.0
     let mut free = space
     let mut sum_scaled = 0.0
@@ -2410,11 +2410,6 @@ fn resolve_flexible(
       } else {
         left = true
       }
-    }
-  }
-  if left {
-    for k in a..<b {
-      f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + TARGET))
     }
   }
 }
