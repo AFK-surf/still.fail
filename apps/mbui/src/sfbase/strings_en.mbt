@@ -1987,7 +1987,7 @@ let en : Map[String, String] = {
   "web-pages.connect.replaceToken": "Replace tokens",
   "web-pages.connect.retrying": "Reconnecting: {error}",
   "web-pages.connect.run": "Runtime settings",
-  "web-pages.connect.runtimeNote": "Runs on {runtime}, fixed after creation; for another runtime, create a new connect. In single-session mode a new model applies to the current session from its next message; in multi-session mode, sessions in progress keep their starting settings.",
+  "web-pages.connect.runtimeNote": "Runs on {runtime}, fixed after creation; for another runtime, create a new connect. A single session switches models from its next message.",
   "web-pages.connect.saveConnect": "Save and connect",
   "web-pages.connect.saveFailedShort": "Couldn't save",
   "web-pages.connect.saveReconnect": "Save and reconnect",
