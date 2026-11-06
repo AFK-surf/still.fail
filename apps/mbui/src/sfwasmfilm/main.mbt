@@ -197,11 +197,12 @@ fn panel_group_demo(root : @view.View, old : Bool, width : Double) -> Unit {
       @ui.old(panel, natural=true, fn(c) {
         c.box(style=@ui.css("w=Full gap=S4"), fn() {
           @sf.panel_group(c, label="Connection and remote screen quality", lead=fn(c) {
-            c.box(style=@ui.style(w=Fixed(12.0), h=Fixed(12.0), bg=Data(0x7B67D5FFL)), fn() { }) |> ignore
+            c.box(style=@ui.css("w=S3 h=S3 bg=Accent"), fn() { }) |> ignore
           }, fn() {
             c.text("Automatic", style=@sf.paragraph) |> ignore
             c.text("High quality", style=@sf.paragraph) |> ignore
           })
+          @sf.menu_rule(c)
           @sf.panel_group(c, fn() {
             c.text("Audio on", style=@sf.paragraph) |> ignore
             c.text("Send files", style=@sf.paragraph) |> ignore
@@ -210,11 +211,14 @@ fn panel_group_demo(root : @view.View, old : Bool, width : Double) -> Unit {
       }) |> ignore
     } else {
       @sf.panel_group_node(panel, label=fn() { "Connection and remote screen quality" }, lead=fn(line) {
-        line.box(fn(mark) { mark.width(Is(Some(12.0))).height(Is(Some(12.0))).ground(Is(0x7B67D5FFL)) |> ignore }) |> ignore
+        line.box(fn(mark) {
+          mark.width(Is(Some(12.0))).height(Is(Some(12.0))).ground(By(fn() { @ui.tree_theme().color(Accent) })) |> ignore
+        }) |> ignore
       }, fn(group) {
         @sf.words_node(group, fn() { "Automatic" }, fn() { @sf.paragraph }) |> ignore
         @sf.words_node(group, fn() { "High quality" }, fn() { @sf.paragraph }) |> ignore
       }) |> ignore
+      @sf.menu_rule_node(panel)
       @sf.panel_group_node(panel, fn(group) {
         @sf.words_node(group, fn() { "Audio on" }, fn() { @sf.paragraph }) |> ignore
         @sf.words_node(group, fn() { "Send files" }, fn() { @sf.paragraph }) |> ignore
