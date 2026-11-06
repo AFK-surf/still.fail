@@ -205,7 +205,7 @@ fn mn_live(text : () -> String, tree : () -> Json?, size : () -> Double, ratio? 
         } else if name.has_suffix(".jpg") {
           Some({
             draw: fn(v) { said(v, fn() { "file:" + name }) },
-            image: Some((ratio(), fn(v, width) { said(v, fn() { "img:" + name + ":" + width().to_string() }) })),
+            image: Some((ratio(), fn(v) { said(v, fn() { "img:" + name }) })),
           })
         } else {
           None
@@ -294,26 +294,20 @@ test "Markdown as nodes: a row of images, one of them twice, each drawn at the w
   let img = fn(src : String) { Json::array([Json::string("img"), Json::array([]), Json::object({ "src": Json::string(src), "alt": Json::string("") })]) }
   let tree = fn() { Some(Json::array([Json::array([Json::string("p"), Json::array([img("a.jpg"), img("a.jpg"), img("b.jpg")])])])) }
   let t = mn_live(fn() { "images" }, tree, fn() { 15.0 }, ratio=fn() { ratio.get() })
-  // (each image's words and the width it says, with the width it is drawn at)
+  // (each image drawn filling the box its row lays it out in, at the width it has there)
   let images = fn() {
     @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words.has_prefix("img:") }).map(fn(d) { (d.words, d.w) })
   }
-  let said_as_drawn = fn() {
-    images().iter().all(fn(d) { d.0.has_suffix(":" + d.1.to_string()) })
-  }
   let first = images()
-  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:a.jpg:") }).length(), 2, msg="\{first}")
-  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:b.jpg:") }).length(), 1, msg="\{first}")
-  assert_true(said_as_drawn(), msg="\{first}")
+  assert_eq(first.filter(fn(d) { d.0 == "img:a.jpg" }).length(), 2, msg="\{first}")
+  assert_eq(first.filter(fn(d) { d.0 == "img:b.jpg" }).length(), 1, msg="\{first}")
   t.resize(600.0, 900.0)
   t.draw()
   let wider = images()
-  assert_true(said_as_drawn(), msg="\{wider}")
   assert_true(wider[0].1 > first[0].1, msg="\{first} \{wider}")
   ratio.set(0.5)
   t.draw()
   let narrower = images()
   assert_eq(narrower.length(), 3, msg="\{narrower}")
-  assert_true(said_as_drawn(), msg="\{narrower}")
   assert_true(narrower[0].1 < wider[0].1, msg="\{wider} \{narrower}")
 }

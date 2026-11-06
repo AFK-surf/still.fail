@@ -191,11 +191,11 @@ priv struct MdNode {
 
 ///|
 /// A file the message places (Placed's, of the window's tree): `draw` it in a node on a line of its own; an image's
-/// width over its height and its drawing in a node as wide as it is given (`image`, the width as a row of them has it
-/// now).
+/// width over its height and its drawing filling a node laid out as big as a row of them gives it (`image`: what is
+/// drawn reads that size as it is painted, nothing of it given before its layout).
 pub(all) struct PlacedNode {
   draw : (@view.View) -> Unit
-  image : (Double, (@view.View, () -> Double) -> Unit)?
+  image : (Double, (@view.View) -> Unit)?
 }
 
 ///|
@@ -1082,9 +1082,6 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
     }
     all
   }
-  // (the width each is laid out at, as its picture is drawn and decoded at it: set as the rows are laid out, before it
-  // is measured)
-  let widths : Map[String, Ref[Double]] = {}
   // (in rows by the width the paragraph is laid out at, in its own layout: nothing of its width read back)
   p.layout_box(By(keyed), sized=true, fn(l, all) {
     let spans = md_picture_row_spans(all.map(fn(im) { im.2 }), l.width)
@@ -1103,18 +1100,9 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       for i in span.0..<span.1 {
         let (key, name, ratio) = all[i]
         let w = (ratio * h).floor()
-        let at = match widths.get(key) {
-          Some(r) => r
-          None => {
-            let r = Ref(w)
-            widths[key] = r
-            r
-          }
-        }
-        at.val = w
         let cell = l.child(key, fn(cell) {
           match (md.files)(name).bind(fn(f) { f.image }) {
-            Some(im) => (im.1)(cell, fn() { at.val })
+            Some(im) => (im.1)(cell)
             None => ()
           }
         })
@@ -1125,16 +1113,6 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       y = y + h
     }
     l.size_to(y)
-    // (none kept for what is no longer in it)
-    let now : Set[String] = Set::new()
-    for im in all {
-      now.add(im.0)
-    }
-    for k in widths.keys().collect() {
-      if !now.contains(k) {
-        widths.remove(k)
-      }
-    }
   })
   |> ignore
 }
