@@ -15,6 +15,8 @@ import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
 import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
+import { CLOSED_CARDS_INDEXED, CLOSED_CARDS_PENDING, CLOSED_CHAT_SAMPLE, CLOSED_SAMPLE_LIMIT, CLOSED_TIME_SAMPLE,
+  LEGACY_CLOSED_CARDS, closedCardsReady, hasClosedCardsTimeIndex, hasLegacyClosedCards, hasNativeClosedCards } from "../store/legacy-closed-cards.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
@@ -25,7 +27,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -869,6 +871,39 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
   const out: CardAnswer[] = [];
   // Only the requested chats (the items a sidebar change touched) are read.
   const scope = [...new Set(threads)];
+  const nativeClosed = hasNativeClosedCards(s.db);
+  const legacyClosed = !nativeClosed && hasLegacyClosedCards(s.db);
+  const smallClosed = new Map<number, Json[]>();
+  let recentClosed: Json[] | null = null;
+  if (!nativeClosed) {
+    const missing = scope.filter((thread) => !closedCardsReady(s.db, thread));
+    if (missing.length && hasClosedCardsTimeIndex(s.db)) {
+      // An existing older index is useful when the whole recent window is small, but never walk an unbounded window.
+      try {
+        const recent = all(s, CLOSED_TIME_SAMPLE, since);
+        if (recent.length < CLOSED_SAMPLE_LIMIT) {
+          const wanted = new Set(scope);
+          const byThread = new Map<number, Json[]>();
+          for (const row of recent) if (wanted.has(row.thread)) {
+            const found = byThread.get(row.thread) ?? [];
+            found.push(row); byThread.set(row.thread, found);
+          }
+          recentClosed = scope.flatMap((thread) => byThread.get(thread) ?? []);
+        }
+      } catch (error) {
+        if (!(error as Error).message.includes("no such index: closed_cards_at")) throw error;
+      }
+    }
+    if (recentClosed === null) {
+      const waiting: number[] = [];
+      for (const thread of missing) {
+        const sample = all(s, CLOSED_CHAT_SAMPLE, thread, since);
+        if (sample.length < CLOSED_SAMPLE_LIMIT) smallClosed.set(thread, sample.filter((row) => row.n !== null));
+        else waiting.push(thread);
+      }
+      if (waiting.length) throw new Refused(503, CLOSED_CARDS_PENDING + JSON.stringify(waiting));
+    }
+  }
   const withPeople = scope.filter((thread) => one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) !== undefined);
   const carded = new Set(threadsWithCards(s, withPeople));
   const relevant = withPeople.filter((thread) => carded.has(thread));
@@ -898,8 +933,17 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
     const a = toMessage(answer);
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
-  const closedRows = scope.flatMap((thread) => all(s, CLOSED_THREAD_SINCE, thread, since))
-    .sort((a, b) => a.at - b.at || a.ordering - b.ordering);
+  let closedRows: Json[];
+  try {
+    closedRows = recentClosed ?? scope.flatMap((thread) => nativeClosed ? all(s, CLOSED_CARDS_INDEXED, thread, since)
+      : smallClosed.get(thread) ?? (legacyClosed ? all(s, LEGACY_CLOSED_CARDS, thread, since) : []));
+  } catch (error) {
+    // A direct caller need not hold the reader worker's snapshot; an older connection may have dropped the index.
+    if (nativeClosed && (error as Error).message.includes("no such index: closed_cards_thread_at"))
+      throw new Refused(503, CLOSED_CARDS_PENDING + JSON.stringify(scope));
+    throw error;
+  }
+  closedRows.sort((a, b) => a.at - b.at || a.ordering - b.ordering);
   for (const { thread, n, viewer: by, at } of closedRows) {
     const found = cardAt(thread, n);
     if (!found) continue;
