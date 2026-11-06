@@ -619,8 +619,6 @@ pub fn sec_section(@ui.Ctx, @sf.Look, String, count~ : Int32, () -> Unit) -> Uni
 pub fn security_open_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
 pub fn security_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, stint? : () -> Int32) -> Unit
-pub fn security_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
-
 pub fn send_in_chat(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Writing) -> Unit
 
 pub let sending_shows_ms : Double

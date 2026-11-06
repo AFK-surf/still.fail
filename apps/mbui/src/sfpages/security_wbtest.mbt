@@ -283,6 +283,52 @@ test "security follows the lock as it loads, is unavailable, and turns off and o
 }
 
 ///|
+test "security adds and removes a member's device group as the lock changes" {
+  for (w, platform) in page_cases {
+    let has_device = Ref(false)
+    let t = setting_tester(Security, w, platform~, h=1600.0, over=fn(base) {
+      {
+        ..base,
+        topic: fn(name, params) {
+          let topic = (base.topic)(name, params)
+          if name != "lock" { return topic }
+          let groups : Array[Json] = if has_device.val {
+            [{
+              "appText": "Example app",
+              "devices": [{ "id": "device-1", "nameText": "Example device", "metaText": "Trusted", "removable": true }],
+            }]
+          } else {
+            []
+          }
+          {
+            ..topic,
+            value: Some({
+              "available": true,
+              "locked": true,
+              "members": [{ "sub": "person-1", "nameText": "Example person", "roleText": "Owner", "groups": Json::array(groups) }],
+              "stations": [],
+            }),
+          }
+        },
+      }
+    })
+    assert_true(t.find("Example person") is Some(_))
+    assert_true(t.find("Example device") is None)
+    has_device.val = true
+    @settings.fixture_changed()
+    t.frame()
+    assert_true(t.find("Example app") is Some(_))
+    assert_true(t.find("Example device") is Some(_))
+    has_device.val = false
+    @settings.fixture_changed()
+    t.frame()
+    assert_true(t.find("Example person") is Some(_))
+    assert_true(t.find("Example app") is None)
+    assert_true(t.find("Example device") is None)
+  }
+}
+
+///|
 test "security turn on opens the separate security open page" {
   for (w, platform) in page_cases {
     let t = setting_tester(Security, w, platform~, over=fn(base) {
@@ -300,6 +346,43 @@ test "security turn on opens the separate security open page" {
     })
     let (x, y, width, height) = t.get(Button, label=@sf.t("web-pages.security.turnOn")).rect
     t.tap(x + width / 2.0, y + height / 2.0)
+    t.frame()
+    assert_true(app.nav.top() is Setting(SecurityOpen))
+  }
+}
+
+///|
+test "security turn on is available only to an owner who can sign and can be opened by keyboard" {
+  for w in [390.0, 720.0, 1280.0] {
+    let state = Ref(0)
+    let t = setting_tester(Security, w, platform=0, over=fn(base) {
+      {
+        ..base,
+        topic: fn(name, params) {
+          let topic = (base.topic)(name, params)
+          if name == "lock" {
+            { ..topic, value: Some({ "available": true, "locked": false, "owner": Json::boolean(state.val != 0), "canSign": Json::boolean(state.val == 2) }) }
+          } else {
+            topic
+          }
+        },
+      }
+    })
+    let label = @sf.t("web-pages.security.turnOn")
+    assert_true(t.query(Button, label~) is None)
+    state.val = 1
+    @settings.fixture_changed()
+    t.frame()
+    assert_true(t.query(Button, label~) is None)
+    state.val = 2
+    @settings.fixture_changed()
+    t.frame()
+    for _ in 0..<8 {
+      if t.focused().map(fn(s) { s.label }) == Some(label) { break }
+      t.tab()
+    }
+    assert_eq(t.focused().map(fn(s) { s.label }), Some(label))
+    t.key(@ui.key_code_enter)
     t.frame()
     assert_true(app.nav.top() is Setting(SecurityOpen))
   }

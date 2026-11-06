@@ -141,7 +141,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Permissions => permissions_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Workspace => workspace_page(c, core, here, frame)
-    Security => security_page(c, core, here, frame)
     SecurityOpen => security_open_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
     VaultItems => vault_items_page(c, core, here, frame)

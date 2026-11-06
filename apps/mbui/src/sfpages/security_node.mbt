@@ -65,8 +65,7 @@ pub fn security_node(
           @sf.words_node(k, fn() {
             @sf.t(if flag(field(lock(), "me"), "unsigned") { "web-pages.security.upgradeTitle" } else { "web-pages.security.waitingTitle" })
           }, fn() { sec_state }) |> ignore
-          // PairSteps is shared with the waiting page. Its node implementation is being provided separately.
-          @ui.old(k, natural=true, unlaid=fn() { 120.0 }, fn(c) { pair_steps(c, core, here().workspace, in_card=true) }) |> ignore
+          pair_steps_node(k, fn() { core }, fn() { here().workspace }, in_card=true)
         })
         "people" => security_people_node(b, core, here, lock)
         "stations" => security_stations_node(b, core, here, lock, stint)
@@ -163,120 +162,29 @@ fn security_on_node(parent : @view.View, lock : () -> Json?) -> Unit {
 }
 
 ///|
-/// The original security rows use a list card when narrow and a card of spaced rows when wide.
-fn security_group_node(
-  parent : @view.View,
-  rows : (@view.View) -> Unit,
-  top_button? : () -> Bool = fn() { false },
-  bottom_button? : () -> Bool = fn() { false },
-) -> Unit {
-  if @sf.look_node(parent) is Narrow {
-    @sf.group_node(parent, rows)
-  } else {
-    parent.box(fn(k) {
-      k.padding(By(fn() {
-        let inset = @sf.card_foot_in(@sf.button_height())
-        (@sf.card_pad, if top_button() { inset } else { @sf.card_pad }, @sf.card_pad, if bottom_button() { inset } else { @sf.card_pad })
-      })).gap(Is(12.0)).radius(By(fn() { @ui.tree_theme().corner(Xl3) }))
-      .ground(By(fn() { @ui.tree_theme().color(Card) })) |> ignore
-      rows(k)
-    }) |> ignore
-  }
-}
-
-///|
 fn security_people_node(parent : @view.View, core : Core, here : () -> Here, lock : () -> Json?) -> Unit {
   @sf.section_node(parent, fn() { @sf.t("web-pages.security.people") }, fn(s) {
-    security_group_node(s, fn(g) {
+    @sf.security_group_node(s, fn(g) {
       g.each(fn() { items(lock(), "members") }, fn(m) { text(Some(m), "sub") }, fn(row, person) {
         let m = fn() { Some(person.get()) }
-        let wide = @sf.look_node(row) is Wide
-        row.gap(Is(if wide { 12.0 } else { 0.0 })) |> ignore
-        security_line_node(row, fn() { text(m(), "nameText") }, fn() { if wide { text(m(), "roleText") } else { "" } },
-          end=fn(e) { if !wide { security_end_node(e, fn() { text(m(), "roleText") }) } })
-        row.box(fn(devices) {
-          if wide { devices.padding(Is((40.0, 0.0, 0.0, 0.0))).gap(Is(8.0)) |> ignore }
-          devices.each(fn() { items(m(), "groups").mapi(fn(i, group) { (i, group) }) }, fn(group) { text(Some(group.1), "appText") }, fn(gr, group) {
-            let gv = fn() { Some(group.get().1) }
-            if wide { gr.gap(Is(8.0)) |> ignore }
-            gr.show(fn() { items(gv(), "devices").length() > 0 }, fn(h) {
-              h.padding(By(fn() {
-                if wide { (0.0, if group.get().0 > 0 { 6.0 } else { 0.0 }, 0.0, 0.0) } else { (24.0, 6.0, 12.0, 0.0) }
-              })) |> ignore
-              @sf.words_node(h, fn() { text(gv(), "appText") }, fn() { if wide { sec_over_words } else { sec_narrow_over_words } }) |> ignore
-            })
-            gr.each(fn() { items(gv(), "devices") }, fn(d) { text(Some(d), "id") }, fn(d, dev) {
-              security_device_node(d, core, here, lock, fn() { Some(dev.get()) })
+        @sf.security_person_node(row, fn() { text(m(), "nameText") }, fn() { text(m(), "roleText") })
+        row.show(fn() { items(m(), "groups").iter().any(fn(group) { items(Some(group), "devices").length() > 0 }) }, fn(shown) {
+          @sf.security_devices_node(shown, fn(devices) {
+            devices.each(fn() { items(m(), "groups").mapi(fn(i, group) { (i, group) }) }, fn(group) { text(Some(group.1), "appText") }, fn(gr, group) {
+              let gv = fn() { Some(group.get().1) }
+              gr.show(fn() { items(gv(), "devices").length() > 0 }, fn(has_devices) {
+                @sf.security_device_group_node(has_devices, fn() { text(gv(), "appText") }, apart=fn() { group.get().0 > 0 }, fn(group_rows) {
+                  group_rows.each(fn() { items(gv(), "devices") }, fn(d) { text(Some(d), "id") }, fn(d, dev) {
+                    security_device_node(d, core, here, lock, fn() { Some(dev.get()) })
+                  })
+                })
+              })
             })
           })
-        }) |> ignore
+        })
       })
     })
   })
-}
-
-///|
-/// A row's words and optional end. Narrow notes occupy their own line; wide notes follow the title.
-fn security_line_node(
-  parent : @view.View,
-  title : () -> String,
-  note : () -> String,
-  end? : (@view.View) -> Unit,
-  mark? : (@view.View) -> Unit,
-  indent? : Bool = false,
-  warn? : () -> Bool = fn() { false },
-  strong? : Bool = true,
-  acts? : (@view.View) -> Unit,
-  acts_shown? : () -> Bool = fn() { true },
-) -> Unit {
-  let wide = @sf.look_node(parent) is Wide
-  parent.box(fn(row) {
-    row.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
-    if wide {
-      row.min_height(Is(Some(sec_row_least))) |> ignore
-    } else {
-      row.padding(Is((if indent { 24.0 } else { 12.0 }, 10.0, 12.0, 10.0))) |> ignore
-    }
-    match mark { Some(f) => f(row); None => () }
-    row.box(fn(body) {
-      body.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-      body.box(fn(line) {
-        line.row(Is(true)).gap(Is(if wide { 6.0 } else { 8.0 })).lines_up(Is(Some(if wide { End } else { Start }))) |> ignore
-        line.show(fn() { title() != "" }, fn(t) {
-          if !wide { t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
-          else { t.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore }
-          @sf.words_node(t, title, fn() { if wide { if strong { sec_row_name } else { sec_row_words } } else { narrow_row_title } }) |> ignore
-        })
-        if wide {
-          line.show(fn() { note() != "" }, fn(n) {
-            n.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            @sf.words_node(n, note, fn() { if warn() { sec_warn } else { sec_row_meta } }) |> ignore
-          })
-        } else {
-          match end { Some(f) => f(line); None => () }
-        }
-      }) |> ignore
-      if !wide {
-        body.show(fn() { note() != "" }, fn(n) { @sf.words_node(n, note, fn() { if warn() { sec_narrow_warn } else { @sf.pg_link_note } }) |> ignore })
-        match acts {
-          Some(f) => body.show(acts_shown, fn(a) { a.row(Is(true)).gap(Is(20.0)).padding(Is((0.0, 6.0, 0.0, 0.0))) |> ignore; f(a) })
-          None => ()
-        }
-      }
-    }) |> ignore
-    if wide {
-      match end { Some(f) => f(row); None => () }
-      match acts { Some(f) => row.show(acts_shown, fn(a) { a.row(Is(true)).gap(Is(12.0)) |> ignore; f(a) }); None => () }
-    }
-  }) |> ignore
-}
-
-///|
-fn security_end_node(parent : @view.View, words : () -> String, warn? : Bool = false) -> Unit {
-  let wide = @sf.look_node(parent) is Wide
-  @sf.words_node(parent, words, fn() {
-    if wide { if warn { sec_warn_state } else { sec_row_state } } else { if warn { sec_narrow_end_warn } else { sec_narrow_end } }
-  }) |> ignore
 }
 
 ///|
@@ -286,7 +194,7 @@ fn security_device_node(parent : @view.View, core : Core, here : () -> Here, loc
   let renew = fn() { has(dev(), "daysLeft") && flag(lock(), "signs") }
   let remove = fn() { flag(dev(), "removable") }
   let busy = fn(action : String) { is_doing(core, [action], [("workspace", ws()), ("device", id())]) }
-  security_line_node(parent, fn() { text(dev(), "nameText") }, fn() { text(dev(), "metaText") }, indent=true, strong=false,
+  @sf.security_line_node(parent, fn() { text(dev(), "nameText") }, fn() { text(dev(), "metaText") }, indent=true, strong=false, drops=true,
     warn=fn() { flag(dev(), "renewSoon") },
     mark=fn(m) {
       m.pick(fn() { text(dev(), "kind") == "web" }, fn(p, web) {
@@ -295,28 +203,17 @@ fn security_device_node(parent : @view.View, core : Core, here : () -> Here, loc
     },
     acts_shown=fn() { renew() || remove() }, acts=fn(a) {
       a.show(renew, fn(r) {
-        security_action_node(r, fn() { @sf.t("web-pages.security.renew") }, fn() { busy("lock.renew") }, fn() {
+        @sf.security_action_node(r, fn() { @sf.t("web-pages.security.renew") }, fn() {
           lock_call(core, ws(), "renew", @sf.t("web-pages.security.renew"), [("device", id())], done=@sf.t("web-pages.security.renewed"))
-        })
+        }, busy=fn() { busy("lock.renew") })
       })
       a.show(remove, fn(r) {
-        security_action_node(r, fn() { @sf.t("web-pages.security.remove") }, fn() { busy("lock.removeDevice") }, fn() {
+        @sf.security_action_node(r, fn() { @sf.t("web-pages.security.remove") }, fn() {
           remove_dialog(core, ws(), id(), text(dev(), "fullText"))
-        })
+        }, busy=fn() { busy("lock.removeDevice") })
       })
     },
   )
-}
-
-///|
-fn security_action_node(parent : @view.View, words : () -> String, busy : () -> Bool, press : () -> Unit) -> Unit {
-  if @sf.look_node(parent) is Wide {
-    @sf.button_node(parent, words, press, tone=Ghost, busy~) |> ignore
-  } else {
-    parent.pick(busy, fn(p, working) {
-      if working { @sf.spinner_node(p, size=14.0) |> ignore } else { @sf.tap_text_node(p, words, press) }
-    })
-  }
 }
 
 ///|
@@ -328,7 +225,7 @@ fn security_stations_node(parent : @view.View, core : Core, here : () -> Here, l
       } else {
         let stations = fn() { items(lock(), "stations") }
         let can_join = fn() { flag(lock(), "owner") && flag(lock(), "signs") }
-        security_group_node(p, top_button=fn() {
+        @sf.security_group_node(p, top_button=fn() {
           match stations().get(0) { Some(st) => can_join() && !flag(Some(st), "protected"); None => false }
         }, bottom_button=fn() {
           let all = stations()
@@ -339,30 +236,23 @@ fn security_stations_node(parent : @view.View, core : Core, here : () -> Here, l
             let guarded = fn() { flag(st(), "protected") }
             let can = fn() { flag(lock(), "owner") && flag(lock(), "signs") }
             let id = fn() { text(st(), "id") }
-            let wide = @sf.look_node(row) is Wide
-            let named = fn() { wide && @sf.has_station_mark(text(st(), "emoji"), text(st(), "icon")) }
-            security_line_node(row, fn() { if named() { "" } else { text(st(), "name") } }, fn() { if guarded() { "" } else { @sf.t("web-pages.security.unprotectedWhy") } },
-              mark=fn(m) {
-                m.pick(guarded, fn(d, on) { security_dot_node(d, on) })
-                if wide {
-                  m.show(named, fn(mark) {
-                    mark.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
-                    @sf.station_mark_node(mark, fn() { text(st(), "emoji") }, fn() { text(st(), "icon") }, desk_mark, fn() { @sf.theme().p.text }, stint)
-                    @sf.words_node(mark, fn() { text(st(), "name") }, fn() { sec_row_name }) |> ignore
-                  })
-                }
-              },
-              end=fn(e) {
+            @sf.security_station_line_node(
+              row,
+              fn() { text(st(), "name") },
+              fn() { if guarded() { "" } else { @sf.t("web-pages.security.unprotectedWhy") } },
+              guarded,
+              fn() { text(st(), "emoji") },
+              fn() { text(st(), "icon") },
+              stint,
+              fn(e) {
                 e.pick(fn() { if guarded() { 0 } else if can() { 1 } else { 2 } }, fn(x, state) {
                   match state {
-                    0 => security_end_node(x, fn() { @sf.t("web-pages.security.protected") })
-                    1 => {
-                      let button = @sf.button_node(x, fn() { @sf.t("web-pages.security.join") }, fn() {
+                    0 => @sf.security_end_node(x, fn() { @sf.t("web-pages.security.protected") })
+                    1 =>
+                      @sf.security_join_button_node(x, fn() { @sf.t("web-pages.security.join") }, fn() {
                         join_dialog(core, here().workspace, id(), text(st(), "name"))
-                      }, tone=Ghost, busy=fn() { is_doing(core, ["lock.joinStation"], [("workspace", here().workspace), ("station", id())]) })
-                      if wide { button.margin(Is((0.0, 0.0, @sf.card_foot_in(@sf.button_height()) - @sf.card_pad, 0.0))) |> ignore }
-                    }
-                    _ => security_end_node(x, fn() { @sf.t("web-pages.security.unprotected") }, warn=true)
+                      }, busy=fn() { is_doing(core, ["lock.joinStation"], [("workspace", here().workspace), ("station", id())]) })
+                    _ => @sf.security_end_node(x, fn() { @sf.t("web-pages.security.unprotected") }, warn=fn() { true })
                   }
                 })
               },
@@ -378,31 +268,5 @@ fn security_stations_node(parent : @view.View, core : Core, here : () -> Here, l
 fn security_disable_node(parent : @view.View, core : Core, here : () -> Here) -> Unit {
   let busy = fn() { is_doing(core, ["lock.disable"], [("workspace", here().workspace)]) }
   let press = fn() { turn_off_dialog(core, here().workspace, here().name) }
-  if @sf.look_node(parent) is Wide {
-    parent.box(fn(line) {
-      line.row(Is(true)) |> ignore
-      @sf.button_node(line, fn() { @sf.t("web-pages.security.turnOff") }, press, tone=Danger, busy~) |> ignore
-    }) |> ignore
-  } else {
-    parent.box(fn(foot) {
-      foot.padding(Is((0.0, 16.0, 0.0, 0.0))) |> ignore
-      @sf.group_node(foot, fn(g) {
-        g.box(fn(row) {
-          row.row(Is(true)).padding(Is((12.0, 10.0, 12.0, 10.0))).lines_up(Is(Some(Middle)))
-          .min_height(By(fn() { Some(@sf.theme().items.least) })) |> ignore
-          row.pick(busy, fn(hit, working) {
-            hit.over(Is(true)).width_share(Is(1.0)).height_share(Is(1.0)) |> ignore
-            if working {
-              hit.presses(Is(false)).says(By(fn() { Some(@view.said(Button, label=@sf.t("web-pages.security.turnOff"))) })) |> ignore
-            } else {
-              @sf.pressed_node(hit, press, Is(@sf.row_corner), Button, fn() { @sf.t("web-pages.security.turnOff") })
-            }
-          })
-          @sf.words_node(row, fn() { @sf.t("web-pages.security.turnOff") }, fn() { acc_delete_words })
-          .grow(Is(1.0)) |> ignore
-          row.show(busy, fn(s) { @sf.spinner_node(s, size=14.0) |> ignore })
-        }) |> ignore
-      })
-    }) |> ignore
-  }
+  @sf.security_danger_node(parent, fn() { @sf.t("web-pages.security.turnOff") }, press, busy~)
 }
