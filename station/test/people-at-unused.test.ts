@@ -34,6 +34,7 @@ test("opening an older store does not rebuild the unused station-wide people ind
     let reopened: Store | null = null;
     try {
       reopened = Store.open(path);
+      assert.equal(hasIndex(reopened.db), false);
       visited.push(count);
     } finally {
       reopened?.close();
@@ -66,6 +67,7 @@ test("opening an older store does not rebuild the unused station-wide closed-car
     let reopened: Store | null = null;
     try {
       reopened = Store.open(path);
+      assert.equal(hasClosedIndex(reopened.db), false);
       visited.push(count);
     } finally {
       reopened?.close();
