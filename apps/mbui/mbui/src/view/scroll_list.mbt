@@ -545,7 +545,13 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   // foot found there or further, the fling planned again to it before it is taken to have met it)
   let meet_off = match @signals.untracked(fn() { self.fling.get() }) {
     Some(f) if self.reads_free && f.v0 > 0.0 && (self.foot_hand)() is None && f.end_t > t && f.end_t < rest =>
-      v.at_moment(f.end_t, fn() {  })
+      {
+        meet_said.val += 1
+        if foot_trace.val {
+          println("MEET said at \{t} for \{f.end_t}")
+        }
+        v.at_moment(f.end_t, fn() { if foot_trace.val { println("MEET due at \{f.end_t}") } })
+      }
     _ => fn() {  }
   }
   let rest_off = v.at_moment(rest, fn() {
@@ -581,6 +587,10 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 /// come or gone; what grew above, Scroll::grew_above), at rest then.
 ///|
 let foot_trace : Ref[Bool] = Ref(false)
+
+///|
+/// How many moments a fling would meet a foot it counts were said (Scroll::list_settles): a test's count.
+let meet_said : Ref[Int] = Ref(0)
 
 ///|
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {

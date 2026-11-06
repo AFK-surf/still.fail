@@ -41,6 +41,7 @@ priv struct HistSeen {
   opened : Int
   dropped : Int
   laid : Int
+  meets : Int
 }
 
 ///|
@@ -62,6 +63,7 @@ fn hist_look(
 ) -> HistSeen {
   let told : Array[String] = []
   faults_stop.val = false
+  let meets_before = meet_said.val
   fault_told.val = Some(fn(said) { told.push("fault: " + said) })
   let keys = @signals.signal(Array::makei(n, fn(i) { i }))
   let heights : Map[Int, @signals.Signal[Double]] = {}
@@ -273,6 +275,7 @@ fn hist_look(
     opened: opened.val,
     dropped: dropped.val,
     laid: tree.work().laid - laid_before,
+    meets: meet_said.val - meets_before,
   }
   tree.dispose()
   faults_stop.val = true
@@ -354,6 +357,9 @@ fn hist_compare(
     }
     for i in 1..<hist_runs.length() {
       let o = look(hist_runs[i])
+      if at == moments[moments.length() - 1] {
+        println("WORK \{what}, a frame each \{hist_runs[i].step} ahead \{hist_runs[i].ahead}: meets said \{o.meets} (60 a second \{base.meets}), opened \{o.opened} dropped \{o.dropped} (\{base.opened} \{base.dropped})")
+      }
       let differs = []
       if (o.past - base.past).abs() > 0.0001 {
         differs.push("past its end \{o.past} against \{base.past}")

@@ -349,25 +349,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let keys_laid : Ref[Array[K]?] = Ref(None)
   // (whether a fling is under way, as last set: what its layout reads, not the signal)
   let flinging = Ref(false)
-  // (flung, each change told the tree laid out as it is told whole, at its moment (View::laid_before_causes): what it
-  // holds changed in an event is laid out and its foot measured then, a frame drawn after or none; at rest, not)
-  let causes_held = Ref(false)
-  let tree = self.tree
-  self.reacts(fn() { s.fling.get() is Some(_) }, fn(now) {
-    flinging.val = now
-    if now != causes_held.val {
-      causes_held.val = now
-      // EXPERIMENT: tree.before_causes = tree.before_causes + (if now { 1 } else { -1 })
-      ignore(tree)
-    }
-  })
-  self.owns(fn() {
-    if causes_held.val {
-      causes_held.val = false
-      tree.before_causes = tree.before_causes - 1
-    }
-  })
-  |> ignore
+  self.reacts(fn() { s.fling.get() is Some(_) }, fn(now) { flinging.val = now })
   // (gone on by itself since it was last laid out (a fling, going back from past its end): laid out where it is at each
   // moment something is done at, before it is done (View::laid_before_due): a moment come due (its own rest), an
   // event's, an input's; the foot it meets measured then, a frame drawn on the way or none)
@@ -481,6 +463,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       fn(l, c) {
         let all = c.keys.v
         due_laid_at.val = self.tree.logic_at()
+        if foot_trace.val {
+          println("LAYOUT logic \{self.tree.logic_at()} drawn \{self.tree.drawn_at()} cause \{self.tree.cause_at} x \{c.x}")
+        }
         match keys_laid.val {
           Some(was) if !physical_equal(was, all) && was != all => ()
           _ => ()
