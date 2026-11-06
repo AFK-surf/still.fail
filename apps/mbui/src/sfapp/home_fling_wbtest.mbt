@@ -7,7 +7,6 @@
 test "the chats' list flung on a phone: no frame of it drawn again whole, rows coming and going" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="long", w=390.0, h=844.0, platform=2)
-  t.check_looks(false)
   t.set_frame_period(1000.0 / 120.0)
   t.run_for(@ui.move_most_ms)
   t.record_host()
@@ -21,7 +20,6 @@ test "the chats' list flung on a phone: no frame of it drawn again whole, rows c
   }
   t.touch_at(2, x, y0 - 450.0, t.time())
   t.run_as_host(2000.0)
-  println("PROBE counts \{@ui.scene_probe_counts()}")
   let frames = t.host_frames()
   let out : Array[String] = []
   for f in frames {

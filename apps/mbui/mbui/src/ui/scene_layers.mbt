@@ -2749,17 +2749,3 @@ fn scene_now_reach(l : SceneLayer) -> Unit {
     }
   }
 }
-
-///|
-/// PROBE: the layers the last frame drew, each with how many instances it holds of its own and with what it holds.
-pub fn scene_probe_counts() -> String {
-  let all : Array[(Int, Int, Int)] = []
-  for id, l in scene.layers {
-    if l.seen == scene.frame && l.count > 0 {
-      all.push((l.count, id.at, l.inner.length()))
-    }
-  }
-  all.sort_by(fn(a, b) { b.0.compare(a.0) })
-  let top = all.iter().take(20).map(fn(t) { "\{t.1}:\{t.0}(\{t.2})" }).collect()
-  "ninst \{g().ninst} layers \{all.length()} top \{top}"
-}
