@@ -1970,6 +1970,8 @@ pub fn row_words_foot() -> Double
 
 pub fn rows_head(@ui.Ctx, () -> Unit, first? : Bool) -> Unit
 
+pub fn rows_head_node(@view.View, (@view.View) -> Unit, first? : () -> Bool) -> Unit
+
 pub fn rows_held(() -> Unit) -> Unit
 
 pub fn rows_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, sized? : @ui.RowCauses) -> Int32
