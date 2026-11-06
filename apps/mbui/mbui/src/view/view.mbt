@@ -3535,6 +3535,18 @@ pub fn Tree::turn_of(self : Tree, id : NodeId) -> (Double, Bool) {
 }
 
 ///|
+/// How far it is turned (Tree::turn_of's first), nothing made to say it: 0 not turned, or let go.
+pub fn Tree::turn_now(self : Tree, id : NodeId) -> Double {
+  if self.alive_id(id) { self.nodes[id.at].look.turn } else { 0.0 }
+}
+
+///|
+/// Whether it is turned about where it is drawn (Tree::turn_of's second), nothing made to say it.
+pub fn Tree::turn_about_drawn(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].look.turn_drawn
+}
+
+///|
 /// How big it is drawn, what it holds with it, as it changes (1: as it is laid out), about the point of it `about` says
 /// (Pivot: At, shares of its width and height, (0.5, 0.5) its middle; FromBeside, the edge it goes out from beside
 /// its anchor, on the side it went to, lined up as it is: a popover's, grown from what opened it): its place's. Drawn,

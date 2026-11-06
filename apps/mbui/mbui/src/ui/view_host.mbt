@@ -1731,7 +1731,7 @@ fn Ctx::tree_draw_own(
   let (cx1, cy1) = (dmin(clip_stack[k + 2], self.width), dmin(clip_stack[k + 3], self.height))
   // (turned, about whatever point of its box: what it draws no further from its box than the box's diagonal)
   let (bw, bh) = (c.w * s, c.h * s)
-  let out = if tree.turn_of(c.id).0 == 0.0 {
+  let out = if tree.turn_now(c.id) == 0.0 {
     0.0
   } else {
     (bw * bw + bh * bh).sqrt()

@@ -585,17 +585,17 @@ fn inset_corner(
 
 ///|
 fn pop_clip() -> Unit {
-  for _ in 0..<clip_n {
-    clip_stack.pop() |> ignore
+  // (cut back, nothing made for what is taken off)
+  clip_stack.truncate(clip_stack.length() - clip_n)
+  let levels = clip_stack.length() / clip_n
+  if clip_from.length() > levels {
+    clip_from.truncate(levels)
   }
-  while clip_from.length() > clip_stack.length() / clip_n {
-    clip_from.pop() |> ignore
+  if clip_window.length() > levels {
+    clip_window.truncate(levels)
   }
-  while clip_window.length() > clip_stack.length() / clip_n {
-    clip_window.pop() |> ignore
-  }
-  while clip_apart.length() > clip_stack.length() / clip_n {
-    clip_apart.pop() |> ignore
+  if clip_apart.length() > levels {
+    clip_apart.truncate(levels)
   }
 }
 

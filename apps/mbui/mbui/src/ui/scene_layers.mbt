@@ -208,9 +208,8 @@ fn SceneEntry::read(self : SceneEntry, tree : @view.Tree) -> Unit {
   let id = self.c.id
   self.glyphs = tree.glyphs_of(id)
   self.over_scrim = tree.over_scrim_of(id)
-  let (turn, about_drawn) = tree.turn_of(id)
-  self.turn = turn
-  self.turn_drawn = about_drawn
+  self.turn = tree.turn_now(id)
+  self.turn_drawn = tree.turn_about_drawn(id)
   let (gx, gy, gw, gh) = tree.ground_drawn_of(id)
   self.ground_x = gx
   self.ground_y = gy
@@ -2485,7 +2484,8 @@ fn scene_fades_inside() -> Unit {
 fn scene_own_place_same(tree : @view.Tree, l : SceneLayer) -> Bool {
   guard scene.reach.get(l.id) is Some(e) else { return false }
   let id = l.id
-  let (turn, about) = tree.turn_of(id)
+  let turn = tree.turn_now(id)
+  let about = tree.turn_about_drawn(id)
   let (start, top, end, foot) = match tree.cut_soft_of(id) {
     Some((over_top, over_foot, h)) => (0.0, cut_soft(over_top, h / 2.0), 0.0, cut_soft(over_foot, h / 2.0))
     None => tree.fades_of(id)
