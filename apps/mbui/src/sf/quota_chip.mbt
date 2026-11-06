@@ -249,6 +249,27 @@ fn quota_left(w : Json?) -> String {
 }
 
 ///|
+/// A meter's figure, in full or briefly for a station's row.
+fn meter_words(m : Json?, brief : Bool) -> String {
+  let unit = chip_str(m, "unit")
+  if brief && chip_str(m, "big") != "" {
+    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
+  } else {
+    chip_str(m, "remaining")
+  }
+}
+
+///|
+/// What a meter says in its tip: its name, how much of how much, and its note.
+fn meter_said(m : Json?) -> String {
+  let note = chip_str(m, "note")
+  match chip_str(m, "label") {
+    "" => ""
+    label => label + " " + chip_str(m, "value") + (if note != "" { " · " + note } else { "" })
+  }
+}
+
+///|
 /// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
 /// `brief`, the figure alone with its unit's first letter, small (a station's row); `drop`, the turn it is left out of
 /// a line short of room in (Ctx::box's), `keep` never squeezed there.
@@ -260,29 +281,17 @@ pub fn meter_chip(
   keep? : Bool = false,
   key? : String = "meter",
 ) -> Unit {
-  let unit = chip_str(m, "unit")
-  let words = if brief && chip_str(m, "big") != "" {
-    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
-  } else {
-    chip_str(m, "remaining")
-  }
-  // what it is over it while pointed at (MeterChips' tip: its name, how much of how much, a note)
-  let note = chip_str(m, "note")
-  let said = match chip_str(m, "label") {
-    "" => ""
-    label => label + " " + chip_str(m, "value") + (if note != "" { " · " + note } else { "" })
-  }
   fill_chip(
     c,
     100 - chip_left(m),
     chip_str(m, "level"),
     chip_str(m, "short"),
-    words,
+    meter_words(m, brief),
     small=brief,
     drop~,
     keep~,
     key=key + "/" + chip_str(m, "short"),
-    said~,
+    said=meter_said(m),
   )
 }
 

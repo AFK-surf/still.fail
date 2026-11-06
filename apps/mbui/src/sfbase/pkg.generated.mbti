@@ -1164,6 +1164,10 @@ pub fn own_screen(String, String) -> Bool
 
 pub let page_bridge_js : String
 
+pub fn page_focus_entry(@view.View, Int32) -> Unit
+
+pub fn page_focus_owner(@view.View) -> PageFocusOwner
+
 pub fn page_glass() -> @paint.Glass
 
 pub let page_glass_blur : Double
@@ -3012,6 +3016,14 @@ pub(all) enum Page {
   Setting(@settings.Route)
   Screen(ScreenAt)
 }
+
+pub struct PageFocusOwner {
+  scopes : Map[Int32, @sf.PageFocusScope]
+  live : Map[Int32, Int32]
+  replacing : @ref.Ref[Int32?]
+}
+pub fn PageFocusOwner::leave(Self, Int32) -> Unit
+pub fn PageFocusOwner::replace(Self, Int32) -> Bool
 
 pub(all) struct PageLink {
   sockets : @sf.LiveMap[String, Int32]
