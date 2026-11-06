@@ -194,6 +194,7 @@ fn panel_centred_node(
               if x.tall > 0.0 && !n.scrolls { held.grow(Is(1.0)) |> ignore }
               held.box(fn(content) {
                 if x.tall > 0.0 && !n.scrolls { content.grow(Is(1.0)) |> ignore }
+                look_lent(content, Wide)
                 (n.body)(content, close)
               }) |> ignore
             }) |> ignore
@@ -339,6 +340,7 @@ fn panel_centred_node(
             foot.box(fn(spacer) { spacer.grow(Is(1.0)) |> ignore }) |> ignore
             foot.box(fn(content) {
               content.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))) |> ignore
+              look_lent(content, Wide)
               f(content, close)
             }) |> ignore
           }) |> ignore

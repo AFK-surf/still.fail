@@ -38,8 +38,10 @@ test "node panel follows its anchor and live title without remaking its contents
     let dismissed = Ref(0)
     let body_button : Ref[@view.View?] = Ref(None)
     let body_box : Ref[@view.View?] = Ref(None)
+    let looks : Array[Look] = []
     present_panel_node(fn() { title.get() }, fn(parent, close) {
       made.val += 1
+      looks.push(look_node(parent))
       body_box.val = Some(parent)
       parent.padding(Is((0.0, 0.0, 0.0, 0.0))) |> ignore
       body_button.val = Some(button_node(parent, fn() { "完成" }, close))
@@ -58,6 +60,7 @@ test "node panel follows its anchor and live title without remaking its contents
     assert_true(t.find("已加载") is Some(_))
     assert_true((t.get(Dialog).rect.0 - 400.0).abs() < 0.5)
     assert_eq(made.val, 1)
+    assert_true(looks.length() == 1 && looks.iter().all(fn(look) { look is Wide }))
     t.tap_text("完成")
     assert_true(!presented_open_of(serial))
     t.run_for(@kit.pop_out_ms)
@@ -178,11 +181,16 @@ test "an unanchored node panel uses the centred dialog, including its live descr
   let description = @signals.signal("等待")
   let made = Ref(0)
   let gone = Ref(0)
+  let looks : Array[Look] = []
   present_panel_node(fn() { "详情" }, fn(parent, _) {
     made.val += 1
+    looks.push(look_node(parent))
     words_node(parent, fn() { "正文" }, fn() { paragraph }) |> ignore
   }, from=Unanchored, description=fn() { description.get() }, gone=fn() { gone.val += 1 },
-    foot=fn(parent, close) { button_node(parent, fn() { "完成" }, close) |> ignore })
+    foot=fn(parent, close) {
+      looks.push(look_node(parent))
+      button_node(parent, fn() { "完成" }, close) |> ignore
+    })
   t.run_for(@ui.move_most_ms)
   let (x, _, w, _) = t.get(Dialog).rect
   assert_true((x + w / 2.0 - 640.0).abs() < 0.5)
@@ -191,6 +199,7 @@ test "an unanchored node panel uses the centred dialog, including its live descr
   t.draw()
   assert_true(t.find("完成加载") is Some(_))
   assert_eq(made.val, 1)
+  assert_true(looks.length() == 2 && looks.iter().all(fn(look) { look is Wide }))
   let (fx, fy, fw, fh) = t.get(Button, label="完成").rect
   t.tap(fx + fw / 2.0, fy + fh / 2.0)
   t.run_for(@ui.move_most_ms)
