@@ -25,6 +25,7 @@ priv struct NavHosted {
 ///|
 // A retained page's participation is the stack's declared state, followed by
 // descendants even while that page is laid out nowhere.
+// kept across runs: the kind of value lent; each page removes its value when its node or tree is released
 let nav_page_shown : @view.Lent[() -> Bool] = @view.Lent::new()
 
 ///|

@@ -632,6 +632,9 @@ pub(all) struct Lingering {
 /// watched).
 pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
   for rk, rd in readings {
+    // The retained page already owns these inputs and deadlines. Do not make
+    // the old root follow its data or navigation before chat_tick skips it.
+    if rd.shown_by is Some(_) { continue }
     // every chat kept whose data the page read: its activities linger on the time that goes by, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
@@ -652,7 +655,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
 ///|
 /// Take a chat's data before publishing its rows. Replies waiting for an avatar never enter the list even for an
 /// intermediate layout; the activity that just ended is still there to hand them off. Advancing their poses and
-/// lingering deadlines belongs to chat_tick, once per frame.
+/// lingering deadlines belongs to the retained page's input timeline, or chat_tick for an old page.
 pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
   let running : Map[String, Agent] = {}
   if !v.newer {
