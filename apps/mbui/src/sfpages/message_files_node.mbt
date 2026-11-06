@@ -83,7 +83,12 @@ fn media_file_node(
   // (`fills`: a placed image whose row or table cell says its width.)
   // (`room`: how wide it may be by how wide what holds it (`room.0`) is laid out, in the same layout: Roomed)
   let most = fn(w : Double) { media_box_width(a(), kind, (room.1)(w), fills) }
-  item.width(Roomed(room.0, fn(w, _) { Some(most(w)) })).max_width_within(Roomed(room.0, fn(w, _) { Some(most(w)) })) |> ignore
+  // (`fills`: as wide as the box a row lays it out in, all of it: no width of its own worked out from that box's)
+  if fills {
+    item.width_share(Is(1.0)) |> ignore
+  } else {
+    item.width(Roomed(room.0, fn(w, _) { Some(most(w)) })).max_width_within(Roomed(room.0, fn(w, _) { Some(most(w)) })) |> ignore
+  }
   let letterbox = fn() { boxed().2 }
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }

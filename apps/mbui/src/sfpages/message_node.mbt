@@ -395,9 +395,9 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
               (r, fn(v : @view.View) {
-                // (as wide as the row lays its box out, in that layout: Roomed by it)
+                // (filling the box the row lays out for it: fills)
                 v.box(fn(item) {
-                  ignore(media_file_node(item, src, here, fn() { a }, "image", (v, fn(w) { Some(w) }), at, @sf.message_file_corner, by, fills=true))
+                  ignore(media_file_node(item, src, here, fn() { a }, "image", (v, fn(_) { None }), at, @sf.message_file_corner, by, fills=true))
                 })
                 |> ignore
               })

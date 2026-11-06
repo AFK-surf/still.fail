@@ -113,9 +113,13 @@ pub fn chat_composer_node(
     body.shrink(Is(0.0)) |> ignore
   })
   root_at.val = Some(root)
-  holder.layout_box(Is(()), sized=true, fn(l, _) {
+  // (with what of its room is not its laid size ("opened", "shape": room_of), so its page's layout has all of it from
+  // this one measuring, the pass it is made in too)
+  holder.layout_box(By(fn() { room_of() }), sized=true, fn(l, of) {
     let (_, h) = l.measure(root, l.width)
     l.report("composer", h)
+    l.report("opened", of.0)
+    l.report("shape", of.1)
     l.size_to(h)
     l.place(root, 0.0, 0.0)
   }) |> ignore

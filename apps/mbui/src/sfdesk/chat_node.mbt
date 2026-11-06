@@ -193,12 +193,13 @@ fn chat_talk_node(
         files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
       )
     })
-    body.layout_box(By(fn() { (made_now.get().map(fn(m) { (m.room_of)() }), (lift.val)()) }), fn(lay, k) {
-      let (of, lift) = k
+    body.layout_box(By(fn() { (lift.val)() }), fn(lay, lift) {
       let (_, ch) = lay.measure(f, lay.width)
-      let room = match of {
-        Some(o) => @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), o)
-        None => 0.0
+      // (the room the composer takes, all of it as measuring it in this layout said (made in it or not): composer_room_in)
+      let room = match (lay.reported(f, "opened"), lay.reported(f, "shape")) {
+        (Some(opened), Some(shape)) =>
+          @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), (opened, shape))
+        _ => 0.0
       }
       lay.measure(l, lay.width, height=lay.height, foot=(0.0, room + lift)) |> ignore
       lay.place(l, 0.0, 0.0)
