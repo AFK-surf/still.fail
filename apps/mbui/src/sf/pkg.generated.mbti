@@ -1232,6 +1232,8 @@ pub fn menu_row_reach(Double) -> Double
 
 pub fn menu_rule(@ui.Ctx) -> Unit
 
+pub fn menu_rule_node(@view.View) -> Unit
+
 pub fn menu_shown(String) -> Bool
 
 pub let menu_w : Double
