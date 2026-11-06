@@ -584,6 +584,8 @@ struct Node {
   mut shows_across : Bool
   /// whether it takes over a hold that began on what it holds, moved so far from where it went down (View::claims)
   mut claims : ((Double, Double) -> Bool)?
+  /// whether it also takes the down itself, before it or a holder claims the drag (View::claims)
+  mut claims_down : Bool
   /// where a hold it takes over may have gone down, in its own terms (View::claims' `from`): none, anywhere
   mut claims_from : ((Double, Double) -> Bool)?
   /// how many times it was said to take over holds (View::claims): a hold asks it as it was said as it went down
@@ -624,6 +626,10 @@ struct Node {
   mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
+  /// a gesture that can be tapped or held reaches the press room around its drawn box
+  mut gesture_reaches : Bool
+  /// whether the current gesture went down outside its drawing, in its enlarged press room
+  mut gesture_from_room : Bool?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
   mut fingers : Int
   /// which saying of its on_drag it is (each said anew, or let go, another): what was told by one is that one's alone
@@ -1399,6 +1405,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.shows = None
       n.shows_across = false
       n.claims = None
+      n.claims_down = false
       n.claims_from = None
       n.claims_said = 0
       n.yields = false
@@ -1412,6 +1419,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.key_said = 0
       n.wheel_said = 0
       n.on_drag = None
+      n.gesture_reaches = false
+      n.gesture_from_room = None
       n.takes = None
       n.takes_units = []
       n.takes_ver = None
@@ -1499,6 +1508,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         shows: None,
         shows_across: false,
         claims: None,
+        claims_down: false,
         claims_from: None,
         claims_said: 0,
         yields: false,
@@ -1516,6 +1526,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         list_rows: false,
         focus_shown_cell: None,
         on_drag: None,
+        gesture_reaches: false,
+        gesture_from_room: None,
         fingers: 1,
         drag_said: 0,
         takes: None,
@@ -2759,7 +2771,8 @@ pub fn Tree::over_scrim_of(self : Tree, id : NodeId) -> Bool {
 /// press, on an old view hosted in it, on nothing that takes one): asked as the hold moves, given how far from where it
 /// went down (dx, dy, in the window's points), the innermost that holds what it went down on first (Tree::claimer_of);
 /// taken over, what had it is called off and the rest of it is this one's (View::on_drag: down where it is then).
-/// One that does takes none at its own down. `scrolls`: what it takes them over for is scrolling what it holds (what
+/// One that does takes none at its own down unless `at_down` is true: then its on_drag also takes the down and can
+/// yield the hold until it or a holder wins (View::yield_drag). `scrolls`: what it takes them over for is scrolling what it holds (what
 /// hosts the tree lets go of the keyboard for that, as a finger scrolling a list does: Tree::claims_scroll). `from`:
 /// whether it may take over a hold that went down there (in its own terms, as it was drawn then): one that went down
 /// elsewhere it is not asked of (a stack's page taking a swipe back from its edge alone); none, from anywhere.
@@ -2768,9 +2781,11 @@ pub fn View::claims(
   f : (Double, Double) -> Bool,
   scrolls? : Bool = false,
   from? : (Double, Double) -> Bool,
+  at_down? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.claims = Some(f)
+  n.claims_down = at_down
   n.claims_from = from
   n.claims_scroll = scrolls
   n.claims_said = n.claims_said + 1
@@ -2786,10 +2801,10 @@ pub fn View::claims(
 /// something of its own there (one with nothing there passed, as though it were not there: Tree::wheel_at's). Asked
 /// again as the hold moves (Tree::claimer_of).
 /// Whether the hold on node `id` may be taken over by what holds it as it moves (a gesture of its waiting on a tap, a
-/// hold or its own slop: View::gesture), as a press of a node's may (Tree::claimer_of); one of its own (its drag begun,
-/// a hold come; a node's raw on_drag: a slider, a picture zoomed, words picked), not.
+/// hold or its own slop: View::gesture, or a raw drag allowing it with View::yield_drag), as a press of a node's may
+/// (Tree::claimer_of); one of its own (its drag begun, a hold come), not.
 pub fn Tree::yields(self : Tree, id : NodeId) -> Bool {
-  self.alive_id(id) && self.nodes[id.at].yields
+  self.held == Some(id) && self.alive_id(id) && self.nodes[id.at].yields
 }
 
 ///|
@@ -4832,12 +4847,14 @@ pub(all) struct Drag {
 
 ///|
 /// What a finger or the pointer held on it does as it goes: put down on it, it is the node's till it is let go or
-/// called off (moved anywhere meanwhile), each event handled at its own moment as one change (Tree::event), outside
-/// any tracking. One let go meanwhile is told nothing more. Up to `fingers` held on it at once, each told by its own
+/// called off (moved anywhere meanwhile), unless it allows a holder to take it over (View::yield_drag). Each event is
+/// handled at its own moment as one change (Tree::event), outside any tracking. One let go meanwhile is told nothing more.
+/// Up to `fingers` held on it at once, each told by its own
 /// events (Drag's `finger`); one more down calls the hold off (each of those down told Off), the rest of it nobody's.
 pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> View {
   guard self.live() is Some(n) else { return self }
   n.fingers = if fingers < 1 { 1 } else { fingers }
+  n.gesture_reaches = false
   n.drag_said = n.drag_said + 1
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
@@ -4848,6 +4865,16 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
   n.on_drag = Some(f)
   self.tree.hits = self.tree.hits + 1
   self
+}
+
+///|
+/// Allow (or stop allowing) what holds this node to take over its current raw drag as it moves (View::claims). Called
+/// during a drag while it is held; no hold, nothing changes. Each new hold starts as its own. A control can therefore
+/// report the down and every move immediately, yield to a scroll in the other direction, and keep its own direction
+/// once it wins. Where this node itself claims the hold, it continues without an Off or another Down.
+pub fn View::yield_drag(self : View, on : Bool) -> Unit {
+  guard self.tree.held == Some(self.id()) && self.live() is Some(n) else { return }
+  n.yields = on
 }
 
 ///|
@@ -4989,6 +5016,7 @@ fn Tree::takes_off(self : Tree, n : Node) -> Unit {
 fn View::drag_ended(self : View) -> Unit {
   let n = self.tree.nodes[self.at]
   n.yields = false
+  n.gesture_from_room = None
   match n.drag_end {
     Some(end) => {
       n.drag_end = None
@@ -5204,6 +5232,7 @@ pub fn Tree::drag_at(
               off()
             }
           Down => {
+            n.yields = false
             self.held_to(Some(id))
             self.downs.clear()
             self.downs.push(finger)
@@ -5344,6 +5373,12 @@ pub fn View::gesture(
       Down => {
         over()
         down.val = Some(d)
+        // A gesture reached from outside its drawing may also be released in that room. One begun on its drawing
+        // retains the existing rule: a release outside it is not on it.
+        match self.live() {
+          Some(n) => n.gesture_from_room = Some(!self.tree.under(d.wx, d.wy).contains(id))
+          None => ()
+        }
         last.val = (d.wx, d.wy)
         moved.val = false
         held.val = false
@@ -5492,12 +5527,17 @@ pub fn View::gesture(
           }
           None => ()
         }
+        match self.live() {
+          Some(n) => n.gesture_from_room = None
+          None => ()
+        }
       }
     }
   })
   |> ignore
   // (said anew or let go: its hold's moment let go, nothing more told)
   guard self.live() is Some(n) else { return self }
+  n.gesture_reaches = tap is Some(_) || hold is Some(_)
   n.drag_end = Some(fn() {
     dead.val = true
     over()
@@ -8541,7 +8581,7 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
   self.walk_taken(x, y, fn(c, cx, cy, _, s) {
     order.val = order.val + 1
     let n = self.nodes[c.id.at]
-    let target = if n.on_drag is Some(_) && n.claims is None {
+    let target = if n.on_drag is Some(_) && (n.claims is None || n.claims_down) {
       // (one that takes over holds (View::claims) takes none at its own down: it is found as it moves)
       Some(Dragged(c.id))
     } else if n.on_press is Some(_) {
@@ -8568,10 +8608,12 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
       top_rect.val = Some((cx, cy, cx + c.w * s, cy + c.h * s))
       top_order.val = order.val
     } else if least > 0.0 &&
-      // (what a press does something with: not what is only held (a sheet's grip, a slider's track), as the old frame's
-      // press_reach reaches only what takes a press)
-      t is Pressed(_) &&
+      // (a press, a tappable or holdable gesture, or a drag that explicitly takes its own down; not a raw drag alone)
+      (t is Pressed(_) || (t is Dragged(_) && (n.on_press is Some(_) || n.gesture_reaches || n.claims_down))) &&
       n.takes is None &&
+      !n.turned_off &&
+      // A resize strip is reached only where it is drawn, like the old frame's as_drawn targets.
+      n.cursor != Some(ResizeX) && n.cursor != Some(ResizeY) &&
       (c.w * s < least || c.h * s < least) &&
       c.w > 0.0 &&
       c.h > 0.0 &&
