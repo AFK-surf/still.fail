@@ -195,16 +195,17 @@ pub fn composer_node(
       },
       fn(files) {
         composing.picking.set(None)
-        // (added as an event of the tree's at the answer's moment: what follows the draft's files reads where things
-        // are laid out, which nothing is yet as the host's answers are handed on)
-        root.at_moment(root.cause_at(), fn() {
-          if !@signals.untracked(no_files) {
-            for f in files {
-              writing_add_picked(src, w, @signals.untracked(spec).station, f)
-            }
+        // (left for the draft as what is shared in is, then taken at this moment as an event of the tree's: what follows
+        // a draft's files reads layout, which nothing has yet as the host's answers are handed on; this composer gone
+        // by then, the draft's next takes them as it comes)
+        if !@signals.untracked(no_files) {
+          let list = @sfbase.shared_into.get(w.key).unwrap_or([])
+          for f in files {
+            list.push(f)
           }
-        })
-        |> ignore
+          @sfbase.shared_into[w.key] = list
+          root.at_moment(root.cause_at(), take) |> ignore
+        }
       },
     )
     // (a video's first frame made from its bytes: followed as its files change and as the player made for it says its

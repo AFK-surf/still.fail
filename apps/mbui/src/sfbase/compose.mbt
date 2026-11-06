@@ -841,20 +841,28 @@ pub fn drafts_given_read() -> Unit {
 }
 
 ///|
-/// What takes what is put into a draft from elsewhere as it is put there, by the draft's key: a composer of the window's
-/// tree's, said as it is made (draft_taker_said), let go with it.
+/// What takes what is put into a draft from elsewhere as it is put there, by the draft's key: the composers of the
+/// window's tree's that say so (draft_taker_said), the last said first, each let go with its node (one of a draft
+/// going while another of it stays: the one that stays takes it).
 // kept across runs: each let go with its node
-let draft_takers : Map[String, () -> Unit] = {}
+let draft_takers : Map[String, Array[() -> Unit]] = {}
 
 ///|
 /// Node `v` (a composer of the tree's) takes what is put into draft `key` from elsewhere with `take`, at once, as it is
 /// put there (draft_given_to), while it is there.
 pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit {
-  draft_takers[key] = take
+  let list = draft_takers.get(key).unwrap_or([])
+  list.push(take)
+  draft_takers[key] = list
   v.owns(fn() {
     match draft_takers.get(key) {
-      Some(f) if physical_equal(f, take) => draft_takers.remove(key)
-      _ => ()
+      Some(list) => {
+        list.retain(fn(f) { !physical_equal(f, take) })
+        if list.is_empty() {
+          draft_takers.remove(key)
+        }
+      }
+      None => ()
     }
   })
   |> ignore
@@ -862,12 +870,12 @@ pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit
 
 ///|
 /// Something put into draft `key` from elsewhere (its files, its quotes, words to send): taken now by the composer of
-/// the tree's that says it takes it (draft_taker_said), in this same event; with none, by an old view's composer as
-/// it next builds (draft_given).
+/// the tree's said last of those that take it (draft_taker_said), in this same event; with none, by an old view's
+/// composer as it next builds (draft_given).
 pub fn draft_given_to(key : String) -> Unit {
   match draft_takers.get(key) {
-    Some(take) => take()
-    None => draft_given()
+    Some(list) if list.length() > 0 => (list[list.length() - 1])()
+    _ => draft_given()
   }
 }
 

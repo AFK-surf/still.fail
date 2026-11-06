@@ -520,12 +520,14 @@ fn composer_made_next() -> Int {
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool, focus? : () -> Unit = fn() { c.focus_editor(composer_field_key) }) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
   @sfbase.drafts_given_read()
+  // (what the system's picker gave, asked for this draft: only its own composer takes it, none of another draft's
+  // takes it from it)
   match composing.picking.get() {
-    Some((key, picker)) =>
+    Some((key, picker)) if key == w.key =>
       match picker.files() {
         Some(files) => {
           composing.picking.set(None)
-          if key == w.key && !no_files {
+          if !no_files {
             for f in files {
               writing_add_picked(src, w, spec.station, f)
             }
@@ -533,7 +535,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
         }
         None => ()
       }
-    None => ()
+    _ => ()
   }
   // files shared into the app from another, for this draft (share.mbt)
   match shared_into.get(w.key) {

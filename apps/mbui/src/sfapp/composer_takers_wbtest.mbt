@@ -77,3 +77,36 @@ test "a 文件 row sent to a chat left for another: not in the other's draft; ba
   let w = @sfbase.writings.get(first).unwrap()
   assert_eq(w.files.get().filter(fn(f) { text(Some(f), "name") == "late.md" }).length(), 1, msg="in its own draft, once")
 }
+
+///|
+/// Chat s-c1 open `w` wide (`platform` 0 a desk's: switching chats makes the other's composer anew; 2 a phone's: the
+/// first kept under the second in the stack).
+fn takers_tester(w : Double, platform : Int) -> @ui.Tester {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "a file picked for one chat, another opened before the picker answers: never in the other's draft; in its own once, back on it" {
+  for at in [(1280.0, 0), (390.0, 2)] {
+    let (width, platform) = at
+    let t = takers_tester(width, platform)
+    let a = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
+    let a_before = a.files.get().length()
+    t.picks([("a.png", b"\x89PNG\r\n\x1a\n")])
+    @sfpages.pick_files(a)
+    open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
+    t.run_for(@ui.move_most_ms * 2.0)
+    let b_files = @sfbase.writings.get("ws1/st1:s-c2").map(fn(w) { w.files.get().length() }).unwrap_or(0)
+    assert_eq(b_files, 0, msg="\{width}: none of it in the other chat's draft")
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+    t.run_for(@ui.move_most_ms * 2.0)
+    assert_eq(a.files.get().length(), a_before + 1, msg="\{width}: in its own draft, once")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(a.files.get().length(), a_before + 1, msg="\{width}: not again")
+  }
+}
