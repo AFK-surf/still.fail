@@ -90,6 +90,68 @@ test "a login whose page gives a code to paste back: 打开登录页, then the c
 }
 
 ///|
+test "a Claude login card asks before opening its authorization page" {
+  for width in [390.0, 1600.0] {
+    let calls : Array[Made] = []
+    let page = "https://claude.ai/oauth/authorize"
+    let t = with_logins(login_core(calls, login_of([
+      ("name", "claude"), ("step", "open"), ("paste", true), ("url", Json::string(page)),
+    ]), w=width))
+    t.tap_text("打开登录页")
+    assert_true(t.opened().is_empty(), msg="the page stays closed until confirmed")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+    t.back()
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.opened().is_empty(), msg="cancelling leaves the page closed")
+    t.tap_text("打开登录页")
+    t.run_for(@ui.move_most_ms)
+    t.tap_text("继续打开")
+    assert_eq(t.opened(), [page])
+  }
+}
+
+///|
+test "a Claude device login copies its code only after confirmation" {
+  let calls : Array[Made] = []
+  let page = "https://claude.ai/oauth/authorize"
+  let t = with_logins(login_core(calls, login_of([
+    ("name", "claude"), ("step", "device"), ("code", "TEST-1234"), ("url", Json::string(page)),
+  ])))
+  t.tap_text("复制并打开")
+  assert_true(t.opened().is_empty())
+  assert_true(t.clipboard() != "TEST-1234")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("继续打开")
+  assert_eq(t.clipboard(), "TEST-1234")
+  assert_eq(t.opened(), [page])
+}
+
+///|
+test "a Claude login asks before opening in the station but not when returning to its open page" {
+  for already_open in [false, true] {
+    let calls : Array[Made] = []
+    let label = if already_open { "回到 Willow 的浏览器" } else { "在 Willow 的浏览器中打开" }
+    let t = with_logins(login_core(calls, login_of([
+      ("name", "claude"), ("step", "loopback"), ("url", "https://claude.ai/oauth/authorize"),
+      ("browser", true), ("browserText", Json::string(label)),
+      ("screen", Json::string(if already_open { "browser:T1" } else { "" })),
+    ]), answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } }, relay=false))
+    t.tap_text(label)
+    if already_open {
+      assert_eq(named(calls, "machineLogin.browser").length(), 1)
+      assert_false(@sf.presenting())
+    } else {
+      assert_true(named(calls, "machineLogin.browser").is_empty())
+      t.run_for(@ui.move_most_ms)
+      assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+      t.tap_text("继续打开")
+      assert_eq(named(calls, "machineLogin.browser").length(), 1)
+    }
+  }
+}
+
+///|
 test "a device login: its code large, 复制并打开 copies it and opens its page" {
   let calls : Array[Made] = []
   let t = with_logins(

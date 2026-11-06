@@ -745,6 +745,22 @@ test "a subscription signing in: what to do in the browser, then the code typed 
 }
 
 ///|
+test "adding an Anthropic subscription asks before opening its authorization page" {
+  let t = settings_tester("new-profile:ws1/st1", shows="settings-new-profile-login", platform=2)
+  t.tap_text("打开授权页面")
+  assert_true(t.opened().is_empty(), msg="the page stays closed until confirmed")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.opened().is_empty())
+  t.tap_text("打开授权页面")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("继续打开")
+  assert_eq(t.opened().length(), 1)
+}
+
+///|
 test "本机缓存: the drives' files kept, counted with the chats', let go when asked" {
   let t = settings_tester("kept")
   // (what is kept asked of the core as the page is first built: drawn with its answer)

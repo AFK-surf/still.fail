@@ -149,7 +149,7 @@ fn login_steps(
   let elsewhere = match in_station {
     Some((name, open)) if flag(job, "browser") => {
       let label = fill(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, [("station", name)])
-      [(label, fn() { open(label) })]
+      [(label, fn() { confirm_claude_auth(provider == "Claude" && text(job, "screen") == "", fn() { open(label) }) })]
     }
     _ => []
   }
@@ -163,8 +163,10 @@ fn login_steps(
     // no code: the page only asks to confirm (Cursor's)
     c.text(tr("android-settings.login.cursorNote"), style=step_note) |> ignore
     if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied, external=true, more=elsewhere) {
-      login_state.copied[k] = true
-      (core.open_link)(url)
+      confirm_claude_auth(provider == "Claude", fn() {
+        login_state.copied[k] = true
+        (core.open_link)(url)
+      })
     }
   } else if state == "needs_approval" && url != "" {
     c.box(style=code_box, fn() {
@@ -199,11 +201,13 @@ fn login_steps(
         external=filled,
         more=elsewhere,
       ) {
-      if !filled {
-        c.copy_text(user_code)
-      }
-      login_state.copied[k] = true
-      (core.open_link)(url)
+      confirm_claude_auth(provider == "Claude", fn() {
+        if !filled {
+          @ui.current().copy_text(user_code)
+        }
+        login_state.copied[k] = true
+        (core.open_link)(url)
+      })
     }
   } else if state == "needs_code" && url != "" {
     // what to do said once, then its two steps in the order they are done, the next one solid: its page, then the
@@ -219,8 +223,10 @@ fn login_steps(
     let field = field_of(key)
     let typed = field.text().trim(chars=" \n").to_owned() != ""
     if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed, external=true, more=elsewhere) {
-      login_state.copied[k] = true
-      (core.open_link)(url)
+      confirm_claude_auth(provider == "Claude", fn() {
+        login_state.copied[k] = true
+        (core.open_link)(url)
+      })
     }
     c.box(style=code_field_room, fn() {
       c.box(style=code_field, fn() {

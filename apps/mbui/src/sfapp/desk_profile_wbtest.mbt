@@ -22,6 +22,30 @@ fn desk_shown(t : @ui.Tester, words : String) -> Unit {
 }
 
 ///|
+test "wide: Anthropic authorization waits for confirmation" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="settings-new-profile-login-station")
+  @settings.fixture_page("settings-new-profile-login-station") |> ignore
+  t.draw()
+  app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="打开授权页面")
+  assert_true(t.opened().is_empty(), msg="the page stays closed until confirmed")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="其他方式")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("在 Willow 的浏览器中打开")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(named(calls, "login.browser").is_empty())
+  t.tap_text("继续打开")
+  assert_eq(named(calls, "login.browser").length(), 1)
+}
+
+///|
 test "wide: adding a profile picks its provider from the core's groups, the machine's own login offered first" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="settings")
