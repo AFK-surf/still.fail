@@ -1560,6 +1560,28 @@ fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
     a[to] = v
     to = to + 1
   }
+  // (where each was drawn among the clips, moved with it: inst_levels)
+  let lv = inst_levels
+  if lv.length() >= self.ninst {
+    let up : Array[Int] = []
+    for r in ranges {
+      for q in r.0..<r.1 {
+        up.push(lv[q])
+      }
+    }
+    let mut t = ranges[0].0
+    for k, r in ranges {
+      let end = if k + 1 < ranges.length() { ranges[k + 1].0 } else { self.ninst }
+      for q in r.1..<end {
+        lv[t] = lv[q]
+        t = t + 1
+      }
+    }
+    for v in up {
+      lv[t] = v
+      t = t + 1
+    }
+  }
   if inst_owners_kept() {
     inst_owners_raised(ranges, self.ninst)
   }

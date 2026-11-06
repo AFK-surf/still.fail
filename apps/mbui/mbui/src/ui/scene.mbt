@@ -94,6 +94,52 @@ let clip_window : Array[Bool] = [true]
 let clip_apart : Array[Bool] = [false]
 
 ///|
+/// Of each level of `clip_stack`, the level its outer (12-23) is that one's own clip of (push_clip_r): none (-1)
+/// where it has none, or one not said. What a layer moved keeps of what it is cut by (scene_layers.mbt): the levels it
+/// pushed itself moved with it, those it began in kept where they are.
+// kept across runs: as clip_stack, put back as each clip is popped
+let clip_from : Array[Int] = []
+
+///|
+/// The level the outer of level `level` is the own clip of (clip_from): -1 none.
+fn clip_from_of(level : Int) -> Int {
+  if level < clip_from.length() { clip_from[level] } else { -1 }
+}
+
+///|
+/// The level just pushed said to have its outer from level `from` (clip_from).
+fn clip_say_from(from : Int) -> Unit {
+  let levels = clip_stack.length() / clip_n
+  while clip_from.length() > levels {
+    clip_from.pop() |> ignore
+  }
+  while clip_from.length() < levels - 1 {
+    clip_from.push(-1)
+  }
+  if clip_from.length() < levels {
+    clip_from.push(from)
+  } else {
+    clip_from[levels - 1] = from
+  }
+}
+
+///|
+/// Of each instance the frame draws, the level of `clip_stack` its clip is (and that level's outer's, clip_from), as it
+/// is drawn: level * 4096 + its outer's + 1 (inst_level_of). What a layer moved keeps of what it is cut by.
+// kept across runs: written as each instance is
+let inst_levels : Array[Int] = []
+
+///|
+/// Instance `i` drawn in the clip painted in now (inst_levels).
+fn inst_level_said(i : Int) -> Unit {
+  let level = clip_top() / clip_n
+  while inst_levels.length() <= i {
+    inst_levels.push(0)
+  }
+  inst_levels[i] = level * 4096 + clip_from_of(level) + 1
+}
+
+///|
 /// Whether the clip at `k` (in `clip_stack`) has its outer apart from it (clip_apart).
 fn clip_is_apart(k : Int) -> Bool {
   let level = k / clip_n
@@ -228,6 +274,7 @@ fn push_clip_r(
   for j in 0..<12 {
     clip_stack.push(if from >= 0 { clip_stack[from + j] } else { 0.0 })
   }
+  clip_say_from(if from < 0 { -1 } else if from == k { k / clip_n } else { clip_from_of(k / clip_n) })
   // (its outer apart from it where it takes one that is: a look's, or one inherited from where that is laid out)
   clip_say_apart(from == k + 12 && has_outer && (outer_kept || apart))
   // (a square clip holding all of the window's edges it is in, a frame's whole, is those edges still)
@@ -535,6 +582,9 @@ fn pop_clip() -> Unit {
   for _ in 0..<clip_n {
     clip_stack.pop() |> ignore
   }
+  while clip_from.length() > clip_stack.length() / clip_n {
+    clip_from.pop() |> ignore
+  }
   while clip_window.length() > clip_stack.length() / clip_n {
     clip_window.pop() |> ignore
   }
@@ -752,6 +802,7 @@ fn Ctx::push_inst(
   a[b + 57] = 0.0
   a[b + 58] = 0.0
   a[b + 59] = 0.0
+  inst_level_said(self.ninst)
   if inst_owners_kept() {
     inst_owned(self.ninst)
   }

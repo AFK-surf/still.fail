@@ -88,6 +88,14 @@ priv struct SceneLayer {
   /// RenderNode): (0, 0) as it is drawn; the clips its drawing pushed and its node cut by, all it holds' too (as drawn,
   /// in its block's terms), and whether what it holds is faded by something of its own: what moving it may change
   mut shown : (Double, Double)
+  /// the level of clip_stack it began in as last drawn, that level's outer's (clip_from) as far below it (none:
+  /// scene_no_level), and how far below the level what holds it began in it began: and of each of its own instances, as
+  /// far below the level it began in its clip and that clip's outer are (scene_level_pack). What it pushed itself moves
+  /// with it, what it began in stays (insts_moved_by)
+  mut clip_lvl : Int
+  mut from_rel : Int
+  mut depth_in : Int
+  block_lvls : Array[Int]
   inner_cuts : @damage.Rect
   mut fades_inside : Bool
 }
@@ -1294,6 +1302,10 @@ fn Ctx::scene_drawn(
         tops_owners: None,
         tops_put: [],
         shown: (0.0, 0.0),
+        clip_lvl: 0,
+        from_rel: scene_no_level,
+        depth_in: 0,
+        block_lvls: [],
         inner_cuts: @damage.Rect::none(),
         fades_inside: false,
       }
@@ -1427,6 +1439,15 @@ fn scene_drawn_begin(
   l.tops_owners = None
   l.tops_put.clear()
   l.shown = (0.0, 0.0)
+  // (the level it begins in, and where what holds it began: a layer drawn again where its reference is keeps how far
+  // below that it is, Ctx::scene_redrawn_in)
+  l.clip_lvl = clip_top() / clip_n
+  let from = clip_from_of(l.clip_lvl)
+  l.from_rel = if from < 0 { scene_no_level } else { from - l.clip_lvl }
+  match outer {
+    Some(o) => l.depth_in = l.clip_lvl - o.clip_lvl
+    None => ()
+  }
   l.inner_cuts.clear()
   l.fades_inside = false
   // (drawn again alone, from what it began in: what holds it as it was)
@@ -1872,6 +1893,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   }
   l.block_n = 0
   l.block_segs.clear()
+  l.block_lvls.clear()
   l.block_refs.clear()
   l.bands.clear()
   let owners : OwnersRun? = if inst_owners_kept() {
@@ -1886,6 +1908,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
         if self.inst[k * inst_size + 5] == 11.0 {
           l.bands.push(l.block_n + k - from)
         }
+        l.block_lvls.push(scene_level_pack(l, k))
       }
       match owners {
         Some(o) => {
@@ -1934,7 +1957,8 @@ fn Ctx::scene_emitted(
   self : Ctx,
   p : TreePaint,
   l : SceneLayer,
-  fixed? : FixedArray[Double]? = None,
+  depth? : Int = 0,
+  along? : Bool = false,
   soft? : Bool = l.fading.is_empty(),
   moved? : (Double, Double) = (0.0, 0.0),
 ) -> Unit {
@@ -1948,11 +1972,6 @@ fn Ctx::scene_emitted(
   }
   let (dx, dy) = l.shown
   let off = dx != 0.0 || dy != 0.0
-  // (what it is cut by from outside what moves, kept where it is: the clip the first of them moved began in)
-  let fixed_here = match fixed {
-    Some(f) => f
-    None => l.clip
-  }
   // (its own pieces in the frame as they were in it as it was drawn: the same in between what it holds)
   let dseg = (seg0 - l.block_seg_base).to_double()
   let ip = Ref(0)
@@ -1967,7 +1986,7 @@ fn Ctx::scene_emitted(
       let k = self.ninst
       l.block.blit_to(self.inst, len=n * inst_size, src_offset=ip.val * inst_size, dst_offset=k * inst_size)
       if off {
-        insts_moved_by(self.inst, k, k + n, dx, dy, fixed_here, soft)
+        insts_moved_by(self.inst, k, k + n, dx, dy, l.block_lvls, ip.val, depth, soft)
       }
       while band.val < l.bands.length() && l.bands[band.val] < to {
         let o = (k + l.bands[band.val] - ip.val) * inst_size
@@ -1997,7 +2016,7 @@ fn Ctx::scene_emitted(
     sp.val = sto
   }
   // (what it holds moved with it where it is moved or put moved: none of it moved in it nor changed, scene_still)
-  let along = off || fixed is Some(_)
+  let along = off || along
   for r in l.block_refs {
     let (ri, rs, cid, tops) = r
     put(ri, rs)
@@ -2010,7 +2029,7 @@ fn Ctx::scene_emitted(
       continue
     }
     match scene.layers.get(cid) {
-      Some(c) if along => self.scene_emitted(p, c, fixed=Some(fixed_here), soft~, moved~)
+      Some(c) if along => self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
       // (as kept where nothing of it changed, where it was put; moved in it, put where it is now, its block moved by
       // its reference (scene_moved_by); else drawn anew where its reference is, the rest of what holds it as kept:
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
@@ -2043,28 +2062,22 @@ fn Ctx::scene_emitted(
 
 ///|
 /// Instances `k0` to `k1` of `a` moved by (`dx`, `dy`), as drawn where they were: their rects, where they are turned
-/// about, the clips and soft cuts of their own; what they are cut by from outside what moved (`fixed`, the clip it
-/// began in, its own and its outer, as an instance keeps them: 16-19, 24-31, 40-51) kept where it is, as is no clip
-/// (one reaching past any window: push_unclipped); where all its soft cuts are its own (`soft`: nothing outside fades
-/// it), those moved too.
+/// about, the clips and soft cuts of their own; what they are cut by from outside what moved kept where it is. Which is
+/// which each instance's levels say (`lvls` from `l0`: scene_level_pack, as far below the level the layer it is of
+/// began in), that layer's `depth` levels below the one the first moved began in: a clip of a level below that one
+/// moves, one of it or above stays; no clip (one reaching past any window: push_unclipped) stays. Where all its soft
+/// cuts are its own (`soft`: nothing outside what moved fades it), those moved too.
 fn insts_moved_by(
   a : FixedArray[Double],
   k0 : Int,
   k1 : Int,
   dx : Double,
   dy : Double,
-  fixed : FixedArray[Double],
+  lvls : Array[Int],
+  l0 : Int,
+  depth : Int,
   soft : Bool,
 ) -> Unit {
-  let same = fn(b : Int, at : Int) {
-    let mut s = true
-    for j in 0..<4 {
-      if a[b + j] != fixed[at + j] {
-        s = false
-      }
-    }
-    s
-  }
   let mv = fn(b : Int) {
     if a[b] > -1.0e9 && a[b] < 1.0e9 {
       a[b] = a[b] + dx
@@ -2091,16 +2104,11 @@ fn insts_moved_by(
       a[b + 33] = a[b + 33] + dx
       a[b + 34] = a[b + 34] + dy
     }
-    // (its own clip: the one it began in, or the outer of that, kept; one of its own moved)
-    if !(same(b + 16, 0) && same(b + 24, 4) && same(b + 28, 8)) &&
-      !(same(b + 16, 12) && same(b + 24, 16) && same(b + 28, 20)) {
+    let (own, from) = scene_level_unpack(lvls[l0 + k - k0])
+    if own + depth > 0 {
       mv(b + 16)
     }
-    // (its outer: none, or one of those it began in, kept)
-    let outer = a[b + 44] > 0.0 || a[b + 45] > 0.0 || a[b + 46] > 0.0 || a[b + 47] > 0.0
-    if outer &&
-      !(same(b + 40, 0) && same(b + 44, 4) && same(b + 48, 8)) &&
-      !(same(b + 40, 12) && same(b + 44, 16) && same(b + 48, 20)) {
+    if from != scene_no_level && from + depth > 0 {
       mv(b + 40)
     }
     if soft {
@@ -2118,6 +2126,27 @@ fn insts_moved_by(
       }
     }
   }
+}
+
+///|
+/// No level (an instance's clip with no outer: scene_level_pack).
+let scene_no_level : Int = -2048
+
+///|
+/// Instance `k` of the frame, of layer `l`'s own: how far below the level `l` began in its clip's level is, and its
+/// outer's (scene_no_level: none), as one number (scene_level_unpack).
+fn scene_level_pack(l : SceneLayer, k : Int) -> Int {
+  let tag = if k < inst_levels.length() { inst_levels[k] } else { l.clip_lvl * 4096 }
+  let own = tag / 4096 - l.clip_lvl
+  let from = tag % 4096 - 1
+  let from_rel = if from < 0 { scene_no_level } else { from - l.clip_lvl }
+  (own + 2048) * 4096 + (from_rel + 2048)
+}
+
+///|
+/// What scene_level_pack packed: (its clip's, its outer's).
+fn scene_level_unpack(v : Int) -> (Int, Int) {
+  (v / 4096 - 2048, v % 4096 - 2048)
 }
 
 ///|
@@ -2282,6 +2311,8 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
   let tree = by.tree
   guard scene_place_now(tree, c) is Some(place) else { return }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
+  // (its outer from where it was, as far below it as it was: insts_moved_by)
+  clip_say_from(if c.from_rel == scene_no_level { -1 } else { clip_top() / clip_n + c.from_rel })
   // (in the frame's paint: the old frame's root, what an old view it holds is painted by)
   let p = TreePaint::new(tree, by.root, false)
   for f in c.fading {

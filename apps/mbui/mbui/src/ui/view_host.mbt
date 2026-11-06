@@ -2442,6 +2442,7 @@ fn Ctx::view_blit(
     for j in 0..<12 {
       s[b + 40 + j] = clip_stack[k + 12 + j]
     }
+    inst_level_said(self.ninst + i)
   }
   // (its glyphs set on the pixels where they are composed, as emit_text sets an old view's where it paints them: x on
   // the pixels, down by the baseline on a row then the glyph's own offset; where it is drawn bigger or smaller, on the
@@ -3617,10 +3618,12 @@ let old_bars : Array[BarAt] = []
 fn island_clips(f : () -> Unit) -> Unit {
   let stack = clip_stack.copy()
   let window = clip_window.copy()
+  let from = clip_from.copy()
   let apart = clip_apart.copy()
   clip_stack.clear()
   clip_window.clear()
   clip_apart.clear()
+  clip_from.clear()
   clip_stack.push_iter([-1.0e9, -1.0e9, 1.0e9, 1.0e9].iter())
   for _ in 4..<clip_n {
     clip_stack.push(0.0)
@@ -3634,6 +3637,8 @@ fn island_clips(f : () -> Unit) -> Unit {
   clip_window.push_iter(window.iter())
   clip_apart.clear()
   clip_apart.push_iter(apart.iter())
+  clip_from.clear()
+  clip_from.push_iter(from.iter())
 }
 
 ///|
