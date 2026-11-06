@@ -1,6 +1,6 @@
 // From a chat's agent (AgentSheet.kt): its station opens the station's card in place of the agent's (Stations.kt
 // openStationPeek: what it says of itself, what is left of its machine, its network, its files, its page); its account
-// opens how it runs (RunSettingsScreen).
+// opens how it runs in the shared model picker.
 
 ///|
 test "an agent's labels and values stay in columns in both languages, including at a larger text size" {
@@ -103,12 +103,38 @@ test "a station's card while it is offline: says so, no figures; its page still 
 }
 
 ///|
-test "an agent's account: how it runs, the agent's sheet gone" {
+test "an agent's account opens its model picker, where the context limit can be changed" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-agent")
   t.tap_text("账号")
-  assert_true(!@sf.presenting(), msg="the agent's card went down")
-  assert_true(app.nav.top() == Setting(@settings.Route::RunSettings("ws1/st1", "s-c1")))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("完整 · 1M") is Some(_), msg="the model picker offers the current context limit")
+  t.tap_text("完整 · 1M")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("300K")
+  let saved = named(calls, "pick.save")
+  assert_eq(saved.length(), 1)
+  assert_eq(text(Some(saved[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(saved[0].params), "of"), "session:s-c1")
+  assert_eq(text(Some(saved[0].params), "context"), "300000")
+}
+
+///|
+test "a chat's history opens the same model picker to change the context limit" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "history-details")
+  let row = t.words().iter().find_first(fn(w) { w.0 == "Opus 5.5" }).unwrap()
+  t.tap(row.1 + row.3 / 2.0, row.2 + row.4 / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("完整 · 1M") is Some(_), msg="the model picker offers the current context limit")
+  t.tap_text("完整 · 1M")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("500K")
+  let saved = named(calls, "pick.save")
+  assert_eq(saved.length(), 1)
+  assert_eq(text(Some(saved[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(saved[0].params), "of"), "session:s-c1")
+  assert_eq(text(Some(saved[0].params), "context"), "500000")
 }
 
 ///|
