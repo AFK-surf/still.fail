@@ -9,6 +9,10 @@ test "an image opened while it goes up: none beside it, then once up the ones be
   let up = @signals.signal(false)
   let asked : Array[String] = []
   let src : Ref[Source?] = Ref(None)
+  // (each its own picture, as big as it is: shot wide, next upright; what is fetched of each said)
+  let shot_png = @sffixture.fixture_png(600, 400)
+  let next_png = @sffixture.fixture_png(400, 640)
+  let fetched : Array[String] = []
   let file = fn(name : String, path : String) -> Json {
     { "name": name, "path": path, "owner": "s-c1", "width": 600, "height": 400 }
   }
@@ -39,7 +43,7 @@ test "an image opened while it goes up: none beside it, then once up the ones be
             let near : Json = if up.get() && path == "upload:u1" {
               {
                 "before": file("before.png", "work/s-c1/before.png"),
-                "after": file("next.png", "work/s-c1/next.png"),
+                "after": { "name": "next.png", "path": "work/s-c1/next.png", "owner": "s-c1", "width": 400, "height": 640 },
                 "index": 1,
                 "count": 3,
               }
@@ -55,14 +59,23 @@ test "an image opened while it goes up: none beside it, then once up the ones be
       },
       file: fn(station, owner, name) {
         images.get(station, @sfbase.file_image_id(station, owner, name), "mem:near-upload/" + name, fn(_, done) {
-          done(Ok((Json::object({}), Some(fixture_file_png("many-0.png")))))
+          fetched.push(name)
+          let bytes = if name == "next.png" { next_png } else if name == "shot.png" { shot_png } else { fixture_file_png("many-0.png") }
+          done(Ok((Json::object({}), Some(bytes))))
         })
       },
     }
     src.val = Some(s)
     s
   })
+  t.add_image("mem:near-upload/shot.png", 600, 400)
+  t.add_image("mem:near-upload/next.png", 400, 640)
   t.check_looks(false)
+  // (the preview's picture whole on its stage: of a proportion, and big)
+  let staged = fn(ratio : Double) {
+    t.drawn_images().filter(fn(i) { i[8] > 0.5 && (i[3] / i[2] - ratio).abs() < 0.01 && i[2] * i[3] > 200.0 * 200.0 }).length() > 0
+  }
+  let decoded = fn(b : Bytes) { t.image_loads().any(fn(l) { l.0 == "bytes:\{b.length()}" }) }
   t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
   let shot = t.semantics().filter(fn(s) { s.role == Button && s.label.contains("shot.png") })
   assert_eq(shot.length(), 1, msg="\{shot.map(fn(s) { s.label })}")
@@ -84,8 +97,12 @@ test "an image opened while it goes up: none beside it, then once up the ones be
   t.drag(300.0, 422.0, 100.0, 422.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(viewer.get().map(fn(v) { v.file.path }), Some("work/s-c1/next.png"))
+  assert_true(fetched.contains("next.png") && decoded(next_png), msg="fetched \{fetched}")
+  assert_true(staged(640.0 / 400.0), msg="next on the stage: \{t.drawn_images()}")
   t.drag(100.0, 422.0, 300.0, 422.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(viewer.get().map(fn(v) { v.file.path }), Some("work/s-c1/uploads/shot.png"))
+  assert_true(staged(400.0 / 600.0), msg="shot on the stage again: \{t.drawn_images()}")
+  assert_true(!staged(640.0 / 400.0), msg="next gone from the stage: \{t.drawn_images()}")
   viewer.set(None)
 }
