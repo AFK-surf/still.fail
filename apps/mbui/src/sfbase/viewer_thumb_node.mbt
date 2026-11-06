@@ -82,14 +82,27 @@ pub fn note_list_node(node : @view.View, key : String, bar : () -> Double, room 
 }
 
 ///|
-fn tree_thumb_of(c : @ui.Ctx, node : @view.View, look : () -> ThumbLook) -> Thumb? {
-  // Follow placement even while it is laid out nowhere, so showing the same node again tells its readers.
-  ignore(node.drawn_window_told())
+fn tree_thumb_of(c : @ui.Ctx, node : @view.View, look : () -> ThumbLook, laid? : @view.Laid) -> Thumb? {
+  // Follow placement even while it is laid out nowhere, so showing the same node again tells its readers (but where it
+  // is read as a frame is painted, `laid`: where it is drawn in that frame, Laid::drawn, nothing followed).
+  if laid is None {
+    ignore(node.drawn_window_told())
+  }
   guard node.alive() && !node.shown_nowhere() else { return None }
   guard @ui.view_tree() is Some(tree) else { return None }
   let l = look()
-  guard tree.drawn_of(node.id()) is Some(drawn) else { return None }
-  let (x, y, w, h) = (drawn.x, drawn.y, drawn.w, drawn.h)
+  let (x, y, w, h) = match laid {
+    Some(laid) =>
+      match laid.drawn(node) {
+        Some(r) => r
+        None => return None
+      }
+    None =>
+      match tree.drawn_of(node.id()) {
+        Some(drawn) => (drawn.x, drawn.y, drawn.w, drawn.h)
+        None => return None
+      }
+  }
   guard w > 0.0 && h > 0.0 && x < c.width && x + w > 0.0 && y < c.height && y + h > 0.0 else { return None }
   let bounds = tree.seen_bounds(node.id(), drawing=true)
   let (left, top) = (dmax(x, bounds.0), dmax(y, bounds.1))

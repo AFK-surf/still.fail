@@ -317,3 +317,55 @@ test "panic: Layout::reported read of a child not measured in the same layout ab
   })
   tree.frame(390.0, 844.0) |> ignore
 }
+
+///|
+test "drawn_each: a few nodes found where and in the order the scene's walk finds them, the tree not gone through" {
+  let ids : Array[@view.NodeId] = []
+  let on = @signals.signal(true)
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        a.padding(Is((10.0, 20.0, 0.0, 0.0))).offset(Is((3.0, 4.0))) |> ignore
+        a.box(fn(b) {
+          ids.push(b.id())
+          b.width(Is(Some(40.0))).height(Is(Some(20.0))).scale(Is(0.5)).drawn_off(Is((1.0, 2.0))) |> ignore
+          b.box(fn(c) {
+            ids.push(c.id())
+            c.width(Is(Some(10.0))).height(Is(Some(10.0))).alpha(Is(0.5)) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+        a.show(fn() { on.get() }, fn(d) {
+          ids.push(d.id())
+          d.width(Is(Some(30.0))).height(Is(Some(30.0))) |> ignore
+        })
+      })
+      |> ignore
+      root.box(fn(e) {
+        ids.push(e.id())
+        e.over(Is(true)).stacked(Is(2)).width(Is(Some(50.0))).height(Is(Some(50.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(f) {
+        ids.push(f.id())
+        f.width(Is(Some(5.0))).height(Is(Some(5.0))) |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.set_pixel_grid(2.0)
+  tree.frame(400.0, 300.0) |> ignore
+  let walked : Array[String] = []
+  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
+    if ids.contains(c.id) {
+      walked.push("\{c.id.at} \{x} \{y} \{a} \{s} \{ux} \{uy}")
+    }
+  })
+  // (asked in another order than they are drawn)
+  let asked = ids.copy()
+  asked.rev_in_place()
+  let found = tree.drawn_each(asked).map(fn(d) { "\{d.0.id.at} \{d.1} \{d.2} \{d.3} \{d.4} \{d.5} \{d.6}" })
+  assert_eq(found, walked)
+}
