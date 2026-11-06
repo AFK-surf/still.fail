@@ -29,7 +29,7 @@ struct NodeSheetCase {
 }
 
 ///|
-fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = false, under? : Double = 0.0, draggable? : Bool = true) -> (@ui.Tester, NodeSheetCase) {
+fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = false, under? : Double = 0.0, draggable? : Bool = true, sticky? : @view.LayoutCap) -> (@ui.Tester, NodeSheetCase) {
   let k : NodeSheetCase = {
     open: @signals.signal(true), content: @signals.signal(200.0), sinks: @signals.signal(0.0), extent: Ref(None),
     shown: Ref(0), gone: Ref(0), pressed: Ref(0), surface: Ref(None),
@@ -40,7 +40,7 @@ fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = fa
     }) |> ignore
     @kit.sheet_node(
       root, fn() { k.open.get() }, fn() { k.open.set(false) },
-      tall~, fit~, grows~, under~, draggable~, label=fn() { "Sheet" },
+      tall~, fit~, grows~, under~, draggable~, sticky?, label=fn() { "Sheet" },
       sinks=fn() { k.sinks.get() },
       extent=fn(v) { k.extent.val = Some(v) },
       shown=fn() { k.shown.val += 1 }, gone=fn() { k.gone.val += 1 },
@@ -57,6 +57,70 @@ fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = fa
   })
   t.draw()
   (t, k)
+}
+
+///|
+test "a natural sheet can remember overflow across content, window and sheet changes" {
+  for frame in [false, true] {
+    let memory = @view.LayoutCap::new()
+    let (t, k) = node_sheet_case(sticky=memory)
+    t.run_for(sheet_test_late_ms)
+    let cap = 844.0 * 0.94
+    assert_eq(k.extent.val.unwrap().rect().3, 225.0)
+    k.content.set(1000.0)
+    if frame { t.draw() }
+    k.content.set(100.0)
+    t.draw()
+    assert_true((k.extent.val.unwrap().rect().3 - cap).abs() < 0.01,
+      msg="overflow is kept after shortening, intermediate frame=\{frame}")
+    t.resize(390.0, 640.0)
+    assert_true((k.extent.val.unwrap().rect().3 - 640.0 * 0.94).abs() < 0.01)
+    k.open.set(false)
+    t.run_for(sheet_test_late_ms)
+    k.open.set(true)
+    t.draw()
+    assert_true((k.extent.val.unwrap().rect().3 - 640.0 * 0.94).abs() < 0.01,
+      msg="a replacement using the same presentation's memory keeps the cap")
+  }
+}
+
+///|
+test "a natural sheet only remembers content exceeding its cap" {
+  let (t, k) = node_sheet_case(sticky=@view.LayoutCap::new())
+  t.run_for(sheet_test_late_ms)
+  k.content.set(844.0 * 0.94 - 25.0)
+  t.draw()
+  k.content.set(100.0)
+  t.draw()
+  assert_eq(k.extent.val.unwrap().rect().3, 125.0)
+}
+
+///|
+test "a natural sheet does not remember an uncommitted overflow within one change" {
+  let (t, k) = node_sheet_case(sticky=@view.LayoutCap::new())
+  t.run_for(sheet_test_late_ms)
+  @signals.start_batch()
+  k.content.set(1000.0)
+  k.content.set(100.0)
+  @signals.end_batch()
+  t.draw()
+  assert_eq(k.extent.val.unwrap().rect().3, 125.0)
+}
+
+///|
+test "a natural sheet ignores an intermediate size read within one event" {
+  let (t, k) = node_sheet_case(sticky=@view.LayoutCap::new())
+  t.run_for(sheet_test_late_ms)
+  let tree = @ui.view_tree().unwrap()
+  let measured = Ref(0.0)
+  tree.event(t.time(), fn() {
+    k.content.set(1000.0)
+    measured.val = k.extent.val.unwrap().laid_size().1
+    k.content.set(100.0)
+  })
+  assert_true(measured.val > 700.0)
+  t.draw()
+  assert_eq(k.extent.val.unwrap().rect().3, 125.0)
 }
 
 ///|
@@ -207,7 +271,7 @@ test "tree sheet with a height share uses the window and excludes its extension 
 
 ///|
 test "tree sheet can fit changing contents up to a share and only enables detents near that limit" {
-  let (t, k) = node_sheet_case(tall=0.7, fit=true, grows=true)
+  let (t, k) = node_sheet_case(tall=0.7, fit=true, grows=true, sticky=@view.LayoutCap::new())
   t.run_for(sheet_test_late_ms)
   let sheet = k.surface.val.unwrap()
   assert_eq(k.extent.val.unwrap().rect().3, 225.0)

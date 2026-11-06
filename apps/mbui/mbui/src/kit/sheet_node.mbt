@@ -4,7 +4,9 @@
 ///|
 /// A bottom sheet in `parent` while `open` says so. `body` makes its contents once: a scrolling body should shrink in
 /// the room between its fixed head and foot. `tall` is a share of the window to fill (0: as tall as its contents),
-/// capped at 94%; with `fit`, a positive `tall` is a limit rather than a fixed height. `grows` allows the 55% and 94%
+/// capped at 94%; with `fit`, a positive `tall` is a limit rather than a fixed height. An optional `sticky` keeps a
+/// natural-height sheet at the cap after its contents first exceed it, and can be kept across presentation changes.
+/// `grows` allows the 55% and 94%
 /// detents; a fitted sheet can use them when its contents come to the limit. The system's bottom inset is included.
 ///
 /// The caller owns its place in the window's stack. `raised`, `sinks`, `dims` and `covered` are the stack's as they
@@ -37,6 +39,7 @@ pub fn sheet_node(
   initial_focus? : () -> @view.View? = fn() { None },
   within? : () -> Bool = fn() { false },
   under? : Double = 0.0,
+  sticky? : @view.LayoutCap,
 ) -> Unit {
   let surface : Ref[@view.View?] = Ref(None)
   let close : Ref[(Double) -> Double] = Ref(fn(_) { 0.0 })
@@ -272,7 +275,14 @@ pub fn sheet_node(
       let (mode, current_h, wh) = state
       let cap = dmax(0.0, dmin(if fit && tall > 0.0 { tall } else { 0.94 }, 0.94) * wh)
       let wanted = dmax(0.0, l.measure(surface_node, l.width).1 - under)
-      let normal = if tall > 0.0 && !fit { dmin(tall * wh, cap) } else { dmin(wanted, cap) }
+      let normal = if tall > 0.0 && !fit {
+        dmin(tall * wh, cap)
+      } else if tall <= 0.0 {
+        match sticky {
+          Some(memory) => l.sticky_cap(memory, wanted, cap)
+          None => dmin(wanted, cap)
+        }
+      } else { dmin(wanted, cap) }
       let eligible = grows && (!(fit && tall > 0.0) || normal >= cap - 1.0)
       let actual = if mode == 1 || ((mode == 2 || mode == 3) && eligible) { current_h } else { normal }
       l.measure(requested, 0.0, height=normal) |> ignore
