@@ -53,13 +53,14 @@ export const ownRate = (width: number, height: number) => Math.max(1_000_000, wi
 export type Quality = "smooth" | "hd" | "original";
 /// The most a view is asked at, whatever its 画质.
 export const MAX_RATE = 60_000_000;
-/// The most a picture of this size is asked at, by its 画质: 原画 its pixels × 16 a second, 高清 × 10, else × 6 (at most
-/// MAX_RATE, at least its own: 1080p 33, 20.7 and 12.4 Mbit/s). On a LAN a desktop's text at its own rate (× 3, about
-/// 0.05 bit a pixel at 60 frames a second) stayed soft as it moved, and at 原画's × 8 too (2026-11-06); Moonlight asks
-/// 20 Mbit/s for 1080p at 60. A link that carries less lowers it as before.
+/// The most a picture of this size is asked at: its pixels × 16 a second (at most MAX_RATE, at least its own: 1080p 33
+/// Mbit/s), 流畅 × 6 (12.4). 自动 is the best the link carries, as 原画 and 高清 are (they choose the size alone): the
+/// link lowers it where it carries less. On a LAN a desktop's text at its own rate (× 3, about 0.05 bit a pixel at 60
+/// frames a second) stayed soft as it moved, and at 原画's × 8 too (2026-11-06); Moonlight asks 20 Mbit/s for 1080p
+/// at 60.
 export function rateCeiling(width: number, height: number, quality?: Quality): number {
   const own = ownRate(width, height);
-  const per = quality === "original" ? 16 : quality === "hd" ? 10 : 6;
+  const per = quality === "smooth" ? 6 : 16;
   return Math.max(own, Math.min(MAX_RATE, width * height * per));
 }
 

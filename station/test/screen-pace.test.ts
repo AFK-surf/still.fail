@@ -2,7 +2,7 @@
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CUT, DOWN, DOWNSIZE_MS, FPS_CHOICES, FrameLatency, LoopStall, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP, UP_AFTER_MS, UP_EVERY_MS, UP_FAST, UP_FAST_AFTER_MS, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
+import { CUT, DOWN, DOWNSIZE_MS, FPS_CHOICES, FrameLatency, LoopStall, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP, UP_AFTER_MS, UP_EVERY_MS, UP_FAST, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
 
 function paced() {
   let now = 0;
@@ -116,7 +116,8 @@ test("lowered, the rate climbs back by UP, and by UP_FAST once nothing was held 
   assert.ok(by(UP)(steps[0]!), `first by UP: ${JSON.stringify(steps)}`);
   const fast = steps.findIndex(by(UP_FAST));
   assert.ok(fast > 0 && steps.slice(fast, -1).every(by(UP_FAST)), `then by UP_FAST: ${JSON.stringify(steps)}`);
-  assert.ok(steps.at(-1)!.at - steps[0]!.at <= UP_FAST_AFTER_MS + 3 * UP_EVERY_MS, `at the top soon: ${JSON.stringify(steps)}`);
+  // From about the link's 5 Mbit/s to 33 in under 5 s (by UP alone: 15 steps, 7.5 s).
+  assert.ok(steps.at(-1)!.at - steps[0]!.at < 5000, `at the top soon: ${JSON.stringify(steps)}`);
   assert.equal(rates.at(-1), top);
 });
 
@@ -224,13 +225,13 @@ test("frame latency: capture to drawn (the acknowledgement less half the round t
   assert.equal(latency.take(), null);
 });
 
-test("the most a view is asked at goes by its 画质: 原画 × 16 a pixel, 高清 × 10, else × 6, at most MAX_RATE", () => {
-  assert.equal(rateCeiling(1920, 1080), 1920 * 1080 * 6);
-  assert.equal(rateCeiling(1920, 1080, "smooth"), 1920 * 1080 * 6);
-  assert.equal(rateCeiling(1920, 1080, "hd"), 1920 * 1080 * 10);
+test("the most a view is asked at: × 16 a pixel (自动, 高清, 原画), 流畅 × 6, at most MAX_RATE", () => {
+  assert.equal(rateCeiling(1920, 1080), 1920 * 1080 * 16);
+  assert.equal(rateCeiling(1920, 1080, "hd"), 1920 * 1080 * 16);
   assert.equal(rateCeiling(1920, 1080, "original"), 1920 * 1080 * 16);
-  assert.equal(rateCeiling(3840, 2160), 3840 * 2160 * 6);
-  assert.equal(rateCeiling(3840, 2160, "hd"), MAX_RATE);
+  assert.equal(rateCeiling(1920, 1080, "smooth"), 1920 * 1080 * 6);
+  assert.equal(rateCeiling(3840, 2160), MAX_RATE);
+  assert.equal(rateCeiling(3840, 2160, "smooth"), 3840 * 2160 * 6);
   assert.equal(rateCeiling(3840, 2160, "original"), MAX_RATE);
   // A small picture's own (at least 1 Mbit/s) is never lowered.
   assert.equal(rateCeiling(200, 100, "original"), 1_000_000);

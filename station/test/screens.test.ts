@@ -438,9 +438,8 @@ test("a still screen's picture goes again sharper as the rate goes up, a key fra
     assert.equal(again[0], 1, "the picture again is a key frame");
     ts = Number(again.readBigUInt64BE(1));
   }
-  // Up from START_RATE by the pace's steps towards the most 自动 asks (1920×1080's, 12.4 Mbit/s: the last step to it
-  // less than SHARPER), and then no more.
-  assert.deepEqual(steps, [2_250_000, 3_375_000, 5_062_500, 7_593_750, 11_390_625]);
+  // Up from START_RATE by the pace's steps to the most 自动 asks (1920×1080's), and then no more.
+  assert.deepEqual(steps, [2_250_000, 3_375_000, 5_062_500, 7_593_750, 11_390_625, 17_085_938, 25_628_906, rateCeiling(1920, 1080)]);
   await time.adjust(5 * STILL_MS);
   await settle();
   assert.equal(view.keyframes, steps.length);
@@ -448,8 +447,8 @@ test("a still screen's picture goes again sharper as the rate goes up, a key fra
   await v.served;
 });
 
-test("原画 asked: the rate goes up to its pixels × 16; 高清 × 10; a client that says none, × 6", async () => {
-  for (const [quality, top] of [["original", rateCeiling(1920, 1080, "original")], ["hd", rateCeiling(1920, 1080, "hd")], [undefined, rateCeiling(1920, 1080)]] as const) {
+test("the rate goes up to its pixels × 16 whatever the 画质 but 流畅, × 6 there", async () => {
+  for (const [quality, top] of [["original", 1920 * 1080 * 16], ["hd", 1920 * 1080 * 16], ["smooth", 1920 * 1080 * 6], [undefined, 1920 * 1080 * 16]] as const) {
     const hub = new ScreenHub();
     const source = new FakeSource();
     source.make = () => new StillView();
