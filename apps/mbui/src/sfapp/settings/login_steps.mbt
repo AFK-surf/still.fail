@@ -145,13 +145,23 @@ fn login_steps(
   let url = text(job, "url")
   let user_code = text(job, "userCode")
   let copied = login_state.copied.get(k).unwrap_or(false)
-  // the same page in the station's browser (回到 … while its tab is open), in the ⋯ of the page's button
-  let elsewhere = match in_station {
+  // in the ⋯ of the page's button: its address copied (for a browser elsewhere), and where the station has one, the same
+  // page in the station's browser (回到 … while its tab is open)
+  let elsewhere = [
+    (
+      tr("common.link.copy"),
+      fn() {
+        @ui.current().copy_text(url)
+        (core.say)(tr("common.link.copied"))
+      },
+    ),
+  ]
+  match in_station {
     Some((name, open)) if flag(job, "browser") => {
       let label = fill(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, [("station", name)])
-      [(label, fn() { open(label) })]
+      elsewhere.push((label, fn() { open(label) }))
     }
-    _ => []
+    _ => ()
   }
   if job is None || state == "starting" {
     wait_line(c, fill("android-settings.login.making", [("provider", provider)]))

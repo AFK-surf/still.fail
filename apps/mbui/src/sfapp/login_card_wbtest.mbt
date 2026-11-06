@@ -90,6 +90,23 @@ test "a login whose page gives a code to paste back: 打开登录页, then the c
 }
 
 ///|
+test "a login's page copied from the ⋯ beside its button, its address on the clipboard and said so" {
+  for login in [
+    login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]),
+    login_of([("step", "open"), ("url", "https://app.devin.ai/login")]),
+    login_of([("step", "device"), ("code", "WXYZ-1234"), ("url", "https://github.com/login"), ("codeUrl", "https://app.devin.ai/login")]),
+  ] {
+    let calls : Array[Made] = []
+    let t = with_logins(login_core(calls, login))
+    t.click(Button, label="其他方式")
+    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.tap_text("复制链接")
+    assert_eq(t.clipboard(), "https://app.devin.ai/login")
+    assert_true(t.opened().is_empty(), msg="copied, nothing opened")
+  }
+}
+
+///|
 test "a device login: its code large, 复制并打开 copies it and opens its page" {
   let calls : Array[Made] = []
   let t = with_logins(

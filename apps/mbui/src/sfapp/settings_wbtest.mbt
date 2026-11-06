@@ -763,6 +763,16 @@ test "a subscription signing in: what to do in the browser, then the code typed 
 }
 
 ///|
+test "a subscription signing in: its page's address copied from the ⋯ beside 打开授权页面 (a browser elsewhere)" {
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login")
+  t.click(Button, label="其他方式")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("复制链接")
+  assert_true(t.clipboard().has_prefix("https://"), msg=t.clipboard())
+  assert_true(t.opened().is_empty(), msg="copied, nothing opened")
+}
+
+///|
 test "本机缓存: the drives' files kept, counted with the chats', let go when asked" {
   let t = settings_tester("kept")
   // (what is kept asked of the core as the page is first built: drawn with its answer)
