@@ -29,6 +29,7 @@ import {
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdits, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { installPeopleSinceIndex } from "./legacy-people-since.ts";
+import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, hasLegacyArchivePolicy, installArchivePolicyIndex } from "./archive-policy-index.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
@@ -379,6 +380,7 @@ export class Store {
   readonly #legacyLoginCards: boolean;
   readonly #legacyEdits: boolean;
   readonly #legacyEditsOldIndex: boolean;
+  readonly #legacyArchivePolicy: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -409,6 +411,7 @@ export class Store {
     this.#legacyLoginCards = hasLegacyLoginCards(db);
     this.#legacyEdits = usesLegacyEdits(db);
     this.#legacyEditsOldIndex = this.#legacyEdits && legacyEditsUseOldIndex(db);
+    this.#legacyArchivePolicy = hasLegacyArchivePolicy(db);
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -468,6 +471,7 @@ export class Store {
       addSmallJobColumn(db);
       addWaitWatchColumn(db);
       addWorkspaceColumns(db);
+      installArchivePolicyIndex(db);
       addOpenerTitle(db);
       addLeftColumn(db);
       addUsageColumns(db);
@@ -1739,7 +1743,7 @@ export class Store {
   /// A workspace's archive policy as last saved, and who saved it (`ws` null, or absent: the station's home workspace's);
   /// null until anyone has (the default then).
   archivePolicy(ws: string | null = null): { policy: Json; change: Json } | null {
-    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy WHERE ws IS ? ORDER BY id DESC LIMIT 1", ws);
+    const r = this.#one(this.#legacyArchivePolicy ? LEGACY_ARCHIVE_POLICY : ARCHIVE_POLICY, ws);
     if (!r) return null;
     const policy = parsed(r.policy);
     if (!policy) return null;
