@@ -7023,6 +7023,14 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 }
 
 ///|
+/// A layout more in this frame, for `why` (what is owed: Tree::owed_passes), counted where it lays anything out again.
+fn Tree::owed_again(self : Tree, why : String) -> Unit {
+  if self.layout_due {
+    self.owed_passes[why] = self.owed_passes.get(why).unwrap_or(0) + 1
+  }
+}
+
+///|
 /// The layout passes past a frame's one taken since it was made, by what asked for each (Tree::laid_out): the reads of
 /// layout told back still owed, a test's to say none more.
 pub fn Tree::owed_passes(self : Tree) -> Map[String, Int] {
@@ -7241,14 +7249,15 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     // is a fault, saying where it marked it)
     if self.due && self.layout_due {
       if why == "" {
-        // (a fault: stopped in a test's run, told the host once; where it goes on, laid out the next frame, not again
-        // in this one)
+        // (a fault: stopped in a test's run, told the host once; where it goes on (a host's run), this frame drawn and
+        // hit as this layout, all of it done, has it, and what was marked after it laid out at the next frame's moment,
+        // not again in this one)
         let said = "view: marked in its own layout, after it was laid out: \{self.laid_marked_at}"
         println(said)
         fault(said)
         break
       }
-      self.owed_passes[why] = self.owed_passes.get(why).unwrap_or(0) + 1
+      self.owed_again(why)
     }
   }
   self.laid_passes = 0
@@ -7261,6 +7270,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if placing && !self.withins_passing {
     self.withins_passing = true
     while self.withins_told() && self.due {
+      self.owed_again("under the pointer told")
       self.laid_out(upto)
     }
     self.withins_passing = false
@@ -7269,6 +7279,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     // placed: an order, what bounds input, what takes it; in this same pass)
     self.withins_passing = true
     while self.bars_near_told() && self.due {
+      self.owed_again("a column's bar near the pointer told")
       self.laid_out(upto)
     }
     self.withins_passing = false
