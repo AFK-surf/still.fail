@@ -733,6 +733,71 @@ describe("borrowed reset expiry details", () => {
     await t.close();
   });
 
+  for (const finalCount of [1, 2]) {
+    test(`a newer host reset count ${finalCount} is kept while an older borrowed read is in flight`, async () => {
+      const time = testClock();
+      const data = temp("borrowed-reset-in-flight");
+      const home = join(data, "homes", "bx");
+      mkdirSync(home, { recursive: true });
+      writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+      const jwt = ["{}", JSON.stringify({ exp: 86_400 }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+      let entered!: () => void;
+      let release!: () => void;
+      const lending = new Promise<void>((resolve) => { entered = resolve; });
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      const oldExpiries = ["2030-03-17T00:00:00Z", "2030-03-19T00:00:00Z"];
+      const expiries = ["2030-04-01T00:00:00Z", "2030-04-02T00:00:00Z"];
+      let count = 2;
+      let reads = 0;
+      let providerCount = 2;
+      const chatgpt = await provider((request) => {
+        if (request.url.endsWith("/usage")) {
+          providerCount = ++reads === 1 ? 2 : finalCount;
+          return { status: 200, body: { rate_limit_reset_credits: { available_count: providerCount } } };
+        }
+        return { status: 200, body: { credits: (reads === 1 ? oldExpiries : expiries).slice(0, providerCount).map((expires_at) => ({ status: "available", expires_at })) } };
+      });
+      const shared = {
+        status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [], resetCount: count, detail: null, checkedAt: 60_000 } }),
+        lendCodex: async () => {
+          entered();
+          await held;
+          writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: jwt } }));
+          return 86_400_000;
+        },
+        view: () => null,
+      };
+      const t = await rig({ data, shared, clock: time.clock, readQuota: async () => ({ state: "unavailable", windows: [], detail: null, checkedAt: 0 }), urls: { ...URLS, chatgpt: chatgpt.base } });
+      let wentBack = false;
+      try {
+        await t.call("POST", "/profiles/bx/check");
+        await lending;
+        count = 1;
+        await t.call("POST", "/profiles/bx/check");
+        assert.equal(t.view("bx")!.quota.resetCount, 1);
+        if (finalCount === 2) {
+          count = 2;
+          await t.call("POST", "/profiles/bx/check");
+        }
+        const stop = t.accounts.onChange(() => {
+          const quota = t.view("bx")?.quota;
+          if (quota?.resetCount !== finalCount || quota?.resetExpiries?.includes(Date.parse(oldExpiries[0]!))) wentBack = true;
+        });
+        release();
+        await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.[0] === Date.parse(expiries[0]!), "the new count's details read");
+        stop();
+        assert.equal(wentBack, false, "the earlier answer never replaces the newer count");
+        assert.equal(t.view("bx")!.quota.resetCount, finalCount);
+        assert.deepEqual(t.view("bx")!.quota.resetExpiries, expiries.slice(0, finalCount).map(Date.parse));
+        assert.equal(reads, 2, "the new count is read once after the earlier request finishes");
+      } finally {
+        release();
+        await t.close();
+        await chatgpt.close();
+      }
+    });
+  }
+
   test("missing reset details are retried on a later quota round, not in a loop", { timeout: 10_000 }, async () => {
     const data = temp("borrowed-reset-retry");
     const home = join(data, "homes", "bx");
