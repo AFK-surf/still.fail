@@ -154,11 +154,6 @@ test("the personal lock API requires its account, keeps each account's chain sep
 });
 
 test("a removed device cannot replace the cloud's longer chain with a fork or an old prefix", async () => {
-  // Exercise the station's actual hello admission without adding all of station to cloud's typecheck.
-  const stationModule = "../../station/src/mesh/serve.ts";
-  const { inLockBringing } = await import(stationModule);
-  const chainsModule = "../../station/src/mesh/person-chains.ts";
-  const { PersonChains } = await import(chainsModule);
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -188,10 +183,8 @@ test("a removed device cannot replace the cloud's longer chain with a fork or an
     const fork = entry(a, 2, hashOf(added), "device", { ...device(c), id: who.base }, personWs);
     const response = await alice("POST", path, { entries: [fork] });
     const said = await (await alice("GET", path)).json() as { entries: PersonalEntry[] };
-    const chains = new PersonChains();
-    const station = { home: () => ws, locked: () => ({ state: bound }), personChains: () => chains };
-    const admitted = { viewer: { sub, role: "owner", workspace: ws, device: endpoint, lockDevice: { base: who.base, proof: who.proof } } };
-    assert.throws(() => inLockBringing(station as never, admitted as never, "owner", endpoint, { lock: { person: said.entries } }), LockRefusal,
+    // This is the same rule the station's verifier applies to a fetched chain. Transport and restart are tested in station.
+    assert.throws(() => admitPerson(bound, who, said.entries), LockRefusal,
       "a station with no cached personal chain must not admit the fork's device from the cloud");
     assert.equal(response.status, 409);
     assert.deepEqual(said.entries, kept);
