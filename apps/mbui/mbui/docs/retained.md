@@ -376,8 +376,10 @@ an event's, finding where things are at its own moment: Tree::laid_now). What co
 column brought to what is to be in sight moves what it holds); a layout more is taken only for what is owed, counted by
 what asked for it (`Tree::owed_passes`: sizes told, once laid out, rows left out told, brought into sight, what is under
 the pointer and a bar near it told after placing), and anything else that marks the tree's layout after its own layout
-is a fault saying where it marked it (in a host's run: told, the frame drawn and hit as that layout has it, what was
-marked laid out at the next frame's moment). The reads
+is a fault saying where it marked it (in a host's run: told, that moment drawn and hit as its one layout has it, what
+was marked laid out as the tree is next laid out, at whatever moment that is). All the passes taken for one moment,
+however they come (what is under the pointer told after placing lays it out once more), are bounded together. The count
+names what is still to move; it proves nothing of determinism, which is the moment's one layout and the rules above. The reads
 still owed are named so (`owed_laid_size`, `owed_laid_window`, `owed_drawn_window`, `owed_went`, `owed_left_out`,
 `owed_once_laid_out`), counted by detlint's `layout-read-back`; as each is gone its count, and its passes, are.
 

@@ -779,6 +779,8 @@ pub struct Tree {
   told_otherwise : Array[String]
   /// the layout passes a frame took past its one, by what asked for each (Tree::laid_out): what is owed, only fewer
   owed_passes : Map[String, Int]
+  /// the layout passes taken for the moment being laid out, all of them (Tree::laid_out): bounded together
+  mut moment_passes : Int
   // where what marked it to be laid out again came from, in the layout pass under way: said with passes that never stop
   mut laid_marked_at : String
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
@@ -1118,6 +1120,7 @@ pub fn Tree::new(
     bringing_at: -1.0,
     laid_passes: 0,
     owed_passes: {},
+    moment_passes: 0,
     laid_marked_at: "",
     told_otherwise: [],
     measure,
@@ -7225,14 +7228,20 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
+  // (the passes counted for the moment it is asked at, however it comes to lay out again in it (what is under the
+  // pointer told after placing lays it out once more, in here): one bound for all of them)
+  if self.laying == 0 {
+    self.moment_passes = 0
+  }
   self.laying += 1
   let mut placing = false
   let mut ordered = false
   let mut passes = 0
   while self.due {
     passes += 1
+    self.moment_passes += 1
     self.laid_passes = passes
-    if passes > laid_passes_most {
+    if self.moment_passes > laid_passes_most {
       let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
       println(said)
       fault(said)
@@ -7249,9 +7258,10 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     // is a fault, saying where it marked it)
     if self.due && self.layout_due {
       if why == "" {
-        // (a fault: stopped in a test's run, told the host once; where it goes on (a host's run), this frame drawn and
-        // hit as this layout, all of it done, has it, and what was marked after it laid out at the next frame's moment,
-        // not again in this one)
+        // (a fault: what marked it read the layout to change what is laid out, the defect itself. In a test's run it
+        // stops there. In a host's it is told once, and this moment is drawn and hit as its one layout, all of it done,
+        // has it: what was marked is laid out as the tree is next laid out, at whatever moment that is (an input's or a
+        // frame's), as any change told then; nothing is drawn half laid out)
         let said = "view: marked in its own layout, after it was laid out: \{self.laid_marked_at}"
         println(said)
         fault(said)
