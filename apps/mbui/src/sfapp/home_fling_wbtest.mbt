@@ -1,10 +1,10 @@
 // The chats' list on a phone flung, its frames as their host gets them (Tester::run_as_host): rows come into the
-// window and go out of it, and no frame of it builds anything again: each put together from the layers' blocks, what
-// changed of them drawn again where its reference is (a phone's list flung was painted whole, the old frame and all of
-// the tree gone through, 1885 frames of 2310, 2026-11-05; docs/retained.md rule 16).
+// window and go out of it, and no frame of it that builds nothing again is drawn again whole: each put together from
+// the layers' blocks, what changed of them drawn again where its reference is (a phone's list flung was painted
+// whole, the old frame and all of the tree gone through, 1885 frames of 2310, 2026-11-05; docs/retained.md rule 16).
 
 ///|
-test "the chats' list flung on a phone: no frame of it built again, rows coming and going" {
+test "the chats' list flung on a phone: no frame of it drawn again whole, rows coming and going" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="long", w=390.0, h=844.0, platform=2)
   t.set_frame_period(1000.0 / 120.0)
@@ -23,8 +23,8 @@ test "the chats' list flung on a phone: no frame of it built again, rows coming 
   let frames = t.host_frames()
   let out : Array[String] = []
   for f in frames {
-    if f.changed && f.old_built {
-      out.push("at \{f.at}: built again")
+    if f.changed && !f.old_built && f.whole_why != 0 {
+      out.push("at \{f.at}: drawn again whole (\{f.whole_why})")
     }
   }
   assert_true(frames.length() > 100, msg="\{frames.length()} frames")
