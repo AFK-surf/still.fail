@@ -902,6 +902,8 @@ pub struct Tree {
   mut modals_held : Int
   mut modals_asked : Bool
   mut modals_at : Double
+  /// the change whose modal state will be published, including its layout work if notification is deferred
+  mut modals_budget : (Ref[Int], Ref[Bool])?
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
@@ -1212,6 +1214,7 @@ pub fn Tree::new(
     modals_held: 0,
     modals_asked: false,
     modals_at: -1.0,
+    modals_budget: None,
     held: None,
     gesture_tapped: false,
     taps_withheld: false,
@@ -1939,6 +1942,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.hosting = -1
   self.modals.clear()
   self.modals_due = false
+  self.modals_budget = None
   self.back_said_at.clear()
   self.keys_said_at.clear()
   // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
@@ -4163,6 +4167,7 @@ fn Tree::modals_told(self : Tree) -> Unit {
   }
   self.modals_due = true
   self.modals_at = self.cause_now()
+  self.modals_budget = self.brought_budget
   self.modals_settled()
 }
 
@@ -4182,21 +4187,21 @@ fn Tree::modals_settled(self : Tree) -> Unit {
   }
   if self.modals_due && !self.modals_asked {
     self.modals_asked = true
-    // If this was scheduled by a bring, callbacks it causes still share that bring's layout budget even when
-    // after_flush has to queue this notification until the current change finishes.
-    let budget = self.brought_budget
     // A layout can pull properties from a still-open signal batch. Their values are available to geometry now;
     // their input/focus notifications belong to the whole change, after all structural readers have returned.
     @signals.after_flush(fn() {
-      let was_budget = self.brought_budget
-      if was_budget is None { self.brought_budget = budget }
-      defer { self.brought_budget = was_budget }
       self.modals_asked = false
       if self.gone || self.committing > 0 || self.modals_held > 0 || self.laying > 0 || self.layouts_active > 0 {
         return
       }
       if self.modals_due {
+        // Another change may have replaced the one that scheduled this callback. Use the latest notification's
+        // budget, including when it has none, rather than the caller's or the original notification's.
+        let was_budget = self.brought_budget
+        self.brought_budget = self.modals_budget
+        defer { self.brought_budget = was_budget }
         self.modals_due = false
+        self.modals_budget = None
         let was = self.cause_at
         self.cause_at = self.modals_at
         self.modals_now()
@@ -7079,6 +7084,9 @@ fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
 
 ///|
 fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
+  // A before-due layout belongs to the selected deadline even if that layout changes the timeline and makes the
+  // loop choose again. Keep its budget until an item at that moment actually runs.
+  let mut before_due_budget : (Double, (Ref[Int], Ref[Bool]))? = None
   while true {
     let mut next = -1
     let mut next_at = 0.0
@@ -7109,15 +7117,21 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     // Each deadline is a separate change, even when one frame advances across many of them. Its layouts and their
     // reentrant notifications share a bound; the next deadline and the outer frame retain their own bounds.
     let was_budget = self.brought_budget
-    if was_budget is Some(_) { self.brought_budget = Some((Ref(0), Ref(false))) }
+    let budget = match before_due_budget {
+      Some((at, b)) if at == next_at => b
+      _ => (Ref(0), Ref(false))
+    }
+    self.brought_budget = Some(budget)
     // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
     // (View::laid_before_due): asked once a moment, however many are due then or are said at it as it comes, and not
     // at all while none asks; what that layout said is due chosen among the rest again)
     if self.moves_before_due(next_at) {
       self.laid_before_due_at(next_at)
+      before_due_budget = Some((next_at, budget))
       self.brought_budget = was_budget
       continue
     }
+    if before_due_budget is Some((at, _)) && at == next_at { before_due_budget = None }
     let d = self.timeline[next]
     let was = self.cause_at
     self.cause_at = next_at

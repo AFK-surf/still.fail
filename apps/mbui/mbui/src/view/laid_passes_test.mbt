@@ -74,8 +74,10 @@ test "independent deadlines do not share one frame's layout pass limit" {
     }, time=fn() { 0.0 })
     tree.frame(200.0, 100.0, now=0.0) |> ignore
     let seen : Array[Double] = []
+    let times : Array[Double] = []
     for i in 1..=65 {
       let size = i.to_double()
+      times.push(size)
       child.val.unwrap().at_moment(size, fn() {
         width.set(size)
         tree.laid_as_now()
@@ -83,8 +85,8 @@ test "independent deadlines do not share one frame's layout pass limit" {
       }) |> ignore
     }
     if painted {
-      for i in 1..=65 {
-        tree.frame(200.0, 100.0, now=i.to_double()) |> ignore
+      for at in times {
+        tree.frame(200.0, 100.0, now=at) |> ignore
       }
     } else {
       tree.frame(200.0, 100.0, now=65.0) |> ignore
