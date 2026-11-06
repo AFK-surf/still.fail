@@ -88,11 +88,12 @@ fn Ctx::corners_found(self : Ctx) -> Unit {
 }
 
 ///|
-/// Whether node `p` is a row whose corner follows its container's (`Inner`, `InnerOr`): its contents lie in the
-/// row's corners even when enlarged text or wrapping makes the row tall.
+/// Whether node `p` is a row whose corner says it follows its container's (`Inner`, `InnerOr`: a list's row the
+/// ladder's inset in), wider than tall: a row of the list whether it can be pressed or not, what is in it its, as in a
+/// pressed row (pressed_row).
 fn Ctx::inner_row(self : Ctx, p : Int) -> Bool {
   let n = self.nodes[p]
-  if n.dir != Row && n.fw <= n.fh * 1.5 {
+  if n.fw <= n.fh * 1.5 {
     return false
   }
   // A node of the window's tree can also say this corner; it is temporary here, not in the old frame's index.
@@ -286,7 +287,6 @@ fn[T] Ctx::with_tree_nodes_for(
     let parent = if holder >= 0 { at[holder] } else { -1 }
     let n = Node::new()
     n.kind = if d.image is Some(_) || d.picture is Some(_) { kind_image } else { kind_box }
-    n.dir = if tree.corner_row(d.id) { Row } else { Column }
     n.shapes = d.shapes
     n.lines = d.lines
     n.x = d.x
@@ -462,6 +462,7 @@ fn tree_style_corners_after_old_layout(c : Ctx) -> Unit {
     Some(tree) if !old_whole.val && !old_boxes.is_empty() && tree.has_style_corners() => tree
     _ => return
   }
+  if !old_boxes.keys().any(fn(id) { tree.style_corners_hold(id) }) { return }
   let old_count = c.count
   let saved_inners = c.inners.copy()
   let saved_inners_or = c.inners_or.copy()

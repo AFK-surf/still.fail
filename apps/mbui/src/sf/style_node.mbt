@@ -50,32 +50,6 @@ fn node_style_bound(len : @ui.Len?) -> @view.StyleSize? {
 }
 
 ///|
-/// Linked corners of a retained node follow its tree's window and theme, not the old frame's current context.
-fn node_style_radius(theme : @ui.Theme, radius : @ui.Radius) -> Double {
-  match radius {
-    Linked(link) => link.radius(@ui.tree_corner_roots_now())
-    LinkedEach(a, b, c, d) => {
-      let roots = @ui.tree_corner_roots_now()
-      theme.corner(Corners(a.radius(roots), b.radius(roots), c.radius(roots), d.radius(roots)))
-    }
-    InnerOr(own) => node_style_radius(theme, own)
-    _ => theme.corner(radius)
-  }
-}
-
-///|
-fn node_style_corners(radius : @ui.Radius) -> (Double, Double, Double, Double)? {
-  match radius {
-    LinkedEach(a, b, c, d) => {
-      let roots = @ui.tree_corner_roots_now()
-      Some((a.radius(roots), b.radius(roots), c.radius(roots), d.radius(roots)))
-    }
-    InnerOr(own) => node_style_corners(own)
-    _ => radius.each().map(fn(c) { (c[0], c[1], c[2], c[3]) })
-  }
-}
-
-///|
 /// Lay `look` on the already made `v`, following its theme, narrowness, hand and visible keyboard focus. In a row,
 /// `w=Full` and `w=Grow` take the room left along it; in a column `h` does. `selected` and `disabled` give the
 /// caller-owned states where the style has those blocks. What the style does not say belongs to the node's maker;
@@ -126,7 +100,7 @@ pub fn style_node(
     }
     let corners = match q.radius {
       None => None
-      Some(radius) => Some(node_style_corners(radius))
+      Some(radius) => Some(radius.each_for_tree().map(fn(c) { (c[0], c[1], c[2], c[3]) }))
     }
     let corner_rule = match q.radius {
       Some(Inner) => Some(@view.StyleCornerRule::FromContainer)
@@ -173,7 +147,7 @@ pub fn style_node(
         Some(JStart) => Some(JustifyStart)
       },
       ground: q.bg.map(fn(c) { th.unwrap().color(c) }),
-      radius: q.radius.map(fn(r) { node_style_radius(th.unwrap(), r) }),
+      radius: q.radius.map(fn(r) { th.unwrap().corner_for_tree(r) }),
       corners,
       corner_links: match q.radius { Some(r) => r.links(); None => None },
       corner_rule,

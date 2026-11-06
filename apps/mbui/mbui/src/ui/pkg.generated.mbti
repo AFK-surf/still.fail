@@ -2279,6 +2279,7 @@ pub(all) enum Radius {
   LinkedEach(@paint.CornerOf, @paint.CornerOf, @paint.CornerOf, @paint.CornerOf)
 }
 pub fn Radius::each(Self) -> FixedArray[Double]?
+pub fn Radius::each_for_tree(Self) -> FixedArray[Double]?
 pub fn Radius::links(Self) -> FixedArray[@paint.CornerOf]?
 
 pub(all) struct RadiusScale {
@@ -3112,6 +3113,7 @@ pub(all) struct Theme {
 }
 pub fn Theme::color(Self, Color) -> Int64
 pub fn Theme::corner(Self, Radius) -> Double
+pub fn Theme::corner_for_tree(Self, Radius) -> Double
 pub fn Theme::dark() -> Self
 pub fn Theme::ios_dark() -> Self
 pub fn Theme::ios_light() -> Self

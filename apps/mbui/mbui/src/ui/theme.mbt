@@ -687,6 +687,21 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
 }
 
 ///|
+/// Resolve a corner for a node of the window's tree. Linked corners follow its window and theme, rather than the old
+/// frame's current context; other corners resolve as in the old frame.
+pub fn Theme::corner_for_tree(self : Theme, r : Radius) -> Double {
+  match r {
+    Linked(c) => c.radius(tree_corner_roots_now())
+    LinkedEach(a, b, c, d) => {
+      let at = tree_corner_roots_now()
+      dmax(dmax(a.radius(at), b.radius(at)), dmax(c.radius(at), d.radius(at)))
+    }
+    InnerOr(own) => self.corner_for_tree(own)
+    _ => self.corner(r)
+  }
+}
+
+///|
 /// The corners of `r` each its own (top left, top right, bottom right, bottom left), where they are not one: `Corners`,
 /// alone or as what `InnerOr` keeps.
 pub fn Radius::each(self : Radius) -> FixedArray[Double]? {
@@ -698,6 +713,19 @@ pub fn Radius::each(self : Radius) -> FixedArray[Double]? {
     }
     InnerOr(own) => own.each()
     _ => None
+  }
+}
+
+///|
+/// Each corner resolved against the window's tree, following its window and theme where linked.
+pub fn Radius::each_for_tree(self : Radius) -> FixedArray[Double]? {
+  match self {
+    LinkedEach(a, b, c, d) => {
+      let at = tree_corner_roots_now()
+      Some(FixedArray::from_array([a.radius(at), b.radius(at), c.radius(at), d.radius(at)]))
+    }
+    InnerOr(own) => own.each_for_tree()
+    _ => self.each()
   }
 }
 

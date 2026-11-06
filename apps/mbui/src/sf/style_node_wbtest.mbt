@@ -579,7 +579,7 @@ test "a transparent rounded row becomes an inner corner's container when it star
 }
 
 ///|
-test "an unpressed tall inner row is the avatar's corner container as in the old tree" {
+test "an unpressed tall inner row and its avatar follow the old corner rule" {
   let old = @ui.Tester::new(fn(c) {
     c.with_theme(ui_theme(), fn() {
       c.box(w=Px(220.0), h=Px(180.0), pad=8.0, radius=26.0, bg=0x333333FFL, clip=true, fn() {
@@ -700,7 +700,7 @@ test "an around styled corner follows a hosted old view's contents" {
 }
 
 ///|
-test "an inner styled corner uses its tree theme when another node hosts an old view" {
+test "an inner styled corner uses its tree theme when it hosts an old view" {
   let no_fit = style_old_inner(8.0, 24.0, InnerOr(Exact(6.0)))
   let fit : @signals.Signal[@ui.CornerFit?] = @signals.signal(
     Some({ least: 20.0, most: 40.0, near: 0.0, far: 20.0 }),
@@ -716,10 +716,10 @@ test "an inner styled corner uses its tree theme when another node hosts an old 
       card.box(fn(v) {
         made.val = Some(v)
         style_node(v, fn() { @ui.style(w=Full, h=Full, radius=InnerOr(Exact(6.0))) })
+        @ui.old(v, fn(c) { c.box(w=Px(4.0), h=Px(4.0), fn() {  }) |> ignore })
+        .width(Is(Some(4.0))).height(Is(Some(4.0))) |> ignore
       }) |> ignore
     }) |> ignore
-    @ui.old(root, fn(c) { c.box(w=Px(4.0), h=Px(4.0), fn() {  }) |> ignore })
-    .width(Is(Some(4.0))).height(Is(Some(4.0))) |> ignore
   })
   t.draw()
   assert_eq(style_node_drawn(made.val.unwrap()).radius, 6.0)

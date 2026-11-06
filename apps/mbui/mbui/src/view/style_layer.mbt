@@ -333,10 +333,16 @@ pub fn Tree::has_style_corners(self : Tree) -> Bool {
 }
 
 ///|
-/// Whether this node lays its children across, as the shared corner rule sees a row.
-pub fn Tree::corner_row(self : Tree, id : NodeId) -> Bool {
+/// Whether a hosted node is inside a layout-dependent styled corner.
+pub fn Tree::style_corners_hold(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
-  self.nodes[id.at].flex.style.direction is (Row | RowReverse)
+  let mut at = id.at
+  while at >= 0 {
+    let n = self.nodes[at]
+    if self.style_corners.contains({ at, gen: n.gen }) { return true }
+    at = n.parent
+  }
+  false
 }
 
 ///|

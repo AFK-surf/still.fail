@@ -128,6 +128,18 @@ test "corners of the window's tree, held on every frame at rest (Tester::hold_co
 }
 
 ///|
+test "a tree theme's corner ladder enables the held check without an old frame ladder" {
+  let follow = concentric(20.0, 6.0)
+  let t = tree_card(tree_ground(20.0), corners_held=false)
+  set_tree_theme(fn() { { ..Theme::light(), corner_ladder: [34.0, 26.0, 20.0, 10.0] } })
+  t.draw()
+  let c = g()
+  let faults = c.held_corner_faults()
+  assert_true(c.corner_ladder.is_empty())
+  assert_true(wants(faults, follow), msg=faults.join("\n"))
+}
+
+///|
 /// A card of the tree, 200×120, its ground 20 round, cutting what it holds to it (`clips`) or not, holding what
 /// `inside` makes there as big as it.
 fn tree_cut_card(inside : (@view.View) -> Unit, clips : Bool) -> Tester {

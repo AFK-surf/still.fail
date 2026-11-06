@@ -3023,8 +3023,17 @@ fn Tester::hold_corners(self : Tester) -> Unit {
 /// and nothing on it moves (Ctx's `motion_left`, the window's tree's drawn as moving too: view_frame_end), the frame's
 /// and the window's tree's nodes (Ctx::with_tree_nodes); none otherwise.
 fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
-  if self.corner_ladder.is_empty() || self.frame_by is Some(_) || self.motion_left || self.page_in_hand {
+  if self.frame_by is Some(_) || self.motion_left || self.page_in_hand {
     return []
+  }
+  if self.corner_ladder.is_empty() {
+    let tree_has_ladder = match view_app.val {
+      Some(_) if !old_whole.val => @signals.untracked(fn() {
+        tree_theme_of.get() is Some(_) && !tree_theme().corner_ladder.is_empty()
+      })
+      _ => false
+    }
+    if !tree_has_ladder { return [] }
   }
   self.all_corner_faults()
 }
