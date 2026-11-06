@@ -84,6 +84,121 @@ fn indexed_list(n : Int) -> (Tester, IndexedRows, NodeRowsIndexed[(String, Doubl
 }
 
 ///|
+/// A changed row can leave the source without a leaving animation. If it returns under the same key after that
+/// motion is over (or cancelled), a later change must not start from the old incarnation's measured height.
+fn indexed_gone_during_change(cancel : Bool) -> Double raise {
+  let src = IndexedRows::new(30)
+  let watching = @signals.signal(true)
+  let out : Ref[NodeRowsIndexed[(String, Double)]?] = Ref(None)
+  let t = Tester::new(fn(_) { }, w=300.0, h=300.0, stable=false)
+  set_view_app(fn(root) {
+    let rows = ListRows::new().in_node_indexed(root, src.source(), fn(i) { src.item(i) }, fn() {
+      let all = src.pending.copy()
+      src.pending.clear()
+      all
+    }, fn(k) { src.at.get(k).map(fn(_) { 0 }) }, watched=fn() { watching.get() }, comes=fn(_) { false })
+    out.val = Some(rows)
+    root.height(Is(Some(300.0))).scrolls_anchored(@view.Scroll::list(), fn() { [] }, est=60.0, indexed=rows.source,
+      rooms=rows.room_now, fn(row, k) {
+        row.height(By(fn() { (rows.item_of)(k).map(fn(x) { x.0.1 }) })) |> ignore
+      }) |> ignore
+  })
+  t.draw()
+  t.run_for(row_size_ms)
+  let rows = out.val.unwrap()
+  (rows.room)("m0", 60.0) |> ignore
+  src.pending.push(Set("m0"))
+  src.rev.set(src.rev.get() + 1)
+  t.draw()
+  assert_true((rows.moving)().contains("m0"), msg="the old row is changing")
+  // An indexed source reports a removal in removed_since, with no row kept for a leave transition.
+  src.keys.remove(0) |> ignore
+  src.at.remove("m0")
+  for i, k in src.keys { src.at[k] = i }
+  src.gone.push((src.rev.get() + 1, "m0"))
+  src.rev.set(src.rev.get() + 1)
+  t.draw()
+  assert_true((rows.moving)().contains("m0"), msg="the original cause still protects the old height")
+  if cancel {
+    watching.set(false)
+    t.draw()
+    watching.set(true)
+    t.draw()
+  } else {
+    t.run_for(row_size_ms + 1.0)
+  }
+  assert_true(!(rows.moving)().contains("m0"), msg="the old cause ended or was cancelled")
+  // Keep the replacement out of the laid-out window until its new height is queried below.
+  t.scroll_to(0)
+  t.draw()
+  assert_true(t.visible().1 < 25, msg="the viewport is away from the end: \{t.visible()}")
+  @signals.start_batch()
+  src.came("m0")
+  src.pending.push(Set("m0"))
+  @signals.end_batch()
+  t.draw()
+  assert_true(t.visible().1 < 25, msg="the replacement remains out of view: \{t.visible()}")
+  assert_true((rows.moving)().contains("m0"), msg="the replacement has its own change")
+  (rows.room)("m0", 120.0).height
+}
+
+///|
+test "an indexed row removed while changing forgets its old height when its cause ends" {
+  assert_eq(indexed_gone_during_change(false), 120.0)
+}
+
+///|
+test "an indexed row removed while changing forgets its old height when its cause is cancelled" {
+  assert_eq(indexed_gone_during_change(true), 120.0)
+}
+
+///|
+test "an indexed list forgets removed rows when their source no longer has the removal history" {
+  let src = IndexedRows::new(30)
+  let original = src.source()
+  let expired = Ref(false)
+  let source : @view.AnchoredSource[String] = {
+    ..original,
+    removed_since: fn(rev) { if expired.val { None } else { (original.removed_since)(rev) } },
+  }
+  let out : Ref[NodeRowsIndexed[(String, Double)]?] = Ref(None)
+  let t = Tester::new(fn(_) { }, w=300.0, h=300.0, stable=false)
+  set_view_app(fn(root) {
+    let rows = ListRows::new().in_node_indexed(root, source, fn(i) { src.item(i) }, fn() {
+      let all = src.pending.copy()
+      src.pending.clear()
+      all
+    }, fn(k) { src.at.get(k).map(fn(_) { 0 }) }, comes=fn(_) { false })
+    out.val = Some(rows)
+    root.height(Is(Some(300.0))).scrolls_anchored(@view.Scroll::list(), fn() { [] }, est=60.0, indexed=rows.source,
+      rooms=rows.room_now, fn(row, k) {
+        row.height(By(fn() { (rows.item_of)(k).map(fn(x) { x.0.1 }) })) |> ignore
+      }) |> ignore
+  })
+  t.draw()
+  t.run_for(row_size_ms)
+  let rows = out.val.unwrap()
+  (rows.room)("m0", 60.0) |> ignore
+  src.keys.remove(0) |> ignore
+  src.at.remove("m0")
+  for i, k in src.keys { src.at[k] = i }
+  expired.val = true
+  src.rev.set(src.rev.get() + 1)
+  t.draw()
+  expired.val = false
+  t.scroll_to(0)
+  t.draw()
+  assert_true(t.visible().1 < 25, msg="the viewport is away from the end: \{t.visible()}")
+  @signals.start_batch()
+  src.came("m0")
+  src.pending.push(Set("m0"))
+  @signals.end_batch()
+  t.draw()
+  assert_true(t.visible().1 < 25, msg="the replacement remains out of view: \{t.visible()}")
+  assert_eq((rows.room)("m0", 120.0).height, 120.0)
+}
+
+///|
 /// How many reads of its rows one row coming at the end of `n` takes, from the frame it comes to its room open.
 fn indexed_reads_for_one(n : Int) -> Int {
   let (t, src, _) = indexed_list(n)
