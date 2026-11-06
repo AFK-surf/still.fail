@@ -389,6 +389,8 @@ pub struct Ctx {
   mut active : Int
   mut focus : Int
   clicked : Array[Int]
+  /// Source presses already forwarded to an immediate callback, kept until the build takes those clicks.
+  forwarded_presses : Array[Int]
   /// what was clicked twice since the last frame, the second within double_click_ms of the first and where it was
   /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
   double_clicked : Array[Int]
@@ -762,6 +764,7 @@ fn Ctx::new() -> Ctx {
     active: 0,
     focus: 0,
     clicked: [],
+    forwarded_presses: [],
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
     click_at: None,
@@ -1006,6 +1009,8 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.press_on.shrink_to_fit()
   self.clicked.clear()
   self.clicked.shrink_to_fit()
+  self.forwarded_presses.clear()
+  self.forwarded_presses.shrink_to_fit()
   self.double_clicked.clear()
   self.double_clicked.shrink_to_fit()
   self.press_chain.clear()

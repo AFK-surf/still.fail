@@ -461,6 +461,27 @@ test "label does not activate a disabled old input callback" {
 }
 
 ///|
+test "a label does not queue an action after its callback removes the target" {
+  let showing = @signals.signal(true)
+  let presses = Ref(0)
+  let queued = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let id = c.id("removable target")
+    label(c, "Remove target", for_id=id) |> ignore
+    if c.action_asked(id, Activate) { queued.val = true }
+    if showing.get() {
+      c.on_press(id, fn() { presses.val += 1; showing.set(false) })
+      let node = c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  })
+      c.semantics(node, Button, id~, label="Target", actions=[Activate])
+    }
+  })
+  t.tap_text("Remove target")
+  t.draw()
+  assert_eq(presses.val, 1)
+  assert_false(queued.val)
+}
+
+///|
 test "an old label forwards its tap to a retained input callback" {
   let target = @signals.signal(0)
   let presses = Ref(0)

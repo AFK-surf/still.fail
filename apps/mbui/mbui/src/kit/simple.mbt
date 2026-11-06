@@ -18,9 +18,7 @@ pub fn label(
   let id = if for_id == 0 { 0 } else { c.id("\u{2}label/" + text) }
   let r = c.interact(id, focusable=false)
   if for_id != 0 {
-    // Forward the label's own press while its input is being delivered. A callback-backed target can then act at
-    // that input; an older target reading actions in its build still receives its ordinary queued action.
-    c.on_press(id, fn() { c.ask_action(for_id, if field { Focus } else { Activate }) })
+    c.forward_press(id, for_id, if field { Focus } else { Activate }, r.clicked)
   }
   c.box(id~, fn() {
     c.text(text, size=size.unwrap_or(t.font), weight~, color=color.unwrap_or(t.fg), wrap=false) |> ignore

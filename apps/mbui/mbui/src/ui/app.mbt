@@ -409,6 +409,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
     c.clicked.clear()
+    c.forwarded_presses.clear()
     c.double_clicked.clear()
     c.click_at = None
     c.tapped = None

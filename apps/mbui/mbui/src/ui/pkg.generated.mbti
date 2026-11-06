@@ -1240,6 +1240,7 @@ pub fn Ctx::focused_id(Self) -> Int32
 pub fn Ctx::follow_back(Self, (@view.BackStep) -> Unit) -> Unit
 pub fn Ctx::forget_parts(Self) -> Unit
 pub fn[X] Ctx::fork(Self, async () -> X, name? : String) -> @effect.Fiber[X]
+pub fn Ctx::forward_press(Self, Int32, Int32, Action, Bool) -> Unit
 pub fn Ctx::frame_dt(Self) -> Double
 pub fn Ctx::frame_ms(Self) -> Double
 pub fn Ctx::frame_number(Self) -> Int32
