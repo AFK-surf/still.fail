@@ -25,6 +25,9 @@ priv struct AnchoredIn[K] {
   indexed : (Int, Int)?
   words : Int
   x : Double
+  /// the moment it is where it is at, while it goes on by itself (Scroll::goes_on), for a list that tells what came in
+  /// sight (`seen`: laid out up to that moment, what it went across by itself is told); -1 at rest or telling none
+  glide_at : Double
   foot : Double
   put : (K, Double)?
   put_n : Int
@@ -57,6 +60,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.indexed == b.indexed &&
   a.words == b.words &&
   a.x == b.x &&
+  a.glide_at == b.glide_at &&
   a.foot == b.foot &&
   a.put_n == b.put_n &&
   a.kept == b.kept &&
@@ -202,6 +206,18 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // is what is not among them, and what it went across as it went on by itself)
   let seen_last : Set[K] = Set::new()
   let seen_moves : Ref[Int] = Ref(s.moved_at_once)
+  // (and what it went across by itself up to a moment come due, laid out at it before what is due then may let it go:
+  // the same whether frames came on the way or none; where it has gone on by itself since it was last laid out, at a
+  // moment past that: at rest, none)
+  let seen_laid_at = Ref(-1.0)
+  if seen is Some(_) {
+    self.laid_before_due(fn(at) {
+      match s.glides_till() {
+        Some(end) => at > seen_laid_at.val && end > seen_laid_at.val
+        None => false
+      }
+    })
+  }
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -415,6 +431,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           indexed: indexed.map(fn(s) { (s.snapshot)() }),
           words: if fixed_estimate { self.words_redone() } else { 0 },
           x: s.drawn(self.tree),
+          glide_at: if seen is Some(_) && s.goes_on() { self.tree.drawn_at() } else { -1.0 },
           foot: foot_room(),
           put: put_at.get(),
           put_n: put_n.get(),
@@ -974,6 +991,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // painted before what comes next or not (Tree::said_after_laid))
         match seen {
           Some(tell) => {
+            seen_laid_at.val = c.glide_at
             let at_once = first_laid || s.moved_at_once != seen_moves.val
             seen_moves.val = s.moved_at_once
             let came : Array[K] = []
