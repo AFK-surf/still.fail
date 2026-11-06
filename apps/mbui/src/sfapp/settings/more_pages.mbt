@@ -723,14 +723,20 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
 }
 
 ///|
-/// A station's rule's draft (`decisionForm`) opened for the page that shows it (src/sfpages automatic_decisions.mbt
-/// completion_node, once the station's section came in sight there; never by a section being made), by the name it is
-/// then known by, told `opened` once the core has opened it; dropped by decision_form_drop as that page is let go.
-pub fn decision_form_open(core : Core, station : String, opened? : (String) -> Unit = fn(_) {  }) -> String {
+/// A new name for a station's rule's draft (`decisionForm`): what the page that asks for it holds it by from then on
+/// (decision_form_open).
+pub fn decision_form_name() -> String {
   profile_forms.val += 1
-  let f = "mbui-decision-" + profile_forms.val.to_string()
-  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]), then=fn(_) { opened(f) })
-  f
+  "mbui-decision-" + profile_forms.val.to_string()
+}
+
+///|
+/// A station's rule's draft `form` (decision_form_name's) opened for the page that shows it (src/sfpages
+/// automatic_decisions.mbt completion_node, once the station's section came in sight there; never by a section being
+/// made): what went wrong said, and told `failed`, the core not having opened it. Dropped by decision_form_drop as that
+/// page is let go: the core takes them in the order asked, one dropped before its opening was answered opened first.
+pub fn decision_form_open(core : Core, station : String, form : String, failed? : (Json) -> Unit = fn(_) {  }) -> Unit {
+  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]), failed~)
 }
 
 ///|

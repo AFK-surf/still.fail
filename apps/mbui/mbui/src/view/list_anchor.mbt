@@ -107,7 +107,8 @@ pub(all) struct AnchoredSource[K] {
 /// keys by position instead of `keys`. `sighted` is told, once each frame is painted, the rows that came in sight or
 /// within `ahead` of it, or were gone past on the way, since it was last laid out, and how wide the list is
 /// laid out (what a row's pictures are decoded for: the same width the rows are drawn at): the same rows whether the frames
-/// between were many or one (what asks for a row's pictures asks by it, never by the row being made).
+/// between were many or one (what asks for a row's pictures asks by it, never by the row being made); nothing once it
+/// is let go before the frame is painted.
 pub fn[K : Hash + Eq] View::scrolls_anchored(
   self : View,
   s : Scroll,
@@ -958,7 +959,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             sighted_h.val = h
             if !fresh_in.is_empty() || !left.is_empty() || moved {
               let s : Sighted[K] = { came: fresh_in, left, width: l.width, rows, height: h, cover: covered }
-              self.tree.said_after_paint(fn() { tell(s) })
+              // (to the list still there: one let go before the frame is painted (laid out at an input's moment, the
+              // frame after another input) tells nothing)
+              self.tree.said_after_paint(fn() { if held.live() is Some(_) { tell(s) } })
             }
           }
           None => ()
@@ -997,7 +1000,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               seen_last.add(k)
             }
             if !came.is_empty() {
-              self.tree.said_after_paint(fn() { tell(came) })
+              // (to the list still there, as sighted's)
+              self.tree.said_after_paint(fn() { if held.live() is Some(_) { tell(came) } })
             }
           }
           None => ()
