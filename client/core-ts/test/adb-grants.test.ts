@@ -6,7 +6,7 @@ import type { Mesh } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
-import { personalStub } from "./adb-personal-stub.ts";
+import { personalStub, takeAll } from "./adb-personal-stub.ts";
 
 test("taking back a chat takes back every grant behind its one row", async () => {
   const host = new FakeHost();
@@ -24,6 +24,7 @@ test("taking back a chat takes back every grant behind its one row", async () =>
   };
   const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
   const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => false });
+  takeAll(adb);
   const exp = Math.floor(host.nowMs() / 1000) + 3600;
   const grant = (id: string, chat: string) => ({ id, chat, session: id, reason: "debug", status: "granted", exp, at: 1 });
   try {
@@ -57,6 +58,7 @@ test("a late whole read does not bring back a grant already taken back", async (
   const link = { adb: () => Effect.promise(() => { started(); return waiting; }) };
   const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
   const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => false });
+  takeAll(adb);
   const grant = { id: "p1", chat: "chat-a", session: "s1", reason: "debug", status: "granted", exp: Math.floor(host.nowMs() / 1000) + 3600, at: 1 };
   try {
     adb.heard("ws/st", grant);

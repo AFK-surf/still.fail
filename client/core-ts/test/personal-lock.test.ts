@@ -168,7 +168,7 @@ function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>) {
   const store = new Store(host, runner);
   const link = { adb: () => Effect.succeed({ status: 200, body: { take: Effect.succeed(null) } }) };
   const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
-  const adb = new Adb({ ...personalStub(), holds: grantHolds, host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => true, ...env });
+  const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => true, ...env });
   return { host, runner, adb };
 }
 
@@ -189,6 +189,26 @@ test("the phone lends on a signed grant alone, and no more once it is taken back
     await p.runner.run(Effect.ignore(p.adb.run({ kind: "revoke", station: STATION_ID, request: "p1" })));
     p.adb.heard(STATION_ID, grant("p1", signed));
     assert.deepEqual(p.adb.wanted(), [], "a station saying it again lends nothing");
+  } finally {
+    p.runner.shutdown();
+    a.runner.shutdown();
+  }
+});
+
+test("a phone started anew reads the lock it pinned, and lends for its grants before any station is reached", async () => {
+  const c = cloud();
+  const a = device(c, "a");
+  const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: 4_000_000_000 }), "why"));
+  // The same device's storage, the process gone and back, the cloud out of reach.
+  const again = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("a"), label: () => "a", changed: () => {} });
+  const p = phone({ personal: again, subOf: () => SUB, sub: () => SUB });
+  try {
+    p.adb.heard(STATION, { ...grantOf(signed), exp: 4_000_000_000 });
+    assert.deepEqual(p.adb.wanted(), [], "not read yet");
+    p.adb.accountsKnown();
+    await p.host.settle();
+    await a.host.settle();
+    assert.deepEqual(p.adb.wanted(), [STATION]);
   } finally {
     p.runner.shutdown();
     a.runner.shutdown();

@@ -60,7 +60,7 @@ import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
-import { PersonalLock, grantHolds } from "./personal-lock.ts";
+import { PersonalLock } from "./personal-lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -299,7 +299,6 @@ export class Core {
           label: () => prefs.deviceName(inner.data) ?? "",
           changed: () => inner.store.invalidate({ topic: "adbShare" }),
         }),
-        holds: grantHolds,
         subOf: (workspace) => inner.workspaces.owner(workspace),
         sub: () => inner.accounts.list()[0]?.sub ?? null,
         pair: {
@@ -382,12 +381,14 @@ export class Core {
         );
       };
       inner.shownAccounts = inner.accounts.list();
+      inner.adb.accountsKnown();
       inner.tracer.setExport((body) => {
         const account = inner.accounts.list()[0];
         return account ? Effect.ignore(inner.provider.traces(account.sub, body)) : Effect.void;
       });
       // An account signed in has its database opened; one signed out, removed (before what it reached is let go).
       inner.accounts.onChange(() => {
+        inner.adb.accountsKnown();
         inner.runner.fork(Effect.andThen(inner.data.accounts(inner.accounts.list().map((a) => a.sub)), Effect.sync(() => inner.cloudSync.accountsChanged())));
       });
       // From now on the core keeps what it holds current, whatever the UI shows.

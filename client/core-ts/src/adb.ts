@@ -58,8 +58,6 @@ export type AdbEnv = {
   /// The person's own lock (personal-lock.ts): whose a workspace's grants are, who this device speaks for, and how it
   /// joins (views/pair.ts).
   personal: PersonalLock;
-  /// How a grant is checked (`grantHolds`).
-  holds: typeof grantHolds;
   subOf: (workspace: string) => string | null;
   sub: () => string | null;
   pair: { begin(sub: string): Effect.Effect<unknown, CoreError>; code(typed: string): Effect.Effect<unknown, CoreError>; cancel(): void; state(sub: string): J };
@@ -468,6 +466,8 @@ class Lend {
 /// its app found (`adb.ports`); and, from an app before grants, to the one station its switch lent it to (`adb.share`).
 /// The grants, every station's, as each says them; decided and taken back here (`adb.decide`, `adb.revoke`).
 export class Adb {
+  /// How a grant is checked (a test of the lending itself takes every grant as the station says it).
+  check: typeof grantHolds = grantHolds;
   readonly #env: AdbEnv;
   readonly #legacy: Lend;
   readonly #lends = new Map<string, Lend>();
@@ -650,9 +650,21 @@ export class Adb {
     } catch {
       return null;
     }
-    const sub = this.#env.subOf(workspace);
+    // (a workspace not known yet, on a phone just started: this device's person, whose signature it must be anyway)
+    const sub = this.#env.subOf(workspace) ?? this.#env.sub();
     const chain = sub === null ? null : this.#env.personal.chain(sub);
-    return sub === null || chain === null ? null : this.#env.holds(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
+    return sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
+  }
+
+  /// The lock pinned here read, and what it lets this phone lend for, as soon as it is known whose it is: a phone started
+  /// anew lends before any station is reached.
+  accountsKnown(): void {
+    const sub = this.#env.sub();
+    if (sub !== null) this.#readPersonal(sub);
+  }
+
+  #readPersonal(sub: string): void {
+    this.#env.runner.fork(Effect.ensuring(Effect.ignore(this.#env.personal.refresh(sub), { log: "Unhandled", message: "personal lock read" }), Effect.sync(() => this.#sync())));
   }
 
   #keepRevoked(): void {
@@ -699,7 +711,7 @@ export class Adb {
   readGrants(station: string): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const sub = this.#env.subOf(StationAddr.parse(station).workspace);
-      if (sub !== null) this.#env.runner.fork(Effect.ignore(Effect.andThen(this.#env.personal.refresh(sub), Effect.sync(() => this.#sync())), { log: "Unhandled", message: "personal lock read" }));
+      if (sub !== null) this.#readPersonal(sub);
       const read = this.#retold.asked();
       return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
         const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
