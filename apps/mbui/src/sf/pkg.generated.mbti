@@ -604,6 +604,8 @@ pub let edge_tip_ms : Double
 
 pub fn empty(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn empty_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub let empty_in : @ui.Space
 
 pub let ended_max : @ui.Len
