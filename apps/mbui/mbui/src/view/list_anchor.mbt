@@ -897,6 +897,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         } else {
           None
         }
+        // (asked further than its foot, held there: where the hand has it next measured from where its foot is, not from
+        // how far past it it was asked to go (else a hand come back that much short of it moves it off its foot))
+        if from_end && r.beyond_end > 0.0 {
+          seen_x.val = Some(c.x - r.beyond_end)
+        }
         // (once all of it is laid out: a fling planned to another foot than this one planned again to it)
         if foot_hand.val is Some(_) && flinging.val {
           let host = s.host
