@@ -293,3 +293,105 @@ fn still_after(asks : Bool) -> (Bool, Int, Int) {
 test "drawn_now on a still tree leaves it as it is without the look: nothing to draw, no layout more" {
   assert_eq(still_after(true), still_after(false))
 }
+
+///|
+/// A node whose width (and colour) the event at 40 sets, asking where it is drawn now after or not, a frame sampled for
+/// 50 with the host at 0 before: what its size's follower is told by the next frame, whether there is something to draw
+/// after the event, the width and colour the next frame draws.
+fn set_then_looked(asks : Bool) -> (Array[Double], Bool, Double?, Int64?) {
+  let width = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let ground = @signals.signal(0x000000FFL, same=fn(a, b) { a == b })
+  let told : Array[Double] = []
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root.box(fn(v) {
+      v.width(By(fn() { Some(width.get()) })).height(Is(Some(10.0))).ground(By(fn() { ground.get() })) |> ignore
+      v.reacts(fn() { v.owed_laid_size() }, fn(z) {
+        match z {
+          Some((w, _)) => told.push(w)
+          None => ()
+        }
+      })
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let v = page.val.unwrap()
+  told.clear()
+  tree.event(40.0, fn() {
+    width.set(70.0)
+    ground.set(0xFF0000FFL)
+    if asks {
+      v.drawn_now() |> ignore
+    }
+  })
+  let to_draw = tree.told_since()
+  tree.frame(400.0, 300.0, now=40.0) |> ignore
+  let drawn = tree.drawn_of(v.id())
+  (told, to_draw, drawn.map(fn(d) { d.w }), drawn.map(fn(d) { d.ground }))
+}
+
+///|
+test "drawn_now after a change in the same event: told, laid out and drawn as without the look" {
+  assert_eq(set_then_looked(true), set_then_looked(false))
+}
+
+///|
+/// The bindings a look at 40 works out (anew, and again as drawn) over 100 nodes drawn by whether the drawing is past
+/// `mark`, a frame sampled for 50 with the host at 0 before.
+fn bound_in_look(mark : Double) -> Int {
+  let first : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    for i in 0..<100 {
+      let n = root.box(fn(v) {
+        v.width(By(fn() { Some(if v.drawn_past(mark) { 40.0 } else { 20.0 }) })).height(Is(Some(1.0))) |> ignore
+      })
+      if i == 0 {
+        first.val = Some(n)
+      }
+    }
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let before = tree.work().bound
+  tree.event(40.0, fn() { first.val.unwrap().drawn_now() |> ignore })
+  tree.work().bound - before
+}
+
+///|
+test "drawn_now works out again only what the look's moment is on the other side of a mark for" {
+  // (past 1000 at neither 40 nor 50: nothing; past 45 at 50 alone: each, anew and as drawn again)
+  let crossed = bound_in_look(45.0)
+  println("bindings worked out by a look over 100 nodes: mark not crossed \{bound_in_look(1000.0)}, crossed \{crossed}")
+  assert_eq(bound_in_look(1000.0), 0)
+  assert_true(crossed >= 100)
+}
+
+///|
+/// What the host is to take after an event at 40 asking where a node drawn by whether the drawing is past 45 is drawn
+/// now or not (made again, placed otherwise), taken empty before it, a frame sampled for 50 with the host at 0 before.
+fn host_takes(asks : Bool) -> (Int, Int) {
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root.box(fn(v) {
+      v.width(By(fn() { Some(if v.drawn_past(45.0) { 40.0 } else { 20.0 }) })).height(Is(Some(40.0))) |> ignore
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.take_changed() |> ignore
+  tree.take_placed() |> ignore
+  tree.event(40.0, fn() { if asks { page.val.unwrap().drawn_now() |> ignore } })
+  (tree.take_changed().length(), tree.take_placed().length())
+}
+
+///|
+test "drawn_now leaves the host nothing more to take than without the look" {
+  assert_eq(host_takes(true), host_takes(false))
+}

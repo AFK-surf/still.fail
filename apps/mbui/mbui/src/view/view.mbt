@@ -6825,12 +6825,31 @@ fn Tree::settled_at(self : Tree, at : Double, look? : () -> Unit) -> Bool {
     // that follows it told; then worked out and laid out as drawn again, as it was)
     @signals.untracked(fn() {
       // (what was due before it, due after it as it was: neither layout of it does what is left for that one)
-      let due_before = self.due
-      let drawn_due_before = self.drawn_due
+      // (and what was told before it and not laid out yet (a binding marked in the same change): due as it was, laid
+      // out and drawn by the layout that would have, what sizes it tells told there)
+      let told_before = self.layout_due ||
+        !self.places_due.is_empty() ||
+        !self.bindings_due.is_empty() ||
+        !self.pulls_marked.is_empty()
+      let due_before = self.due || told_before
+      let drawn_due_before = self.drawn_due || told_before
+      // (what the host is to take (made again, placed, ordered otherwise), as it was before it where nothing was told
+      // before it: what its two layouts made again and put back is nothing for the host; what was told before it is the
+      // host's as that layout leaves it)
+      let host_had = (
+        self.pending.length(),
+        self.placed_pending.length(),
+        self.ordered_pending.length(),
+        self.changed.length(),
+        self.composed.length(),
+      )
       let told = self.clock.drawn_by()
       told.append(self.beat.drawn_by())
+      // (of the marks, those the look's moment is on the other side of alone: one past at both reads the same)
       for m in self.drawn_marks {
-        told.append(m.2.drawn_by())
+        if (shown >= m.1) != (at >= m.1) {
+          told.append(m.2.drawn_by())
+        }
       }
       self.sample = Some(at)
       @signals.sampled(fn() {
@@ -6859,6 +6878,13 @@ fn Tree::settled_at(self : Tree, at : Double, look? : () -> Unit) -> Bool {
       self.look_laying = was_laying
       self.due = due_before || !self.laid_waits.is_empty() || !self.shows_due.is_empty() || self.outs_changed
       self.drawn_due = drawn_due_before
+      if !told_before {
+        self.pending.truncate(host_had.0)
+        self.placed_pending.truncate(host_had.1)
+        self.ordered_pending.truncate(host_had.2)
+        self.changed.truncate(host_had.3)
+        self.composed.truncate(host_had.4)
+      }
     })
   } else {
     @signals.untracked(fn() {
