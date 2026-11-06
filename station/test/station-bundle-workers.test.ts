@@ -51,6 +51,8 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.insertJob({ id: "old-job", sessionKey: "old-count", name: "old-job", command: "true", cwd: "/", port: null,
       token: "old-job", state: "running", pgid: null, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
     store.db.exec("DELETE FROM session_up_job_rows; UPDATE session_up_job_meta SET fresh=0");
+    store.db.prepare("INSERT INTO chat_shares(session,shared,write,by,at) VALUES (?,?,0,'a',1)")
+      .run("old-share", JSON.stringify([{ workspace: "other", name: "Other", used: 1 }]));
     store.db.prepare("UPDATE entries SET attachments=? WHERE thread=? AND n=1")
       .run(JSON.stringify([{ path: "/w/bundle.html", name: "bundle.html" }]), thread);
     store.db.prepare("UPDATE entries SET card=? WHERE thread=? AND n=1").run('{"type":"text"}', thread);
@@ -63,6 +65,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["sessions/workspace-activity-worker.js", { kind: "recovery" }],
       ["sessions/workspace-activity-worker.js", { kind: "sandbox" }],
       ["sessions/workspace-activity-worker.js", { kind: "directory" }],
+      ["sessions/workspace-activity-worker.js", { kind: "chat-share" }],
       ["sessions/session-count-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
@@ -100,6 +103,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.deepEqual(store.recoveryWaits()?.map(({ row }) => row.key), ["old-count"]);
     assert.equal(store.db.prepare("SELECT name FROM sandbox_name_rows WHERE session=?").get("old-count")?.name, sandboxName(keyPart("old-count")));
     assert.equal(store.db.prepare("SELECT root FROM session_dir_rows WHERE session=?").get("old-count")?.root, "/w");
+    assert.equal(store.db.prepare("SELECT workspace FROM chat_share_targets WHERE session=?").get("old-share")?.workspace, "other");
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
     assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");

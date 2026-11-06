@@ -79,6 +79,40 @@ for (const recursive of [false, true]) test(`share lookup follows old writes and
   } finally { old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("indexed shares agree with the old rules through interleaved changes and expiry boundaries", () => {
+  const time = testClock(), store = Store.open(":memory:", null, time.clock), db = store.db, now = store.now();
+  const put = db.prepare(add.replace("INSERT INTO", "INSERT OR REPLACE INTO"));
+  const update = db.prepare("UPDATE chat_shares SET shared = ? WHERE session = ?");
+  const drop = db.prepare("DELETE FROM chat_shares WHERE session = ?");
+  const guests = ["one", "two", "three"], times = [now - XSHARE_IDLE_MS - 201, now - XSHARE_IDLE_MS - 200,
+    now - XSHARE_IDLE_MS - 1, now - XSHARE_IDLE_MS, now - XSHARE_IDLE_MS + 1, now - 1];
+  let seed = 239017;
+  const next = (n: number) => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) % n;
+  const values = () => share(...Array.from({ length: next(4) }, () => ({ workspace: guests[next(guests.length)]!, used: times[next(times.length)]! })));
+  try {
+    for (let i = 0; i < 20; i++) put.run(`s${i}`, values(), now);
+    installChatShareIndex(db); finish(db);
+    for (let step = 0; step < 150; step++) {
+      const key = `s${next(20)}`;
+      switch (next(3)) {
+        case 0: put.run(key, values(), now); break;
+        case 1: update.run(values(), key); break;
+        case 2: drop.run(key); break;
+      }
+      if (step % 7 === 0) chatShareIndexStep(db, 3);
+      const expected = legacy(db, now, now - 200, guests);
+      assert.deepEqual([...store.chatShares()], expected.live, `live at ${step}`);
+      assert.deepEqual([...store.lapsedShareWorkspaces(guests)].sort(), expected.lapsed, `lapsed at ${step}`);
+      assert.equal(store.lapseChatShares(now - 200), expected.next, `next at ${step}`);
+      const indexed = dueChatShareRows(db, now - 200, now);
+      assert.notEqual(indexed, null);
+      const due = indexed!.rows.filter((row) => toChatShare(row).to.some((t) => t.used + XSHARE_IDLE_MS > now - 200 && t.used + XSHARE_IDLE_MS <= now))
+        .map((row) => row.session);
+      assert.deepEqual(due, expected.due, `due at ${step}`);
+    }
+  } finally { store.close(); }
+});
+
 test("unusual old share values keep the old JavaScript deadline rule", () => {
   const time = testClock(), store = Store.open(":memory:", null, time.clock), db = store.db, now = store.now();
   try {
@@ -110,6 +144,24 @@ test("share preparation waits for handover and a closed builder settles its wait
     await builder.settled();
     assert.equal(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'chat_share_index_meta'").get(), undefined);
   } finally { previous.resolve(); await builder.close(); store.close(); }
+});
+
+test("an old share store is prepared on a worker after the previous station leaves", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "share-handover-")), path = join(dir, "store.db");
+  const store = Store.open(path), old = new DatabaseSync(path), previous = Promise.withResolvers<void>();
+  const builder = new ChatShareIndexBuilder(store, previous.promise);
+  try {
+    const put = old.prepare(add), now = store.now();
+    for (let i = 0; i < 40; i++) put.run(`share-${i}`, share({ workspace: "one", used: now }), now);
+    builder.request();
+    assert.equal(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'chat_share_index_meta'").get(), undefined);
+    put.run("later", share({ workspace: "two", used: now }), now);
+    previous.resolve();
+    await builder.settled();
+    assert.equal(chatShareIndexReady(store.db), true);
+    assert.equal(store.chatShares().size, 41);
+    assert.equal(store.chatShares().has("later"), true);
+  } finally { previous.resolve(); await builder.close(); old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a failed share batch rolls its index entries and cursor back together", () => {
