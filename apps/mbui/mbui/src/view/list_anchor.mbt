@@ -1205,7 +1205,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         }
         // (what came in sight or within `ahead` of it, or was gone past on the way, since the last layout: sighted, told
         // once the frame is painted, whether the frames between were many or one)
-        match sighted {
+        // (a look's layout (Tree::settled_at): a sample, nothing of it sighted, what was sighted last kept)
+        match (if self.tree.look_laying { None } else { sighted }) {
           Some(tell) => {
             let width = l.width
             let say = fn() {
@@ -1268,7 +1269,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // this layout set out. Seen, told as this layout is done, whether a frame is painted before what comes next or
         // not (Tree::said_after_laid); of a moment before the one it last told of (a change said at a moment gone),
         // nothing told, what it told kept)
-        match seen {
+        // (a look's layout: a sample, nothing of it seen, what was seen last and where it told from kept)
+        match (if self.tree.look_laying { None } else { seen }) {
           Some(tell) if r.keys.length() > 0 => {
             let count = r.keys.length()
             let tall = fn(i : Int) {

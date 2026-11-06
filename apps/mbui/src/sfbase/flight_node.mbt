@@ -255,8 +255,12 @@ fn flight_quote_node(
         None => ()
       }
   }
-  // The composer's close control and empty comment hint leave with the card, on the original leave path.
-  parent.show(fn() { f.gone.shown(parent) < 1.0 }, fn(leaving) {
+  // The composer's close control and empty comment hint leave with the card, on the original leave path: let go at
+  // that way's end, a moment on the tree's timeline (the logic's, whatever frames are drawn), never by where a frame is
+  // drawn. The node's: called off with it.
+  let gone_over = @signals.signal(false)
+  parent.at_moment(@signals.untracked(fn() { f.gone.ends() }), fn() { gone_over.set(true) }) |> ignore
+  parent.show(fn() { !gone_over.get() }, fn(leaving) {
     leaving.over(Is(true)).alpha(By(fn() { 1.0 - f.gone.shown(leaving) })) |> ignore
     let side = @sf.corner_remove_side
     let reach = @sf.corner_remove_reach(@sf.composer_inner())

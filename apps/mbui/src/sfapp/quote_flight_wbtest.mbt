@@ -359,3 +359,31 @@ test "sent, a quote's ✕ leaves with its card and the send button fades to fain
   assert_true(faint != ready)
   assert_true(grounds.iter().any(fn(g) { g != ready && g != faint }), msg="\{grounds}")
 }
+
+///|
+/// Whether anything shaped and inked as a quote's ✕ is drawn at all, faded out or not.
+fn x_drawn(t : @ui.Tester) -> Bool {
+  let ink = @sf.theme().p.text
+  t.drawn_rects().iter().any(fn(r) {
+    let (_, _, w, h, colour) = r
+    w >= 16.0 && w <= 21.0 && (h - w).abs() < 0.5 && colour >> 8 == ink >> 8
+  })
+}
+
+///|
+test "sent, a quote's ✕ that left with its card is let go at its leave's end, whether frames were drawn between or none" {
+  for framed in [true, false] {
+    let calls : Array[Made] = []
+    let t = quoting(calls)
+    t.run_for(@sf.dur_ms)
+    tap_send(t)
+    assert_true(x_drawn(t))
+    if framed {
+      t.run_for(@sf.leave_ms + 50.0)
+    } else {
+      t.advance(@sf.leave_ms + 50.0)
+      t.frame()
+    }
+    assert_true(!x_drawn(t), msg="framed \{framed}: the ✕ still drawn after its leave")
+  }
+}

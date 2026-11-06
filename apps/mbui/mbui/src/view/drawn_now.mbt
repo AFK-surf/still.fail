@@ -42,20 +42,27 @@ pub fn View::drawn_now(self : View) -> DrawnNow? {
   guard self.alive() else { return None }
   let tree = self.tree
   guard tree.layout_owner < 0 && tree.laying == 0 else { return None }
-  guard tree.settled_at(tree.logic_at()) else { return None }
-  guard self.alive() && !tree.out_at(self.at) else { return None }
-  guard tree.drawn_of(self.id()) is Some(d) else { return None }
-  let scale = tree.drawn_scale(self.id())
-  let b = tree.seen_bounds(self.id(), drawing=true)
-  let (left, top) = (dmax(d.x, b.0), dmax(d.y, b.1))
-  let (right, foot) = (dmin(d.x + d.w, b.2), dmin(d.y + d.h, b.3))
-  Some({
-    rect: (d.x, d.y, d.w, d.h),
-    seen: (left, top, dmax(0.0, right - left), dmax(0.0, foot - top)),
-    corners: d.corners.map(fn(c) { (c.0 * scale, c.1 * scale, c.2 * scale, c.3 * scale) }),
-    scale,
-    alpha: d.alpha,
-  })
+  // (looked at as of the logic's moment, read there, and laid out as drawn again: what reads the drawing's moment or what
+  // a layout tells for its own sake (a structure's binding, a reaction, an effect, what waits for a change told whole)
+  // told nothing of the look, Tree::settled_at)
+  let found : Ref[DrawnNow?] = Ref(None)
+  let read = fn() {
+    guard self.alive() && !tree.out_at(self.at) else { return }
+    guard tree.drawn_of(self.id()) is Some(d) else { return }
+    let scale = tree.drawn_scale(self.id())
+    let b = tree.seen_bounds(self.id(), drawing=true)
+    let (left, top) = (dmax(d.x, b.0), dmax(d.y, b.1))
+    let (right, foot) = (dmin(d.x + d.w, b.2), dmin(d.y + d.h, b.3))
+    found.val = Some({
+      rect: (d.x, d.y, d.w, d.h),
+      seen: (left, top, dmax(0.0, right - left), dmax(0.0, foot - top)),
+      corners: d.corners.map(fn(c) { (c.0 * scale, c.1 * scale, c.2 * scale, c.3 * scale) }),
+      scale,
+      alpha: d.alpha,
+    })
+  }
+  guard @signals.effects_held(fn() { tree.settled_at(tree.logic_at(), look=read) }) else { return None }
+  found.val
 }
 
 ///|
