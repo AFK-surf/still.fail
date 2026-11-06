@@ -22,7 +22,7 @@ fn Tree::sampled_shown(self : Tree, upto : Double) -> Unit {
   // (each watch once, however many of them it reads; all in one sample: a computed several read worked out once)
   let once : Array[@signals.Watch] = []
   for w in drawn {
-    if !once.iter().any(fn(o) { physical_equal(o, w) }) {
+    if !once.iter().any(fn(o) { o.is(w) }) {
       once.push(w)
     }
   }
