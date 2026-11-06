@@ -7,6 +7,7 @@
 // and the host starts another.
 #ifdef _WIN32
 #include <windows.h>
+#include <objbase.h>
 #include <bcrypt.h>
 #include <process.h>
 #else
@@ -327,7 +328,11 @@ class Engine {
       if (host_.app_sync && op.rfind("text.", 0) == 0) {
         if (char* said = host_.app_sync(host_.ctx, op.c_str(), json.data(), json.size())) {
           jsi::String s = jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(said), std::strlen(said));
+#ifdef _WIN32
+          CoTaskMemFree(said);
+#else
           std::free(said);
+#endif
           return s;
         }
       }
