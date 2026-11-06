@@ -72,6 +72,7 @@ priv struct SheetKept {
   mut shown : Bool
   mut asked : Double
   mut opened : Int
+  mut opened_at : Double
 }
 
 ///|
@@ -119,6 +120,7 @@ pub fn sheet(
         shown: false,
         asked: -1.0,
         opened: -1,
+        opened_at: -1.0,
       }
       kit.val.sheets[id] = s
       s
@@ -141,8 +143,9 @@ pub fn sheet(
     s.shown = true
     s.asked = target
     s.opened = c.frame_number()
+    s.opened_at = c.moment()
   } else if open && target != s.asked {
-    if s.opened == c.frame_number() {
+    if s.opened == c.frame_number() && c.moment() <= s.opened_at + @ui.same_moment_ms {
       // (opened this frame, its height known only as this frame lays out what it holds: from below at that)
       s.h.put(target)
       s.below.put(target)
@@ -251,7 +254,12 @@ pub fn sheet(
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
-        body()
+        // Probe only: keep the sheet's body separately from the motion of its shell.
+        if @ui.probe_keep_staged_body() {
+          @ui.probe_kept_sheet_body(c, key, body)
+        } else {
+          body()
+        }
       })
     })
     match surface {

@@ -117,6 +117,8 @@ pub fn Ctx::drag_area(
 /// `hold`), pressed and still: held long_press_ms since the press went down, the press is its from here (the others
 /// under it let it go, no tap), felt, moving; before then, a frame asked for when it will have been.
 pub fn Ctx::drag_of(self : Ctx, id : Int) -> Drag? {
+  // A partial build does not own a drag's pending movement/end; the complete old frame takes it once.
+  if probe_causal_layer.val { return None }
   match drags.get(id) {
     Some(d) => {
       // (read so: the press and, while it is on it, where the pointer is: hand.mbt)

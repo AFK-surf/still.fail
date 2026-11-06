@@ -488,6 +488,12 @@ pub fn pointer_pressed() -> Bool
 
 pub fn pointing() -> Pointing
 
+pub fn probe_keep_staged_body() -> Bool
+
+pub fn probe_kept_sheet_body(Ctx, String, () -> Unit) -> Unit
+
+pub fn probe_old_layer(@view.View) -> Unit
+
 pub let press_enter : Int32
 
 pub let press_slop : Double

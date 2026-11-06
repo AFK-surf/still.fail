@@ -72,6 +72,46 @@ priv struct OldIsland {
 let old_islands : Array[OldIsland] = []
 
 ///|
+// Probe only: one-shot tells from a staged old layer until the first frame that still holds it.
+let old_layer_staged_tells : Map[@view.NodeId, Array[(Int, () -> Unit)]] = {}
+
+///|
+// Probe only: event-staged layers to update to an input's time before finding its old targets.
+let old_layer_staged_views : Map[@view.NodeId, (@view.View, Double)] = {}
+
+///|
+// Probe only: the first ordinary build after staging may reuse the staged body once.
+let old_layer_body_pending : Map[@view.NodeId, Bool] = {}
+
+///|
+pub fn probe_keep_staged_body() -> Bool {
+  if probe_causal_layer.val { return true }
+  match island_building.val {
+    Some(id) if old_layer_body_pending.contains(id) => {
+      old_layer_body_pending.remove(id)
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+pub fn probe_kept_sheet_body(c : Ctx, key : String, body : () -> Unit) -> Unit {
+  let (ww, wh) = c.window_size()
+  c.part_nodes(c.id(key + "/probe-body"), "\{ww}x\{wh}", body, true, own=true, fragment=true)
+}
+
+///|
+fn append_told(to : Array[(Int, () -> Unit)], incoming : Array[(Int, () -> Unit)]) -> Unit {
+  for t in incoming {
+    match to.search_by(fn(x) { x.0 == t.0 }) {
+      Some(i) => to[i] = t
+      None => to.push(t)
+    }
+  }
+}
+
+///|
 // kept across runs: put back as a run begins (view_forget)
 let old_made : Ref[Int] = Ref(0)
 
@@ -365,6 +405,10 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  probe_causal_layer.val = false
+  old_layer_staged_tells.clear()
+  old_layer_staged_views.clear()
+  old_layer_body_pending.clear()
   // A replacement tree can change who may type even if the numeric focus stays the same during an event.
   view_modals_version.val += 1
   view_read_tells.clear()
@@ -818,6 +862,19 @@ fn old_frame(c : Ctx) -> Unit {
       old_islands.length() != old_placed.length() ||
       old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => view_brought(tree)
     _ => ()
+  }
+  let gone = old_layer_staged_tells.keys().filter(fn(id) {
+    !old_islands.iter().any(fn(o) { o.id == id })
+  }).collect()
+  for id in gone { old_layer_staged_tells.remove(id) }
+  for p in old_placed {
+    match old_layer_staged_tells.get(p.0) {
+      Some(told) => {
+        append_told(c.told, told)
+        old_layer_staged_tells.remove(p.0)
+      }
+      None => ()
+    }
   }
   // (where they are placed, as told: one let go builds nothing, old_places_tell)
   old_places_said.get() |> ignore
@@ -2773,6 +2830,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   let at = view_moment()
   tree.bring_to(at)
   let held_tip = passive_hold_before(kind, x, y)
+  let stages = old_placed.iter().filter_map(fn(p) { old_layer_staged_views.get(p.0) }).collect()
+  for (v, staged_at) in stages {
+    if v.alive() && at > staged_at { probe_old_layer(v) }
+  }
   g().projected_input(tree)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
@@ -3296,6 +3357,30 @@ pub fn old(
       held_box: -1,
     })
     n.owns(fn() {
+      if old_layer_staged_views.contains(id) {
+        let c = g()
+        let ids : Array[Int] = []
+        for i in 0..<c.count {
+          if c.old_portal_owner(i) == Some(id) {
+            let node = c.nodes[i]
+            if node.id != 0 && !ids.contains(node.id) { ids.push(node.id) }
+          }
+        }
+        for s in c.sems {
+          if s.id != 0 && c.old_portal_owner(s.node) == Some(id) && !ids.contains(s.id) { ids.push(s.id) }
+        }
+        // A press or accessibility request queued for the removed opening must not act on a replacement reusing an id.
+        c.clicked.retain(fn(x) { !ids.contains(x) })
+        c.double_clicked.retain(fn(x) { !ids.contains(x) })
+        c.actions.retain(fn(x) { !ids.contains(x.0) })
+        c.asked_actions.retain(fn(x) { !ids.contains(x.0) })
+        for key in ids { made_presses.remove(key) }
+        let layers = c.last_layers.filter(fn(l) { l.owner == Some(id) }).rev()
+        for l in layers { c.layer_ended(l.id) }
+        old_layer_staged_views.remove(id)
+        old_layer_staged_tells.remove(id)
+        old_layer_body_pending.remove(id)
+      }
       // (its fields let go with it, at this moment: island_fields_let_go)
       island_fields_let_go(id)
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -4839,7 +4924,11 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
       }
       None => s.rect
     }
-    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden, disabled: off, actions: if off { [] } else { s.actions }, rect })
+    let owner_gone = match self.old_portal_owner(nodes_of[k]) {
+      Some(id) => !tree.lives(id)
+      None => false
+    }
+    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden || owner_gone, disabled: off, actions: if off { [] } else { s.actions }, rect })
     moved[k] = out.length() - 1
   }
   // (those let go read out no more: their ids nobody's)
@@ -4976,6 +5065,20 @@ fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
 }
 
 ///|
+// A portal sits at the old root but still belongs to the hosted node whose build opened it.
+fn Ctx::old_portal_owner(self : Ctx, i : Int) -> @view.NodeId? {
+  let mut j = i
+  while j > 0 && j < self.count {
+    match self.last_layers.iter().find_first(fn(l) { l.node == j }) {
+      Some(l) if l.owner is Some(_) => return l.owner
+      _ => ()
+    }
+    j = self.nodes[j].parent
+  }
+  None
+}
+
+///|
 /// Whether old widget `id` may be acted on as a screen reader asks, as the window's tree is now (in the event it is asked
 /// in: Ctx::ask_action): the node hosting the old view it says itself in (by what it said of its node:
 /// Ctx::said_owner) read out and taking presses (Tree::acts_on); what the old frame put over all of it, always (its
@@ -5001,6 +5104,10 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
       }
       found
     }
+  }
+  match c.old_portal_owner(node) {
+    Some(owner) if !tree.lives(owner) => return false
+    _ => ()
   }
   let host = match c.said_owner(node) {
     // (of a layer the old frame put over all of it: where none over it in the window's stack of layers is modal, the
@@ -6058,4 +6165,173 @@ fn view_after_paint() -> Unit {
   for f in due {
     @signals.untracked(f)
   }
+}
+pub fn probe_old_layer(v : @view.View) -> Unit {
+  guard !building.val && !laying.val && !@signals.tracking_underway() else {
+    abort("an old layer can only be staged at an event boundary")
+  }
+  let tree = view_tree().unwrap()
+  let was_at = view_logic_at.val
+  view_logic_at.val = v.cause_at()
+  view_brought(tree)
+  view_logic_at.val = was_at
+  let o = old_islands.iter().find_first(fn(o) { o.id == v.id() }).unwrap()
+  let p = old_placed.iter().find_first(fn(p) { p.0 == o.id }).unwrap()
+  let (_, _, _, w, h, _, x, y, _) = p
+  let c = g()
+  let (window_w, window_h) = view_window.val
+  let previous_window = (c.window_w, c.window_h)
+  let previous_room = (c.width, c.height)
+  let previous_theme = c.theme
+  let previous_narrow = c.narrow
+  c.window_w = window_w
+  c.window_h = window_h
+  c.width = window_w
+  c.height = window_h
+  c.pick_theme()
+  // A partial build must not take inputs intended for the next complete old frame, nor leave them visible to its
+  // repeated readback passes. Inputs of other islands are preserved as well.
+  let clicked = c.clicked.copy()
+  let double_clicked = c.double_clicked.copy()
+  let click_at = c.click_at
+  let tapped = c.tapped
+  let actions = c.actions.copy()
+  let keys = desk.keys.copy()
+  let menus = desk.menus.copy()
+  c.clicked.clear()
+  c.double_clicked.clear()
+  c.click_at = None
+  c.tapped = None
+  c.actions.clear()
+  desk.keys.clear()
+  desk.menus.clear()
+  if c.layers.is_empty() { c.layers.append(c.last_layers) }
+  let before_told = c.told.copy()
+  c.told.clear()
+  let from_tells = c.tells.length()
+  let before_back = c.back_said()
+  let clock = c.clock
+  let was_whole = nodes_run.whole
+  let was_evented = nodes_run.evented
+  nodes_run.whole = false
+  nodes_run.evented = false
+  c.layers_opened.clear()
+  for pass in 0..<frame_passes_most {
+    match kept_nodes.get((o.part, -1)) {
+      Some(rn) if rn.in_pool => {
+        let from = rn.base
+        let until = from + rn.n
+        let wrapper = old_boxes.get(o.id).unwrap_or(-1)
+        let children : Array[Int] = []
+        let mut child = c.nodes[0].first
+        while child >= 0 {
+          let next = c.nodes[child].next
+          if child != wrapper && !(child >= from && child < until && c.nodes[child].portal) {
+            children.push(child)
+          }
+          child = next
+        }
+        let layers = c.layers.filter(fn(l) { l.node < from || l.node >= until })
+        c.layers.clear()
+        c.layers.append(layers)
+        let scrims = dr.scrims.filter(fn(i) { i < from || i >= until })
+        dr.scrims.clear()
+        dr.scrims.append(scrims)
+        c.row_nodes_out(rn)
+        rn.in_pool = false
+        rn.ok = false
+        c.nodes[0].first = -1
+        c.nodes[0].last = -1
+        for i in children { c.link_last(0, i) }
+      }
+      _ => ()
+    }
+    if pass > 0 {
+      nodes_run.whole = true
+      c.tells.truncate(from_tells)
+      c.back_next = before_back.f
+      c.back_node_next = before_back.node
+      c.back_edge_next = before_back.edge
+      c.back_island_next = before_back.island
+      c.back_chain_next = before_back.chain
+    }
+    c.read_back_moved = false
+    let from_layers = c.layers.length()
+    c.clock = v.cause_at()
+    building.val = true
+    probe_causal_layer.val = true
+    let mut wrapper = -1
+    c.with_parent(0, fn() {
+      wrapper = c.box(style=style(w=Fixed(w), h=Fixed(h)), left=x, top=y, fn() {
+        o.part = c.id(o.key)
+        o.room.val = (w, h)
+        c.sized(w, h, fn() {
+          owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
+        })
+      })
+    })
+    old_boxes[o.id] = wrapper
+    old_box_owners[wrapper] = (o.owner, o.id)
+    laying.val = true
+    c.layout(wrapper, x, y, w, h) |> ignore
+    for k in from_layers..<c.layers.length() {
+      c.layout(c.layers[k].node, 0.0, 0.0, c.window_w, c.window_h) |> ignore
+    }
+    c.sideways_found()
+    c.sideways_after_layout()
+    c.focusables_found()
+    c.sems_found()
+    c.raise_layers()
+    c.reads_after_layout()
+    c.layers_focus()
+    laying.val = false
+    building.val = false
+    probe_causal_layer.val = false
+    if !c.read_back_moved { break }
+  }
+  c.back = c.back_next
+  c.back_node = c.back_node_next
+  c.back_island = c.back_island_next
+  c.back_edge = c.back_edge_next
+  c.back_chain = c.back_chain_next
+  c.back_layer_spent()
+  c.back_told_host()
+  c.layers_frame_end()
+  c.focus_frame_end()
+  nodes_run.whole = was_whole
+  nodes_run.evented = was_evented
+  let staged_told = match old_layer_staged_tells.get(o.id) {
+    Some(told) => told
+    None => {
+      let told : Array[(Int, () -> Unit)] = []
+      old_layer_staged_tells[o.id] = told
+      told
+    }
+  }
+  append_told(staged_told, c.told)
+  c.told.clear()
+  c.told.append(before_told)
+  c.clicked.clear()
+  c.clicked.append(clicked)
+  c.double_clicked.clear()
+  c.double_clicked.append(double_clicked)
+  c.click_at = click_at
+  c.tapped = tapped
+  c.actions.clear()
+  c.actions.append(actions)
+  desk.keys.clear()
+  desk.keys.append(keys)
+  desk.menus.clear()
+  desk.menus.append(menus)
+  c.clock = clock
+  projection_hits_dirty.val = true
+  c.projected_input(tree)
+  c.window_w = previous_window.0
+  c.window_h = previous_window.1
+  c.width = previous_room.0
+  c.height = previous_room.1
+  c.theme = previous_theme
+  c.narrow = previous_narrow
+  old_layer_staged_views[v.id()] = (v, v.cause_at())
+  old_layer_body_pending[v.id()] = true
 }
