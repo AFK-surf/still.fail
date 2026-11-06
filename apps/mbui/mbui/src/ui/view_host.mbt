@@ -1289,7 +1289,9 @@ fn Ctx::tree_walk(
       l.base_lvl = clip_top() / clip_n
       let (fx, fy) = scene_frame_origin.val
       scene_frame_origin.val = (fx + x, fy + y)
+      scene_own_depth.val = scene_own_depth.val + 1
       let es = self.tree_walk_in(p, from, (0.0, 0.0, a, s, ux - x, uy - y), depth, kept)
+      scene_own_depth.val = scene_own_depth.val - 1
       scene_frame_origin.val = (fx, fy)
       pop_clip()
       es
@@ -1466,6 +1468,7 @@ fn Ctx::tree_step(
         if skippable && self.scene_drawn_out(l, clip_top()) {
           self.ninst = l.start
           self.segs.truncate(l.seg_from * 4)
+          scene_glyphs_cut(l.start)
           scene_left_out(l, None, l.start, l.seg_from)
         }
       }
@@ -2544,6 +2547,14 @@ fn Ctx::view_blit(
   for gl in made.glyphs {
     let (i, gx, base, goy) = gl
     let b = at + i * inst_size
+    // (drawn from a place of its own: set on the pixels where that place is put, as it is put there, scene_origin_put;
+    // till then where it is, and its baseline, unset)
+    if scene_own_depth.val > 0 && lx == x && ly == y {
+      s[b] = x + gx
+      s[b + 1] = y + base
+      scene_glyphs.push((b / inst_size, goy))
+      continue
+    }
     s[b] = if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx }
     s[b + 1] = if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly }
   }

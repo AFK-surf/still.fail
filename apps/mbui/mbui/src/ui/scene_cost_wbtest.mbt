@@ -63,6 +63,10 @@ fn spinner_over(n : Int) -> (SceneWork, Array[(Double, Double, Double, Double)])
       full: after.full - before.full,
       parts: after.parts - before.parts,
       moved_insts: after.moved_insts - before.moved_insts,
+      put_layers: after.put_layers - before.put_layers,
+      put_insts: after.put_insts - before.put_insts,
+      origin_insts: after.origin_insts - before.origin_insts,
+      origin_cuts: after.origin_cuts - before.origin_cuts,
     },
     scene_parts(),
   )

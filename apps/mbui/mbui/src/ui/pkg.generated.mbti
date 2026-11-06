@@ -2358,6 +2358,10 @@ pub(all) struct SceneWork {
   mut parts : Int32
   mut moved : Int32
   mut moved_insts : Int32
+  mut put_layers : Int32
+  mut put_insts : Int32
+  mut origin_insts : Int32
+  mut origin_cuts : Int32
 }
 
 type Sem

@@ -78,6 +78,9 @@ priv struct SceneLayer {
   block_refs : Array[(Int, Int, @view.NodeId, Bool)]
   /// where in the frame the bands it draws as it is drawn are (scene_band_drawn), till its block is kept
   bands_at : Array[Int]
+  /// the glyphs of its own block not yet set on the pixels (drawn in a place of its own: scene_glyphs), each by where it
+  /// is in the block and its own offset from its baseline
+  block_glyphs : Array[(Int, Double)]
   /// what it drew that is over everything (a field's handles, Ctx::paint_top): never among its own, a block of its own
   /// put where the window's stack has it (what is over everything raised there, Ctx::raise_tops), who drew each where
   /// that is kept
@@ -443,6 +446,14 @@ pub(all) struct SceneWork {
   /// instances of theirs moved so (`moved_insts`: Ctx::scene_emitted)
   mut moved : Int
   mut moved_insts : Int
+  /// what putting the frame together of blocks did (Ctx::scene_emitted): layers put so (`put_layers`), the instances
+  /// copied from their blocks into the frame (`put_insts`), of those and of what was drawn now in a place of its own the
+  /// instances put where that place is (`origin_insts`: scene_origin_put, each time, however deep), and of those the
+  /// clips of their own cut by what they began in (`origin_cuts`: clip_cut_by)
+  mut put_layers : Int
+  mut put_insts : Int
+  mut origin_insts : Int
+  mut origin_cuts : Int
 } derive(Eq, Debug, Show)
 
 ///|
@@ -456,6 +467,10 @@ let scene_work : SceneWork = {
   parts: 0,
   moved: 0,
   moved_insts: 0,
+  put_layers: 0,
+  put_insts: 0,
+  origin_insts: 0,
+  origin_cuts: 0,
 }
 
 ///|
@@ -967,6 +982,7 @@ fn Ctx::scene_begin(self : Ctx) -> Unit {
   scene.owners = if inst_owners_kept() && !scene.fresh { Some(owners_run(0, scene.prev_n)) } else { None }
   scene.old_now.clear()
   scene.tops_now.clear()
+  scene_glyphs.clear()
 }
 
 ///|
@@ -1097,6 +1113,11 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
     }
     k - before
   }
+  // (the glyphs not yet set on the pixels, where they are now)
+  for i, g in scene_glyphs {
+    scene_glyphs[i] = (moved_to(g.0), g.1)
+  }
+  scene_glyphs.sort_by(fn(a, b) { a.0.compare(b.0) })
   // (the bands the layers being drawn drew, where they are now)
   scene.layers.each(fn(_, l) {
     for i, k in l.bands_at {
@@ -1350,6 +1371,7 @@ fn Ctx::scene_drawn(
         block_owners: None,
         block_refs: [],
         bands_at: [],
+        block_glyphs: [],
         tops: [],
         tops_owners: None,
         tops_put: [],
@@ -1575,7 +1597,7 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
   self.scene_block_kept(l, k0, s0)
   // (drawn from a place of its own: put where that is in what holds it)
   if l.has_origin {
-    scene_origin_put(self.inst, k0, self.ninst, l.origin, l.base_lvl - 1, l.clip)
+    scene_origin_put(self.inst, k0, self.ninst, l.origin, l.base_lvl - 1, l.clip, self.scale)
   }
   // (the host's controls it drew, each by its instance from its first: where it is put, the same)
   for i, a in l.anchors {
@@ -2048,6 +2070,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   l.block_from.clear()
   l.block_refs.clear()
   l.bands.clear()
+  l.block_glyphs.clear()
   l.block_owners = if inst_owners_kept() {
     Some({ owner: [], cell: [], tree: [], mark: [], bone: [] })
   } else {
@@ -2107,6 +2130,12 @@ fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom
   let mut band = band
   if to > from {
     self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
+    // (its glyphs not yet set on the pixels, where they are in its block: set as it is put where it is, scene_glyphs)
+    let mut g = scene_glyphs_from(from)
+    while g < scene_glyphs.length() && scene_glyphs[g].0 < to {
+      l.block_glyphs.push((l.block_n + scene_glyphs[g].0 - from, scene_glyphs[g].1))
+      g = g + 1
+    }
     // (a Tester's: how far its own instances reach, worked out from them, to hold what the walk said against)
     if looks_check.val {
       scene.parts.reach_add(self.inst, from, to, own_reach_checked)
@@ -2158,6 +2187,7 @@ fn Ctx::scene_emitted(
 ) -> Unit {
   let at = self.ninst
   let seg0 = self.segs.length() / 4
+  scene_work.put_layers = scene_work.put_layers + 1
   // (moved since the frame before by `moved`, with what holds it or on its own: how far it is put from where it was
   // drawn, what it reached told so (scene_reach_moved))
   if moved != (0.0, 0.0) {
@@ -2281,7 +2311,7 @@ fn Ctx::scene_emitted(
       mv(12)
     }
     let outer_from = if l.from_rel == scene_no_level { -1 } else { lvl + l.from_rel }
-    scene_origin_put(self.inst, at, self.ninst, l.origin_now, lvl, clip, outer_from~)
+    scene_origin_put(self.inst, at, self.ninst, l.origin_now, lvl, clip, self.scale, outer_from~)
   }
   // (all it and what it holds reach now, where each is put: whether it is left out, Ctx::scene_layer_left_out)
   scene_now_reach(l)
@@ -2414,8 +2444,7 @@ fn Ctx::scene_offset_ok(
     place.3 == d.3 &&
     place.4 - place.0 == d.4 - d.0 &&
     place.5 - place.1 == d.5 - d.1 &&
-    (sx * self.scale).round() == sx * self.scale &&
-    (sy * self.scale).round() == sy * self.scale &&
+    (l.has_origin || ((sx * self.scale).round() == sx * self.scale && (sy * self.scale).round() == sy * self.scale)) &&
     l.stretching.is_empty() &&
     l.glyphing.is_empty() &&
     (l.fading.is_empty() || !l.fades_inside) &&
@@ -2612,6 +2641,11 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
 /// everything (Ctx::raise_tops; Chromium's top layer, Flutter's Overlay): the layer's own block whole, nothing of it
 /// parted by what is raised.
 fn Ctx::scene_tops_taken(self : Ctx, l : SceneLayer, from : Int) -> Unit {
+  // (its glyphs set on the pixels where the window has them now: what is over everything is in no place of its own)
+  while scene_glyphs.length() > 0 && scene_glyphs[scene_glyphs.length() - 1].0 >= from {
+    let (k, oy) = scene_glyphs.pop().unwrap()
+    glyph_set(self.inst, k, oy, self.scale)
+  }
   let t0 = l.tops.length()
   for q in (from * inst_size)..<(self.ninst * inst_size) {
     l.tops.push(self.inst[q])
@@ -2768,6 +2802,19 @@ fn Ctx::scene_block_put(
     }
     let k = self.ninst
     l.block.blit_to(self.inst, len=n * inst_size, src_offset=from * inst_size, dst_offset=k * inst_size)
+    scene_work.put_insts = scene_work.put_insts + n
+    // (its glyphs not yet set on the pixels, told where they are in the frame: set as what they are in is put, scene_glyphs)
+    // (put where no place of its own is: set on the pixels now, where the window has them)
+    let unset = scene_own_depth.val > 0 || scene_put_in_own.val > 0
+    for gl in l.block_glyphs {
+      if gl.0 >= from && gl.0 < to {
+        if unset {
+          scene_glyphs.push((k + gl.0 - from, gl.1))
+        } else {
+          glyph_set(self.inst, k + gl.0 - from, gl.1, self.scale)
+        }
+      }
+    }
     // (each one's levels as drawn, as far below the one it begins in now (`lvl`): what puts it where a layer holding it
     // is drawn from a place of its own reads, scene_origin_put)
     while inst_levels.length() < k + n {
@@ -2939,6 +2986,7 @@ fn Ctx::scene_put_then_out(self : Ctx, c : SceneLayer, k : Int, s : Int, redrawn
   if out {
     self.ninst = k
     self.segs.truncate(s * 4)
+    scene_glyphs_cut(k)
     scene_left_out(c, None, k, s)
   }
 }
@@ -3064,23 +3112,71 @@ let own_reach_checked : @damage.Rect = @damage.Rect::none()
 let scene_frame_origin : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
+/// How many layers drawn from a place of their own the walk is in now (Ctx::tree_walk): the glyphs drawn there set on the
+/// pixels as they are put where they are (scene_glyphs).
+// kept across runs: put back as each such is closed
+let scene_own_depth : Ref[Int] = Ref(0)
+
+///|
+/// The glyphs in the frame drawn in a place of its own not yet set on the pixels, each by its instance and its own offset
+/// from its baseline (its x where it is across, its y its baseline, unset): set on them where the window has them as
+/// the place of its own they are in is put where it is (scene_origin_put), drawn so now or put together of what is kept,
+/// the same, wherever that is, on whole pixels or between (as the window's own are, Ctx::tree_draw_node). In the order
+/// of their instances.
+// kept across runs: cleared as each frame begins, each taken as it is set
+let scene_glyphs : Array[(Int, Double)] = []
+
+///|
+/// Glyph `k` of `a`, its x where it is across and its y its baseline, unset (scene_glyphs), `oy` its own offset from that,
+/// in the terms of what is drawn now (scene_frame_origin): set on the pixels where the window has it, as the window's
+/// own are (Ctx::tree_draw_node: x on the pixels, down by the baseline on a row then its own offset).
+fn glyph_set(a : FixedArray[Double], k : Int, oy : Double, sc : Double) -> Unit {
+  let (fx, fy) = scene_frame_origin.val
+  let q = k * inst_size
+  a[q] = on_pixels(a[q] + fx, sc) - fx
+  a[q + 1] = on_glyph_row(a[q + 1] + fy, oy, sc) - fy
+}
+
+///|
+/// Of scene_glyphs, those from instance `k` on let go (what they are in left out after it was drawn).
+fn scene_glyphs_cut(k : Int) -> Unit {
+  while scene_glyphs.length() > 0 && scene_glyphs[scene_glyphs.length() - 1].0 >= k {
+    scene_glyphs.pop() |> ignore
+  }
+}
+
+///|
+/// Where in scene_glyphs the first of instance `k` or after is.
+fn scene_glyphs_from(k : Int) -> Int {
+  let mut lo = 0
+  let mut hi = scene_glyphs.length()
+  while lo < hi {
+    let m = (lo + hi) / 2
+    if scene_glyphs[m].0 < k {
+      lo = m + 1
+    } else {
+      hi = m
+    }
+  }
+  lo
+}
+
+///|
 /// How many layers drawn from a place of their own are being put together now, one in another (Ctx::scene_emitted): what
 /// is drawn again in one is drawn in its terms (Ctx::scene_redrawn_in).
 // kept across runs: put back as each such is put together
 let scene_put_in_own : Ref[Int] = Ref(0)
 
 ///|
-/// Whether layer `l`, its node where `at` says in what holds it, is drawn from a place of its own there: its place on
-/// the window's pixels (what it draws on them, its glyphs, set on them in its own terms as they would be in the
-/// window's), nothing of what holds it fading, stretching it or setting its glyphs (what those do is where they are, in
-/// what holds it's terms), nothing in it drawn otherwise than by the tree (an old view, glass, a native view's anchor:
-/// drawn in the window's terms, Tree::holds_own_only), and somewhere else than where what holds it begins.
+/// Whether layer `l`, its node where `at` says in what holds it, is drawn from a place of its own there (on whole
+/// pixels or between: its glyphs set on them as it is put where it is, scene_glyphs), nothing of what holds it fading,
+/// stretching it or setting its glyphs (what those do is where they are, in what holds it's terms), nothing in it drawn
+/// otherwise than by the tree (an old view, glass, a native view's anchor: drawn in the window's terms,
+/// Tree::holds_own_only), and somewhere else than where what holds it begins.
 fn Ctx::scene_origin_may(self : Ctx, p : TreePaint, l : SceneLayer, at : (Double, Double, Double, Double, Double, Double)) -> Bool {
+  ignore(self)
   let (x, y, _, _, _, _) = at
-  let sc = self.scale
   (x != 0.0 || y != 0.0) &&
-  (x * sc).round() == x * sc &&
-  (y * sc).round() == y * sc &&
   p.fading.is_empty() &&
   p.stretching.is_empty() &&
   p.glyphing.is_empty() &&
@@ -3113,10 +3209,14 @@ fn scene_origin_put(
   o : (Double, Double),
   b : Int,
   clip : FixedArray[Double],
+  sc : Double,
   outer_from? : Int = clip_from_of(b),
 ) -> Unit {
   let (ox, oy) = o
   let t = b + 1
+  if k1 > k0 {
+    scene_work.origin_insts = scene_work.origin_insts + (k1 - k0)
+  }
   let mv = fn(at : Int) {
     if a[at] > -1.0e9 && a[at] < 1.0e9 {
       a[at] = a[at] + ox
@@ -3179,6 +3279,7 @@ fn scene_origin_put(
     mv(q + 16)
     if !(a[q + 16] <= -1.0e9 && a[q + 18] >= 1.0e9) {
       clip_cut_by(a, q, clip)
+      scene_work.origin_cuts = scene_work.origin_cuts + 1
     }
     if fr > t {
       mv(q + 40)
@@ -3200,6 +3301,13 @@ fn scene_origin_put(
           inst_froms[k] = -1
         }
       }
+    }
+  }
+  // (its glyphs set on the pixels where the window has them, put there: scene_glyphs)
+  while scene_glyphs.length() > 0 && scene_glyphs[scene_glyphs.length() - 1].0 >= k0 {
+    let (k, oy) = scene_glyphs.pop().unwrap()
+    if k < k1 {
+      glyph_set(a, k, oy, sc)
     }
   }
 }
