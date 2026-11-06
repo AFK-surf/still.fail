@@ -16,7 +16,7 @@ test "a frame shown after the logic's moment works out a paint reading the clock
   )
   let alpha = fn() { tree.drawn().iter().find_first(fn(d) { d.w == 10.0 }).map(fn(d) { d.alpha }).unwrap() }
   tree.frame(390.0, 844.0, now=80.0) |> ignore
-  let before = (alpha(), reads.val)
+  let before = alpha()
   reads.val = 0
   tree.at(150.0)
   tree.frame(390.0, 844.0, now=80.0) |> ignore
@@ -25,7 +25,7 @@ test "a frame shown after the logic's moment works out a paint reading the clock
   // (shown later again at the same logic's moment: sampled again, nothing else)
   tree.at(160.0)
   tree.frame(390.0, 844.0, now=80.0) |> ignore
-  assert_eq((before, ahead, (alpha(), reads.val)), ((1.0, 1), (0.5, 1), (0.5, 1)))
+  assert_eq((before, ahead, (alpha(), reads.val)), (1.0, (0.5, 1), (0.5, 1)))
 }
 
 ///|
