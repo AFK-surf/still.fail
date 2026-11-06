@@ -30,10 +30,11 @@ pub fn View::sticks(self : View, top : Live[Double]) -> View {
       By(f) => f()
     }
   }
-  self.offset(By(fn() {
+  // (worked out as the frame is painted, from where this frame laid the column and what holds it: Painted)
+  self.offset(Painted(fn(laid) {
     match (column, holder) {
       (Some(c), Some(h)) =>
-        match (c.laid_window_told(), h.laid_window_told()) {
+        match (laid.rect(c), laid.rect(h)) {
           (Some((_, cy, _, _)), Some((_, hy, _, hh))) => {
             // (where it is laid out in what holds it, its own height: its layout's, not where it is drawn, which this
             // says)

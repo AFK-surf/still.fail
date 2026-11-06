@@ -30,7 +30,8 @@ fn chat_root_node(
     page.reacts(open, fn(o) {
       let to = if o { 1.0 } else { 0.0 }
       if slide.target() != to {
-        let pane = page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(page.window().0)
+        // (as wide as the pane is laid out at the cause's moment: View::laid_size)
+        let pane = page.laid_size().0
         slide.go(to, @motion.move(over=side_whole(pane)), at=page.cause_at())
       }
     })

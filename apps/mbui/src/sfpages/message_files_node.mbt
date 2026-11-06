@@ -8,7 +8,7 @@
 /// `by` whose and when (what quoting one says), `at` where in the chat it is (its preview's place); `landed` told each
 /// one's landing by its key as it is made and let go; `corner` its pictures' (a quote's own: @sf.quote_picture_corner);
 /// `by` whose message it is, their role and its ts (what quoting one of them says; none: not quoted from here); `most`
-/// how wide they may be where what holds them is as wide as they are (a quote's card: none, the column's).
+/// how wide they may be by how wide the column is laid out, in the same layout (a quote's card: none, the column's).
 fn message_files_node(
   col : @view.View,
   src : Source,
@@ -19,7 +19,7 @@ fn message_files_node(
   landed? : (String, @sfbase.FileLandingNode?) -> Unit = fn(_, _) {  },
   corner? : Double = @sf.message_file_corner,
   by? : () -> (String, String, String)? = fn() { None },
-  most? : () -> Double? = fn() { None },
+  most? : (Double) -> Double? = fn(_) { None },
 ) -> Unit {
   col.box(fn(flow) {
     flow
@@ -45,11 +45,11 @@ fn message_files_node(
       let kind = @signals.untracked(fn() { file_kind(a().name) })
       match kind {
         "image" | "video" => {
-          let landing = media_file_node(item, src, here, a, kind, most, at, corner, by)
+          let landing = media_file_node(item, src, here, a, kind, (col, most), at, corner, by)
           landed(key, Some(landing))
         }
         _ => {
-          let landing = card_file_node(item, src, here, a, most, at, by)
+          let landing = card_file_node(item, src, here, a, (col, most), at, by)
           landed(key, Some(landing))
         }
       }
@@ -70,7 +70,7 @@ fn media_file_node(
   here : () -> MessageHere,
   a : () -> Attachment,
   kind : String,
-  room : () -> Double?,
+  room : (@view.View, (Double) -> Double?),
   at : () -> String,
   corner : Double,
   by : () -> (String, String, String)?,
@@ -81,8 +81,9 @@ fn media_file_node(
   let boxed = fn() { image_box(a(), least, min_side=side) }
   // Its own width and ratio are data. The row supplies the available width in the same layout that wraps it.
   // (`fills`: a placed image whose row or table cell says its width.)
-  let most = fn() { media_box_width(a(), kind, room(), fills) }
-  item.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) })) |> ignore
+  // (`room`: how wide it may be by how wide what holds it (`room.0`) is laid out, in the same layout: Roomed)
+  let most = fn(w : Double) { media_box_width(a(), kind, (room.1)(w), fills) }
+  item.width(Roomed(room.0, fn(w, _) { Some(most(w)) })).max_width_within(Roomed(room.0, fn(w, _) { Some(most(w)) })) |> ignore
   let letterbox = fn() { boxed().2 }
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }
@@ -224,7 +225,7 @@ fn card_file_node(
   src : Source,
   here : () -> MessageHere,
   a : () -> Attachment,
-  room : () -> Double?,
+  room : (@view.View, (Double) -> Double?),
   at : () -> String,
   by : () -> (String, String, String)?,
 ) -> @sfbase.FileLandingNode {
@@ -246,7 +247,7 @@ fn card_file_node(
     )
   }
   let id = fn() { text(coming().0, "id") }
-  item.max_width_within(By(fn() { Some(dmin(@sf.file_card_w, room().unwrap_or(@sf.file_card_w))) })) |> ignore
+  item.max_width_within(Roomed(room.0, fn(w, _) { Some(dmin(@sf.file_card_w, (room.1)(w).unwrap_or(@sf.file_card_w))) })) |> ignore
   let view = @sf.file_card_node(
     item,
     info,

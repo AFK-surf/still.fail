@@ -393,7 +393,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
               (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { Some(w()) }, at, @sf.message_file_corner, by, fills=true))
+                ignore(media_file_node(v, src, here, fn() { a }, "image", (v.parent().unwrap(), fn(_) { Some(w()) }), at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
@@ -884,11 +884,12 @@ fn quotes_node(
       }
       // (as wide as the card may be, not as its words are: what the viewer sends may be (the pane's, as the composer
       // sets it), else the message's column; less the card's own room)
-      let quote_picture_most = fn() {
+      // (by how wide the column is laid out, in the same layout: Roomed)
+      let quote_picture_most = fn(col_w : Double) {
         if mine {
           Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
         } else {
-          col.laid_size_told().map(fn(z) { @sf.quote_picture_room(z.0) })
+          Some(@sf.quote_picture_room(col_w))
         }
       }
       let card = @sf.quote_card_node(
@@ -907,13 +908,13 @@ fn quotes_node(
             let file = fn() { quote_file(q(), files()) }
             // A non-media file keeps the quote's existing placeholder; video uses its own cover's limits.
             let kind = fn(a : Attachment) { if file_kind(a.name) == "video" { "video" } else { "image" } }
-            let most = fn() {
-              match (file(), quote_picture_most()) {
+            let most = fn(col_w : Double) {
+              match (file(), quote_picture_most(col_w)) {
                 (Some(a), Some(w)) => media_box_width(a, kind(a), Some(w), false)
                 _ => 0.0
               }
             }
-            b.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) }))
+            b.width(Roomed(col, fn(w, _) { Some(most(w)) })).max_width_within(Roomed(col, fn(w, _) { Some(most(w)) }))
             .aspect(By(fn() { file().map(fn(a) { media_box_ratio(a, kind(a)) }).unwrap_or(0.0) }))
             |> ignore
           })
