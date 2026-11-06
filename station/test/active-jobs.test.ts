@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { OTHER_JOBS_AT_INSTALL, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "../src/store/active-jobs.ts";
 import { HAS_ACTIVE_WATCH, installActiveWatches } from "../src/store/watch-jobs.ts";
+import { activeJobUpgradeReady, activeJobUpgradeStep } from "../src/store/active-jobs-upgrade.ts";
 
 for (const recursive of [false, true]) test(`the running limit follows watches, ordinary jobs and older writers (recursive triggers ${recursive})`, () => {
   const db = new DatabaseSync(":memory:");
@@ -145,6 +146,7 @@ test("archiving finds running jobs and restarting services without their complet
     add("other-service", "b", "exited", 0, 47126, 206);
     installActiveWatches(db);
     installOtherActiveJobs(db);
+    while (!activeJobUpgradeReady(db)) activeJobUpgradeStep(db);
     const plan = (db.prepare(`EXPLAIN QUERY PLAN ${UP_JOBS_OF_SESSION}`).all("a") as { detail: string }[]).map((r) => r.detail).join(" | ");
     assert.match(plan, /active_watch_jobs_session \(session=\?\)/);
     assert.match(plan, /active_other_jobs USING PRIMARY KEY \(session=\?\)/);

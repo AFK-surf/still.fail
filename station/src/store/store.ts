@@ -39,8 +39,9 @@ import { retireDuplicateUsage } from "./usage-unified.ts";
 import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
-import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
+import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, installActiveWatches } from "./watch-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_JOB_SESSIONS, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, AWAKE_JOBS_BEFORE_UPGRADE, REMOTE_QUEUE_BEFORE_UPGRADE, RUNNING_LIMIT_BEFORE_UPGRADE, RUNNING_JOB_SESSIONS_BEFORE_UPGRADE, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, UP_JOBS_BEFORE_UPGRADE, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
+import { activeRemoteJobsAvailable, REMOTE_QUEUE_PREPARED } from "./active-jobs-upgrade.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
 import { AWAKE_WAIT_STATUS, awakeWaitsReady, exactAwakeTime } from "./awake-waits.ts";
@@ -59,6 +60,7 @@ import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION 
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
+import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -67,6 +69,11 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export { SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME };
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// The closest failure in a notice's time window, breaking ties in listTurns' order.
+export const FAILED_TURN_NEAR = `SELECT * FROM turns INDEXED BY turns_by_end
+  WHERE session_key = ?1 AND ended_at >= ?2 AND ended_at <= ?3 AND outcome = 'failed'
+  ORDER BY ABS(ended_at - ?4), started_at, rowid LIMIT 1`;
+export const PROCESS_BY_GROUP = "SELECT * FROM processes WHERE pgid = ?";
 export const SESSION_THREAD_BY_ID = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
   WHERE ts.thread = ?1 AND ts.session = ?2`;
 export const THREAD_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home)
@@ -201,9 +208,53 @@ export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
 export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
-// Keep the grouping on the recent covering index, but fetch result text only after the session's workspace is known.
-export const LATEST_DECISIONS_SCOPED = `WITH latest AS MATERIALIZED (
+const LATEST_DECISIONS_SCOPED_FALLBACK = `WITH latest AS MATERIALIZED (
   SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 GROUP BY +session
+)
+SELECT d.id, d.session, d.created_at, d.result FROM latest l
+LEFT JOIN sessions s ON s.key = l.session
+CROSS JOIN decision_checks d ON d.id = l.id
+WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
+ORDER BY d.created_at, d.id`;
+// With a small non-home workspace, seek its sessions by connect and inspect only the last few checks of each. If a
+// check has an out-of-order time beyond that bound, or the workspace is large, retain the exact recent-index grouping.
+// Home also uses the grouping because it includes checks for sessions no longer in the sessions table.
+// The fallback's CROSS JOIN puts mode outside the index loop, so a disabled fallback does not traverse recent checks.
+const DECISION_SCOPE_BATCH = 64;
+export const LATEST_DECISIONS_SCOPED = `WITH RECURSIVE
+recent AS MATERIALIZED (
+  SELECT id FROM decision_checks INDEXED BY decision_checks_lately WHERE ?3 = 0 AND created_at >= ?1 LIMIT ${DECISION_SCOPE_BATCH + 1}
+),
+connects(connect, n) AS (
+  SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1), 1
+  WHERE (SELECT COUNT(*) FROM recent) = ${DECISION_SCOPE_BATCH + 1}
+  UNION ALL
+  SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1), n + 1
+  FROM connects c WHERE c.connect IS NOT NULL AND n < ${DECISION_SCOPE_BATCH + 1}
+),
+chosen AS MATERIALIZED (
+  SELECT s.key FROM connects c CROSS JOIN sessions s INDEXED BY sessions_by_connect
+  WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws = ?2 LIMIT ${DECISION_SCOPE_BATCH + 1}
+),
+lookups AS MATERIALIZED (
+  SELECT c.key, (SELECT id FROM (
+    SELECT id, created_at FROM decision_checks INDEXED BY decision_checks_session
+    WHERE session = c.key ORDER BY id DESC LIMIT ${DECISION_SCOPE_BATCH + 1}
+  ) WHERE created_at >= ?1 ORDER BY id DESC LIMIT 1) AS id
+  FROM chosen c WHERE (SELECT COUNT(connect) FROM connects) <= ${DECISION_SCOPE_BATCH} AND (SELECT COUNT(*) FROM chosen) <= ${DECISION_SCOPE_BATCH}
+),
+mode AS MATERIALIZED (
+  SELECT (SELECT COUNT(*) FROM recent) < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
+    OR (SELECT COUNT(*) FROM chosen) > ${DECISION_SCOPE_BATCH} OR EXISTS (
+      SELECT 1 FROM lookups l WHERE l.id IS NULL AND EXISTS (
+        SELECT 1 FROM decision_checks INDEXED BY decision_checks_session WHERE session = l.key ORDER BY id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}
+      )
+    ) AS use_global
+),
+latest AS MATERIALIZED (
+  SELECT MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1 GROUP BY +session
+  UNION ALL
+  SELECT id, key AS session FROM lookups WHERE id IS NOT NULL AND NOT (SELECT use_global FROM mode)
 )
 SELECT d.id, d.session, d.created_at, d.result FROM latest l
 LEFT JOIN sessions s ON s.key = l.session
@@ -256,6 +307,8 @@ export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM session
 /// named, the most used first, then the latest (`effortsUsedBy`).
 export const EFFORTS_USED_BY =
   "SELECT effort, COUNT(*) AS n, MAX(created_at) AS last FROM sessions INDEXED BY sessions_efforts WHERE created_by = ? AND runtime = ? AND model IS ? AND created_at >= ? AND effort IS NOT NULL AND effort != '' GROUP BY effort ORDER BY n DESC, last DESC";
+/// Large old stores without that index seek the same person's recent sessions using their existing model lookup.
+export const EFFORTS_USED_BY_BEFORE_INDEX = EFFORTS_USED_BY.replace("INDEXED BY sessions_efforts", "INDEXED BY sessions_models");
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
@@ -314,6 +367,7 @@ const optFlag = (b: boolean | null | undefined): number | null => (b === null ||
 export class Store {
   readonly db: DatabaseSync;
   readonly backfillPriority: SharedArrayBuffer;
+  readonly #effortsIndex: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -338,6 +392,7 @@ export class Store {
 
   private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock, backfillPriority: SharedArrayBuffer) {
     this.db = db;
+    this.#effortsIndex = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -547,6 +602,17 @@ export class Store {
   }
   #all(sql: string, ...args: Arg[]): Json[] {
     return this.#stmt(sql).all(...args);
+  }
+  #active(sql: string, before: string, ...args: Arg[]): Json[] {
+    try { return this.#all(sql, ...args); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("no such table: active_watch_jobs") && !message.includes("no such table: active_other_jobs")
+        && !message.includes("no such index: active_other_remote_jobs")) throw error;
+      if (sql === REMOTE_QUEUE_JOBS && message.includes("no such index: active_other_remote_jobs")
+        && activeRemoteJobsAvailable(this.db)) return this.#all(REMOTE_QUEUE_PREPARED, ...args);
+      return this.#all(before, ...args);
+    }
   }
   /// How many rows it changed.
   #run(sql: string, ...args: Arg[]): number {
@@ -815,7 +881,9 @@ export class Store {
   /// Every chat shared with another workspace now, by its session key.
   chatShares(): Map<string, ChatShare> {
     const now = this.now();
-    return new Map(this.#all("SELECT * FROM chat_shares").flatMap((r) => {
+    let indexed: Json[] | null = null;
+    try { indexed = liveChatShareRows(this.db, now); } catch { /* Keep the original read if the lookup is unavailable. */ }
+    return new Map((indexed ?? this.#all("SELECT * FROM chat_shares")).flatMap((r) => {
       const share = liveShare(toChatShare(r), now);
       return share === null ? [] : [[r.session, share] as const];
     }));
@@ -829,9 +897,17 @@ export class Store {
   }
 
   /// The workspaces some chat's share with lapsed: their stations are still answered why they read it no more.
-  lapsedShareWorkspaces(): Set<string> {
+  lapsedShareWorkspaces(workspaces: readonly string[] | null = null): Set<string> {
     const now = this.now();
-    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to.filter((t) => !shareLive(t, now)).map((t) => t.workspace)));
+    if (workspaces !== null) {
+      try {
+        const indexed = lapsedChatShareWorkspaces(this.db, workspaces, now);
+        if (indexed !== null) return indexed;
+      } catch { /* Keep the original read if the lookup is unavailable. */ }
+    }
+    const wanted = workspaces === null ? null : new Set(workspaces);
+    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to
+      .filter((t) => !shareLive(t, now) && (wanted === null || wanted.has(t.workspace))).map((t) => t.workspace)));
   }
 
   /// The agents of `workspaces` read a chat or wrote to it: its share with them goes on from now (one lapsed stays
@@ -850,9 +926,11 @@ export class Store {
   /// it no longer). Answers when the next one lapses, null when none will.
   lapseChatShares(since: number): number | null {
     const now = this.now();
-    let next: number | null = null;
+    let indexed: ReturnType<typeof dueChatShareRows> = null;
+    try { indexed = dueChatShareRows(this.db, since, now); } catch { /* Keep the original read if the lookup is unavailable. */ }
+    let next: number | null = indexed?.next ?? null;
     this.#with((changes) => {
-      for (const r of this.#all("SELECT * FROM chat_shares")) {
+      for (const r of indexed?.rows ?? this.#all("SELECT * FROM chat_shares")) {
         const ends = toChatShare(r).to.map((t) => t.used + XSHARE_IDLE_MS);
         if (ends.some((end) => end > since && end <= now)) {
           for (const t of this.sessionThreads(r.session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
@@ -950,7 +1028,8 @@ export class Store {
   /// The efforts `createdBy`'s chats on `runtime` and `model` here since `since` ran at, the most used first (what
   /// chat_create runs when it is told no effort).
   effortsUsedBy(createdBy: string, runtime: string, model: string | null, since: number): { effort: string; n: number }[] {
-    return this.#all(EFFORTS_USED_BY, createdBy, runtime, model, since).map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
+    return this.#all(this.#effortsIndex ? EFFORTS_USED_BY : EFFORTS_USED_BY_BEFORE_INDEX, createdBy, runtime, model, since)
+      .map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
   }
 
   /// Who opened session `child` of this station, if another agent did.
@@ -1340,12 +1419,12 @@ export class Store {
 
   /// Whether an agent in this thread has a watch running, without reading its completed jobs.
   hasActiveWatch(thread: number): boolean {
-    return this.#one(HAS_ACTIVE_WATCH, thread) !== undefined;
+    return this.#active(HAS_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, thread).length !== 0;
   }
 
   /// Whether this session has a watch running, without reading its completed jobs.
   hasSessionActiveWatch(session: string): boolean {
-    return this.#one(HAS_SESSION_ACTIVE_WATCH, session) !== undefined;
+    return this.#active(HAS_SESSION_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, session).length !== 0;
   }
 
   /// A thread of this session by the address the agent names it with, and how the session posts there.
@@ -1621,8 +1700,18 @@ export class Store {
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
-    const rows = viewer === undefined ? this.#all(LATEST_DECISIONS, since)
-      : this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, viewer.home !== false ? 1 : 0);
+    let rows: Json[];
+    if (viewer === undefined) rows = this.#all(LATEST_DECISIONS, since);
+    else if (viewer.home !== false) rows = this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
+    else {
+      try {
+        rows = this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately)$/.test(message)) throw error;
+        rows = this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 0);
+      }
+    }
     return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
@@ -2406,6 +2495,11 @@ export class Store {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
   }
 
+  /// The closest failed turn in a time window, without reading a session's older turns.
+  failedTurnsNear(session: string, from: number, to: number, at: number): TurnRow[] {
+    return this.#all(FAILED_TURN_NEAR, session, from, to, at).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
+  }
+
   /// Latest turns for the named sessions: a missing session is omitted, even if an old turn remains for it.
   lastTurnsOf(keys: Iterable<string>): Map<string, TurnSummary | null> {
     const out = new Map<string, TurnSummary | null>();
@@ -2589,7 +2683,7 @@ export class Store {
 
   /// The remote queue's running jobs, in the same order, without unrelated running jobs.
   remoteQueueJobs(): Pick<JobRow, "id" | "sessionKey" | "startedAt" | "queued" | "screen" | "small">[] {
-    return this.#all(REMOTE_QUEUE_JOBS).map((r) => ({
+    return this.#active(REMOTE_QUEUE_JOBS, REMOTE_QUEUE_BEFORE_UPGRADE).map((r) => ({
       id: r.id, sessionKey: r.session_key, startedAt: r.started_at,
       ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
       ...(r.small === 1 ? { small: true } : {}),
@@ -2598,22 +2692,29 @@ export class Store {
 
   /// The running commands and watches that can keep the machine awake, without unrelated services on ports.
   awakeJobs(): { sessionKey: string; startedAt: number }[] {
-    return this.#all(AWAKE_JOBS).map((r) => ({ sessionKey: r.session_key, startedAt: r.started_at }));
+    return this.#active(AWAKE_JOBS, AWAKE_JOBS_BEFORE_UPGRADE).map((r) => ({ sessionKey: r.session_key, startedAt: r.started_at }));
   }
 
   /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
   runningJobsAtLeast(session: string, limit: number): boolean {
-    return limit <= 0 || this.#one(RUNNING_LIMIT, session, limit - 1) !== undefined;
+    return limit <= 0 || this.#active(RUNNING_LIMIT, RUNNING_LIMIT_BEFORE_UPGRADE, session, limit - 1).length !== 0;
+  }
+
+  /// Of these sessions, those with at least one running job. Once prepared, the lookup does not read their history.
+  runningJobSessions(sessions: string[]): Set<string> {
+    if (sessions.length === 0) return new Set();
+    return new Set(this.#active(RUNNING_JOB_SESSIONS, RUNNING_JOB_SESSIONS_BEFORE_UPGRADE, JSON.stringify(sessions)).map((r) => r.session as string));
   }
 
   /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
   runningWaitJobIds(session: string): string[] {
-    return this.#all(RUNNING_WAIT_JOBS, session).map((r) => r.id);
+    return this.#active(RUNNING_WAIT_JOBS, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, session).map((r) => r.id);
   }
 
   /// Its running jobs and services waiting to restart: what must stop when it is archived.
   upJobIds(session: string, old = false): string[] {
-    return this.#all(!old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION, session).map((r) => r.id);
+    const sql = !old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION;
+    return this.#active(sql, UP_JOBS_BEFORE_UPGRADE, session).map((r) => r.id);
   }
 
   /// Null means this old session's jobs have not been prepared yet.
@@ -2675,6 +2776,12 @@ export class Store {
 
   listProcesses(): ProcessRow[] {
     return this.#all("SELECT * FROM processes").map((r) => ({ pgid: r.pgid, startedAt: r.started_at, runtime: r.runtime, label: r.label }));
+  }
+
+  /// The process group with this id, if recorded by this or an earlier station.
+  processByGroup(pgid: number): ProcessRow | null {
+    const r = this.#one(PROCESS_BY_GROUP, pgid);
+    return r ? { pgid: r.pgid, startedAt: r.started_at, runtime: r.runtime, label: r.label } : null;
   }
 
   // ── widget states ──

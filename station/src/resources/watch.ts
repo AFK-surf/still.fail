@@ -52,6 +52,8 @@ export type ResourceOptions = {
   args?(): Promise<Map<number, string> | null>;
   /// The chats' directories.
   places?(): Place[];
+  /// Owners of argument lines, or null to use the immediate directory list while its lookup is unready.
+  placesInArguments?(lines: readonly string[]): Map<string, string> | null;
   /// Each pid's usage so far, null where not read.
   usage(pids: number[]): (Usage | null)[];
   /// Each pid's traffic so far (those with none left out); null: not read.
@@ -67,7 +69,8 @@ export type ResourceOptions = {
 
 /// Each process's whose: the jobs' groups first, then the runners, the app, the station, each with all under it; then
 /// what is left that names a chat's directory.
-export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, "jobs" | "isApp" | "self">, runners: readonly Runner[], args?: Map<number, string> | null, places: readonly Place[] = []): Map<number, Whose> {
+export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, "jobs" | "isApp" | "self">, runners: readonly Runner[], args?: Map<number, string> | null,
+  places: readonly Place[] | (() => readonly Place[]) = [], placesInArguments?: (lines: readonly string[]) => Map<string, string> | null): Map<number, Whose> {
   const { byPid, children } = treeOf(table);
   const out = new Map<number, Whose>();
   const give = (roots: number[], whose: Whose) => {
@@ -86,13 +89,22 @@ export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, 
   give(app.map((p) => p.pid), { key: "app", kind: "app", session: null });
   give(o.self, { key: "station", kind: "station", session: null });
   // What is left that names a chat's directory (the longest that it names), from the top: a script and all it runs.
-  if (args && places.length > 0) {
-    const dirs = places.map((p) => ({ ...p, dir: p.dir.endsWith("/") ? p.dir : `${p.dir}/` })).sort((a, b) => b.dir.length - a.dir.length);
+  if (args) {
+    const lines = [...new Set(table.flatMap((p) => {
+      if (out.has(p.pid) || out.has(p.ppid)) return [];
+      const line = args.get(p.pid);
+      return line === undefined ? [] : [line];
+    }))];
+    const owners = lines.length === 0 ? new Map<string, string>() : placesInArguments?.(lines) ?? null;
+    const dirs = owners === null
+      ? (typeof places === "function" ? places() : places).map((p) => ({ ...p, dir: p.dir.endsWith("/") ? p.dir : `${p.dir}/` })).sort((a, b) => b.dir.length - a.dir.length)
+      : [];
     for (const p of table) {
       if (out.has(p.pid) || out.has(p.ppid)) continue;
       const line = args.get(p.pid);
-      const place = line === undefined ? undefined : dirs.find((d) => line.includes(d.dir));
-      if (place) give([p.pid], chat(place.session));
+      if (line === undefined) continue;
+      const session = owners === null ? dirs.find((d) => line.includes(d.dir))?.session : owners.get(line);
+      if (session !== undefined) give([p.pid], chat(session));
     }
   }
   return out;
@@ -196,7 +208,7 @@ export class ResourceWatch {
     const at = this.#fibers.now();
     const args = this.#o.args ? await this.#o.args().catch(() => null) : null;
     const runners = await this.#o.runners();
-    const whose = whoseOf(table, this.#o, runners, args, this.#o.places?.() ?? []);
+    const whose = whoseOf(table, this.#o, runners, args, () => this.#o.places?.() ?? [], this.#o.placesInArguments);
     const mine = table.filter((p) => whose.has(p.pid));
     const agent = agentsOwn(runners);
     const used = this.#o.usage(mine.map((p) => p.pid));
@@ -256,7 +268,7 @@ export class ResourceWatch {
     if (!table || !now) throw new NotEndable("gone");
     const args = this.#o.args ? await this.#o.args().catch(() => null) : null;
     const runners = await this.#o.runners();
-    const w = whoseOf(table, this.#o, runners, args, this.#o.places?.() ?? []).get(pid);
+    const w = whoseOf(table, this.#o, runners, args, () => this.#o.places?.() ?? [], this.#o.placesInArguments).get(pid);
     if (w?.kind !== "chat" || w.session !== session || agentsOwn(runners).has(pid)) throw new NotEndable("not a chat's");
     kill(pid, "SIGTERM");
     this.#fibers.after(KILL_AFTER_MS, async () => {

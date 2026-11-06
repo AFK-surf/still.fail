@@ -6,16 +6,29 @@ import { giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { workspaceActivityStep } from "../store/workspace-activity.ts";
 import { recoverWaitsStep } from "../store/recover-waits.ts";
 import { awakeWaitsStep } from "../store/awake-waits.ts";
+import { disableSandboxIndex, enableSandboxIndex, sandboxIndexStep } from "../store/sandbox-index.ts";
+import { installSessionDirectories, sessionDirectoriesStep } from "../store/session-directory.ts";
+import { chatShareIndexStep, installChatShareIndex } from "../store/chat-share-index.ts";
+import { installProcessJobs, processJobsStep } from "../store/process-jobs.ts";
+import { activeJobUpgradeStep } from "../store/active-jobs-upgrade.ts";
 
 const db = new DatabaseSync(workerData.path as string);
 const priority = new Int32Array(workerData.priority as SharedArrayBuffer);
 db.exec("PRAGMA busy_timeout = 250; PRAGMA synchronous = NORMAL");
 
-parentPort!.on("message", async (message: { kind?: "activity" | "recovery" | "awake" }) => {
+parentPort!.on("message", async (message: { kind?: "activity" | "recovery" | "awake" | "sandbox" | "sandbox-off" | "directory" | "chat-share" | "process-jobs" | "active-jobs" }) => {
   const kind = message.kind ?? "activity";
   let result: { done: boolean; error?: string } = { done: false };
   if (takeBackfill(priority, threadId)) {
-    try { result = kind === "recovery" ? recoverWaitsStep(db) : kind === "awake" ? awakeWaitsStep(db) : workspaceActivityStep(db); }
+    try {
+      if (kind === "sandbox") { enableSandboxIndex(db); result = sandboxIndexStep(db); }
+      else if (kind === "sandbox-off") { disableSandboxIndex(db); result = { done: true }; }
+      else if (kind === "directory") { installSessionDirectories(db); result = sessionDirectoriesStep(db); }
+      else if (kind === "chat-share") { installChatShareIndex(db); result = chatShareIndexStep(db); }
+      else if (kind === "process-jobs") { installProcessJobs(db); result = processJobsStep(db); }
+      else if (kind === "active-jobs") result = activeJobUpgradeStep(db);
+      else result = kind === "recovery" ? recoverWaitsStep(db) : kind === "awake" ? awakeWaitsStep(db) : workspaceActivityStep(db);
+    }
     catch (error) {
       const code = (error as { errcode?: number }).errcode;
       if (code === undefined || ![5, 6].includes(code & 255)) result = { done: false, error: (error as Error).message };
