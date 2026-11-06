@@ -1474,6 +1474,7 @@ fn scene_drawn_begin(
   l.bands_at.clear()
   l.tops_put.clear()
   l.shown = (0.0, 0.0)
+  l.own_reach.clear()
   // (the level it begins in, and where what holds it began: a layer drawn again where its reference is keeps how far
   // below that it is, Ctx::scene_redrawn_in)
   l.clip_lvl = clip_top() / clip_n
@@ -1975,7 +1976,6 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   l.block_from.clear()
   l.block_refs.clear()
   l.bands.clear()
-  l.own_reach.clear()
   l.block_owners = if inst_owners_kept() {
     Some({ owner: [], cell: [], tree: [], mark: [], bone: [] })
   } else {
@@ -2022,7 +2022,6 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
 fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom : Int, sto : Int, band : Int) -> Int {
   let mut band = band
   if to > from {
-    scene.parts.reach_add(self.inst, from, to, l.own_reach)
     self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
     // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
     while band < l.bands_at.length() && l.bands_at[band] < to {

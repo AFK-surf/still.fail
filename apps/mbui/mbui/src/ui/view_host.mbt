@@ -1450,6 +1450,11 @@ fn Ctx::tree_step(
   // anew with it: of a layer kept, only its own node may be, the rest of it marking it)
   e.reach.clear()
   scene.parts.reach_add(self.inst, k0, self.ninst, e.reach)
+  // (and the layer being drawn told how far what it draws itself reaches, as worked out here once)
+  match scene.drawing {
+    Some(l) => l.own_reach.take(e.reach)
+    None => ()
+  }
   let moved = (made || c.id.at == from) && scene.moved.contains(c.id)
   e.moved = moved
   p.open.push(e)
