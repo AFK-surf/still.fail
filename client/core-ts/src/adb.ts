@@ -586,10 +586,7 @@ export class Adb {
       case "personalForget":
         return this.#mine((sub) => this.#env.personal.forget(sub, t("core-misc.personal.reason.forget")));
       case "personalRestart":
-        return this.#mine((sub) => Effect.gen({ self: this }, function* () {
-          yield* this.#env.personal.forget(sub, t("core-misc.personal.reason.forget"));
-          return yield* this.#env.personal.restart(sub, t("core-misc.personal.reason.restart"));
-        }));
+        return this.#mine((sub) => this.#env.personal.restart(sub, t("core-misc.personal.reason.restart")));
       case "revoke": {
         // One list row represents the whole chat, including multiple agents' grants in that chat.
         const selected = this.#grants.get(call.station)?.get(call.request);
