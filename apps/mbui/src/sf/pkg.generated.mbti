@@ -794,6 +794,8 @@ pub fn group_row(@ui.Ctx, Bool, Bool, () -> Unit, id? : Int32) -> Unit
 
 pub let group_row_end_radius : @ui.Radius
 
+pub fn group_row_node(@view.View, () -> Bool, () -> Bool, (@view.View) -> Unit) -> Unit
+
 pub fn group_rows(@ui.Ctx, String, Array[(String, () -> Unit)]) -> Unit
 
 pub fn group_rows_reset() -> Unit
