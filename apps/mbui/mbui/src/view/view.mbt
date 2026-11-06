@@ -712,6 +712,8 @@ struct Node {
   /// as a modal layer, what is typed still the field of an old view under it that has the focus as it comes over it
   /// (View::leaves_typing)
   mut leaves_typing : Bool
+  /// it leaves text to an old editor alone, while keeping a retained editor's focus without sending it text
+  mut leaves_typing_old_only : Bool
   /// it, and what it holds, are over all else of the window while this holds (View::over_all)
   mut over_all : Bool
   /// drawn, with what it holds, over the scrim of a modal layer of the old frame's up (View::over_scrim)
@@ -1495,6 +1497,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.modal = false
       n.back_goes_on = false
       n.leaves_typing = false
+      n.leaves_typing_old_only = false
       n.over_all = false
       n.over_scrim = false
       n.stack = -1
@@ -1626,6 +1629,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         modal: false,
         back_goes_on: false,
         leaves_typing: false,
+        leaves_typing_old_only: false,
         over_all: false,
         over_scrim: false,
         stack: -1,
@@ -4255,11 +4259,11 @@ fn Tree::modals_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Whether the topmost modal layer now leaves what is typed to the field under it that has the focus
-/// (View::leaves_typing).
-pub fn Tree::typing_left_under(self : Tree) -> Bool {
+/// Whether the topmost modal layer leaves what is typed to a focused field under it (View::leaves_typing). `retained`
+/// asks whether it leaves text to a field of this tree rather than an old editor.
+pub fn Tree::typing_left_under(self : Tree, retained? : Bool = false) -> Bool {
   match self.modal_top() {
-    Some(m) => self.nodes[m.at].leaves_typing
+    Some(m) => self.nodes[m.at].leaves_typing && (!retained || !self.nodes[m.at].leaves_typing_old_only)
     None => false
   }
 }

@@ -2658,7 +2658,7 @@ fn Ctx::typing_allowed(self : Ctx) -> Int {
     return focus
   }
   match view_app.val {
-    Some(tree) if @signals.untracked(fn() { tree.typing_left_under() }) => self.focus
+    Some(tree) if @signals.untracked(fn() { tree.typing_left_under(retained=tree_said_ids.contains(self.focus)) }) => self.focus
     _ => 0
   }
 }

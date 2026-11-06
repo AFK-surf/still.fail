@@ -299,7 +299,7 @@ pub fn sheet_node(
     }) |> ignore
     match initial_focus() {
       Some(target) => layer.focus_opens(target) |> ignore
-      None => layer.leaves_typing().focus_returns() |> ignore
+      None => layer.leaves_typing(old_only=true).focus_returns() |> ignore
     }
     layer.owns(fn() { (size_done.val)() }) |> ignore
   })

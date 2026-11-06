@@ -595,7 +595,7 @@ test "tree sheet can give a requested field the initial focus and return focus t
 }
 
 ///|
-test "old and tree sheets leave the existing editor focused by default and return it on closing" {
+test "sheets leave the existing editor focused by default and return it on closing" {
   for legacy in [true, false] {
     let open = @signals.signal(false)
     let field = @ui.Field::new()
@@ -622,12 +622,107 @@ test "old and tree sheets leave the existing editor focused by default and retur
     t.draw()
     assert_eq(t.ctx().focused_id(), before, msg="legacy=\{legacy}: focus while open")
     t.type_text("x")
-    assert_eq(field.text(), "x", msg="legacy=\{legacy}: typing while open")
+    // The old sheet leaves an old editor accepting text. The retained sheet keeps the focus but must not send text
+    // to a covered editor; in the mixed old-sheet / retained-editor case the old sheet also blocks the text.
+    assert_eq(field.text(), if legacy { "x" } else { "" }, msg="legacy=\{legacy}: typing while open")
     t.tab()
     assert_eq(t.focused().unwrap().label, "Inside", msg="legacy=\{legacy}: Tab enters sheet")
     open.set(false)
     t.draw()
     assert_eq(t.ctx().focused_id(), before, msg="legacy=\{legacy}: focus after close")
+  }
+}
+
+///|
+test "a tree sheet keeps covered editors focused and routes text as an old sheet does" {
+  for old_editor in [false, true] {
+    for intermediate in [false, true] {
+      let open = @signals.signal(false)
+      let field = @ui.Field::new()
+      let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+        if old_editor {
+          @ui.old(root, fn(c) { c.editor("page-field", placeholder="Page field", field~) |> ignore })
+          .height(Is(Some(40.0))) |> ignore
+        } else {
+          @ui.field(root, field, placeholder="Page field") |> ignore
+        }
+        @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
+          s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+        })
+      })
+      t.draw()
+      t.tap_text("Page field")
+      let before = t.ctx().focused_id()
+      assert_true(before != 0)
+      open.set(true)
+      if intermediate { t.draw() }
+      t.text_told("x", t.time())
+      assert_eq(t.ctx().focused_id(), before, msg="old editor=\{old_editor}, intermediate=\{intermediate}")
+      assert_eq(field.text(), if old_editor { "x" } else { "" }, msg="old editor=\{old_editor}, intermediate=\{intermediate}")
+      open.set(false)
+      t.text_told("y", t.time())
+      assert_eq(t.ctx().focused_id(), before)
+      assert_eq(field.text(), if old_editor { "xy" } else { "y" }, msg="closed sheet must release the original editor")
+    }
+  }
+}
+
+///|
+test "old and tree sheets route a covered tree editor alike" {
+  let results : Array[(Bool, String, String)] = []
+  for old_sheet in [true, false] {
+    let open = @signals.signal(false)
+    let field = @ui.Field::new()
+    let page_field : Ref[@view.View?] = Ref(None)
+    let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+      page_field.val = Some(@ui.field(root, field, placeholder="Page field"))
+      if old_sheet {
+        @ui.old(root, fn(c) {
+          @kit.sheet(c, "old focus sheet", open.get(), h=200.0, fn() {  }) |> ignore
+        }).over(Is(true)) |> ignore
+      } else {
+        @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
+          s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+        })
+      }
+    })
+    t.draw()
+    t.act(TextField, Focus, label="Page field")
+    open.set(true)
+    t.draw()
+    let focused = page_field.val.unwrap().focused()
+    t.text_told("x", t.time())
+    let covered = field.text()
+    open.set(false)
+    t.draw()
+    t.text_told("y", t.time())
+    results.push((focused, covered, field.text()))
+  }
+  assert_eq(results, [(true, "", "y"), (true, "", "y")])
+}
+
+///|
+test "a tree sheet can focus its own editor and return to the covered one" {
+  for intermediate in [false, true] {
+    let open = @signals.signal(false)
+    let underneath = @ui.Field::new()
+    let inside = @ui.Field::new()
+    let initial : Ref[@view.View?] = Ref(None)
+    let t = @ui.Tester::new(fn(_) {  }, time=0.0, tree=fn(root : @view.View) {
+      @ui.field(root, underneath, placeholder="Page field") |> ignore
+      @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, initial_focus=fn() { initial.val }, fn(s) {
+        initial.val = Some(@ui.field(s, inside, placeholder="Sheet field"))
+      })
+    })
+    t.draw()
+    t.act(TextField, Focus, label="Page field")
+    open.set(true)
+    if intermediate { t.draw() }
+    t.text_told("x", t.time())
+    assert_eq((underneath.text(), inside.text()), ("", "x"), msg="intermediate=\{intermediate}")
+    open.set(false)
+    t.text_told("y", t.time())
+    assert_eq((underneath.text(), inside.text()), ("y", "x"), msg="intermediate=\{intermediate}")
   }
 }
 
