@@ -18,7 +18,7 @@ import { Effect, Fiber } from "effect";
 import { PLATFORMS, changes, pack } from "../../scripts/module-bundle.ts";
 import { filesOf as nativeFiles } from "../../scripts/native.ts";
 import { stationDrive } from "../src/drive/drive.ts";
-import { ask } from "../src/modules/forward.ts";
+import { ask, forward } from "../src/modules/forward.ts";
 import { keep, type Life } from "../src/modules/live.ts";
 import { ModuleSet, modulesOf } from "../src/modules/modules.ts";
 import { Packages, readInstalled } from "../src/modules/packages.ts";
@@ -90,6 +90,30 @@ test("a cancelled package request closes its socket", async (t) => {
   await requestReceived;
   cancel.abort();
   await assert.rejects(answer, { name: "AbortError" });
+  await socketClosed;
+});
+
+test("a cancelled package response closes its socket after its headers", async (t) => {
+  const dir = temp("mp-cancel-");
+  const socket = join(dir, "module.sock");
+  let closed!: () => void;
+  const socketClosed = new Promise<void>((resolve) => { closed = resolve; });
+  const server = createServer((req, res) => {
+    res.writeHead(200);
+    res.write("partial");
+    const timer = setTimeout(() => res.end("rest"), 100);
+    req.socket.once("close", () => { clearTimeout(timer); closed(); });
+  });
+  await new Promise<void>((resolve) => server.listen(socket, resolve));
+  t.after(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const cancel = new AbortController();
+  const response = await forward(socket, { method: "GET", path: "/about", headers: {}, body: Buffer.alloc(0) }, null, cancel.signal);
+  const reading = (async () => { for await (const _ of response.body as AsyncIterable<Buffer>) { /* drain */ } })();
+  cancel.abort();
+  await assert.rejects(reading);
   await socketClosed;
 });
 
