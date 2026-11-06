@@ -118,3 +118,78 @@ test "a drawing-clock observer cannot advance a deadline past an input that canc
   tree.advance(120.0)
   assert_eq(told, [])
 }
+
+///|
+test "nested geometry notifications keep the frame's moment and restore the next input's scope" {
+  let wall = Ref(0.0)
+  let page : Ref[@view.View?] = Ref(None)
+  let stage = @signals.signal(0.0)
+  let leaf = @signals.signal(0.0)
+  let seen : Array[(String, Double)] = []
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root)
+    root.reacts(fn() { stage.get() }, fn(n) {
+      seen.push(("stage", root.cause_at()))
+      leaf.set(n * 2.0)
+    })
+    root.reacts(fn() { leaf.get() }, fn(_) { seen.push(("leaf", root.cause_at())) })
+    root.box(fn(v) {
+      v.width_share(Is(0.5)).height(Is(Some(40.0))) |> ignore
+      v.reacts(fn() { v.laid_window_told() }, fn(r) {
+        match r {
+          Some(r) => {
+            seen.push(("geometry", v.cause_at()))
+            stage.set(r.2)
+          }
+          None => ()
+        }
+      })
+    }) |> ignore
+  }, time=fn() { wall.val })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  page.val.unwrap().at_moment(15.0, fn() { seen.push(("deadline", page.val.unwrap().cause_at())) }) |> ignore
+  seen.clear()
+  wall.val = 900.0
+  tree.at(20.0)
+  tree.frame(600.0, 300.0, now=10.0) |> ignore
+  assert_eq(seen, [("geometry", 10.0), ("stage", 10.0), ("leaf", 10.0)])
+  seen.clear()
+  tree.event(12.0, fn() { stage.set(700.0) })
+  assert_eq(seen, [("stage", 12.0), ("leaf", 12.0)])
+  seen.clear()
+  wall.val = 30.0
+  stage.set(800.0)
+  assert_eq(seen, [("deadline", 15.0), ("stage", 30.0), ("leaf", 30.0)])
+  assert_eq(tree.logic_at(), 30.0)
+}
+
+///|
+test "prediction preserves equal-time deadline registration order and cancellation" {
+  let page : Ref[@view.View?] = Ref(None)
+  let seen : Array[(String, Double)] = []
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root)
+    root.reacts(fn() { root.drawn_past(95.0) }, fn(_) { })
+  })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let v = page.val.unwrap()
+  let cancel_b : Ref[() -> Unit] = Ref(fn() { })
+  v.at_moment(100.0, fn() {
+    seen.push(("a", v.cause_at()))
+    (cancel_b.val)()
+    v.at_moment(100.0, fn() { seen.push(("d", v.cause_at())) }) |> ignore
+  }) |> ignore
+  cancel_b.val = v.at_moment(100.0, fn() { seen.push(("b", v.cause_at())) })
+  v.at_moment(100.0, fn() { seen.push(("c", v.cause_at())) }) |> ignore
+  let cancel = v.at_moment(99.0, fn() { seen.push(("cancelled", v.cause_at())) })
+  tree.at(110.0)
+  tree.frame(400.0, 300.0, now=90.0) |> ignore
+  assert_eq(seen, [])
+  tree.event(95.0, cancel)
+  tree.advance(120.0)
+  assert_eq(seen, [("a", 100.0), ("c", 100.0), ("d", 100.0)])
+  tree.advance(120.0)
+  assert_eq(seen.length(), 3, msg="each deadline runs once")
+}
