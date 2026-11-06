@@ -1,4 +1,4 @@
-// An agent's execution history, a page of its own (slice 8: ember apps/android chat/screens/History.kt HistoryScreen,
+// An agent's execution history, a page of its own (slice 8: still.fail apps/android chat/screens/History.kt HistoryScreen,
 // Steps, Item, Message, Group, StepRow, Folding, Whole, PhaseLine, Details; ui/ToolStep.kt): what it received and what
 // it sent, drawn alike (a line saying what and where, then its words in brief beside a bar); what it did in between,
 // grouped, each group opening to its calls and thoughts, a call opening to what it asked for (a command, an edit as a

@@ -1,4 +1,4 @@
-// The bookshelf and the reader, in still.fail's design (ember web/ui: the
+// The bookshelf and the reader, in still.fail's design (still.fail web/ui: the
 // reader is viewer/Reader.tsx and its bars, the shelf a page as the drive's
 // is): a grid of books, and a reader that turns pages and keeps the place
 // (chapter and offset, as the media service stores it), over a Source.

@@ -1,4 +1,4 @@
-// A search's words marked in the message it opened a chat at (ember apps/android chat/screens/ChatMotion.kt markWords,
+// A search's words marked in the message it opened a chat at (still.fail apps/android chat/screens/ChatMotion.kt markWords,
 // drawFound; Chat.kt rememberJump's FOUND; shared/ui/TextMark.kt passageMark with words): the chat opens with the
 // message's top under the bar, its first word put in the list's middle when it lies low (past 80% of the page); each
 // of the words in it is bold with a hand-drawn stroke under it, drawn in one after another, kept for as long as the

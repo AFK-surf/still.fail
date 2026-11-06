@@ -1,4 +1,4 @@
-// A hand-drawn stroke under words a search found (ember apps/android chat/screens/Search.kt StrokedLine, a found
+// A hand-drawn stroke under words a search found (still.fail apps/android chat/screens/Search.kt StrokedLine, a found
 // line's; ui/TextMark.kt passageMark, a message's a search opened): a cubic from the words' left to their right that
 // rises, dips and rises again a little, drawn in from the left in the accent with round ends, one stroke after another
 // (web global.css.ts [data-search-marks]). Rasterised here as the icons are, a picture for each step of its drawing.

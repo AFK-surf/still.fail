@@ -1,4 +1,4 @@
-// A chat on the desktop (ember web/src/pages/ChatPage.tsx, ChatPage.css.ts; styles/sidebar.css.ts pageBar,
+// A chat on the desktop (still.fail web/src/pages/ChatPage.tsx, ChatPage.css.ts; styles/sidebar.css.ts pageBar,
 // conversation.css.ts pageBarTitle): its side panel beside it (panel.mbt), its bar over its messages: its title (while a
 // new one goes, that one with a turning ring), its station's update, the station while no agent is in it, its people,
 // its agents (each its history beside the chat, its card on hover); at its end 归档 while nothing is left in it, its

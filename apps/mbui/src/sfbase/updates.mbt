@@ -1,4 +1,4 @@
-// The app keeping itself current, for both frames (ember apps/android app/Updates.kt, Install.kt; the desktop app's
+// The app keeping itself current, for both frames (still.fail apps/android app/Updates.kt, Install.kt; the desktop app's
 // appUpdate). What the person wants is the newest build, not to watch it come: a newer build is asked of the update
 // source the app is given (`set_update_source`) as the app starts and each time it is shown again, and one found is
 // handed to the host at once (@ui.update_fetch), which downloads it by itself and checks it (on a phone, on a network

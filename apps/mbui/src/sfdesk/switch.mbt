@@ -1,4 +1,4 @@
-// Between a chat and a new chat in the wide frame, by the sidebar's 新建对话 or a chat's row (ember web/src/dock.tsx
+// Between a chat and a new chat in the wide frame, by the sidebar's 新建对话 or a chat's row (still.fail web/src/dock.tsx
 // useComposerMove): the composer goes from its place on the one to its place on the other (340 ms, the ease out: its
 // own reshape, composer.mbt), a new chat left leaves by its own way (its scene fading where it is, its choices
 // fading where they are: fresh.mbt, as a new chat become its chat does), and what comes in is there at once. No page

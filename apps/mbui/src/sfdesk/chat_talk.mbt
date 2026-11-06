@@ -1,4 +1,4 @@
-// A chat's talk on the desktop (ember web/src/Chat.tsx ChatShown): its list (sfpages chat_list.mbt) over the pane, the
+// A chat's talk on the desktop (still.fail web/src/Chat.tsx ChatShown): its list (sfpages chat_list.mbt) over the pane, the
 // bar over it, the composer at its foot, what is picked and dropped over them.
 
 ///|

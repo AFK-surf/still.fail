@@ -1,4 +1,4 @@
-// Every model a run can move to (ember apps/android shared/screens/SettingParts.kt ModelList), by series as the core
+// Every model a run can move to (still.fail apps/android shared/screens/SettingParts.kt ModelList), by series as the core
 // lists them: a field to filter them by once there are more than 8, a series' name over its models where there is
 // more than one series, each model with its maker's mark, where it comes from after its name (ModelFrom), faint until
 // borrowed when it is not usable here yet; said so when none matches.

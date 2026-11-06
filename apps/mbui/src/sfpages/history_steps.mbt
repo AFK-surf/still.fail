@@ -1,4 +1,4 @@
-// An agent's execution history's steps, in any pane (ember web/src/History.tsx, History.css.ts; ToolStep.tsx,
+// An agent's execution history's steps, in any pane (still.fail web/src/History.tsx, History.css.ts; ToolStep.tsx,
 // ToolStep.css.ts): what the core put together (its `history` view) drawn turn by turn, each prompt that woke the agent
 // beginning one under a rule saying when and what it did; each event a mark in the gutter on the turn's rail and what it
 // is beside it. What people were sent leads, on a card; the agent's own words are a grey line; the calls and thoughts

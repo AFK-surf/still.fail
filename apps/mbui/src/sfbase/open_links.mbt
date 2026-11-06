@@ -1,4 +1,4 @@
-// still.fail's own links, opened in the app (ember apps/android shared/AppState.kt openLink, open, openItem;
+// still.fail's own links, opened in the app (still.fail apps/android shared/AppState.kt openLink, open, openItem;
 // app/MainActivity.kt handle): the core says what a link opens (`link.parse`, its LinkTarget: client/core-ts
 // src/shapes/schema.ts), which opens here as pages over the one in view; any other link goes to the caller's
 // `or_else` (the system's browser for a link tapped in a message).

@@ -1,4 +1,4 @@
-// The rail at the wide frame's left (ember web/src/Rail.tsx, Rail.css.ts), in one block with the sidebar (frame.mbt
+// The rail at the wide frame's left (still.fail web/src/Rail.tsx, Rail.css.ts), in one block with the sidebar (frame.mbt
 // dock): its top row (in a window with its buttons in the app's top row, their row, dragging the window), the places
 // the person chose on this device as the core has them (prefs `railView`: which, their words and kinds, their order;
 // the rail only draws them), at its foot every workspace to switch to (each with what waits in it; a ＋ over them for

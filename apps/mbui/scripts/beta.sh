@@ -198,7 +198,7 @@ build() {
     export STILLFAIL_POSTHOG="$posthog/posthog.json"
   fi
   local r=0
-  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" SF_SRC="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ -z "$posthog" ] || rm -rf "$posthog"
@@ -223,12 +223,12 @@ mac() {
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac"
-  env MBUI_BUILD=$n EMBER="$REPO" MBUI_SIGN_AFTER_BUILD=1 bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+  env MBUI_BUILD=$n SF_SRC="$REPO" MBUI_SIGN_AFTER_BUILD=1 bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
   sign=(python3 "$REPO/.github/mac_signing.py" run --)
   [ -z "${MAC_SIGN_IDENTITY:-}" ] || sign=()
-  MBUI_BUILD=$n EMBER="$REPO" "${sign[@]}" bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
+  MBUI_BUILD=$n SF_SRC="$REPO" "${sign[@]}" bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
   case $variant in
     stable) zip=$WORK/out/mac/stillfail-$n-arm64-mac.zip ;;
     beta) zip=$WORK/out/mac/stillfail-beta-$n-arm64-mac.zip ;;

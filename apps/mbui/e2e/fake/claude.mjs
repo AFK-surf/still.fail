@@ -1,6 +1,6 @@
-// The test station's claude for the app's flows: ember's fake claude (station/test/fake/claude.mjs, the next one on
+// The test station's claude for the app's flows: still.fail's fake claude (station/test/fake/claude.mjs, the next one on
 // PATH) for everything it knows, and beside it what the decisions and the execution history need, which it does not
-// do. A message the station hands it with one of these in it is answered here (the rest go to ember's fake as they
+// do. A message the station hands it with one of these in it is answered here (the rest go to still.fail's fake as they
 // come):
 //   card:<question>|<label>|<label>*|<label>!   chat_post with an options card ending the turn need_human: the
 //                                               question, then the options (`*` recommended, `!` action close)
@@ -31,7 +31,7 @@ const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : und
 const sessionId = flag("--session-id") || flag("--resume") || "none";
 const say = (frame) => fs.writeSync(1, JSON.stringify(frame) + "\n");
 
-// ember's fake: the first claude.mjs on PATH that is not this one
+// still.fail's fake: the first claude.mjs on PATH that is not this one
 const theirs = (process.env.PATH || "")
   .split(path.delimiter)
   .map((d) => path.join(d, "claude.mjs"))

@@ -17,7 +17,7 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
 2. **The theme is in the Ctx** (SwiftUI's environment, Compose's CompositionLocal, egui's Style): `Ctx::set_theme`
    once, `Ctx::with_theme` for a part. Widgets read their defaults from it; what a call says wins. **The default is
    still.fail's** (its web's and apps' tokens): `Theme::light` and `Theme::dark` the wide screen's (the white canvas,
-   ink, ember orange), `Theme::narrow_light` and `Theme::narrow_dark` the phone's (warm paper, words a size up).
+   ink, still.fail orange), `Theme::narrow_light` and `Theme::narrow_dark` the phone's (warm paper, words a size up).
    The components' default looks are still.fail's parts: pill buttons and fields, the ink for what is to be done (a
    solid button, a checked box, a tooltip, a toast), the accent for what is on or moving (a switch, a slider,
    progress), small panels 6 in with rows on the hover's ground. `Theme::ios_light` and `Theme::ios_dark` keep the

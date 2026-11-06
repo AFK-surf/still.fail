@@ -1,4 +1,4 @@
-// ⌘/ (ember web/src/Shortcuts.tsx ShortcutsDialog, Shortcuts.css.ts): every shortcut, by where it works, the way to
+// ⌘/ (still.fail web/src/Shortcuts.tsx ShortcutsDialog, Shortcuts.css.ts): every shortcut, by where it works, the way to
 // change them (快捷键, sfpages shortcuts.mbt) at its foot.
 
 ///|

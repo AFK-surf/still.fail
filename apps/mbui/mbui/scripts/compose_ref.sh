@@ -1,6 +1,6 @@
 #!/bin/sh
 # Compose's own animation arithmetic, run on this machine's JVM from the
-# animation-core the ember Android app builds with (gradle's cache): the
+# animation-core still.fail's Android app builds with (gradle's cache): the
 # reference values src/motion/motion_test.mbt checks mbui's springs and tweens
 # against. Prints them; nothing is written outside out/compose-ref.
 set -e

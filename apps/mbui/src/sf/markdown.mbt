@@ -259,12 +259,10 @@ let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, cor
 
 ///|
 /// The file a link or an image names, by its name (the last part of its
-/// path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`.
+/// path): `shot.png`, `/w/shot.png`, `file:///w/shot.png`.
 pub fn file_name_of(url : String) -> String {
   let mut u = url.trim(chars=" ").to_string()
-  if u.has_prefix("ember-file://") {
-    u = u.view(start_offset=13).to_string()
-  } else if u.has_prefix("file://") {
+  if u.has_prefix("file://") {
     u = u.view(start_offset=7).to_string()
   }
   let u = @codec.percent_decoded(u)

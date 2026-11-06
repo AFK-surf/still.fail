@@ -1,4 +1,4 @@
-// A chat's web services and background jobs on the desktop (ember web/src/Jobs.tsx, Jobs.css.ts): status a small dot
+// A chat's web services and background jobs on the desktop (still.fail web/src/Jobs.tsx, Jobs.css.ts): status a small dot
 // before the name and a word on the line under it; the chat bar's popover shows what matters now (JobsPopover), the
 // 任务 tab beside the chat everything (JobsTab). What a job's dot says, its word, the line under its name and every
 // time in words are the core's (its `chatJobs` view, `jobLog`); what is done goes through its calls.

@@ -1,4 +1,4 @@
-// The frame's keys (ember web/src/keymap.ts useShortcut, Switcher.tsx GlobalShortcuts, Sidebar.tsx goToNeighbour,
+// The frame's keys (still.fail web/src/keymap.ts useShortcut, Switcher.tsx GlobalShortcuts, Sidebar.tsx goToNeighbour,
 // brand.tsx's sidebar.toggle): ⌘K the switcher, ⌘N a new chat, ⌥↑ / ⌥↓ the chat before or after, ⌘\ the sidebar, ⌘,
 // settings, ⌘/ the shortcuts, ⌘[ / ⌘] back and forward, Esc what the frame opened closed; the keys as the core's prefs
 // keep them on this device (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them.

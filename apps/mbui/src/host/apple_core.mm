@@ -9,7 +9,7 @@
 // CLOCK_MONOTONIC (which on Apple's systems goes on while the machine sleeps, as Android's CLOCK_BOOTTIME: a 10 s wait
 // begun before a sleep is over after it), and the microtasks drained after each.
 //
-// The script's `__native` is ember's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways), its calls
+// The script's `__native` is still.fail's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways), its calls
 // going to the shell (HTTP, still.fail cloud's socket, files and the accounts' SQLite, TCP, iroh), whose answers come
 // from its threads and are posted here as tasks. What only an app can do is not the shell's: `listen.*` (a login's
 // loopback listener) is answered here, on apple_listen.m; `secure.*` here too (the Keychain, or files for a build that
@@ -300,7 +300,7 @@ static void answer_later(double cid, NSData *json, NSString *error, NSData *byte
             !error && bytes != nil);
 }
 
-// ── secure.* (ember hosts/bridge.ts; Android's Keystore) ──
+// ── secure.* (still.fail hosts/bridge.ts; Android's Keystore) ──
 //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
 //   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes; secure.past {key} → {sizes} + the
 //   bytes, a `user: false` key's values kept before accounts named the home (past_accounts), newest first.
@@ -675,7 +675,7 @@ extern "C" int mb_core_secure_test(void) {
   return 1;
 }
 
-// ── listen.* (ember client/core-ts hosts/bridge.ts; Android's Loopback.kt) ──
+// ── listen.* (still.fail client/core-ts hosts/bridge.ts; Android's Loopback.kt) ──
 //   listen.open {port, host} → {id, port}, or the error (the port taken: "Address already in use")
 //   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
 //   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}
@@ -793,7 +793,7 @@ static void core_listen_close_all(void) {
   core_listens = nil;
 }
 
-// ── kept.read (ember client/core-ts hosts/bridge.ts) ──
+// ── kept.read (still.fail client/core-ts hosts/bridge.ts) ──
 //   kept.read {at, start, end} → {} + the bytes, or {none: true}: a file the app saved where the person keeps files
 //   (its path, as the keep said it: apple_views.m keep_answer) read back, bytes start to end (the core's downloads:
 //   drive-kept.ts `saved`). One exported through iOS's Files sheet is named only, out of the app's reach: none.

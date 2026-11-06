@@ -1,4 +1,4 @@
-// What a chat's agents and other chats' agents wrote each other (session_send), in a tab beside the chat (ember
+// What a chat's agents and other chats' agents wrote each other (session_send), in a tab beside the chat (still.fail
 // web/src/Letters.tsx, Letters.css.ts; the core's `chatLetters` view): first the chats it wrote with, a row each, the
 // last written with first; one opened, its letters both ways in the order written, each drawn as the chat draws a
 // message out of its list (StaticMessage: message.mbt).

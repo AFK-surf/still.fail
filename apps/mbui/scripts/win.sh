@@ -22,16 +22,16 @@
 # preview, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
 # beta still.fail's desktop app itself, to take its place (apps/desktop/package.json, build.sh): its id
 # (fail.still.desktop, .beta: its AppUserModelID, its pinned shortcuts'), its name (still.fail, youdid.wtf: its
-# userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail
-# and ember, stillfail-beta), MBUI_OWN; the beta's core a beta's.
+# userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail,
+# stillfail-beta), MBUI_OWN; the beta's core a beta's.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # Every app build, including release variants, picks the same compiler before mbc looks up its objects.
 if [ "${1:-build}" = build ]; then . "$D/win-compiler.sh"; fi
 export APP=${APP:-stillfail}
 if [ "$APP" = stillfail ]; then
-  engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1
-  shell=$(cd "$EMBER" && node scripts/native.ts path shell win32-x64) || exit 1
+  engine=$(cd "$SF_SRC" && node scripts/native.ts path engine win32-x64) || exit 1
+  shell=$(cd "$SF_SRC" && node scripts/native.ts path shell win32-x64) || exit 1
   # (the shell's import library too: the app asks the shell itself for a remote screen's frames, src/host/win_core.c)
   export LIB="$(cygpath -w "$engine");$(cygpath -w "$shell");$LIB"
   export CL="/I$(cygpath -w "$A/engine") /I$(cygpath -w "$MBUI_DIR/src/host") ${CL:-}"
@@ -44,7 +44,7 @@ MONOID_ENV='MBUI_OWN=1\nMBUI_UPDATE_FEED=win\nMBUI_CLOUD=https://app.monoid.buil
 variant() {
   case "${MBUI_VARIANT:-preview}" in
     preview) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
-    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
+    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
     beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
     # monoid's: the same app on monoid's cloud, its station its own (~\.monoid, 「monoid station」: install-windows.ts)
     monoid) id=build.monoid.desktop name=monoid exe=monoid dir=monoid schemes=monoid extra="$MONOID_ENV" ;;
@@ -54,7 +54,7 @@ variant() {
 }
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)
 res() {
-  local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
+  local n=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)}
   local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12).ico
   [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico $icon, on a Mac)" >&2; return 1; }
   local id name exe dir schemes extra r=$A/out/win-res
@@ -158,7 +158,7 @@ setup_bare() {
   echo "win.sh: setup.c compiled in $((SECONDS - t0)) s"
 }
 setup() {
-  local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
+  local n=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
   variant || return 1
   . "$MBUI_DIR/scripts/env.sh"
   local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=${MBUI_SETUP_OUT:-$A/out/setup}

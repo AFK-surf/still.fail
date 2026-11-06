@@ -22,7 +22,7 @@ exe=$A/_build/native/release/build/stillfail/sflayout/sflayout.exe
 echo '[]' > "$out/asked.json"
 rm -f "$out"/*.web.before.json
 for round in 1 2; do
-  (cd "$EMBER" && node apps/mbui/scripts/web-layout.mjs "$out" "$stories" "$size" "$out/asked.json") || exit 1
+  (cd "$SF_SRC" && node apps/mbui/scripts/web-layout.mjs "$out" "$stories" "$size" "$out/asked.json") || exit 1
   # the page taken again is the same page: its elements as the round before (else something not the run's got in)
   for id in $ids; do
     if [ -f "$out/$id.web.before.json" ]; then

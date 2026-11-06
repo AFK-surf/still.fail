@@ -1,4 +1,4 @@
-// An agent's context by hand, between turns (ember apps/android chat/screens/AgentSheet.kt ContextEntry, openContext):
+// An agent's context by hand, between turns (still.fail apps/android chat/screens/AgentSheet.kt ContextEntry, openContext):
 // its context's tile in the agent's card opens a sheet that compacts it (its chat is told when it is done) or clears it
 // (asked first in a sheet of its own, PageParts.kt confirm): its next message starts a new session.
 

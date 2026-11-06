@@ -1,4 +1,4 @@
-// Connecting a Slack connect on the desktop (ember web/src/slack.tsx, slack.css.ts): the steps that make its app in
+// Connecting a Slack connect on the desktop (still.fail web/src/slack.tsx, slack.css.ts): the steps that make its app in
 // Slack from still.fail's manifest (CreateAppSteps), and its two tokens typed into the core's draft of them
 // (useSlackTokens: `slackTokens {station, form}`, `slack.tokens.edit`, `.verify`, `.drop`), who they belong to said
 // once the core has checked them (TokenFields).

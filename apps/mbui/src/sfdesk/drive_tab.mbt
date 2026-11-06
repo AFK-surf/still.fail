@@ -1,4 +1,4 @@
-// A chat's 文件 tab (ember web/src/pages/DriveTab.tsx, DriveTab.css.ts; mobile/StationFiles.tsx): the files of the
+// A chat's 文件 tab (still.fail web/src/pages/DriveTab.tsx, DriveTab.css.ts; mobile/StationFiles.tsx): the files of the
 // workspace's stations beside a chat, to put into what is being written. That is what it is for, on every screen: a
 // few files picked (a press picks a file, goes into a folder; the folder shown picked as a whole from the top of its
 // list), then 添加 n at its foot puts them into the message; what a file is, seen by its row's menu (打开) or the

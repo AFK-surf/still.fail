@@ -1,4 +1,4 @@
-// The `@` menu over the desktop's composer (ember web/src/ChatRef.tsx ChatRefMenu, Chat.tsx useComposerText's
+// The `@` menu over the desktop's composer (still.fail web/src/ChatRef.tsx ChatRefMenu, Chat.tsx useComposerText's
 // reference and its keys; ChatRef.css.ts refMenu, refHead, refQuery, refEmpty, refItem, refLogo, refTitleCell,
 // refTitle, refChipStation, refTime): `@` and a few letters at the caret offer the workspace's chats, then the
 // viewer's other workspaces' (the core's `chatSearch`); the one picked goes in as its mark. What the field's words hold

@@ -14,7 +14,7 @@ import android.os.IBinder;
 import android.os.Looper;
 
 /**
- * Holds the app up while a loopback listener is open ({@link Loopback}), as still.fail's app does (ember
+ * Holds the app up while a loopback listener is open ({@link Loopback}), as still.fail's app does (still.fail
  * apps/android LoginRelay.kt): while the person signs in in the browser the app is in the background, and Android
  * freezes a cached app's process within seconds (the cached apps freezer, on by default from Android 14); a frozen
  * process answers nobody, and the browser's way back would hang. So for as long as one listens, and only then, a

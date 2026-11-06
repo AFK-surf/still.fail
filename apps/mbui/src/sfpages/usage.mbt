@@ -1,4 +1,4 @@
-// 用量, one page in every frame (ember web/src/cloud/settings.tsx UsageSettings; the narrow app's mobile/Usage.tsx;
+// 用量, one page in every frame (still.fail web/src/cloud/settings.tsx UsageSettings; the narrow app's mobile/Usage.tsx;
 // Usage.tsx; Usage.css.ts): what the agents spent over the last 7 or 30 days (picked at the page's head), as the core's
 // `usage` view says it, laid out by what someone opening it wants to know, most first:
 // as Codex's usage history:

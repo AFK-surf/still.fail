@@ -1,4 +1,4 @@
-// The files' page's tabs, as the core keeps them on this device (ember web/src/drive/tabs.ts: its `filesTabs` topic and
+// The files' page's tabs, as the core keeps them on this device (still.fail web/src/drive/tabs.ts: its `filesTabs` topic and
 // `files.tabs`; client/core-ts/src/drive-browse.ts has what they hold and what is done to them).
 
 ///|

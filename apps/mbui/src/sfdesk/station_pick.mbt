@@ -1,4 +1,4 @@
-// A station's files picked to go into a message (ember web/src/mobile/StationFiles.tsx, as the phone's ＋ → Station
+// A station's files picked to go into a message (still.fail web/src/mobile/StationFiles.tsx, as the phone's ＋ → Station
 // 文件 and a narrow chat's 文件 tab): each station's home and the person's favorites, under its name (离线 while away),
 // a folder entered by a tap, the way back as crumbs over
 // them; files ticked (and the folder shown, as a whole), then 添加: each into the chat's message as the 文件 tab's

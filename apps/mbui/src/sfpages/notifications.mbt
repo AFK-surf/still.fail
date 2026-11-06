@@ -1,4 +1,4 @@
-// 通知, one page in every frame, as the web's (ember web/src/pages/Notifications.tsx, Notifications.css.ts; laid out by its
+// 通知, one page in every frame, as the web's (still.fail web/src/pages/Notifications.tsx, Notifications.css.ts; laid out by its
 // width, page_look.mbt): what this device
 // tells its person about their chats, and how, laid out as a phone's notification settings are: a preview that follows
 // the settings (the banner of the kind looked at, the app's badge with what it counts), the ways it tells as tiles each

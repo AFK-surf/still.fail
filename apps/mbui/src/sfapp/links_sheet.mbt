@@ -1,4 +1,4 @@
-// An invitation's link (/invite#<token>) opened in the app (ember apps/android settings/screens/Workspaces.kt
+// An invitation's link (/invite#<token>) opened in the app (still.fail apps/android settings/screens/Workspaces.kt
 // openInvite, InviteLinkSheet, invitationToken): what it leads to, read as the account it would be accepted by
 // (`invitation.preview`), shown in a sheet of half the screen before it is accepted (`invitation.accept`), that
 // account chosen when more than one is signed in. Signed out, the sheet says to sign in first. Without a link (pasted

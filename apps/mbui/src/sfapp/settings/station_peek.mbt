@@ -1,4 +1,4 @@
-// A station's card, from a chat's agent (ember apps/android settings/screens/Stations.kt openStationPeek): whether it
+// A station's card, from a chat's agent (still.fail apps/android settings/screens/Stations.kt openStationPeek): whether it
 // is up and what its agents do, its machine and network at a glance, and where to go on: its files where it lends some,
 // its page.
 

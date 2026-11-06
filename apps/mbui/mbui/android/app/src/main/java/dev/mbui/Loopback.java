@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * browser ({@link BrowserLogin}, mbui/hostapi {@code browser_login}) and the still.fail core's {@code listen.*}
  * ({@link CoreHost}: taking a station's login callback on this device, {@code canRelay}).
  *
- * <p>Each request is read whole (head up to 64 KB, body up to 1 MB, 15 s at most, as ember's Loopback.kt) and handed on
+ * <p>Each request is read whole (head up to 64 KB, body up to 1 MB, 15 s at most, as still.fail's Loopback.kt) and handed on
  * once; it is answered once with {@link #respond}, which closes its connection. A request nobody answers waits until
  * the listener closes. While any listener is open the app holds itself up with {@link LoginService} (a frozen process
  * answers nobody).

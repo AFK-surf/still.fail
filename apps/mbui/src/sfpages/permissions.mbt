@@ -1,4 +1,4 @@
-// Settings pages the wide frame has as the web's has them (ember web/src/pages/Permissions.tsx, Archiving.tsx;
+// Settings pages the wide frame has as the web's has them (still.fail web/src/pages/Permissions.tsx, Archiving.tsx;
 // archiving.ts): what the system lets still.fail do here, and 归档: whether a done chat suggests archiving it, then
 // each station's own archiving, a page of its own each. The phone's settings say these elsewhere (the station's page).
 // 通知 is notifications.mbt's.

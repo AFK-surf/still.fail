@@ -1,4 +1,4 @@
-// What is dragged on the files' page (ember web/src/drive/drag.ts, browse.ts takes / effectOf / dropInto, transfer.ts,
+// What is dragged on the files' page (still.fail web/src/drive/drag.ts, browse.ts takes / effectOf / dropInto, transfer.ts,
 // FilesNav.tsx useFolderDrop): a row pressed and moved past a few points carries its file or folder under the pointer;
 // let go on a folder (a folder's row, a column, the folder shown, a folder of the sidebar) it goes there: within its
 // station moved (⌥: copied), to another station copied (⌘: moved), as Finder does across disks; a folder let go on 个人

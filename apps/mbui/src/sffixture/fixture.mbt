@@ -257,7 +257,7 @@ pub fn last(text : String) -> Json {
 }
 
 ///|
-/// The web's demo's chats (ember web/src/demo/fixtures.ts startingChats), its one station's, as its core lists them:
+/// The web's demo's chats (still.fail web/src/demo/fixtures.ts startingChats), its one station's, as its core lists them:
 /// MBUI_FIXTURE=webdemo, the wide frame beside the web's story app-chat with the same chats (their people's pictures
 /// letters here).
 pub fn webdemo_days() -> Array[Json] {

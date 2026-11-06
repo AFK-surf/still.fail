@@ -1,4 +1,4 @@
-// A chat's composer (ember apps/android chat/screens/Composer.kt ComposerBar, DraftExtras, Drafts, upload; ChatHost.kt
+// A chat's composer (still.fail apps/android chat/screens/Composer.kt ComposerBar, DraftExtras, Drafts, upload; ChatHost.kt
 // HostComposer; Attach.kt; PastedText.kt; SendText.kt): a capsule floating over the list's foot. ＋, a field that grows
 // with the words up to six lines, the round send button; focused or holding something, the field takes the whole
 // width and the buttons go under it. What waits to go with the words sits over the field: the quotes (each with a

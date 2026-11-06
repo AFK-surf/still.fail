@@ -1,4 +1,4 @@
-// A station's screen, full screen (ember apps/android app/remote/ScreenViewer.kt, ScreenActivity.kt;
+// A station's screen, full screen (still.fail apps/android app/remote/ScreenViewer.kt, ScreenActivity.kt;
 // docs/remote-screens.md): the frame fitted whole (letterboxed), zoomed in place with two fingers; while driving it, a
 // tap clicks, a long press right-clicks, a drag drags, two fingers moving together scroll, and the keyboard types into
 // it. Upright, the bar is above the frame (close, the title, how the view goes and who is on it, 只看/控制, pasting,

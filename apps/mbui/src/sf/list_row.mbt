@@ -1,4 +1,4 @@
-// A row of a list (ember web/src/Sidebar.tsx ChatRow; SidebarList.tsx NavItem, "laid out as a chat's"): a chat's, a
+// A row of a list (still.fail web/src/Sidebar.tsx ChatRow; SidebarList.tsx NavItem, "laid out as a chat's"): a chat's, a
 // station's, a folder's, a profile's are one row: its mark beside its first line, its first line (its title and what
 // stands at that line's end), then the lines under it; its sizes the theme's chats' list's, how far in and whether its
 // ground is rounded where its list stands (ListAt).

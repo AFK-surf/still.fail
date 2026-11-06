@@ -1,4 +1,4 @@
-// A file and a quote as a message and the composer show them (ember web/src/Chat.tsx FileTile, FileName, FileCard,
+// A file and a quote as a message and the composer show them (still.fail web/src/Chat.tsx FileTile, FileName, FileCard,
 // QuoteCard; Chat.css.ts fileTile, fileCard…, quoteCard…, later.css.ts fileCard): a file's sheet with its extension on
 // it, its name cut in its middle, its card with its size or how far it has gone; a quote's card with whose it is, its
 // own picture and what is said about it.

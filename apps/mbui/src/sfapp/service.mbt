@@ -1,4 +1,4 @@
-// A web service an agent started (a dev server, a report it serves), full screen over its chat (ember apps/android
+// A web service an agent started (a dev server, a report it serves), full screen over its chat (still.fail apps/android
 // chat/screens/Preview.kt PreviewScreen, PreviewWeb.kt, PreviewLoad.kt; web mobile/Preview.tsx): found by its job (the
 // `job` topic), known by its name, never its port. Its page is a site view (src/ui/native.mbt `NativeView::site`: a
 // web view of a host of its own) whose every request is answered here from the station through the core

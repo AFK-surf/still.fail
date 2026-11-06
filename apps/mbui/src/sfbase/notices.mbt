@@ -1,4 +1,4 @@
-// Notifications, as still.fail's Android app has them (ember apps/android app/Notices.kt, Push.kt, App.kt,
+// Notifications, as still.fail's Android app has them (still.fail apps/android app/Notices.kt, Push.kt, App.kt,
 // MainActivity.kt; docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), a tap
 // opening the chat at the message it is about with Back going to its chat list.
 //

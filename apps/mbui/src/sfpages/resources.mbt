@@ -1,4 +1,4 @@
-// What still.fail uses of a station's machine, as Activity Monitor says it (ember web/src/Resources.tsx ResourcesBody,
+// What still.fail uses of a station's machine, as Activity Monitor says it (still.fail web/src/Resources.tsx ResourcesBody,
 // Resources.css.ts; the core's `resources` view, client/core-ts/src/views/resources.ts): a station's page's 进程, and
 // the line its overview says it in (StationCards.tsx Uses). Its totals with the last minutes' line under each, whose
 // uses what (a chat, the agents, the desktop app, the station) grouped or every process flat, sorted by a column, a

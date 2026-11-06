@@ -1,4 +1,4 @@
-// A chat's messages on the desktop (ember web/src/Chat.tsx ChatShown, ChatRows, useMessageList, ToLatest, ToAsk;
+// A chat's messages on the desktop (still.fail web/src/Chat.tsx ChatShown, ChatRows, useMessageList, ToLatest, ToAsk;
 // Chat.css.ts chatMessages, chatToBottom, chatToAsk; styles/session.css.ts chatList): its rows in the column 760 wide
 // at most in the pane's middle, running on under the composer; following its end, the pages before and after brought
 // in near its edges, put in place once (the unread line, where it was left, where the core opened it), what is read and

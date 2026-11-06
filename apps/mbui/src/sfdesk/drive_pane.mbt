@@ -1,4 +1,4 @@
-// The preview beside a folder's list (⌘⇧P, as Finder's preview pane: ember web/src/pages/DrivePane.tsx, Drive.tsx
+// The preview beside a folder's list (⌘⇧P, as Finder's preview pane: still.fail web/src/pages/DrivePane.tsx, Drive.tsx
 // usePreviewShown): the file chosen shown there as it is chosen (a picture whole, the start of a text, Markdown
 // rendered, code as it is), with what it is, where (its station, its path) and its size and time; what plays (a video,
 // a song) or needs a page of its own (a PDF) says how to open it. Several chosen, or a folder, say so. The files' page

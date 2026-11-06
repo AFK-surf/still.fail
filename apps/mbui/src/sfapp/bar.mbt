@@ -1,4 +1,4 @@
-// The phone's bottom bar (ember apps/android shared/ui/Bar.kt BottomBar, shared/Places.kt PlaceBar): a floating capsule
+// The phone's bottom bar (still.fail apps/android shared/ui/Bar.kt BottomBar, shared/Places.kt PlaceBar): a floating capsule
 // of the places of one bar, 22 in from the screen's sides and its foot (the system's bars are the host's: the view is
 // laid out inside them); a ball over the place shown that travels on a spring stretched by its speed and goes where a
 // finger takes it; the page's primary action in a notch cut out of the bar's top (令, a new chat, on the chats'

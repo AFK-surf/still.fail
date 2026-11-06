@@ -7,7 +7,7 @@
 # app's loopback listener, auth.complete; then Home, with the test chat in it. Started again on the same files, it is
 # signed in at once. The rest of the still.fail it runs against is as scripts/e2e-local.sh has it on a Mac: an
 # iroh-relay of its own (n0's Windows build), a test station enrolled there (this checkout's station/dist, on its
-# Windows natives, ember's fake claude its agent), and alice's other device (e2e/peer.ts) making the chat. Checked beside
+# Windows natives, still.fail's fake claude its agent), and alice's other device (e2e/peer.ts) making the chat. Checked beside
 # it: the browser came back to the app's own page, the core's store holds alice's sign-in, secure.* round-trips through
 # DPAPI, Home lists the chat the station has, both runs' scripts pass. Then the app as an app (its identity in its
 # resources: mbui's src/host/win_life.h): a window's program; started again with a link of its schemes, it hands the
@@ -22,9 +22,9 @@
 set -u
 D="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$(cd "$D/.." && pwd)
-EMBER=$(cd "$ROOT/../.." && pwd)
-# (the station's environment drops every EMBER* variable, as e2e-local.sh's does: this checkout by another name there)
-SF=$EMBER
+SF_SRC=$(cd "$ROOT/../.." && pwd)
+# (the station's environment drops every SF_SRC* variable, as e2e-local.sh's does: this checkout by another name there)
+SF=$SF_SRC
 . "$ROOT/scripts/env.sh"
 PORT=${E2E_PORT:-18787}
 ORIGIN=http://127.0.0.1:$PORT
@@ -60,7 +60,7 @@ relay=$!
 # the cloud: fresh, its own ports
 # (its READY line read from its output as it comes, cloud.ready made then: Windows tells nothing of a log file growing
 # while the cloud holds it open, so not the log's change events; scripts/waitfor.mjs --tee)
-(cd "$EMBER/cloud" && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT \
+(cd "$SF_SRC/cloud" && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT \
   exec node "$(w "$ROOT/scripts/waitfor.mjs")" --tee "$(w "$OUT/cloud.log")" --mark "$(w "$OUT/cloud.ready")" \
     --line 'READY still.fail cloud' -- pnpm exec tsx test/dev.ts) &
 cloud=$!
@@ -68,7 +68,7 @@ node "$ROOT/scripts/waitfor.mjs" --deadline 120 --what "the cloud's READY line" 
   { tail -30 "$OUT/cloud.log"; echo "e2e: the cloud did not start"; exit 1; }
 echo "e2e: cloud up at $ORIGIN"
 
-# the station: its own data and HOME, ember's fake agents first on PATH, no discovery on the LAN, its Windows natives
+# the station: its own data and HOME, still.fail's fake agents first on PATH, no discovery on the LAN, its Windows natives
 STATION=$WORK/station
 mkdir -p "$STATION/data/homes/cc" "$STATION/home" "$WORK/peer-home"
 echo '{"profiles":[{"id":"cc","runtime":"claude","home":"homes/cc","models":["claude-sonnet-5-5"]}],"autoUpdate":false}' > "$STATION/data/config.json"
@@ -76,7 +76,7 @@ echo '{}' > "$STATION/data/homes/cc/.credentials.json"
 mesh=$(cd "$SF" && node scripts/native.ts file mesh win32-x64)
 runner=$(cd "$SF" && node scripts/native.ts file runner win32-x64)
 station_env() {
-  for v in $(env | grep -Eo '^(EMBER|STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset $v; done
+  for v in $(env | grep -Eo '^(STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset $v; done
   export HOME="$(w "$STATION/home")" USERPROFILE="$(w "$STATION/home")" PATH="$SF/station/test/fake:$PATH"
   export STILLFAIL_NO_DISCOVERY=1 STILLFAIL_DATA="$(w "$STATION/data")" STILLFAIL_MESH_NATIVE="$mesh" STILLFAIL_RUNNER="$runner"
 }
@@ -95,7 +95,7 @@ if (station_env && node "$SF/station/dist/main.js" enroll "$ORIGIN" "$token" --d
   if node "$ROOT/scripts/waitfor.mjs" --deadline 60 --what "the station up" \
        --exists "$(w "$OUT/station.ready")" > "$OUT/station-up.log" 2>&1 &&
      (export HOME="$(w "$WORK/peer-home")" USERPROFILE="$(w "$WORK/peer-home")" STILLFAIL_MESH_NATIVE="$mesh" \
-        E2E_EMBER="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
+        E2E_SF_SRC="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
       timeout 180 node "$D/peer.ts" setup) > "$OUT/peer.log" 2>&1; then
     station_ok=1
   fi
@@ -250,7 +250,7 @@ check "files from outside: a copied file and a bitmap pasted, two picked through
 # frames), then tapping it
 peer() {
   (export HOME="$(w "$WORK/peer-home")" USERPROFILE="$(w "$WORK/peer-home")" STILLFAIL_MESH_NATIVE="$mesh" \
-     E2E_EMBER="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
+     E2E_SF_SRC="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
    timeout 120 node "$D/peer.ts" "$@")
 }
 notice_do() {

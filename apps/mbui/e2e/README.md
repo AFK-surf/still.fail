@@ -1,18 +1,18 @@
 # End to end, against a still.fail of its own
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
-only on this machine, never the real account: ember's local cloud (cloud/test/dev.ts: its Workers in Miniflare,
+only on this machine, never the real account: still.fail's local cloud (cloud/test/dev.ts: its Workers in Miniflare,
 Google mocked, the test identities, alice in the workspace "Dev"), an iroh-relay of its own (dev mode, loopback), and
-a test station enrolled there from a clone of ember (built in it, never in ember-src), its agent ember's fake claude
+a test station enrolled there from a clone of still.fail (built in it, never in the checkout it is cloned from), its agent still.fail's fake claude
 (station/test/fake: it answers `post:<words>` with those words through the agents' door, as an agent's chat_post),
 its one profile with a model enabled (`models: [claude-sonnet-5-5]` in its config: a new chat is refused on a station
 with none). Every part has its own ports (E2E_PORT, the cloud from 18787 to 18792; E2E_RELAY, 18740) and directories (E2E_WORK,
 e2e-local beside the checkout; the station's data and HOME under /tmp/mbui-e2e-<uid>, short, as its runners' sockets
 need); the station starts with what the shell has of the machine's own station (EMBER_*, STILLFAIL_* …) taken out.
 
-- `up` clones ember (or brings the clone to ember-src's commit), installs and builds it once, starts the relay, the
+- `up` clones still.fail (or brings the clone to that checkout's commit), installs and builds it once, starts the relay, the
   cloud and the station (each in a session of its own: they outlive the task that started them until `down`), enrolls
-  the station with the cloud's printed token, and has alice's other device (e2e/peer.ts: ember's TS core in Node, on
+  the station with the cloud's printed token, and has alice's other device (e2e/peer.ts: still.fail's TS core in Node, on
   the station's mesh addon, signed in with the cloud's mock account) make the test chat; it writes
   `<work>/run/e2e-env.sh`: MBUI_CLOUD and the account (MBUI_CORE_ACCOUNT_B64, from /__dev/account?user=alice).
 - The app takes them: MBUI_CLOUD=<origin> is the cloud it starts its core on (src/sfcore; Android logs "cloud
@@ -50,7 +50,7 @@ have it (`scripts/e2e-local.sh wait-chat`). Two orderings that could leave a row
 met: core-ts `station/sync.ts` `#read`/`#whole` (a /chats read answered before a later `chat` event but arriving after
 it), and the station's `api/events.ts` `open()`/`flush()` reading rows on two readers at once.
 
-Slice 8 (branch decisions) added flows 22–28 and e2e/fake/claude.mjs, put first on the test station's PATH: ember's
+Slice 8 (branch decisions) added flows 22–28 and e2e/fake/claude.mjs, put first on the test station's PATH: still.fail's
 fake claude for everything it knows, and beside it `card:<question>|<label>|<label>*|<label>!` (chat_post with an
 options card ending need_human: `*` recommended, `!` action=close), `text-card:<question>|<placeholder>` and
 `steps:<words>` (tool calls written to the runtime's own transcript, then chat_post all done). A flow's `#env K=V` lines

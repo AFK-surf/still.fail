@@ -1,4 +1,4 @@
-// What a station's page shows of the machine and its software (ember web/src/components.tsx MeterDials, Dial;
+// What a station's page shows of the machine and its software (still.fail web/src/components.tsx MeterDials, Dial;
 // cloud/StationCards.tsx Net, HostDetails; Versions.tsx SoftwareList, SoftwareRow; MachineLogins.tsx LoginsSection,
 // PastRow; their css.ts), all of it as the core says it.
 

@@ -1,4 +1,4 @@
-// References to other chats in what is written (ember apps/android chat/screens/Composer.kt ChatRefs, RefMarks, the
+// References to other chats in what is written (still.fail apps/android chat/screens/Composer.kt ChatRefs, RefMarks, the
 // field's InputTransformation, ChatRefMenu, markPasted; web ChatRef.tsx): in the composer a short mark, `@[its title]`,
 // drawn in the accent, its brackets unseen; sent, a link the core keeps for it until then. `@` and a few letters at
 // the caret open a menu over the composer of the chats it finds (the core's `chatSearch`: this workspace's, on every

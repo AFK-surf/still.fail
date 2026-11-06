@@ -4,7 +4,7 @@
 // scripts/core.sh hermes). What the core says comes back through the engine's `say`, through core_native.c into mbui's
 // queue (mb_post), which asks for the frame that takes it (win_app.c); the calls only the app does are
 // answered here, as android_core.c's CoreHost and apple_core.mm do:
-//   secure.* (ember hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
+//   secure.* (still.fail hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
 //     key), sealed with DPAPI for this Windows user (CryptProtectData, no prompt ever) in files of <data>\secure, one a
 //     key (its UTF-8 in hex, `.user` after a `user` one's: read only as it was kept). secure.get {key, user} -> {} + the
 //     bytes, or {none: true}; secure.set {key, user} + the bytes -> {}; secure.delete {key} -> {}; secure.ask {reason}

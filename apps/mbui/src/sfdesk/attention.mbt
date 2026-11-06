@@ -1,4 +1,4 @@
-// What wants the viewer and they have not looked at yet, beside the rail's bell or under 待处理 (ember
+// What wants the viewer and they have not looked at yet, beside the rail's bell or under 待处理 (still.fail
 // web/src/Attention.tsx, Attention.css.ts): the stations' trouble and the services left up long (with the bell), then
 // each workspace's chats that came to want the viewer and were not read since (the core's `workspaceMarks` items),
 // each leading to its chat: a card until read (then its row still says it), a failure until the chat runs again;

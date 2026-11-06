@@ -1,4 +1,4 @@
-// What the viewer lays out as the web's (ember web/src/FilePreview.tsx, FilePreview.css.ts), read by its stages
+// What the viewer lays out as the web's (still.fail web/src/FilePreview.tsx, FilePreview.css.ts), read by its stages
 // (viewer.mbt), and how it says where a file was opened from.
 
 ///|

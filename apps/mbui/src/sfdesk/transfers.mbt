@@ -1,4 +1,4 @@
-// What comes to this device and goes between its stations (ember web/src/pages/Transfers.tsx, Files.css.ts
+// What comes to this device and goes between its stations (still.fail web/src/pages/Transfers.tsx, Files.css.ts
 // transfers): the copies between folders and stations, the files downloaded to this device (a chat's, a drive's) and
 // those opened and let go being brought after everything else (client/core-ts fill.ts). On the files' bar its 传输,
 // and in the chats' sidebar's foot (how many go, how far); its list (each copy's way, how it stands, stopped, tried

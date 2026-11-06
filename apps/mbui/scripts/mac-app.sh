@@ -28,7 +28,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$A"
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$(now)-$1:.1f}')"; }
-N=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
+N=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)}
 # MBUI_VARIANT, which app it is built as (as Android's apk.json variants are): preview (the default) still.fail preview, an app
 # beside still.fail's desktop app (fail.still.mbui, its feed mac/mbui); stable and beta still.fail's desktop app itself,
 # to take its place: Electron's ids, names and links (apps/desktop/package.json, build.sh), so that app's updater takes
@@ -37,7 +37,7 @@ N=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
 # beta's core and still.fail preview's are a beta's (MBUI_BETA): builds of every commit, the test channel's.
 case "${MBUI_VARIANT:-preview}" in
   preview) ID=fail.still.mbui NAME="still.fail preview" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
-  stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail ember) ZIP_NAME=stillfail ;;
+  stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail) ZIP_NAME=stillfail ;;
   beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
   # monoid's: the same app on monoid's cloud (MONOID below), its own ids, name and links
   monoid) ID=build.monoid.desktop NAME=monoid FEED=mac OWN=1 BETA= SCHEMES=(monoid) ZIP_NAME=monoid ;;
@@ -74,7 +74,7 @@ sign() {
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
-  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$EMBER/.github/mac_signing.py" notarize "$APPDIR" --no-staple ;; esac
+  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$SF_SRC/.github/mac_signing.py" notarize "$APPDIR" --no-staple ;; esac
   spctl --assess --type execute -vv "$APPDIR" 2>&1 | sed 's/^/spctl: /' || true
   rm -f "$ZIP"
   (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "$(basename "$ZIP")")

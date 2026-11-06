@@ -1,4 +1,4 @@
-// Where people write to a chat on the desktop (ember web/src/Chat.tsx ComposerView, ComposerTools, useComposerText's
+// Where people write to a chat on the desktop (still.fail web/src/Chat.tsx ComposerView, ComposerTools, useComposerText's
 // field, ComposerExtras, sendDraft; styles/composer.css.ts, Chat.css.ts composerText, composerToolbar, sendBtn,
 // attachBtn, composerFiles, composerChoices, chatError; NewChat.css.ts's frosted box; dock.css.ts's width): a frosted
 // capsule that grows into a box with its text, ＋ and send at its ends; opened (focused, written in, a file or a quote

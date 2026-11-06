@@ -1,4 +1,4 @@
-// A link held in a message (ember apps/android ui/Links.kt linkHold, in Sheet.kt MenuHost's look): its own menu, open it
+// A link held in a message (still.fail apps/android ui/Links.kt linkHold, in Sheet.kt MenuHost's look): its own menu, open it
 // or copy it, rather than the message's (picking its words) and rather than the link opening as the finger lifts; a tap
 // stays the link's. The menu is 180 wide, under the line held (over it when there is no room below), centred on the
 // finger; it comes as the app's menus do (MenuSpring, from its corner by the line) over the menu's scrim. Other words

@@ -1,4 +1,4 @@
-// The ways a folder of a station's drive is shown (ember web/src/pages/DriveViews.tsx: the files' page, a chat's 文件
+// The ways a folder of a station's drive is shown (still.fail web/src/pages/DriveViews.tsx: the files' page, a chat's 文件
 // tab), switched over its list and kept for each place on this device (prefs `driveViews`: `page`, `tab`): columns (a
 // column a folder, from where it is to the one open, as Finder's), a tree (folders opened in place, several
 // at once), or a list (one folder). Each row is the same (DriveRow, drive.mbt): chosen by a press, opened by a double

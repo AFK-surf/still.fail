@@ -1,4 +1,4 @@
-// What the last update brought, at the top of the chats' lists until it is seen (ember web/src/mobile/Changelog.tsx
+// What the last update brought, at the top of the chats' lists until it is seen (still.fail web/src/mobile/Changelog.tsx
 // ChangelogNews; the `changelog` topic's `news`), where the frame puts it (the phone's Home: beside the wide frame's
 // rail the web says it in a bubble of its own, cloud/workspace.tsx): the build it is now and its first three changes,
 // a press opens the changelog; its × lets it go at once and tells the core (`changelog.seen`).
