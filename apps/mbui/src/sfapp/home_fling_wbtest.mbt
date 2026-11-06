@@ -83,7 +83,9 @@ test "the chats' list flung on a phone: no layer drawn again but for what change
       out.push("at \{f.at}: the same as before, \{f.layers_drawn} layers drawn again, parts \{f.damage}")
     }
   }
-  println("frames: \{frames.length()}, drawing what differs \{drew}, the old frame built \{built}, the same \{same}")
+  let recorded = frames.fold(init=0, fn(n, f) { n + f.insts_recorded })
+  let drawn = frames.fold(init=0, fn(n, f) { n + f.layers_drawn })
+  println("frames: \{frames.length()}, drawing what differs \{drew}, the old frame built \{built}, the same \{same}; layers drawn \{drawn}, their own instances \{recorded}")
   assert_true(frames.length() > 100 && drew > 100, msg="\{frames.length()} frames, \{drew} drawing what differs")
   assert_eq(out, [])
 }
