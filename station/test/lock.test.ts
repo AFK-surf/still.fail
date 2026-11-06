@@ -666,6 +666,19 @@ test("a hello bringing its person's own lock is let in on it where its member bo
   entry(chain, "device.remove", { key: phone.key.id }, first.key);
   assert.equal(inLockBringing(cloud, admitted(first.base), "member", endpoint, { lock: { person: chain } }).viewer.role, "member");
   assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, { lock: { person: before } }), LockRefusal);
+  // The station says what it knows, for a device to ask before it writes such an entry.
+  const viewer = admitted(first.base).viewer;
+  assert.deepEqual((lockRoute(cloud, "GET", [], Buffer.alloc(0), viewer)[1] as { takes: string[] }).takes, ["person"]);
+  // Told a device was taken off before anyone brings the chain, and after a restart it remembers.
+  const next = [...chain];
+  entry(next, "device", { key: phone.key.id, id: phone.base.hex, label: "phone" }, first.key);
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), viewer)[0], 200);
+  entry(next, "device.remove", { key: phone.key.id }, first.key);
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), viewer)[0], 200);
+  const restarted = new Cloud(cloud.data);
+  assert.throws(() => inLockBringing(restarted, admitted(phone.base), "member", endpoint, { lock: { person: next.slice(0, 4) } }), LockRefusal);
+  // Another's lock is not told here, nor one that was not bound.
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), { ...viewer, sub: "alice" } as any)[0], 409);
 });
 
 test("a device brings what put it in the lock to a station that has not heard of it yet, taken only as any entry is", () => {
