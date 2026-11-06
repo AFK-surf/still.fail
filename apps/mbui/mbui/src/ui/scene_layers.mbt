@@ -90,8 +90,8 @@ priv struct SceneLayer {
   mut shown : (Double, Double)
   /// the level of clip_stack it began in as last drawn, that level's outer's (clip_from) as far below it (none:
   /// scene_no_level), and how far below the level what holds it began in it began: and of each of its own instances, as
-  /// far below the level it began in its clip and that clip's outer are (block_own, block_from: scene_no_level none). What it pushed itself moves
-  /// with it, what it began in stays (insts_moved_by)
+  /// far below the level it began in its clip and that clip's outer are (block_own, block_from: scene_no_level
+  /// none). What it pushed itself moves with it, what it began in stays (insts_moved_by)
   mut clip_lvl : Int
   mut from_rel : Int
   mut depth_in : Int
