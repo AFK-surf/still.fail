@@ -64,6 +64,51 @@ test("what is not an entry is refused", () => {
   assert.throws(() => extendPersonal(SUB, [], "x"), /invalid_lock_entries/);
 });
 
+test("a full personal chain can be kept even when it exceeds one storage value", async () => {
+  const h = await harness();
+  try {
+    const tokens = await h.login("alice"), sub = tokens.subject, ws = `person:${sub}`;
+    const signer = key(), chain: PersonalEntry[] = [];
+    chain.push(entry(signer, 0, null, "genesis", { sub, device: device(signer) }, ws));
+    for (let i = 1; i < 1024; i++) {
+      chain.push(entry(signer, i, hashOf(chain.at(-1)!), "device", { ...device(signer), label: `${i}${"x".repeat(3000)}` }, ws));
+    }
+    assert.ok(Buffer.byteLength(JSON.stringify(chain)) > 2_000_000);
+    const accounts: any = await h.mf.getDurableObjectNamespace("ACCOUNTS", "api");
+    const account = accounts.get(accounts.idFromName(sub));
+    const saved = await account.appendPersonalLock(sub, chain);
+    assert.equal(saved.refused, null);
+    // The local Cloudflare emulator permits an oversized KV value; production limits key plus value to 2 MB.
+    const sizes = await account.personalValueSizes() as { key: string; bytes: number }[];
+    assert.ok(sizes.every(({ bytes }) => bytes < 1_000_000), `individual storage values must fit the provider's limit: ${JSON.stringify(sizes)}`);
+    const fetched = await (await h.as(tokens)("GET", "/v1/me/personal-lock")).json() as { entries: PersonalEntry[] };
+    assert.deepEqual(fetched.entries, chain);
+    const replacement = key(), first = entry(replacement, 0, null, "genesis", { sub, device: device(replacement) }, ws);
+    assert.equal((await account.appendPersonalLock(sub, [first])).refused, null);
+    const afterReset = await account.personalValueSizes() as { key: string; bytes: number }[];
+    assert.equal(afterReset.filter(({ key }) => key.startsWith("personal-lock-part:")).length, 1, "reset discards old parts atomically");
+    assert.deepEqual((await (await h.as(tokens)("GET", "/v1/me/personal-lock")).json() as { entries: PersonalEntry[] }).entries, [first]);
+  } finally { await h.close(); }
+});
+
+test("a personal lock kept by an older cloud is read and migrated on its next extension", async () => {
+  const h = await harness();
+  try {
+    const tokens = await h.login("alice"), sub = tokens.subject, ws = `person:${sub}`, alice = h.as(tokens);
+    const a = key(), b = key(), first = entry(a, 0, null, "genesis", { sub, device: device(a) }, ws);
+    const accounts: any = await h.mf.getDurableObjectNamespace("ACCOUNTS", "api");
+    const account = accounts.get(accounts.idFromName(sub));
+    await account.keepLegacyPersonal([first]);
+    assert.deepEqual((await (await alice("GET", "/v1/me/personal-lock")).json() as { entries: PersonalEntry[] }).entries, [first]);
+    const added = entry(a, 1, hashOf(first), "device", device(b), ws);
+    assert.equal((await alice("POST", "/v1/me/personal-lock", { entries: [added] })).status, 200);
+    assert.deepEqual((await (await alice("GET", "/v1/me/personal-lock")).json() as { entries: PersonalEntry[] }).entries, [first, added]);
+    const sizes = await account.personalValueSizes() as { key: string }[];
+    assert.equal(sizes.some(({ key }) => key === "personal-lock"), false);
+    assert.equal(sizes.some(({ key }) => key === "personal-lock-part:0"), true);
+  } finally { await h.close(); }
+});
+
 test("the personal lock API requires its account, keeps each account's chain separate and rejects another's entry", async () => {
   const h = await harness();
   try {

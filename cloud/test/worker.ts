@@ -164,6 +164,10 @@ export class Account extends ProductionAccount {
   async fireAccountAlarm() { await this.alarm(); }
   async nextAccountAlarm() { return this.ctx.storage.getAlarm(); }
   personalPending() { return this.ctx.storage.kv.get("personal-lock-pending") !== undefined; }
+  personalValueSizes() {
+    return [...this.ctx.storage.kv.list({ prefix: "personal-lock" })].map(([key, value]) => ({ key, bytes: new TextEncoder().encode(JSON.stringify(value)).length }));
+  }
+  keepLegacyPersonal(entries: unknown[]) { this.ctx.storage.kv.put("personal-lock", entries); }
 
   expire(id: string, kind: "idle" | "absolute") {
     const account = this.ctx.storage.kv.get<any>("account");

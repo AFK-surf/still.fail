@@ -1,12 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
-import { extendPersonal, type PersonalEntry } from "./personal-lock";
+import { MAX_ENTRIES, extendPersonal, type PersonalEntry } from "./personal-lock";
 import { entryHash, type Entry } from "../../station/src/cloud/lock.ts";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
 const PERSONAL_RETRY_MS = 5_000;
+// Each entry is bounded by 4096 JSON characters. Even at three UTF-8 bytes per character, 64 entries stay well
+// below the SQLite-backed Durable Object's 2 MB key/value limit.
+const PERSONAL_PART_ENTRIES = 64;
+const personalPart = (index: number) => `personal-lock-part:${index}`;
 type Retry = { hash: string; request: string; until: number; response: string };
 /** Why a session ended, kept a while (the last 32) for the span of a refresh that finds it gone. */
 type Ended = { id: string; at: number; why: "reused" | "logout" | "logout_all" | "removed" | "blocked" };
@@ -48,7 +52,27 @@ export class Account extends DurableObject<Env> {
 
   /** The person's own lock (personal-lock.ts): kept whole, read and written by themselves. */
   personalLock(): PersonalEntry[] {
-    return this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock") ?? [];
+    const count = this.ctx.storage.kv.get<number>("personal-lock-parts");
+    // Earlier clouds kept the whole chain in one value; migrate it on the next successful write.
+    if (count === undefined) return this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock") ?? [];
+    if (!Number.isSafeInteger(count) || count < 1 || count > Math.ceil(MAX_ENTRIES / PERSONAL_PART_ENTRIES)) throw new Error("personal lock storage is broken");
+    const entries: PersonalEntry[] = [];
+    for (let i = 0; i < count; i++) {
+      const part = this.ctx.storage.kv.get<PersonalEntry[]>(personalPart(i));
+      if (!Array.isArray(part) || part.length === 0 || part.length > PERSONAL_PART_ENTRIES || (i < count - 1 && part.length !== PERSONAL_PART_ENTRIES)) throw new Error("personal lock storage is broken");
+      entries.push(...part);
+    }
+    return entries;
+  }
+
+  /** Called in the same transaction as the revision and outbox, so a reset cannot expose mixed generations. */
+  private savePersonalLock(entries: PersonalEntry[]): void {
+    const oldCount = this.ctx.storage.kv.get<number>("personal-lock-parts") ?? 0;
+    const count = Math.ceil(entries.length / PERSONAL_PART_ENTRIES);
+    for (let i = 0; i < count; i++) this.ctx.storage.kv.put(personalPart(i), entries.slice(i * PERSONAL_PART_ENTRIES, (i + 1) * PERSONAL_PART_ENTRIES));
+    for (let i = count; i < oldCount; i++) this.ctx.storage.kv.delete(personalPart(i));
+    this.ctx.storage.kv.put("personal-lock-parts", count);
+    this.ctx.storage.kv.delete("personal-lock");
   }
 
   /** The revision orders snapshots and notifications, including when a new genesis replaces the old. */
@@ -84,7 +108,7 @@ export class Account extends DurableObject<Env> {
           let version = this.ctx.storage.kv.get<number>("personal-lock-version") ?? 0;
           if (nextGenesis !== oldGenesis || next.length !== kept.length) {
             version++;
-            this.ctx.storage.kv.put("personal-lock", next);
+            this.savePersonalLock(next);
             this.ctx.storage.kv.put("personal-lock-version", version);
             this.ctx.storage.kv.put("personal-lock-pending", { sub, version });
           }
