@@ -75,7 +75,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
   room? : (K, Double) -> ListRoom,
-  kept? : (K) -> Bool = fn(_) { false },
+  kept? : (K) -> Bool,
   moving? : () -> Array[K],
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
@@ -288,11 +288,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             _ => ()
           }
         }
+      // (asked of each block only where it is told what is kept so: none kept by a list told neither, and its blocks not
+      // gone through as it scrolls, the home's thousands of chats every frame they are counted anew)
       None =>
-        for i, b in all {
-          if kept(b.0) {
-            with_slot[i] = true
-          }
+        match kept {
+          Some(kept) =>
+            for i, b in all {
+              if kept(b.0) {
+                with_slot[i] = true
+              }
+            }
+          None => ()
         }
     }
     let ix = with_slot.keys().collect()
@@ -552,7 +558,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       }
       slot.row_known_as(id)
-      let shows = fn() { window.get().contains(k) || kept(k) }
+      let shows = fn() { window.get().contains(k) || (match kept { Some(f) => f(k); None => false }) }
       // (its block in `laid`, where the column holds it now: its place there said with its slot, nothing looked for)
       let laid_now = fn() {
         match item.get() {
