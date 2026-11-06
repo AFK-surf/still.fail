@@ -1727,6 +1727,15 @@ fn Ctx::tree_draw_own(
   if c.native_surface && tree_natives.contains(c.id) {
     scene_own_only()
   }
+  if c.host_drawing is Some(_) && (stream_pointer_pictures.contains(c.id) || stream_pointer_overlays.contains(c.id)) {
+    scene_own_only()
+  }
+  // A stream may acquire a native layer as it comes into the clip. Do not replay its old texture or hole separately
+  // from the host placement, even when it was outside the clip the last time this layer was painted.
+  match c.texture {
+    Some(t) if t.direct && t.fit is TextureFill => scene_own_only()
+    _ => ()
+  }
   if c.hosted {
     // (the old frame's: drawn otherwise than by the tree alone, what it reaches the old view's)
     scene_own_only()
@@ -1876,6 +1885,54 @@ fn Ctx::tree_draw_own(
     }
     _ => ()
   }
+  // (a host-owned texture, composed with the same place, clip and opacity as the node)
+  match c.texture {
+    Some(texture) if c.bones == 0L => {
+      let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+      inst_owners.painting = -1
+      inst_owners.tree_painting = Some(c.id)
+      // A system layer cannot reproduce a fade, crop-to-cover, turn or the per-pixel effects of a holder. Decide
+      // with the composed look here, so switching between it and the texture takes effect in this same paint.
+      let direct = if texture.direct && texture.fit is TextureFill && a == 1.0 && words_alpha.val == 1.0 &&
+        e.turn == 0.0 && p.fading.is_empty() && p.stretching.is_empty() && p.glyphing.is_empty() && !shooting.val {
+        stream_of_image(texture.id).bind(fn(st) {
+          match st.view {
+            Some(v) if !st.closed && st.h264 && !v.closed => Some(v)
+            _ => None
+          }
+        })
+      } else {
+        None
+      }
+      match direct {
+        Some(v) => self.paint_tree_native(v, c, x, y, s, None)
+        None => self.paint_tree_texture(c, texture, x, y, s, a)
+      }
+      let ((cx0, cy0, cx1, cy1), _) = clip_shown()
+      let visible = c.w * s > 0.0 && c.h * s > 0.0 && x < cx1 && y < cy1 && x + c.w * s > cx0 && y + c.h * s > cy0
+      if visible || e.turn != 0.0 {
+        stream_pointer_picture_drawn(c.id, stream_of_image(texture.id), direct is Some(_), x, y, c.w * s, c.h * s)
+      }
+      inst_owners.painting = was
+      inst_owners.tree_painting = was_tree
+    }
+    _ => ()
+  }
+  match stream_pointer_overlays.get(c.id) {
+    Some(pointer) if c.bones == 0L => {
+      let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+      inst_owners.painting = -1
+      inst_owners.tree_painting = Some(c.id)
+      self.paint_tree_stream_pointer(
+        pointer, c, x, y, s, a,
+        a == 1.0 && words_alpha.val == 1.0 && e.turn == 0.0 && p.fading.is_empty() &&
+        p.stretching.is_empty() && p.glyphing.is_empty() && !shooting.val,
+      )
+      inst_owners.painting = was
+      inst_owners.tree_painting = was_tree
+    }
+    _ => ()
+  }
   // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
   // as big, as an old view's field is painted; not in its block, kept as it was made)
   if e.field {
@@ -1892,7 +1949,7 @@ fn Ctx::tree_draw_own(
     // what it drew this frame, its picture as far as it drew one)
     let (px, py) = if !e.turn_drawn {
       (x + c.w / 2.0 * s, y + c.h / 2.0 * s)
-    } else if c.image is Some(_) {
+    } else if c.image is Some(_) || c.texture is Some(_) {
       inst_range_middle(self.inst, i0, self.ninst)
     } else {
       (x + block.drawn_mid.0 * s, y + block.drawn_mid.1 * s)
@@ -2177,7 +2234,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     each()
   } else if bones != 0L {
     // (its pictures, icons and drawings a shape of its box: its own picture, the shapes and lines it draws)
-    if c.image is Some(_) || c.picture is Some(_) || !c.shapes.is_empty() || !c.lines.is_empty() {
+    if c.image is Some(_) || c.texture is Some(_) || c.picture is Some(_) || !c.shapes.is_empty() || !c.lines.is_empty() {
       self.emit_bone(0.0, 0.0, c.w, c.h, bone_shape_r(c.radius, c.w, c.h), bones, 1.0)
       each()
     }

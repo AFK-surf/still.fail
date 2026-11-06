@@ -210,6 +210,10 @@ pub(all) struct Look {
   /// where in it its picture lies (x, y, w, h, in its own terms) and the matte filling the rest of it, drawn with the
   /// picture in one (its edge cut once, its corners its own): View::image_in; None, the picture fills it
   mut image_in : ((Double, Double, Double, Double), Int64)?
+  /// A host texture drawn in this node (View::texture).
+  mut texture : Texture?
+  /// A drawing supplied by the host, identified by its revision (View::host_drawing).
+  mut host_drawing : Int64?
   /// how round its corners are (its ground's, its glass's), and the glass it is drawn as under what it draws (None: none):
   /// View::radius, View::glass
   mut radius : Double
@@ -306,6 +310,10 @@ pub(all) struct Content {
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
   image_in : ((Double, Double, Double, Double), Int64)?
+  /// A host texture drawn in this node (View::texture).
+  texture : Texture?
+  /// A drawing supplied by the host, identified by its revision.
+  host_drawing : Int64?
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
@@ -336,6 +344,8 @@ pub fn Content::draws(self : Content) -> Bool {
   (self.ground & 0xFFL) != 0L ||
   (self.edge.0 > 0.0 && (self.edge.1 & 0xFFL) != 0L) ||
   self.image is Some(_) ||
+  self.texture is Some(_) ||
+  self.host_drawing is Some(_) ||
   self.words != "" ||
   !self.shapes.is_empty() ||
   !self.lines.is_empty() ||
@@ -394,6 +404,10 @@ pub(all) struct Drawn {
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
   image_in : ((Double, Double, Double, Double), Int64)?
+  /// A host texture drawn in this node (View::texture).
+  texture : Texture?
+  /// A drawing supplied by the host, identified by its revision.
+  host_drawing : Int64?
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
@@ -1246,6 +1260,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.image_cover = false
       n.look.image_fade = false
       n.look.image_in = None
+      n.look.texture = None
+      n.look.host_drawing = None
       n.look.glass = None
       n.look.words_look = words_plain
       n.look.shadow = (0.0, 0.0, 0L)
@@ -1370,7 +1386,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "", native_surface: false },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, texture: None, host_drawing: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "", native_surface: false },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2284,6 +2300,8 @@ priv enum Prop {
   ImageCover
   ImageFade
   ImageIn
+  Texture
+  HostDrawing
   Corners
   Bones
   BoneWhole
@@ -2890,6 +2908,14 @@ pub fn View::native_surface(self : View, on : Live[Bool]) -> View {
 }
 
 ///|
+/// A drawing supplied by the tree's host (None: none). Change its revision when that drawing needs painting again;
+/// the tree keeps its place, clipping and lifetime just as it does for its own content.
+pub fn View::host_drawing(self : View, revision : Live[Int64?]) -> View {
+  self.bind(HostDrawing, revision, Paint, fn(r) { self.tree.nodes[self.at].look.host_drawing = r })
+  self
+}
+
+///|
 /// The shapes it draws over its ground, in its own terms from its top left (@paint.Shape: outlines filled and stroked):
 /// paint's. What they come to as they are drawn is worked out once for the shapes said (their outlines), whatever colour
 /// they are drawn in (View::tint).
@@ -3121,6 +3147,8 @@ fn draws_of(n : Node) -> Bool {
   (l.ground & 0xFFL) != 0L ||
   (l.edge.0 > 0.0 && (l.edge.1 & 0xFFL) != 0L) ||
   l.image is Some(_) ||
+  l.texture is Some(_) ||
+  l.host_drawing is Some(_) ||
   l.words != "" ||
   !l.runs.is_empty() ||
   !l.shapes.is_empty() ||
@@ -7433,6 +7461,8 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     image_cover: n.look.image_cover,
     image_fade: n.look.image_fade,
     image_in: n.look.image_in,
+    texture: n.look.texture,
+    host_drawing: n.look.host_drawing,
     glass: n.look.glass,
     words_look: n.look.words_look,
     runs: n.look.runs,
@@ -7832,6 +7862,8 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     image_cover: c.image_cover,
     image_fade: c.image_fade,
     image_in: c.image_in,
+    texture: c.texture,
+    host_drawing: c.host_drawing,
     glass: c.glass,
     words_look: c.words_look,
     runs: c.runs,

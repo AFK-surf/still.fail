@@ -66,6 +66,13 @@ pub struct Stream {
   /// the picture shown: its size in pixels and its frame's time, from the event that said it decoded
   priv mut size : (Int, Int)?
   priv mut at : Double?
+  /// Changes when a decoded frame must be composed by the app, including the first frame and a new size. Quiet
+  /// frames shown directly on a system layer leave this alone.
+  priv picture : @signals.Signal[Int64]
+  priv mut picture_revision : Int64
+  /// The system layer's actual visibility, told after a frame places or hides it.
+  priv layer_visible : @signals.Signal[Bool]
+  priv mut layer_visible_now : Bool
   /// frames handed over, their fate not said yet: their time and their ticket's number
   priv out : Array[(Double, Int)]
   /// what it let go of itself, said as the next frame begins ("d TS")
@@ -115,6 +122,9 @@ fn streams_reset() -> Unit {
   stream_nodes.clear()
   stream_tickets.val = 0
   pointers_told.clear()
+  stream_pointer_pictures.clear()
+  stream_pointer_overlays.clear()
+  stream_pointer_epoch.val = 0L
 }
 
 ///|
@@ -142,6 +152,10 @@ pub fn Stream::new(
     need_key: true,
     size: None,
     at: None,
+    picture: @signals.signal(0L),
+    picture_revision: 0L,
+    layer_visible: @signals.signal(false),
+    layer_visible_now: false,
     out: [],
     own: [],
     acks: [],
@@ -307,21 +321,32 @@ pub fn Stream::jpeg(self : Stream, data : Bytes, ts : Double) -> Unit {
 }
 
 ///|
-/// The picture's size in pixels, once a frame of it shows (H.264's: its config's; JPEG's: the frame's).
+/// The picture's size in pixels, once a frame of it shows (H.264's: its config's; JPEG's: the frame's). Tracked.
 pub fn Stream::size(self : Stream) -> (Int, Int)? {
+  self.picture.get() |> ignore
   self.size
 }
 
 ///|
-/// Whether a frame has shown since it opened (one is kept on screen through a reconnect or an end).
+/// Whether a frame has shown since it opened (one is kept on screen through a reconnect or an end). Tracked.
 pub fn Stream::shown_any(self : Stream) -> Bool {
+  self.picture.get() |> ignore
   self.at is Some(_)
 }
 
 ///|
-/// The time of the frame it shows, once one does.
+/// The time of the frame it shows, once one does. Tracked when the frame requires composition; quiet frames advance the
+/// value without notifying readers. Frames handed in by the app are acknowledged by `shown`, including quiet frames.
 pub fn Stream::shown_at(self : Stream) -> Double? {
+  self.picture.get() |> ignore
   self.at
+}
+
+///|
+/// Tell readers of the picture after a non-quiet decoder event, or when it closes.
+fn Stream::picture_changed(self : Stream) -> Unit {
+  self.picture_revision += 1L
+  self.picture.set(self.picture_revision)
 }
 
 ///|
@@ -337,7 +362,13 @@ pub fn Stream::close(self : Stream) -> Unit {
   if self.closed {
     return
   }
+  self.pointer_at(None)
+  pointers_told.remove(self.id)
   self.closed = true
+  if self.layer_visible_now {
+    self.layer_visible_now = false
+    self.layer_visible.set(false)
+  }
   for o in self.out {
     outside_end(outside_stream, o.1)
   }
@@ -354,6 +385,7 @@ pub fn Stream::close(self : Stream) -> Unit {
     h_stream_close(self.id)
   }
   open_streams.retain(fn(s) { !physical_equal(s, self) })
+  self.picture_changed()
 }
 
 ///|
@@ -377,7 +409,7 @@ fn Stream::open(self : Stream) -> Unit {
 /// in the last frame painted, its decoder the host's own.
 fn Stream::shows_itself(self : Stream) -> Bool {
   match self.view {
-    Some(v) => !v.closed && v.told_shown && self.feed is None
+    Some(v) => !v.closed && v.told_shown && self.h264 && self.feed is None
     None => false
   }
 }
@@ -611,6 +643,7 @@ fn streams_said(id : Int) -> Unit {
 /// to latch it).
 fn streams_frame_start() -> Unit {
   let c = g()
+  let changed : Array[Stream] = []
   for s in open_streams.copy() {
     if s.closed {
       continue
@@ -624,6 +657,7 @@ fn streams_frame_start() -> Unit {
     let events = s.own.copy()
     s.own.clear()
     let latch : Ref[Double?] = Ref::new(None)
+    let was_at = s.at
     let take = fn(e : String) {
       let w = e.split(" ").map(fn(x) { x.to_string() }).to_array()
       match w {
@@ -686,12 +720,29 @@ fn streams_frame_start() -> Unit {
         }
       _ => ()
     }
+    if latch.val is Some(_) || s.at != was_at {
+      changed.push(s)
+    }
   }
+  // A whole frame and its sharper part may both have decoded before this frame. Publish them together so a reader
+  // comparing the two sees the final pair, not an intermediate combination from the order of open_streams.
+  @signals.start_batch()
+  for s in changed {
+    s.picture_changed()
+  }
+  @signals.end_batch()
 }
 
 ///|
 /// Once the frame is painted: the frames taken in it said shown, drawn or not.
 fn streams_after_paint() -> Unit {
+  // The host has just placed or hidden all views. Publish their actual layer visibility together, and clear a
+  // pointer belonging to a layer that left, before readers decide where to draw it next.
+  @signals.start_batch()
+  for s in open_streams.copy() {
+    s.layer_visibility_said()
+  }
+  @signals.end_batch()
   for s in open_streams.copy() {
     if s.acks.length() == 0 {
       continue

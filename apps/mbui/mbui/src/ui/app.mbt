@@ -490,6 +490,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
 /// build the last one's (frame_watch.mbt): what that build made for the frames after it (its layers, what takes the
 /// focus) is as it left it.
 fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
+  stream_pointer_epoch.val += 1L
   // A paint-only frame can hide or move a tree's native surface without making a new old-frame build.
   for v in open_views {
     v.painted = -1

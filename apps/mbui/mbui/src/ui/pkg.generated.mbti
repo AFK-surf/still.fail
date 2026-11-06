@@ -640,6 +640,10 @@ pub let still_look : Look
 
 pub fn stream_audio_here() -> Bool
 
+pub fn stream_in(@view.View, () -> Stream?, layer? : () -> Bool, fit? : () -> Fit, pointer? : StreamPointer?) -> @view.View
+
+pub fn stream_pointer_in(@view.View, StreamPointer) -> @view.View
+
 pub fn stream_layers_here() -> Bool
 
 pub fn strike(String) -> @text.Run
@@ -2514,6 +2518,7 @@ pub fn Stream::h264(Self, Bytes, Int32, Int32) -> Unit
 pub fn Stream::hevc(Self, Bytes, Int32, Int32) -> Unit
 pub fn Stream::id(Self) -> Int32
 pub fn Stream::jpeg(Self, Bytes, Double) -> Unit
+pub fn Stream::layer_visible(Self) -> Bool
 pub fn Stream::layered(Self) -> Bool
 pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit, layer? : Bool, quiet? : ((Double) -> Bool)?) -> Self
 pub fn Stream::pointer_at(Self, (Double, Double)?) -> Unit
@@ -2522,6 +2527,13 @@ pub fn Stream::route(Self, Int32, Double, video~ : Bool, audio~ : Bool) -> Unit
 pub fn Stream::shown_any(Self) -> Bool
 pub fn Stream::shown_at(Self) -> Double?
 pub fn Stream::size(Self) -> (Int32, Int32)?
+
+pub struct StreamPointer {
+  // private fields
+}
+pub fn StreamPointer::at(Self, (Double, Double)?) -> Unit
+pub fn StreamPointer::image(Self, String, () -> Bytes, Double, Double, Double, Double) -> Unit
+pub fn StreamPointer::new() -> Self
 
 #derive(Eq, Show, @debug.Debug)
 pub(all) enum Stroke {
