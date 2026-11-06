@@ -254,11 +254,17 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
         // A newer lock is already known but still loading. If no other workspace can answer now, wait for that read:
         // a device just approved in the newer lock can then show this try's code. A ready workspace can proceed now.
         if (signerOf(inner) !== null && places.places.length === 0 && personalAsked(inner, hello.value) === null) {
-          const failed: string[] = [];
-          yield* Effect.forEach(stale, (ws) =>
-            Effect.map(Effect.result(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws))), (r) => { if (r._tag === "Failure") failed.push(ws); }),
-          { concurrency: "unbounded", discard: true });
-          places = placesFor(inner, withoutLocks(hello.value, failed), peer, me);
+          const completed = yield* Queue.unbounded<void>();
+          yield* Effect.forkChild(Effect.forEach(stale, (ws) =>
+            Effect.andThen(Effect.result(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws))), Queue.offer(completed, undefined)),
+          { concurrency: "unbounded", discard: true }));
+          // Recheck after each read: an eligible workspace need not wait for an unrelated slow read. A read may
+          // succeed while the cloud view moves on again, so never use a lock still known to be behind.
+          for (const _ of stale) {
+            yield* Queue.take(completed);
+            places = placesFor(inner, withoutLocks(hello.value, locksToRead(inner, hello.value)), peer, me);
+            if (places.places.length > 0) break;
+          }
         }
         return places;
       });
