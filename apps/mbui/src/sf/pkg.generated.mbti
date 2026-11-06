@@ -1990,6 +1990,8 @@ pub fn rows_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, sized? : @ui.R
 
 pub fn rows_room(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn rows_room_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub fn rule_ink(@ui.Ctx) -> Int64
 
 pub let rule_line : @ui.Style
