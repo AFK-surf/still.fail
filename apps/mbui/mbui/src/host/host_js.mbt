@@ -1057,8 +1057,8 @@ fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bo
 }
 
 ///|
-/// What a view has to say (see host_native.mbt): the browser opens no site (a page cannot answer another's requests
-/// without a service worker of its own), so only what a page's frame posts its host (`{"said":…}`).
+/// What a view has to say (see host_native.mbt): a site's requests where the page has a frame for them (web/host.js),
+/// what a page's frame posts its host (`{"said":…}`).
 fn view_site_next(id : Int) -> String {
   js_view_site_next(id)
 }
@@ -1078,44 +1078,57 @@ extern "js" fn js_view_tell(id : Int, what : Int, text : String) -> Unit =
   #|(i, w, t) => { const H = globalThis.__mbhost; if (H && H.viewTell) H.viewTell(i, w, t) }
 
 ///|
+extern "js" fn js_view_site_body(id : Int, req : Int) -> Bytes =
+  #|(i, r) => globalThis.__mbhost.viewSiteBody(i, r)
+
+///|
 fn view_site_body(id : Int, req : Int) -> Bytes {
-  ignore(id)
-  ignore(req)
-  Bytes::new(0)
+  js_view_site_body(id, req)
 }
+
+///|
+extern "js" fn js_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit =
+  #|(i, r, s, h) => globalThis.__mbhost.viewSiteHead(i, r, s, h)
 
 ///|
 fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(status)
-  ignore(headers)
+  js_view_site_head(id, req, status, headers)
 }
+
+///|
+extern "js" fn js_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit =
+  #|(i, r, d) => globalThis.__mbhost.viewSiteChunk(i, r, d)
 
 ///|
 fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(data)
+  js_view_site_chunk(id, req, data)
 }
+
+///|
+extern "js" fn js_view_site_end(id : Int, req : Int, error : String) -> Unit =
+  #|(i, r, e) => globalThis.__mbhost.viewSiteEnd(i, r, e)
 
 ///|
 fn view_site_end(id : Int, req : Int, error : String) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(error)
+  js_view_site_end(id, req, error)
 }
+
+///|
+extern "js" fn js_view_site_state(id : Int) -> String =
+  #|(i) => globalThis.__mbhost.viewSiteState(i)
 
 ///|
 fn view_site_state(id : Int) -> String {
-  ignore(id)
-  ""
+  js_view_site_state(id)
 }
 
 ///|
+extern "js" fn js_view_site_load(id : Int, path : String) -> Unit =
+  #|(i, p) => globalThis.__mbhost.viewSiteLoad(i, p)
+
+///|
 fn view_site_load(id : Int, path : String) -> Unit {
-  ignore(id)
-  ignore(path)
+  js_view_site_load(id, path)
 }
 
 ///|

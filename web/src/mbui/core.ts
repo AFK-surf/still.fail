@@ -17,6 +17,7 @@ interface MbHost {
   post(channel: string, json: string, bytes?: Uint8Array): void;
 }
 
+declare const __PREVIEW_ORIGIN__: string;
 const host = (): MbHost | undefined => (globalThis as { __mbhost?: MbHost }).__mbhost;
 
 /// What the worker says, to the app: its JSON without the bytes, and those beside it.
@@ -144,6 +145,8 @@ const starting = fetchCarried("inter.woff2", interLatin);
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
+// where a web service's page is shown (cloud/src/preview.ts, the host's site view)
+(host() as { siteFrame?: string } | undefined)!.siteFrame = `${__PREVIEW_ORIGIN__}/_stillfail/frame`;
 // what /share was given, for the app to take (share.ts), said before the app runs
 takeShare((channel, json) => host()?.post(channel, json), (open) => {
   const h = host() as { openUrl?(url: string): boolean } | undefined;

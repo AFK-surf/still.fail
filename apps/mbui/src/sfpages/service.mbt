@@ -496,7 +496,8 @@ fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
 ///|
 /// Marking the page for the chat's agent (a page with no chat to put it in has none).
 fn mark_key_of(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView) -> Unit {
-  if p.session != "" && page_mark_key(c, p.marks.marking) {
+  // (none yet in a frame of the browser's: marking is page.js's, which it does not run)
+  if p.session != "" && !site.framed() && page_mark_key(c, p.marks.marking) {
     page_marks_toggle(p, site)
   }
 }

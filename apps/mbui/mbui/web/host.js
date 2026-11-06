@@ -1328,7 +1328,9 @@
 
   // ---- native views over the canvas (src/ui/native.mbt) ----
   // DOM elements in a layer under the canvas, shown through its holes: a <video> whose bytes come through the app
-  // (read in parts, then played from a Blob), a sandboxed <iframe> (scripts only) for a page of HTML.
+  // (read in parts, then played from a Blob), a sandboxed <iframe> (scripts only) for a page of HTML, the frame of
+  // H.siteFrame for a site where the page has one (a host of its own, whose service worker hands every request of the
+  // site's page here over a port: still.fail's cloud/src/preview.ts says the messages).
   const views = new Map();
   let nextZ = 0;  // the z-index the next view raised takes (view_tell 5); one opened goes over those before it
   let nextView = 0, viewLayer = null;
@@ -1362,15 +1364,127 @@
       H.requestFrame();
     }
   });
+  // ---- a site's frame ----
+  const FROM_FRAME = /^(stillfail|ember)-preview-/;
+  const siteSay = (v, said) => { v.said.push(JSON.stringify(said)); H.requestFrame(); };
+  const siteSays = (v, words) => siteSay(v, { said: JSON.stringify(words) });
+  const toBase64 = (b) => { let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); };
+  const fromBase64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+  // What the frame's port says: a request of the site's page, one it gave up, its WebSockets. A socket is the app's as
+  // a page's own script would say it (mbuiHost.post); no request is `page`: the frame's service worker puts what a page
+  // needs first in it, the app has nothing to add. A request waits for its head as a browser's does (no `late`, no
+  // `slow`: this host keeps nothing of an answer to read too slowly).
+  const siteAsked = (v, m) => {
+    if (m.type === 'cancel') { v.bodies.delete(m.id); siteSay(v, { gone: m.id }); }
+    else if (m.type === 'socket') siteSays(v, { p: 'open', sid: m.sid, path: m.path, protocols: [].concat(m.protocols ?? []).join(', ') });
+    else if (m.type === 'socket-send') {
+      if (m.close) siteSays(v, { p: 'close', sid: m.sid, code: m.close[0], reason: m.close[1] || '' });
+      else if (typeof m.text === 'string') siteSays(v, { p: 'send', sid: m.sid, text: m.text });
+      else if (m.binary) siteSays(v, { p: 'sendBinary', sid: m.sid, b64: toBase64(new Uint8Array(m.binary)) });
+    } else if (typeof m.id === 'number') {
+      if (m.body) v.bodies.set(m.id, m.body);
+      siteSay(v, { req: m.id, method: m.method, path: m.path, headers: m.headers || [], page: false });
+    }
+  };
+  const sitePost = (v, m, transfer) => { if (v.port) v.port.postMessage(m, transfer || []); };
+  const siteNav = (v, action, path) => { if (v.el.contentWindow) v.el.contentWindow.postMessage({ type: 'stillfail-preview-nav', action, path }, v.origin); };
+  window.addEventListener('message', (e) => {
+    if (typeof e.data?.type !== 'string' || !FROM_FRAME.test(e.data.type)) return;
+    for (const v of views.values()) {
+      if (v.kind !== 3 || e.source !== v.el.contentWindow || e.origin !== v.origin || e.data.nonce !== v.nonce) continue;
+      const name = e.data.type.replace(FROM_FRAME, '');
+      if (name === 'ready' && !v.port) {
+        const { port1, port2 } = new MessageChannel();
+        v.port = port1;
+        port1.onmessage = (m) => siteAsked(v, m.data);
+        e.source.postMessage({ type: 'stillfail-preview-port', streams: true }, v.origin, [port2]);
+      } else if (name === 'at') {
+        Object.assign(v.at, { path: e.data.path, back: !!e.data.back, forward: !!e.data.forward, loading: false });
+        v.at = { ...v.at };
+        H.requestFrame();
+      }
+    }
+  });
+  // Where a press goes: the canvas lies over every view, so a site takes presses by the canvas being cut away where it
+  // is seen (the hole the app paints shows nothing of the canvas's there anyway), but for what the app says takes a
+  // press over it (view_tell 4), in cells of a grid of those rects' edges, none overlapping (the rule is even-odd).
+  let cutSaid = '';
+  const cutSites = () => {
+    let cells = '';
+    for (const v of views.values()) {
+      if (v.kind !== 3 || !v.seen || v.touch === 'through') continue;
+      const [x0, y0, x1, y1] = v.seen;
+      const covers = v.covers;
+      const lines = (from, to, at) => [...new Set([from, to, ...covers.flatMap((c) => [c[at], c[at + 2]]).filter((k) => k > from && k < to)])].sort((a, b) => a - b);
+      const xs = lines(x0, x1, 0), ys = lines(y0, y1, 1);
+      for (let i = 0; i + 1 < xs.length; i++) for (let j = 0; j + 1 < ys.length; j++) {
+        const [a, b, c, d] = [xs[i], ys[j], xs[i + 1], ys[j + 1]];
+        if (covers.some((r) => a >= r[0] && b >= r[1] && c <= r[2] && d <= r[3])) continue;
+        cells += `M${a} ${b}H${c}V${d}H${a}Z`;
+      }
+    }
+    const said = cells && `path(evenodd,"M0 0H99999V99999H0Z${cells}")`;
+    if (said !== cutSaid) canvas.style.clipPath = cutSaid = said;
+  };
   H.viewSiteNext = (id) => {
     const v = views.get(id);
     return v && v.said && v.said.length ? v.said.shift() : '';
+  };
+  H.viewSiteBody = (id, req) => {
+    const v = views.get(id);
+    const body = v && v.bodies && v.bodies.get(req);
+    if (body) v.bodies.delete(req);
+    return body || new Uint8Array(0);
+  };
+  H.viewSiteHead = (id, req, status, headers) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3) return;
+    sitePost(v, { id: req, head: { status, headers: JSON.parse(headers) } });
+  };
+  H.viewSiteChunk = (id, req, data) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3) return;
+    const chunk = new Uint8Array(data);
+    sitePost(v, { id: req, chunk }, [chunk.buffer]);
+  };
+  H.viewSiteEnd = (id, req, error) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3) return;
+    sitePost(v, error ? { id: req, error } : { id: req, end: true });
+  };
+  // how a site stands, once as it changes
+  H.viewSiteState = (id) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3 || v.atSaid === v.at) return '';
+    v.atSaid = v.at;
+    return JSON.stringify(v.at);
+  };
+  H.viewSiteLoad = (id, path) => {
+    const v = views.get(id);
+    if (v && v.kind === 3) siteNav(v, 'go', path);
   };
   H.viewTell = (id, what, text) => {
     const v = views.get(id);
     // raised over all the others (the app paints it after them): by z-index, as moving an iframe in the page loads it
     // again
     if (v && what === 5) { v.clip.style.zIndex = String(++nextZ); return; }
+    if (v && v.kind === 3) {
+      if (what === 2) { v.touch = text.split(' ')[0]; cutSites(); }
+      else if (what === 4) {
+        const n = text ? text.split(' ').map(Number) : [];
+        v.covers = [];
+        for (let i = 0; i + 3 < n.length; i += 4) v.covers.push(n.slice(i, i + 4));
+        cutSites();
+      } else if (what === 7) {
+        // what a socket did, on to the frame (NativeView::tell_frame): [sid, what, …]
+        const [sid, kind, a, b, c] = JSON.parse(text);
+        if (kind === 'open') sitePost(v, { type: 'socket-open', sid, protocol: a });
+        else if (kind === 'text') sitePost(v, { type: 'socket-message', sid, text: a });
+        else if (kind === 'binary') { const binary = fromBase64(a); sitePost(v, { type: 'socket-message', sid, binary }, [binary.buffer]); }
+        else if (kind === 'close') sitePost(v, { type: 'socket-close', sid, code: a, reason: b, failed: c });
+      }
+      return;
+    }
     if (!v || v.kind !== 2) return;
     if (what === 1) { v.scripts.push(text); runScripts(v); }
   };
@@ -1381,7 +1495,7 @@
     tell(OUTSIDE_VIEW, id, state);
   };
   H.viewOpen = (kind, arg) => {
-    if (kind !== 1 && kind !== 2) return 0;
+    if (kind !== 1 && kind !== 2 && !(kind === 3 && H.siteFrame)) return 0;
     const id = ++nextView;
     const clip = document.createElement('div');
     clip.style.cssText = 'position:absolute;overflow:hidden;display:none;background:' + (kind === 1 ? '#000' : '#fff');
@@ -1432,6 +1546,23 @@
         H.requestFrame();
       };
       v.ask(0);
+    } else if (kind === 3) {
+      const el = document.createElement('iframe');
+      el.style.cssText = 'position:absolute;border:0;background:#fff;pointer-events:auto;transform-origin:0 0';
+      const frame = new URL(H.siteFrame, location.href);
+      v.origin = frame.origin;
+      v.nonce = crypto.randomUUID();
+      v.said = [];
+      v.bodies = new Map();
+      v.covers = [];
+      v.scale = 1;
+      v.at = { path: arg, back: false, forward: false, loading: true, title: '', cookies: false, frame: true };
+      frame.searchParams.set('n', v.nonce);
+      frame.searchParams.set('path', arg);
+      el.src = frame.href;
+      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; ready(id, v, 1); stood(id); });
+      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); stood(id); });
+      v.el = el;
     } else {
       const el = document.createElement('iframe');
       el.setAttribute('sandbox', 'allow-scripts');
@@ -1462,8 +1593,16 @@
     // (its corners round, each its own (top left, then round it), as the hole the app paints for it: the element cut
     // to them, what it shows with it)
     const rs = [r0, r1, r2, r3].map((k) => Math.max(0, k)), round = rs.some((k) => k > 0);
-    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px',
-      borderRadius: round ? rs.map((k) => k + 'px').join(' ') : '', overflow: round ? 'hidden' : '' });
+    // (a site laid out at its rect over its scale and drawn at it: view_control 8)
+    const k = v.scale || 1;
+    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w / k + 'px', height: h / k + 'px',
+      borderRadius: round ? rs.map((r) => r / k + 'px').join(' ') : '', overflow: round ? 'hidden' : '' });
+    if (v.kind === 3) {
+      v.el.style.transform = k === 1 ? '' : `scale(${k})`;
+      v.seen = shown && cx1 > cx0 && cy1 > cy0 ? [cx0, cy0, cx1, cy1] : null;
+      v.placed = [x, y, w, h, cx0, cy0, cx1, cy1, shown, r0, r1, r2, r3];
+      cutSites();
+    }
     // where it is now, in device pixels, as the page laid it out (scripts/host_contract.sh web views: against VIEWTOLD)
     if (shown && H.log) {
       const d = window.devicePixelRatio || 1, r = v.el.getBoundingClientRect(), k = v.clip.getBoundingClientRect();
@@ -1484,10 +1623,22 @@
     if (!v) return;
     views.delete(id);
     if (v.kind === 1) { v.el.pause(); if (v.url) URL.revokeObjectURL(v.url); }
+    if (v.kind === 3 && v.port) v.port.close();
     v.clip.remove();
+    cutSites();
   };
   H.viewControl = (id, op, value) => {
     const v = views.get(id);
+    if (v && v.kind === 3) {
+      if (op === 5) siteNav(v, 'back');
+      else if (op === 6) siteNav(v, 'forward');
+      else if (op === 7) siteNav(v, 'reload');
+      else if (op === 8 && value > 0 && value !== v.scale) {
+        v.scale = value;
+        if (v.placed) H.viewPlace(id, ...v.placed);
+      }
+      return;
+    }
     if (!v || v.kind !== 1) return;
     if (op === 1) v.el.play().catch(() => {});
     else if (op === 2) v.el.pause();
