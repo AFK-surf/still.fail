@@ -106,6 +106,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       t.frame_at(returned_at + linger_ms + 2.0 * @ui.move_most_ms)
       t.assert_idle()
       assert_true(tree.wake_waited() is None && t.next_wake() is None, msg="no expired reply is waiting for another callback")
+      println("backlog final \{width}, \{hz} Hz: reading \{(rd.top_seq, rd.top_off, rd.bottom_seq, rd.at_end)}, field focused \{t.ctx().field_focused()}")
       // Compare glyphs by their content key, not the atlas positions assigned
       // by earlier frames; all instances and their clipping stay in the text.
       pictures.push(t.drawn_text())
@@ -142,10 +143,8 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       let mut changed_words = 0
       let count = if words[0].length() > words[1].length() { words[0].length() } else { words[1].length() }
       for i in 0..<count {
+        println("backlog words \{width} item \{i}: 0 Hz \{words[0].get(i)}; 60 Hz \{words[1].get(i)}")
         if words[0].get(i) != words[1].get(i) {
-          if changed_words < 12 {
-            println("backlog words \{width} item \{i}: 0 Hz \{words[0].get(i)}; 60 Hz \{words[1].get(i)}")
-          }
           changed_words += 1
         }
       }
