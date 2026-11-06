@@ -1,9 +1,10 @@
 // 账号, one page in every frame (web/src/cloud/settings.tsx AccountSettings; the narrow app's mobile/Me.tsx), the same
 // on every width (the user, 2026-10-26: 「设置感觉很乱」; it was four sections and two cards wide, one card narrow): the
 // accounts on this device on one card, the one in view first with who it is (its picture, name, email and how it
-// signs in) and signing out of it, the others each signed out of by itself, another added; where it is signed in (each
-// device, signed out from here but this one); deleting the account, in red at the foot. Signing out and deleting
-// asked first (@sf.confirm).
+// signs in) and signing out of it, its picture changed under it (one of its own from the system's photos, or its
+// sign-in's again), the others each signed out of by itself, another added; where it is signed in (each device,
+// signed out from here but this one); deleting the account, in red at the foot. Signing out and deleting asked first
+// (@sf.confirm).
 
 ///|
 /// 账号 (AccountSettings, MeScreen).
@@ -20,6 +21,26 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
     _ => []
   }
   let others = accounts.filter(fn(a) { text(Some(a), "sub") != here.sub })
+  // a picture picked as theirs, once read: made their face and put up
+  if own_picture.reading != "" {
+    match c.image_pixels(own_picture.reading, @sf.face_picture_read) {
+      PixelsComing => ()
+      PixelsRead(w, h, px) => {
+        own_picture.reading = ""
+        @settings.act(
+          core,
+          @sf.t("android-settings.me.pictureWhat"),
+          "account.setPicture",
+          obj([("account", str(own_picture.sub)), ("picture", str(@sf.face_picture(w, h, px)))]),
+          done=@sf.t("android-settings.me.pictureSet"),
+        )
+      }
+      PixelsFailed => {
+        own_picture.reading = ""
+        (core.say)(@sf.t("android-settings.me.pictureUnread"))
+      }
+    }
+  }
   // signing out of one: asked first, then the chats (the account in view goes with it)
   let sign_out = fn(sub : String, email : String) {
     @sf.confirm(
@@ -83,6 +104,37 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         },
       )
       |> ignore
+      // its picture under it: one of its own from the system's photos; its sign-in's again once it has one of its own
+      // (each pressed once at a time, spinning while it goes)
+      let setting = own_picture.asking ||
+        own_picture.reading != "" ||
+        is_doing(core, ["account.setPicture"], [("account", here.sub)])
+      let removing = is_doing(core, ["account.removePicture"], [("account", here.sub)])
+      if @sf.link_row(c, "own-picture", @sf.t("android-settings.me.picture"), chevron=false, tail?=if setting {
+            Some(fn() { spinner(c, inline=true) })
+          } else {
+            None
+          }) &&
+        !setting &&
+        !removing {
+        pick_own_picture(core, here.sub)
+      }
+      if own_picture_of(core, here.sub) &&
+        @sf.link_row(c, "own-picture-default", @sf.t("android-settings.me.pictureDefault"), chevron=false, tail?=if removing {
+            Some(fn() { spinner(c, inline=true) })
+          } else {
+            None
+          }) &&
+        !setting &&
+        !removing {
+        @settings.act(
+          core,
+          @sf.t("android-settings.me.pictureDefaultWhat"),
+          "account.removePicture",
+          obj([("account", str(here.sub))]),
+          done=@sf.t("android-settings.me.pictureDefaultSet"),
+        )
+      }
       for a in others {
         let sub = text(Some(a), "sub")
         let email = text(Some(a), "email")
@@ -177,6 +229,65 @@ fn devices_list(c : @ui.Ctx, core : Core, here : Here, list : Array[Json]) -> Un
       |> ignore
     }
   })
+}
+
+///|
+/// A picture of an account's own being had: asked of the system's photo picker, then read to be made its face
+/// (me_page), for the account it was asked for (it may be another by then).
+priv struct OwnPicture {
+  /// the account it is for
+  mut sub : String
+  /// asked of the system's photo picker
+  mut asking : Bool
+  /// the picture picked, being read (its key), "" none
+  mut reading : String
+}
+
+///|
+let own_picture : OwnPicture = { sub: "", asking: false, reading: "" }
+
+///|
+/// Pictures picked as an account's own, each its own key.
+let own_pictures : Ref[Int] = Ref(0)
+
+///|
+fn own_picture_reset() -> Unit {
+  own_picture.sub = ""
+  own_picture.asking = false
+  own_picture.reading = ""
+  own_pictures.val = 0
+}
+
+///|
+/// The system's photo picker asked for a picture to be the account `sub`'s own; the one picked read by me_page.
+fn pick_own_picture(core : Core, sub : String) -> Unit {
+  let asked = (core.pick_picture)(fn(bytes) {
+    own_picture.asking = false
+    match bytes {
+      Some(b) => {
+        own_pictures.val += 1
+        own_picture.sub = sub
+        own_picture.reading = "mem:own-picture/\{own_pictures.val}"
+        @ui.add_image(own_picture.reading, b)
+      }
+      None => ()
+    }
+  })
+  own_picture.asking = asked
+  if !asked {
+    (core.say)(@sf.t("android-settings.me.pictureUnread"))
+  }
+}
+
+///|
+/// Whether the account `sub` shows a picture of its own (the `workspaces` topic's `ownPicture`), rather than its
+/// sign-in's.
+fn own_picture_of(core : Core, sub : String) -> Bool {
+  match (core.topic)("workspaces", Map::new()).value {
+    Some(Array(entries)) =>
+      entries.iter().any(fn(e) { text(field(Some(e), "account"), "sub") == sub && flag(Some(e), "ownPicture") })
+    _ => false
+  }
 }
 
 ///|

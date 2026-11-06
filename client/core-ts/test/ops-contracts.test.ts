@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PARAMS, request } from "../src/ops.ts";
 
-const CLOUD = ["workspace", "invitation", "loginSession", "admin"];
+const CLOUD = ["workspace", "invitation", "loginSession", "account", "admin"];
 const SAMPLE: Record<string, unknown> = { string: "x", number: 1, boolean: true, strings: ["x"], json: {} };
 
 /// The params' fields `request` reads, the params as given.
@@ -42,6 +42,13 @@ test("every_operation_reads_what_its_contract_names_and_nothing_else", () => {
     assert.deepEqual([...seen].filter((f) => !declared.has(f)).sort(), [], `${name} reads what its contract does not name`);
     assert.deepEqual([...declared].filter((f) => !seen.has(f)).sort(), [], `${name}'s contract names what it does not read`);
   }
+});
+
+test("an_accounts_own_picture_is_put_up_and_taken_away_on_still_fail_cloud_as_that_account", () => {
+  const set = request("account.setPicture", { account: "a", picture: "data:image/jpeg;base64,/9j/" });
+  assert.deepEqual([set?.target, set?.method, set?.path, set?.body], [{ cloud: "a" }, "PUT", "/v1/me/picture", { picture: "data:image/jpeg;base64,/9j/" }]);
+  const remove = request("account.removePicture", { account: "a" });
+  assert.deepEqual([remove?.target, remove?.method, remove?.path, remove?.body], [{ cloud: "a" }, "DELETE", "/v1/me/picture", null]);
 });
 
 test("a_chat_is_kept_by_put_and_let_go_by_delete", () => {

@@ -159,6 +159,8 @@ export interface OperationParams {
   "invitation.accept": { id?: string | null | undefined; token?: string | null | undefined };
   "invitation.decline": { id: string };
   "loginSession.revoke": { id: string };
+  "account.setPicture": { picture: string };
+  "account.removePicture": {  };
   "admin.me": {  };
   "admin.createCode": { note?: string | null | undefined; days?: number | null | undefined; beta?: boolean | null | undefined };
   "admin.revokeCode": { code: string };
@@ -344,6 +346,8 @@ export function bindCloudOperations(call: Call) {
     invitationAccept: <T = unknown>(params: OperationParams["invitation.accept"] = {}) => call("invitation.accept", params) as Promise<T>,
     invitationDecline: <T = unknown>(params: OperationParams["invitation.decline"]) => call("invitation.decline", params) as Promise<T>,
     loginSessionRevoke: <T = unknown>(params: OperationParams["loginSession.revoke"]) => call("loginSession.revoke", params) as Promise<T>,
+    accountSetPicture: <T = unknown>(params: OperationParams["account.setPicture"]) => call("account.setPicture", params) as Promise<T>,
+    accountRemovePicture: <T = unknown>(params: OperationParams["account.removePicture"] = {}) => call("account.removePicture", params) as Promise<T>,
     adminMe: <T = unknown>(params: OperationParams["admin.me"] = {}) => call("admin.me", params) as Promise<T>,
     adminCreateCode: <T = unknown>(params: OperationParams["admin.createCode"] = {}) => call("admin.createCode", params) as Promise<T>,
     adminRevokeCode: <T = unknown>(params: OperationParams["admin.revokeCode"]) => call("admin.revokeCode", params) as Promise<T>,

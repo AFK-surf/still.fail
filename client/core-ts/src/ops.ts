@@ -58,7 +58,7 @@ export function encode(text: string): string {
   return out;
 }
 
-const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "admin"];
+const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "account", "admin"];
 
 /// What each operation takes (`field:type`, `field?:type` when it may be left out; types: string, number, boolean,
 /// strings, json), station operations first: the contract the UIs' bindings are made from (scripts/operations.ts:
@@ -224,6 +224,8 @@ export const PARAMS: Record<string, string> = {
   "invitation.accept": "id?:string token?:string",
   "invitation.decline": "id:string",
   "loginSession.revoke": "id:string",
+  "account.setPicture": "picture:string",
+  "account.removePicture": "",
   "admin.me": "",
   "admin.createCode": "note?:string days?:number beta?:boolean",
   "admin.revokeCode": "code:string",
@@ -774,6 +776,12 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/v1/invitations/${p.at("id")}/decline`, null);
     case "loginSession.revoke":
       return op("DELETE", () => `/v1/auth/sessions/${p.at("id")}`, null);
+    // The picture the account puts up for itself (a data URL, which still.fail cloud keeps), shown in the place of its
+    // sign-in's; or taken away, its sign-in's shown again.
+    case "account.setPicture":
+      return op("PUT", () => "/v1/me/picture", p.pick(["picture"]));
+    case "account.removePicture":
+      return op("DELETE", () => "/v1/me/picture", null);
     case "admin.me":
       return op("GET", () => "/v1/admin/me", null);
     case "admin.createCode":

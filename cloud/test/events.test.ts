@@ -213,6 +213,13 @@ test("every change reaches exactly the accounts it affects", async () => {
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.last_seen, h.now(), "last here at");
 
+    // A picture of its own put up or taken away (own-picture.test.ts): its `/v1/me` changed, and the members lists it
+    // is in.
+    await bob("PUT", "/v1/me/picture", { picture: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString("base64")}` });
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture");
+    await bob("DELETE", "/v1/me/picture");
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture taken away");
+
     // A leaver and a removed member hear of it too.
     assert.equal((await bob("DELETE", `/v1/workspaces/${w}/members/${bobSub}`)).status, 200);
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "leave");
