@@ -951,7 +951,7 @@ pub struct Tree {
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
   mut before_causes : Int
-  /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
+  /// sampling or laying out the tree: its output notifications do not advance input deadlines or start another settlement
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
   mut settle_asked : Bool
@@ -1671,10 +1671,15 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
   // (what the clock set so tells, of its moment: Tree::brought)
   let was = self.bringing_at
+  let was_standing = self.standing
   self.bringing_at = ms
+  self.standing = true
+  defer {
+    self.bringing_at = was
+    self.standing = was_standing
+  }
   self.clock_to(ms)
   self.beat_set(ms)
-  self.bringing_at = was
 }
 
 ///|
@@ -2009,7 +2014,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = self.time_now()
+      told_at.val = if self.standing { self.cause_now() } else { self.time_now() }
       self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
@@ -2146,14 +2151,20 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
+  } else if self.standing {
+    self.logic
   } else {
     self.time_now()
   }
-  self.advance_logic(at)
+  if !self.standing {
+    self.advance_logic(at)
+  }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
   @signals.start_batch()
-  self.advance_clock(at)
+  if !self.standing {
+    self.advance_clock(at)
+  }
   let was = self.cause_at
   self.cause_at = at
   self.committing += 1
@@ -6489,6 +6500,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     Some(n) => n
     None => @signals.untracked(fn() { self.clock.get() })
   }
+  let was = self.bringing_at
+  self.bringing_at = upto
+  defer { self.bringing_at = was }
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
@@ -6524,6 +6538,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
+  let was = self.bringing_at
+  self.bringing_at = at
+  defer { self.bringing_at = was }
   // (its logic first, to the moment, then what it draws drawn as of it (a frame to be shown later drawn ahead of it:
   // drawn again as of now, for where a press finds things), then what it marked)
   self.advance(at)
@@ -6545,10 +6562,10 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // deep as a chat was left on an emulator, its GL thread out of stack, 2026-11-05)
   let was = self.bringing_at
   self.bringing_at = upto
+  defer { self.bringing_at = was }
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
-  self.bringing_at = was
 }
 
 ///|
@@ -6739,6 +6756,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
+  let was_standing = self.standing
+  self.standing = true
+  defer { self.standing = was_standing }
   let mut placing = false
   let mut ordered = false
   let mut passes = 0
