@@ -24,6 +24,12 @@ fn ui_fault_category(said : String) -> String {
     "tree field reused"
   } else if said.has_prefix("scene: a frame put together round layers drawn again where they were not kept: ") {
     "scene layer conflict"
+  } else if said.has_prefix("view: marked in its own layout, after it was laid out: ") {
+    "layout marked during layout"
+  } else if said.has_prefix("view: ") && said.contains(" layout passes in one, each telling what marks another;") {
+    "layout pass limit"
+  } else if said.has_prefix("layout_box node ") {
+    "layout box fault"
   } else if said == "presented beside a node of the tree, drawn by the old frame: a kind of panel panel_node does not take yet" {
     "panel cannot be presented"
   } else {
