@@ -53,6 +53,9 @@ let drive_node_window : Ref[Bool] = Ref(false)
 ///|
 fn drive_node_drag_reset() -> Unit {
   drive_node_targets.clear()
+  chat_drop_hint_layers.clear()
+  old_chat_drop_hints.clear()
+  old_chat_hint_owners.clear()
   drive_node_position.set(None)
   drive_node_pending.clear()
   drive_node_serial.val = 0
@@ -242,8 +245,12 @@ pub fn drive_drag_window_node(window : @view.View, src : Source, ws : () -> Stri
     drive_node_gesture.val += 1
     drive_node_position.set(None)
     drive_node_pending.clear()
+    old_chat_drop_hints.clear()
     drag_taken() |> ignore
   }) |> ignore
+  window.reacts(fn() { dragged() is Some(_) }, fn(carrying) {
+    if !carrying { old_chat_drop_hints.clear() }
+  })
   @ui.takes_let_go(window, fn(x, y) {
     guard dragged() is Some(item) else { return false }
     let target = drive_node_old_at(@ui.current(), x, y)
@@ -291,7 +298,9 @@ pub fn drive_drag_window_node(window : @view.View, src : Source, ws : () -> Stri
   // The old shell opens this same presenter during the transition. It is safe to ask here too: the presenter is
   // opened once and the window owns it even when the folder page is no longer on screen.
   window.reacts(fn() { clash_told.get() }, fn(_) { clash_dialog(@ui.current()) })
-  window.show(fn() { window.pointer_here_told() is Some(_) && dragged() is Some(_) }, fn(layer) {
+  window.show(fn() {
+    window.pointer_here_told() is Some(_) && dragged() is Some(_) && !chat_drop_hint_covers_chip()
+  }, fn(layer) {
     layer.over(Is(true)).presses(Is(false)).hides(Is(true)).lines_up(Is(Some(Start))).offset(By(fn() {
       let (x, y) = window.pointer_here_told().unwrap_or((0.0, 0.0))
       (x + fdrag_ghost_off, y + fdrag_ghost_off)

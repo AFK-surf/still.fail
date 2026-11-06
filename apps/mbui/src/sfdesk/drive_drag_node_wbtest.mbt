@@ -199,6 +199,7 @@ test "folder drag chat hint follows the actual target without taking the drop" {
   let enabled = @signals.signal(true)
   let writable = @signals.signal(true)
   let covered = @signals.signal(false)
+  let hint_mounted = @signals.signal(true)
   let shown : Ref[() -> Bool] = Ref(fn() { false })
   let taken : Array[String] = []
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=400.0, h=300.0, platform=0)
@@ -224,7 +225,10 @@ test "folder drag chat hint follows the actual target without taking the drop" {
         match drag_taken() { Some(item) => { taken.push(item.name); true }; None => false }
       })
       shown.val = chat_drop_hint_active(chat, fn() { enabled.get() })
-      chat_drop_hint_node(chat, shown.val)
+      chat.show(fn() { hint_mounted.get() }, fn(hint) {
+        hint.over(Is(true)).presses(Is(false)).hides(Is(true)) |> ignore
+        chat_drop_hint_node(hint, shown.val)
+      })
     }) |> ignore
     root.show(fn() { covered.get() }, fn(cover) {
       cover.over(Is(true)).offset(Is((0.0, 70.0))).width(Is(Some(260.0))).height(Is(Some(120.0)))
@@ -240,9 +244,17 @@ test "folder drag chat hint follows the actual target without taking the drop" {
   t.draw()
   assert_true((shown.val)())
   assert_true(t.find(@sf.t("web-main.composer.dropHere")) is Some(_))
+  assert_false(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="the chat hint covers the drag chip")
+  hint_mounted.set(false)
+  t.draw()
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="removing the hint restores the chip")
+  hint_mounted.set(true)
+  t.draw()
+  assert_false(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="a remounted hint covers the chip")
   t.move(fx, fy)
   t.draw()
   assert_false((shown.val)())
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="the chip returns over an eligible folder")
   writable.set(false)
   t.draw()
   assert_true((shown.val)())
@@ -253,6 +265,7 @@ test "folder drag chat hint follows the actual target without taking the drop" {
   enabled.set(false)
   t.draw()
   assert_false((shown.val)())
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="the chip returns when the chat cannot receive")
   enabled.set(true)
   t.move(220.0, 150.0)
   t.draw()
@@ -260,6 +273,67 @@ test "folder drag chat hint follows the actual target without taking the drop" {
   t.release(220.0, 150.0)
   assert_eq(taken, ["Source.txt"])
   assert_false((shown.val)())
+}
+
+///|
+test "folder drag chip stays under an old chat hint" {
+  drag_reset()
+  let mounted = @signals.signal(true)
+  let available = @signals.signal(true)
+  let src = @sfbase.made_source(topic=fn(_, _) { None }, call=fn(_, _, done) { done(Ok({})) })
+  let from : DriveAt = { station: "ws/source", root: Some("/src"), path: "" }
+  let entry = @sfbase.dv_entry({ "name": "Source.txt", "kind": "text", "size": 2 })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=400.0, h=300.0, platform=0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(source) {
+      source.width(Is(Some(180.0))).height(Is(Some(70.0))).presses(Is(true)) |> ignore
+      @sf.words_node(source, fn() { "Source" }, fn() { @sf.theme().items.name }) |> ignore
+      source.gesture(fdrag_slop, drag=fn(d) { drive_node_drag(src, from, entry, d) }) |> ignore
+    }) |> ignore
+    root.show(fn() { mounted.get() }, fn(chat) {
+      chat.width(Is(Some(260.0))).height(Is(Some(120.0))) |> ignore
+      @ui.old(chat, fn(c) {
+        let pane = c.id("old-chat-hint-pane")
+        c.box(id=pane, w=Px(260.0), h=Px(120.0), fn() { c.text("Old chat") |> ignore }) |> ignore
+        if available.get() { drop_hint(c, pane) } else { old_chat_drop_hint_forget(pane) }
+      }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    })
+    drive_drag_window_node(root, src, fn() { "ws" })
+  })
+  t.draw()
+  t.draw()
+  let (sx, sy) = t.find("Source").unwrap()
+  t.press_at(sx, sy)
+  t.move(220.0, 150.0)
+  t.draw()
+  assert_true(t.drawn_text().contains(@sf.t("web-main.composer.dropHere")), msg="the old chat hint is drawn")
+  assert_false(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="the old chat hint covers the drag chip")
+  available.set(false)
+  t.draw()
+  assert_false(t.drawn_text().contains(@sf.t("web-main.composer.dropHere")))
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="losing the chat view restores the chip")
+  available.set(true)
+  t.draw()
+  assert_true(t.drawn_text().contains(@sf.t("web-main.composer.dropHere")))
+  assert_false(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="the restored chat hint covers the chip")
+  mounted.set(false)
+  t.draw()
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="removing the old chat restores the chip")
+  mounted.set(true)
+  t.draw()
+  // The old hint uses the previous frame's pane rectangle. On the first frame of a new island it has not drawn yet.
+  assert_false(t.drawn_text().contains(@sf.t("web-main.composer.dropHere")))
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }))
+  t.move(219.0, 150.0)
+  t.draw()
+  assert_true(t.drawn_text().contains(@sf.t("web-main.composer.dropHere")))
+  assert_false(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="a remounted old hint covers the chip")
+  t.move(350.0, 250.0)
+  t.draw()
+  assert_true(t.drawn_words_found().iter().any(fn(w) { w.3 == "Source.txt" }), msg="the chip returns outside the old chat")
+  t.release(350.0, 250.0)
+  assert_true(old_chat_drop_hints.is_empty())
 }
 
 ///|

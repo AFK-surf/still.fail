@@ -115,8 +115,32 @@ jobs:
       - name: "The dock's number's contract: said to the docks on the session bus, given to one that asks"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux badge
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-linux
+          path: apps/mbui/mbui/out/host/
+          if-no-files-found: ignore
+
+  # Stream decoding is independent of the host contracts, and both fit the five-minute limit on their own.
+  streams:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-host-linux
+          packages: >-
+            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
+            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - uses: ./.github/actions/mbui-moonbit
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
-        if: success() || failure()
         run: |
           APP=streamdemo bash scripts/linux.sh build > /dev/null
           mkdir -p out/host
@@ -136,6 +160,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: host-linux
+          name: host-linux-streams
           path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore
