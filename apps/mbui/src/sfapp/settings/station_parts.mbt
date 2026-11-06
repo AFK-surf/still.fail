@@ -856,9 +856,9 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
           }
           let busy = is_doing(core, ["adb.revoke"], [("request", request)])
           // (narrow, 收回 by its title alone, the line under it as wide as the row: when it was used, and why it was asked;
-          // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压. Wide, the row has the room for both beside
-          // it, 收回 in the row's middle: a wide row's first line is too low for a press's room)
-          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, face=@sf.look() is Wide, goes=station != "" && session != "", control=fn() {
+          // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压; wide, the library's link_row has it by the
+          // row's side)
+          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, goes=station != "" && session != "", control=fn() {
               if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
                 act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
               }
