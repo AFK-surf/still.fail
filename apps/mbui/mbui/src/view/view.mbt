@@ -2227,7 +2227,8 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     }
     let v = w.read(read)
     let was = self.cause_at
-    self.cause_at = told_at.val
+    // (run first as it is made, told by nothing: the change it is made in, if any, its cause)
+    self.cause_at = if told_at.val >= 0.0 { told_at.val } else { was }
     told_at.val = -1.0
     @signals.untracked(fn() { then(v) })
     // (what it said waits for its change committed whole, done as it ends where no change round it does
