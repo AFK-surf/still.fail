@@ -20,6 +20,7 @@ import { lanAddrs, tailnetAddrs } from "./lan.ts";
 import { Superseded } from "./superseded.ts";
 import { Storms } from "./storms.ts";
 import { Fibers } from "../ops/fibers.ts";
+import { signedPost } from "../cloud/signed.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -104,7 +105,11 @@ export const MeshLive = Layer.effectDiscard(
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
       // The station's log, waiting since it started (ops/log-export.ts).
       stationLog.sendWith((body) => Effect.runPromise(plane.logs(body)));
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected() };
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected(), personal: async (workspace: string, sub: string) => {
+        const said = await signedPost(cloud.state, key, "/v1/stations/personal-lock", "stillfail-station-personal-lock-v1", { workspace, sub });
+        if (!Array.isArray(said?.entries) || !Number.isSafeInteger(said?.version) || said.version < 0) throw new Error("the cloud did not return a personal lock");
+        return { entries: said.entries as unknown[], version: said.version as number };
+      } };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
         Effect.sync(() =>

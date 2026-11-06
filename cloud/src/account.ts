@@ -1,9 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
+import { MAX_ENTRIES, extendPersonal, type PersonalEntry } from "./personal-lock";
+import { entryHash, type Entry } from "../../station/src/cloud/lock.ts";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
+const PERSONAL_RETRY_MS = 5_000;
+// Each entry is bounded by 4096 JSON characters. Even at three UTF-8 bytes per character, 64 entries stay well
+// below the SQLite-backed Durable Object's 2 MB key/value limit.
+const PERSONAL_PART_ENTRIES = 64;
+const personalPart = (index: number) => `personal-lock-part:${index}`;
 type Retry = { hash: string; request: string; until: number; response: string };
 /** Why a session ended, kept a while (the last 32) for the span of a refresh that finds it gone. */
 type Ended = { id: string; at: number; why: "reused" | "logout" | "logout_all" | "removed" | "blocked" };
@@ -41,6 +48,89 @@ export class Account extends DurableObject<Env> {
     quota.requests++;
     this.ctx.storage.kv.put("quota", quota);
     return true;
+  }
+
+  /** The person's own lock (personal-lock.ts): kept whole, read and written by themselves. */
+  personalLock(): PersonalEntry[] {
+    const count = this.ctx.storage.kv.get<number>("personal-lock-parts");
+    // Earlier clouds kept the whole chain in one value; migrate it on the next successful write.
+    if (count === undefined) return this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock") ?? [];
+    if (!Number.isSafeInteger(count) || count < 1 || count > Math.ceil(MAX_ENTRIES / PERSONAL_PART_ENTRIES)) throw new Error("personal lock storage is broken");
+    const entries: PersonalEntry[] = [];
+    for (let i = 0; i < count; i++) {
+      const part = this.ctx.storage.kv.get<PersonalEntry[]>(personalPart(i));
+      if (!Array.isArray(part) || part.length === 0 || part.length > PERSONAL_PART_ENTRIES || (i < count - 1 && part.length !== PERSONAL_PART_ENTRIES)) throw new Error("personal lock storage is broken");
+      entries.push(...part);
+    }
+    return entries;
+  }
+
+  /** Called in the same transaction as the revision and outbox, so a reset cannot expose mixed generations. */
+  private savePersonalLock(entries: PersonalEntry[]): void {
+    const oldCount = this.ctx.storage.kv.get<number>("personal-lock-parts") ?? 0;
+    const count = Math.ceil(entries.length / PERSONAL_PART_ENTRIES);
+    for (let i = 0; i < count; i++) this.ctx.storage.kv.put(personalPart(i), entries.slice(i * PERSONAL_PART_ENTRIES, (i + 1) * PERSONAL_PART_ENTRIES));
+    for (let i = count; i < oldCount; i++) this.ctx.storage.kv.delete(personalPart(i));
+    this.ctx.storage.kv.put("personal-lock-parts", count);
+    this.ctx.storage.kv.delete("personal-lock");
+  }
+
+  /** The revision orders snapshots and notifications, including when a new genesis replaces the old. */
+  personalLockState(): { entries: PersonalEntry[]; version: number } {
+    return { entries: this.personalLock(), version: this.ctx.storage.kv.get<number>("personal-lock-version") ?? 0 };
+  }
+
+  /** Entries brought to it; the code it refuses them with, or the whole lock now. */
+  async appendPersonalLock(sub: string, entries: unknown, expect?: unknown): Promise<{ entries: PersonalEntry[]; version: number; refused: string | null }> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      // Set the alarm before committing: if the caller stops immediately after the commit, the outbox is still retried.
+      const due = Date.now() + PERSONAL_RETRY_MS;
+      const alarm = await this.ctx.storage.getAlarm();
+      if (alarm === null || alarm > due) await this.ctx.storage.setAlarm(due);
+      try {
+        return this.ctx.storage.transactionSync(() => {
+          const kept = this.personalLock();
+          if (expect !== undefined) {
+            const wanted = expect as { length?: unknown; head?: unknown } | null;
+            if (!wanted || typeof wanted !== "object" || !Number.isSafeInteger(wanted.length) || (wanted.length as number) < 0 ||
+                !(wanted.head === null || (typeof wanted.head === "string" && /^[0-9a-f]{64}$/.test(wanted.head)))) throw new Error("invalid_lock_entries");
+            const head = kept.length ? entryHash(kept[kept.length - 1] as unknown as Entry) : null;
+            if (wanted.length !== kept.length || wanted.head !== head) throw new Error("lock_refused");
+          }
+          const next = extendPersonal(sub, kept, entries);
+          const nextGenesis = entryHash(next[0] as unknown as Entry);
+          const oldGenesis = kept.length ? entryHash(kept[0] as unknown as Entry) : null;
+          if (nextGenesis !== oldGenesis) {
+            // A reset is deliberately allowed, but it must not make an earlier retired lock current again.
+            if (this.ctx.storage.kv.get(`personal-lock-retired:${nextGenesis}`)) throw new Error("lock_refused");
+            if (oldGenesis !== null) this.ctx.storage.kv.put(`personal-lock-retired:${oldGenesis}`, true);
+          }
+          let version = this.ctx.storage.kv.get<number>("personal-lock-version") ?? 0;
+          if (nextGenesis !== oldGenesis || next.length !== kept.length) {
+            version++;
+            this.savePersonalLock(next);
+            this.ctx.storage.kv.put("personal-lock-version", version);
+            this.ctx.storage.kv.put("personal-lock-pending", { sub, version });
+          }
+          return { entries: next, version, refused: null };
+        });
+      } catch (error) {
+        return { entries: [], version: 0, refused: (error as Error).message };
+      }
+    });
+  }
+
+  /** A notification for an older revision must not erase a newer pending notification. */
+  private acknowledgePersonal(version: number): void {
+    const pending = this.ctx.storage.kv.get<{ sub: string; version: number }>("personal-lock-pending");
+    if (pending?.version === version) this.ctx.storage.kv.delete("personal-lock-pending");
+  }
+
+  async personalDelivered(version: number): Promise<void> {
+    await this.ctx.blockConcurrencyWhile(async () => {
+      this.acknowledgePersonal(version);
+      await this.schedule(this.data());
+    });
   }
 
   /** A new access credential for the session. */
@@ -224,17 +314,26 @@ export class Account extends DurableObject<Env> {
     data.sessions = data.sessions.filter((s) => s.expires > now && s.idle > now);
     this.save(data);
   }
-  private async schedule(data: AccountData) {
-    const deadlines = data.sessions.flatMap((s) => [s.expires, s.idle]);
-    if (deadlines.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 1000, Math.min(...deadlines) * 1000));
+  private async schedule(data?: AccountData) {
+    const deadlines = (data?.sessions ?? []).flatMap((s) => [s.expires * 1000, s.idle * 1000]);
+    if (this.ctx.storage.kv.get("personal-lock-pending")) deadlines.push(Date.now() + PERSONAL_RETRY_MS);
+    if (deadlines.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 1000, Math.min(...deadlines)));
     else await this.ctx.storage.deleteAlarm();
   }
   async alarm() {
-    const data = this.data();
-    if (data) {
-      this.prune(data);
-      await this.schedule(data);
+    const pending = this.ctx.storage.kv.get<{ sub: string; version: number }>("personal-lock-pending");
+    if (pending) {
+      try {
+        const current = this.personalLockState();
+        await this.env.DIRECTORY.getByName("primary").personalChanged(pending.sub, current.entries, current.version);
+        this.acknowledgePersonal(current.version);
+      } catch (error) {
+        console.warn("personal lock notification will be retried", error);
+      }
     }
+    const data = this.data();
+    if (data) this.prune(data);
+    await this.schedule(data);
   }
 
   /** Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but

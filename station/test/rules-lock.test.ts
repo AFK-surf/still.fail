@@ -23,7 +23,7 @@ function plain(s: LockState): unknown {
   return JSON.parse(JSON.stringify({
     ws: s.ws, seq: s.seq, head: s.head, genesis: s.genesis, origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys,
     members: pairs(s.members), devices: pairs(s.devices), signKeys: pairs(s.signKeys), passkeys: pairs(s.passkeys), signed: [...s.signed],
-    stations: pairs(s.stations), gateways: [...s.gateways], disabled: s.disabled,
+    stations: pairs(s.stations), gateways: [...s.gateways], persons: pairs(s.persons), disabled: s.disabled,
   }));
 }
 

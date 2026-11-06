@@ -32,6 +32,29 @@ plant "a device that ran out signs" src/role/role.mbt "  } else if !live {
 plant "someone else's device admitted" src/role/role.mbt "  } else if !theirs {
     Others" "  } else if false {
     Others"
+plant "a manager binds someone else to a lock" src/role/role.mbt "  if !mine {
+    false
+  } else {
+    own
+  }" "  if false {
+    false
+  } else {
+    own
+  }"
+plant "a person's last device taken off" src/role/role.mbt "  if !held {
+    false
+  } else {
+    !lone
+  }" "  if !held {
+    false
+  } else {
+    true
+  }"
+plant "a device let in on a lock its member did not bind" src/role/role.mbt "  if !pinned {
+    false
+  } else if !proved" "  if false {
+    false
+  } else if !proved"
 plant "a device put in by another gets vault keys" src/role/role.mbt "  if own {
     true
   } else {

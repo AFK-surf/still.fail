@@ -26,5 +26,21 @@ plant "a device approves a key it was shown no code of" approved_only_as_shown \
   "In(pkNew), !Shown(h(pkNew)) ]" "In(pkNew) ]"
 plant "a vault's key sealed to a box key no device certified" sealed_to_certified \
   "In(<'box', boxPub, pk(d), sign(<'box', boxPub>, d)>)" "In(<'box', boxPub, pk(d)>)"
+for l in $(grep -oE '^lemma [a-z_]+' person.spthy | cut -d' ' -f2); do
+  r=$(said person.spthy "$l")
+  if [ "$r" = verified ]; then echo "protocol: person: $l: verified"; else echo "protocol: person: $l: ${r:-not ended in a minute}" >&2; bad=1; fi
+done
+plantp() { # name lemma from to
+  python3 -c "import sys;p,a,b,o=sys.argv[1:];s=open(p).read();assert s.count(a)==1,a;open(o,'w').write(s.replace(a,b))" person.spthy "$3" "$4" "$work/p.spthy" ||
+    { echo "protocol: \"$1\" is not in person.spthy as it was; update rules/protocol/check.sh" >&2; bad=1; return; }
+  r=$(said "$work/p.spthy" "$2")
+  if [ "$r" = falsified ]; then echo "protocol: planted, $1: $2 falsified"; else echo "protocol: planted, $1: $2 ${r:-not ended in a minute}, not falsified" >&2; bad=1; fi
+}
+plantp "a station takes a binding unsigned" bound_as_its_device_said \
+  "In(<'person', root, pk(d), sign(<'person', root>, d)>)" "In(<'person', root, pk(d)>)"
+plantp "a station goes along a chain unsigned" each_key_as_its_signer_approved \
+  "In(<'pdevice', root, pkNew, pk(s), sign(<'pdevice', root, pkNew>, s)>)" "In(<'pdevice', root, pkNew, pk(s)>)"
+plantp "a device approves a key it was shown no code of" approved_only_as_shown \
+  "In(pkNew), !Shown(h(pkNew)) ]" "In(pkNew) ]"
 rm -rf "$work"
 exit $bad

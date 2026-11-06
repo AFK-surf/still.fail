@@ -638,6 +638,17 @@ test("over the stations' own transport: a station the control plane stuffs in is
   }
 });
 
+test("a hello cannot use a personal chain without checking the cloud", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  cloud.takeLock([w.first]);
+  const signer = ed(), base = ed(), endpoint = ed().hex;
+  const first = signed({ v: 1, ws: "person:carol", seq: 0, prev: null, at: 1000, kind: "genesis", body: { sub: "carol", device: { key: signer.id, id: base.hex, label: "phone" } } }, signer);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "person", { sub: "carol", person: entryHash(first) }), w.carol.signer)]);
+  const admitted = { viewer: { sub: "carol", email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: base.hex, proof: base.sign(endpointBytes(WS, endpoint)) } }, exp: 4102444800 } as any;
+  assert.throws(() => inLockBringing(cloud, admitted, "member", endpoint, { lock: { person: [first] } }), LockRefusal);
+});
+
 test("a device brings what put it in the lock to a station that has not heard of it yet, taken only as any entry is", () => {
   const w = workspace();
   const cloud = stationData(w, w.stations[0]!.hex);

@@ -82,6 +82,8 @@ pub(all) struct LockState {
   signed : Map[String, Unit]
   stations : Map[String, Station]
   gateways : Map[String, Unit]
+  /// The person's own lock each member bound themselves to (`person` entries, docs/personal-lock.md): its genesis's hash.
+  persons : Map[String, String]
   disabled : Bool
 }
 
@@ -408,6 +410,7 @@ pub fn genesis(e : Json, c : &Crypto) -> LockState raise LockError {
     signed: Map([]),
     stations: Map([]),
     gateways: Map([]),
+    persons: Map([]),
     disabled: false,
   }
   for m in arr(field(b, "members")) {
@@ -503,6 +506,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
     signed: copy(prev.signed),
     stations: copy(prev.stations),
     gateways: copy(prev.gateways),
+    persons: copy(prev.persons),
   }
   let b = match field(v, "body") {
     None | Some(Null) => Some(Json::object(Map([])))
@@ -543,6 +547,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
       }
       // (made a member again, their first device is put in by an owner or admin as anyone's first is)
       s.signed.remove(sub)
+      s.persons.remove(sub)
     }
     "device" => {
       let d = device(b, at, c)
@@ -572,6 +577,14 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
       guard p is Some(p) else { raise Refused("no such passkey") }
       need(@role.may(who, Own(p.sub == by.sub)), "members remove only their own passkeys")
       s.passkeys.remove(p.key)
+    }
+    "person" => {
+      let sub = text_of(field(b, "sub"))
+      guard sub is Some(sub) && s.members.contains(sub) else { raise Refused("a person's lock is a member's") }
+      guard text_of(field(b, "person")) is Some(person) && is_hex32(person) else { raise Refused("a person's lock is named by its genesis's hash") }
+      // (their own device or passkey as this workspace recognized it; an admin approves a member's first device)
+      need(@role.binds(sub == by.sub, by.own), "members bind only themselves to a lock of their own, from their own device")
+      s.persons[sub] = person
     }
     "station" => {
       need(@role.may(who, Roster), "only owners and admins add stations")
