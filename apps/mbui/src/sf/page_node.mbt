@@ -337,7 +337,7 @@ fn page_focus_register(control : @view.View, key : PageFocusKey) -> @view.View {
       // laid out, so return when the matching control itself is laid out, not when the shell first appears.
       match scope.pending.val {
         Some(request) if request.key == key =>
-          control.once_laid_out(fn() {
+          control.owed_once_laid_out(fn() {
             match scope.pending.val {
               Some(current) if physical_equal(current, request) => {
                 scope.give()
