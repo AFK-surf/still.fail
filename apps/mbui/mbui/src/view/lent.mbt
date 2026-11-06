@@ -180,10 +180,10 @@ pub fn Tree::laid_as_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Finish `f` after the tree's current change has been published, before its next deadline or input. Tree events
-/// enter outside an unfinished signal change, and drain their completions before advancing further. Work raised
-/// by layout waits for that layout to return; work in a raw signal batch also wakes at that batch's end. No frame
-/// is asked for and no deadline advanced here. The caller keeps its own lifetime guard.
+/// Finish `f` after the current tree change, signal publication and layout have returned. Work in a raw signal
+/// batch wakes at that batch's end. This is a publication completion, not a way to dispatch an input or postpone
+/// a deadline: those execute synchronously in their own callbacks. No frame is asked for and no deadline advanced
+/// here. The caller keeps its own lifetime guard.
 pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
   if self.gone { return }
   self.changes.push((self.logic_at(), f))

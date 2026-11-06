@@ -101,30 +101,28 @@ pub fn chat_list_node(
   v.owns(fn() { @signals.untracked(fn() { rows_now.get() }).let_go() }) |> ignore
   v.reacts(fn() {
     em.read()
-    (ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }, rd0.landing.get(), shown_by(), app_in_front())
+    (ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }, shown_by(), app_in_front())
   }, fn(now) {
-    // A landing can be reported while layout is measuring a child. Commit both the reply take and its rows
-    // together after that layout/change; no partially built row enters the list before emit_take holds it.
-    v.tree.after_change(fn() {
-      if !v.alive() { return }
-      let { cv, f, .. } = now.0
-      guard cv is Some(cv) else { return }
-      @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=now.2, in_front=now.3)
-      // (those waiting their turn as what came is decided: emit_take's)
-      let held = @signals.untracked(fn() { @sfbase.emit_held_seqs(em) })
-      let tail = @sfbase.tail_taken(rd0, rk, cv, f)
-      let was = @signals.untracked(fn() { rows_now.get() })
-      let cr = if physical_equal(was.messages, cv.messages) {
-        was
-      } else {
-        was.let_go()
-        @sfbase.ChatRows::new(cv.messages, key_of, end_key=id_of)
-      }
-      cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
-      rows_now.set(cr)
-      advance()
-    })
+    let { cv, f, .. } = now.0
+    guard cv is Some(cv) else { return }
+    // The data delivery owns its rows. Publish them in that change, before its later observers request pictures
+    // or locate a message. Geometry's landing notification below does not retake the data or rebuild these rows.
+    @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=now.1, in_front=now.2)
+    // (those waiting their turn as what came is decided: emit_take's)
+    let held = @signals.untracked(fn() { @sfbase.emit_held_seqs(em) })
+    let tail = @sfbase.tail_taken(rd0, rk, cv, f)
+    let was = @signals.untracked(fn() { rows_now.get() })
+    let cr = if physical_equal(was.messages, cv.messages) {
+      was
+    } else {
+      was.let_go()
+      @sfbase.ChatRows::new(cv.messages, key_of, end_key=id_of)
+    }
+    cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
+    rows_now.set(cr)
+    advance()
   })
+  v.reacts(fn() { rd0.landing.get() }, fn(_) { advance() })
   // (the message the unread line is over, followed as that changes alone)
   let line_seq = @signals.computed(fn(_) { view().bind(fn(cv) { cv.unread_line }) }, same=fn(a, b) { a == b })
   // (a message's row: the unread line over it where it is over it, its own gap under the line (joined, 4; else the

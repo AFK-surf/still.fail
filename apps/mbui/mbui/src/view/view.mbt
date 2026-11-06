@@ -2285,19 +2285,6 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   } else {
     self.time_now()
   }
-  // An unscoped signal change may notify several structures. Advancing deadlines from its first reader would
-  // run a new event in the middle of that notification. Tree events already own their moment and commit here;
-  // an outside notification enters the timeline once the surrounding change has finished notifying.
-  if self.committing == 0 && !self.standing && @signals.is_flushing() {
-    @signals.after_flush(fn() {
-      if self.gone { return }
-      let was = self.bringing_at
-      self.bringing_at = at
-      self.at_cause(f)
-      self.bringing_at = was
-    })
-    return
-  }
   if !self.standing && self.committing == 0 {
     self.advance_logic(at)
   }
@@ -6496,12 +6483,6 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
     @signals.end_batch()
     return
   }
-  if @signals.batch_depth() > 0 || @signals.is_flushing() {
-    @signals.after_flush(fn() {
-      if !self.gone { self.event_said(at, said, f) }
-    })
-    return
-  }
   self.settle(at)
   // (what went on by itself laid out where it is at the event's moment before it is taken, where it says so, as before
   // what is due then: what the event does (lets go of it, reads what it told) finds it as of then, a frame drawn on the
@@ -6785,15 +6766,6 @@ fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
 /// its turn. Frames, inputs and the host's calls each advance it to their moment and no further: how often they come
 /// changes nothing of what it does.
 pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
-  // A partial input is one event, not a place to insert another deadline. A raw signal batch can still ask
-  // for its current geometry; advancing to a later moment is committed after that batch, in request order.
-  if self.committing > 0 { return }
-  if @signals.batch_depth() > 0 || @signals.is_flushing() {
-    @signals.after_flush(fn() {
-      if !self.gone { self.advance(upto) }
-    })
-    return
-  }
   self.advance_logic(upto)
   self.advance_clock(upto)
 }
@@ -7036,21 +7008,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
 /// tree's as of then, whatever frame came before): the clock set there, what ended by then settled, the bindings told
 /// worked out, what is marked laid out, placed and looked at, the order made, as a frame does all of it (what it
 /// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
-/// the tree has a size (its first frame). Inside an event it reads that event's geometry without advancing time.
-/// Inside a raw signal batch it reads the current logical geometry; the advance to `at` runs after the batch commits.
+/// the tree has a size (its first frame).
 pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live {
-    return
-  }
-  if self.committing > 0 {
-    self.laid_now()
-    return
-  }
-  if @signals.batch_depth() > 0 || @signals.is_flushing() {
-    @signals.after_flush(fn() {
-      if !self.gone { self.bring_to(at) }
-    })
-    self.laid_now()
     return
   }
   let was = self.bringing_at
