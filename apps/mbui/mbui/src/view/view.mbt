@@ -5128,7 +5128,7 @@ pub fn Tree::drag_at(
             told(Moved, finger, track_now(false))
           }
           Up => {
-            let v = track_now(false)
+            let v = self.tracked(finger, false, track, t, x, y, up=true)
             self.held_tracks.remove(finger)
             self.downs.retain(fn(g) { g != finger })
             if self.downs.is_empty() {
@@ -5148,7 +5148,8 @@ pub fn Tree::drag_at(
 ///|
 /// Finger `finger`'s event at `t` at (x, y) in the window counted with its own before it (`down`: it goes down, `track`
 /// what it did before this from where it went down, by their own times (this one where it went down among them), else
-/// from here): how fast it goes as of it (across, down, points a ms).
+/// from here): how fast it goes as of it (across, down, points a ms; Tracker::velocity_at). `up`: it goes up there, no
+/// sample where it says the last place again (Tracker::up).
 fn Tree::tracked(
   self : Tree,
   finger : Int,
@@ -5157,6 +5158,7 @@ fn Tree::tracked(
   t : Double,
   x : Double,
   y : Double,
+  up? : Bool = false,
 ) -> (Double, Double) {
   let (tx, ty) = match self.held_tracks.get(finger) {
     Some(p) if !down => p
@@ -5171,11 +5173,14 @@ fn Tree::tracked(
     }
   }
   // (down with what it did before: those its events, this one where it went down among them)
-  if !(down && track.length() > 0) {
+  if up {
+    tx.up(t, x)
+    ty.up(t, y)
+  } else if !(down && track.length() > 0) {
     tx.add(t, x)
     ty.add(t, y)
   }
-  (tx.velocity(), ty.velocity())
+  (tx.velocity_at(t), ty.velocity_at(t))
 }
 
 ///|
