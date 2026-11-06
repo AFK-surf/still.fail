@@ -27,9 +27,16 @@ for pair in typing-before:typing-after caret-before:caret-hidden caret-hidden:ca
     code=1
     continue
   fi
+  rm -f "$O/$after.png" "$O/$after.whole.png"
   MBUI_DL_FROM="$O/$before.dl" MBUI_DL="$O/$after.dl" MBUI_DL_PNG="$O/$after.png" \
     "$renderer" > "$O/$after.render.log" 2>&1
-  if cmp -s "$O/$after.png" "$O/$after.whole.png"; then
+  if grep -Eq '[1-9][0-9]* not known here' "$O/$after.render.log"; then
+    echo "paint damage: $after has glyphs the host could not render (see $O/$after.render.log)"
+    code=1
+  elif [ ! -s "$O/$after.png" ] || [ ! -s "$O/$after.whole.png" ]; then
+    echo "paint damage: $after did not produce both pictures (see $O/$after.render.log)"
+    code=1
+  elif cmp -s "$O/$after.png" "$O/$after.whole.png"; then
     echo "paint damage: $after partial and whole match"
   else
     echo "paint damage: $after partial and whole differ"

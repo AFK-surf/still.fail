@@ -99,6 +99,14 @@ Without a window (mbui-render, the bench) the offscreen target is the canvas: it
   it.
 - **On a device, by hand**: `MBUI_PARTIAL_CHECK=1` (Metal) reads back each frame drawn in parts and the same frame
   drawn whole, and says on the log where they differ (slow: for a run by hand, not for use).
+- **Paint changes without a tree property changing** (`src/ui/field_present_wbtest.mbt`,
+  `scripts/render_paint_damage.sh`, also run by `render_check.sh`): typing into an existing line and a timed caret,
+  then moving, shrinking, removing and newly showing a field, nested rounded clips and glass over changed text.
+  Each pair uses the parts actually handed to `h_present`, even when empty, and real host text records. The native
+  host renders the partial frame over its predecessor and the same frame whole; both pictures must match to the
+  byte, with no missing glyphs. The tests also keep an unchanged region outside the damage. A paint watch, wake
+  or glyph retry must invalidate the layer's previous reach and its reach after recording, just as a tree change
+  does; asking for another recording alone does not repaint the host's retained canvas.
 - `MBUI_PROBE=1` says every 2 s how many frames were drawn whole, in parts or not at all, why the whole ones were
   (`whole_why`, by @damage.Parts::why: 1 none before, 3 another window, 4 the atlas anew, 5 more than half, 6 an old
   frame with no tree),

@@ -683,6 +683,19 @@ fn scene_mark(id : @view.NodeId) -> Unit {
 }
 
 ///|
+/// What a layer paints changed without a tree property changing (a field's text, a caret's wake, a glyph now
+/// available). Marking the layer records it again; the host must also repaint its old reach and, once recorded,
+/// its new reach. A layer not drawn yet has no old reach, but still contributes its new one at scene_end.
+fn scene_paint_told(id : @view.NodeId) -> Unit {
+  match scene.reach.get(id) {
+    Some(e) => scene.parts.add(e.reach.rect())
+    None => ()
+  }
+  scene.due.push(id)
+  scene_mark(id)
+}
+
+///|
 /// Layer `id` placed otherwise (moved, faded, turned in what holds it), nothing of it made again: drawn where it is put
 /// now as it keeps how it is drawn (scene_entries_kept, where its node is as opaque and as big as it was), what holds it
 /// not copied whole (it is elsewhere in it).
@@ -737,7 +750,7 @@ fn scene_watch(id : @view.NodeId) -> @signals.Watch {
       }
       None => ()
     }
-    scene_mark(id)
+    scene_paint_told(id)
     if !in_frame.val {
       h_frame_owed()
     }
@@ -780,7 +793,7 @@ fn scene_again() -> Unit {
   scene.again.clear()
   for id in again {
     if scene.layers.contains(id) {
-      scene_mark(id)
+      scene_paint_told(id)
     }
   }
 }
@@ -1656,7 +1669,7 @@ fn Ctx::scene_wakes(self : Ctx, t : Double) -> Unit {
   for w in scene.wakes {
     if w.0 <= t {
       if scene.layers.contains(w.1) {
-        scene_mark(w.1)
+        scene_paint_told(w.1)
       }
     } else {
       left.push(w)
