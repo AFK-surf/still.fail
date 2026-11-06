@@ -131,7 +131,8 @@ pub fn sheet_node(
       surface.val = Some(sheet)
       let max_h = fn() { dmax(0.0, sheet.window().1 * 0.94) }
       sheet
-      .max_height(By(fn() { Some(max_h() + under) }))
+      // Content is capped at the top detent. While held or returning, allow its rubber-band extension above it.
+      .max_height(By(fn() { Some((if size_mode.get() == 0 { max_h() } else { sheet.window().1 }) + under) }))
       .height(By(fn() {
         match size_mode.get() {
           1 => Some(held.get() + under)
@@ -208,7 +209,14 @@ pub fn sheet_node(
             let total = @signals.untracked(fn() { sheet.window().1 })
             let top = if grows { total * 0.94 } else { base_h.val }
             let least = if grows { 120.0 } else { 0.0 }
-            let h = stretched(dmax(base_h.val - delta, least), top, total - top)
+            let from = if @signals.untracked(fn() { size_mode.get() }) == 1 {
+              @signals.untracked(fn() { held.get() })
+            } else { base_h.val }
+            let to = dmax(base_h.val - delta, least)
+            if from <= top && to > top && @ui.pointing() is Finger {
+              @ui.haptic(TextHandleMove)
+            }
+            let h = stretched(to, top, total - top)
             held.set(h)
             size_mode.set(1)
           }

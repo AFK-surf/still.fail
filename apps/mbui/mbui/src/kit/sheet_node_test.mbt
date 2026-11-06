@@ -29,7 +29,7 @@ struct NodeSheetCase {
 }
 
 ///|
-fn node_sheet_case(tall? : Double = 0.0, grows? : Bool = false, under? : Double = 0.0) -> (@ui.Tester, NodeSheetCase) {
+fn node_sheet_case(tall? : Double = 0.0, grows? : Bool = false, under? : Double = 0.0, draggable? : Bool = true) -> (@ui.Tester, NodeSheetCase) {
   let k : NodeSheetCase = {
     open: @signals.signal(true), content: @signals.signal(200.0), sinks: @signals.signal(0.0), heights: [],
     shown: Ref(0), gone: Ref(0), pressed: Ref(0), surface: Ref(None),
@@ -40,7 +40,7 @@ fn node_sheet_case(tall? : Double = 0.0, grows? : Bool = false, under? : Double 
     }) |> ignore
     @kit.sheet_node(
       root, fn() { k.open.get() }, fn() { k.open.set(false) },
-      tall~, grows~, under~, label=fn() { "Sheet" },
+      tall~, grows~, under~, draggable~, label=fn() { "Sheet" },
       sinks=fn() { k.sinks.get() },
       height=fn(h) { k.heights.push(h) },
       shown=fn() { k.shown.val += 1 }, gone=fn() { k.gone.val += 1 },
@@ -120,6 +120,40 @@ test "tree sheet drag: a short drag returns, a long drag dismisses" {
   assert_eq(k.heights.last(), Some(225.0))
   t.drag(190.0, y, 190.0, y + 120.0)
   assert_false(k.open.get())
+}
+
+///|
+test "tree sheet with dragging disabled stays in place when its head is dragged" {
+  let (t, k) = node_sheet_case(draggable=false)
+  t.run_for(sheet_test_late_ms)
+  let sheet = k.surface.val.unwrap()
+  let before = sheet.rect()
+  t.drag(190.0, before.1 + 10.0, 190.0, before.1 + 160.0)
+  assert_true(k.open.get())
+  assert_eq(sheet.rect(), before)
+  t.press("Escape")
+  assert_false(k.open.get())
+}
+
+///|
+test "tree sheet gives and ticks once as a finger pulls beyond its top detent" {
+  let (t, k) = node_sheet_case(tall=0.94, grows=true)
+  t.run_for(sheet_test_late_ms)
+  t.host_says_finger(Some(true))
+  let sheet = k.surface.val.unwrap()
+  let y = sheet.rect().1 + 10.0
+  t.touch(0, 190.0, y)
+  t.touch(1, 190.0, y - 30.0)
+  t.draw()
+  assert_true(sheet.rect().3 > 844.0 * 0.94)
+  assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
+  t.touch(1, 190.0, y - 45.0)
+  t.draw()
+  assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
+  t.touch(2, 190.0, y - 45.0)
+  t.run_for(sheet_test_late_ms)
+  assert_true(k.open.get())
+  assert_true((sheet.rect().3 - 844.0 * 0.94).abs() < 0.01)
 }
 
 ///|
