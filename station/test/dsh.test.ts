@@ -126,6 +126,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.deepEqual(byId["llm-pi-ai"].config.providers.stillfail, {
       displayName: "OpenCode Go", api: "openai-completions", baseURL: "https://opencode.ai/zen/go/v1", apiKeyEnv: "STILLFAIL_DSH_KEY",
       models: [{ id: "m1", reasoningEfforts: { off: null, max: "max" } }], headers: { "x-opencode-session": `stillfail-${o.route}` }, reasoning: "max",
+      compat: { supportsDeveloperRole: false },
     });
     assert.deepEqual(byId["agent-default-model"].config, { provider: "stillfail", model: "m1" });
     assert.deepEqual(byId["system-prompt"].config, { personaPrefix: "", personaSuffix: "be brief; {\u200b{not a variable}}" }, "no prompt variables: the instructions' braces broken");
@@ -351,6 +352,16 @@ describe("what a profile runs DeepSeek Harness on", () => {
     assert.deepEqual(profileRuntimes(profile({ kind: "subscription" })), [], "no subscription to sign in to");
     assert.deepEqual(profileRuntimes(profile({ kind: "opencode-go", key: "k" }, { runtime: "claude" })), ["claude", "codex", "dsh"]);
     assert.deepEqual(profileRuntimes(profile({ kind: "anthropic-api", key: "k" }, { runtime: "claude" })), ["claude", "dsh"]);
+  });
+
+  test("a custom OpenAI-compatible gateway receives system rather than developer instructions", () => {
+    const compat = (access: Record<string, unknown>) =>
+      dshSetup(dshRoute(profile(access)), "m", "high", "", "/h", "r", "http://127.0.0.1:1/mcp").patch.find((p) => p.id === "llm-pi-ai").config.providers.stillfail.compat;
+    assert.deepEqual(compat({ kind: "api-provider", provider: "custom", key: "k", endpoint: "https://gateway.example/v1", protocol: "chat_completions" }), { supportsDeveloperRole: false });
+    assert.deepEqual(compat({ kind: "api-provider", provider: "custom", key: "k", endpoint: "https://api.openai.com.gateway.example/v1", protocol: "chat_completions" }), { supportsDeveloperRole: false });
+    assert.deepEqual(compat({ kind: "api-provider", provider: "custom", key: "k", endpoint: "https://gateway.example/v1", protocol: "responses" }), { supportsDeveloperRole: false });
+    assert.equal(compat({ kind: "api-provider", provider: "openai", key: "k" }), undefined, "OpenAI's own API supports the role");
+    assert.equal(compat({ kind: "api-provider", provider: "minimax", key: "k" }), undefined, "Anthropic's protocol does not use that role");
   });
 
   test("a model dsh is started on declares image input when it reads images, and nothing when it does not", () => {
