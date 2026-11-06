@@ -166,20 +166,22 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   if !old_said_allowed(self, id) {
     return
   }
+  // Current semantics are the authority for immediate actions, as for the window tree. A remembered id alone
+  // neither takes focus nor revives a callback from a hidden, disabled or no longer built control.
+  if (action == Focus || (action == Activate && made_presses.contains(id))) &&
+    !self.semantics_tree().iter().any(fn(s) {
+      id != 0 && s.id == id && !s.hidden && !s.disabled && s.actions.contains(action)
+    }) {
+    return
+  }
   if action == Focus {
     self.focus_moved(id)
   }
   if action == Activate && made_presses.contains(id) {
-    // The callback may outlive the last box that registered it. Only a currently exposed semantic action may
-    // invoke it: a retired, hidden, disabled or covered row cannot be revived by an old accessibility id.
-    if self.semantics_tree().iter().any(fn(s) {
-      s.id == id && !s.hidden && !s.disabled && s.actions.contains(Activate)
-    }) {
-      self.clicked.push(id)
-      made_pressed(id)
-      hand_event()
-      input_came()
-    }
+    self.clicked.push(id)
+    made_pressed(id)
+    hand_event()
+    input_came()
     return
   }
   self.asked_actions.push((id, action))
@@ -230,6 +232,18 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
 /// The old views' tree (Ctx::semantics_tree, with no window's tree), and the node each of its is said of.
 fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
   let count = self.count
+  // Focus is exposed from the same registration used by the keyboard, as it is for retained nodes. Pages do not
+  // need a second declaration of a focusable control's capability for accessibility.
+  let focusable : Set[Int] = Set::new()
+  for f in self.last_focusables {
+    if !self.layer_inert(f.layer) && island_allows(f.island) { focusable.add(f.id) }
+  }
+  let actions_for = fn(id : Int, declared : Array[Action], disabled : Bool) {
+    if disabled { return [] }
+    let actions = declared.copy()
+    if focusable.contains(id) && !actions.contains(Focus) { actions.push(Focus) }
+    actions
+  }
   // by node: what said something of it (the last to say wins), -1 none
   let said = Array::make(count, -1)
   for k, s in self.sems {
@@ -304,7 +318,7 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
         disabled: s.disabled,
         modal: s.modal,
         range: s.range,
-        actions: s.actions,
+        actions: actions_for(s.id, s.actions, s.disabled),
         rect: (n.x, n.y, n.fw, n.fh),
         focused: s.id != 0 && s.id == self.focus,
         hidden,
@@ -336,7 +350,7 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
         disabled: false,
         modal: false,
         range: None,
-        actions: [Activate],
+        actions: actions_for(n.id, [Activate], false),
         rect: (n.x, n.y, n.fw, n.fh),
         focused: n.id == self.focus,
         hidden,
