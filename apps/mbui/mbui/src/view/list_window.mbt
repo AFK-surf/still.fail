@@ -5,7 +5,8 @@
 // as `est` (its height kept by its key as wide as the column was as it was laid out), so a block that does not show is
 // not made and nothing of it measured, and nothing a block measures is told back to lay the column out again. As what
 // is over what shows changes height (a block laid out again taller than it was counted, one come or gone over it), what
-// shows stays where it is: the column is where its anchor is.
+// shows stays where it is: the column is where its anchor is. ui's ListRows::in_node alone is laid out the way before
+// it still, its blocks' heights told back (View::scrolls_window_rooms).
 
 ///|
 /// A block's room in a windowed list, apart from its natural measured height: its height now and where its content

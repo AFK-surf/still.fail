@@ -492,10 +492,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         if fixed_estimate && (reset_fixed || fixed_changed) {
           fixed_sums.val = Array::make(n + 1, 0.0)
           fixed_delta.val = 0.0
-          for i in 0..<n {
-            match heights.get(key_at(i)) {
-              Some(h) => fixed_add(i, h - est)
-              None => ()
+          // (each row measured counted as it was measured: none gone through while none is, as it is first laid out)
+          if !heights.is_empty() {
+            self.tree.work.keys_swept = self.tree.work.keys_swept + n
+            for i in 0..<n {
+              match heights.get(key_at(i)) {
+                Some(h) => fixed_add(i, h - est)
+                None => ()
+              }
             }
           }
           fixed_keys.val = Some(all)
@@ -599,22 +603,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
           return
         }
-        // (where the top of a row put `off` under the window's top is, the row `hk` tall as measured now: a point inside
-        // it (`off` under nothing) no further in than leaves a part of it in sight, till it is measured as tall as that.
-        // A row's first measurement may be its heading alone, what it hosts measured after (an old view's island): put
-        // out of sight, it would be let go before that could say the rest of its height)
-        let put_top = fn(off : Double, hk : Double) { if off < 0.0 { -dmin(-off, dmax(0.0, hk - 0.5)) } else { off } }
         // (put at a row, its top that far under the window's top)
         let putting = c.put_n > put_laid.val && c.put is Some(_)
         match c.put {
           Some((k, off)) if putting =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
               Some(i) => {
-                let hk = if from_end || off < 0.0 { measure(i) } else { 0.0 }
-                let top = put_top(off, hk)
-                anchor.val = Some({ key: k, under: if from_end { top + hk - h } else { -top }, near: i })
-                // (from its start too while it is put short of where it was asked: held there as it is measured)
-                pinned.val = if from_end || top != off { Some((k, off)) } else { None }
+                anchor.val = Some({ key: k, under: if from_end { off + measure(i) - h } else { -off }, near: i })
+                pinned.val = if from_end { Some((k, off)) } else { None }
               }
               None => ()
             }
@@ -780,20 +776,53 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           _ => ()
         }
         // (put at a row and nothing moved it since: its top where it was put, whatever came to be measured round it)
+        // (one put out of sight kept made while it is put there, so that one that says how tall it is only after it is
+        // first laid out (an old view's island) can say it: where its top is as the rows laid out put it, it as tall as
+        // it is measured now and those between as tall as they were (measured where they never were), and how tall it is)
+        let pinned_out = fn(r : ListLaid[K], i : Int) -> (Double, Double) {
+          let hk = measure(i)
+          let tall = fn(j : Int) {
+            match known(j) {
+              Some(t) => t
+              None => measure(j)
+            }
+          }
+          if i < r.first {
+            let mut top = r.tops[0] - hk
+            for j in (i + 1)..<r.first {
+              top = top - tall(j)
+            }
+            (top, hk)
+          } else {
+            let q = r.keys.length() - 1
+            let mut top = r.tops[q] + r.heights[q]
+            for j in (r.last + 1)..<i {
+              top = top + tall(j)
+            }
+            (top, hk)
+          }
+        }
         match pinned.val {
           Some((k, off)) if glide is None && !read_held.val =>
-            for q in 0..<r.keys.length() {
-              if r.keys[q] == k {
-                let top = put_top(off, r.heights[q])
-                if (r.tops[q] - top).abs() > 0.01 {
+            match r.keys.search(k) {
+              Some(q) =>
+                if (r.tops[q] - off).abs() > 0.01 {
                   match find(k, r.first + q) {
-                    Some(i) =>
-                      r = lay(Some({ key: k, under: if from_end { top + r.heights[q] - h } else { -top }, near: i }), 0.0)
+                    Some(i) => r = lay(Some({ key: k, under: off + r.heights[q] - h, near: i }), 0.0)
                     None => ()
                   }
                 }
-                break
-              }
+              // (out of sight, elsewhere than it was put (measured taller since, or shorter): laid out from it again)
+              None =>
+                match find(k, r.first) {
+                  Some(i) if r.keys.length() > 0 => {
+                    let (top, hk) = pinned_out(r, i)
+                    if (top - off).abs() > 0.01 {
+                      r = lay(Some({ key: k, under: off + hk - h, near: i }), 0.0)
+                    }
+                  }
+                  _ => ()
+                }
             }
           _ => if glide is Some(_) || read_held.val { pinned.val = None }
         }
@@ -892,6 +921,20 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             }
           None => ()
         }
+        // (and the row it is put at, out of sight while it is put there: kept made, where the rows laid out and those
+        // between put it)
+        let put_kept = match pinned.val {
+          Some((k, _)) if r.keys.length() > 0 && !r.keys.contains(k) =>
+            match find(k, r.first) {
+              Some(i) => {
+                let (top, _) = pinned_out(r, i)
+                l.place(slot_of(k), 0.0, top + c.x)
+                Some(k)
+              }
+              None => None
+            }
+          _ => None
+        }
         // (what came in sight or within `ahead` of it, or was gone past on the way, since the last layout: sighted, told
         // once the frame is painted, whether the frames between were many or one)
         match sighted {
@@ -938,7 +981,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         }
         // (a row a scroll only went past, measured for how far it went: not kept, a cache of the picture of what shows)
         for k in made_to_measure {
-          if !r.keys.contains(k) && !c.kept.contains(k) {
+          if !r.keys.contains(k) && !c.kept.contains(k) && put_kept != Some(k) {
             l.let_go(name_of(k))
           }
         }
@@ -1190,6 +1233,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       })
     }
     None => self.reacts(keys, fn(now) {
+      // (none named, made or measured yet (its first keys): none to forget, none gone through)
+      if row_ids.is_empty() && names.is_empty() && heights.is_empty() {
+        return
+      }
+      self.tree.work.keys_swept = self.tree.work.keys_swept + now.length()
       let here : Set[K] = Set::new()
       for k in now { here.add(k) }
       forget_missing(fn(k) { here.contains(k) })
