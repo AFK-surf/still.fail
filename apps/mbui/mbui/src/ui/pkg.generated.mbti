@@ -704,9 +704,9 @@ pub fn tree_corner_roots_now() -> @paint.CornerRoots
 
 pub fn tree_corners_linked(@view.View, () -> FixedArray[@paint.CornerOf]?) -> Unit
 
-pub fn tree_narrow() -> Bool
-
 pub let tree_menu_own : @ref.Ref[(Array[@view.NodeId]) -> Bool]
+
+pub fn tree_narrow() -> Bool
 
 pub fn tree_picked(dragged? : Bool) -> TreePicked?
 

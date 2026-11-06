@@ -138,6 +138,37 @@ test "an explicit property set after a node style keeps winning as its style cha
 }
 
 ///|
+test "a node style restores the latest width read during its holder's layout" {
+  let holder_width = @signals.signal(200.0)
+  let styled = @signals.signal(false)
+  let made : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(_) {  }, w=500.0, h=100.0)
+  @ui.set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(holder) {
+      holder.width(By(fn() { Some(holder_width.get()) })).height(Is(Some(40.0))) |> ignore
+      holder.box(fn(v) {
+        made.val = Some(v)
+        v.width(Roomed(holder, fn(w, _) { Some(w / 2.0) })).height(Is(Some(20.0))) |> ignore
+        style_node(v, fn() { if styled.get() { @ui.style(w=Fixed(80.0)) } else { @ui.style() } })
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let v = made.val.unwrap()
+  assert_eq(v.laid_size().0, 100.0)
+  styled.set(true)
+  t.draw()
+  assert_eq(v.laid_size().0, 80.0)
+  holder_width.set(300.0)
+  t.draw()
+  assert_eq(v.laid_size().0, 80.0)
+  styled.set(false)
+  t.draw()
+  assert_eq(v.laid_size().0, 150.0)
+}
+
+///|
 test "an explicit row width replaces the style's grow and basis as well as its width" {
   let growing = @signals.signal(true, same=fn(a, b) { a == b })
   let made : Ref[@view.View?] = Ref(None)
@@ -548,6 +579,39 @@ test "a transparent rounded row becomes an inner corner's container when it star
 }
 
 ///|
+test "an unpressed inner row holds its avatar's corner as the old row does" {
+  let old = @ui.Tester::new(fn(c) {
+    c.box(w=Px(220.0), h=Px(180.0), pad=8.0, radius=26.0, bg=0x333333FFL, clip=true, fn() {
+      c.box(style=@ui.style(radius=Inner), w=Fill(1.0), h=Fill(1.0), dir=Row, pad=16.0, fn() {
+        avatar(c, "alexandra@example.org", "Alexandra Chen", "", 46.0)
+      }) |> ignore
+    }) |> ignore
+  }, w=320.0, h=220.0, corners_held=false)
+  old.draw()
+  let old_faults = old.corner_faults()
+  assert_eq(old_faults, [])
+  let inner = @signals.signal(false)
+  let t = @ui.Tester::new(fn(_) {  }, w=320.0, h=220.0, corners_held=false)
+  @ui.set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(card) {
+      card.width(Is(Some(220.0))).height(Is(Some(180.0))).pad(Is(8.0))
+      .radius(Is(26.0)).ground(Is(0x333333FFL)).clips(Is(true)) |> ignore
+      card.box(fn(row) {
+        row.row(Is(true)).height(Is(Some(164.0))).pad(Is(16.0)) |> ignore
+        style_node(row, fn() { @ui.style(radius=if inner.get() { Inner } else { Exact(18.0) }) })
+        avatar_node(row, fn() { "alexandra@example.org" }, fn() { "Alexandra Chen" }, fn() { "" }, 46.0)
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  assert_true(t.corner_faults().length() > 0)
+  inner.set(true)
+  t.draw()
+  assert_eq(t.corner_faults(), old_faults)
+}
+
+///|
 test "layout-derived corners are not recomputed for unrelated text ink changes" {
   let ink = @signals.signal(0x111111FFL, same=fn(a, b) { a == b })
   let ground = @signals.signal(0x333333FFL, same=fn(a, b) { a == b })
@@ -606,6 +670,26 @@ test "an around styled corner follows its contents and keeps clipping on the sam
   mark_radius.set(8.0)
   t.draw()
   assert_eq((style_node_drawn(card).radius, card.id()), (old_mark, id))
+}
+
+///|
+test "an around styled corner follows a hosted old view's contents" {
+  let expected = style_old_around(6.0, 10.0)
+  let made : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(_) {  }, w=200.0, h=200.0, corners_held=false)
+  @ui.set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(card) {
+      made.val = Some(card)
+      card.pad(Is(6.0)) |> ignore
+      style_node(card, fn() { @ui.style(w=Fixed(100.0), h=Fixed(100.0), bg=Data(0x333333FFL), radius=Around, clip=true) })
+      @ui.old(card, fn(c) {
+        c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=0xEEEEEEFFL, fn() {  }) |> ignore
+      }).width(Is(Some(20.0))).height(Is(Some(20.0))) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  assert_eq(style_node_drawn(made.val.unwrap()).radius, expected)
 }
 
 ///|

@@ -333,6 +333,13 @@ pub fn Tree::has_style_corners(self : Tree) -> Bool {
 }
 
 ///|
+/// Whether this node lays its children across, as the shared corner rule sees a row.
+pub fn Tree::corner_row(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  self.nodes[id.at].flex.style.direction is (Row | RowReverse)
+}
+
+///|
 /// Install the host's shared rule for corners that depend on layout. It is called after layout and before painting,
 /// only when such a corner is present and something relevant to the scene changed.
 pub fn Tree::style_corners_by(self : Tree, resolve : (Tree) -> Unit) -> Unit {

@@ -88,12 +88,11 @@ fn Ctx::corners_found(self : Ctx) -> Unit {
 }
 
 ///|
-/// Whether node `p` is a row whose corner says it follows its container's (`Inner`, `InnerOr`: a list's row the
-/// ladder's inset in), wider than tall: a row of the list whether it can be pressed or not, what is in it its, as in a
-/// pressed row (pressed_row).
+/// Whether node `p` is a row whose corner follows its container's (`Inner`, `InnerOr`): its contents lie in the
+/// row's corners even when enlarged text or wrapping makes the row tall.
 fn Ctx::inner_row(self : Ctx, p : Int) -> Bool {
   let n = self.nodes[p]
-  if n.fw <= n.fh * 1.5 {
+  if n.dir != Row && n.fw <= n.fh * 1.5 {
     return false
   }
   // A node of the window's tree can also say this corner; it is temporary here, not in the old frame's index.
@@ -287,6 +286,7 @@ fn[T] Ctx::with_tree_nodes_for(
     let parent = if holder >= 0 { at[holder] } else { -1 }
     let n = Node::new()
     n.kind = if d.image is Some(_) || d.picture is Some(_) { kind_image } else { kind_box }
+    n.dir = if tree.corner_row(d.id) { Row } else { Column }
     n.shapes = d.shapes
     n.lines = d.lines
     n.x = d.x
@@ -452,6 +452,73 @@ fn tree_style_corners_after_layout(tree : @view.Tree) -> Unit {
   layout_read_at.val = old_read
   // The scratch context must not retain copies of the first scene's content after the layout pass.
   c.nodes.clear()
+}
+
+///|
+/// Once hosted old views have been laid out, include their boxes in the same corner rule. The tree's first pass runs
+/// before those views are built; Around in particular must see the contents, not just the empty hosting node.
+fn tree_style_corners_after_old_layout(c : Ctx) -> Unit {
+  let tree = match view_app.val {
+    Some(tree) if !old_whole.val && !old_boxes.is_empty() && tree.has_style_corners() => tree
+    _ => return
+  }
+  let old_count = c.count
+  let saved_inners = c.inners.copy()
+  let saved_inners_or = c.inners_or.copy()
+  let saved_arounds = c.arounds.copy()
+  let old_faults : Array[String] = []
+  let tree_faults : Array[String] = []
+  let old_read = layout_read_at.val
+  c.with_tree_nodes_for(tree, fn(ids) {
+    c.corners_found()
+    c.inner_faults.clear()
+    let take_faults = fn(i : Int) {
+      if i < old_count { old_faults.append(c.inner_faults) } else { tree_faults.append(c.inner_faults) }
+      c.inner_faults.clear()
+    }
+    for i in c.arounds {
+      c.around_after_layout(i)
+      take_faults(i)
+    }
+    let grounds = c.layer_grounds()
+    let hung = c.hung_marks()
+    // Old nodes have lower indices than temporary tree nodes, although a tree node can hold an old node.
+    // Work inner corners in hierarchy order so every container is resolved before its contents.
+    let ordered = c.inners.map(fn(i) {
+      let mut depth = 0
+      let mut parent = c.nodes[i].parent
+      while parent >= 0 {
+        depth += 1
+        parent = c.nodes[parent].parent
+      }
+      (depth, i)
+    })
+    ordered.sort_by(fn(a, b) { a.compare(b) })
+    for (_, i) in ordered {
+      c.inner_after_layout(i, grounds, hung)
+      take_faults(i)
+    }
+    c.corners_in_corners(grounds, inners_done=true)
+    for (id, i) in ids {
+      if tree.style_corner(id) is Some(_) {
+        let n = c.nodes[i]
+        let corners = n.radii.map(fn(r) { (r[0], r[1], r[2], r[3]) })
+        tree.style_corner_worked(id, n.radius, corners)
+      }
+    }
+  }, laid=true, fallback=true)
+  layout_read_at.val = old_read
+  c.inners.clear(); c.inners.append(saved_inners)
+  c.inners_or.clear(); c.inners_or.append(saved_inners_or)
+  c.arounds.clear(); c.arounds.append(saved_arounds)
+  c.inner_faults.clear(); c.inner_faults.append(old_faults)
+  match tree_corner_context.val {
+    Some(scratch) => {
+      scratch.inner_faults.clear()
+      scratch.inner_faults.append(tree_faults)
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -1646,7 +1713,7 @@ fn alike(rs : FixedArray[Double]) -> Bool {
 /// or a circle (its corner half its shorter side) is round by its shape: where it stands is what makes it concentric
 /// (ui-panels.md: 外圆角 = 距离 + 半高), which corner_faults checks; so is one too small for the corner it would have
 /// there, and one at different distances from the two edges: each keeps its own.
-fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
+fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int], inners_done? : Bool = false) -> Unit {
   let inner : Set[Int] = Set::new()
   for i in self.inners {
     inner.add(i)
@@ -1659,7 +1726,7 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
   let hung = self.hung_marks()
   for i in 0..<self.count {
     if inner.contains(i) {
-      self.inner_after_layout(i, grounds, hung)
+      if !inners_done { self.inner_after_layout(i, grounds, hung) }
       continue
     }
     let b = self.nodes[i]
@@ -1860,58 +1927,63 @@ let half_pi : Double = 1.5707963267948966
 /// or one whose corner is `Inner` itself (each worked out from the other) is drawn square, and said so.
 fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
   for p in self.arounds {
-    let a = self.nodes[p]
-    a.radius = 0.0
-    a.radii = None
-    // (corner index, the box, its distances from the corner's two edges)
-    let mut best : (Int, Int, Double, Double)? = None
-    let mut best_d = 1.0e9
-    for i in 0..<self.count {
-      let b = self.nodes[i]
-      if i == p ||
-        b.kind != kind_box ||
-        b.layer ||
-        (b.radius < 0.5 && !self.inners.contains(i)) ||
-        b.fw <= 0.0 ||
-        b.fh <= 0.0 {
+    self.around_after_layout(p)
+  }
+}
+
+///|
+/// Work one Around corner, including its diagnostic, using the boxes in this layout.
+fn Ctx::around_after_layout(self : Ctx, p : Int) -> Unit {
+  let a = self.nodes[p]
+  a.radius = 0.0
+  a.radii = None
+  let mut best : (Int, Int, Double, Double)? = None
+  let mut best_d = 1.0e9
+  for i in 0..<self.count {
+    let b = self.nodes[i]
+    if i == p ||
+      b.kind != kind_box ||
+      b.layer ||
+      (b.radius < 0.5 && !self.inners.contains(i)) ||
+      b.fw <= 0.0 ||
+      b.fh <= 0.0 {
+      continue
+    }
+    if !self.lies_in_bare(i, p) {
+      continue
+    }
+    for k in 0..<4 {
+      let (dx, dy) = corner_gaps(a, b, k)
+      if dx < -inner_even || dy < -inner_even {
         continue
       }
-      if !self.lies_in_bare(i, p) {
-        continue
-      }
-      for k in 0..<4 {
-        let (dx, dy) = corner_gaps(a, b, k)
-        if dx < -inner_even || dy < -inner_even {
-          continue
-        }
-        let far = dmax(dx, dy)
-        if far < best_d {
-          best_d = far
-          best = Some((k, i, dx, dy))
-        }
+      let far = dmax(dx, dy)
+      if far < best_d {
+        best_d = far
+        best = Some((k, i, dx, dy))
       }
     }
-    match best {
-      None => self.inner_faults.push("\{self.named(p)}: radius=Around, nothing with a corner in its corners")
-      Some((k, i, dx, dy)) => {
-        let corner = corner_names[k]
-        if self.inners.contains(i) {
-          self.inner_faults.push(
-            "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, whose corner is Inner: each worked out from the other",
-          )
-          continue
-        }
-        if (dx - dy).abs() > inner_even {
-          self.inner_faults.push(
-            "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, at different distances from its edges: \{dx} and \{dy}",
-          )
-          continue
-        }
-        let b = self.nodes[i]
-        let rb = b.corner_at(k)
-        let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
-        a.radius = if round { round_like_out(dx + rb, room=dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
+  }
+  match best {
+    None => self.inner_faults.push("\{self.named(p)}: radius=Around, nothing with a corner in its corners")
+    Some((k, i, dx, dy)) => {
+      let corner = corner_names[k]
+      if self.inners.contains(i) {
+        self.inner_faults.push(
+          "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, whose corner is Inner: each worked out from the other",
+        )
+        return
       }
+      if (dx - dy).abs() > inner_even {
+        self.inner_faults.push(
+          "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, at different distances from its edges: \{dx} and \{dy}",
+        )
+        return
+      }
+      let b = self.nodes[i]
+      let rb = b.corner_at(k)
+      let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
+      a.radius = if round { round_like_out(dx + rb, room=dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
     }
   }
 }
