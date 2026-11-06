@@ -101,7 +101,7 @@ pub let viz_css : String =
   #|  --dur: 140ms;
   #|  --ease-out: cubic-bezier(.2, .7, .2, 1);
   #|
-  #|  /* Names this sheet answered to before (Codex's older ones and still.fail's), kept so old figures draw. */
+  #|  /* Names this sheet answered to before (Codex's older ones and still.fail's from before its rename), kept so old figures draw. */
   #|  --chart-1: var(--viz-series-1);
   #|  --chart-2: var(--viz-series-2);
   #|  --chart-3: var(--viz-series-3);
@@ -303,7 +303,7 @@ pub let viz_css : String =
   #|.table :is(.text-center, [align="center"]) { text-align: center; }
   #|.table .text-nowrap { white-space: nowrap; }
   #|
-  #|/* ── Boxes in a flow (still.fail's own) ────────────────────────────────────────────────── */
+  #|/* ── Boxes in a flow (still.fail's own) ────────────────────────────────────────────── */
   #|.viz-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
   #|.viz-flow.is-vertical { flex-direction: column; align-items: flex-start; }
   #|.viz-node {
