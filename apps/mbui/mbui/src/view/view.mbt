@@ -79,7 +79,7 @@ pub fn Laid::size(self : Laid, v : View) -> (Double, Double)? {
 ///|
 /// Where `v` is drawn in the window this frame, and how big: as Laid::rect, with what it and its holders are drawn off by
 /// (View::drawn_off: a list's rows on their way as it glides) and how big they are drawn (View::scale), the value
-/// View::drawn_window_told tells, read here as it is painted and never told (what flies to a row as that row is drawn).
+/// View::owed_drawn_window tells, read here as it is painted and never told (what flies to a row as that row is drawn).
 /// Each `Painted` reads what was placed before it: the layout's, and the `Painted` said before it; one said after it,
 /// none of it. None: let go, or laid out nowhere.
 pub fn Laid::drawn(self : Laid, v : View) -> (Double, Double, Double, Double)? {
@@ -553,14 +553,14 @@ struct Node {
   /// whether Tab's stop on it is said by View::tab_stop (the last saying of it), not by View::focusable's `tab`
   mut tab_by_stop : Bool
   mut focused_cell : @signals.Signal[Bool]?
-  /// how big it was laid out, told once all of the layout is done (View::laid_size_told: none till then); made as
+  /// how big it was laid out, told once all of the layout is done (View::owed_laid_size: none till then); made as
   /// first read
   mut size_cell : @signals.Signal[(Double, Double)?]?
   /// its placed rectangle in the window, without drawing transforms, told after placement to an attached overlay
   mut rect_cell : @signals.Signal[(Double, Double, Double, Double)?]?
   /// its rectangle where it is drawn, including its holders' drawing transforms, followed by a detached overlay
   mut drawn_rect_cell : @signals.Signal[(Double, Double, Double, Double)?]?
-  /// the side it went on beside its anchor, told once all of the layout is done (View::went_told: none till then); made
+  /// the side it went on beside its anchor, told once all of the layout is done (View::owed_went: none till then); made
   /// as first read
   mut went_cell : @signals.Signal[Side?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
@@ -781,6 +781,19 @@ pub struct Tree {
   // (Tree::told_noted)
   mut laid_passes : Int
   told_otherwise : Array[String]
+  /// the layout passes a frame took past its one, by what asked for each (Tree::laid_out): what is owed, only fewer
+  owed_passes : Map[String, Int]
+  /// the layout passes taken for the moment being laid out, all of them (Tree::laid_out): bounded together
+  mut moment_passes : Int
+  /// the children the layout box being laid out measured in it, and those of them changed since and not measured
+  /// again (View::layout_box)
+  mut box_measured : Set[Int]
+  mut box_stale : Set[Int]
+  /// what changed them (Tree::layout_marked_at): the node marked, and where what it read was last set
+  mut box_stale_why : String
+  // (the node whose children the framework is making, dropping or putting in another order, told to layout: in a
+  // layout_box's own layout, what it holds changed, none of its layout properties written; Tree::layout_marked_at)
+  mut box_kids_changing : Int
   // where what marked it to be laid out again came from, in the layout pass under way: said with passes that never stop
   mut laid_marked_at : String
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
@@ -805,6 +818,13 @@ pub struct Tree {
   /// what a layout found to tell of its moment, told as it is done (Tree::said_after_laid): a windowed list's blocks
   /// come in sight
   after_laid : Array[() -> Unit]
+  /// what is made elsewhere for what a layout built (View::made_after_layout), made as that layout is done, before it
+  /// returns; and whether that is being made now (no layout under way then)
+  made_after : Array[() -> Unit]
+  mut making_after : Bool
+  /// the node a Roomed value is being applied to as its holder is laid out (View::bind's Roomed; -1: none): its own
+  /// mark is found again there, not a layout to do again (what else the apply changes is marked as any change is)
+  mut roomed_applying : Int
   /// how deep in Tree::laid_out it is (0: not laying out), and whether what layouts found is being told
   mut laying : Int
   mut telling_laid : Bool
@@ -853,7 +873,7 @@ pub struct Tree {
   outs_said : @signals.Signal[Int]
   /// what its rows left out changed in this layout, to be told as it is done
   mut outs_changed : Bool
-  /// the nodes whose size is followed (View::laid_size_told), told as all of the layout is done
+  /// the nodes whose size is followed (View::owed_laid_size), told as all of the layout is done
   sized : Array[Int]
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
@@ -875,7 +895,10 @@ pub struct Tree {
   /// then put in its place) never seen half done
   mut committing : Int
   // what is to be done once the event being taken is committed whole (Tree::after_event), in order
-  afters : Array[() -> Unit]
+  afters : Array[(Double, () -> Unit)]
+  /// what waits for a change said in a layout (a followed point's, Tree::follow_point) committed whole, by that change's
+  /// moment: done once the outermost layout is over, before it returns (Tree::laid_out)
+  afters_laid : Array[(Double, () -> Unit)]
   /// Work completing a published change, before the next timeline moment or input is taken (Tree::after_change).
   changes : Array[(Double, () -> Unit)]
   mut changes_running : Bool
@@ -979,6 +1002,14 @@ pub struct Tree {
   feet : Map[Int, (Double, Double)]
   foot_readers : Map[Int, Array[NodeId]]
   foot_read : Map[Int, Int]
+  /// the box layouts under way, outermost first (View::layout_box): where a box reading an anchor (Layout::anchor) finds
+  /// the one that lays out both it and that anchor
+  layouts : Array[Layout]
+  /// the boxes whose layouts read how big a node is that another branch has laid out before them (Layout::anchor: what
+  /// flies over a list, as big as the row it lands on), by the box that lays out both: who reads which, as big as it
+  /// read it; and the box each reader's last layout read under (one at most)
+  anchor_readers : Map[Int, Array[AnchorRead]]
+  anchor_read : Map[Int, Int]
   /// what each box's layout reported of what it laid out, by name (Layout::report)
   reports : Map[Int, Map[String, (Double, Double)]]
   /// what each node works out of how big a node holding it is laid out, by that node (Live's Roomed)
@@ -1127,6 +1158,12 @@ pub fn Tree::new(
     cause_at: -1.0,
     bringing_at: -1.0,
     laid_passes: 0,
+    owed_passes: {},
+    moment_passes: 0,
+    box_measured: Set::new(),
+    box_stale: Set::new(),
+    box_stale_why: "",
+    box_kids_changing: -1,
     laid_marked_at: "",
     told_otherwise: [],
     measure,
@@ -1144,6 +1181,9 @@ pub fn Tree::new(
     painted: [],
     after_paint: [],
     after_laid: [],
+    made_after: [],
+    making_after: false,
+    roomed_applying: -1,
     laying: 0,
     telling_laid: false,
     first_drawn: [],
@@ -1170,6 +1210,7 @@ pub fn Tree::new(
     modals: [],
     committing: 0,
     afters: [],
+    afters_laid: [],
     changes: [],
     changes_running: false,
     structures: [],
@@ -1213,6 +1254,9 @@ pub fn Tree::new(
     feet: {},
     foot_readers: {},
     foot_read: {},
+    layouts: [],
+    anchor_readers: {},
+    anchor_read: {},
     reports: {},
     roomed: {},
     on_layers_focus: fn(_, _) {  },
@@ -1306,6 +1350,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       self.feet.remove(i)
       self.foot_readers.remove(i)
       self.foot_unread(i)
+      self.anchor_readers.remove(i)
+      self.anchor_unread(i)
       self.reports.remove(i)
       self.roomed.remove(i)
       n.flex = @flex.Node::new()
@@ -1970,6 +2016,36 @@ pub fn View::cause_at(self : View) -> Double {
 }
 
 ///|
+/// Whether its tree is being laid out now (what is built in a layout, a list's rows as they come into it): what is made
+/// elsewhere for it (a window's layer for its popup) made after, at the same moment (View::at_moment), not in it.
+pub fn View::laying_out(self : View) -> Bool {
+  (self.tree.laying > 0 && !self.tree.making_after) || self.tree.layout_owner >= 0
+}
+
+///|
+/// `f` done now, or, asked while its tree is laid out (View::laying_out: what is built in a layout, a list's rows as
+/// they come into it), as the outermost layout of this moment is done, before it returns: before anything is drawn or
+/// hit at that moment. For what is made elsewhere for it (a window's layer for its popup open as its row is made again):
+/// what that makes is laid out at once, in a pass of its own (Tree::owed_passes: "made after its layout"). Not done
+/// once it is let go.
+pub fn View::made_after_layout(self : View, f : () -> Unit) -> Unit {
+  guard self.alive() else { return }
+  guard self.laying_out() else { f(); return }
+  let id = self.id()
+  let tree = self.tree
+  tree.made_after.push(fn() { if tree.alive_id(id) { f() } })
+}
+
+///|
+/// `f` (what a node tells as it is made or let go: a signal what another branch shows by reads) told now, or, asked while
+/// its tree is laid out, as the outermost layout of this moment is done (as View::made_after_layout's), let go by then
+/// or not: what that other branch does then laid out in a pass of its own, never in the layout that measured it.
+pub fn View::told_after_layout(self : View, f : () -> Unit) -> Unit {
+  guard self.laying_out() else { f(); return }
+  self.tree.made_after.push(f)
+}
+
+///|
 /// The moment the logic is at (Tree::logic_at), for what a node works out from the time.
 pub fn View::logic_at(self : View) -> Double {
   self.tree.logic_at()
@@ -2030,8 +2106,37 @@ fn Tree::marked(self : Tree, loc~ : SourceLoc) -> Unit {
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
+  if self.roomed_applying == at {
+    return
+  }
   if self.layout_owner >= 0 {
     // A layout callback is building its own children before measuring them. Nothing outside that layout is dirty.
+    // (one it measured already in this layout, changed now: to be measured again in it, else a fault as it ends,
+    // View::layout_box)
+    let mut c = at
+    while c >= 0 && self.nodes[c].parent != self.layout_owner {
+      c = self.nodes[c].parent
+    }
+    // (only what it lays out, inside it, may be changed in its layout: itself or another branch changed there is a
+    // fault, saying which; its layout is its constraints' and content's, read before it)
+    // (save the framework's one mark for what it holds made, dropped or reordered (Tree::kids_marked_at), on it or, a
+    // slot's, on what holds it: no layout property of it written; nothing told after that mark is saved by it)
+    if self.box_kids_changing == self.layout_owner {
+      let mut o = self.layout_owner
+      while o >= 0 && o != at { o = self.nodes[o].parent }
+      if o == at { return }
+    }
+    if c < 0 || at == self.layout_owner {
+      let made = if self.box_kids_changing >= 0 { ", what node \{self.box_kids_changing} holds made, let go or reordered" } else { "" }
+      fault("layout_box node \{self.layout_owner}: node \{at}'s layout changed in its layout, not one of what it lays out\{made} (last set at \{@signals.last_set_at()})")
+      return
+    }
+    if self.box_measured.contains(c) {
+      if !self.box_stale.contains(c) {
+        self.box_stale_why = self.box_stale_why + " node \{at} (last set at \{@signals.last_set_at()})"
+      }
+      self.box_stale.add(c)
+    }
     let mut i = at
     while i >= 0 && i != self.layout_owner {
       let flex = self.nodes[i].flex
@@ -2043,6 +2148,10 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       i = self.nodes[i].parent
     }
     return
+  }
+  // (marked while it is being laid out: which node, and what set what it read, for a fault to say)
+  if self.laying > 0 {
+    self.laid_marked_at = "node \{at}, last set at \{@signals.last_set_at()}"
   }
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
@@ -2168,9 +2277,21 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     }
     let v = w.read(read)
     let was = self.cause_at
-    self.cause_at = told_at.val
+    // (run first as it is made, told by nothing: the change it is made in, if any, its cause)
+    self.cause_at = if told_at.val >= 0.0 { told_at.val } else { was }
     told_at.val = -1.0
     @signals.untracked(fn() { then(v) })
+    // (what it said waits for its change committed whole, done as it ends where no change round it does
+    // (Tree::afters_done); said in a layout (a frame's, as what it follows changed there), once that layout is over,
+    // at this change's moment: nothing done inside a layout)
+    if was < 0.0 && self.cause_at >= 0.0 && self.afters.length() > 0 {
+      if self.laying > 0 {
+        self.afters_laid.append(self.afters)
+        self.afters.clear()
+      } else {
+        self.afters_done()
+      }
+    }
     self.cause_at = was
   }
   (b.run)()
@@ -2319,20 +2440,27 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
+  // (in a layout (what it builds as it lays out: a list's rows, a part picked by its room): of that layout's moment,
+  // nothing due done in it nor the clocks moved on, never anything outside what it lays out set going from it)
+  let laying = (self.laying > 0 && !self.making_after) || self.layout_owner >= 0
+  // (and while a layout or a view of a moment stands, the clock not moved on either: Tree::standing)
+  let in_layout = laying || self.standing
   let at = if self.cause_at >= 0.0 {
     self.cause_at
-  } else if self.standing {
+  } else if in_layout {
     self.logic
   } else {
     self.time_now()
   }
-  if !self.standing && self.committing == 0 {
+  // An existing cause also belongs to a frame or a property being applied, where committing may be zero.
+  // Publishing the focus/structure it changes must not dispatch another deadline midway through that cause.
+  if self.cause_at < 0.0 && !in_layout && self.committing == 0 {
     self.advance_logic(at)
   }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
   @signals.start_batch()
-  if !self.standing {
+  if !in_layout {
     self.advance_clock(at)
   }
   let was = self.cause_at
@@ -2344,6 +2472,16 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
+  // (what it said waits for its change committed whole: in a layout, once the outermost layout is over, at its moment,
+  // as Tree::queued's)
+  if was < 0.0 {
+    if laying {
+      self.afters_laid.append(self.afters)
+      self.afters.clear()
+    } else {
+      self.afters_done()
+    }
+  }
   self.cause_at = was
   if changed {
     self.marked()
@@ -2531,7 +2669,12 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         let v = reads_own(fn() { watch.read(fn() { f(w, h) }) })
         if last.val != Some(v) {
           last.val = Some(v)
+          // (applied as part of the layout under way: what holds it up to `of` found again here, not marked to be laid
+          // out again)
+          let was = tree.roomed_applying
+          tree.roomed_applying = at
           apply(v)
+          tree.roomed_applying = was
           // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
           let mut j = at
           while j >= 0 && j != of.at {
@@ -3592,6 +3735,28 @@ pub fn View::placed_window_now(self : View, drawing? : Bool = false) -> (Double,
 }
 
 ///|
+/// Where it was last placed in the window, as placed_window_now says it, read also as it is let go (what it lets go of
+/// as it goes, View::owns: its place and what held it as they stood): for an action that hands what it showed to
+/// another owner, said once at that moment. Zero where it was never placed.
+pub fn View::placed_window_last(self : View) -> (Double, Double, Double, Double) {
+  guard self.at >= 0 && self.at < self.tree.nodes.length() else { return (0.0, 0.0, 0.0, 0.0) }
+  let n = self.tree.nodes[self.at]
+  guard n.gen == self.gen else { return (0.0, 0.0, 0.0, 0.0) }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut i = self.at
+  while i >= 0 {
+    let m = self.tree.nodes[i]
+    if !m.slot {
+      x = x + m.lx
+      y = y + m.ly
+    }
+    i = m.parent
+  }
+  (x, y, n.lw, n.lh)
+}
+
+///|
 /// What was told worked out and laid out as of the logic's moment, nothing placed by it (each node where it was placed
 /// till a frame or a change's end places things, by this same layout): where a change under way lays things out, read
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
@@ -3620,7 +3785,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
       i = i + 1
     }
     self.bindings_due.clear()
-    if self.layout_due && self.measured_gen < 0 {
+    let measure = fn() {
       self.laid_out_now(0, self.last_w, self.last_h, fn(g) {
         self.measured_gen = g
         // (placed by once things are placed, whatever is laid out again before that)
@@ -3628,6 +3793,28 @@ fn Tree::measured_now(self : Tree) -> Unit {
           self.walk_from = g
         }
       })
+    }
+    if self.layout_due && self.measured_gen < 0 {
+      measure()
+    }
+    // (what this measuring said for once it is over (View::made_after_layout, told_after_layout), done before it
+    // returns where no layout holds it, and what that changed measured again: what is read after it is of then)
+    // (each round of them a pass of this moment's, bounded as a layout's are: laid_passes_most)
+    if self.laying == 0 && self.layout_owner < 0 {
+      let mut rounds = 0
+      while !self.made_after.is_empty() {
+        rounds += 1
+        if rounds > laid_passes_most {
+          // (a fault; what is left of them done by the next layout, as its own are: Tree::laid_out)
+          fault("measured: what was said for once it is measured said more each time, \{laid_passes_most} rounds")
+          break
+        }
+        self.made_after_run()
+        // (marked by them: measured_gen let go where the layout was marked, Tree::layout_marked_at)
+        if self.layout_due && self.measured_gen < 0 {
+          measure()
+        }
+      }
     }
   })
   if shown != at {
@@ -3639,6 +3826,20 @@ fn Tree::measured_now(self : Tree) -> Unit {
   self.standing = was_standing
   // A standalone measurement has no outer laid_out/tell_laid to finish work raised by flex's callbacks.
   self.changes_done() |> ignore
+}
+
+///|
+/// What was said for once the layout under way is over (View::made_after_layout, told_after_layout), each done now
+/// (what those say in turn left for the next round).
+fn Tree::made_after_run(self : Tree) -> Unit {
+  let now = self.made_after.copy()
+  self.made_after.clear()
+  let was = self.making_after
+  self.making_after = true
+  for f in now {
+    f()
+  }
+  self.making_after = was
 }
 
 ///|
@@ -4376,7 +4577,8 @@ pub fn View::fits(self : View, on : Live[Bool]) -> View {
 ///|
 /// Whether its row left it out as it was last laid out (View::drops), followed: told once all of the layout is done, as
 /// one change of all its rows left out.
-pub fn View::left_out(self : View) -> Bool {
+/// Owed: as View::owed_laid_size (what is left out said in the layout of what holds it: layout_box).
+pub fn View::owed_left_out(self : View) -> Bool {
   self.tree.outs_said.get() |> ignore
   match self.live() {
     Some(n) => n.out
@@ -5929,7 +6131,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
     return
   }
   self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
-  self.tree.layout_marked_at(at)
+  self.tree.kids_marked_at(at, self.at)
   self.tree.order_marked()
   self.tree.modals_told()
 }
@@ -5982,7 +6184,7 @@ fn View::boxes_again(self : View) -> Unit {
     None => ()
   }
   self.tree.boxes_now(at)
-  self.tree.layout_marked_at(at)
+  self.tree.kids_marked_at(at, self.at)
   self.tree.order_marked()
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.tree.modals_told()
@@ -5996,7 +6198,7 @@ fn View::boxes_removed(self : View) -> Unit {
     Some(batch) if self.tree.layouts_active == 0 && batch.slot == self.id() => {
       let at = self.boxes_owner()
       batch.pending.add(self.tree.handle(at).id())
-      self.tree.layout_marked_at(at)
+      self.tree.kids_marked_at(at, self.at)
       self.tree.order_marked()
       self.tree.modals_told()
     }
@@ -6047,6 +6249,17 @@ fn View::drop(self : View, v : View) -> Unit {
     None => ()
   }
   @signals.end_batch()
+}
+
+///|
+/// `at` marked to be laid out again for what node `kids_of` holds made, dropped or put in another order (`at` that node,
+/// or, a slot's, what holds it): in a layout_box's own layout, the framework's change of what it holds, none of its
+/// layout properties written (Tree::layout_marked_at); only this one mark, nothing told after it.
+fn Tree::kids_marked_at(self : Tree, at : Int, kids_of : Int) -> Unit {
+  let was = self.box_kids_changing
+  self.box_kids_changing = kids_of
+  self.layout_marked_at(at)
+  self.box_kids_changing = was
 }
 
 ///|
@@ -6214,6 +6427,12 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
     }
   })
   slot.owns(stop) |> ignore
+}
+
+///|
+/// The moment of the change being made now (an event's, a moment's come on the timeline: Tree::cause_at), -1 none.
+pub fn Tree::change_at(self : Tree) -> Double {
+  self.cause_at
 }
 
 ///|
@@ -6548,16 +6767,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
-  // (what waits for it committed whole, each a change of its own of this moment, in order)
-  while self.afters.length() > 0 {
-    let next = self.afters.remove(0)
-    self.committing += 1
-    @signals.start_batch()
-    @signals.untracked(next)
-    @signals.end_batch()
-    self.committing -= 1
-    self.modals_settled()
-  }
+  self.afters_done()
   self.cause_at = was
   // (where things stand once it is told whole, for the next change: Tree::settle_after_change)
   if was < 0.0 {
@@ -6599,11 +6809,22 @@ fn Tree::settle_after_change(self : Tree, at : Double) -> Unit {
 /// Where things stand as of `at` laid out and placed now, where something asks (View::laid_before_causes): what was told
 /// worked out, laid out and placed as a frame would, nothing drawn.
 fn Tree::settle_now(self : Tree, at : Double) -> Unit {
-  if self.before_causes <= 0 || self.standing || self.last_w <= 0.0 {
+  if self.before_causes <= 0 {
     return
   }
+  self.settled_at(at) |> ignore
+}
+
+///|
+/// Laid out and placed as of `at`, what was told so far worked out, as a frame would, nothing drawn (Tree::settle_now's,
+/// View::drawn_now's): false where it cannot be (inside such a settle already, or the window not sized yet), true where
+/// it is or nothing was due.
+fn Tree::settled_at(self : Tree, at : Double) -> Bool {
+  if self.standing || self.last_w <= 0.0 {
+    return false
+  }
   if !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
-    return
+    return true
   }
   self.standing = true
   self.work.settles = self.work.settles + 1
@@ -6631,6 +6852,12 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = false
   self.withins_restored()
+  // (what a change worked out in it waits for (a followed point's, Tree::follow_point), where no change round it takes
+  // it: done once it is over, out of its standing, at its moment)
+  if cause < 0.0 {
+    self.afters_done()
+  }
+  true
 }
 
 ///|
@@ -6662,6 +6889,11 @@ fn Tree::laid_before_due_at(self : Tree, at : Double) -> Unit {
     })
   }
   self.standing = false
+  // (what that layout's changes wait for (Tree::follow_point's) done now, out of its standing, before the event or what
+  // is due at that moment: as Tree::settled_at does)
+  if cause < 0.0 {
+    self.afters_done()
+  }
 }
 
 ///|
@@ -6704,9 +6936,28 @@ fn View::laid_before_due(self : View, moves : (Double) -> Bool) -> Unit {
 ///|
 /// `f` done once the event being taken now is committed whole (what it told brought about: nodes shown, gone, made anew,
 /// a modal layer opened), as a change of its own of that moment; taken in none, now.
+fn Tree::afters_done(self : Tree) -> Unit {
+  // (what waits for the change under way committed whole, each a change of its own of its moment, in order: an
+  // event's, a moment's come on the timeline, a signal's change: whichever change it was said in, as that one ends)
+  // (each at the moment of the change it was said in: Tree::after_event keeps it with it)
+  while self.afters.length() > 0 {
+    let (at, next) = self.afters.remove(0)
+    let was = self.cause_at
+    self.cause_at = at
+    self.committing += 1
+    @signals.start_batch()
+    @signals.untracked(next)
+    @signals.end_batch()
+    self.committing -= 1
+    self.modals_settled()
+    self.cause_at = was
+  }
+}
+
+///|
 fn Tree::after_event(self : Tree, f : () -> Unit) -> Unit {
   if self.cause_at >= 0.0 {
-    self.afters.push(f)
+    self.afters.push((self.cause_at, f))
   } else {
     f()
   }
@@ -6925,6 +7176,9 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     }
     self.committing -= 1
     self.modals_settled()
+    if was < 0.0 {
+      self.afters_done()
+    }
     self.cause_at = was
     // (where things stand once it is told whole, as of its moment, for the next change: Tree::settle_after_change)
     if was < 0.0 {
@@ -7133,9 +7387,28 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 }
 
 ///|
+/// What a layout pass says where its layout was marked again in it and not laid out in it (Tree::laid_pass).
+let laid_marked_in_own : String = "\u{0}marked in its own layout"
+
+///|
+/// A layout more in this frame, for `why` (what is owed: Tree::owed_passes), counted where it lays anything out again.
+fn Tree::owed_again(self : Tree, why : String) -> Unit {
+  if self.layout_due {
+    self.owed_passes[why] = self.owed_passes.get(why).unwrap_or(0) + 1
+  }
+}
+
+///|
+/// The layout passes past a frame's one taken since it was made, by what asked for each (Tree::laid_out): the reads of
+/// layout told back still owed, a test's to say none more.
+pub fn Tree::owed_passes(self : Tree) -> Map[String, Int] {
+  self.owed_passes
+}
+
+///|
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
 /// things are as an event finds them in the middle of its change: Tree::laid_now).
-fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
+fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   let w = self.last_w
   let h = self.last_h
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
@@ -7222,18 +7495,27 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     self.work.orders = self.work.orders + 1
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
+  // (its layout marked again while it was laid out, placed or painted, outside a layout box's own: laid out in it all
+  // the same where that came before it was reached (what holds it no longer to be laid out: nothing left), else marked
+  // in its own layout and not laid out in it, said so, its `due` kept)
+  if self.layout_due {
+    if self.nodes.length() > 0 && self.nodes[0].flex.dirty {
+      return (placing, ordered, laid_marked_in_own)
+    }
+    self.layout_due = false
+  }
   self.due = false
   // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
   // same pass: one result, the frame drawing all of it)
   if self.outs_changed {
     self.outs_told()
     if self.due {
-      return (placing, ordered)
+      return (placing, ordered, "rows left out told")
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
   if self.sized.length() > 0 && self.sizes_told() && self.due {
-    return (placing, ordered)
+    return (placing, ordered, "sizes told (owed_laid_size, owed_laid_window, owed_drawn_window, owed_went)")
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
@@ -7244,7 +7526,7 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
       @signals.untracked(f)
     }
     if self.due {
-      return (placing, ordered)
+      return (placing, ordered, "once laid out (owed_once_laid_out)")
     }
   }
   // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
@@ -7252,10 +7534,10 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
   if self.shows_due.length() > 0 {
     self.shown_now()
     if self.due {
-      return (placing, ordered)
+      return (placing, ordered, "brought into sight")
     }
   }
-  (placing, ordered)
+  (placing, ordered, "")
 }
 
 ///|
@@ -7320,6 +7602,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
+  // (the passes of this outermost layout and those nested in it (what is under the pointer told after placing lays it
+  // out once more, in here): one bound for all of them; another asked for apart, at the same moment or not, its own)
+  if self.laying == 0 {
+    self.moment_passes = 0
+  }
   let was_standing = self.standing
   self.standing = true
   defer { self.standing = was_standing }
@@ -7329,8 +7616,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   let mut passes = 0
   while self.due {
     passes += 1
+    self.moment_passes += 1
     self.laid_passes = passes
-    if passes > laid_passes_most {
+    if self.moment_passes > laid_passes_most {
       let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
       println(said)
       fault(said)
@@ -7338,9 +7626,26 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       break
     }
     self.told_otherwise.clear()
-    let (p, o) = self.laid_pass(upto)
+    let (p, o, why) = self.laid_pass(upto)
     placing = placing || p
     ordered = ordered || o
+    // (one layout a frame (retained.md rule 10): what comes after it places, never lays out again (a column brought to
+    // what is to be in sight moves what it holds: placed, in this frame); a layout more only for what is owed, each
+    // counted by what it is, the count only ever smaller; anything else that marks the tree's layout in its own layout
+    // is a fault, saying where it marked it)
+    if self.due && self.layout_due {
+      if why == "" || why == laid_marked_in_own {
+        // (a fault: what marked it read the layout to change what is laid out, the defect itself. In a test's run it
+        // stops there. In a host's it is told once, and this moment is drawn and hit as its one layout, all of it done,
+        // has it: what was marked is laid out as the tree is next laid out, at whatever moment that is (an input's or a
+        // frame's), as any change told then; nothing is drawn half laid out)
+        let said = "view: marked in its own layout, after it was laid out: \{self.laid_marked_at}"
+        println(said)
+        fault(said)
+        break
+      }
+      self.owed_again(why)
+    }
   }
   self.laid_passes = 0
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
@@ -7352,6 +7657,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if placing && !self.withins_passing {
     self.withins_passing = true
     while self.withins_told() && self.due {
+      self.owed_again("under the pointer told")
       self.laid_out(upto)
     }
     self.withins_passing = false
@@ -7360,15 +7666,39 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     // placed: an order, what bounds input, what takes it; in this same pass)
     self.withins_passing = true
     while self.bars_near_told() && self.due {
+      self.owed_again("a column's bar near the pointer told")
       self.laid_out(upto)
     }
     self.withins_passing = false
+  }
+  // (what is made elsewhere for what it built, made as it is done (View::made_after_layout), by the outermost: laid out
+  // at once, in its own pass, before it returns)
+  if self.laying == 1 {
+    while !self.made_after.is_empty() {
+      let now = self.made_after.copy()
+      self.made_after.clear()
+      self.making_after = true
+      for f in now {
+        f()
+      }
+      self.making_after = false
+      if self.due && self.layout_due {
+        self.owed_again("made after its layout")
+        self.laid_out(upto)
+      }
+    }
   }
   self.laying -= 1
   // (what it found to tell, told as it is done, of its moment, whatever laid it out (a frame, an input's moment, an
   // event finding where things are, a change settled): once, by the outermost)
   if self.laying == 0 {
     self.tell_laid()
+    // (what waits for a change said in it committed whole, at that change's moment, the layout over: Tree::afters_done)
+    if self.afters_laid.length() > 0 {
+      self.afters.append(self.afters_laid)
+      self.afters_laid.clear()
+      self.afters_done()
+    }
     if self.changes_done() && self.due {
       self.laid_out(upto)
     }
@@ -7376,7 +7706,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
 }
 
 ///|
-/// The sizes followed (View::laid_size_told), all of it laid out, told as one change: whether any was told otherwise.
+/// The sizes followed (View::owed_laid_size), all of it laid out, told as one change: whether any was told otherwise.
 /// The tree's own telling of what it laid out, wherever its layout runs (a hand-off's change brought to its moment
 /// too): reads what is laid out as its own (reads_own), never as the hand-off's code.
 fn Tree::sizes_told(self : Tree) -> Bool {
@@ -7439,7 +7769,7 @@ fn Tree::sizes_told_now(self : Tree) -> Bool {
         }
         None => ()
       }
-      // (and the side it went on beside its anchor, where that is followed: View::went_told)
+      // (and the side it went on beside its anchor, where that is followed: View::owed_went)
       match n.went_cell {
         Some(cell) =>
           if @signals.untracked(fn() { cell.get() }) != n.went {
@@ -7538,8 +7868,12 @@ fn Tree::shown_now(self : Tree) -> Unit {
 /// change of all those followed (what holds a column that scrolls in it, how far it can go: View::scrolls); none till
 /// the first layout after it is first asked has been done (not measured yet: no size of nothing). Never a motion's
 /// target.
-pub fn View::laid_size_told(self : View) -> (Double, Double)? {
-  layout_read("laid_size_told")
+/// Owed (retained.md, "Layout read back"): a read of layout told back to what builds, kept only for what reads it
+/// still (an old view hosted, what is not moved yet), counted by detlint's layout-read-back and only ever fewer; a node of
+/// the tree reads layout as it is painted (Painted), in an event (shown_rect, laid_size) or in the layout of what holds
+/// both (layout_box, by_room).
+pub fn View::owed_laid_size(self : View) -> (Double, Double)? {
+  layout_read("owed_laid_size")
   guard self.live() is Some(n) else { return None }
   let cell = match n.size_cell {
     Some(c) => c
@@ -7559,8 +7893,12 @@ pub fn View::laid_size_told(self : View) -> (Double, Double)? {
 /// including scrolling and anchoring, in the same layout pass. None before that first pass or while laid out nowhere.
 /// Drawing transforms are excluded, as in placed_window_now. This describes geometry; it never starts or retimes a
 /// motion. A flight declares its way once for the send and uses this only to locate its destination on that way.
-pub fn View::laid_window_told(self : View) -> (Double, Double, Double, Double)? {
-  layout_read("laid_window_told")
+/// Owed (retained.md, "Layout read back"): a read of layout told back to what builds, kept only for what reads it
+/// still (an old view hosted, what is not moved yet), counted by detlint's layout-read-back and only ever fewer; a node of
+/// the tree reads layout as it is painted (Painted), in an event (shown_rect, laid_size) or in the layout of what holds
+/// both (layout_box, by_room).
+pub fn View::owed_laid_window(self : View) -> (Double, Double, Double, Double)? {
+  layout_read("owed_laid_window")
   guard self.live() is Some(n) else { return None }
   let cell = match n.rect_cell {
     Some(c) => c
@@ -7578,9 +7916,13 @@ pub fn View::laid_window_told(self : View) -> (Double, Double, Double, Double)? 
 ///|
 /// Its whole rectangle where the window draws it, followed by an overlay outside its holders. Includes drawing
 /// offsets and scaling, even while its own opacity is zero; clipping does not shorten the rectangle. Told after
-/// placement in the same pass, or None before that pass and while laid out nowhere. Unlike laid_window_told, this
+/// placement in the same pass, or None before that pass and while laid out nowhere. Unlike owed_laid_window, this
 /// follows a landing on its way; it must not be used to define that landing's own motion.
-pub fn View::drawn_window_told(self : View) -> (Double, Double, Double, Double)? {
+/// Owed (retained.md, "Layout read back"): a read of layout told back to what builds, kept only for what reads it
+/// still (an old view hosted, what is not moved yet), counted by detlint's layout-read-back and only ever fewer; a node of
+/// the tree reads layout as it is painted (Painted), in an event (shown_rect, laid_size) or in the layout of what holds
+/// both (layout_box, by_room).
+pub fn View::owed_drawn_window(self : View) -> (Double, Double, Double, Double)? {
   guard self.live() is Some(n) else { return None }
   let cell = match n.drawn_rect_cell {
     Some(c) => c
@@ -8923,7 +9265,7 @@ pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone 
 }
 
 ///|
-/// `f` done once all of it is laid out as it is next (sizes told: View::laid_size_told), as one with that layout, whether
+/// `f` done once all of it is laid out as it is next (sizes told: View::owed_laid_size), as one with that layout, whether
 /// anything it follows came out otherwise or not: what waits on where a change it made leaves things (a page's list's
 /// fling toward its foot as what is above it grew, Scroll::grew_above).
 fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
@@ -8935,9 +9277,13 @@ fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
 /// `f` done once all of it is laid out as it is next (Tree::once_laid_out: every pass over, the sizes told), the node's:
 /// not done where the node is let go before. What is to be done where things are once laid out (a menu put beside what
 /// it was opened from, a list scrolled to what it is to show), never as the frame is built or what the host says comes.
-/// What `f` reads of the layout told (View::laid_size_told, laid_window_told) is this layout's, where it was asked once
+/// What `f` reads of the layout told (View::owed_laid_size, owed_laid_window) is this layout's, where it was asked once
 /// before: a told value is followed only from its first asking, none till a layout after that.
-pub fn View::once_laid_out(self : View, f : () -> Unit) -> Unit {
+/// Owed (retained.md, "Layout read back"): a read of layout told back to what builds, kept only for what reads it
+/// still (an old view hosted, what is not moved yet), counted by detlint's layout-read-back and only ever fewer; a node of
+/// the tree reads layout as it is painted (Painted), in an event (shown_rect, laid_size) or in the layout of what holds
+/// both (layout_box, by_room).
+pub fn View::owed_once_laid_out(self : View, f : () -> Unit) -> Unit {
   guard self.alive() else { return }
   self.tree.once_laid_out(fn() {
     if self.alive() {
@@ -9587,7 +9933,7 @@ pub fn reset_globals() -> Unit {
 /// From now on what is laid out may not be read (`why`: where), until it is put back with what this gives (None: it may
 /// be read). Only ui's hand-off of what the host has once (host_said_arrive) says it; an app never does. What is shut is
 /// what this frame has yet to lay out, read as if it were: where it was placed (placed_window_now) and the sizes and
-/// places told (laid_size_told, laid_window_told). A read that lays it out there and then, as of the logic's moment
+/// places told (owed_laid_size, owed_laid_window). A read that lays it out there and then, as of the logic's moment
 /// (laid_size, laid_window_now: how big a thing is at a change, a slide's length said by it), is not of them: it may
 /// be read.
 pub fn shut_layout_reads(why : String?) -> String? {

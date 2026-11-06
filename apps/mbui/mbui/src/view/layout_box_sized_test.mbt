@@ -65,11 +65,33 @@ test "by_room sized by what it picks: as tall as the arrangement its width calls
 }
 
 ///|
+// kept across runs: the tree stopped by the expected abort, let go as the next run begins
+let stopped_sized_tree : Ref[@view.Tree?] = Ref(None)
+
+///|
 test "panic: a layout box sized by what it holds that says no height aborts" {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(col) { col.box(fn(b) { b.layout_box(Is(()), fn(_, _) {  }, sized=true) |> ignore }) |> ignore }) |> ignore
   })
+  stopped_sized_tree.val = Some(tree)
   tree.frame(390.0, 844.0) |> ignore
+}
+
+///|
+test "a run after an aborted sized layout lets go of its tree and drains after-flush work" {
+  // A new run resets the reactive context before disposing of the stopped tree, then runs what other owners kept.
+  @signals.reset_globals()
+  match stopped_sized_tree.val {
+    Some(tree) => {
+      stopped_sized_tree.val = None
+      tree.dispose()
+    }
+    None => () // Native's test driver skips the expected-abort test.
+  }
+  @signals.run_told()
+  let ran = Ref(false)
+  @signals.after_flush(fn() { ran.val = true })
+  assert_true(ran.val, msg="after-flush work is not held by the stopped layout")
 }
 
 ///|

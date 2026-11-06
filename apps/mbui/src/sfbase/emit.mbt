@@ -57,6 +57,8 @@ pub(all) struct Turn {
   /// its way stretched as it goes (a Float waiting for words sent to land, emit_step): how far it was, how fast it went
   /// on and how fast it ends, over its clock (0 to 1: emit_clock); None: the clock itself
   warp : (Double, Double, Double)?
+  /// the glide's length has been chosen from the endpoints at its start; an underway glide is never retimed
+  timed : Bool
 }
 
 ///|
@@ -68,7 +70,7 @@ pub(all) struct Emits {
   queue : Array[(Double, String, String, @motion.Way)]
   mut current : Turn?
   /// when each agent's last message came out of its avatar, as its poses declared it to end (not the frame that saw
-  /// it end): its line's lingering counted from there (chat_tick)
+  /// it end): its line's lingering counted from there (chat_play)
   ended : Map[String, Double]
   /// this message's endpoint at its Float or Spit deadline, for this seq alone: a fallback while its row is
   /// absent. Drawing never writes it. A new turn or release clears it.
@@ -373,6 +375,7 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
     clock: if float { pose_clock(Float.ms(), Some(at)) } else { pose_clock(left, Some(at)) },
     span: if float { Float.ms() } else { left },
     warp: None,
+    timed: false,
   })
   // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
   c.moving(e.mover, e as &@ui.Moving)
@@ -392,17 +395,16 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
 }
 
 ///|
-/// How long the avatar takes home (Return) from where it let the message out to its activity's avatar: as Return's
-/// over its usual way (emit_way_points, a row or two), longer or shorter as a Move of it is (@ui.move_ms: the further the
-/// longer, not in proportion). The hop (Float) is a hop's, over its own height above the higher of its ends; the drop
-/// and the folding, a row's.
-fn return_ms(landed : (Double, Double)?, home : (Double, Double)?) -> Double {
-  match (landed, home) {
-    (Some(l), Some(h)) => {
-      let far = dmax((h.0 - l.0).abs(), (h.1 - l.1).abs())
-      (Return.ms() * @ui.move_ms(far) / @ui.move_ms(emit_way_points)).round()
+/// How long a glide takes from its endpoints at its cause: the distance-scaled Float, Return or same-agent drop
+/// (Spit here denotes emit_drop_ms). Unknown endpoints use the pose's usual length.
+fn emit_way_ms(pose : Pose, from : (Double, Double)?, to : (Double, Double)?) -> Double {
+  let usual = if pose == Spit { emit_drop_ms } else { pose.ms() }
+  match (from, to) {
+    (Some(a), Some(b)) => {
+      let far = dmax((b.0 - a.0).abs(), (b.1 - a.1).abs())
+      (usual * @ui.move_ms(far) / @ui.move_ms(emit_way_points)).round()
     }
-    _ => Return.ms()
+    _ => usual
   }
 }
 
@@ -475,7 +477,9 @@ pub fn emit_step(
   }
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
-    turns.over(c, Emits, turns.moment(c))
+    if turns.emits_held() {
+      turns.over(c, Emits, turns.moment(c))
+    }
     return
   }
   let starting = e.current is None
@@ -499,6 +503,36 @@ pub fn emit_step(
       Some(t) => t
       None => break
     }
+    // The row becomes available when Float is published. At that same cause the owner supplies its placement;
+    // choose the distance-based duration once, preserving a previous handover if its landing node has gone.
+    let t = match t.pose {
+      Float if !t.timed && t.warp is None => {
+        let start = t.clock.end() - t.span
+        if now <= start {
+          let from = match t.from {
+            Some(k) => match place(k) {
+              Some(r) => Some((r.0, r.1 + 3.0))
+              None => t.from_at
+            }
+            None => place("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
+          }
+          let to = place("emit-landing/" + key + "/" + seq_s(t.seq)).map(fn(r) { (r.0, r.1 + 3.0) })
+          if from is Some(_) && to is Some(_) {
+            let span = emit_way_ms(if t.from is Some(_) { Spit } else { Float }, from, to)
+            let t = { ..t, clock: pose_clock(span, Some(start)), span, timed: true }
+            e.current = Some(t)
+            t
+          } else {
+            t
+          }
+        } else {
+          let t = { ..t, timed: true }
+          e.current = Some(t)
+          t
+        }
+      }
+      _ => t
+    }
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
@@ -510,7 +544,7 @@ pub fn emit_step(
         let long = sending - now
         let way = pose_clock(long, Some(now))
         let most = 3.0 * (1.0 - u)
-        let end_rate = 1.0 / pose_ms(Float, t.from)
+        let end_rate = 1.0 / t.span
         e.held_until = sending
         let warp = Some((u, dmin(rate * long, most), dmin(end_rate * long, most)))
         let t = { ..t, clock: way, span: long, warp }
@@ -528,7 +562,7 @@ pub fn emit_step(
     let at = t.clock.end()
     match t.pose {
       Fold =>
-        e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None })
+        e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None, timed: false })
       Float => {
         // (held till words sent from here land, as their way declared: built again then, their flight's end read by
         // nothing)
@@ -550,7 +584,7 @@ pub fn emit_step(
         e.aimed_at = t.seq
         e.out_at[seq_s(t.seq)] = pose_clock(emit_out_ms_most, Some(at))
         let clock = pose_clock(Spit.ms(), Some(at))
-        e.current = Some({ ..t, pose: Spit, from: None, from_at: None, clock, span: Spit.ms(), warp: None })
+        e.current = Some({ ..t, pose: Spit, from: None, from_at: None, clock, span: Spit.ms(), warp: None, timed: true })
       }
       Spit =>
         match e.queue.get(0) {
@@ -569,6 +603,7 @@ pub fn emit_step(
               clock: pose_clock(emit_drop_ms, Some(at)),
               span: emit_drop_ms,
               warp: None,
+              timed: false,
             })
             e.aimed = None
             e.aimed_at = -1.0
@@ -577,10 +612,10 @@ pub fn emit_step(
             // Both ends belong to this phase's cause, not to whichever pictures happened to sample Spit.
             let landed = emit_landing_by(key, e, t, agents, place)
             let home = place("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
-            let span = return_ms(landed, home)
+            let span = emit_way_ms(Return, landed, home)
             e.aimed = landed
             e.aimed_at = t.seq
-            e.current = Some({ ..t, pose: Return, clock: pose_clock(span, Some(at)), span, warp: None })
+            e.current = Some({ ..t, pose: Return, clock: pose_clock(span, Some(at)), span, warp: None, timed: true })
           }
         }
       Return => {

@@ -122,8 +122,9 @@ pub fn composer_cc_open() -> Bool
 
 pub let composer_field_key : String
 
-pub fn composer_foot_in(Double) -> Double
+pub fn composer_follows(Double, FixedArray[Double]?) -> Bool
 
+pub fn composer_foot_in(Double) -> Double
 
 pub fn composer_geometry(Double, FixedArray[Double]?) -> (Double, Double, ComposerPlace)
 
@@ -135,6 +136,7 @@ pub fn composer_open_room(Double) -> Double
 
 pub fn composer_place(Double) -> ComposerPlace
 
+pub fn composer_place_of(Bool, FixedArray[Double]?) -> ComposerPlace
 
 pub fn composer_room_in(Double, Double, (Double, Double)) -> Double
 

@@ -11,10 +11,12 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, platform=2, stable=false)
   let make = fn(p : @view.View, width : Double?) {
     @sf.quote_card_node(p, fn() { "作者" }, fn() { quoted }, comment=fn() { comment },
-      composer=true, corner=fn() { 16.0 }, words_width=fn() { width })
+      composer=true, corner=fn() { 16.0 },
+      words_width?=width.map(@sf.WordsWidth::fixed))
   }
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(@sf.ui_theme_now)
+    flight_page(root, [fn(root) {
     root.box(fn(list) {
       list.height(Is(Some(160.0))).clips(Is(true)) |> ignore
       list.show(fn() { row.get() }, fn(r) {
@@ -29,10 +31,12 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
       from.val = Some(make(p, None))
       @ui.field(p, field) |> ignore
     })
+    }, fn(root) {
     root.box(fn(layer) {
       layer.over(Is(true)) |> ignore
       send_flight_node(layer, "quotes", fn(_) { None }, quotes=fn(_, key) { target.get(key) })
     }) |> ignore
+    }])
   })
   t.draw()
   let q = from.val.unwrap()

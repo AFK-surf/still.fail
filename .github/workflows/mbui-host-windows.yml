@@ -17,6 +17,7 @@ on:
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/log_files.h"
       - "apps/mbui/mbui/scripts/win_logs_test.c"
+      - "apps/mbui/mbui/scripts/win_drop_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
@@ -75,6 +76,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
+      - name: "File drop and clipboard: movable CF_HDROP with Unicode paths"
+        run: |
+          mkdir -p out/host
+          cl.exe -nologo -W3 -D_CRT_SECURE_NO_WARNINGS -I"$MOON_HOME/include" -Isrc/host scripts/win_drop_test.c -Foout/host/ -Feout/host/win_drop_test.exe user32.lib shell32.lib ole32.lib uuid.lib
+          out/host/win_drop_test.exe
       - name: "A key that focuses a field and the next typed key belong to the right recipients"
         run: |
           mkdir -p out/host
@@ -92,6 +98,29 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
         if: success() || failure()
         run: scripts/host_contract.sh windows site
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-windows
+          path: apps/mbui/mbui/out/host/
+          if-no-files-found: ignore
+
+  # The remaining service and accessibility contracts use the same host, but not the recorded-frame comparison.
+  services:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: kitdemo
+        run: scripts/host_contract.sh windows build
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
@@ -110,9 +139,28 @@ jobs:
       - name: "The player: test/host/playcheck.mp4 read through the app, played to its end, a frame grabbed (WebView2's <video>)"
         if: success() || failure()
         run: scripts/host_contract.sh windows play
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-windows-services
+          path: apps/mbui/mbui/out/host/
+          if-no-files-found: ignore
+
+  # The host contracts already approach the job's five-minute limit; the independent stream run has its own clock.
+  streams:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
       - name: "Streams: streamdemo's H.264 (Media Foundation's decoder) and its JPEG (WIC) each said shown to its end (STREAM done)"
-        if: success() || failure()
-        timeout-minutes: 5
         run: |
           APP=streamdemo bash scripts/win.sh build >/dev/null
           mkdir -p out/host
@@ -128,6 +176,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: host-windows
+          name: host-windows-streams
           path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore

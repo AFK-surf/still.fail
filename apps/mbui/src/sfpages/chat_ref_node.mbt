@@ -60,14 +60,14 @@ fn ref_menu_node(
   }
   let rows : Map[String, @view.View] = {}
   let row_key = fn(x : Json) { let item = @sfbase.chat_item(x); item.station + "\t" + item.id }
-  let layer = @sf.popup_root_node(owner)
+  @sf.popup_root_when(owner, fn() { offered() is Some(_) }, fn(layer) {
   layer.show(fn() { offered() is Some(_) }, fn(p) {
     let held = Ref(@signals.untracked(fn() { offered().unwrap() }))
     p.owns(@signals.effect(fn() { match offered() { Some(o) => held.val = o; None => () } })) |> ignore
     let data = fn() { offer.get().unwrap_or(held.val) }
     let look = @motion.presence_node(p, initial=false, enter=@kit.pop_in, exit=@kit.pop_out)
-    p.beside(cap.id(), side=Top, along=Start, offset=ref_menu_off)
-    .width(By(fn() { Some(cap.laid_size_told().map(fn(s) { s.0 }).unwrap_or(ref_menu_least)) }))
+    // (as wide as the composer's capsule, laid out after it in the same layout: View::beside's as_wide)
+    p.beside(cap.id(), side=Top, along=Start, offset=ref_menu_off, as_wide=true)
     .max_height(By(fn() { Some(dmin(ref_menu_max, p.window().1 - 16.0)) }))
     .padding(Is((@sf.panel_pad, @sf.panel_pad, @sf.panel_pad, @sf.panel_pad)))
     .radius(By(fn() { @ui.tree_theme().corner(@sf.ref_menu_corner) }))
@@ -152,6 +152,7 @@ fn ref_menu_node(
       })
     }) |> ignore
   }, leave=@kit.pop_out_ms)
+  })
   fn(code, mods) {
     guard offered() is Some(o) else { return false }
     if code == @ui.key_escape { @sfbase.refs_close(w.key); return true }

@@ -14,6 +14,7 @@ on:
   pull_request:
     paths: &paths
       - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/main.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/sitecheck.mbt"
       - "apps/mbui/mbui/src/streamdemo/**"
@@ -37,6 +38,7 @@ on:
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"
       - "apps/mbui/mbui/scripts/linux.sh"
+      - "apps/mbui/mbui/scripts/linux-host-packages.*"
       - "apps/mbui/mbui/scripts/host_contract.sh"
       - "apps/mbui/mbui/tools/chk/textrec.mbt"
       - "apps/mbui/mbui/test/host/**"
@@ -50,7 +52,31 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Download the packages once, on their own clock. An updated WebKit package has taken nearly three minutes to arrive
+  # from the Ubuntu mirror; that must not consume the time the actual host and stream contracts need to run.
+  packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - id: host-packages
+        run: printf 'names=%s\n' "$(tr '\n' ' ' < apps/mbui/mbui/scripts/linux-host-packages.txt)" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-host-linux
+          packages: ${{ steps.host-packages.outputs.names }}
+      - name: Stage the package archives and their indexes
+        run: bash apps/mbui/mbui/scripts/linux-host-packages.sh snapshot "$PWD/.ci/apt" "$PWD/out/host-linux-packages"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-linux-packages
+          path: out/host-linux-packages/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
   contracts:
+    needs: packages
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     defaults:
@@ -59,61 +85,87 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-linux-packages
+          path: .ci/host-linux-packages
       # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
       # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji); D-Bus's daemon, for a
       # session bus of the links' run; WebKitGTK 6.0, poppler's GLib face and GStreamer (its base and good plugins, and
       # gst-libav's H.264), which the host loads for its web views, its PDFs and its player
-      - uses: ./.github/actions/apt
-        with:
-          name: mbui-host-linux
-          packages: >-
-            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
-            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
-            fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: Install the prepared packages without downloads
+        run: bash scripts/linux-host-packages.sh install "$GITHUB_WORKSPACE/.ci/host-linux-packages"
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
+        id: host_ready
         run: scripts/host_contract.sh linux build
       - name: "The host's contract: a run's tape = a Tester's frames"
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux record
+      - name: "Modifiers: X11 keyboard and mouse events carry the held keys to release"
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" bash test/host/linux_modifiers.sh
       - name: "The text's contract: linux_controls = Pango's"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux text
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux runner
       - name: "The links' contract: started with a link, and handed one by itself started again"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux links
       - name: "The notifications' contract: one shown, kept, and clicked"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux notices
       - name: "The update's contract: another machine's build refused, this machine's put in place and opened"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux update
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux views
       - name: "The pages' contract: a page says to the app, runs its scripts, takes an event stream as it is sent"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux site
       - name: "The player: test/host/playcheck.mp4 read through the app, drawn in the canvas, its frames' times read, played to its end, a frame grabbed (GStreamer's)"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux play
       - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux pdf
       - name: "The pictures' contract over a new context: a picture told ready again and drawn again there"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux images
       - name: "This machine's station's contract: one started by hand said and stopped, the service's said as running it"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux station
       - name: "The dock's number's contract: said to the docks on the session bus, given to one that asks"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_ready.outcome == 'success'
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux badge
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-linux
+          path: apps/mbui/mbui/out/host/
+          if-no-files-found: ignore
+
+  # Stream decoding is independent of the host contracts, and both fit the five-minute limit on their own.
+  streams:
+    needs: packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-linux-packages
+          path: .ci/host-linux-packages
+      - name: Install the prepared packages without downloads
+        run: bash scripts/linux-host-packages.sh install "$GITHUB_WORKSPACE/.ci/host-linux-packages"
+      - uses: ./.github/actions/mbui-moonbit
+        id: host_toolchain
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
-        if: success() || failure()
         run: |
           APP=streamdemo bash scripts/linux.sh build > /dev/null
           mkdir -p out/host
@@ -122,7 +174,7 @@ jobs:
           grep -a STREAM out/host/stream-jpeg.log | tail -5
           grep -q 'STREAM done' out/host/stream-jpeg.log
       - name: "Streams: streamdemo's H.264 (GStreamer's, gst-libav's decoder) said shown to its end (STREAM done)"
-        if: success() || failure()
+        if: (success() || failure()) && steps.host_toolchain.outcome == 'success'
         run: |
           APP=streamdemo bash scripts/linux.sh build > /dev/null
           mkdir -p out/host
@@ -133,6 +185,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: host-linux
+          name: host-linux-streams
           path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore

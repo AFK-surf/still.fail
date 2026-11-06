@@ -25,10 +25,15 @@ pub fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
     Some(i) => i
     None => return
   }
-  let (px, py, _) = c.pointer()
+  let (old_x, old_y, _) = c.pointer()
+  let (px, py) = match drive_node_position.get() {
+    Some(p) if drive_node_window.val => p
+    _ => (old_x, old_y)
+  }
   if !inside(c.rect_of(pane), px, py) {
     return
   }
+  old_chat_drop_hint(pane)
   let l = c.layer(fn() {
     c.layer(fn() { c.box(style=drop_ground, glass=@sf.glass_floating(), fn() {  }) |> ignore }) |> ignore
     c.box(style=drop_hint_box, fn() {

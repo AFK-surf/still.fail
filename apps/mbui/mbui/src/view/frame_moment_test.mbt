@@ -14,7 +14,7 @@ test "a frame lays out at the moment it is given, the host later by then: what i
         child.width(Is(Some(80.0)))
         .height(By(fn() { Some(20.0 + root.tree.drawn_at() / 10.0) }))
         .shrink(Is(0.0)) |> ignore
-        child.reacts(fn() { child.laid_size_told() }, fn(size) {
+        child.reacts(fn() { child.owed_laid_size() }, fn(size) {
           seen.val = size
         })
       }) |> ignore

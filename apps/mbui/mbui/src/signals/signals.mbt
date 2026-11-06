@@ -39,6 +39,9 @@ priv struct Run {
   /// Structural publications deferred by a watcher: finish them before observers registered with after_flush.
   commits : Array[() -> Unit]
   commits_by : Array[ReactiveNode?]
+  mut commit_index : Int
+  /// Nested writes may finish their publications; post-change observers wait for the outer publication to return.
+  mut committing : Int
   afters : Array[() -> Unit]
   /// what asked for each of `afters` (asker: what was reading, running or owning then): a run stopped before it was done keeps it
   /// for its owner while that owner is kept (reset_globals, run_told)
@@ -75,6 +78,8 @@ let run : Run = {
   flushing: 0,
   commits: [],
   commits_by: [],
+  commit_index: 0,
+  committing: 0,
   afters: [],
   afters_by: [],
   lasts: [],
@@ -571,8 +576,8 @@ fn run_effect(e : ReactiveNode) -> Unit {
 }
 
 ///|
-/// How deep flushes may run in each other (a batch that writes, inside an effect, flushes there and then: as deep as
-/// what it sets going goes on so; leaving a long chat, 15).
+/// How deep changes may run in each other (a batch that writes, inside an effect or structural publication,
+/// flushes there and then: as deep as what it sets going goes on so; leaving a long chat, 15).
 pub let flush_deepest : Int = 64
 
 ///|
@@ -609,19 +614,20 @@ fn effect_round(under_way : ReactiveNode) -> Unit {
 pub let flush_too_deep_said : Ref[((String) -> Unit)?] = Ref(None)
 
 ///|
-fn flush() -> Unit {
+fn change_depth_allowed() -> Bool {
   // (one inside another past flush_deepest: something set going without end what sets more going, or what is not
   // the program's (a clock read as it goes) taken into it, each round a flush deeper; said where they were set off,
   // before it runs the stack out. 2026-11-05: a frame's layout took the host's now, 2000 deep as a chat was left)
-  if run.flushing >= flush_deepest {
+  let depth = run.flushing + run.committing
+  if depth >= flush_deepest {
     let from = if run.flush_trail.length() > 8 { run.flush_trail.length() - 8 } else { 0 }
     let last = Array::makei(run.flush_trail.length() - from, fn(i) { run.flush_trail[from + i] })
-    let said = "signals: flushes \{run.flushing} deep in each other, set off from (the innermost last) \{last}"
+    let said = "signals: flushes \{depth} deep in each other (\{run.committing} structural publications), set off from (the innermost last) \{last}"
     match flush_too_deep_said.val {
       // (a test's: said, and what is queued left to the flushes under way)
       Some(f) => {
         f(said)
-        return
+        return false
       }
       None => {
         println(said)
@@ -629,6 +635,12 @@ fn flush() -> Unit {
       }
     }
   }
+  true
+}
+
+///|
+fn flush() -> Unit {
+  guard change_depth_allowed() else { return }
   run.flush_trail.push(
     match setting.val {
       Some(l) => l.to_string()
@@ -652,21 +664,40 @@ fn flush() -> Unit {
 }
 
 ///|
+/// Finish structural publications before returning a completed set/batch, including a set made by an after_flush
+/// observer. The shared cursor lets that nested set finish its publications without replaying the outer callback.
+/// Ordinary post-change observers keep their non-reentrant queue below.
+fn commits_drained() -> Unit {
+  if run.flushing > 0 || run.batch_depth > 0 || run.afters_held > 0 { return }
+  if run.commit_index >= run.commits.length() { return }
+  guard change_depth_allowed() else { return }
+  run.committing += 1
+  while run.commit_index < run.commits.length() {
+    let f = run.commits[run.commit_index]
+    run.commit_index += 1
+    f()
+  }
+  run.committing -= 1
+  if run.committing == 0 {
+    run.commits.clear()
+    run.commits_by.clear()
+    run.commit_index = 0
+  }
+}
+
+///|
 /// What waits for a change told whole done, in order, where nothing holds it back: no flush, batch or layout under way.
 fn afters_drained() -> Unit {
-  if run.flushing == 0 && run.batch_depth == 0 && !run.draining && run.afters_held == 0 {
+  commits_drained()
+  if run.flushing == 0 && run.batch_depth == 0 && run.committing == 0 && !run.draining && run.afters_held == 0 {
     run.draining = true
     // (taken by where each queue is up to, not removed from its head: removing the first shifted all the rest down
     // each time, a change that asked 10⁴s of them (a long page's buttons each going together) held the desktop app's
     // main thread 3.2 s, 0.1.7302, 2026-11-05)
-    let mut c = 0
     let mut a = 0
     let mut l = 0
-    while c < run.commits.length() || a < run.afters.length() || l < run.lasts.length() {
-      let f = if c < run.commits.length() {
-        c += 1
-        run.commits[c - 1]
-      } else if a < run.afters.length() {
+    while a < run.afters.length() || l < run.lasts.length() {
+      let f = if a < run.afters.length() {
         a += 1
         run.afters[a - 1]
       } else {
@@ -675,8 +706,6 @@ fn afters_drained() -> Unit {
       }
       f()
     }
-    run.commits.clear()
-    run.commits_by.clear()
     run.afters.clear()
     run.afters_by.clear()
     run.lasts.clear()
@@ -690,12 +719,11 @@ fn afters_drained() -> Unit {
 /// This is part of committing the change, not another input: a deferred reader may withdraw another queued reader.
 /// A batch or layout still holds it back, just as it holds back the observers of that completed change.
 pub fn after_notify(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
-    run.commits.push(f)
-    run.commits_by.push(asker())
-  } else {
-    f()
-  }
+  run.commits.push(f)
+  run.commits_by.push(asker())
+  // A publication that only registers another publication extends the current queue. Only a nested set/batch's
+  // completion re-enters commits_drained: its caller must see that change's structure before continuing.
+  if run.committing == 0 { afters_drained() }
 }
 
 ///|
@@ -703,7 +731,7 @@ pub fn after_notify(f : () -> Unit) -> Unit {
 /// every effect it set going run); none under way, now. Not alien-signals': a hook beside it, for what must see where
 /// one change left things and never half of it (where a window's tree stands as the next change comes).
 pub fn after_flush(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
+  if run.flushing > 0 || run.batch_depth > 0 || run.committing > 0 || run.draining || run.afters_held > 0 {
     run.afters.push(f)
     run.afters_by.push(asker())
   } else {
@@ -716,7 +744,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 /// what waits on that included): for what must see where the change left things after everything set going by it,
 /// whatever order its effects ran in.
 pub fn after_all_flushed(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
+  if run.flushing > 0 || run.batch_depth > 0 || run.committing > 0 || run.draining || run.afters_held > 0 {
     run.lasts.push(f)
     run.lasts_by.push(asker())
   } else {

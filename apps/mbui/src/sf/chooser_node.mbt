@@ -68,13 +68,14 @@ pub fn chooser_node(
       icon_node(b, "chevron-down", chooser_chevron, By(fn() { if lit() { theme().p.text } else { theme().p.muted } })) |> ignore
     }
   })
-  let popup = popup_root_node(button)
+  popup_root_when(button, fn() { open() && !disabled() }, fn(popup) {
   popup.show(fn() { open() && !disabled() }, fn(slot) {
     // The per-opening scope fills the popup layer; its menu's absolute panel is measured in the window's room.
     slot.over(Is(true)) |> ignore
     menu_node(slot, fn() { open() && !disabled() }, fn(_) { button }, entries, "", Start, 6.0,
       @signals.untracked(fn() { by_key.get() }), @signals.untracked(fn() { !by_key.get() && @ui.pointing() is Finger }),
       fn(item) { set_open(false); (item.select)() }, fn() { set_open(false) }, side~, min_w=chooser_menu_w)
+  })
   })
   button
 }

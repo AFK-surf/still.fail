@@ -8,8 +8,24 @@ pub(all) struct QuoteCardNode {
   root : @view.View
   card : @view.View
   words : @view.View
-  copy : (@view.View, () -> Double?) -> QuoteCardNode
+  copy : (@view.View, WordsWidth?) -> QuoteCardNode
   sent_shift : () -> (Double, Double)
+}
+
+///|
+/// How wide a card's words are laid out where they are not as wide as the card (a flying copy's: its source's lines on
+/// their way to its message's): `width` of how big `anchor` is laid out in the same layout (Layout::anchor: None while
+/// it is laid out to nothing, or none said) and of how far `way` says it has gone.
+pub(all) struct WordsWidth {
+  anchor : @view.View?
+  way : () -> Double
+  width : ((Double, Double)?, Double) -> Double
+}
+
+///|
+/// Words laid out `w` wide, whatever else is laid out (a snapshot's: as wide as they were sent).
+pub fn WordsWidth::fixed(w : Double) -> WordsWidth {
+  { anchor: None, way: fn() { 0.0 }, width: fn(_, _) { w } }
 }
 
 ///|
@@ -32,7 +48,7 @@ pub fn quote_card_node(
   picture_box? : (@view.View) -> Unit,
   picture_shown? : () -> Bool = fn() { true },
   comment_field? : (@view.View) -> Unit,
-  words_width? : () -> Double? = fn() { None },
+  words_width? : WordsWidth,
   tips? : TipLayer,
 ) -> QuoteCardNode {
   let hung = composer && remove is Some(_)
@@ -42,7 +58,7 @@ pub fn quote_card_node(
   let make = fn(outer : @view.View) {
     card_at.val = Some(outer.box(fn(card) {
       card.radius(By(fn() { if composer { corner() } else { quote_corner } }))
-      .clips(By(fn() { words_width() is None }))
+      .clips(Is(words_width is None))
       .gap(Is(if composer { 0.0 } else { 6.0 }))
       .padding(Is(if composer { (0.0, 0.0, 0.0, 0.0) } else { (8.0, 8.0, 8.0, 8.0) }))
       .ground(By(fn() {
@@ -86,12 +102,8 @@ pub fn quote_card_node(
               icon_node(mark, "quote", quote_icon, By(fn() { theme().p.accent })) |> ignore
             }
           })
-          words_at.val = Some(row.box(fn(text) {
-            // A flying card carries its source's line width. Flexing that width into the destination card would
-            // rewrap the source before its path has begun.
-            text.min_width(Is(Some(0.0)))
-            .grow(By(fn() { if words_width() is Some(_) { 0.0 } else { 1.0 } }))
-            .shrink(By(fn() { if words_width() is Some(_) { 0.0 } else { 1.0 } })).width(By(words_width))
+          let said = fn(text : @view.View) {
+            text
             .words_runs(By(fn() {
               if pin() != "" {
                 [@view.words_run(words().split("\n").next().map(fn(s) { s.to_string() }).unwrap_or(""))]
@@ -102,7 +114,26 @@ pub fn quote_card_node(
             .words_look(By(fn() { @ui.style_words(quote_text) }))
             .runs_look(Is({ ..@view.runs_plain, max_lines: 2 }))
             .ink(By(fn() { if jump is Some(_) && (source.pointed() || source.pressed()) { theme().p.text } else { theme().p.muted } })) |> ignore
-          }))
+          }
+          words_at.val = Some(match words_width {
+            None => row.box(fn(text) {
+              text.min_width(Is(Some(0.0))).grow(Is(1.0)).shrink(Is(1.0)) |> ignore
+              said(text)
+            })
+            // A flying card carries its source's line width. Flexing that width into the destination card would
+            // rewrap the source before its path has begun: its words laid out as wide as it says, in its own layout.
+            Some(by) => {
+              let held = row.box(fn(held) { held.min_width(Is(Some(0.0))).grow(Is(1.0)).shrink(Is(1.0)) |> ignore })
+              let text = held.box(said)
+              held.layout_box(By(by.way), sized=true, fn(lay, way) {
+                let w = (by.width)(by.anchor.bind(fn(a) { lay.anchor(a) }), way)
+                let (_, h) = lay.measure(text, w)
+                lay.place(text, 0.0, 0.0)
+                lay.size_to(h)
+              }) |> ignore
+              text
+            }
+          })
         }) |> ignore
       }) |> ignore
       match picture {
@@ -146,7 +177,7 @@ pub fn quote_card_node(
       // (its room as its caller says it is laid out, `picture_box`: the same box the picture is laid out in, nothing
       // of the picture's laid size read back; none said, none)
       quote_card_node(p, author, words, role~, comment~, composer~, corner~,
-        picture?=picture.bind(fn(_) { picture_box }), picture_shown~, words_width=width)
+        picture?=picture.bind(fn(_) { picture_box }), picture_shown~, words_width?=width)
     },
   }
 }

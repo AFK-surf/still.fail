@@ -2488,10 +2488,24 @@ pub fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
 /// handler, a fiber, a test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt):
 /// for a stamp, or a moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
 pub fn Ctx::moment(self : Ctx) -> Double {
+  if self.change_moment() is Some(at) {
+    return at
+  }
   if self.in_frame() {
     self.clock
   } else {
     h_now()
+  }
+}
+
+///|
+/// The moment of a change of the window's tree being made now at its moment (a moment come on its timeline, done as a
+/// frame advances to it; an event's), the frame's time not yet there or past it: what is told in it starts then
+/// (Ctx::moment, Ctx::wake_in). None outside such a change.
+fn Ctx::change_moment(_self : Ctx) -> Double? {
+  match view_tree() {
+    Some(t) if t.change_at() >= 0.0 => Some(t.change_at())
+    _ => None
   }
 }
 
@@ -2981,13 +2995,10 @@ pub fn local_station_act(action : String) -> Unit {
 }
 
 ///|
-/// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
-/// them (Tester::hold_mods).
+/// The modifier keys held now (mod_shift_key, mod_ctrl, mod_alt, mod_cmd), followed as they change, including while the
+/// pointer rests. They are cleared when the window loses focus. A Tester changes them with Tester::hold_mods.
 pub fn mods_held() -> Int {
-  match fake.val {
-    Some(f) => f.mods
-    None => @hostapi.mods_held()
-  }
+  modifiers_now.get()
 }
 
 ///|
@@ -3096,6 +3107,8 @@ pub fn Ctx::wake_in(self : Ctx, ms : Double, later? : Bool = false, loc~ : Sourc
   }
   // Keep a positive fractional delay at its requested moment. Only move a wake on when adding the delay cannot advance
   // the clock (including zero or a negative delay), so it cannot ask for the same frame forever.
-  let at = self.clock + ms
+  // (from the moment now (Ctx::moment): a change of the window's tree made at its moment counts from that moment, as
+  // what it worked out the delay from did)
+  let at = self.change_moment().unwrap_or(self.clock) + ms
   self.wake_at_time(if at > self.clock { at } else { self.clock + 1.0 }, later~, loc~)
 }

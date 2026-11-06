@@ -315,7 +315,7 @@ fn chats_pane_node(
         "search" => {
           let field = search_field_node(line, frame.at)
           // (told as it is first laid out: where it is then)
-          field.reacts(fn() { field.laid_size_told() is Some(_) }, fn(laid) {
+          field.reacts(fn() { field.owed_laid_size() is Some(_) }, fn(laid) {
             if laid {
               search_line.val = Some(field)
               search_laid.set(true)

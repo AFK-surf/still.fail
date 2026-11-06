@@ -4,8 +4,9 @@
 ///|
 fn recent_list_node(parent : @view.View, src : Source, w : Workspace, stint : () -> Int) -> Unit {
   let read = fn() { chats_of(src, w.id, "all") }
-  let popup = @sf.popup_root_node(parent)
-  let tips = @sf.TipLayer::new(fn() { Some(popup) })
+  // (the window's layer for its tips, made as the first shows: popup_root_lazy)
+  let popup = @sf.popup_root_lazy(parent)
+  let tips = @sf.TipLayer::new(fn() { Some(popup()) })
   let waiting = fn() {
     match read().0 {
       None => true

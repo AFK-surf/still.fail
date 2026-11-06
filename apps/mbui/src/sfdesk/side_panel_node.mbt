@@ -48,8 +48,9 @@ fn side_panel_node(
   ground? : () -> Int64 = fn() { @sf.theme().p.bg },
   old_page? : (@ui.Ctx, () -> Unit) -> Unit = fn(_, build) { build() },
 ) -> Unit {
-  let popup = @sf.popup_root_node(parent)
-  let tips = @sf.TipLayer::new(fn() { Some(popup) })
+  // (the window's layer for its tips, made as the first shows: popup_root_lazy)
+  let popup = @sf.popup_root_lazy(parent)
+  let tips = @sf.TipLayer::new(fn() { Some(popup()) })
   parent.show(fn() { view() is Some(_) }, fn(panel) {
     let initial = @signals.untracked(view).unwrap()
     let current = fn() { view().unwrap_or(initial) }

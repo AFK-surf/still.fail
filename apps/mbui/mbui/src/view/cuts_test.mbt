@@ -114,23 +114,23 @@ test "cuts kept for fit: the title whole before its marks, cut only once they le
     t.drawn_of(nodes["title"].id()).unwrap().w
   }
   assert_eq(width(), 96.0)
-  assert_true(nodes["people"].left_out(), msg="the title counted before the people: 203 needed, 198 offered")
+  assert_true(nodes["people"].owed_left_out(), msg="the title counted before the people: 203 needed, 198 offered")
   room.set(203.0)
   assert_eq(width(), 96.0)
-  assert_false(nodes["people"].left_out(), msg="just enough room: the same people back")
+  assert_false(nodes["people"].owed_left_out(), msg="just enough room: the same people back")
   room.set(140.0)
   assert_eq(width(), 79.0, msg="all that may leave gone, the title fits what is left")
-  assert_true(nodes["people"].left_out())
+  assert_true(nodes["people"].owed_left_out())
   words.set("abc")
   assert_eq(width(), 24.0)
-  assert_false(nodes["people"].left_out(), msg="a shorter title makes room for the same people")
+  assert_false(nodes["people"].owed_left_out(), msg="a shorter title makes room for the same people")
   words.set("abcdefghijkl")
   assert_eq(width(), 79.0)
-  assert_true(nodes["people"].left_out())
+  assert_true(nodes["people"].owed_left_out())
   nodes["title"].cuts(Is(true)) |> ignore
   assert_eq(width(), 33.0)
-  assert_false(nodes["people"].left_out(), msg="no longer kept before them: title gives way first")
+  assert_false(nodes["people"].owed_left_out(), msg="no longer kept before them: title gives way first")
   nodes["title"].cuts(Is(true), keep=true).shrink(Is(1.0)) |> ignore
   assert_eq(width(), 33.0)
-  assert_false(nodes["people"].left_out(), msg="shrink said last takes over cuts and its keep")
+  assert_false(nodes["people"].owed_left_out(), msg="shrink said last takes over cuts and its keep")
 }

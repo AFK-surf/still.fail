@@ -33,7 +33,7 @@ fn pick_row_node(slot : @view.View, words : @view.View, row : () -> PickRow?) ->
   let at = words.id()
   pick_tree.val = Some(words.tree)
   pick_rows[at] = row
-  pick_rows_said()
+  pick_rows_said_in(words.tree)
   // (the same message actions as pickable's right click, including the viewer's own bubble; files and links
   // inside it keep their own innermost menu)
   words.on_menu(fn(mn) {
@@ -48,11 +48,12 @@ fn pick_row_node(slot : @view.View, words : @view.View, row : () -> PickRow?) ->
     }
   }) |> ignore
   // (let go with what made it, not once another made since in the same row has said it)
+  let tree = words.tree
   words.owns(fn() {
     match pick_rows.get(at) {
       Some(f) if physical_equal(f, row) => {
         pick_rows.remove(at)
-        pick_rows_said()
+        pick_rows_said_in(tree)
       }
       _ => ()
     }
@@ -85,6 +86,30 @@ let pick_rows_told : @signals.Signal[Int] = @signals.signal(0)
 fn pick_rows_said() -> Unit {
   pick_rows_told.set(@signals.untracked(fn() { pick_rows_told.get() }) + 1)
 }
+
+///|
+/// The same told of rows made or let go in `tree`, as its rows are in a list's layout: once that layout is over, at
+/// its moment, never inside it, once for all of them (what reads which message is picked laid out elsewhere: the chat's bar).
+fn pick_rows_said_in(tree : @view.Tree) -> Unit {
+  // (told once for all of a layout's rows)
+  // (a tree let go before its layout was over told nothing: none of it due)
+  pick_rows_due.retain(fn(t) { t.root().alive() })
+  if pick_rows_due.iter().any(fn(t) { physical_equal(t, tree) }) {
+    return
+  }
+  // (told now where it is laid out by none: none left due)
+  guard tree.root().laying_out() else { return pick_rows_said() }
+  pick_rows_due.push(tree)
+  tree.root().made_after_layout(fn() {
+    pick_rows_due.retain(fn(t) { !physical_equal(t, tree) })
+    pick_rows_said()
+  })
+}
+
+///|
+/// The trees whose layout's rows made or let go are to be told as it is over (pick_rows_said_in's).
+// kept across runs: none between layouts (a tree let go in one, gone as the next is told)
+let pick_rows_due : Array[@view.Tree] = []
 
 ///|
 /// The tree the messages' words picked are in (pick_row_node's), once one is.
@@ -413,5 +438,6 @@ let pick_pop_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium,
 /// What holds the messages' words let go of, as their rows are once scrolled far off: what of them was picked goes.
 pub fn pick_rows_let_go() -> Unit {
   pick_rows.clear()
+  pick_rows_due.clear()
   pick_rows_said()
 }

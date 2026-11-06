@@ -8,10 +8,12 @@ import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LATEST_DECISIONS_SCOPED_NO_TIME, LEGACY_LATEST_DECISIONS, LEGACY_LATEST_DECISIONS_SCOPED, LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, newMessage,
 } from "../src/store/store.ts";
 import { addClientColumn, addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
+import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, installArchivePolicyIndex } from "../src/store/archive-policy-index.ts";
+import { installDecisionTimeIndex } from "../src/store/legacy-decision-time.ts";
 import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
@@ -1733,7 +1735,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [SESSION_UP_JOBS_END, ["a"]],
     [SESSION_UP_JOBS_FIRST, ["a", "100", 64]], [SESSION_UP_JOBS_NEXT, ["a", "1", "100", 64]],
     [WIDGET_SOURCE_POSITIONS_FIRST, [1, "100", 64]], [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 64]],
-    [LATEST_DECISIONS, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
+    [LATEST_DECISIONS, [0]], [ARCHIVE_POLICY, ["ws"]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
@@ -1818,6 +1820,37 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(CLOSED_THREAD_SINCE)!.some((d) => d.includes("closed_cards_thread_at (thread=? AND at>?)")), plans.get(CLOSED_THREAD_SINCE)!.join(" | "));
   // Each session's latest check of the last days: from the index of their times alone.
   assert.ok(plans.get(LATEST_DECISIONS)!.some((d) => d.includes("COVERING INDEX decision_checks_lately")), plans.get(LATEST_DECISIONS)!.join(" | "));
+  // An old store's ready branch also reads times and sessions from a covering index; the small workspace path seeks
+  // its sessions and their checks. The no-time fallback uses those same seeks if a time index disappears.
+  const decisionOld = memory();
+  decisionOld.db.exec("CREATE INDEX decision_checks_at ON decision_checks(created_at)");
+  const putDecision = decisionOld.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES('old',1,'{}')");
+  for (let n = 0; n < 64; n++) putDecision.run();
+  decisionOld.db.exec("DROP INDEX decision_checks_lately");
+  installDecisionTimeIndex(decisionOld.db);
+  for (const [sql, args] of [[LEGACY_LATEST_DECISIONS, [0]], [LEGACY_LATEST_DECISIONS_SCOPED, [0, "ws", 0]],
+    [LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, [0, "ws", 1]]] as [string, unknown[]][]) {
+    const oldPlan = (decisionOld.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(oldPlan.some((d) => d.includes("COVERING INDEX legacy_decision_time_at (created_at>?)")), oldPlan.join(" | "));
+    if (sql === LEGACY_LATEST_DECISIONS_SCOPED) {
+      assert.ok(oldPlan.some((d) => d.includes("sessions_by_connect") && d.includes("connect=?") && d.includes("ws=?")), oldPlan.join(" | "));
+      assert.ok(oldPlan.some((d) => d.includes("decision_checks_session") && d.includes("session=?")), oldPlan.join(" | "));
+    }
+  }
+  const noTimePlan = (decisionOld.db.prepare(`EXPLAIN QUERY PLAN ${LATEST_DECISIONS_SCOPED_NO_TIME}`).all(0, "ws", 0) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(noTimePlan.some((d) => d.includes("sessions_by_connect") && d.includes("connect=?") && d.includes("ws=?")), noTimePlan.join(" | "));
+  assert.ok(noTimePlan.some((d) => d.includes("decision_checks_session") && d.includes("session=?")), noTimePlan.join(" | "));
+  // Current policy: seek this workspace's most recent change. An old store keeps the original scan only until its
+  // background lookup is prepared; its ready branch must seek the workspace, then the chosen row by primary key.
+  assert.ok(plans.get(ARCHIVE_POLICY)!.some((d) => d.includes("archive_policy_by_ws (ws=?)")), plans.get(ARCHIVE_POLICY)!.join(" | "));
+  const policyOld = memory();
+  policyOld.db.exec("DROP INDEX archive_policy_by_ws");
+  const putPolicy = policyOld.db.prepare("INSERT INTO archive_policy(at,policy,author,summary,ws) VALUES(0,'{}','{}','','ws')");
+  for (let n=0;n<64;n++) putPolicy.run();
+  installArchivePolicyIndex(policyOld.db);
+  const oldPolicyPlan = (policyOld.db.prepare(`EXPLAIN QUERY PLAN ${LEGACY_ARCHIVE_POLICY}`).all("ws") as { detail: string }[]).map((r) => r.detail);
+  assert.ok(oldPolicyPlan.some((d) => d.includes("archive_policy_lookup_ws (ws=?)")), oldPolicyPlan.join(" | "));
+  assert.ok(oldPolicyPlan.some((d) => d.includes("INTEGER PRIMARY KEY (rowid=?)")), oldPolicyPlan.join(" | "));
   // The turns the usage counter reads at each part of a transcript: those of its calls' time alone.
   assert.ok(plans.get(TURNS_BETWEEN)!.some((d) => d.includes("turns_by_session (session_key=? AND started_at>? AND started_at<?)")), plans.get(TURNS_BETWEEN)!.join(" | "));
   assert.ok(plans.get(TAKEN_SINCE)!.some((d) => d.includes("deliveries_taken (session=? AND delivered_at>?)")), plans.get(TAKEN_SINCE)!.join(" | "));

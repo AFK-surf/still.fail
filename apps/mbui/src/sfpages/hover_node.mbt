@@ -25,7 +25,8 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
       fn() { open.set(on) })
   })
   trigger.owns(fn() { (due.val)() }) |> ignore
-  let root = @sf.popup_root_node(trigger)
+  // (the window's layer made as it first opens, not for each that could: popup_root_when)
+  @sf.popup_root_when(trigger, fn() { open.get() }, fn(root) {
   root.show(fn() { open.get() }, fn(layer) {
     let look = @motion.presence_node(layer, initial=false, enter=hover_in, exit=hover_out)
     let live = fn() { !layer.leaving() }
@@ -61,5 +62,6 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
     }) |> ignore
     layer.focus_returns() |> ignore
   }, leave=hover_out_ms)
+  })
   fn() { (due.val)(); held.set(true); open.set(true) }
 }

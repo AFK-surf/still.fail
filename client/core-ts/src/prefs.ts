@@ -50,11 +50,12 @@ export function readerOf(v: unknown): Map_ {
 export type BadgeKinds = { on: boolean; wait: boolean; failed: boolean; done: boolean; message: boolean; services: boolean };
 
 /// What the badge counts, kind by kind: as kept (`badgeKinds`, what it does not say as before), or as the older
-/// `badge` says (decisions: the cards; attention, the default: and what went wrong; all: and the unread). `services`
+/// `badge` says (decisions: the cards; attention: and what went wrong; all, the default: and the unread). `services`
 /// is the rail's bell's alone: the services and jobs left up long light it until looked at (never the app's number).
 export function badgeKindsOf(prefs: unknown): BadgeKinds {
   const by = isObject(prefs) ? prefs.badge : null;
-  const base = { on: true, wait: true, failed: by !== "decisions", done: by === "all", message: by === "all", services: true };
+  const unread = by !== "decisions" && by !== "attention";
+  const base = { on: true, wait: true, failed: by !== "decisions", done: unread, message: unread, services: true };
   const k = isObject(prefs) && isObject(prefs.badgeKinds) ? prefs.badgeKinds : {};
   const flag = (name: keyof BadgeKinds) => (typeof k[name] === "boolean" ? k[name] as boolean : base[name]);
   return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message"), services: flag("services") };

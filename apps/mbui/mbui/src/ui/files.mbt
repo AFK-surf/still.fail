@@ -16,9 +16,11 @@ pub struct Pick {
 ///|
 priv struct FakePick {
   kind : @hostapi.PickKind
-  /// the frame it was asked in: answered from the next on
-  frame : Int
+  /// The fake host's answer frame when asked: answered when the next one arrives.
+  mut frame : Int
   mut taken : Bool
+  /// A dropped set is fixed at the host's event; a picker uses the Tester's current answer.
+  files : Array[@hostapi.Picked]?
 }
 
 ///|
@@ -27,7 +29,7 @@ priv struct FakePick {
 pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
   match fake.val {
     Some(f) => {
-      f.pick_asks.push({ kind, frame: g().frame_no, taken: false })
+      f.pick_asks.push({ kind, frame: answers_frames.val, taken: false, files: None })
       f.wants = true
       let p : Pick = { hosts: [], got: [], fake: f.pick_asks.length() - 1 }
       p.wait("a pick")
@@ -127,13 +129,13 @@ fn Pick::faked(self : Pick) -> Array[@hostapi.Picked]? {
       let a = f.pick_asks[self.fake]
       if a.taken {
         Some([])
-      } else if g().frame_no <= a.frame && !host_said_asking.val {
-        // (from the next frame: its build, or as it begins where what the host has once is asked (host_said_arrive),
-        // which is before that frame is counted, as shared_in's)
+      } else if answers_frames.val <= a.frame && !host_said_asking.val {
+        // (from the next fake answer frame, including its notification before the UI frame is built; the host's
+        // once-only handoff may also ask as the frame begins, as shared_in does)
         None
       } else {
         a.taken = true
-        Some(f.picks.copy())
+        Some(a.files.unwrap_or(f.picks).copy())
       }
     }
     _ => Some([])

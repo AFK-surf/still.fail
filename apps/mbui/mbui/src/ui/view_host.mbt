@@ -677,6 +677,7 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double, said : () -> U
       _ => () // a replacement takes this same frame's room and drawing sample before anything is painted
     }
   }
+  tree_files_refresh()
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
   view_pointed_again()
@@ -702,6 +703,7 @@ fn view_arrived() -> Unit {
   match view_app.val {
     Some(tree) if tree.told_since() => {
       view_brought(tree)
+      tree_files_refresh()
       // (what a still pointer is over, as what came moved it: view_pointed_again)
       view_pointed_again()
     }
@@ -2543,6 +2545,16 @@ fn Ctx::view_blit(
 let island_building : Ref[@view.NodeId?] = Ref(None)
 
 ///|
+/// The tree node hosting the old view currently being built; None outside one or in an old root layer. The node's
+/// lifetime is the old view's, so registrations made on it are removed with it.
+pub fn old_building_view() -> @view.View? {
+  match (g().island_said(), view_app.val) {
+    (Some(id), Some(tree)) => tree.view_of(id)
+    _ => None
+  }
+}
+
+///|
 /// What an old view's build asked that cannot be done as asked (@view.Tree::fault): told to the boundary round the old
 /// view being built (each old view is one: `old`), its build going on as what asked it says.
 fn old_fault(said : String) -> Unit {
@@ -3187,6 +3199,7 @@ fn view_frame_end(c : Ctx) -> Unit {
   // (where the old frame's topmost modal layer is in the window's stack of layers, as this frame built it: what of the
   // tree is not over it takes no input, Tree::hold_under)
   tree.hold_under(c.old_modal_stack())
+  tree_files_refresh()
   // (the tree's layers that gave the focus as they opened: opened before this frame ended, no longer: view_focus_kept_for)
   for l in layer_focus_open {
     l.fresh = false
@@ -4649,6 +4662,7 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
     (None, None) => false
   }
   view_point_seen.val = (tree.hits_said(), over, yields_said.val)
+  let_go_hits_changed()
   match view_point.val {
     // (gone, or under the old frame's layer: nothing of the tree's followed; the old views' as they have it)
     None => {
