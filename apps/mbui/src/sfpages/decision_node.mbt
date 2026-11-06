@@ -137,6 +137,8 @@ fn who_node(w : @view.View, m : () -> Message, resolved : () -> Bool) -> Unit {
   let was = @motion.Way::new(if first { 0.0 } else { 1.0 })
   let now = @motion.Way::new(if first { 1.0 } else { 0.0 })
   w.reacts(resolved, fn(r) {
+    // The first declaration already has this state; only a later change fades between the two looks.
+    if was.target() == (if r { 0.0 } else { 1.0 }) { return }
     let at = w.cause_at()
     if r {
       was.go(0.0, @motion.tween(options_out_ms, ease=Leave), at~)
@@ -177,7 +179,10 @@ fn settled_words_node(v : @view.View, words : () -> String) -> Unit {
 fn history_line_node(line : @view.View, words : () -> String, open : (@sf.Anchor) -> Unit) -> Unit {
   let lit = @motion.Way::new(0.0)
   line.reacts(fn() { line.pointed() || line.focused() }, fn(on) {
-    lit.go(if on { 1.0 } else { 0.0 }, @motion.tween(@sf.dur_ms, ease=Out), at=line.cause_at())
+    let to = if on { 1.0 } else { 0.0 }
+    if lit.target() != to {
+      lit.go(to, @motion.tween(@sf.dur_ms, ease=Out), at=line.cause_at())
+    }
   })
   line
   .row(Is(true))
@@ -328,7 +333,10 @@ fn dismiss_node(
       // (let go or answered on screen: faded where it is from that change, as its room goes too (main's dismiss-live
       // presence, archive_tween), the two looks one over the other)
       let lit = @motion.Way::new(if @signals.untracked(live) { 1.0 } else { 0.0 })
-      w.reacts(live, fn(on) { lit.go(if on { 1.0 } else { 0.0 }, archive_tween, at=w.cause_at()) })
+      w.reacts(live, fn(on) {
+        let to = if on { 1.0 } else { 0.0 }
+        if lit.target() != to { lit.go(to, archive_tween, at=w.cause_at()) }
+      })
       w
       .alpha(By(fn() { way_shown(lit, w) }))
       .padding(Is((0.0, 2.0, 0.0, 0.0)))
