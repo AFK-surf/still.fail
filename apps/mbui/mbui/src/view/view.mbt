@@ -1792,7 +1792,7 @@ pub fn View::box(self : View, make : (View) -> Unit) -> View {
   if self.at == 0 {
     self.tree.top_last()
   }
-  self.boxes_again()
+  self.box_appended(v.at)
   v.owning(fn() { make(v) })
   v
 }
@@ -5584,6 +5584,36 @@ fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
   } else {
     into.push(n.flex)
   }
+}
+
+///|
+/// A newly made box follows what its parent holds. Through slots, it follows all of the layout parent's boxes only if
+/// every slot is last among its siblings; otherwise their order is found again.
+fn View::box_appended(self : View, child : Int) -> Unit {
+  // The root tells the host before linking its new box. That telling may synchronously make another box.
+  if self.at == 0 {
+    self.boxes_again()
+    return
+  }
+  let mut at = self.at
+  while self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
+    let n = self.tree.nodes[at]
+    let parent = n.parent
+    let siblings = self.tree.nodes[parent].kids
+    // Tree::boxes omits a slot made as wide as its anchor, along with everything it holds.
+    if (n.beside is Some(b) && b.as_wide) ||
+      parent == 0 ||
+      siblings.length() == 0 ||
+      siblings[siblings.length() - 1] != at {
+      self.boxes_again()
+      return
+    }
+    at = parent
+  }
+  self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
+  self.tree.layout_marked_at(at)
+  self.tree.order_marked()
+  self.tree.modals_told()
 }
 
 ///|
