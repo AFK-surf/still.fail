@@ -2552,9 +2552,10 @@ pub fn View::basis(self : View, b : Live[Double?]) -> View {
 /// How big it is laid out as of the logic's moment (Tree::logic_at): what was told before it laid out first (what an event
 /// changed before it asks, laid out as a frame would), as of the window's size its last frame gave (0 by 0 before the
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
+/// Inside a sample already under way, it measures at that sample's clock without changing its moment.
 pub fn View::laid_size(self : View) -> (Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0) }
-  // (laid out as of the logic's moment, what the change under way set so far counted, nothing of the logic run; read,
+  // (laid out at the active sample or logic's moment, what the change under way set so far counted, nothing of the logic run; read,
   // not placed by: each node where it stood till the change is placed, Tree::measured_now)
   self.tree.measured_now()
   (n.flex.width, n.flex.height)
@@ -3413,13 +3414,15 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
 /// What was told worked out and laid out as of the logic's moment, nothing placed by it (each node where it was placed
 /// till a frame or a change's end places things, by this same layout): where a change under way lays things out, read
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
-/// that change.
+/// that change. A measurement inside an active sample inherits its clock instead of entering another moment.
 fn Tree::measured_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
-  let at = self.logic_at()
   let shown = @signals.untracked(fn() { self.clock.get() })
+  // A measure requested by the sampling already under way belongs to that sample. Rewinding it to the input
+  // clock and restoring it can notify the same visual threshold again, asking for this measure without end.
+  let at = if self.standing { shown } else { self.logic_at() }
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
   let was_standing = self.standing
   self.standing = true

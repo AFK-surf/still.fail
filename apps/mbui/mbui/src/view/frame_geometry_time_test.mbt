@@ -196,3 +196,43 @@ test "prediction preserves equal-time deadline registration order and cancellati
   tree.advance(after_deadlines)
   assert_eq(seen.length(), 3, msg="each deadline runs once")
 }
+
+///|
+test "measuring during a predicted sample cannot repeat its visual threshold or take an input deadline" {
+  let threshold = 100.0
+  let input_at = 90.0
+  let shown_at = 130.0
+  let armed = Ref(false)
+  let observed : Array[Bool] = []
+  let measured : Array[(Double, Double)] = []
+  let due : Array[Double] = []
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(By(fn() { Some(if v.drawn_past(threshold) { 40.0 } else { 20.0 }) }))
+        .height(Is(Some(30.0))) |> ignore
+      v.reacts(fn() { v.drawn_past(threshold) }, fn(past) {
+        if armed.val {
+          observed.push(past)
+          // Stop the broken feedback path before it exhausts memory, then assert its actual notifications.
+          if observed.length() <= 8 {
+            @signals.after_flush(fn() {
+              let (_, _, width, _) = v.laid_window_now()
+              measured.push((v.drawn_at(), width))
+            })
+          }
+        }
+      })
+    }) |> ignore
+  })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=input_at) |> ignore
+  tree.root().at_moment(threshold, fn() { due.push(tree.logic_at()) }) |> ignore
+  armed.val = true
+  tree.at(shown_at)
+  assert_eq(observed, [true], msg="a measurement must not cross the same visual threshold again")
+  assert_eq(measured, [(shown_at, 40.0)])
+  assert_eq(tree.logic_at(), input_at)
+  assert_eq(due, [])
+  tree.advance(threshold)
+  assert_eq(due, [threshold])
+}
