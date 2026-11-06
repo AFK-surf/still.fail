@@ -11,17 +11,17 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, platform=2, stable=false)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(@sf.ui_theme_now)
+    flight_page(root, [fn(root) {
     root.box(fn(list) {
       list.height(Is(Some(160.0))).clips(Is(true)) |> ignore
       list.show(fn() { row.get() }, fn(file) {
         file.width(Is(Some(300.0))).height(Is(Some(120.0))).offset(Is((40.0, 30.0))).ground(Is(ink)) |> ignore
         destination["file"] = {
           view: file, share: fn() { (0.8, 1.0) }, top_crop: fn() { true },
-          copy: fn(p, w, h, fit, corner) {
+          copy: fn(p, fit, corner) {
             fitted.val = fit
             p.box(fn(content) {
-              content.width(By(fn() { Some(w()) })).height(By(fn() { Some(h()) }))
-              .radius(By(corner)).ground(Is(ink)) |> ignore
+              content.over(Is(true)).radius(By(corner)).ground(Is(ink)) |> ignore
             }) |> ignore
           },
         }
@@ -33,10 +33,12 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
       .offset(Is((from.0, from.1))).ground(Is(ink)) |> ignore
     })
     root.box(fn(input) { @ui.field(input, field) |> ignore }) |> ignore
+    }, fn(root) {
     root.box(fn(layer) {
       layer.over(Is(true)) |> ignore
       send_flight_node(layer, "files", fn(_) { None }, files=fn(_, key) { destination.get(key) })
     }) |> ignore
+    }])
   })
   t.draw()
   let ff : FlyingFile = {

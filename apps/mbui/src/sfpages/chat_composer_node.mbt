@@ -35,8 +35,13 @@ pub fn composer_on_page(
   let w = @signals.untracked(fn() { @sfbase.writing(src, draft) })
   let me = parent.id()
   parent.show(fn() { active() && w.held_by.get().map_or(true, fn(h) { h == me }) }, fn(f) {
-    @signals.untracked(fn() { w.held_by.set(Some(me)) })
-    f.owns(fn() { if @signals.untracked(fn() { w.held_by.get() }) == Some(me) { w.held_by.set(None) } }) |> ignore
+    // (said held once the layout it is made in is over, as what another page's composer of it reads: that one made or
+    // let go then, not in a layout that measured it already)
+    f.made_after_layout(fn() { @signals.untracked(fn() { w.held_by.set(Some(me)) }) })
+    // (and let go so, as the layout that let it go is over: what holds it next made then)
+    f.owns(fn() {
+      f.told_after_layout(fn() { if @signals.untracked(fn() { w.held_by.get() }) == Some(me) { w.held_by.set(None) } })
+    }) |> ignore
     make(f)
   })
 }
@@ -113,9 +118,13 @@ pub fn chat_composer_node(
     body.shrink(Is(0.0)) |> ignore
   })
   root_at.val = Some(root)
-  holder.layout_box(Is(()), sized=true, fn(l, _) {
+  // (with what of its room is not its laid size ("opened", "shape": room_of), so its page's layout has all of it from
+  // this one measuring, the pass it is made in too)
+  holder.layout_box(By(fn() { room_of() }), sized=true, fn(l, of) {
     let (_, h) = l.measure(root, l.width)
     l.report("composer", h)
+    l.report("opened", of.0)
+    l.report("shape", of.1)
     l.size_to(h)
     l.place(root, 0.0, 0.0)
   }) |> ignore

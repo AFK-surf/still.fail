@@ -142,9 +142,9 @@ pub let loupe_zoom : Double
 
 pub fn media_decode_stalled(@ui.Ctx, @ui.NativeView?) -> Bool
 
-pub fn media_grab_stalled(@ui.Ctx, @ui.NativeView) -> Bool
-
 pub let media_decode_wait_ms : Double
+
+pub fn media_grab_stalled(@ui.Ctx, @ui.NativeView) -> Bool
 
 pub let media_grab_wait_ms : Double
 

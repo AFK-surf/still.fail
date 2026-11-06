@@ -182,7 +182,7 @@ fn View::scroll_bar(
   // (across, as an old view's foot_bar along the view it is for: `bar_in` in from either side, no more than leaves it
   // its least twice, what scrolls and what it holds as wide less that)
   let track = fn(x : Double) {
-    let (vh, ends) = match self.laid_size_told() {
+    let (vh, ends) = match self.owed_laid_size() {
       Some((w, h)) => if across { (w, dclamp(bar_in_now(), 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
       None => (0.0, 0.0)
     }
@@ -245,7 +245,7 @@ fn View::scroll_bar(
       // (along its right; across, along its foot)
       (if across { thumb.height(thick).width(By(long)) } else { thumb.width(thick).height(By(long)) })
       .offset(By(fn() {
-        let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
+        let (w, h) = self.owed_laid_size().unwrap_or((0.0, 0.0))
         let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
         if across {
           (track(x).0 - b.grab, h - b.inset - b.size - b.grab)

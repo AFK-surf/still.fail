@@ -22,7 +22,7 @@ let host_saids : Array[HostSaid] = []
 /// once. Held by node `owner`: asked no more once it is let go. One kind is one holder's: what `said` takes, another
 /// asking after it never has (a Tester aborts where two live holders say one kind). `said` and `f` run untracked: the
 /// host asked is nothing they depend on; what `f` sets tells what reads it, as any change does. `f` sets signals and
-/// says what is to be done, never reads where things are laid out (that is not laid out yet: View::laid_size_told and
+/// says what is to be done, never reads where things are laid out (that is not laid out yet: View::owed_laid_size and
 /// the like are a fault there, stopping a test's run, told a host's once).
 pub fn[T] on_host_said(owner : @view.View, kind~ : String, said : () -> T?, f : (T) -> Unit) -> Unit {
   if fake.val is Some(_) &&

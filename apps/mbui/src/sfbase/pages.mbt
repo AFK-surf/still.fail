@@ -334,6 +334,7 @@ pub fn reset() -> Unit {
   emit_rooms.clear()
   // words sent flying (flight.mbt)
   send_flight.set(None)
+  flight_way_told.set(0)
   landing_shares.clear()
   // the chats' lists as kept while they show and where they were left (chat_list.mbt)
   readings.clear()

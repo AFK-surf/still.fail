@@ -182,7 +182,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
   let state : Map[Int, Int] = {}
   fn refused(at : Int) -> Unit {
     state[at] = 3
-    // (on no side of anything: View::went_told says none)
+    // (on no side of anything: View::owed_went says none)
     self.nodes[at].went = None
     // (where it is laid out, as if it went beside nothing: never where it went last)
     let n = self.nodes[at]
@@ -333,21 +333,26 @@ fn Tree::window_place(self : Tree, at : Int) -> (Double, Double, Double)? {
 
 ///|
 /// It let go as `owner` is, wherever it is held (what is drawn elsewhere for another, a tip in a layer over all of the
-/// window for the control it tells of: its scope the other's, nothing of it left once that one goes). It.
+/// window for the control it tells of: its scope the other's, nothing of it left once that one goes). It. `owner` let go
+/// in a layout (a list's row it no longer lays out), it is let go as that layout is done, before it returns: what holds
+/// it (the window's root) is no box that layout lays out (View::made_after_layout).
 pub fn View::lives_with(self : View, owner : View) -> View {
   owner.owns(fn() {
-    guard self.live() is Some(_) else { return }
-    match self.parent() {
-      Some(p) => p.drop(self)
-      None => {
-        // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
-        // any state written by the checkpoint only after the node has been let go.
-        @signals.start_batch()
-        self.tree.before_removing(self)
-        self.let_go()
-        @signals.end_batch()
+    let go = fn() {
+      guard self.live() is Some(_) else { return }
+      match self.parent() {
+        Some(p) => p.drop(self)
+        None => {
+          // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
+          // any state written by the checkpoint only after the node has been let go.
+          @signals.start_batch()
+          self.tree.before_removing(self)
+          self.let_go()
+          @signals.end_batch()
+        }
       }
     }
+    if self.laying_out() { self.tree.made_after.push(go) } else { go() }
   })
   |> ignore
   self
@@ -594,9 +599,10 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
 ///|
 /// The side of what it goes beside (View::beside) it went on (the side it was said to go on, or the other where it had
 /// not the room: place_beside's flip), followed: told once all of the layout is done, as the sizes followed are
-/// (View::laid_size_told), what reads it told again only as it goes to the other side; none till the first layout after
+/// (View::owed_laid_size), what reads it told again only as it goes to the other side; none till the first layout after
 /// it is first asked, or where it goes beside nothing.
-pub fn View::went_told(self : View) -> Side? {
+/// Owed: as View::owed_laid_size.
+pub fn View::owed_went(self : View) -> Side? {
   guard self.live() is Some(n) else { return None }
   let cell = match n.went_cell {
     Some(c) => c

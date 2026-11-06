@@ -100,13 +100,27 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         })
         })
       })
-      body.layout_box(By(fn() { (made_now.get().map(fn(m) { (m.room_of)() }), (lift.val)(), @ui.system_tabletop()) }), fn(lay, k) {
-        let (of, lift, fold) = k
+      // (what flies in the page: over its messages and its composer, under its bar and what opens over it, cut by
+      // neither: what words sent fly in, sfpages' chat_flight_layer; laid out after them in the same layout, what
+      // flies as big as what it lands on as that is laid out, Layout::anchor)
+      let fl = body.box(fn(fl) {
+        @sfpages.chat_flight_layer_made(r, fl)
+        // (words sent: from the composer to their row's bubble and words, as the list has that row)
+        @sfbase.send_flight_node(fl, r.station + ":" + r.session, fn(f) {
+          (landing.val)(f.key).bind(fn(l) { l.text })
+        }, quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) }, files=fn(f, key) {
+          (landing.val)(f.key).bind(fn(l) { l.files.get(key) })
+        })
+      })
+      body.layout_box(By(fn() { ((lift.val)(), @ui.system_tabletop()) }), fn(lay, k) {
+        let (lift, fold) = k
         // (as tall as the composer is, the recent chats under the fold taking none of it yet)
         let (_, ch) = lay.measure(f, lay.width)
-        let room = match of {
-          Some(o) => @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), o)
-          None => 0.0
+        // (the room the composer takes, all of it as measuring it in this layout said (made in it or not): composer_room_in)
+        let room = match (lay.reported(f, "opened"), lay.reported(f, "shape")) {
+          (Some(opened), Some(shape)) =>
+            @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), (opened, shape))
+          _ => 0.0
         }
         // (what the fold leaves under the list: from it to the page's foot, the system's bar not counted)
         let under_fold = match fold {
@@ -126,23 +140,10 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
           }
           None => lay.place(f, 0.0, lay.height - ch)
         }
+        lay.measure(fl, lay.width, height=lay.height) |> ignore
+        lay.place(fl, 0.0, 0.0)
       })
       |> ignore
-    })
-    |> ignore
-    // (what flies in the page: over its messages and its composer, under its bar and what opens over it, cut by
-    // neither: what words sent fly in, sfpages' chat_flight_layer)
-    p.box(fn(fl) {
-      fl
-      .over(Is(true))
-      |> ignore
-      @sfpages.chat_flight_layer_made(r, fl)
-      // (words sent: from the composer to their row's bubble and words, as the list has that row)
-      @sfbase.send_flight_node(fl, r.station + ":" + r.session, fn(f) {
-        (landing.val)(f.key).bind(fn(l) { l.text })
-      }, quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) }, files=fn(f, key) {
-        (landing.val)(f.key).bind(fn(l) { l.files.get(key) })
-      })
     })
     |> ignore
     // (what is picked of a message: the finger's bar or the mouse's pill over it, under the bar: pick_node.mbt)

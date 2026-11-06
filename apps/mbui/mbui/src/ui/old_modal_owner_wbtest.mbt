@@ -222,7 +222,7 @@ test "a portal's opening survives its owner being left out of a row and laid out
     host_event(fn() { width.set(20.0) })
     if framed {
       t.frame_at(hidden_at)
-      assert_true(owner.val.unwrap().left_out())
+      assert_true(owner.val.unwrap().owed_left_out())
     }
     t.advance(returned_at - t.time())
     host_event(fn() { width.set(40.0) })

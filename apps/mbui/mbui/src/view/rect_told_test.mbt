@@ -19,10 +19,10 @@ test "an overlay follows its landing through a width change and scrolling in the
     }) |> ignore
     let landing = target.val.unwrap()
     copy.val = Some(root.box(fn(overlay) {
-      let rect = fn() { landing.laid_window_told().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
+      let rect = fn() { landing.owed_laid_window().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
       overlay.over(Is(true)).offset(By(fn() { (rect().0, rect().1) }))
       .width(By(fn() { Some(rect().2) })).height(By(fn() { Some(rect().3) })) |> ignore
-      overlay.reacts(fn() { landing.laid_window_told() }, fn(_) { told.val += 1 })
+      overlay.reacts(fn() { landing.owed_laid_window() }, fn(_) { told.val += 1 })
     }))
   })
   tree.frame(400.0, 300.0) |> ignore
@@ -39,7 +39,7 @@ test "an overlay follows its landing through a width change and scrolling in the
   assert_eq(told.val, count)
   shown.set(false)
   tree.frame(400.0, 300.0) |> ignore
-  assert_eq(target.val.unwrap().laid_window_told(), None)
+  assert_eq(target.val.unwrap().owed_laid_window(), None)
 }
 
 ///|
@@ -64,10 +64,10 @@ test "a detached overlay follows its hidden landing's drawn rectangle including 
     }) |> ignore
     let landing = target.val.unwrap()
     copy.val = Some(root.box(fn(overlay) {
-      let rect = fn() { landing.drawn_window_told().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
+      let rect = fn() { landing.owed_drawn_window().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
       overlay.over(Is(true)).offset(By(fn() { (rect().0, rect().1) }))
       .width(By(fn() { Some(rect().2) })).height(By(fn() { Some(rect().3) })) |> ignore
-      overlay.reacts(fn() { landing.drawn_window_told() }, fn(_) { told.val += 1 })
+      overlay.reacts(fn() { landing.owed_drawn_window() }, fn(_) { told.val += 1 })
     }))
   })
   tree.frame(400.0, 300.0) |> ignore
@@ -83,7 +83,7 @@ test "a detached overlay follows its hidden landing's drawn rectangle including 
   assert_eq(told.val, count)
   shown.set(false)
   tree.frame(400.0, 300.0) |> ignore
-  assert_eq(target.val.unwrap().drawn_window_told(), None)
+  assert_eq(target.val.unwrap().owed_drawn_window(), None)
   shown.set(true)
   tree.frame(400.0, 300.0) |> ignore
   assert_eq(copy.val.unwrap().rect(), (45.0, 15.0, 180.0, 60.0))

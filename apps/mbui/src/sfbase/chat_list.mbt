@@ -103,14 +103,11 @@ pub(all) struct Reading {
   /// the rows at its end that go from it as its turns go (by key): its agents' lines, where it stands. One gone leaves
   /// its room as a floor; an agent's line gone is forgotten (row_keys)
   acts : Map[String, Bool]
-  /// the frame its page was last built in, and its own data last taken in (chat_tick: what comes out of its avatars
-  /// played on, its activities' lingering)
+  /// the frame its old page was last built in
   mut shown_frame : Int
   /// while its list is a node of the window's tree, whether it shows (made, laid out somewhere): shown then without
   /// a build marking it
   mut shown_by : (() -> Bool)?
-  mut played : Int
-  mut ticked : Int
   fresh : Map[String, Bool]
   /// the frame a row new to it last came into it (`fresh`): what comes at its end then is glided after (Follow.kt)
   mut came_frame : Int
@@ -257,8 +254,6 @@ pub fn reading_of(key : String) -> Reading {
         acts: {},
         shown_frame: -10,
         shown_by: None,
-        played: -10,
-        ticked: -10,
         fresh: {},
         came_frame: -10,
         came: {},
@@ -302,9 +297,9 @@ pub fn reading_of(key : String) -> Reading {
         motion_of: [],
         motion_list: "",
         landing: @signals.computed(fn(was) {
-          match send_flight.get() {
-            Some(f) if f.turns == key => if f.placed { f.way.ends() } else { -2.0 }
-            _ =>
+          match flight_landing_of(key) {
+            Some(at) => at
+            None =>
               match was {
                 Some(at) if at >= 0.0 => at
                 _ => -1.0
@@ -610,20 +605,27 @@ fn message_key(m : Json) -> String {
 pub let linger_ms : Double = 600.0
 
 ///|
-/// An agent whose turn ended, its activity still shown (with_lingering): its moment's count (anew each time its
-/// messages stop coming out of its avatar).
+/// An agent whose turn ended, its activity still shown (with_lingering): from when (the moment its turn was seen over).
 pub(all) struct Lingering {
   agent : Agent
-  /// which of the chat's lingerings it is (Reading.lingered): its timers its own, never an earlier one's run out
+  /// which of the chat's lingerings it is (Reading.lingered)
   id : Int
-  mut n : Int
+  at : Double
 }
 
 ///|
-/// Each frame, before any page is built, whatever page shows: from each chat kept's own data (its agents running, its
-/// messages coming out of an avatar), whose activity stays a moment as its turn ends, and how long, counted by the
-/// framework (@kit.after) from the build that sees the turn over; a chat under another page lingers on the time that
-/// goes by, as Chat.kt's. The chat's page draws what it says. `in_front`: the app shown (what is said then is
+/// When agent `k`'s line lingering as `l` is gone: linger_ms after its turn was seen over, or after its last message
+/// came out of its avatar where that was later (as that was declared to end: emit_ended); none while its messages still
+/// come out of it (`held`).
+fn linger_ends(l : Lingering, em : Emits, k : String, held : Bool) -> Double {
+  if held { @double.infinity } else { dmax(l.at, emit_ended(em, k)) + linger_ms }
+}
+
+///|
+/// Each frame, before any page is built, of each chat kept whose list shows nowhere (one that shows is played by its
+/// node: chat_play_node): from its own data (its agents running), whose activity stays a moment as its turn ends, gone
+/// once its time is (chat_play: a function of the time, whichever frame sees it); a chat under another page lingers on
+/// the time that goes by, as Chat.kt's. The chat's page draws what it says. `in_front`: the app shown (what is said then is
 /// watched).
 pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
   for rk, rd in readings {
@@ -637,8 +639,13 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     if chat_kept(r) is None {
       continue
     }
+    // (one whose list shows is played by its node, at its moments: chat_play_node)
+    guard rd.shown_by is None else { continue }
     match chat_view_now(src, r) {
-      Some(v) => chat_tick(c, rk, rd, v, shown=rd.shown(c), in_front~)
+      Some(v) => {
+        chat_take(c, rk, rd, v, shown=false, in_front~)
+        chat_play(c, rk, rd, shown=false) |> ignore
+      }
       None => ()
     }
   }
@@ -647,7 +654,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
 ///|
 /// Take a chat's data before publishing its rows. Replies waiting for an avatar never enter the list even for an
 /// intermediate layout; the activity that just ended is still there to hand them off. Advancing their poses and
-/// lingering deadlines belongs to chat_tick, once per frame.
+/// lingering deadlines belongs to chat_play, at their moments.
 pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
   let running : Map[String, Agent] = {}
   if !v.newer {
@@ -662,7 +669,7 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
       rd.lingered += 1
-      rd.linger[k] = { agent: a, id: rd.lingered, n: 0 }
+      rd.linger[k] = { agent: a, id: rd.lingered, at: c.moment() }
       linger_told(rd)
     }
   }
@@ -676,7 +683,7 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
           !rd.running.contains(a.key) &&
           !rd.linger.contains(a.key) => {
           rd.lingered += 1
-          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0 }
+          rd.linger[a.key] = { agent: a, id: rd.lingered, at: c.moment() }
           linger_told(rd)
         }
         _ => ()
@@ -713,19 +720,17 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
 }
 
 ///|
-/// A chat's own motions, once a frame, before its page is built (linger_tick; its page the first frame it shows).
-pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
-  chat_take(c, rk, rd, v, shown~, in_front~)
-  let frame = c.frame_number()
-  let lingered = rd.ticked == frame
-  let played = rd.played == frame
-  if lingered && (played || !shown) {
-    return
-  }
+/// A chat's own motions played on to the logic's moment, from the moments each was declared to end, whichever frame (or
+/// none) sees it: its list's turns, what comes out of its avatars (`shown`: its list laid out somewhere), its agents'
+/// lines lingering. Said where its chat is taken (chat_take) and at the moment the next of them is due, which it gives
+/// (inf: none due): played by its list's node (chat_play_node), or, a chat not shown, as time goes by (linger_tick).
+pub fn chat_play(c : @ui.Ctx, rk : String, rd : Reading, shown~ : Bool) -> Double {
   let em = emits_of(rk)
-  if shown && !played {
-    rd.played = frame
+  let now = c.moment()
+  let mut due = @double.infinity
+  if shown {
     let turns = turns_of(rk)
+    turns.now = now
     turns.step(c, match rd.list_read {
       Some(lr) =>
         match lr.info() {
@@ -736,16 +741,10 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     })
     // words sent from here: their landing as declared (-2: not laid out yet, -1 none), kept once they are there
     // (emit_step)
-    let sending = rd.landing.get()
-    emit_step(c, em, turns, sending)
+    let sending = @signals.untracked(fn() { rd.landing.get() })
+    due = dmin(due, emit_step(c, rk, em, turns, sending))
   }
-  if lingered {
-    return
-  }
-  rd.ticked = frame
-  // while its messages still come out of its avatar it stays whole (ChatMotion.keeps): each build they are still coming
-  // it takes a new count (`n`, its timers' keys), so the count it keeps, asked first in the last of those builds, runs
-  // from there (linger_wbtest: gone 600 ms after the last frame they came)
+  // (an agent's line stays whole while its messages still come out of its avatar (ChatMotion.keeps), then linger_ms)
   let keeps = emit_keeps(em)
   let over : Array[String] = []
   for k, l in rd.linger {
@@ -753,16 +752,11 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       over.push(k)
       continue
     }
-    if keeps.contains(k) {
-      l.n += 1
-    }
-    let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
-    let held = keeps.contains(k)
-    // (asked while held too: its count starts at the last build they were still coming)
-    // (counted from when its last message came out of its avatar as declared, not from the frame that saw it: a
-    // frame drawn late counts from then all the same)
-    if @kit.after(c, at + "/gone", true, linger_ms, since=if held { -1.0 } else { emit_ended(em, k) }) && !held {
+    let ends = linger_ends(l, em, k, keeps.contains(k))
+    if ends <= now {
       over.push(k)
+    } else {
+      due = dmin(due, ends)
     }
   }
   for k in over {
@@ -771,6 +765,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   if !over.is_empty() {
     linger_told(rd)
   }
+  due
 }
 
 ///|
@@ -1624,7 +1619,7 @@ pub fn sent_let_go(rd : Reading, flight : SendFlight?) -> Bool {
 /// turn), its turns and its messages out of avatars played on, the list following its newest, words sent flying from
 /// the composer of draft `draft`, whether what comes at its end glides, and the page before come in above what is
 /// in view keeping it where it is. `rise_ms`, `top`, `in_front`: as row_keys', follow_newest's,
-/// chat_tick's.
+/// chat_play's.
 pub fn list_frame(
   c : @ui.Ctx,
   r : ChatRef,
@@ -1646,7 +1641,8 @@ pub fn list_frame(
   // marked again: linger_tick plays it on then)
   rd.shown_frame = c.frame_number()
   @ui.built_used(fn() { rd.shown_frame = @ui.current().frame_number() })
-  chat_tick(c, ek, rd, v, shown=true, in_front~)
+  chat_take(c, ek, rd, v, shown=true, in_front~)
+  chat_play(c, ek, rd, shown=true) |> ignore
   let read = if em.queue.length() > 0 || em.current is Some(_) {
     read.filter(fn(e) {
       match e {

@@ -79,7 +79,7 @@ fn stage_node(
           let (sw, sh) = room()
           let given = match body_at.val {
             Some(b) =>
-              match b.laid_size_told() {
+              match b.owed_laid_size() {
                 Some((_, g)) if g > 0.0 => g
                 _ => sh
               }

@@ -66,3 +66,14 @@ pub fn runs_words_now(v : @view.View) -> Words? {
   let (_, lay, _) = view_runs_laid(runs, look, set, width)
   Some({ text: lay.text, pieces: [{ layout: lay, x, y, w: lay.w, h: lay.h, start: 0 }] })
 }
+
+///|
+/// A retained rich paragraph laid out `width` wide, as its words are said now, where it lies not said (at 0, 0): its
+/// lines as a layout that knows that width has them (a box laying out by it, Layout::anchor), nothing laid out for it.
+pub fn runs_words_in(v : @view.View, width : Double) -> Words? {
+  guard v.alive() else { return None }
+  let (runs, look, set) = v.runs_set_now()
+  guard !runs.is_empty() else { return None }
+  let (_, lay, _) = view_runs_laid(runs, look, set, width)
+  Some({ text: lay.text, pieces: [{ layout: lay, x: 0.0, y: 0.0, w: lay.w, h: lay.h, start: 0 }] })
+}

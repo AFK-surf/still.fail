@@ -200,6 +200,8 @@ pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
 
 pub fn host_event(() -> Unit) -> Unit
 
+pub fn image_decoded_px(Double) -> Int32
+
 pub let image_fade_ms : Double
 
 pub fn image_natural(String) -> (Double, Double)?
@@ -207,6 +209,8 @@ pub fn image_natural(String) -> (Double, Double)?
 pub fn image_placed_px(Double, Double, Fit, (Double, Double)?, Double) -> Double
 
 pub fn image_state(String) -> Int32
+
+pub fn images_ready(Array[(String, Double)]) -> Bool
 
 pub fn ime_inset() -> Double
 
@@ -537,6 +541,8 @@ pub fn runs_across(Array[@text.Run], @view.WordsLook) -> Double
 pub fn runs_glyph_cells(Array[@text.Run], @view.WordsLook) -> Array[(Double, Double)]
 
 pub fn runs_links(@view.View, () -> Array[@text.Run], (String) -> Unit, hold? : (String, (Double, Double, Double, Double)) -> Unit, shown? : (Array[(String, String, Int32)]) -> Unit) -> RunsLinks
+
+pub fn runs_words_in(@view.View, Double) -> Words?
 
 pub fn runs_words_now(@view.View) -> Words?
 
@@ -1115,6 +1121,7 @@ pub struct Ctx {
   window_corners : FixedArray[Double]
   mut direction : Direction
   sems : Array[Sem]
+  sem_ids : Map[Int32, Int32]
   mut sem_hide : Int32
   asked_actions : Array[(Int32, @view.Action)]
   actions : Array[(Int32, @view.Action)]
@@ -1124,6 +1131,7 @@ pub struct Ctx {
   mut focus_before : Int32
   mut focusables : Array[Focusable]
   mut last_focusables : Array[Focusable]
+  last_focus_ids : Map[Int32, Focusable]
   groups : Map[Int32, Group]
   mut group_cur : Int32
   mut layers : Array[Layer]
@@ -1714,17 +1722,26 @@ pub(all) struct HostFrame {
   at : Double
   asked : Bool
   changed : Bool
+  drawn_as : String
   old_built : Bool
   why : String
+  for_old_input : Bool
+  not_for_old_input : String
   parts_built : Int32
   tree_alone : Bool
   alone_why : String
   layers_drawn : Int32
   insts_recorded : Int32
   insts_moved : Int32
+  old_inputs : Array[String]
+  tree_inputs : Array[String]
+  left_by : String
   damage : Array[(Double, Double, Double, Double)]
   damage_share : Double
   whole_why : Int32
+  damage_said : Array[(Double, Double, Double, Double)]
+  glass_taken : Array[(Double, Double, Double, Double)]
+  missed : Array[String]
   glass : Double
   laid : Int32
   passes : Int32
@@ -1908,6 +1925,7 @@ pub fn[T] ListRows::in_node_indexed(Self[T], @view.View, @view.AnchoredSource[St
 pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
+pub fn[T] ListRows::rooms_worked(Self[T]) -> Int32
 pub fn[T] ListRows::rows(Self[T], Ctx, Array[String], Array[T], (T) -> String, watched? : Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool) -> (Array[T], Array[String])
 pub fn[T] ListRows::sized(Self[T]) -> RowCauses
 pub fn[T] ListRows::went(Self[T], String) -> Double?
@@ -2601,6 +2619,7 @@ pub fn Tester::back(Self) -> Unit
 pub fn Tester::back_gesture(Self, Double, Bool, steps? : Int32) -> Unit
 pub fn Tester::back_raw(Self, Int32, Double, Double) -> Unit
 pub fn Tester::back_told(Self, Double) -> Unit
+pub fn Tester::backs_out(Self) -> Int32
 pub fn Tester::backspace(Self) -> Unit
 pub fn Tester::badge(Self) -> Int32
 pub fn Tester::bench(Self, String, fps? : Double, max? : Int32, each~ : (Self, Bool) -> Unit) -> Array[String]
@@ -2671,6 +2690,7 @@ pub fn Tester::each_frame(Self, (() -> Unit)?) -> Unit
 pub fn Tester::edit_can(Self) -> Int32
 pub fn Tester::end_run(Self, &@hostapi.Host) -> Unit
 pub fn Tester::enter(Self) -> Unit
+pub fn Tester::export_frames(Self) -> Unit
 pub fn Tester::face_wider(Self, Int32, Double) -> Unit
 pub fn Tester::failed_images(Self) -> Array[Int32]
 pub fn Tester::failed_images_drawn(Self) -> Array[Int32]
@@ -2683,9 +2703,11 @@ pub fn Tester::find_last(Self, String) -> (Double, Double)?
 pub fn Tester::finish(Self, Int32, Int32, ok? : Bool) -> Unit
 pub fn Tester::finish_all(Self) -> Unit
 pub fn Tester::finished_order(Self) -> Array[(Int32, Int32)]
+pub fn Tester::focus_said(Self) -> String
 pub fn Tester::focused(Self) -> SemNode?
 pub fn Tester::frame(Self, ms? : Double) -> Unit
 pub fn Tester::frame_at(Self, Double) -> Unit
+pub fn Tester::frame_export(Self) -> Array[String]
 pub fn Tester::frame_hash(Self) -> Int64
 pub fn Tester::frame_late(Self, Double) -> Unit
 pub fn Tester::frame_perf(Self) -> FramePerf
@@ -2694,6 +2716,7 @@ pub fn Tester::frame_shown_at(Self, Double, Double) -> Unit
 pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
 pub fn Tester::frames_on(Self) -> Int32
 pub fn Tester::frames_owed(Self) -> Unit
+pub fn Tester::frames_shown_ahead(Self, Double) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]
 pub fn Tester::get(Self, @view.Role, label? : String) -> SemNode raise
@@ -2767,6 +2790,7 @@ pub fn Tester::next_wake(Self) -> (Double, String)?
 pub fn Tester::notice_asks(Self) -> Int32
 pub fn Tester::notice_settings_opened(Self) -> Int32
 pub fn Tester::notices(Self) -> Array[Notice]
+pub fn Tester::old_views_hosted(Self) -> Int32
 pub fn Tester::opened(Self) -> Array[String]
 pub fn Tester::overs_done(Self) -> Array[Bool]
 pub fn Tester::painted_why(Self) -> String
@@ -2785,6 +2809,7 @@ pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, D
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
 pub fn Tester::press_target_at(Self, Double, Double) -> SemNode?
+pub fn Tester::probe_at(Self, Double, Double) -> String
 pub fn Tester::query(Self, @view.Role, label? : String) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]
 pub fn Tester::record_host(Self) -> Unit
@@ -2809,6 +2834,7 @@ pub fn Tester::run_for(Self, Double) -> Unit
 pub fn Tester::run_for_exact(Self, Double) -> Unit
 pub fn Tester::run_rects(Self, String) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::said(Self) -> String
+pub fn Tester::scene_checks_every(Self, Int32) -> Unit
 pub fn Tester::scroll_all_to_end(Self) -> Int32
 pub fn Tester::scroll_to(Self, Int32) -> Unit
 pub fn Tester::scroll_to_end(Self) -> Unit

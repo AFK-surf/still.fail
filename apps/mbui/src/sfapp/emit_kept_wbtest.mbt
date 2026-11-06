@@ -184,11 +184,12 @@ test "the avatar going home draws its movement without laying out the chat again
   }
   // Compare whole and retained frames above; inspect the next frame itself, without the comparison's rebuild.
   t.check_looks(false)
+  let at = fn() { emit_flight(t.ctx(), emit_chat, em, [turn.agent]).map(fn(r) { (r.0, r.1) }) }
   for _ in 0..<3 {
-    let before = em.trace.0
+    let before = at()
     t.frame_at(t.next_frame_time())
     let perf = t.frame_perf()
-    assert_true(em.trace.0 > before, msg="the avatar did not move")
+    assert_true(at() != before, msg="the avatar did not move")
     // (painted alone from the last build, or the window's tree alone drawing what of it changed: nothing laid out)
     assert_true(perf.painted || perf.alone, msg="its move laid out the chat again: \{t.built_why()}; \{perf}")
   }

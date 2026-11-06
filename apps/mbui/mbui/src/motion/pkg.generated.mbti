@@ -384,6 +384,7 @@ pub(all) enum Spec {
   Snap(Double)
   Motion(Transition)
 }
+pub fn Spec::at_since(Self, Double, Double, Double) -> Double
 pub fn Spec::delayed(Self, Double) -> Self
 pub fn Spec::duration(Self, Double, Double, Double) -> Double
 pub fn Spec::over(Self, Double) -> Self

@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mbui/signals"
 
+import {
+  "moonbitlang/core/ref",
+}
+
 // Values
 pub const DIRTY : Int32 = 16
 
@@ -22,21 +26,35 @@ pub fn after_all_flushed(() -> Unit) -> Unit
 
 pub fn after_flush(() -> Unit) -> Unit
 
+pub fn afters_held(() -> Unit) -> Unit
+
 pub fn batch_depth() -> Int32
 
 pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
 
-pub fn effect(() -> Unit) -> () -> Unit
+pub fn count_changes(Bool) -> Unit
 
-pub fn effect_cleanup(() -> () -> Unit) -> () -> Unit
+#callsite(autofill(loc))
+pub fn effect(() -> Unit, loc~ : SourceLoc) -> () -> Unit
+
+#callsite(autofill(loc))
+pub fn effect_cleanup(() -> () -> Unit, loc~ : SourceLoc) -> () -> Unit
+
+pub let effect_round_said : @ref.Ref[(String) -> Unit]
 
 pub fn effect_scope(() -> Unit) -> () -> Unit
 
 pub fn end_batch() -> Unit
 
+pub let flush_deepest : Int32
+
+pub let flush_too_deep_said : @ref.Ref[((String) -> Unit)?]
+
 pub fn[K : Hash + Eq] keyed() -> Keyed[K]
 
 pub fn last_set_at() -> String
+
+pub fn phase_guard(AccessPhase) -> String?
 
 pub fn reset_globals() -> Unit
 
@@ -48,6 +66,10 @@ pub fn set_active_sub(ReactiveNode?) -> ReactiveNode?
 
 pub fn set_owner(ReactiveNode?) -> ReactiveNode?
 
+pub fn set_phase_guard(AccessPhase, String?) -> Unit
+
+pub fn sets_made() -> Int32
+
 pub fn setting_at() -> SourceLoc?
 
 pub fn[T] signal(T, same? : (T, T) -> Bool) -> Signal[T]
@@ -58,17 +80,26 @@ pub fn trigger(() -> Unit) -> Unit
 
 pub fn[T] untracked(() -> T) -> T
 
-pub fn watch(() -> Unit) -> Watch
+#callsite(autofill(loc))
+pub fn watch(() -> Unit, loc~ : SourceLoc) -> Watch
 
 // Errors
 
 // Types and methods
+#derive(Eq, Show)
+pub(all) enum AccessPhase {
+  Build
+  Layout
+}
+
 type Computed[T]
 pub fn[T] Computed::dispose(Self[T]) -> Unit
-pub fn[T] Computed::get(Self[T]) -> T
+#callsite(autofill(loc))
+pub fn[T] Computed::get(Self[T], loc~ : SourceLoc) -> T
 pub fn[T] Computed::invalidate(Self[T]) -> Unit
 pub fn[T, U] Computed::lend(Self[T], Self[U]) -> Unit
-pub fn[T] Computed::peek(Self[T]) -> T?
+#callsite(autofill(loc))
+pub fn[T] Computed::peek(Self[T], loc~ : SourceLoc) -> T?
 pub fn[T, U] Computed::reading(Self[T], () -> U) -> U
 pub fn[T] Computed::watched(Self[T]) -> Bool
 
@@ -88,7 +119,8 @@ pub struct ReactiveNode {
 }
 
 type Signal[T]
-pub fn[T] Signal::get(Self[T]) -> T
+#callsite(autofill(loc))
+pub fn[T] Signal::get(Self[T], loc~ : SourceLoc) -> T
 #callsite(autofill(loc))
 pub fn[T] Signal::set(Self[T], T, loc~ : SourceLoc) -> Unit
 pub fn[T] Signal::watched(Self[T]) -> Bool

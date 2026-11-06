@@ -1,8 +1,8 @@
-// Sizes followed (View::laid_size_told) of nodes made as another's size is told: asked as they are made, told as they
+// Sizes followed (View::owed_laid_size) of nodes made as another's size is told: asked as they are made, told as they
 // are laid out, as any other's.
 
 ///|
-test "laid_size_told: a node made as another's size is told, its own size asked as it is made: told once it is laid out" {
+test "owed_laid_size: a node made as another's size is told, its own size asked as it is made: told once it is laid out" {
   let wide = @signals.signal(100.0, same=fn(a, b) { a == b })
   let told : Ref[(Double, Double)?] = Ref(None)
   let tree = @view.Tree::new(
@@ -11,9 +11,9 @@ test "laid_size_told: a node made as another's size is told, its own size asked 
         o.width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore
         let a = o.box(fn(a) { a.width(By(fn() { Some(wide.get()) })).height(Is(Some(10.0))) |> ignore })
         // (made as A is told wider than 150, reading its own size as it is made)
-        o.show(fn() { a.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0) > 150.0 }, fn(b) {
+        o.show(fn() { a.owed_laid_size().map(fn(z) { z.0 }).unwrap_or(0.0) > 150.0 }, fn(b) {
           b.width(Is(Some(40.0))).height(Is(Some(20.0))) |> ignore
-          b.reacts(fn() { b.laid_size_told() }, fn(z) { told.val = z })
+          b.reacts(fn() { b.owed_laid_size() }, fn(z) { told.val = z })
         })
       })
       |> ignore
