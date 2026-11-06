@@ -444,7 +444,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         let pv = Some(p)
         info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv, fn() {
           chat_own.info_open.set(false)
-          @sfbase.open_link(text(pv, "url"))
+          @sfbase.open_link(text(pv, "url"), src=Some(src))
         })
       }
       if pulls.length() > named {

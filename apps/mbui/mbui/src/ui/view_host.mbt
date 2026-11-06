@@ -4080,11 +4080,15 @@ fn old_owner_open(owner : @view.NodeId?) -> Bool {
 ///|
 /// An input from outside at its own moment that finds what is at a place among the old frame's hit targets (words or
 /// files let go there): the window's tree brought to that moment first, and what the old views take placed where it
-/// has them then, as a pointer's event is (view_pointer).
+/// has them then, as a pointer's event is (view_pointer). Inside an event, only its current layout is needed: what
+/// became due during that change must wait until the whole event has been told.
 fn old_input_brought() -> Unit {
   match view_app.val {
     Some(tree) => {
-      tree.bring_to(view_moment())
+      match tree.moment() {
+        Some(_) => tree.laid_as_now()
+        None => tree.bring_to(view_moment())
+      }
       old_hits_place(g(), Some(tree))
     }
     None => ()
