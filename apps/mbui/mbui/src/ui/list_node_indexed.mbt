@@ -197,6 +197,8 @@ pub fn[T] ListRows::in_node_indexed(
             // (come and gone in it: never among them)
             came_now.remove(k)
             c.by.remove(k) |> ignore
+            // It may have protected an earlier removed row, even though this brief arrival left no removal record.
+            forget.push(k)
           } else if watching {
             let at = from(k).unwrap_or(now)
             let after = after.unwrap_or("")

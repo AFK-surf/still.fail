@@ -86,7 +86,7 @@ fn indexed_list(n : Int) -> (Tester, IndexedRows, NodeRowsIndexed[(String, Doubl
 ///|
 /// A changed row can leave the source without a leaving animation. If it returns under the same key after that
 /// motion is over (or cancelled), a later change must not start from the old incarnation's measured height.
-fn indexed_gone_during_change(cancel : Bool) -> Double raise {
+fn indexed_gone_during_change(how : Int) -> Double raise {
   let src = IndexedRows::new(30)
   let watching = @signals.signal(true)
   let out : Ref[NodeRowsIndexed[(String, Double)]?] = Ref(None)
@@ -119,7 +119,15 @@ fn indexed_gone_during_change(cancel : Bool) -> Double raise {
   src.rev.set(src.rev.get() + 1)
   t.draw()
   assert_true((rows.moving)().contains("m0"), msg="the original cause still protects the old height")
-  if cancel {
+  if how == 2 {
+    // A brief come and go in one batch has no row in the final source and no entry in its removal history.
+    @signals.start_batch()
+    src.pending.push(Came("m0"))
+    src.pending.push(Went("m0", ("m0", 60.0), None))
+    src.rev.set(src.rev.get() + 1)
+    @signals.end_batch()
+    t.draw()
+  } else if how == 1 {
     watching.set(false)
     t.draw()
     watching.set(true)
@@ -144,12 +152,17 @@ fn indexed_gone_during_change(cancel : Bool) -> Double raise {
 
 ///|
 test "an indexed row removed while changing forgets its old height when its cause ends" {
-  assert_eq(indexed_gone_during_change(false), 120.0)
+  assert_eq(indexed_gone_during_change(0), 120.0)
 }
 
 ///|
 test "an indexed row removed while changing forgets its old height when its cause is cancelled" {
-  assert_eq(indexed_gone_during_change(true), 120.0)
+  assert_eq(indexed_gone_during_change(1), 120.0)
+}
+
+///|
+test "a brief come and go forgets a removed row's previously protected height" {
+  assert_eq(indexed_gone_during_change(2), 120.0)
 }
 
 ///|
