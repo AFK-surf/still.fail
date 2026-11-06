@@ -1358,8 +1358,8 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
 
 ///|
 /// Whether the panel is a station's screen alone in a panel of its own on the tape: its top bar the panel's, named by it
-/// and closed from it, or from the system's bars where it has them (bar_chat; the user, 2026-11-05: its name twice, its ×
-/// alone in a row of its own, in the system's bars on a Duo).
+/// and closed from its end (the user, 2026-11-05: its name twice, its × alone in a row of its own; 2026-11-06: its × among
+/// the chat's actions in a Duo's system bars read as another thing's, so there too it is the bar's own).
 fn screen_tab_alone(tabs : Array[String]) -> Bool {
   wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
 }
