@@ -25,9 +25,11 @@ priv struct AnchoredIn[K] {
   indexed : (Int, Int)?
   words : Int
   x : Double
-  /// the moment it is where it is at, while it goes on by itself (Scroll::goes_on), for a list that tells what came in
-  /// sight (`seen`: laid out up to that moment, what it went across by itself is told); -1 at rest or telling none
+  /// for a list that tells what came in sight (`seen`), while it goes on by itself (Scroll::goes_on): the logic's
+  /// moment, what it tells is of (never a frame's drawn ahead of it: Tree::drawn_at is for a look), and how far it is
+  /// scrolled then (Scroll::at's, its bar's count aside); at rest or telling none, -1 and `x`
   glide_at : Double
+  logic_x : Double
   foot : Double
   put : (K, Double)?
   put_n : Int
@@ -61,6 +63,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.words == b.words &&
   a.x == b.x &&
   a.glide_at == b.glide_at &&
+  a.logic_x == b.logic_x &&
   a.foot == b.foot &&
   a.put_n == b.put_n &&
   a.kept == b.kept &&
@@ -206,15 +209,23 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // is what is not among them, and what it went across as it went on by itself)
   let seen_last : Set[K] = Set::new()
   let seen_moves : Ref[Int] = Ref(s.moved_at_once)
-  // (and what it went across by itself up to a moment come due, laid out at it before what is due then may let it go:
-  // the same whether frames came on the way or none; where it has gone on by itself since it was last laid out, at a
-  // moment past that: at rest, none)
+  // (the first and the last of those, each by its key and where it was: what it went across by itself since is what
+  // lies between them and those in sight now, however many layouts came between, whatever moment each was drawn at)
+  let seen_ends : Ref[(K, Int, K, Int)?] = Ref(None)
+  // (and what it went across by itself up to a moment something is done at (come due, an input's, an event's), laid
+  // out at it before what is done then may let it go or read what it told: the same whether frames came on the way or
+  // none; where it has gone on by itself since the moment it last told of, at a moment past that: at rest, none. Asked
+  // so, what it reads of that moment taken anew as it is laid out then, the clock where it was drawn or not)
   let seen_laid_at = Ref(-1.0)
+  let due_said : @signals.Signal[Double] = @signals.signal(-1.0)
   if seen is Some(_) {
     self.laid_before_due(fn(at) {
       match s.glides_till() {
-        Some(end) => at > seen_laid_at.val && end > seen_laid_at.val
-        None => false
+        Some(end) if at > seen_laid_at.val && end > seen_laid_at.val => {
+          due_said.set(at)
+          true
+        }
+        _ => false
       }
     })
   }
@@ -426,12 +437,23 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
     held.height_share(Is(1.0)) |> ignore
     held.layout_box(
       By(fn() {
+        let x = s.drawn(self.tree)
+        // (telling what came in sight as it goes on by itself: the logic's moment, taken anew as it is asked to be laid
+        // out at one (View::laid_before_due), and where it is then)
+        let gliding = seen is Some(_) && s.goes_on()
+        let logic = if gliding {
+          due_said.get() |> ignore
+          self.tree.logic_at()
+        } else {
+          -1.0
+        }
         {
           keys: { v: current_keys.get() },
           indexed: indexed.map(fn(s) { (s.snapshot)() }),
           words: if fixed_estimate { self.words_redone() } else { 0 },
-          x: s.drawn(self.tree),
-          glide_at: if seen is Some(_) && s.goes_on() { self.tree.drawn_at() } else { -1.0 },
+          x,
+          glide_at: logic,
+          logic_x: if gliding { s.where_at(logic) } else { x },
           foot: foot_room(),
           put: put_at.get(),
           put_n: put_n.get(),
@@ -719,8 +741,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         let known = fn(i : Int) { heights.get(key_at(i)) }
         // (the rows the last of these layouts went past on the way: in sight on the way, sighted)
         let went_past : Array[K] = []
+        // (and where it set out from: another row than where it was (one brought into sight from out of it, put, held
+        // under what covers its top), what shows then got to at once, nothing gone across on the way)
+        let laid_from : Ref[ListAnchor[K]?] = Ref(None)
         let lay = fn(from : ListAnchor[K]?, by : Double) {
           went_past.clear()
+          laid_from.val = from
           let past = fn(i : Int) { went_past.push(key_at(i)) }
           if from_end {
             list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=if short_glide.val { h } else { 0.0 }, went_past=past)
@@ -983,17 +1009,62 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
           None => ()
         }
-        // (what came in sight since it was last laid out (at an input's moment or a frame's): in sight now, or gone
-        // across on the way as it went on by itself (a fling, a wheel's notches easing in, a glide to its end: each row
-        // of that way in sight at a moment of it, whether the frames between were many or one); not what it went past
-        // as it was moved at once (a wheel's turn, a drag's move, its bar, put) or as it was first laid out where it was
-        // scrolled to, made only to be measured: seen, told as this layout is done, of its moment, whether a frame is
-        // painted before what comes next or not (Tree::said_after_laid))
+        // (what came in sight since it last told (laid out at an input's moment, an event's, one come due, or a frame's):
+        // in sight now, or gone across on the way as it went on by itself (a fling, a wheel's notches easing in, a glide
+        // to its end: each row between those it had in sight then and those it has now, whether the layouts between
+        // were many or one); not what it went past as it was moved at once (a wheel's turn, a drag's move, its bar, put,
+        // a row brought into sight from out of it) or as it was first laid out where it was scrolled to, made only to be
+        // measured. Of the logic's moment, never of a frame's drawn ahead of it (what a press would stop it short of):
+        // where it is then, the rows this layout has where they would be then (by as much higher as it is drawn further
+        // on), and those past them as tall as they were measured. Seen, told as this layout is done, whether a frame is
+        // painted before what comes next or not (Tree::said_after_laid); of a moment before the one it last told of (a
+        // change said at a moment gone), nothing told, what it told kept)
         match seen {
-          Some(tell) => {
+          Some(tell) if c.glide_at < 0.0 || c.glide_at >= seen_laid_at.val => {
             seen_laid_at.val = c.glide_at
-            let at_once = first_laid || s.moved_at_once != seen_moves.val
+            let at_once = first_laid || laid_from.val != from || s.moved_at_once != seen_moves.val
             seen_moves.val = s.moved_at_once
+            let shift = c.x - c.logic_x
+            let tall = fn(i : Int) {
+              match known(i) {
+                Some(v) => v
+                None => measure(i)
+              }
+            }
+            // (in sight then, from its first: over those laid out, under them, as far as it is apart from where drawn)
+            let now : Array[(K, Int)] = []
+            let count = r.keys.length()
+            if count > 0 {
+              let over : Array[(K, Int)] = []
+              let mut edge = r.tops[0] + shift
+              let mut i = r.first - 1
+              while i >= 0 && edge > 0.0 {
+                let top = edge - tall(i)
+                if top < h {
+                  over.push((key_at(i), i))
+                }
+                edge = top
+                i = i - 1
+              }
+              over.rev_in_place()
+              now.append(over)
+              for q in 0..<count {
+                let top = r.tops[q] + shift
+                if top + r.heights[q] > 0.0 && top < h {
+                  now.push((r.keys[q], r.first + q))
+                }
+              }
+              let mut top = r.tops[count - 1] + r.heights[count - 1] + shift
+              let mut i = r.last + 1
+              while i < n && top < h {
+                let under = top + tall(i)
+                if under > 0.0 {
+                  now.push((key_at(i), i))
+                }
+                top = under
+                i = i + 1
+              }
+            }
             let came : Array[K] = []
             let told : Set[K] = Set::new()
             let came_in = fn(k : K) {
@@ -1002,21 +1073,32 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                 came.push(k)
               }
             }
-            if !at_once {
-              for k in went_past {
-                came_in(k)
+            // (gone across: toward its start, those over the first it had in sight, the nearest first; toward its end,
+            // those under the last)
+            match (now.get(0), now.last(), seen_ends.val) {
+              (Some((_, lo)), Some((_, hi)), Some((ka, ia, kb, ib))) if !at_once => {
+                let near = fn(k : K, i : Int) { find(k, i).unwrap_or(if i < 0 { 0 } else if i >= n { n - 1 } else { i }) }
+                let mut i = near(ka, ia) - 1
+                while i >= lo {
+                  came_in(key_at(i))
+                  i = i - 1
+                }
+                for j in (near(kb, ib) + 1)..=hi {
+                  came_in(key_at(j))
+                }
               }
+              _ => ()
             }
-            let now : Array[K] = []
-            for q in 0..<r.keys.length() {
-              if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
-                now.push(r.keys[q])
-                came_in(r.keys[q])
-              }
+            for k in now {
+              came_in(k.0)
             }
             seen_last.clear()
             for k in now {
-              seen_last.add(k)
+              seen_last.add(k.0)
+            }
+            seen_ends.val = match (now.get(0), now.last()) {
+              (Some((ka, ia)), Some((kb, ib))) => Some((ka, ia, kb, ib))
+              _ => None
             }
             if !came.is_empty() {
               // (to the list still there: one let go before its turn (by a telling before it, laying out at once and
@@ -1024,7 +1106,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               self.tree.said_after_laid(fn() { if held.live() is Some(_) { tell(came) } })
             }
           }
-          None => ()
+          _ => ()
         }
         // (a row a scroll only went past, measured for how far it went: not kept, a cache of the picture of what shows)
         for k in made_to_measure {
