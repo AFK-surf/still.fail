@@ -303,7 +303,12 @@ pub fn reading_of(key : String) -> Reading {
         motion_list: "",
         landing: @signals.computed(fn(was) {
           match send_flight.get() {
-            Some(f) if f.turns == key => if f.placed { f.way.ends() } else { -2.0 }
+            Some(f) if f.turns == key => {
+              // Placement declares the path and notifies its readers. Follow it
+              // even while the row is still waiting for its landing geometry.
+              let end = f.way.ends()
+              if f.placed { end } else { -2.0 }
+            }
             _ =>
               match was {
                 Some(at) if at >= 0.0 => at

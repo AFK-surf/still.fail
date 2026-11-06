@@ -420,7 +420,7 @@ pub fn pose_ms(pose : Pose, from : (Double, Double)?) -> Double {
 
 ///|
 /// A pose's way, 0 to 1 over its length, linear: from `at` (where the pose before was declared to end), else from
-/// this frame.
+/// the current input's cause.
 pub fn pose_clock(ms : Double, at : Double?) -> @motion.Way {
   let a = @motion.Way::new(0.0)
   a.go(1.0, @motion.tween(ms, ease=Linear), at=at.unwrap_or(emit_moment(@ui.current())))
@@ -435,7 +435,7 @@ fn emit_moment(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// The poses played on, a frame at a time (ChatMotion.play): each to its end, then the next; the next waiting starts
+/// Advance the poses at an input or their declared deadline: each to its end, then the next; the next waiting starts
 /// once none plays. They take one turn among what changes the list's height (`turns`, ChatMotion.start): the first
 /// waiting starts as it comes, from then, and it is over once none is left. Not watched, all of it at once.
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
