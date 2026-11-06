@@ -41,8 +41,16 @@ on:
       target:
         description: Scratch desktop experiment
         type: choice
-        options: [windows, mac-availability, finder-build, finder]
+        options: [windows-build, windows, mac-availability, finder-build, finder]
         default: windows
+      source_ref:
+        description: Exact product commit for native probe builds
+        type: string
+        required: false
+      artifact_run_id:
+        description: Native build run containing the probe executable
+        type: string
+        required: false
 
 
 jobs:
@@ -88,7 +96,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: explorer-drop-exe
-          run-id: 42258251075
+          run-id: ${{ inputs.artifact_run_id || '42258251075' }}
           github-token: ${{ github.token }}
           path: apps/mbui/mbui/out/win/mod/_build/native/release/build/drop_probe
       - name: Drag from Explorer into the app
@@ -112,6 +120,40 @@ jobs:
           name: explorer-drop-exe
           path: apps/mbui/mbui/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe
           if-no-files-found: ignore
+
+  windows-build:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'windows-build' }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: harness }
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ${{ inputs.source_ref || github.sha }}
+      - name: Copy only the probe fixture onto the selected product commit
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          actual=$(git -C source rev-parse HEAD)
+          echo "Product commit: $actual"
+          [ -z "$SOURCE_REF" ] || [ "$actual" = "$SOURCE_REF" ]
+          mkdir -p source/apps/mbui/mbui/src/drop_probe
+          cp harness/apps/mbui/mbui/src/drop_probe/main.mbt harness/apps/mbui/mbui/src/drop_probe/moon.pkg source/apps/mbui/mbui/src/drop_probe/
+      - uses: ./source/.github/actions/msvc
+      - uses: ./source/.github/actions/mbui-moonbit
+      - name: Build retained-node probe for Explorer
+        working-directory: source/apps/mbui/mbui
+        run: APP=drop_probe bash scripts/win.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: explorer-drop-exe
+          path: source/apps/mbui/mbui/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe
+          if-no-files-found: error
 
   mac-availability:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'mac-availability' }}
@@ -141,14 +183,28 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/mbui-moonbit
+        with: { path: harness }
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ${{ inputs.source_ref || github.sha }}
+      - name: Copy only the probe fixture onto the selected product commit
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          actual=$(git -C source rev-parse HEAD)
+          echo "Product commit: $actual"
+          [ -z "$SOURCE_REF" ] || [ "$actual" = "$SOURCE_REF" ]
+          mkdir -p source/apps/mbui/mbui/src/drop_probe
+          cp harness/apps/mbui/mbui/src/drop_probe/main.mbt harness/apps/mbui/mbui/src/drop_probe/moon.pkg source/apps/mbui/mbui/src/drop_probe/
+      - uses: ./source/.github/actions/mbui-moonbit
       - name: Build retained-node probe for Finder
-        working-directory: apps/mbui/mbui
+        working-directory: source/apps/mbui/mbui
         run: APP=drop_probe bash scripts/mac.sh build
       - uses: actions/upload-artifact@v4
         with:
           name: finder-drop-exe
-          path: apps/mbui/mbui/_build/native/release/build/drop_probe/drop_probe.exe
+          path: source/apps/mbui/mbui/_build/native/release/build/drop_probe/drop_probe.exe
           if-no-files-found: error
 
   finder-probe:
@@ -166,7 +222,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: finder-drop-exe
-          run-id: 42262295383
+          run-id: ${{ inputs.artifact_run_id || '42262295383' }}
           github-token: ${{ github.token }}
           path: apps/mbui/mbui/out/finder-bin
       - name: Drag from Finder into the app
