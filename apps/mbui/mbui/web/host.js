@@ -1372,9 +1372,10 @@
   const fromBase64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
   // What the frame's port says: a request of the site's page, one it gave up, its WebSockets. A socket is the app's as
   // a page's own script would say it (mbuiHost.post); no request is `page`: the frame's service worker puts what a page
-  // needs first in it, the app has nothing to add.
+  // needs first in it, the app has nothing to add. A request waits for its head as a browser's does (no `late`, no
+  // `slow`: this host keeps nothing of an answer to read too slowly).
   const siteAsked = (v, m) => {
-    if (m.type === 'cancel') { clearTimeout(v.waitingHead.get(m.id)); v.waitingHead.delete(m.id); v.bodies.delete(m.id); siteSay(v, { gone: m.id }); }
+    if (m.type === 'cancel') { v.bodies.delete(m.id); siteSay(v, { gone: m.id }); }
     else if (m.type === 'socket') siteSays(v, { p: 'open', sid: m.sid, path: m.path, protocols: [].concat(m.protocols ?? []).join(', ') });
     else if (m.type === 'socket-send') {
       if (m.close) siteSays(v, { p: 'close', sid: m.sid, code: m.close[0], reason: m.close[1] || '' });
@@ -1382,7 +1383,6 @@
       else if (m.binary) siteSays(v, { p: 'sendBinary', sid: m.sid, b64: toBase64(new Uint8Array(m.binary)) });
     } else if (typeof m.id === 'number') {
       if (m.body) v.bodies.set(m.id, m.body);
-      v.waitingHead.set(m.id, setTimeout(() => { v.waitingHead.delete(m.id); siteSay(v, { late: m.id }); }, v.headWait));
       siteSay(v, { req: m.id, method: m.method, path: m.path, headers: m.headers || [], page: false });
     }
   };
@@ -1436,11 +1436,9 @@
     if (body) v.bodies.delete(req);
     return body || new Uint8Array(0);
   };
-  const siteAnswered = (v, req) => { clearTimeout(v.waitingHead.get(req)); v.waitingHead.delete(req); };
   H.viewSiteHead = (id, req, status, headers) => {
     const v = views.get(id);
     if (!v || v.kind !== 3) return;
-    siteAnswered(v, req);
     sitePost(v, { id: req, head: { status, headers: JSON.parse(headers) } });
   };
   H.viewSiteChunk = (id, req, data) => {
@@ -1452,7 +1450,6 @@
   H.viewSiteEnd = (id, req, error) => {
     const v = views.get(id);
     if (!v || v.kind !== 3) return;
-    siteAnswered(v, req);
     sitePost(v, error ? { id: req, error } : { id: req, end: true });
   };
   // how a site stands, once as it changes
@@ -1473,7 +1470,6 @@
     if (v && what === 5) { v.clip.style.zIndex = String(++nextZ); return; }
     if (v && v.kind === 3) {
       if (what === 2) { v.touch = text.split(' ')[0]; cutSites(); }
-      else if (what === 3) { const wait = JSON.parse(text).head_wait_ms; if (wait > 0) v.headWait = wait; }
       else if (what === 4) {
         const n = text ? text.split(' ').map(Number) : [];
         v.covers = [];
@@ -1558,8 +1554,6 @@
       v.nonce = crypto.randomUUID();
       v.said = [];
       v.bodies = new Map();
-      v.waitingHead = new Map();
-      v.headWait = 60000;
       v.covers = [];
       v.scale = 1;
       v.at = { path: arg, back: false, forward: false, loading: true, title: '', cookies: false, frame: true };
@@ -1629,10 +1623,7 @@
     if (!v) return;
     views.delete(id);
     if (v.kind === 1) { v.el.pause(); if (v.url) URL.revokeObjectURL(v.url); }
-    if (v.kind === 3) {
-      for (const t of v.waitingHead.values()) clearTimeout(t);
-      if (v.port) v.port.close();
-    }
+    if (v.kind === 3 && v.port) v.port.close();
     v.clip.remove();
     cutSites();
   };

@@ -313,7 +313,8 @@ pub fn NativeView::page(html : String, said? : (String) -> Unit) -> NativeView {
 /// worker handing requests over; else none), which runs no script of the app's (`framed`). What its scripts say to the app goes to `said`, as a page's
 /// (`NativeView::page`). A request whose head has not come in `site_head_wait_ms` is answered 502 with `no_answer`;
 /// one whose page reads it so slowly that more than `site_backlog_max` of it waits is stopped with `too_slow` (the
-/// app's words for each: a person may read them on the page), and let go of (its `when_gone`).
+/// app's words for each: a person may read them on the page), and let go of (its `when_gone`); in the browser's frame
+/// it waits as a browser's request does.
 pub fn NativeView::site(
   start : String,
   serve : (SiteRequest, SiteReply) -> Unit,
