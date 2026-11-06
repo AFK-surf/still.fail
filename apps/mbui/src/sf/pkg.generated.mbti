@@ -292,6 +292,8 @@ pub let check_room_w : @ui.Len
 
 pub fn check_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, lead? : (@ui.Ctx) -> Unit) -> Bool
 
+pub fn checkbox_node(@view.View, () -> String, () -> @view.Check, () -> Unit, disabled? : () -> Bool) -> @view.View
+
 pub fn chip(@ui.Ctx, String, key? : String, icon? : String, ink? : Int64, disabled? : Bool, inner? : Bool, said? : String) -> Bool
 
 pub fn chip_node(@view.View, () -> String, () -> Unit, icon? : String, ink? : () -> Int64, said? : () -> String, tips? : TipLayer) -> @view.View
@@ -1997,6 +1999,28 @@ pub fn section_none_node(@view.View, () -> String) -> Unit
 pub let section_note_gap : Double
 
 pub let section_note_most : @ui.Len
+
+pub fn security_action_node(@view.View, () -> String, () -> Unit, busy? : () -> Bool) -> Unit
+
+pub fn security_danger_node(@view.View, () -> String, () -> Unit, busy? : () -> Bool) -> Unit
+
+pub fn security_device_group_node(@view.View, () -> String, (@view.View) -> Unit, apart? : () -> Bool) -> Unit
+
+pub fn security_devices_node(@view.View, (@view.View) -> Unit) -> Unit
+
+pub fn security_end_node(@view.View, () -> String, warn? : () -> Bool) -> Unit
+
+pub fn security_footer_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
+
+pub fn security_group_node(@view.View, (@view.View) -> Unit, top_button? : () -> Bool, bottom_button? : () -> Bool) -> Unit
+
+pub fn security_join_button_node(@view.View, () -> String, () -> Unit, busy? : () -> Bool) -> Unit
+
+pub fn security_line_node(@view.View, () -> String, () -> String, mark? : (@view.View) -> Unit, end? : (@view.View) -> Unit, acts? : (@view.View) -> Unit, acts_shown? : () -> Bool, indent? : Bool, warn? : () -> Bool, strong? : Bool, drops? : Bool) -> Unit
+
+pub fn security_person_node(@view.View, () -> String, () -> String) -> Unit
+
+pub fn security_station_line_node(@view.View, () -> String, () -> String, () -> Bool, () -> String, () -> String, () -> Int, (@view.View) -> Unit) -> Unit
 
 pub let seg_card_radius : @ui.Radius
 
