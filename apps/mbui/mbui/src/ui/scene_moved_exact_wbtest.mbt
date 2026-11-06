@@ -18,7 +18,7 @@ test "rows scrolled by whole pixels, what they hold at thirds of a pixel: copied
       })
       |> ignore
       row.box(fn(w) {
-        w.padding(Is((8.0 / 3.0, 0.0, 0.0, 0.0))).words(Is("message \{k}")) |> ignore
+        w.padding(Is((0.0, 8.0 / 3.0, 0.0, 0.0))).words(Is("message \{k}")) |> ignore
       })
       |> ignore
     })
