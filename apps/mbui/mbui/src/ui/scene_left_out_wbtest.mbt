@@ -49,3 +49,47 @@ test "a layer below the window, one in it moved into the window and back: drawn 
   t.clock_frame()
   assert_eq(blue(), 0, msg="drawn once moved out again")
 }
+
+///|
+test "a layer whose own drawing is its edge alone, drawn as its node closes, reaching into the window: never left out by what it holds" {
+  let down = @signals.signal(150.0)
+  let t = Tester::new(fn(_) {  }, w=200.0, h=200.0)
+  set_view_app(fn(root) {
+    root.width(Is(Some(200.0))).height(Is(Some(200.0))) |> ignore
+    // (a layer of its own with an edge and no ground, what it holds at its foot below the window)
+    root.box(fn(card) {
+      card.offset(By(fn() { (10.0, down.get()) })).width(Is(Some(180.0))).height(Is(Some(150.0)))
+      .edge(Is((2.0, 0x000000FFL))) |> ignore
+      card.box(fn(foot) {
+        foot.offset(Is((0.0, 110.0))).width(Is(Some(40.0))).height(Is(Some(30.0))).ground(Is(0x3366CCFFL)) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let edges = fn() {
+    let c = g()
+    let mut n = 0
+    for k in 0..<c.ninst {
+      let b = k * inst_size
+      if c.inst[b + 5] == 0.0 && c.inst[b + 6] == 2.0 {
+        n = n + 1
+      }
+    }
+    n
+  }
+  t.draw()
+  t.clock_frame()
+  t.clock_frame()
+  // (its edge's top in the window, all it holds below it: the edge drawn)
+  assert_eq(edges(), 1, msg="the edge in the window left out")
+  // (moved wholly out, then back)
+  down.set(260.0)
+  t.clock_frame()
+  t.clock_frame()
+  assert_eq(edges(), 0, msg="drawn wholly out of the window")
+  down.set(150.0)
+  t.clock_frame()
+  t.clock_frame()
+  assert_eq(edges(), 1, msg="not drawn back in the window")
+}
