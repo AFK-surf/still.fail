@@ -30,14 +30,16 @@
 <meta property="og:image:height" content="630">
 <!-- /i18n:head -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#FAFAF8">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<!-- Suisse Intl, the brand face: its headline weight asked for with the page (22 KB); Regular and Book follow as the
-     sheet needs them. Chinese uses the system's PingFang / YaHei, so nothing is downloaded for it. -->
-<link rel="preload" href="assets/fonts/suisse-intl-medium.woff2" as="font" type="font/woff2" crossorigin>
+<!-- Newsreader, the headlines' Latin (22 KB), and Suisse Intl, the brand face (Regular for the text, Medium for the
+     wordmark and sub-heads), asked for with the page; Book follows as the sheet needs it. Chinese, Japanese and Korean
+     use the system's fonts, so nothing is downloaded for them. -->
+<link rel="preload" href="assets/fonts/newsreader-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/suisse-intl-regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/suisse-intl-medium.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -121,16 +123,16 @@
 
 <main id="top">
 
-<!-- ============ Hero: Base ground, the field of the mark below ============ -->
-<section class="band hero" data-tone="brand" aria-labelledby="hero-title">
-  <div class="w">
+<!-- ============ Hero: paper, the headline beside its lead, a low band of the mark's field below ============ -->
+<section class="band hero" data-tone="paper" aria-labelledby="hero-title">
+  <div class="w hero-top">
     <h1 id="hero-title" class="display"><span data-t="hero.one-devices.6d97">One devices</span></h1>
     <div class="hero-body">
       <p class="lead">
         <span data-t="hero.monoid-joins-the-agents.7887">monoid joins the agents on all your computers into one: <b>one account pool</b>, <b>one team</b> in Slack, <b>every device</b> picking up where you left&nbsp;off.</span>
       </p>
       <div class="actions">
-        <a class="btn btn-paper lg" href="#download"><span data-t="hero.download-monoid.7e7d">Download monoid</span><svg class="ico arr" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="btn btn-ink lg" href="#download"><span data-t="hero.download-monoid.7e7d">Download monoid</span><svg class="ico arr" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         <a class="btn btn-line lg" data-app href="https://app.monoid.build"><span data-t="hero.open-the-web-app.7646">Open the web app</span></a>
       </div>
     </div>
@@ -157,7 +159,7 @@
 </section>
 
 <!-- ============ 01 Account pool ============ -->
-<section class="band sec" data-tone="mist" id="pool" aria-labelledby="pool-title">
+<section class="band sec" data-tone="paper" id="pool" aria-labelledby="pool-title">
   <div class="w">
     <div class="split-head rv">
       <div>
@@ -180,10 +182,10 @@
 
       <figure class="pool-fig" aria-label="Three layers: new chats drop into the pool, each gets an account, and runs on a station" data-t-aria="pool.three-layers-new-chats.0812">
         <div class="iso-box">
-          <svg class="iso" viewBox="0 0 324 596" fill="none" stroke-linejoin="round" aria-hidden="true"><path d="M6.1 108V294" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 108V294" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M6.1 304V490" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 304V490" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><polygon points="6.1,490 162,580 162,590 6.1,500" fill="#ECECEE" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="317.9,490 162,580 162,590 317.9,500" fill="#E2E2E5" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="162,400 317.9,490 162,580 6.1,490" fill="#F7F7F8" stroke="#CFCFD2" stroke-width="0.75"/><path d="M182.8 418L37.3 502" stroke="#E6E6E8" stroke-width=".75"/><path d="M141.2 418L286.7 502" stroke="#E6E6E8" stroke-width=".75"/><path d="M208.8 433L63.3 517" stroke="#E6E6E8" stroke-width=".75"/><path d="M115.2 433L260.7 517" stroke="#E6E6E8" stroke-width=".75"/><path d="M234.7 448L89.3 532" stroke="#E6E6E8" stroke-width=".75"/><path d="M89.3 448L234.7 532" stroke="#E6E6E8" stroke-width=".75"/><path d="M260.7 463L115.2 547" stroke="#E6E6E8" stroke-width=".75"/><path d="M63.3 463L208.8 547" stroke="#E6E6E8" stroke-width=".75"/><path d="M286.7 478L141.2 562" stroke="#E6E6E8" stroke-width=".75"/><path d="M37.3 478L182.8 562" stroke="#E6E6E8" stroke-width=".75"/><g class="pl-run" data-n="1"><ellipse cx="155.1" cy="438" rx="36.7" ry="21.2" stroke="#DC5929" stroke-width="1.5"/></g><g class="pl-run" data-n="0"><ellipse cx="130.8" cy="508" rx="36.7" ry="21.2" stroke="#DC5929" stroke-width="1.5"/></g><g class="pl-run" data-n="2"><ellipse cx="179.3" cy="536" rx="36.7" ry="21.2" stroke="#DC5929" stroke-width="1.5"/></g><polygon points="120.4,420 155.1,440 155.1,458 120.4,438" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="189.7,420 155.1,440 155.1,458 189.7,438" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="155.1,400 189.7,420 155.1,440 120.4,420" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="155.1,415 163.7,420 155.1,425 146.4,420" fill="#3B82D6"/><polygon points="168.9,448 203.6,468 203.6,486 168.9,466" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="238.2,448 203.6,468 203.6,486 238.2,466" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="203.6,428 238.2,448 203.6,468 168.9,448" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="203.6,443 212.2,448 203.6,453 194.9,448" fill="#2F8F5B"/><polygon points="96.2,490 130.8,510 130.8,528 96.2,508" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="165.5,490 130.8,510 130.8,528 165.5,508" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="130.8,470 165.5,490 130.8,510 96.2,490" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="130.8,485 139.5,490 130.8,495 122.2,490" fill="#DC5929"/><polygon points="144.7,518 179.3,538 179.3,556 144.7,536" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="214,518 179.3,538 179.3,556 214,536" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="179.3,498 214,518 179.3,538 144.7,518" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="179.3,513 188,518 179.3,523 170.7,518" fill="#8B5CC6"/><path class="pl-run" data-n="0" d="M130.8 312V487" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="1" d="M155.1 242V417" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="2" d="M179.3 340V515" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><polygon points="6.1,294 162,384 162,394 6.1,304" fill="#FBDCCF" stroke="#EBC3B3" stroke-width="0.75"/><polygon points="317.9,294 162,384 162,394 317.9,304" fill="#F6CDBD" stroke="#EBC3B3" stroke-width="0.75"/><polygon points="162,204 317.9,294 162,384 6.1,294" fill="#FFF3EE" stroke="#EBC3B3" stroke-width="0.75"/><polygon points="96.2,247 137.8,271 137.8,276 96.2,252" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="203.6,233 137.8,271 137.8,276 203.6,238" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><g class="pl-lit" data-n="1"><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFE1D4" stroke="#EF6334" stroke-width="1.5"/></g><ellipse cx="162" cy="220" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="113.5,241 119.6,244.5 112.6,248.5 106.6,245" fill="#2F8F5B"/><polygon points="120.6,245.1 126.7,248.6 119.7,252.6 113.7,249.1" fill="#2F8F5B"/><polygon points="127.7,249.2 133.8,252.7 126.8,256.7 120.8,253.2" fill="#2F8F5B"/><polygon points="134.8,253.3 140.9,256.8 133.9,260.8 127.9,257.3" fill="#2F8F5B"/><polygon points="141.9,257.4 148,260.9 141,264.9 135,261.4" fill="#E2E1E0"/><polygon points="144.7,275 186.2,299 186.2,304 144.7,280" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="252.1,261 186.2,299 186.2,304 252.1,266" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="210.5,237 252.1,261 186.2,299 144.7,275" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><ellipse cx="210.5" cy="248" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="162,269 168.1,272.5 161.1,276.5 155.1,273" fill="#2F8F5B"/><polygon points="169.1,273.1 175.2,276.6 168.2,280.6 162.2,277.1" fill="#2F8F5B"/><polygon points="176.2,277.2 182.3,280.7 175.3,284.7 169.3,281.2" fill="#E2E1E0"/><polygon points="183.3,281.3 189.4,284.8 182.4,288.8 176.4,285.3" fill="#E2E1E0"/><polygon points="190.4,285.4 196.5,288.9 189.5,292.9 183.5,289.4" fill="#E2E1E0"/><polygon points="23.4,289 65,313 65,318 23.4,294" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="130.8,275 65,313 65,318 130.8,280" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="89.3,251 130.8,275 65,313 23.4,289" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><ellipse cx="89.3" cy="262" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="40.8,283 46.8,286.5 39.9,290.5 33.8,287" fill="#E6A23C"/><polygon points="47.9,287.1 53.9,290.6 47,294.6 40.9,291.1" fill="#E2E1E0"/><polygon points="55,291.2 61,294.7 54.1,298.7 48,295.2" fill="#E2E1E0"/><polygon points="62.1,295.3 68.1,298.8 61.2,302.8 55.1,299.3" fill="#E2E1E0"/><polygon points="69.2,299.4 75.2,302.9 68.3,306.9 62.2,303.4" fill="#E2E1E0"/><polygon points="259,270 300.6,294 234.7,332 193.2,308" fill="#FFF8F5" stroke="#A4A5A9" stroke-width="1" stroke-dasharray="3 3"/><ellipse cx="259" cy="281" rx="4.3" ry="2.5" stroke="#A4A5A9" stroke-width="1"/><polygon points="210.5,302 216.6,305.5 209.6,309.5 203.6,306" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="217.6,306.1 223.7,309.6 216.7,313.6 210.7,310.1" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="224.7,310.2 230.8,313.7 223.8,317.7 217.8,314.2" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="231.8,314.3 237.9,317.8 230.9,321.8 224.9,318.3" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="238.9,318.4 245,321.9 238,325.9 232,322.4" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="71.9,317 113.5,341 113.5,346 71.9,322" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="179.3,303 113.5,341 113.5,346 179.3,308" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><g class="pl-lit" data-n="0"><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFE1D4" stroke="#EF6334" stroke-width="1.5"/></g><ellipse cx="137.8" cy="290" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="89.3,311 95.3,314.5 88.4,318.5 82.3,315" fill="#2F8F5B"/><polygon points="96.4,315.1 102.4,318.6 95.5,322.6 89.4,319.1" fill="#2F8F5B"/><polygon points="103.5,319.2 109.5,322.7 102.6,326.7 96.5,323.2" fill="#2F8F5B"/><polygon points="110.6,323.3 116.6,326.8 109.7,330.8 103.6,327.3" fill="#2F8F5B"/><polygon points="117.7,327.4 123.7,330.9 116.8,334.9 110.7,331.4" fill="#2F8F5B"/><polygon points="120.4,345 162,369 162,374 120.4,350" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="227.8,331 162,369 162,374 227.8,336" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><g class="pl-lit" data-n="2"><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFE1D4" stroke="#EF6334" stroke-width="1.5"/></g><ellipse cx="186.2" cy="318" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="137.8,339 143.8,342.5 136.9,346.5 130.8,343" fill="#2F8F5B"/><polygon points="144.9,343.1 150.9,346.6 144,350.6 137.9,347.1" fill="#2F8F5B"/><polygon points="152,347.2 158,350.7 151.1,354.7 145,351.2" fill="#2F8F5B"/><polygon points="159.1,351.3 165.1,354.8 158.2,358.8 152.1,355.3" fill="#E2E1E0"/><polygon points="166.2,355.4 172.2,358.9 165.3,362.9 159.2,359.4" fill="#E2E1E0"/><polygon points="6.1,98 162,188 162,198 6.1,108" fill="#ECECEE" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="317.9,98 162,188 162,198 317.9,108" fill="#E2E2E5" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="162,8 317.9,98 162,188 6.1,98" fill="#FFFFFF" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="96.2,80 127.4,98 96.2,116 65,98" fill="#F7F7F8" stroke="#C9CACD" stroke-width="1" stroke-dasharray="3 3"/><polygon points="162,80 193.2,98 162,116 130.8,98" fill="#F7F7F8" stroke="#C9CACD" stroke-width="1" stroke-dasharray="3 3"/><polygon points="227.8,80 259,98 227.8,116 196.6,98" fill="#F7F7F8" stroke="#C9CACD" stroke-width="1" stroke-dasharray="3 3"/><path class="pl-route" data-n="0" d="M96.2 98L130.8 305" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="1" d="M162 98L155.1 235" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="2" d="M227.8 98L179.3 333" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><g class="pl-chat" data-n="0" style="--dx:-34.6px;--dy:-209px"><polygon points="106.6,303 130.8,317 130.8,321 106.6,307" fill="#2C2D31" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="155.1,303 130.8,317 130.8,321 155.1,307" fill="#0E0F11" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="130.8,289 155.1,303 130.8,317 106.6,303" fill="#1A1B1E" stroke="#1A1B1E" stroke-width="0.5"/><path d="M133.4 296.5L120.4 304" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M140.3 300.5L131.7 305.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="1" style="--dx:6.9px;--dy:-139px"><polygon points="130.8,233 155.1,247 155.1,251 130.8,237" fill="#2C2D31" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="179.3,233 155.1,247 155.1,251 179.3,237" fill="#0E0F11" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="155.1,219 179.3,233 155.1,247 130.8,233" fill="#1A1B1E" stroke="#1A1B1E" stroke-width="0.5"/><path d="M157.7 226.5L144.7 234" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M164.6 230.5L155.9 235.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="2" style="--dx:48.5px;--dy:-237px"><polygon points="155.1,331 179.3,345 179.3,349 155.1,335" fill="#2C2D31" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="203.6,331 179.3,345 179.3,349 203.6,335" fill="#0E0F11" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="179.3,317 203.6,331 179.3,345 155.1,331" fill="#1A1B1E" stroke="#1A1B1E" stroke-width="0.5"/><path d="M181.9 324.5L168.9 332" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M188.8 328.5L180.2 333.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g></svg>
-          <span class="mtag pt" style="--x:98.1%;--y:16.4%" aria-hidden="true"><i></i><span data-t="pool.new-chats-3.2c25">new chats · 3</span></span>
-          <span class="mtag pt pt-l" style="--x:1.9%;--y:49.3%;--xm:98.1%" aria-hidden="true"><i></i><span data-t="pool.pool-6-accounts.503e">pool · 6 accounts</span></span>
-          <span class="mtag pt" style="--x:98.1%;--y:82.2%" aria-hidden="true"><i></i><span data-t="pool.stations-4.dc28">stations · 4</span></span>
+          <svg class="iso" viewBox="0 0 324 596" fill="none" stroke-linejoin="round" aria-hidden="true"><path d="M6.1 108V294" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 108V294" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M6.1 304V490" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 304V490" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><polygon points="6.1,490 162,580 162,590 6.1,500" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="317.9,490 162,580 162,590 317.9,500" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="162,400 317.9,490 162,580 6.1,490" fill="#F7F6F3" stroke="#D6D4CE" stroke-width="0.75"/><path d="M182.8 418L37.3 502" stroke="#E6E4DF" stroke-width=".75"/><path d="M141.2 418L286.7 502" stroke="#E6E4DF" stroke-width=".75"/><path d="M208.8 433L63.3 517" stroke="#E6E4DF" stroke-width=".75"/><path d="M115.2 433L260.7 517" stroke="#E6E4DF" stroke-width=".75"/><path d="M234.7 448L89.3 532" stroke="#E6E4DF" stroke-width=".75"/><path d="M89.3 448L234.7 532" stroke="#E6E4DF" stroke-width=".75"/><path d="M260.7 463L115.2 547" stroke="#E6E4DF" stroke-width=".75"/><path d="M63.3 463L208.8 547" stroke="#E6E4DF" stroke-width=".75"/><path d="M286.7 478L141.2 562" stroke="#E6E4DF" stroke-width=".75"/><path d="M37.3 478L182.8 562" stroke="#E6E4DF" stroke-width=".75"/><g class="pl-run" data-n="1"><ellipse cx="155.1" cy="438" rx="36.7" ry="21.2" stroke="#1C1B1A" stroke-width="1.5"/></g><g class="pl-run" data-n="0"><ellipse cx="130.8" cy="508" rx="36.7" ry="21.2" stroke="#1C1B1A" stroke-width="1.5"/></g><g class="pl-run" data-n="2"><ellipse cx="179.3" cy="536" rx="36.7" ry="21.2" stroke="#1C1B1A" stroke-width="1.5"/></g><polygon points="120.4,420 155.1,440 155.1,458 120.4,438" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="189.7,420 155.1,440 155.1,458 189.7,438" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="155.1,400 189.7,420 155.1,440 120.4,420" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="155.1,415 163.7,420 155.1,425 146.4,420" fill="#3B82D6"/><polygon points="168.9,448 203.6,468 203.6,486 168.9,466" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="238.2,448 203.6,468 203.6,486 238.2,466" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="203.6,428 238.2,448 203.6,468 168.9,448" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="203.6,443 212.2,448 203.6,453 194.9,448" fill="#2F8F5B"/><polygon points="96.2,490 130.8,510 130.8,528 96.2,508" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="165.5,490 130.8,510 130.8,528 165.5,508" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="130.8,470 165.5,490 130.8,510 96.2,490" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="130.8,485 139.5,490 130.8,495 122.2,490" fill="#DC5929"/><polygon points="144.7,518 179.3,538 179.3,556 144.7,536" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="214,518 179.3,538 179.3,556 214,536" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="179.3,498 214,518 179.3,538 144.7,518" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="179.3,513 188,518 179.3,523 170.7,518" fill="#8B5CC6"/><path class="pl-run" data-n="0" d="M130.8 312V487" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="1" d="M155.1 242V417" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="2" d="M179.3 340V515" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><polygon points="6.1,294 162,384 162,394 6.1,304" fill="#E6E4DF" stroke="#CFCDC7" stroke-width="0.75"/><polygon points="317.9,294 162,384 162,394 317.9,304" fill="#DEDCD7" stroke="#CFCDC7" stroke-width="0.75"/><polygon points="162,204 317.9,294 162,384 6.1,294" fill="#FFFFFF" stroke="#CFCDC7" stroke-width="0.75"/><polygon points="96.2,247 137.8,271 137.8,276 96.2,252" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="203.6,233 137.8,271 137.8,276 203.6,238" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><g class="pl-lit" data-n="1"><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFFFFF" stroke="#1C1B1A" stroke-width="1.5"/></g><ellipse cx="162" cy="220" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="113.5,241 119.6,244.5 112.6,248.5 106.6,245" fill="#2F8F5B"/><polygon points="120.6,245.1 126.7,248.6 119.7,252.6 113.7,249.1" fill="#2F8F5B"/><polygon points="127.7,249.2 133.8,252.7 126.8,256.7 120.8,253.2" fill="#2F8F5B"/><polygon points="134.8,253.3 140.9,256.8 133.9,260.8 127.9,257.3" fill="#2F8F5B"/><polygon points="141.9,257.4 148,260.9 141,264.9 135,261.4" fill="#E2E0DB"/><polygon points="144.7,275 186.2,299 186.2,304 144.7,280" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="252.1,261 186.2,299 186.2,304 252.1,266" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="210.5,237 252.1,261 186.2,299 144.7,275" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><ellipse cx="210.5" cy="248" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="162,269 168.1,272.5 161.1,276.5 155.1,273" fill="#2F8F5B"/><polygon points="169.1,273.1 175.2,276.6 168.2,280.6 162.2,277.1" fill="#2F8F5B"/><polygon points="176.2,277.2 182.3,280.7 175.3,284.7 169.3,281.2" fill="#E2E0DB"/><polygon points="183.3,281.3 189.4,284.8 182.4,288.8 176.4,285.3" fill="#E2E0DB"/><polygon points="190.4,285.4 196.5,288.9 189.5,292.9 183.5,289.4" fill="#E2E0DB"/><polygon points="23.4,289 65,313 65,318 23.4,294" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="130.8,275 65,313 65,318 130.8,280" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="89.3,251 130.8,275 65,313 23.4,289" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><ellipse cx="89.3" cy="262" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="40.8,283 46.8,286.5 39.9,290.5 33.8,287" fill="#E6A23C"/><polygon points="47.9,287.1 53.9,290.6 47,294.6 40.9,291.1" fill="#E2E0DB"/><polygon points="55,291.2 61,294.7 54.1,298.7 48,295.2" fill="#E2E0DB"/><polygon points="62.1,295.3 68.1,298.8 61.2,302.8 55.1,299.3" fill="#E2E0DB"/><polygon points="69.2,299.4 75.2,302.9 68.3,306.9 62.2,303.4" fill="#E2E0DB"/><polygon points="259,270 300.6,294 234.7,332 193.2,308" fill="#FAFAF8" stroke="#A3A19B" stroke-width="1" stroke-dasharray="3 3"/><ellipse cx="259" cy="281" rx="4.3" ry="2.5" stroke="#A3A19B" stroke-width="1"/><polygon points="210.5,302 216.6,305.5 209.6,309.5 203.6,306" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="217.6,306.1 223.7,309.6 216.7,313.6 210.7,310.1" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="224.7,310.2 230.8,313.7 223.8,317.7 217.8,314.2" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="231.8,314.3 237.9,317.8 230.9,321.8 224.9,318.3" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="238.9,318.4 245,321.9 238,325.9 232,322.4" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="71.9,317 113.5,341 113.5,346 71.9,322" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="179.3,303 113.5,341 113.5,346 179.3,308" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><g class="pl-lit" data-n="0"><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFFFFF" stroke="#1C1B1A" stroke-width="1.5"/></g><ellipse cx="137.8" cy="290" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="89.3,311 95.3,314.5 88.4,318.5 82.3,315" fill="#2F8F5B"/><polygon points="96.4,315.1 102.4,318.6 95.5,322.6 89.4,319.1" fill="#2F8F5B"/><polygon points="103.5,319.2 109.5,322.7 102.6,326.7 96.5,323.2" fill="#2F8F5B"/><polygon points="110.6,323.3 116.6,326.8 109.7,330.8 103.6,327.3" fill="#2F8F5B"/><polygon points="117.7,327.4 123.7,330.9 116.8,334.9 110.7,331.4" fill="#2F8F5B"/><polygon points="120.4,345 162,369 162,374 120.4,350" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="227.8,331 162,369 162,374 227.8,336" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><g class="pl-lit" data-n="2"><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFFFFF" stroke="#1C1B1A" stroke-width="1.5"/></g><ellipse cx="186.2" cy="318" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="137.8,339 143.8,342.5 136.9,346.5 130.8,343" fill="#2F8F5B"/><polygon points="144.9,343.1 150.9,346.6 144,350.6 137.9,347.1" fill="#2F8F5B"/><polygon points="152,347.2 158,350.7 151.1,354.7 145,351.2" fill="#2F8F5B"/><polygon points="159.1,351.3 165.1,354.8 158.2,358.8 152.1,355.3" fill="#E2E0DB"/><polygon points="166.2,355.4 172.2,358.9 165.3,362.9 159.2,359.4" fill="#E2E0DB"/><polygon points="6.1,98 162,188 162,198 6.1,108" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="317.9,98 162,188 162,198 317.9,108" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="162,8 317.9,98 162,188 6.1,98" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="96.2,80 127.4,98 96.2,116 65,98" fill="#F7F6F3" stroke="#C9C7C1" stroke-width="1" stroke-dasharray="3 3"/><polygon points="162,80 193.2,98 162,116 130.8,98" fill="#F7F6F3" stroke="#C9C7C1" stroke-width="1" stroke-dasharray="3 3"/><polygon points="227.8,80 259,98 227.8,116 196.6,98" fill="#F7F6F3" stroke="#C9C7C1" stroke-width="1" stroke-dasharray="3 3"/><path class="pl-route" data-n="0" d="M96.2 98L130.8 305" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="1" d="M162 98L155.1 235" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="2" d="M227.8 98L179.3 333" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><g class="pl-chat" data-n="0" style="--dx:-34.6px;--dy:-209px"><polygon points="106.6,303 130.8,317 130.8,321 106.6,307" fill="#2E2D2B" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="155.1,303 130.8,317 130.8,321 155.1,307" fill="#0F0E0D" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="130.8,289 155.1,303 130.8,317 106.6,303" fill="#1C1B1A" stroke="#1C1B1A" stroke-width="0.5"/><path d="M133.4 296.5L120.4 304" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M140.3 300.5L131.7 305.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="1" style="--dx:6.9px;--dy:-139px"><polygon points="130.8,233 155.1,247 155.1,251 130.8,237" fill="#2E2D2B" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="179.3,233 155.1,247 155.1,251 179.3,237" fill="#0F0E0D" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="155.1,219 179.3,233 155.1,247 130.8,233" fill="#1C1B1A" stroke="#1C1B1A" stroke-width="0.5"/><path d="M157.7 226.5L144.7 234" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M164.6 230.5L155.9 235.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="2" style="--dx:48.5px;--dy:-237px"><polygon points="155.1,331 179.3,345 179.3,349 155.1,335" fill="#2E2D2B" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="203.6,331 179.3,345 179.3,349 203.6,335" fill="#0F0E0D" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="179.3,317 203.6,331 179.3,345 155.1,331" fill="#1C1B1A" stroke="#1C1B1A" stroke-width="0.5"/><path d="M181.9 324.5L168.9 332" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M188.8 328.5L180.2 333.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g></svg>
+          <span class="pt" style="--x:98.1%;--y:16.4%" aria-hidden="true"><span data-t="pool.new-chats-3.2c25">new chats · 3</span></span>
+          <span class="pt pt-l" style="--x:1.9%;--y:49.3%;--xm:98.1%" aria-hidden="true"><span data-t="pool.pool-6-accounts.503e">pool · 6 accounts</span></span>
+          <span class="pt" style="--x:98.1%;--y:82.2%" aria-hidden="true"><span data-t="pool.stations-4.dc28">stations · 4</span></span>
         </div>
       </figure>
 
@@ -265,7 +267,7 @@
 </section>
 
 <!-- ============ 03 Every device ============ -->
-<section class="band sec" data-tone="mist" id="devices" aria-labelledby="devices-title">
+<section class="band sec" data-tone="paper" id="devices" aria-labelledby="devices-title">
   <div class="w">
     <div class="split-head rv">
       <div>
@@ -300,12 +302,6 @@
         <!-- One device a step, upright and whole, in the middle of the stage at the size that fills it (main.js: --k);
              the steps cross-fade as the scroll moves. -->
         <div class="dv-view" aria-hidden="true">
-          <div class="dv-tags">
-            <span class="mtag"><i></i>pose · open · 2 panels</span>
-            <span class="mtag"><i></i>virtual display · 2m</span>
-            <span class="mtag"><i></i>load → least busy</span>
-            <span class="mtag"><i></i>app.monoid.build</span>
-          </div>
           <div class="d d-duo">
             <div class="duo" aria-hidden="true">
               <!-- Opened as a book (its inner screen 890 × 626 points, apps/mbui sfapp/tabletop_wbtest.mbt): the desktop's
@@ -437,7 +433,6 @@
           <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span data-t="devices.open-on-iphone.0e24">Open on iPhone</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
         </div>
         <div class="vis">
-          <span class="mtag on-vis pose-open"><i></i>pose · open · 2 panels</span>
           <div class="duo" aria-hidden="true">
             <!-- Opened as a book (its inner screen 890 × 626 points, apps/mbui sfapp/tabletop_wbtest.mbt): the desktop's
                  structure with touch's sizes, the panes as cards across (native_in 4 apart), the sidebar ending on the
@@ -488,7 +483,6 @@
           </div>
         </div>
         <div class="vis">
-          <span class="mtag on-vis"><i></i>virtual display · 2m</span>
           <div class="mk-phone droid" aria-hidden="true">
             <span class="isl"></span><span class="gest"></span>
             <div class="mk mk-m">
@@ -520,7 +514,6 @@
           </div>
         </div>
         <div class="vis">
-          <span class="mtag on-vis"><i></i>load → least busy</span>
           <div class="mk-fit" aria-hidden="true"><div class="mk mk-win list">
             <div class="mk-app mac">
               <div class="mk-dock">
@@ -563,7 +556,6 @@
           <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span data-t="devices.open-the-web-app.7646">Open the web app</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
         </div>
         <div class="vis">
-          <span class="mtag on-vis"><i></i>app.monoid.build</span>
           <div class="mk-fit" aria-hidden="true"><div class="mk mk-win web">
             <div class="mk-browser"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
             <div class="mk-app">
@@ -610,8 +602,8 @@
   </div>
 </section>
 
-<!-- ============ Security: Ink ============ -->
-<section class="band sec" data-tone="ink" id="security" aria-labelledby="security-title">
+<!-- ============ Security ============ -->
+<section class="band sec" data-tone="paper" id="security" aria-labelledby="security-title">
   <div class="w">
     <div class="split-head rv">
       <div>
@@ -635,24 +627,24 @@
       <figure class="sec-net">
         <svg viewBox="0 0 358 358" fill="none" aria-hidden="true">
           <defs>
-            <pattern id="sec-cell" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="8" height="8" rx="1.5" fill="rgba(255,255,255,.08)"/></pattern>
-            <pattern id="sec-dot" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r=".9" fill="rgba(255,255,255,.13)"/></pattern>
+            <pattern id="sec-cell" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="8" height="8" rx="1.5" fill="#ECEBE7"/></pattern>
+            <pattern id="sec-dot" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r=".9" fill="#C9C7C1"/></pattern>
           </defs>
           <!-- frame: a ring of cells, a few lit -->
           <path d="M0 0h358v8H0zM0 350h358v8H0zM0 14h8v330H0zM350 14h8v330h-8z" fill="url(#sec-cell)"/>
-          <rect x="56" width="8" height="8" rx="1.5" fill="#EF6334"/><rect x="196" width="8" height="8" rx="1.5" fill="#FFB599"/><rect x="350" y="98" width="8" height="8" rx="1.5" fill="#fff"/><rect x="350" y="266" width="8" height="8" rx="1.5" fill="#EF6334"/><rect x="126" y="350" width="8" height="8" rx="1.5" fill="#FFB599"/><rect y="210" width="8" height="8" rx="1.5" fill="#fff"/>
-          <rect x="16.5" y="16.5" width="325" height="325" rx="12" fill="url(#sec-dot)" stroke="rgba(255,255,255,.14)"/>
+          <rect x="56" width="8" height="8" rx="1.5" fill="#1C1B1A"/><rect x="196" width="8" height="8" rx="1.5" fill="#C9C7C1"/><rect x="350" y="98" width="8" height="8" rx="1.5" fill="#C9C7C1"/><rect x="350" y="266" width="8" height="8" rx="1.5" fill="#1C1B1A"/><rect x="126" y="350" width="8" height="8" rx="1.5" fill="#C9C7C1"/><rect y="210" width="8" height="8" rx="1.5" fill="#A3A19B"/>
+          <rect x="16.5" y="16.5" width="325" height="325" rx="12" fill="#F4F3F0" stroke="#E6E4DF"/><rect x="16.5" y="16.5" width="325" height="325" rx="12" fill="url(#sec-dot)"/>
           <!-- construction: every station on one circle, the relay on the half-radius one -->
-          <path d="M16.5 179h325M179 16.5v325" stroke="rgba(255,255,255,.06)"/>
-          <circle cx="179" cy="179" r="152" stroke="rgba(255,255,255,.13)" stroke-dasharray="3 5"/>
-          <circle cx="179" cy="179" r="76" stroke="rgba(255,255,255,.11)" stroke-dasharray="1 5" stroke-linecap="round"/>
+          <path d="M16.5 179h325M179 16.5v325" stroke="rgba(28,27,26,.06)"/>
+          <circle cx="179" cy="179" r="152" stroke="rgba(28,27,26,.18)" stroke-dasharray="3 5"/>
+          <circle cx="179" cy="179" r="76" stroke="rgba(28,27,26,.2)" stroke-dasharray="1 5" stroke-linecap="round"/>
           <!-- links: three direct, one through the relay -->
-          <g class="sn-direct" stroke="#EF6334" stroke-width="1.5">
+          <g class="sn-direct" stroke="#1C1B1A" stroke-width="1.25">
             <path d="M179 179L82 62"/><path d="M179 179L276 62"/><path d="M179 179L82 296"/>
           </g>
-          <path class="sn-relay" d="M179 179L276 296" stroke="rgba(255,181,153,.55)" stroke-width="1.5" stroke-dasharray="4 5"/>
+          <path class="sn-relay" d="M179 179L276 296" stroke="#A3A19B" stroke-width="1.25" stroke-dasharray="4 5"/>
           <!-- packets: all leave the phone together; each arrives after its own round trip -->
-          <g class="sn-pkts" fill="#FFB599">
+          <g class="sn-pkts" fill="#1C1B1A">
             <circle class="p1" cx="179" cy="179" r="3"/><circle class="p2" cx="179" cy="179" r="3"/><circle class="p3" cx="179" cy="179" r="3"/><circle class="p4" cx="179" cy="179" r="3"/>
           </g>
           <!-- stations: name, then how this phone reaches it (the app's own words and demo data) -->
@@ -668,12 +660,12 @@
           </g>
           <!-- the relay: it passes data on, locked -->
           <g class="sn-lock">
-            <circle cx="227.5" cy="237.5" r="16" fill="#1A1B1E" stroke="rgba(255,181,153,.55)" stroke-width="1.5"/>
-            <path class="sn-shackle" d="M224 236v-3a3.5 3.5 0 0 1 7 0v3" stroke="#EF6334" stroke-width="1.6" stroke-linecap="round"/>
-            <rect x="221.5" y="236" width="12" height="9" rx="2" fill="#EF6334"/>
+            <circle cx="227.5" cy="237.5" r="16" fill="#FFFFFF" stroke="#A3A19B" stroke-width="1.25"/>
+            <path class="sn-shackle" d="M224 236v-3a3.5 3.5 0 0 1 7 0v3" stroke="#6E6C68" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="221.5" y="236" width="12" height="9" rx="2" fill="#6E6C68"/>
           </g>
           <!-- this phone -->
-          <rect x="127" y="157" width="104" height="44" rx="11" fill="#EF6334"/>
+          <rect x="127" y="157" width="104" height="44" rx="11" fill="#1C1B1A"/>
           <text class="sn-me" x="179" y="183.5"><tspan data-t="security.your-phone.8b1c">Your phone</tspan></text>
         </svg>
         <figcaption class="sec-vh"><span data-t="security.diagram-your-phone-reaches.e4f6">Diagram: your phone reaches Willow, Mini and the laptop directly, and the server through an encrypted relay.</span></figcaption>
@@ -694,7 +686,7 @@
 </section>
 
 <!-- ============ Install ============ -->
-<section class="band sec" data-tone="mist" id="install" aria-labelledby="install-title">
+<section class="band sec" data-tone="paper" id="install" aria-labelledby="install-title">
   <div class="w">
     <div class="split-head rv">
       <div>
@@ -726,7 +718,7 @@
   </div>
 </section>
 
-<!-- ============ Shipped nightly: Reducto's latest articles ============ -->
+<!-- ============ Shipped nightly ============ -->
 <section class="band sec" data-tone="paper" id="changelog" aria-labelledby="changelog-title">
   <div class="w">
     <div class="split-head rv">
@@ -737,19 +729,19 @@
     </div>
     <div class="posts rv">
       <article class="post feature">
-        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cva1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cva2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#EF6334"/><rect y="320" width="640" height="32" fill="url(#cva12)"/><rect y="288" width="640" height="32" fill="url(#cva9)"/><rect y="256" width="640" height="32" fill="url(#cva6)"/><rect y="224" width="640" height="32" fill="url(#cva4)"/><rect y="192" width="640" height="32" fill="url(#cva2)"/><rect y="176" width="640" height="16" fill="url(#cva1)"/><rect x="529" y="49" width="14" height="14" rx="2" fill="#FFFFFF"/><rect x="577" y="97" width="14" height="14" rx="2" fill="#FFFFFF"/><rect x="465" y="17" width="14" height="14" rx="2" fill="#FFFFFF"/><text x="48" y="112" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="72" letter-spacing="-2.5" fill="#1A1B1E">0.1.7394</text></svg></div>
+        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cva1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cva2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#F4F3F0"/><rect y="320" width="640" height="32" fill="url(#cva12)"/><rect y="288" width="640" height="32" fill="url(#cva9)"/><rect y="256" width="640" height="32" fill="url(#cva6)"/><rect y="224" width="640" height="32" fill="url(#cva4)"/><rect y="192" width="640" height="32" fill="url(#cva2)"/><rect y="176" width="640" height="16" fill="url(#cva1)"/><rect x="529" y="49" width="14" height="14" rx="2" fill="#1C1B1A"/><rect x="577" y="97" width="14" height="14" rx="2" fill="#1C1B1A"/><rect x="465" y="17" width="14" height="14" rx="2" fill="#1C1B1A"/><text x="48" y="112" font-family="Newsreader, Georgia, serif" font-weight="400" font-size="76" letter-spacing="-1.5" fill="#1C1B1A">0.1.7394</text></svg></div>
         <div class="post-body">
           <div class="post-meta"><span class="tag"><span data-t="changelog.latest.decd">Latest</span></span><span class="tnum"><span data-t="changelog.november-6-2026.a449">November 6, 2026</span></span></div>
           <h3><span data-t="changelog.this-release-12-fixes.8541">This release: 12 fixes and 5 new features</span></h3>
           <div class="hbs">
-            <div class="hb"><span><span data-t="changelog.new.6403">New</span></span><span class="track"><span class="bar" style="--n:5;--c:var(--brand)"></span><span class="val">5</span></span></div>
+            <div class="hb"><span><span data-t="changelog.new.6403">New</span></span><span class="track"><span class="bar" style="--n:5;--c:var(--ink)"></span><span class="val">5</span></span></div>
             <div class="hb"><span><span data-t="changelog.improved.bb6a">Improved</span></span><span class="track"><span class="bar" style="--n:3"></span><span class="val">3</span></span></div>
             <div class="hb"><span><span data-t="changelog.fixed.ab98">Fixed</span></span><span class="track"><span class="bar" style="--n:12"></span><span class="val">12</span></span></div>
           </div>
           <ul class="changes">
-            <li><svg class="ico c-ui"><use href="#i-plus"/></svg><span><span data-t="changelog.a-phone-lent-to.2cde">A phone lent to an agent opens a virtual screen of its own, so you can keep using it</span></span></li>
-            <li><svg class="ico c-ui"><use href="#i-plus"/></svg><span><span data-t="changelog.see-which-device-holds.7e61">See which device holds a screen, and disconnect it or make it view-only</span></span></li>
-            <li><svg class="ico c-ui"><use href="#i-plus"/></svg><span><span data-t="changelog.antigravity-cli-signs-in.1853">Antigravity CLI signs in with a Google account and joins the pool</span></span></li>
+            <li><svg class="ico"><use href="#i-plus"/></svg><span><span data-t="changelog.a-phone-lent-to.2cde">A phone lent to an agent opens a virtual screen of its own, so you can keep using it</span></span></li>
+            <li><svg class="ico"><use href="#i-plus"/></svg><span><span data-t="changelog.see-which-device-holds.7e61">See which device holds a screen, and disconnect it or make it view-only</span></span></li>
+            <li><svg class="ico"><use href="#i-plus"/></svg><span><span data-t="changelog.antigravity-cli-signs-in.1853">Antigravity CLI signs in with a Google account and joins the pool</span></span></li>
           </ul>
         </div>
       </article>
@@ -796,7 +788,7 @@
 </section>
 
 <!-- ============ FAQ ============ -->
-<section class="band sec" data-tone="paper" id="faq" aria-labelledby="faq-title" style="padding-top:0">
+<section class="band sec" data-tone="paper" id="faq" aria-labelledby="faq-title">
   <div class="w faq">
     <div class="head rv" style="margin:0">
       <h2 id="faq-title"><span data-t="faq.asked-most.39ee">Asked most</span></h2>
@@ -818,12 +810,13 @@
   </div>
 </section>
 
-<!-- ============ End: Base ground, the headline leads, the field below ============ -->
-<section class="band end" data-tone="brand" aria-labelledby="end-title">
+<!-- ============ End: the dark band, the headline leads, the field below; the footer continues it ============ -->
+<section class="band end" data-tone="ink" aria-labelledby="end-title">
   <div class="w end-in">
-    <!-- A poster's two lines: the break stands in for the comma (kept for screen readers only). -->
-    <h2 id="end-title"><span data-t="end.add-a-computer-it.c266">Add a computer, it does the rest</span></h2>
-    <p class="lead"><span data-t="end.ask-once-your-computers.6d9f">Ask once. Your computers work until it’s done.</span></p>
+    <div class="end-say">
+      <h2 id="end-title"><span data-t="end.add-a-computer-it.c266">Add a computer, it does the rest</span></h2>
+      <p class="lead"><span data-t="end.ask-once-your-computers.6d9f">Ask once. Your computers work until it’s done.</span></p>
+    </div>
     <div class="actions">
       <a class="btn btn-ink lg" data-app href="https://app.monoid.build"><span data-t="end.open-monoid.5754">Open monoid</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>
       <a class="btn btn-line lg" href="#download"><span data-t="end.download.a479">Download</span></a>
@@ -835,7 +828,7 @@
 </main>
 
 <!-- ============ Footer ============ -->
-<footer class="band foot" data-tone="paper">
+<footer class="band foot" data-tone="ink">
   <div class="w">
     <div class="foot-grid">
       <div class="foot-id">

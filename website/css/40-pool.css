@@ -1,27 +1,30 @@
 /* ---------- 01 Account pool ----------
-   Desktop: two callouts | the picture | two callouts, on the 22-unit content width (5U | 12U | 5U).
+   Desktop: the two callouts, split by a dashed rule | the picture on a dotted panel (5 : 12).
    The picture is three isometric plates: new chats, the pool's six accounts, four stations. Each chat drops onto the
    account it is given (lit), and a dotted line runs down to the station it runs on (ringed). The tags are HTML, so
    they keep a readable size however small the plates are drawn. */
 .pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 12fr); gap: var(--gap); align-items: center; }
-.callouts { display: flex; flex-direction: column; gap: clamp(32px, 3.4vw, 56px); }
+.callouts { display: flex; flex-direction: column; }
+.callout { padding-block: clamp(20px, 2vw, 28px); }
+.callout + .callout { background: var(--dash-x); background-position: left top; }
 .callout h3 { display: flex; align-items: center; gap: 10px; font-size: 16px; line-height: 1.3; }
 .callout p { color: var(--graphite); margin-top: 8px; font-size: var(--t-small); line-height: 1.62; text-wrap: pretty; }
 
-/* The figure: the svg box plus room for the tags on both sides. */
-.pool-fig { margin: 0; display: flex; flex-direction: column; align-items: center; --lead: 22px; --tagw: 168px; }
+/* The figure: a dotted panel; the svg box in it plus room for the captions on both sides. */
+.pool-fig { margin: 0; display: flex; flex-direction: column; align-items: center; --lead: 22px; --tagw: 168px;
+  padding: clamp(28px, 3.4vw, 56px) 16px; border-radius: 16px; background: var(--dots), var(--panel); }
 .iso-box { position: relative; width: min(360px, calc(100% - 2 * var(--tagw)), 50svh); }
 .iso { display: block; width: 100%; height: auto; overflow: visible; }
 
-/* Tags: a dot on the plate's corner, a short leader, the mono label. */
-.pool-fig .pt { left: calc(var(--x) + var(--lead)); right: auto; top: var(--y); bottom: auto; transform: translateY(-50%); z-index: 1; }
+/* Captions: a dot on the plate's corner, a short leader, a quiet mono label (on the panel's ground, so no dot shows
+   through its words). */
+.pool-fig .pt { position: absolute; left: calc(var(--x) + var(--lead)); top: var(--y); transform: translateY(-50%); z-index: 1;
+  padding: 2px 6px; background: var(--panel); font-family: var(--mono); font-size: 11.5px; line-height: 1.3; color: var(--graphite); white-space: nowrap; }
 .pool-fig .pt::before { content: ""; position: absolute; right: 100%; top: 50%; width: var(--lead); height: 1px; background: var(--silver); }
 .pool-fig .pt::after { content: ""; position: absolute; left: calc(-1 * var(--lead) - 3px); top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--ink); }
 .pool-fig .pt-l { left: auto; right: calc(100% - var(--x) + var(--lead)); }
 .pool-fig .pt-l::before { right: auto; left: 100%; }
 .pool-fig .pt-l::after { left: auto; right: calc(-1 * var(--lead) - 3px); }
-
-/* The key under the picture. */
 
 /* ---------- Motion: an explanation, so it takes its time (7.2 s a round), but only while on screen ----------
    At rest (before it plays, and under reduced motion) the picture shows the outcome: every chat on its account,
@@ -81,16 +84,13 @@
 /* ---------- Phones: the plates to the left, every tag on the right; callouts as a list ---------- */
 @media (max-width: 640px) {
   .pool { grid-template-columns: minmax(0, 1fr); row-gap: 36px; }
-  .pool-fig { --lead: 12px; --tagw: 150px; align-items: stretch; }
+  .pool-fig { --lead: 12px; --tagw: 140px; align-items: stretch; padding: 28px 12px; }
   .iso-box { --iw: min(240px, calc(100% - var(--tagw)), 50svh); width: var(--iw); margin-left: max(0px, calc((100% - var(--iw) - var(--tagw)) / 2)); }
-  .pool-fig .mtag { font-size: 10.5px; gap: 5px; padding: 0 7px 0 5px; }
+  .pool-fig .pt { font-size: 10.5px; padding: 2px 4px; }
   .pool-fig .pt-l { left: calc(var(--xm) + var(--lead)); right: auto; }
   .pool-fig .pt-l::before { left: auto; right: 100%; }
   .pool-fig .pt-l::after { right: auto; left: calc(-1 * var(--lead) - 3px); }
-  .callouts { gap: 0; }
-  .callout:last-child { border-bottom: 1px solid var(--hair); }
-  .pool > .callouts:first-child .callout:last-child { border-bottom: 0; }
-  .callout { padding-block: 20px; border-top: 1px solid var(--hair); }
+  .callout { padding-block: 20px; }
   .callout h3 { font-size: 16px; }
   .callout p { font-size: 15px; margin-top: 6px; }
 }

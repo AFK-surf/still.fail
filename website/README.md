@@ -112,42 +112,68 @@ Chinese pixel for pixel (1440 × 900 and 390 × 844, full page, with motion redu
 
 ## Structure
 
-Section order follows Reducto's site (on Mobbin): hero → logo strip → product overview (list left, picture right) →
-"how it works" (picture centred, notes around it) → feature grid with dotted rails → the devices → a dark security band
-→ get started → latest releases → download → FAQ → closing call to action → footer. The three things the page is about
-each have their own section: **号池** (`#pool`), **协同** (`#teams`), **多端** (`#devices`: iPhone · iPhone Duo, Android,
-desktop, web, Slack).
+Section order (first taken from Reducto's site on Mobbin): hero → logo strip → pool (list left, picture right) →
+teams grid → the devices → security → get started → latest release → download → FAQ → closing call to action →
+footer. The three things the page is about each have their own section: **号池** (`#pool`), **协同** (`#teams`),
+**多端** (`#devices`: iPhone · iPhone Duo, Android, desktop, web, Slack).
 
 ## Visual system
 
-monoid's own: the brand colour Base `#EF6334` and its roles, Suisse Intl, the 24-unit grid, and a motif taken from the
-mark. Reducto's site (on Mobbin) gives the section structure, the details and the illustration ideas. There is no comma
+monoid's identity (Suisse Intl, the mark and wordmark, the field motif, the faithful product pictures, the brand
+orange as its one accent) set with the restraint of Runner's site (on Mobbin): paper and ink, a book serif for
+headlines, mono for utility, dashed guide lines, dot-grid panels, generous whitespace, one dark band. There is no comma
 language: headlines end as sentences do, and no comma appears as a motif, glyph, pattern or swatch. (A Chinese
 two-line headline keeps its comma for screen readers only, `.vh`, where the line breaks.)
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--brand` (Base) | `#EF6334` | Large fields: the hero, the closing band, product stages. Text on it is Ink (5.3:1); white only at display sizes (3.2:1) |
-| `--brand-deep` | `#C24A22` | Small text and links on Paper (4.9:1); focus ring on light bands |
-| `--brand-ink` | `#4A1606` | Secondary text on Base (4.6:1) |
-| `--brand-haze` / `--brand-tint` | `#F68B64` / `#FFB599` | a lighter Base for marks at rest on Base / accent on Ink |
-| Ink / Graphite / Silver / Line / Mist | `#1A1B1E` `#4A4C50` `#A4A5A9` `#E3E3E4` `#F1F1F2` | text, hairlines, the Mist band |
+| `--paper` | `#FAFAF8` | the page, every band but one |
+| `--card` / `--panel` | `#FFFFFF` / `#F4F3F0` | cards and app windows / panels behind product pictures (with `--dots`) |
+| `--line` / `--guide` / `--dot` | `#E6E4DF` / `#DEDCD7` / `#C9C7C1` | solid card borders / dashed guides and rules / dot textures |
+| `--graphite` / `--silver` | `#6E6C68` / `#A3A19B` | secondary text (5.0:1 on paper, 4.7:1 on panel) / quiet marks |
+| `--ink` | `#1C1B1A` | text, primary buttons, the terminal |
+| `--night` | `#1F1E1D` | the dark band (closing call + footer): text `#F4F3F0`, secondary `#A3A19B` (6.4:1) |
+| `--brand` / `--brand-deep` | `#EF6334` / `#C24A22` | the mark only / small accents on paper (4.7:1): the current step or card number, step 02, a link's hover underline, the menu's current marker, the focus ring |
 | Success / Warning / Error | `#079455` `#F79009` `#D92D20` | status only |
 
-One colour leads each band (Paper, Mist, Base, Ink, set by `data-tone`, which also sets the band's text, hairline,
-link and focus colours); the nav bar takes the tone of the band behind it.
+Two tones (`data-tone`: `paper`, `ink`), which set the band's text, hairline, guide, link and focus colours; the nav bar
+turns dark over the dark band. The orange is never a fill behind text, a card or a band.
 
-**The mark's motif.** The hero's lower part and the closing band's bottom edge are a field taken from the mark
-(`assets/mark.svg`: a dark rounded square, two round white eyes, two peach pill cheeks), abstract and never a face:
-one cell per grid unit (1U; 1.5U on a tablet, 2U on a phone), each a white dot (an eye) or a peach pill (a cheek). One
-Ink dot, a sixth of the way in on the second row, is "you"; every few seconds a ripple runs out from it, and each cell
-it reaches turns to the other part. Drawn on a canvas; a pause button sits on a cleared cell.
+**Guides and rules.** Every band draws two dashed lines (4 on, 4 off, `--guide`) on the container's edges, behind its
+content (`.band::before`, z-index −1 in the band's own stacking context, so a card or panel covers them), and a dashed
+rule across the page where it meets the band above (`::after`); the bar draws the same lines and a dashed rule under
+it, so they run the whole page. The container is `--cw` (1200 px) at most, with 1U margins below that. Grids are split
+by dashed rules (teams cells, download cells, callouts, notes, steps), the FAQ rows by dotted ones.
 
-**Type.** Suisse Intl: Regular (400) for running text, Book (500) for UI and labels, Medium (600) for headlines. Size,
-leading and tracking move as a set (`--t-*`, `--lh-*`, `--tr-*` in 00-base.css): the larger the size, the tighter both;
-Chinese, Japanese and Korean take more leading than Latin. Its three Latin subsets (about 21 KB each) are in
-`assets/fonts/`, under the team's license; an installed copy is used first. Chinese, Japanese and Korean are set in the
-system's fonts (see Languages), so nothing is downloaded for them. Mono tags use the system's monospace. A half-width space separates Chinese from Latin and figures.
+**Panels.** Product pictures sit on a warm-grey panel with a faint 14 px dot grid (`--dots` on `--panel`): the pool's
+picture, the teams frames, the devices scene's picture side and the swiper cards. App windows on them are white with a
+hairline and a soft, low, neutral shadow.
+
+**The mark's motif.** Under the hero and at the closing band's foot, a low band of a field taken from the mark
+(`assets/mark.svg`: a dark rounded square, two round eyes, two pill cheeks), abstract and never a face: one cell per
+grid unit (1U; 1.5U on a tablet, 2U on a phone), each a dot (an eye) or a pill (a cheek), five rows in the hero (four on
+a phone), three at the end. Its colours are the band's (`--f-eye`, `--f-cheek`, `--f-you` on the field's wrap, as
+"r g b"): greys on paper with one Ink dot, dark greys on the dark band with one light dot. That dot, a sixth of the way
+in on the second row, is "you"; every few seconds a ripple runs out from it, and each cell it reaches turns to the
+other part. Drawn on a canvas; a pause button sits on a cleared cell.
+
+**Type.** Headlines (`h1`, `h2`, the closing headline, the devices' step and card titles, the FAQ questions) are
+Newsreader Regular (400), a book serif (`--serif`); Chinese, Japanese and Korean headlines use the system's serif
+(zh-CN Songti SC / STSong / Noto Serif SC / Noto Serif CJK SC / Source Han Serif SC, then PingFang SC / Microsoft
+YaHei; zh-TW Songti TC / Noto Serif TC …; ja Hiragino Mincho ProN / Yu Mincho / Noto Serif JP …, then Hiragino Sans /
+Yu Gothic; ko AppleMyungjo / Noto Serif KR …, then Apple SD Gothic Neo / Malgun Gothic; never SimSun) at 500, which
+takes a face's Medium where it has one and its Regular otherwise. Suisse Intl sets everything else: Regular (400) for
+running text (15–16 px, Graphite), Book (500) for UI and labels, Medium (600) for sub-heads and the wordmark. The nav,
+small captions, tags, overlines (uppercase, tracked) and numerals use the system's monospace (`--mono`); on Chinese,
+Japanese and Korean pages the nav's labels are in the sans. Size, leading and tracking move as a set (`--t-*`, `--lh-*`,
+`--tr-*` in 00-base.css): section titles 32 px, the hero 36–52 px, the closing headline 30–40 px. Newsreader's Latin
+subset (22 KB, 400 only, preloaded) is `assets/fonts/newsreader-400.woff2`, under the SIL Open Font License
+(`Newsreader-OFL.txt`, Production Type); Suisse Intl's three Latin subsets (about 21 KB each) are under the team's
+license; an installed copy of either is used first. Chinese, Japanese and Korean are set in the system's fonts (see
+Languages), so nothing is downloaded for them. A half-width space separates Chinese from Latin and figures.
+
+**Buttons.** Small-radius rectangles (6 px, 42–44 px tall, Suisse 15 px): Ink fill, or a 1 px outline at 20% Ink; on
+the dark band a light fill and a light outline. Pressed: scale .96 at once (150 ms, still under reduced motion).
 
 **Product pictures.** Every picture of monoid's own app (the desktop client, the web app, iPhone Duo, Android, the
 Slack thread) is HTML/CSS drawn to the product's own values at 1:1 (`.mk*` in 05-components.css: its colours, its
@@ -164,11 +190,9 @@ each drawn 400 × 300 and zoomed in steps to its frame.
 **Marks:** the agents' and places' logos in the strip under the hero are the app's own (`web/ui/src/brands.tsx`), in
 their makers' shapes and colours.
 
-**From Reducto:** eyebrow labels with an icon; the overview list beside a large stage; the "how it works" picture with
-notes around it (here an isometric stack: new chats → account pool → stations); the feature grid with dotted rails and
-pictures on a dot grid; small mono tags with a square glyph and a leader line; the dark band whose line drawing sits in
-a ring of squares with a few lit pixels and dashed construction circles; the "latest articles" grid, here the nightly
-releases with pixel-mosaic covers and pixel bar charts; the closing call to action on a fine grid.
+**Kept from Reducto:** the pool's isometric stack (new chats → account pool → stations) with quiet mono captions on
+leaders; the security network's ring of squares with a few dark pixels and dashed construction circles; the release's
+pixel-mosaic cover and pixel bar charts.
 
 **Craft.** Hover only behind `(hover: hover) and (pointer: fine)`; `:active` press feedback on every control; a
 visible `:focus-visible` ring in each band's tone.
@@ -193,10 +217,10 @@ transform and opacity move.
   reaches the screen, groups one child after another.
 - **Every device, as one scene played by scrolling** (`#devices`, on screens at least 1024 × 760 with motion allowed:
   `html.scrolly`, set in the head before the first paint). Four steps, one device each, upright and whole in the
-  middle of the stage at the size that fills it (main.js `fit`, read as the trigger refreshes): the iPhone Duo open on
-  two panels, Android, the desktop app, the web app. Between steps the words and the device cross-fade (opacity and at
-  most 12 px up), scrubbed by the scroll. The words, a `01 / 04` counter, a rail of the devices (each a link to its
-  step) and a mono tag follow along. The
+  middle of the stage's dotted panel at the size that fills it (main.js `fit`, read as the trigger refreshes): the
+  iPhone Duo open on two panels, Android, the desktop app, the web app. Between steps the words and the device
+  cross-fade (opacity and at most 12 px up), scrubbed by the scroll. The words (on the paper beside the panel), a
+  `01 / 04` counter and a rail of the devices (each a link to its step) follow along. The
   stage is CSS `position: sticky` in a placeholder sized from the first paint; the scene is built from a `<template>`
   only where it plays (phones never parse it). GSAP ScrollTrigger scrubs one timeline and snaps to each step. Elsewhere,
   and if GSAP cannot load, the devices are the swiper.
@@ -217,7 +241,7 @@ claims the product and its docs make. The hero has no label row: the headline, t
 ## Performance
 
 - One request before the first paint once built (CSS and JS inlined): about 295–303 KB, 65–68 KB gzipped, per language, plus Suisse Intl's
-  Medium and Regular (21 KB each), preloaded; Book follows as the sheet needs it; Inter (48 KB) only as product
+  Newsreader (22 KB) and Suisse Intl's Regular and Medium (21 KB each), preloaded; Book follows as the sheet needs it; Inter (48 KB) only as product
   pictures need it. Chinese, Japanese and Korean use the system's fonts. No new external requests; no images on the page but small SVGs.
 - Bands below the first screen use `content-visibility: auto`, and so do the overview's cards on a phone, so the first
   layout covers little more than the first screen.

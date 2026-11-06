@@ -4,20 +4,23 @@
    screen --ease-in-out, leaving is a quick fade. Nothing appears from nothing: no scale(0). Reduced motion: the
    finished picture, still. Pictures of monoid's own app use the product's values (05-components.css .mk); Slack keeps
    Slack's look. Every picture is drawn at the product's 1:1 size, 400 wide, and scaled as a whole with `zoom`. */
-.rails { position: relative; border: 1px solid var(--line); background: #fff; }
+/* Three cells on the page's grid: dashed rules across the page above and below them, dashed rules between them (the
+   page's guides are their outer edges). */
+.rails { position: relative; }
+.rails::before, .rails::after { content: ""; position: absolute; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
+.rails::before { top: 0; }
+.rails::after { bottom: 0; }
 .rails > .cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.cell { padding: clamp(20px, 2.2vw, 36px); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
-.cell:nth-child(3n) { border-right: 0; }
-.cell:nth-last-child(-n+3) { border-bottom: 0; }
+.cell { padding: clamp(16px, 1.7vw, 24px) clamp(16px, 1.7vw, 24px) clamp(24px, 2.4vw, 36px); display: flex; flex-direction: column; min-width: 0; }
+.cell + .cell { background: var(--dash-y); background-position: left top; }
 .cell h3 { margin-top: clamp(20px, 1.8vw, 28px); font-size: 16px; line-height: 1.3; letter-spacing: -.008em; display: flex; align-items: center; gap: 10px; }
 /* The headline breaks where its comma was; the comma stays for screen readers. */
-.cell > p { margin-top: 8px; color: var(--graphite); font-size: var(--t-small); line-height: 1.6; text-wrap: pretty; max-width: 34em; }
+.cell > p { margin-top: 8px; color: var(--mut); font-size: var(--t-small); line-height: 1.6; text-wrap: pretty; max-width: 34em; }
 
-/* The picture's ground: a faint dot grid, as Reducto's, 4:3. Each picture is drawn 400 × 300 at the product's 1:1
+/* The picture's ground: a dotted panel, 4:3. Each picture is drawn 400 × 300 at the product's 1:1
    and zoomed in steps to about 88% of the frame's width, so it sits whole in the middle with even room round it. */
 .cell .vis { position: relative; container: tv / inline-size; aspect-ratio: 4 / 3; min-width: 0; display: grid; place-items: center; overflow: hidden;
-  padding: 0; border-radius: 14px; background: radial-gradient(circle, #D9D9DB 1px, transparent 1.4px) 0 0 / 14px 14px, #FAFAFA;
-  border: 1px solid var(--line); transition: border-color var(--dur-ui) var(--ease-out); }
+  padding: 0; border-radius: 10px; background: var(--dots), var(--panel); }
 .tp { --z: .52; position: relative; width: 400px; height: 300px; zoom: var(--z); transition: transform var(--dur-ui) var(--ease-out); }
 @container tv (width >= 260px) { .tp { --z: .58; } }
 @container tv (width >= 290px) { .tp { --z: .64; } }
@@ -27,12 +30,9 @@
 @container tv (width >= 430px) { .tp { --z: .95; } }
 @container tv (width >= 470px) { .tp { --z: 1.05; } }
 @container tv (width >= 520px) { .tp { --z: 1.15; } }
-/* A product fragment floats on the dots: hairline and a soft shadow, the app's own corner. */
-.tp.frame { border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 0 0 .5px rgb(0 0 0 / .16), 0 18px 36px -22px rgb(42 11 2 / .4); }
+/* A product fragment floats on the dots: hairline and a soft low shadow, the app's own corner. */
+.tp.frame { border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 4px 16px -4px rgb(28 27 26 / .1), 0 1px 2px rgb(28 27 26 / .06); }
 
-@media (hover: hover) and (pointer: fine) {
-  .cell:hover .vis { border-color: #D3D3D6; }
-}
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .cell:hover .tp.frame { transform: translateY(-2px); }
 }
@@ -48,7 +48,7 @@
 /* ---- 1 · Slack: someone mentions the bot in a thread, it works and answers there, and hears whoever speaks next ---- */
 .tp-sl { display: grid; grid-template-columns: 52px minmax(0, 1fr); border-radius: 12px; overflow: hidden; background: #fff; text-align: left;
   font: 400 13px/1.42 "Lato", "Helvetica Neue", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1D1C1D; -webkit-font-smoothing: antialiased; user-select: none;
-  box-shadow: 0 0 0 .5px rgb(0 0 0 / .16), 0 18px 36px -22px rgb(42 11 2 / .4); }
+  box-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 4px 16px -4px rgb(28 27 26 / .1), 0 1px 2px rgb(28 27 26 / .06); }
 .sl-rail { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 14px; background: #3F0E40; }
 .sl-ws { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #fff; color: #3F0E40; font-weight: 800; font-size: 14px; box-shadow: 0 0 0 2px #3F0E40, 0 0 0 4px rgb(255 255 255 / .55); }
 .sl-rail i { width: 24px; height: 24px; border-radius: 7px; background: rgb(255 255 255 / .16); }
@@ -99,8 +99,8 @@ img.sl-av { background: none; }
 .tp-st .mk-row.on { background: var(--se); }
 .st-lane { position: relative; height: 48px; margin-left: 21px; }
 .st-lane::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; border-left: 1.5px dotted #B9B7B1; }
-.st-lane .pk { position: absolute; left: -4px; top: 0; width: 9.5px; height: 9.5px; border-radius: 2.5px; background: var(--brand); }
-.st-lane .pk.up { background: var(--ink); }
+.st-lane .pk { position: absolute; left: -4px; top: 0; width: 9.5px; height: 9.5px; border-radius: 2.5px; background: var(--ink); }
+.st-lane .pk.up { background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); }
 .st-lane .pk { transition: opacity 120ms linear; }
 .st-lane .pk.dn.is-in { animation: pk-down 900ms var(--ease-in-out) both; }
 .st-lane .pk.up.is-in { animation: pk-up 900ms var(--ease-in-out) both; }
@@ -125,29 +125,29 @@ img.sl-av { background: none; }
    the dots and count follow it, as the devices swiper's do (60-devices.css). ---- */
 .tm-nav { display: none; }
 @media (max-width: 899px) {
-  .rails { margin-inline: calc(-1 * var(--gl)) calc(-1 * var(--gr)); border: 0; background: none; }
+  .rails { margin-inline: calc(-1 * var(--gl)) calc(-1 * var(--gr)); }
   .rails::before, .rails::after { display: none; }
   .rails > .cells { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(calc(100vw - var(--gl) - var(--gr) - 28px), 380px); gap: 12px;
     margin: 0; padding: 2px var(--gr) 4px var(--gl); scroll-padding-inline: var(--gl); overflow-x: auto; overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory; touch-action: pan-x pan-y; scrollbar-width: none; align-items: start; }
   .rails > .cells::-webkit-scrollbar { display: none; }
   .rails > .cells:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 18px; }
-  .cell { scroll-snap-align: start; scroll-snap-stop: always; padding: 10px 10px 22px; border: 1px solid var(--line) !important; border-radius: 21px; background: #fff; } /* .vis 10 + padding 10 + border 1 */
-  .cell .vis { border-radius: 10px; }
+  .cell, .cell + .cell { scroll-snap-align: start; scroll-snap-stop: always; padding: 8px 8px 22px; border: 1px solid var(--line); border-radius: 15px; background: #fff; } /* .vis 6 + padding 8 + border 1 */
+  .cell .vis { border-radius: 6px; }
   .cell h3 { margin: 18px 8px 0; font-size: 16px; }
   .cell > p { margin: 6px 8px 0; font-size: 15px; line-height: 1.55; }
   .tm-nav { display: flex; align-items: center; gap: 12px; margin: 8px var(--gr) 0 var(--gl); }
   .tm-dots { position: relative; display: flex; margin-left: -10px; }
   .tm-dots button { all: unset; box-sizing: border-box; position: relative; width: 26px; height: 44px; cursor: pointer;
     -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-  .tm-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(26,27,30,.2);
+  .tm-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(28,27,26,.2);
     transition: background-color var(--dur-press) ease-out; }
-  .tm-dots button:active::before { background: rgba(26,27,30,.5); } /* pressed: the dot darkens at once (6 px has no room to scale) */
+  .tm-dots button:active::before { background: rgba(28,27,26,.5); } /* pressed: the dot darkens at once (6 px has no room to scale) */
   .tm-dots button:focus-visible { outline: 2px solid var(--ring); outline-offset: -8px; border-radius: 10px; }
   .tm-dots button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .tm-pill { position: absolute; left: 0; top: 50%; width: 18px; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--ink); pointer-events: none;
     transform: translateX(calc(4px + var(--p, 0) * 26px)); }
   .tm-count { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--graphite); }
-  .tm-count b { font-weight: 500; color: var(--ink); }
+  .tm-count b { font-weight: 500; color: var(--brand-deep); }
 }
 @media (prefers-reduced-motion: reduce) { .rails > .cells { scroll-behavior: auto; } }

@@ -1,40 +1,35 @@
 /* ---------- Hero ----------
-   Base ground: the open sentence, its lead and two calls to action, then the field of the mark filling the rest of the
-   first screen. Vertical spacing steps in fractions of 1U (the 24-unit grid), clamped for small screens. */
+   Paper: the headline on the left, the lead and two calls to action beside it (under it on narrow screens), then a
+   low band of the mark's field, drawn quietly in greys, like a faint pattern under the words. */
 .hero {
   /* The field's cell: 1U on the 24-unit grid; 1.5U on a tablet and 2U on a phone, so a dot stays a dot, not a speck. */
-  --cols: 24; --fc: calc(100cqw / var(--cols));
-  container-type: inline-size; display: flex; flex-direction: column; min-height: calc(100svh - var(--nav));
+  --cols: 24; --fc: calc(100cqw / var(--cols)); --rows: 5;
+  --f-eye: 201 199 193; --f-cheek: 222 220 215; --f-you: 28 27 26;
+  container-type: inline-size; display: flex; flex-direction: column;
 }
-/* With no label row above it, the headline takes the top air itself: a little more than the air under the lead. */
-.hero > .w { width: 100%; padding-top: clamp(32px, calc(var(--u) * 1.2), 96px); } /* a column flex item: full width, still centred at 1920 */
+.hero > .w { width: 100%; padding-top: clamp(48px, 7.4vw, 112px); padding-bottom: clamp(36px, 4.4vw, 64px); } /* a column flex item: full width, still centred */
+.hero-top { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px clamp(24px, 4vw, 64px); align-items: start; }
 .hero h1 { max-width: 15ch; }
-/* The lead holds about 11U (two lines in Chinese, three in English at 1440); the calls to action end on the right margin,
-   their bottom on the lead's last line. */
-.hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px var(--u); align-items: end;
-  padding-block: clamp(20px, calc(var(--u) * .7), 52px) clamp(24px, calc(var(--u) * .7), 52px); }
-.hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 28em); color: var(--brand-ink); text-wrap: pretty; } /* zh: two lines, the break after 订阅， */
-:root:not(:lang(zh), :lang(ja), :lang(ko)) .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 30em); }
+.hero-body { display: flex; flex-direction: column; align-items: flex-start; gap: 24px; padding-top: .55em; }
+.hero .lead { max-width: 30em; text-wrap: pretty; }
 .hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
 /* Japanese runs long phrases with no spaces: a bold phrase kept whole would break the line early. */
 :root:lang(ja) .hero .lead b { white-space: normal; }
 .hero .lead .nb { white-space: nowrap; } /* no lone 干。 on the last line (WebKit has no text-wrap: pretty yet) */
-.hero .actions { justify-content: flex-end; }
 
 /* ---------- The field ----------
-   The mark taken apart: its eyes (white dots) and cheeks (peach pills), one to a cell, in diagonal runs of dot, dot,
-   pill. main.js draws whole rows from the top; in the hero the field takes what the first screen leaves (4 to 14 rows),
-   so the gap above it is the same on every screen and the leftover, under a cell, falls to the band's bottom edge. */
+   The mark taken apart: its eyes (dots) and cheeks (pills), one to a cell, in diagonal runs of dot, dot, pill, in the
+   band's greys (--f-eye, --f-cheek) with one cell in its strongest colour (--f-you): you. main.js draws whole rows. */
 .field-wrap { position: relative; }
-.hero .field-wrap { flex: 1 0 auto; min-height: calc(var(--fc) * 4); max-height: calc(var(--fc) * 14); }
+.hero .field-wrap { height: calc(var(--fc) * var(--rows)); }
 .field { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 
 /* Pause: the field moves on its own, so it can be stopped. It takes a cell of its own, the second from the right on the
-   top row, a thin white ring (32 px; 44 px to a finger). main.js shows it only where the field moves. */
+   top row, a thin grey ring (32 px; 44 px to a finger). main.js shows it only where the field moves. */
 .fpause {
   position: absolute; z-index: 1; top: calc(var(--fc) / 2 - 16px); right: max(calc(var(--fc) * 1.5 - 16px), env(safe-area-inset-right, 0px));
-  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid rgba(255,255,255,.75); border-radius: 50%;
-  background: transparent; color: #fff; cursor: pointer;
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid rgba(28,27,26,.22); border-radius: 50%;
+  background: var(--paper); color: var(--graphite); cursor: pointer;
   -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
@@ -47,9 +42,9 @@
 .fpause .pl, .fpause[aria-pressed=true] .ps { opacity: 0; scale: .25; filter: blur(4px); }
 .fpause[aria-pressed=true] .pl { opacity: 1; scale: 1; filter: blur(0); }
 @media (prefers-reduced-motion: no-preference) { .fpause:not(:disabled):active { scale: .96; } }
-.fpause:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.fpause:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) {
-  .fpause:hover { background: rgba(255,255,255,.18); border-color: #fff; }
+  .fpause:hover { color: var(--ink); border-color: var(--ink); }
 }
 
 /* ---------- Entrance, once, on load ----------
@@ -77,24 +72,23 @@
 
 /* ---------- Smaller screens ---------- */
 @media (max-width: 960px) {
-  .hero-body { grid-template-columns: minmax(0, 1fr); }
-  .hero .actions { justify-content: flex-start; }
+  .hero-top { grid-template-columns: minmax(0, 1fr); }
+  .hero-body { padding-top: 0; }
 }
 /* A tablet: 16 cells across (a dot of 1U would be a speck). */
 @media (min-width: 641px) and (max-width: 1023px) {
   .hero { --cols: 16; }
 }
-/* A phone: 12 cells across, the calls to action in reach of a thumb. */
+/* A phone: 12 cells across, four rows, the calls to action in reach of a thumb. */
 @media (max-width: 640px) {
-  .hero { --cols: 12; }
+  .hero { --cols: 12; --rows: 4; }
+  .hero .actions { align-self: stretch; }
   .hero .actions .btn { flex: 1 1 0; min-width: max-content; } /* equal halves, or full width each when they don't fit */
 }
-/* A phone on its side: a short screen, so the lead and the calls to action sit side by side again, as at 1440, and the
-   headline steps down, so both calls to action are on the first screen and the field starts on it. */
+/* A phone on its side: a short screen, so the headline steps down and the field keeps three rows. */
 @media (max-height: 500px) and (orientation: landscape) {
-  .hero > .w { padding-top: 24px; }
+  .hero { --rows: 3; }
+  .hero > .w { padding-top: 24px; padding-bottom: 24px; }
   .hero h1 { font-size: 34px; }
-  .hero-body { grid-template-columns: minmax(0, 1fr) auto; align-items: end; padding-block: 16px 20px; }
-  .hero .actions { flex-direction: column; align-items: stretch; justify-content: flex-end; }
-  .hero .actions .btn { flex: none; }
+  .hero-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }

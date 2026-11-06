@@ -1,26 +1,3 @@
-/* ---------- Small parts the bands share (teams, pool) ---------- */
-.av { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10px; font-weight: 600; color: #fff; flex: none; }
-.cap { display: inline-flex; align-items: center; gap: .4em; height: 2em; padding: 0 .8em 0 .55em; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); background: #fff; color: var(--ink); font-weight: 500; font-size: 13px; line-height: 1; white-space: nowrap; }
-.cap svg { width: 1.1em; height: 1.1em; flex: none; }
-.task { background: #fff; border-radius: 12px; box-shadow: inset 0 0 0 .5px var(--line), 0 1px 2px rgba(16,24,40,.05); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; color: var(--ink); }
-.task-t { display: flex; gap: 8px; align-items: center; font-weight: 500; font-size: 14px; }
-.task-t svg { width: 16px; height: 16px; flex: none; }
-.task > .cap { align-self: flex-start; }
-.task small { color: var(--graphite); font-size: 12px; }
-.c-ok { color: var(--ok); }
-.c-warn { color: var(--warn); }
-.c-mut { color: var(--graphite); }
-.c-sil { color: var(--silver); }
-.c-ui { color: var(--brand-deep); }
-/* ---------- Reducto's details: mono tags ---------- */
-.mtag { position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px 0 6px; border-radius: 4px; background: #fff;
-  border: 1px solid #D3D3D6; font-family: var(--mono); font-size: 11.5px; color: var(--ink); white-space: nowrap; z-index: 2; }
-.mtag i { width: 8px; height: 8px; border-radius: 1.5px; box-shadow: inset 0 0 0 1.2px var(--graphite); }
-.mtag.on-vis { left: auto; right: 16px; top: 16px; bottom: auto; }
-@media (max-width: 640px) {
-  .mtag.on-vis { right: 10px; top: 10px; font-size: 10.5px; }
-}
-
 /* =====================================================================================================================
    monoid's own app, drawn in HTML/CSS (the overview stage, the device tabs, the scroll scene).
    Every value is the product's (REFERENCE: web/src/styles, web/ui/src, apps/mbui tokens), at its own 1:1 size; a whole
@@ -77,7 +54,7 @@
 
 /* ---- Desktop window (Mac app; the web app adds a browser bar) ---- */
 .mk-win { --h: 600px; position: relative; width: 100%; height: var(--h); zoom: .78; border-radius: 12px; overflow: hidden; background: var(--cv);
-  box-shadow: 0 0 0 .5px rgb(0 0 0 / .22), 0 30px 70px -30px rgb(42 11 2 / .5); }
+  box-shadow: 0 0 0 .5px rgb(0 0 0 / .2), 0 30px 70px -30px rgb(28 27 26 / .4); }
 .mk-app { display: grid; grid-template-columns: auto minmax(0, 1fr); height: 100%; }
 .mk-win.web .mk-app { height: calc(100% - 40px); }
 /* Rail + sidebar: one block on one warm ground, flush with the white page. */
@@ -234,7 +211,7 @@
 
 /* ---- Phones: iPhone (Dynamic Island) and Android (punch hole), at 1:1 and zoomed as a whole ---- */
 .mk-phone { --z: .5; position: relative; flex: none; width: 412px; height: 868px; zoom: var(--z); padding: 11px; border-radius: 64px; background: #101113;
-  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 50px 90px -40px rgb(42 11 2 / .55); }
+  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 50px 90px -40px rgb(28 27 26 / .45); }
 .mk-phone > .mk { position: relative; height: 100%; border-radius: 53px; overflow: hidden; background: var(--cv); display: flex; flex-direction: column; }
 .mk-phone .isl { position: absolute; left: 50%; top: 11px; width: 124px; height: 36px; margin-left: -62px; border-radius: 20px; background: #000; z-index: 4; }
 .mk-phone.droid { width: 432px; height: 912px; border-radius: 48px; padding: 10px; }
@@ -337,7 +314,7 @@
    draws the places, the chat's actions, the bell and the new chat in its own glass down the trailing edge, with the
    status bar at the column's top; the composer stands level with the round new-chat button at its foot. */
 .duo { position: relative; flex: none; width: 906px; height: 642px; padding: 8px; border-radius: 36px; background: #101113;
-  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 40px 80px -40px rgb(42 11 2 / .55); }
+  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 40px 80px -40px rgb(28 27 26 / .45); }
 .duo::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 453px; width: 2px; margin-left: -1px; pointer-events: none;
   background: linear-gradient(to bottom, rgb(0 0 0 / .06), rgb(0 0 0 / .2), rgb(0 0 0 / .06)); }
 .duo-scr { display: flex; gap: 4px; height: 100%; padding: 4px; border-radius: 28px; overflow: hidden; background: #DFDBD2; }
@@ -394,7 +371,7 @@
   .fpanel .vis > .mk-phone { --z: .5; }
 }
 /* The Duo at a zoom by the room it gets (906 × 642 at 1:1; the panel's picture is a container): about its width,
-   and on a card whose picture is a band (640-899) by its height too, below the tag. */
+   and on a card whose picture is a band (640-899) by its height too. */
 .fpanel .vis:has(> .duo) { container: dvis / inline-size; }
 .fpanel .vis > .duo { zoom: var(--dz, .23); }
 @container dvis (width >= 230px) { .fpanel .vis > .duo { --dz: .25; } }
@@ -408,7 +385,6 @@
 @container dvis (width >= 498px) { .fpanel .vis > .duo { --dz: .55; } }
 @container dvis (width >= 544px) { .fpanel .vis > .duo { --dz: .6; } }
 @container dvis (width >= 598px) { .fpanel .vis > .duo { --dz: .66; } }
-@media (max-width: 899px) { .fpanel .vis > .mtag.on-vis ~ .duo { margin-top: 24px; } }
 @media (min-width: 640px) and (max-width: 899px) { .fpanel .vis > .duo { zoom: .5; } } /* a 400-high band */
 .mk-i.bell { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3V5 M6.5 17V11Q6.5 5 12 5Q17.5 5 17.5 11V17 M4.5 17H19.5 M10 20.5H14'/></svg>"); }
 .mk-i.chats { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M8 5V4.5Q8 3 10 3H17Q20.5 3 20.5 6.5V11Q20.5 13 18.5 13.5 M7 8H12.5Q16 8 16 11.5V15Q16 18.5 12.5 18.5H9L4 21V17.5Q3 16.5 3 15V12Q3 8 7 8Z'/></svg>"); }

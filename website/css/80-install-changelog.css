@@ -1,5 +1,5 @@
 /* ---------- Install: the three steps, and the command from step 02 in a terminal beside them ---------- */
-.card { background: #fff; border-radius: 20px; border: 1px solid var(--hair); padding: calc(clamp(20px, 2.6vw, 44px) - 1px); min-width: 0; }
+.card { background: #fff; border-radius: 16px; border: 1px solid var(--line); padding: calc(clamp(20px, 2.6vw, 44px) - 1px); min-width: 0; }
 .card.install {
   --g: clamp(32px, 3.4vw, 64px);
   display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); gap: var(--g); align-items: center;
@@ -7,11 +7,12 @@
 .steps { counter-reset: none; }
 .steps li {
   position: relative; display: grid; grid-template-columns: 3.2em minmax(0, 1fr); align-items: baseline;
-  padding: 18px 0; border-top: 1px solid var(--line); font-size: var(--t-body); line-height: 1.45; color: var(--ink);
+  padding: 18px 0; font-size: var(--t-body); line-height: 1.45; color: var(--ink); background: var(--dash-x); background-position: left top;
 }
-.steps li:last-child { border-bottom: 1px solid var(--line); }
-.steps li b { font-family: var(--mono); font-size: 13px; font-weight: 400; color: var(--silver); font-feature-settings: "tnum"; }
-.steps li.now b { color: var(--brand-deep); }
+.steps li:last-child { background: var(--dash-x), var(--dash-x); background-position: left top, left bottom; }
+.steps li b { font-family: var(--mono); font-size: 13px; font-weight: 400; color: var(--graphite); font-feature-settings: "tnum"; }
+/* The step the terminal shows: its number in the accent. */
+.steps li.now b { color: var(--brand-deep); font-weight: 500; }
 /* Step 02's leader: a dashed rail from the step across the gap to the terminal it describes, ending in a square. */
 @media (min-width: 961px) {
   .steps li.now::after {
@@ -20,16 +21,16 @@
   }
   .steps li.now::before {
     content: ""; position: absolute; top: calc(50% - 3px); left: calc(100% + var(--g) - 16px); width: 6px; height: 6px;
-    border-radius: 1px; background: var(--brand);
+    border-radius: 1px; background: var(--ink);
   }
 }
 
 /* The terminal: a window with three grey lights; the copy button lives in its title bar, next to what it copies. */
-.term { position: relative; background: var(--ink); color: #E6E7EA; border-radius: 14px; min-width: 0; overflow: hidden; }
+.term { position: relative; background: var(--ink); color: #E8E6E1; border-radius: 10px; min-width: 0; overflow: hidden; }
 .term-bar { display: flex; align-items: center; gap: 14px; height: 48px; padding: 0 8px 0 16px; box-shadow: inset 0 -1px 0 rgba(255,255,255,.08); }
 .lights { display: flex; gap: 7px; }
-.lights i { width: 10px; height: 10px; border-radius: 50%; background: #3A3B3F; }
-.term-name { font-family: var(--mono); font-size: 12px; color: #8E9096; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lights i { width: 10px; height: 10px; border-radius: 50%; background: #3A3936; }
+.term-name { font-family: var(--mono); font-size: 12px; color: #A3A19B; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .term-body {
   padding: 18px 20px 22px; font-family: var(--mono); font-size: clamp(12.5px, .95vw, 14px); line-height: 1.8;
 }
@@ -38,14 +39,14 @@
 .term .row { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
 .term .row.cmd {
   white-space: pre; overflow-wrap: normal; overflow-x: auto; overscroll-behavior-x: contain;
-  scrollbar-width: thin; scrollbar-color: #3A3B3F transparent;
+  scrollbar-width: thin; scrollbar-color: #3A3936 transparent;
 }
 .term .row + .row { margin-top: 2px; }
 .term .cmd { color: #fff; margin-bottom: 6px; }
 .term code { font: inherit; }
-.term .p { color: var(--silver); user-select: none; -webkit-user-select: none; }
+.term .p { color: #A3A19B; user-select: none; -webkit-user-select: none; }
 .term .ok { color: #7EE2B0; }
-.term .dim { color: #8E9096; }
+.term .dim { color: #A3A19B; }
 /* On reveal the output follows the command, line by line: the command ran. */
 .card.install.rv-wait .out { opacity: 0; }
 .card.install.rv-in .out { transition: opacity 220ms var(--ease-out); transition-delay: calc(140ms + var(--k, 0) * 90ms); }
@@ -53,14 +54,14 @@
 .card.install .out:nth-child(4) { --k: 2; }
 
 .copy-btn {
-  position: relative; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px 0 9px; border: 1px solid transparent; border-radius: 8px;
-  background: rgba(255,255,255,.08); color: #E6E7EA; font-size: 13px; font-weight: 500; letter-spacing: .004em; cursor: pointer;
+  position: relative; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px 0 9px; border: 1px solid transparent; border-radius: 5px;
+  background: rgba(255,255,255,.08); color: #E8E6E1; font-size: 13px; font-weight: 500; letter-spacing: .004em; cursor: pointer;
   touch-action: manipulation; user-select: none; -webkit-user-select: none;
   transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
 .copy-btn::before { content: ""; position: absolute; inset: -9px -5px; } /* a 48 px tall target on a 32 px button */
 @media (prefers-reduced-motion: no-preference) { .copy-btn:not(:disabled):active { scale: .96; } }
-.copy-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.copy-btn:focus-visible { outline: 2px solid #F4F3F0; outline-offset: 2px; }
 .cb-ico { position: relative; width: 15px; height: 15px; flex: none; }
 .cb-ico svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1), scale 300ms cubic-bezier(0.2, 0, 0, 1), filter 300ms cubic-bezier(0.2, 0, 0, 1); } /* 2 px drawn at 15 px, beside Book */
 .cb-done { opacity: 0; scale: .25; filter: blur(4px); }
@@ -82,14 +83,18 @@
 }
 .copy-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* ---------- Changelog: the nightly releases, with dithered pixel covers ---------- */
-.posts { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.post { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: clamp(20px, 2.4vw, 40px); display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+/* ---------- Changelog: the latest nightly release, its cover a pixel mosaic on a panel ----------
+   Between dashed rules across the page; the page's guides are its sides. */
+.posts { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); }
+.posts::before, .posts::after { content: ""; position: absolute; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
+.posts::before { top: 0; }
+.posts::after { bottom: 0; }
+.post { padding: clamp(20px, 2.4vw, 40px) 0; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .post.feature { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 3vw, 56px); align-items: start; }
-.post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; outline: 1px solid oklch(0 0 0 / .1); outline-offset: -1px; }
+.post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; }
 .post .cover svg { width: 100%; height: 100%; display: block; }
 .post-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; flex: 1; }
-.post-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; line-height: 1.3; color: var(--graphite); }
+.post-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.3; color: var(--graphite); }
 .post h3 { font-size: 18px; letter-spacing: -.018em; line-height: 1.25; text-wrap: balance; }
 .post.feature h3 { font-size: clamp(20px, 1.6vw, 24px); line-height: 1.18; }
 .post p { color: var(--graphite); font-size: var(--t-small); line-height: var(--lh-small); }
@@ -104,21 +109,16 @@
 .hb .track { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .hb .bar {
   flex: none; height: 10px; width: calc(var(--n) * 14px - 4px); max-width: 100%;
-  background: repeating-linear-gradient(90deg, var(--c, #C9CACD) 0 10px, transparent 10px 14px);
+  background: repeating-linear-gradient(90deg, var(--c, var(--dot)) 0 10px, transparent 10px 14px);
 }
 .hb .val { font-feature-settings: "tnum"; font-weight: 500; color: var(--ink); }
 .posts.rv-wait .bar { clip-path: inset(0 100% 0 0); }
 .posts.rv-in .bar { transition: clip-path 300ms steps(var(--n)); transition-delay: calc(140ms + var(--r, 0) * 60ms); }
 .hb:nth-child(2) { --r: 1; }
 .hb:nth-child(3) { --r: 2; }
-.changes { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 18px; }
+.changes { display: flex; flex-direction: column; gap: 10px; padding-top: 18px; background: var(--dash-x); background-position: left top; }
 .changes li { display: flex; gap: 10px; font-size: var(--t-small); line-height: 1.5; color: var(--ink); }
-.changes li svg { width: 18px; height: 18px; flex: none; margin-top: 2px; }
-/* A small release's tally, in mono, each count keyed by its square. */
-.post p.tally { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: auto; padding-top: 4px; font-family: var(--mono); font-size: 12px; line-height: 1.4; color: var(--graphite); font-feature-settings: "tnum"; }
-.tally > span { display: inline-flex; align-items: center; gap: 7px; }
-.tally > span::before { content: ""; width: 8px; height: 8px; background: #C9CACD; }
-.tally > span:first-child::before { background: var(--brand); }
+.changes li svg { width: 18px; height: 18px; flex: none; margin-top: 2px; color: var(--graphite); }
 
 /* 961-1180: two columns but a narrow terminal; give it more of the card and step the mono down so the command
    stays on one line (65 ch at .62 em). */
@@ -128,18 +128,18 @@
 }
 @media (max-width: 960px) {
   .card.install, .post.feature { grid-template-columns: minmax(0, 1fr); }
-  .card.install { gap: 24px; border-radius: calc(14px + clamp(20px, 2.6vw, 44px)); } /* stacked: .term 14 + padding + border */
+  .card.install { gap: 24px; border-radius: calc(10px + clamp(20px, 2.6vw, 44px)); } /* stacked: .term 10 + padding + border */
 }
 @media (max-width: 640px) {
-  .posts { grid-template-columns: minmax(0, 1fr); border-left: 0; }
-  .post { border-right: 0; padding: 24px 0; gap: 18px; }
+  .post { padding: 24px 0; gap: 18px; }
   .post.feature { gap: 20px; }
-  .card.install { padding: 7px; border-radius: 20px; gap: 8px; } /* .term 12 + padding 7 + border 1 */
+  .card.install { padding: 7px; border-radius: 16px; gap: 8px; } /* .term 8 + padding 7 + border 1 */
   .card.install .steps { padding: 4px 12px 0; }
   .steps li { padding: 14px 0; font-size: 16px; grid-template-columns: 2.6em minmax(0, 1fr); }
-  .steps li:first-child { border-top: 0; }
-  .steps li:last-child { border-bottom: 0; }
-  .term { border-radius: 12px; }
+  .steps li:first-child, .steps li:last-child { background: none; }
+  .steps li:last-child { background: var(--dash-x); background-position: left top; }
+  .steps li:first-child:last-child { background: none; }
+  .term { border-radius: 8px; }
   .term-body { padding: 16px 16px 20px; font-size: 12.5px; line-height: 1.75; }
   .copy-btn { height: 36px; padding: 0 13px 0 11px; font-size: 14px; }
   .copy-btn::before { inset: -5px -7px; } /* 44 px */

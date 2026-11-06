@@ -390,9 +390,9 @@ function main(argv) {
     return;
   }
 
-  // Suisse Intl's three subsets, which the page preloads and its sheet names.
-  const suisse = ["suisse-intl-medium", "suisse-intl-regular", "suisse-intl-book"];
-  const missingFonts = suisse.filter((f) => !existsSync(here(`assets/fonts/${f}.woff2`)));
+  // The page's own faces, which it preloads and its sheet names: Suisse Intl's three subsets and Newsreader's.
+  const faces = ["suisse-intl-medium", "suisse-intl-regular", "suisse-intl-book", "newsreader-400"];
+  const missingFonts = faces.filter((f) => !existsSync(here(`assets/fonts/${f}.woff2`)));
   if (missingFonts.length) throw new Error(`website/assets/fonts: missing ${missingFonts.join(", ")}`);
 
   const r = check(tpl, cfg);
@@ -435,7 +435,7 @@ function main(argv) {
     "/assets/*", "  Cache-Control: public, max-age=86400",
     "/*", "  X-Content-Type-Options: nosniff", "",
   ].join("\n"));
-  for (const f of suisse) console.log(`${f.padEnd(36)}${kb(statSync(out + `assets/fonts/${f}.woff2`).size)}`);
+  for (const f of faces) console.log(`${f.padEnd(36)}${kb(statSync(out + `assets/fonts/${f}.woff2`).size)}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));

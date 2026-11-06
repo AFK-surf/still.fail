@@ -1,29 +1,24 @@
 /* ---------- End: the back cover ----------
-   Base, on a fine 48 px grid; everything centred (the one band the VI sets centred). The headline leads, its top a
-   whole number of cells down the grid. The hero's field closes the band: main.js draws it, with the same Ink cell
-   (you) the hero's ripple starts from, and ripples it once as it comes on screen. */
-.band.end { --cell: 48px; --cols: 24; --fc: calc(100cqw / var(--cols)); container-type: inline-size; }
-.end-in { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; text-align: center;
-  padding-top: calc(var(--cell) * 3); padding-bottom: clamp(56px, calc(var(--u) * 1.2), 96px); }
-/* The grid runs edge to edge from the top of the band and fades out just above the field, so no cut cell meets it. */
-.end-in::before {
-  content: ""; position: absolute; z-index: -1; inset: 0 calc(50% - 50vw);
-  background-image: linear-gradient(rgba(74,22,6,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(74,22,6,.09) 1px, transparent 1px);
-  background-size: var(--cell) var(--cell); background-position: center top;
-  -webkit-mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent); mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent);
-}
-.band.end h2 { max-width: 13ch; margin-inline: auto; }
-/* The comma the line break replaces, for screen readers only. */
-.band.end .lead { color: var(--brand-ink); margin: clamp(16px, 1.6vw, 24px) auto 0; text-wrap: balance; }
-.band.end .actions { justify-content: center; margin-top: clamp(28px, 2.6vw, 40px); }
+   The one dark band (the footer continues it). The headline and its line on the left, the two calls to action on the
+   right, level with the lead's foot; the mark's field closes the band in dark greys, with the same cell (you, in the
+   band's light) the hero's ripple starts from, and ripples once as it comes on screen. */
+.band.end { --cols: 24; --fc: calc(100cqw / var(--cols)); --f-eye: 68 66 63; --f-cheek: 50 49 47; --f-you: 244 243 240; container-type: inline-size; }
+.end-in { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px var(--gap); align-items: end;
+  padding-top: clamp(72px, 8.4vw, 128px); padding-bottom: clamp(48px, 5vw, 80px); }
+.band.end h2 { font-size: var(--t-cta); line-height: 1.08; letter-spacing: -.015em; max-width: 13ch; }
+.band.end .lead { color: var(--mut); margin-top: clamp(14px, 1.4vw, 20px); text-wrap: balance; }
+.band.end .actions { justify-content: flex-end; }
 .band.end .field-wrap { height: calc(var(--fc) * 3); }
 
 @media (min-width: 641px) and (max-width: 1023px) {
   .band.end { --cols: 16; }
 }
-/* A phone: the grid's cell steps down with the screen (7 to the width, 48 px at most), and the headline starts two
-   cells down, so it, the lead and both calls to action share the first screen. */
+@media (max-width: 720px) {
+  .end-in { grid-template-columns: minmax(0, 1fr); }
+  .band.end .actions { justify-content: flex-start; }
+}
 @media (max-width: 640px) {
-  .band.end { --cols: 12; --cell: min(48px, calc((100vw - 32px) / 7)); }
-  .end-in { padding-top: calc(var(--cell) * 2); padding-bottom: 48px; }
+  .band.end { --cols: 12; }
+  .end-in { padding-top: 64px; padding-bottom: 40px; }
+  .band.end .actions .btn { flex: 1 1 0; min-width: max-content; }
 }

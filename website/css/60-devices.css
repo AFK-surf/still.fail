@@ -14,15 +14,15 @@
 .dv-swipe .fpanels::-webkit-scrollbar { display: none; }
 .dv-swipe .fpanels:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 22px; }
 .fpanel { scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; min-width: 0;
-  background: #fff; border-radius: 20px; overflow: hidden; border: 1px solid var(--line); isolation: isolate; }
+  background: #fff; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); isolation: isolate; }
 .fpanel .vis { order: -1; position: relative; display: grid; place-items: center; --vis-h: clamp(260px, 72vw, 320px); height: var(--vis-h); padding: 20px; overflow: hidden;
-  background: radial-gradient(circle, rgba(255,255,255,.28) 1.1px, transparent 1.6px) 0 0 / 11px 11px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); }
+  background: var(--dots), var(--panel); }
 /* A phone stands up from the picture's bottom edge, cropped there like a product shot. */
 .fpanel .vis:has(> .mk-phone) { place-items: start center; padding-top: 32px; }
-.fpanel .vis > .mk-phone { --z: .46; box-shadow: 0 30px 60px -30px rgba(42, 11, 2, .6); }
+.fpanel .vis > .mk-phone { --z: .46; box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 30px 60px -30px rgb(28 27 26 / .45); }
 .fpanel .txt { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 24px; }
-.fpanel .txt .eyebrow { font-family: var(--mono); font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--graphite); }
-.fpanel .txt h3 { font-size: 22px; line-height: 1.22; letter-spacing: -.016em; font-weight: 600; text-wrap: balance; }
+.fpanel .txt h3 { font-family: var(--serif); font-size: 24px; line-height: 1.16; letter-spacing: -.01em; font-weight: 400; text-wrap: balance; }
+:root:is(:lang(zh), :lang(ja), :lang(ko)) :is(.fpanel .txt h3, .dv-step h3) { font-weight: 500; letter-spacing: 0; }
 :root:is(:lang(zh), :lang(ja)) .fpanel .txt h3 > span { font-feature-settings: "halt"; }
 .fpanel .txt p { color: var(--graphite); font-size: 15.5px; line-height: 1.55; text-wrap: pretty; }
 .fpanel .txt .actions { margin-top: auto; padding-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
@@ -46,17 +46,17 @@
 .dv-dots { position: relative; display: flex; margin-left: -10px; }
 .dv-dots button { all: unset; box-sizing: border-box; position: relative; width: 26px; height: 44px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-.dv-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(26,27,30,.2);
+.dv-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(28,27,26,.2);
   transition: transform var(--dur-press) var(--ease-out); }
-.dv-dots button:active::before { background: rgba(26,27,30,.5); }
+.dv-dots button:active::before { background: rgba(28,27,26,.5); }
 .dv-dots button:focus-visible { outline: 2px solid var(--ring); outline-offset: -8px; border-radius: 10px; }
 .dv-pill { position: absolute; left: 0; top: 50%; width: 18px; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--ink); pointer-events: none;
   transform: translateX(calc(4px + var(--p, 0) * 26px)); }
 .dv-count { font-family: var(--mono); font-size: 13px; color: var(--graphite); }
-.dv-count b { font-weight: 500; color: var(--ink); }
+.dv-count b { font-weight: 500; color: var(--brand-deep); }
 .dv-arrows { display: none; margin-left: auto; gap: 8px; }
-.dv-arrows button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; color: var(--ink);
-  background: #fff; border: 1px solid var(--hair); -webkit-user-select: none; user-select: none; touch-action: manipulation;
+.dv-arrows button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 6px; cursor: pointer; color: var(--ink);
+  background: #fff; border: 1px solid rgba(28,27,26,.2); -webkit-user-select: none; user-select: none; touch-action: manipulation;
   transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, opacity var(--dur-ui) ease, transform var(--dur-press) var(--ease-out); }
 .dv-arrows button svg { width: 18px; height: 18px; }
 .dv-arrows [data-step="-1"] svg { transform: scaleX(-1); }
@@ -70,23 +70,23 @@
 @media (hover: hover) and (pointer: fine) {
   .dv-arrows { display: flex; }
   .dv-arrows button:hover:not(:disabled) { background: var(--ink); color: #fff; }
-  .dv-dots button:hover::before { background: rgba(26,27,30,.45); }
+  .dv-dots button:hover::before { background: rgba(28,27,26,.45); }
 }
 @media (min-width: 640px) {
   .dv-swipe .fpanels { --peek: 96px; gap: 16px; }
   .fpanel .txt { padding: 24px 28px 28px; }
-  .fpanel .txt h3 { font-size: 26px; }
+  .fpanel .txt h3 { font-size: 28px; }
   .fpanel .vis { --vis-h: 400px; }
   .fpanel .vis > .mk-phone { --z: .5; }
 }
 @media (min-width: 900px) {
   .dv-swipe .fpanels { --peek: clamp(120px, 12vw, 240px); gap: 20px; }
-  .fpanel { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); min-height: clamp(440px, 36vw, 560px); border-radius: 24px; }
+  .fpanel { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); min-height: clamp(440px, 36vw, 560px); border-radius: 16px; }
   .fpanel .vis { order: 0; height: auto; padding: clamp(28px, 3vw, 56px); }
   .fpanel .vis:has(> .mk-phone) { padding-top: 48px; }
   .fpanel .vis > .mk-phone { --z: .56; }
   .fpanel .txt { padding: clamp(28px, 3.4vw, 56px); gap: 16px; justify-content: flex-start; }
-  .fpanel .txt h3 { font-size: clamp(28px, 2.4vw, 40px); line-height: 1.12; letter-spacing: -.02em; }
+  .fpanel .txt h3 { font-size: 32px; line-height: 1.12; letter-spacing: -.01em; }
   .fpanel .txt p { font-size: var(--t-body); }
   .dv-nav { margin-top: 20px; }
 }
@@ -112,44 +112,38 @@
 .scrolly .dv-swipe { display: none; }
 .scrolly #devices { content-visibility: visible; }
 .scrolly .dv-show { display: block; height: 400vh; }
-/* The words take page columns 2-8 (7U, never under 340 px); the pictures get the rest and the full height.
+/* The words on the paper at the left (7U, never under 340 px), level with the section's headline; the devices on a
+   dotted panel taking the rest and the full height.
    svh: the stage's foot (rail, links) stays above Safari's toolbar on iPad; vh only where svh is unknown. */
 .dv-stage { position: sticky; top: calc(var(--nav) + 16px); height: calc(100vh - var(--nav) - 32px); height: calc(100svh - var(--nav) - 32px);
-  border-radius: 24px; overflow: hidden; isolation: isolate;
-  display: grid; grid-template-columns: max(calc(7 * var(--u)), 340px) minmax(0, 1fr); color: var(--ink);
-  background: radial-gradient(circle, rgba(255,255,255,.26) 1.1px, transparent 1.6px) 0 0 / 12px 12px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); }
-.dv-copy { position: relative; display: flex; flex-direction: column; padding: clamp(32px, 3.6vw, 56px); padding-right: 16px; min-width: 0; }
-.dv-no { font-family: var(--mono); font-size: 13px; color: var(--brand-ink); }
-.dv-no b { font-weight: 500; color: var(--ink); font-size: 14px; }
+  display: grid; grid-template-columns: max(calc(6 * var(--u)), 340px) minmax(0, 1fr); gap: clamp(24px, 3vw, 48px); color: var(--ink); }
+.dv-copy { position: relative; display: flex; flex-direction: column; padding: 8px 0 4px; min-width: 0; }
+/* The step's number is the band's one accent. */
+.dv-no { font-family: var(--mono); font-size: 13px; color: var(--graphite); }
+.dv-no b { font-weight: 500; color: var(--brand-deep); font-size: 14px; }
 .dv-steps { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: clamp(24px, 4vh, 48px); }
 .dv-step { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 12px; }
 .dv-step:not([data-i="0"]) { opacity: 0; visibility: hidden; }
-.dv-step .eyebrow { color: var(--ink); font-family: var(--mono); font-weight: 400; font-size: 13px; }
-.dv-step h3 { font-size: clamp(28px, 2.2vw, 32px); line-height: 1.15; letter-spacing: -.02em; text-wrap: balance; }
+.dv-step h3 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 2.2vw, 32px); line-height: 1.12; letter-spacing: -.01em; text-wrap: balance; }
 :root:is(:lang(zh), :lang(ja)) .dv-step h3 > span { font-feature-settings: "halt"; }
-.dv-step p { color: var(--brand-ink); font-size: 16px; line-height: 1.55; max-width: 26em; text-wrap: pretty; }
+.dv-step p { color: var(--graphite); font-size: 16px; line-height: 1.55; max-width: 26em; text-wrap: pretty; }
 .dv-rail { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
-.dv-rail button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 0; font-size: 14px; font-weight: 500; cursor: pointer;
-  color: var(--brand-ink); opacity: .62; -webkit-user-select: none; user-select: none; touch-action: manipulation;
-  transition: opacity var(--dur-ui) ease, transform var(--dur-reveal) var(--ease-out); }
-.dv-rail button svg { width: 18px; height: 18px; flex: none; }
-@media (hover: hover) and (pointer: fine) { .dv-rail button:hover { opacity: 1; } }
-.dv-rail li:not([data-on]) button:active { opacity: .85; }
+.dv-rail { background: var(--dash-x); background-position: left top; padding-top: 6px; }
+.dv-rail button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 0; font-family: var(--mono); font-size: 13px; cursor: pointer;
+  color: var(--graphite); -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: color var(--dur-ui) ease, transform var(--dur-reveal) var(--ease-out); }
+.dv-rail button svg { width: 16px; height: 16px; flex: none; }
+@media (hover: hover) and (pointer: fine) { .dv-rail button:hover { color: var(--ink); } }
+.dv-rail li:not([data-on]) button:active { color: var(--ink); }
 @media (prefers-reduced-motion: no-preference) { .dv-rail li:not([data-on]) button:active { transform: translateX(2px); transition-duration: var(--dur-press); } }
 .dv-rail button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
-.dv-rail li[data-on] button { opacity: 1; color: var(--ink); transform: translateX(6px); }
-.dv-bar { height: 2px; margin-top: 14px; background: rgba(26,27,30,.14); border-radius: 2px; overflow: hidden; }
+.dv-rail li[data-on] button { color: var(--ink); transform: translateX(6px); }
+.dv-bar { height: 1px; margin-top: 14px; background: var(--guide); overflow: hidden; }
 .dv-bar i { display: block; height: 100%; background: var(--ink); transform-origin: left; transform: scaleX(0); }
-.dv-view { position: relative; min-width: 0; }
-/* Each device's centre on the free area's (below the tag row: --oy), at --k; the cross-fade moves only its opacity and
-   --ty (at most 12 px). */
-.dv-view .d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) translateY(calc(var(--oy, 0px) + var(--ty, 0px))) scale(var(--k, .5));
+.dv-view { position: relative; min-width: 0; border-radius: 16px; overflow: hidden; isolation: isolate; background: var(--dots), var(--panel); }
+/* Each device's centre on the panel's, at --k; the cross-fade moves only its opacity and --ty (at most 12 px). */
+.dv-view .d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) translateY(var(--ty, 0px)) scale(var(--k, .5));
   will-change: transform, opacity; }
 .dv-view .d:not(.d-duo) { opacity: 0; visibility: hidden; }
 .dv-view .d-android .mk-phone { --z: 1; }
-.dv-view .mk-win { --h: 600px; width: 920px; zoom: 1; box-shadow: 0 0 0 .5px rgb(0 0 0 / .22), 0 40px 80px -40px rgb(42 11 2 / .5); }
-/* The tag names what the current step shows, level with the step number across the stage (outside the scaled devices,
-   so it keeps its size at any scale). */
-.dv-tags { position: absolute; z-index: 2; right: clamp(32px, 3.6vw, 56px); top: clamp(32px, 3.6vw, 56px); display: grid; justify-items: end; pointer-events: none; }
-.dv-tags .mtag { position: static; grid-area: 1 / 1; opacity: 0; }
-.dv-tags .mtag:first-child { opacity: 1; }
+.dv-view .mk-win { --h: 600px; width: 920px; zoom: 1; box-shadow: 0 0 0 .5px rgb(0 0 0 / .2), 0 40px 80px -40px rgb(28 27 26 / .4); }

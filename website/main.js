@@ -99,12 +99,6 @@
     }
   }
 
-  // ---- The bar: its lower edge fades the page out only once something has scrolled under it ----
-  let under = false;
-  const edge = () => { const s = scrollY > 1; if (s !== under) { under = s; nav.toggleAttribute("data-scrolled", s); } };
-  addEventListener("scroll", edge, { passive: true });
-  requestAnimationFrame(edge); // first read in the frame's own layout, not a forced one while the page parses
-
   // ---- Mobile menu: a sheet from under the bar. Escape or the dimmed page closes it; Tab stays inside while open ----
   const menu = $(".menu-btn", nav);
   const narrow = matchMedia("(max-width: 980px)");
@@ -200,10 +194,9 @@
     mark(on && links.get(on.id));
   }, { rootMargin: "-45% 0px -50% 0px" });
   for (const s of $$("main > section")) spy.observe(s);
-  // The bar takes the tone of the band behind it, so its material reads as part of that band: dark over Ink, paper
-  // elsewhere. Two 1 px lines decide: the bar's middle (data-under, what is behind it) and its lower edge (data-below,
-  // what meets it; where the two differ, the band's own boundary is the edge and the fade is dropped).
-  // The lines are measured as the page scrolls, since they sit a few pixels from a band's edge: the search starts from
+  // The bar takes the tone of the band behind it, so its material reads as part of that band: dark over the dark band,
+  // paper elsewhere. One 1 px line decides: the bar's middle (data-under, what is behind it).
+  // The line is measured as the page scrolls, since they sit a few pixels from a band's edge: the search starts from
   // the band found last, so a frame reads one or two boxes. Above the first band (the bar's own place at the top)
   // there is no tone, and the bar is paper.
   const bands = $$("main > section[data-tone], footer[data-tone]");
@@ -217,7 +210,7 @@
     return r.top <= y && r.bottom > y ? bands[i].dataset.tone : null;
   }
   const setTone = (k, t) => { if (t == null) delete nav.dataset[k]; else if (nav.dataset[k] !== t) nav.dataset[k] = t; };
-  const tone = () => { setTone("under", at(barH / 2)); setTone("below", at(barH)); };
+  const tone = () => setTone("under", at(barH / 2));
   // Once more after the scroll settles, and when the bands' heights settle (content-visibility), which moves them
   // without a scroll event.
   let toneT;
@@ -380,17 +373,16 @@
     const { gsap, ScrollTrigger } = window;
     gsap.registerPlugin(ScrollTrigger);
     const show = $(".dv-show"), stage = $(".dv-stage", show), view = $(".dv-view", show);
-    const steps = $$(".dv-step", show), rail = $$(".dv-rail li", show), tags = $$(".dv-tags .mtag", show);
-    const devices = $$(".dv-view > .d", show), tagRow = $(".dv-tags", view);
+    const steps = $$(".dv-step", show), rail = $$(".dv-rail li", show);
+    const devices = $$(".dv-view > .d", show);
     const navH = () => $("#nav").offsetHeight;
 
-    // Each device at the size that fills the free area (below the tag row, a margin round it), never over 1:1, its
-    // centre on that area's centre. Read as the trigger refreshes (after layout), never while the page parses.
+    // Each device at the size that fills the panel (a margin round it), never over 1:1, in its middle. Read as the
+    // trigger refreshes (after layout), never while the page parses.
     const fit = () => {
-      const W = view.clientWidth, H = view.clientHeight, top = tagRow.offsetTop + tagRow.offsetHeight + 20, side = 40, foot = 40;
-      view.style.setProperty("--oy", `${(top - foot) / 2}px`);
+      const W = view.clientWidth, H = view.clientHeight, side = 40, edge = 40;
       for (const d of devices) {
-        const k = Math.min((W - 2 * side) / d.offsetWidth, (H - top - foot) / d.offsetHeight, 1);
+        const k = Math.min((W - 2 * side) / d.offsetWidth, (H - 2 * edge) / d.offsetHeight, 1);
         d.style.setProperty("--k", k.toFixed(3));
       }
     };
@@ -408,9 +400,9 @@
       tl.to({}, { duration: 0.4 }); // each step holds a while before the next comes
       const t = tl.duration();
       // Out: a quick fade, up a little; in: a fade, up from a little below. Only opacity and a 12 px move.
-      tl.to([steps[i - 1], tags[i - 1]], { autoAlpha: 0, y: -12, duration: 0.35, ease: "power1.out" }, t)
+      tl.to(steps[i - 1], { autoAlpha: 0, y: -12, duration: 0.35, ease: "power1.out" }, t)
         .to(devices[i - 1], { autoAlpha: 0, "--ty": "-12px", duration: 0.4, ease: "power1.out" }, t)
-        .fromTo([steps[i], tags[i]], { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.5, immediateRender: false }, t + 0.3)
+        .fromTo(steps[i], { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.5, immediateRender: false }, t + 0.3)
         .fromTo(devices[i], { autoAlpha: 0, "--ty": "12px" }, { autoAlpha: 1, "--ty": "0px", duration: 0.55, immediateRender: false }, t + 0.3);
       stop(names[i]);
     }
@@ -602,7 +594,7 @@
     });
   }
 
-  // ---- Downloads: the one for this device first, in Base, marked as this device's ----
+  // ---- Downloads: the one for this device first, outlined in Ink and tagged as this device's ----
   const ua = navigator.userAgent;
   const platform = /Android/i.test(ua) ? "android"
     : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ios"
@@ -643,14 +635,12 @@
   }
 
   // ---- The field: the mark taken apart ----
-  // Each cell holds one of the mark's parts, an eye (a white dot) or a cheek (a peach pill), in diagonal runs of dot,
-  // dot, pill. A ripple runs out from one cell and, as it reaches each cell, that cell turns to the next part of its
+  // Each cell holds one of the mark's parts, an eye (a dot) or a cheek (a pill), in diagonal runs of dot, dot, pill,
+  // drawn quietly in the band's greys (--f-eye, --f-cheek on the field's wrap, as "r g b"). A ripple runs out from one cell and, as it reaches each cell, that cell turns to the next part of its
   // run: a dot closes to a pill, a pill opens to a dot. One ask, every device answering in turn. The ripple is an
   // explanation, so it takes its time to cross (about 3 s), but each cell's own change is a blink of about 250 ms.
-  // The ripple starts from one cell in Ink, the mark's own ground: you. It stays a dot and only swells as the ripple
+  // The ripple starts from one cell in the band's strongest colour (--f-you: Ink on paper): you. It stays a dot and only swells as the ripple
   // leaves it. Its place is fixed: a sixth of the way in, on the second row (the hero and the closing band share it).
-  const EYE = [255, 255, 255], CHEEK = [246, 188, 159]; // the mark's own white and peach
-  const INK = "#1A1B1E"; // --ink
   const DOT = .17, PILL_W = .29, PILL_H = .1; // in cells; the pill is the mark's cheek (.59 of an eye high), a little longer
   const SPEED = 9, BAND = 2.2, GAP = 5; // cells a second; cells over which one cell changes; seconds between ripples
   const part = (c, r, s) => ((c + 2 * r + s) % 3 === 2 ? 1 : 0); // 0 an eye, 1 a cheek
@@ -666,6 +656,7 @@
   function field(wrap, { loop, delay }) {
     const canvas = $("canvas", wrap), ctx = canvas.getContext("2d");
     let w = 0, h = 0, cols = 24, cell = 0, rows = 0, oc = 0, or = 0, far = 0;
+    let EYE = [201, 199, 193], CHEEK = [222, 220, 215], YOU = [28, 27, 26];
     // at: seconds into the ripple under way, or null between ripples; wait: seconds until the next one.
     let shift = 0, at = null, wait = loop ? delay : Infinity;
     let running = !reduce, inView = false, ready = false, raf = 0, timer = 0, last = 0, drawn = 0;
@@ -673,7 +664,10 @@
     function size() {
       w = canvas.clientWidth; h = canvas.clientHeight;
       if (!w || !h) return;
-      cols = parseInt(getComputedStyle(wrap).getPropertyValue("--cols"), 10) || 24;
+      const cs = getComputedStyle(wrap);
+      const rgb = (k, d) => { const v = cs.getPropertyValue(k).trim().split(/\s+/).map(Number); return v.length === 3 && v.every((n) => n >= 0) ? v : d; };
+      cols = parseInt(cs.getPropertyValue("--cols"), 10) || 24;
+      EYE = rgb("--f-eye", EYE); CHEEK = rgb("--f-cheek", CHEEK); YOU = rgb("--f-you", YOU);
       cell = w / cols;
       rows = Math.max(1, Math.floor(h / cell + .01));
       const d = Math.min(devicePixelRatio || 1, 2);
@@ -710,7 +704,7 @@
       const still = [new Path2D(), new Path2D()];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         if (empty.has(r * cols + c)) continue;
-        if (c === oc && r === or) continue; // you: drawn last, in Ink
+        if (c === oc && r === or) continue; // you: drawn last, in its own colour
         const a = part(c, r, shift), b = part(c, r, shift + 1);
         const k = front < 0 ? 0 : Math.min(1, Math.max(0, (front - Math.hypot(c - oc, r - or)) / BAND));
         const t = a + (b - a) * smooth(k), s = cell * (1 + .12 * Math.sin(Math.PI * k));
@@ -722,11 +716,11 @@
         ctx.fillStyle = `rgb(${EYE.map((v, i) => Math.round(v + (CHEEK[i] - v) * t))})`;
         ctx.fill();
       }
-      ctx.fillStyle = "#FFFFFF"; ctx.fill(still[0]);
-      ctx.fillStyle = "#F6BC9F"; ctx.fill(still[1]);
+      ctx.fillStyle = `rgb(${EYE})`; ctx.fill(still[0]);
+      ctx.fillStyle = `rgb(${CHEEK})`; ctx.fill(still[1]);
       const k0 = front < 0 ? 0 : Math.min(1, front / BAND), s0 = cell * DOT * (1 + .12 * Math.sin(Math.PI * k0));
       ctx.beginPath(); pill(ctx, (oc + .5) * cell, (or + .5) * cell, s0, s0);
-      ctx.fillStyle = INK; ctx.fill();
+      ctx.fillStyle = `rgb(${YOU})`; ctx.fill();
     }
     // At most 30 frames a second, only while a ripple is under way; between ripples nothing runs but one timer.
     const active = () => running && inView && ready && !document.hidden;
