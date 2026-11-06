@@ -23,7 +23,7 @@ pub fn chat_timeline(
   fn advance() {
     if advancing.val || pending.val || !owner.alive() { return }
     pending.val = true
-    owner.tree.outside_layout(fn() {
+    owner.tree.after_change(fn() {
       pending.val = false
       if advancing.val || !owner.alive() { return }
       guard read() is Some(cv) else { return }
@@ -38,7 +38,7 @@ pub fn chat_timeline(
         let place = fn(k) {
           if !placed.val {
             placed.val = true
-            // Only the first endpoint asks for placement, including when this cause catches up across Fold.
+            // Only the first endpoint asks for placement. The preceding phase's row changes are published first.
             // Re-read each registration after it: layout may have mounted, replaced or released the row.
             owner.tree.laid_as_now()
           }
@@ -46,7 +46,7 @@ pub fn chat_timeline(
         }
         // The remaining endpoint reads use that placement without changing the clock or running another layout.
         emit_step(c, rk, em, cv.agents.map(fn(a) { a.key }), turns_of(rk), rd.landing.get(),
-          place~, at=now)
+          place~, one_phase=true, at=now)
       }
       let keeps = emit_keeps(em)
       let gone : Array[String] = []

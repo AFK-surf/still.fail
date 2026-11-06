@@ -445,6 +445,8 @@ fn emit_moment(c : @ui.Ctx) -> Double {
 /// `place` reads one placement prepared at this cause by the owner; it must not lay out per lookup. With no causal
 /// source (the old frame-built entry), geometry is unknown: fixed phase durations and no saved endpoint. An old
 /// drawing may still sample its measured boxes, but those past boxes cannot set a phase's handover or duration.
+/// `one_phase`: publish each phase before its owner asks again after that change is told. Rows unhidden by Float
+/// must exist before the next handover asks where they are, even when several phases are already due on return.
 pub fn emit_step(
   c : @ui.Ctx,
   key : String,
@@ -453,6 +455,7 @@ pub fn emit_step(
   turns : Turns,
   sending : Double,
   place? : (String) -> (Double, Double, Double, Double)? = fn(_) { None },
+  one_phase? : Bool = false,
   at? : Double,
 ) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
@@ -475,7 +478,8 @@ pub fn emit_step(
     turns.over(c, Emits, turns.moment(c))
     return
   }
-  if e.current is None {
+  let starting = e.current is None
+  if starting {
     if e.queue.length() == 0 {
       return
     }
@@ -487,7 +491,8 @@ pub fn emit_step(
   // a pose's end reached: the next pose, from its own beginning in this frame
   let was = e.current
   let mut steps = 0
-  while steps < 6 {
+  let most = if one_phase { if starting { 0 } else { 1 } } else { 6 }
+  while steps < most {
     steps = steps + 1
     // (none left: still on to say no copy flies, its activity's avatar back)
     let t = match e.current {
