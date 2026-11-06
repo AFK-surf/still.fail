@@ -7462,6 +7462,79 @@ pub fn Tree::each_drawn_laid(self : Tree, f : (Content, Double, Double, Double, 
 }
 
 ///|
+/// Each of the nodes `ids` names as Tree::walk_drawn finds it (where it is drawn, as opaque and as big as it is, and
+/// where it would be were nothing grown or shrunk: each_drawn_laid's), those it would find none of (let go, laid out
+/// nowhere, in one that is, drawing nothing of their own) left out, in the order it goes through them: what reads a few
+/// nodes of the scene (the old views hosted in it) reads them so, the tree not gone through for them. Each composed from
+/// the root down as the walk composes it.
+pub fn Tree::drawn_each(
+  self : Tree,
+  ids : Array[NodeId],
+  drawing? : Bool = true,
+) -> Array[(Content, Double, Double, Double, Double, Double, Double)] {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return []
+  }
+  let roots = self.root_layers()
+  let found : Array[(Array[Int], (Content, Double, Double, Double, Double, Double, Double))] = []
+  for id in ids {
+    guard self.alive_id(id) && self.nodes[id.at].content is Some(c) else { continue }
+    // (what holds it, from the root down)
+    let chain : Array[Int] = []
+    let mut i = id.at
+    while i >= 0 {
+      chain.push(i)
+      i = self.nodes[i].parent
+    }
+    chain.rev_in_place()
+    // (where it is gone through: by its place among what the root holds in the window's stack of layers, then among
+    // what each that holds it holds)
+    let key : Array[Int] = []
+    let mut ok = true
+    let mut ux = 0.0
+    let mut uy = 0.0
+    // (the first of its own the root holds it in: what is in a slot the root holds is the root's own, Tree::root_layers)
+    let mut top = -1
+    for k, at in chain {
+      let n = self.nodes[at]
+      if k > 0 && top < 0 && !n.slot {
+        top = k
+        match roots.search(at) {
+          Some(j) => key.push(j)
+          None => ok = false
+        }
+      } else if top >= 0 {
+        match self.nodes[chain[k - 1]].kids.search(at) {
+          Some(j) => key.push(j)
+          None => ok = false
+        }
+      }
+      if !n.slot {
+        ux = ux + n.lx
+        uy = uy + n.ly
+      }
+    }
+    // (where it is drawn composed as the walk composes it, the one way: Tree::projected)
+    if ok && !self.out_at(id.at) {
+      let (x, y, a, s) = self.projected(id.at, drawing~)
+      found.push((key, (c, x, y, a, s, ux, uy)))
+    }
+  }
+  // (as the walk goes: by each place in turn, one that holds another before it, never by how deep)
+  found.sort_by(fn(p, q) {
+    let (a, b) = (p.0, q.0)
+    let n = if a.length() < b.length() { a.length() } else { b.length() }
+    for i in 0..<n {
+      if a[i] != b[i] {
+        return a[i].compare(b[i])
+      }
+    }
+    a.length().compare(b.length())
+  })
+  found.map(fn(f) { f.1 })
+}
+
+///|
 /// The scene gone through as each_drawn_laid goes through it, `f` given besides each one's place among what is drawn
 /// (counted from 0 as each that draws is gone through) and that of the innermost of what holds it that draws (-1:
 /// none).

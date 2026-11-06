@@ -750,15 +750,17 @@ fn old_place(tree : @view.Tree) -> Unit {
   old_placed_off.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
-  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
-    if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
+  // (the old views alone, each found where the scene has it: the tree not gone through for them, Tree::drawn_each)
+  for d in tree.drawn_each(old_islands.map(fn(o) { o.id })) {
+    let (c, x, y, a, s, ux, uy) = d
+    if c.hosted {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
       old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
       // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
       // there: off where its layout alone puts it by what places it beside another or offsets it)
       old_placed_off[c.id] = (ux - ox, uy - oy)
     }
-  })
+  }
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
