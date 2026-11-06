@@ -1,12 +1,12 @@
 #!/bin/sh
-# Whether a commit or a push would undo what others merged into main: each commit on main of the two days before it
-# left main that touched a file this changes is looked for in what this leaves. Its change still applies backwards: it is still
+# Whether a commit or a push would undo what others merged into its base: each commit on that base of the two days before it
+# branched that touched a file this changes is looked for in what this leaves. Its change still applies backwards: it is still
 # there. It applies only forwards: the file is back as it was before it, undone. That is how a squash onto a main that
 # moved meanwhile goes wrong (`git reset --soft origin/main` after a fetch, by this or any session sharing the
 # repository's refs: the tree is the old main and this, the parent the new main, so the diff takes back everything
 # merged in between). Seen again and again (2026-09-28, 2026-10-01 twice), so it is checked, not just written down.
 #
-#   sh scripts/undone.sh <base> <commit>   what <commit> has against <base> (a push: base where it left main)
+#   sh scripts/undone.sh <base> <commit>   what <commit> has against <base> (a push: its branch base)
 #   sh scripts/undone.sh HEAD index <msg>  what is staged against HEAD (a commit; <msg> its message file)
 #
 # A commit meant to take one back says so in its message: `Reverts <sha>` (or `Undoes <sha>`), 7 or more of its hex.
@@ -82,7 +82,7 @@ objects_back() {
 }
 
 undone=""
-# A branch lives hours, a day or two: what main took in before that is not this one's to undo.
+# A branch lives hours, a day or two: older base changes are not this one's to undo.
 since=$(( $(git log -1 --format=%ct "$base") - 2 * 86400 ))
 # shellcheck disable=SC2086 # paths in this repository have no spaces
 for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); do
@@ -98,12 +98,12 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
       $touched"
     continue
   fi
-  # Main may already have removed or superseded this old patch. Only reject
+  # The base may already have removed or superseded this old patch. Only reject
   # a loss introduced by this branch; don't blame it for the base tree's state.
   if ! GIT_INDEX_FILE="$work/base-index" git apply --cached --check -R "$work/patch" 2>/dev/null &&
      GIT_INDEX_FILE="$work/base-index" git apply --cached --check "$work/patch" 2>/dev/null; then continue; fi
   if [ -s "$work/moved" ]; then moved "$work/patch" > "$work/here"; else cp "$work/patch" "$work/here"; fi
-  # Still there, or changed again since on main (then neither way applies): fine.
+  # Still there, or changed again since on the base (then neither way applies): fine.
   GIT_INDEX_FILE="$work/index" git apply --cached --check -R "$work/here" 2>/dev/null && continue
   GIT_INDEX_FILE="$work/index" git apply --cached --check "$work/here" 2>/dev/null || continue
   # Applying forwards says no more than that its context is there: a hunk that only adds applies again wherever the
@@ -145,12 +145,12 @@ done
 
 [ -z "$undone" ] && exit 0
 cat <<MSG
-this would undo what is on main (the files are back as they were before these commits):$undone
+this would undo what is on the base (the files are back as they were before these commits):$undone
 
-Most likely squashed onto a main that moved meanwhile. Put only this branch's own changes on today's main:
+Most likely squashed onto a base that moved meanwhile. Put only this branch's own changes on today's base:
   git diff <where the branch started> HEAD > /tmp/mine.patch
-  git checkout -B <branch> origin/main && git apply --3way /tmp/mine.patch
-To squash, \`git rebase origin/main\` first, then \`git reset --soft \$(git merge-base HEAD origin/main)\`.
+  git checkout -B <branch> <base-branch> && git apply --3way /tmp/mine.patch
+To squash, first rebase onto <base-branch>, then reset softly to its merge base.
 Undoing one on purpose: say \`Reverts <sha>\` in the commit message.
 MSG
 exit 1

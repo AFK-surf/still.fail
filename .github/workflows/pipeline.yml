@@ -1,5 +1,5 @@
 # still.fail's pipeline (docs/operations.md, "CI"), on AFK-surf's Linux runners and self-hosted Macs:
-#   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
+#   a branch: the full check (scripts/check.sh) of what it changes from its integration base, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
 #             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview, share and youdid.wtf,
@@ -78,7 +78,7 @@ jobs:
       - id: plan
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then base=$(git rev-parse -q --verify "refs/tags/deployed/beta^{commit}" || true)
-          else base=$(git merge-base origin/main HEAD); fi
+          else base=$(sh scripts/branch-base.sh HEAD "$GITHUB_REF"); fi
           if [ -n "$base" ]; then range="$base..$GITHUB_SHA"; changed=$(git diff --name-only "$base" "$GITHUB_SHA"); else range=all; changed=$(git ls-files); fi
           # Part by part: scripts/plan.sh.
           printf '%s\n' "$changed" | range=$range bash scripts/plan.sh > "$RUNNER_TEMP/plan"
@@ -232,31 +232,48 @@ jobs:
   check:
     needs: plan
     runs-on: [self-hosted, macos-ci]
-    # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
+    # A test that hangs (one waiting on what never comes,
     # up to its 10 minutes each) held one of macos-ci's four runners for most of an hour, and every run behind it waited
     # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
     timeout-minutes: 5
+    # Rust must not compete with the station's real-time tests, but waiting for all of them in one job left too little
+    # of its five minutes for a cold Rust build. Each half has its own limit; they still run one at a time.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - part: station
+            checks: station-js
+          - part: native
+            checks: station-native core
     env:
-      STILLFAIL_CHECK_PART: station core
+      STILLFAIL_CHECK_PART: ${{ matrix.checks }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Full check (station, core)
+      - name: Full check (${{ matrix.part }})
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
-          # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
-          # a squash onto a main that moved (scripts/undone.sh), and the changelog's trailers (scripts/changelog.ts: no
+          github_range=$range
+          if [ "$GITHUB_REF" = refs/heads/main ]; then github_range="$(git merge-base origin/main HEAD)..HEAD"; fi
+          if [ "$github_range" != all ] && git diff --name-only "$github_range" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          # Its guards beside it: the stable release's selection, and (a branch) nothing on the branch base taken back by
+          # a squash onto a base that moved (scripts/undone.sh), and the changelog's trailers (scripts/changelog.ts: no
           # `Changelog: none`, the parts said).
-          python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
-          stable=$!
-          bash .github/test_mac_release_prebuild.sh > "$RUNNER_TEMP/mac-prebuild-test.log" 2>&1 &
-          mac_prebuild_test=$!
+          stable=""
+          mac_prebuild_test=""
           undone=""
-          if [ "$GITHUB_REF" != refs/heads/main ]; then
-            sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
-            undone=$!
+          if [ '${{ matrix.part }}' = station ]; then
+            python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
+            stable=$!
+            bash .github/test_mac_release_prebuild.sh > "$RUNNER_TEMP/mac-prebuild-test.log" 2>&1 &
+            mac_prebuild_test=$!
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              sh scripts/undone.sh "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
+              undone=$!
+            fi
           fi
           status=0
           # In the background, so that when the job's time is up the runner's signal (to this shell alone) reaches it too,
@@ -265,13 +282,17 @@ jobs:
           check=$!
           trap 'kill -TERM $check 2> /dev/null; wait $check; exit 1' INT TERM
           wait $check || status=1
-          if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
-          if wait $mac_prebuild_test; then echo "· Mac release prebuild … ok"; else echo "· Mac release prebuild … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/mac-prebuild-test.log"; status=1; fi
-          if [ "$GITHUB_REF" != refs/heads/main ]; then
-            if node scripts/changelog.ts --refuse "$(git merge-base HEAD origin/main)..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
+          if [ -n "$stable" ]; then
+            if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
+          fi
+          if [ -n "$mac_prebuild_test" ]; then
+            if wait $mac_prebuild_test; then echo "· Mac release prebuild … ok"; else echo "· Mac release prebuild … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/mac-prebuild-test.log"; status=1; fi
+          fi
+          if [ '${{ matrix.part }}' = station ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            if node scripts/changelog.ts --refuse "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
           fi
           if [ -n "$undone" ]; then
-            if wait $undone; then echo "· undoes nothing on main … ok"; else echo "· undoes nothing on main … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
+            if wait $undone; then echo "· undoes nothing on the base … ok"; else echo "· undoes nothing on the base … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
           fi
           exit $status
 
@@ -302,7 +323,9 @@ jobs:
       - name: Full check (ts)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          github_range=$range
+          if [ "$GITHUB_REF" = refs/heads/main ]; then github_range="$(git merge-base origin/main HEAD)..HEAD"; fi
+          if [ "$github_range" != all ] && git diff --name-only "$github_range" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
           # says then which steps were still running and where each had got to.
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
@@ -339,7 +362,9 @@ jobs:
       - name: Full check (browser, ${{ matrix.share }})
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          github_range=$range
+          if [ "$GITHUB_REF" = refs/heads/main ]; then github_range="$(git merge-base origin/main HEAD)..HEAD"; fi
+          if [ "$github_range" != all ] && git diff --name-only "$github_range" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
           # says then which steps were still running and where each had got to.
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
@@ -746,6 +771,30 @@ jobs:
             .ci/hbc
           key: mbui-mac-${{ github.sha }}
           restore-keys: mbui-mac-
+      # A branch based on arch/next needs its compiled units too. GitHub makes the branch's own and main's caches
+      # available, but not arch/next's; next-mac-cache.yml keeps that branch's on main's ref for this job.
+      - id: arch-base
+        if: github.ref != 'refs/heads/main'
+        run: |
+          next=$(git merge-base HEAD origin/arch/next 2>/dev/null || :)
+          shared=$(git merge-base origin/main origin/arch/next 2>/dev/null || :)
+          if [ -n "$next" ] && [ -n "$shared" ] && [ "$next" != "$shared" ] && git merge-base --is-ancestor "$shared" "$next"; then
+            echo "next=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.arch-base.outputs.next == 'true'
+        run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
+      - uses: actions/cache/restore@v4
+        if: steps.arch-base.outputs.next == 'true'
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-next-mac-${{ github.sha }}
+          restore-keys: mbui-next-mac-
+      - if: steps.arch-base.outputs.next == 'true'
+        run: |
+          mkdir -p .ci && rsync -a --ignore-existing "$RUNNER_TEMP/ci-main/" .ci/
+          rm -rf "$RUNNER_TEMP/ci-main"
       - id: hermes
         run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
@@ -780,8 +829,20 @@ jobs:
           touch "$RUNNER_TEMP/start"
           bash .github/mac-release-prebuild.sh start
       - uses: ./.github/actions/mbui-moonbit
+      # The next build is kept on main's ref too. Take its Moon build first; unlike the content-addressed units,
+      # two Moon build directories cannot be overlaid, so fall back to main's only if there is no next build.
+      - uses: actions/cache/restore@v4
+        id: moon-next
+        if: steps.arch-base.outputs.next == 'true'
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-next-moon-mac-${{ github.sha }}
+          restore-keys: mbui-next-moon-mac-
       - uses: actions/cache/restore@v4
         id: moon
+        if: steps.moon-next.outputs.cache-matched-key == ''
         with:
           path: |
             apps/mbui/_build
