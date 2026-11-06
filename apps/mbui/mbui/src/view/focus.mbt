@@ -418,12 +418,16 @@ fn Tree::inputs_told(self : Tree) -> Unit {
   let live = self.inputs_at.filter(fn(at) { self.nodes[at].live && self.nodes[at].input_cell is Some(_) })
   self.inputs_at.clear()
   self.inputs_at.append(live)
+  // Ownership can be published after the layout's batch has ended. Readers of several nodes must still see
+  // one whole input state, never one omitted node changed while its sibling still accepts input.
+  @signals.start_batch()
   for at in self.inputs_at {
     match self.nodes[at].input_cell {
       Some(s) => s.set(!self.pressless_at(at))
       None => ()
     }
   }
+  @signals.end_batch()
 }
 
 ///|

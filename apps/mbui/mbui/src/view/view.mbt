@@ -773,6 +773,8 @@ pub struct Tree {
   // The moment a frame or the clock brings the tree to while it does (Tree::brought, Tree::at), -1 outside one: what
   // is told meanwhile (a size laid out otherwise, a moment come) is of it
   mut bringing_at : Double
+  /// the outer bring's layout-pass count and stop flag, shared by its reentrant layouts and modal notifications
+  mut brought_budget : (Ref[Int], Ref[Bool])?
   // The layout pass under way in one (Tree::laid_out), 0 outside one; what it told otherwise, where noted
   // (Tree::told_noted)
   mut laid_passes : Int
@@ -896,6 +898,18 @@ pub struct Tree {
   /// moment: done once the outermost layout is over, before it returns (Tree::laid_out)
   afters_laid : Array[(Double, () -> Unit)]
   mut modals_due : Bool
+  /// A property application or geometry read is still using the nodes; publish input ownership after it returns.
+  mut modals_held : Int
+  mut modals_asked : Bool
+  /// nesting of input-ownership notifications, whose layouts can schedule their next notification
+  mut modals_telling : Int
+  mut modals_at : Double
+  /// the change whose modal state will be published, including its layout work if notification is deferred
+  mut modals_budget : (Ref[Int], Ref[Bool])?
+  /// The current modal telling's descendants share its pass ancestry until that signal drain finishes.
+  mut modal_telling_life : Ref[Bool]?
+  /// The lifetime of the telling that produced the pending notification, if any.
+  mut modal_life : Ref[Bool]?
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
@@ -1147,6 +1161,7 @@ pub fn Tree::new(
     time,
     cause_at: -1.0,
     bringing_at: -1.0,
+    brought_budget: None,
     laid_passes: 0,
     owed_passes: {},
     moment_passes: 0,
@@ -1202,6 +1217,13 @@ pub fn Tree::new(
     afters: [],
     afters_laid: [],
     modals_due: false,
+    modals_held: 0,
+    modals_asked: false,
+    modals_telling: 0,
+    modals_at: -1.0,
+    modals_budget: None,
+    modal_telling_life: None,
+    modal_life: None,
     held: None,
     gesture_tapped: false,
     taps_withheld: false,
@@ -1914,6 +1936,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.drawn_marks.clear()
   // A checkpoint can lay out rows without painting them. A disposed tree must not later report those rows as drawn.
   self.after_paint.clear()
+  self.first_drawn.clear()
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
@@ -1927,6 +1950,10 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.before_due.clear()
   self.hosting = -1
   self.modals.clear()
+  self.modals_due = false
+  self.modals_budget = None
+  self.modal_telling_life = None
+  self.modal_life = None
   self.back_said_at.clear()
   self.keys_said_at.clear()
   // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
@@ -2223,7 +2250,7 @@ priv enum Phase {
 /// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : Bool) -> () -> Unit {
   // (a node's own read, of what is laid out too, as told last: wherever a write set it off, reads_own)
   let read = fn() { reads_own(read) }
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
@@ -2246,10 +2273,14 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
-      self.pulls_marked.push(b)
+      // Only properties can be read through a partial batch. follow_point's callback stays on the existing
+      // notified queue; pulling a size-dependent property must not dispatch an arbitrary pointer callback.
+      if property { self.pulls_marked.push(b) }
     }
   })
   b.run = fn() {
+    self.modals_held += 1
+    defer { self.modals_released() }
     b.queued = false
     b.marked = false
     if !b.live {
@@ -2290,9 +2321,12 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
 ///|
 /// The bindings marked since (what they read changed, told or not: a change under way, in its batch, tells them as it
 /// ends) worked out now, each once, where what they read did change (a computed read the same, not): what is asked at
-/// once (View::laid_size, Tree::bring_to). Nothing else run: what shows, which is picked and what effects do wait for
-/// the change's end; those not marked are not looked at.
+/// once (View::laid_size, Tree::bring_to). Only properties are pulled; pointer callbacks stay on the notified queue.
+/// A property's input-ownership notification waits for the geometry read and the whole change to finish. Those
+/// not marked are not looked at.
 fn Tree::pull(self : Tree) -> Unit {
+  self.modals_held += 1
+  defer { self.modals_released() }
   while self.pulls_marked.length() > 0 {
     let marked = self.pulls_marked.copy()
     self.pulls_marked.clear()
@@ -2539,6 +2573,8 @@ priv enum Prop {
 fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
   let tree = self.tree
+  tree.modals_held += 1
+  defer { tree.modals_released() }
   let at = self.at
   let marked = fn() {
     match phase {
@@ -2567,23 +2603,23 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
-    let stop = tree.queued(
-      f,
-      fn(v) {
-        let n = tree.nodes[at]
-        if !n.live || n.gen != gen {
-          return
-        }
-        let work = tree.work
-        work.bound = work.bound + 1
-        if last.val == Some(v) {
-          work.same = work.same + 1
-          return
-        }
-        last.val = Some(v)
-        apply(v)
-        marked()
-      })
+      let stop = tree.queued(
+        f,
+        fn(v) {
+          let n = tree.nodes[at]
+          if !n.live || n.gen != gen {
+            return
+          }
+          let work = tree.work
+          work.bound = work.bound + 1
+          if last.val == Some(v) {
+            work.same = work.same + 1
+            return
+          }
+          last.val = Some(v)
+          apply(v)
+          marked()
+        }, property=true)
       n.props[prop] = stop
     }
     Roomed(of, f) => {
@@ -2811,10 +2847,13 @@ pub fn View::basis(self : View, b : Live[Double?]) -> View {
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
 /// Inside a sample already under way, it measures at that sample's clock without changing its moment.
 pub fn View::laid_size(self : View) -> (Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0) }
+  self.tree.modals_held += 1
+  defer { self.tree.modals_released() }
+  if !self.alive() { return (0.0, 0.0) }
   // (laid out at the active sample or logic's moment, what the change under way set so far counted, nothing of the logic run; read,
   // not placed by: each node where it stood till the change is placed, Tree::measured_now)
   self.tree.measured_now()
+  guard self.live() is Some(n) else { return (0.0, 0.0) }
   (n.flex.width, n.flex.height)
 }
 
@@ -3781,8 +3820,11 @@ fn Tree::made_after_run(self : Tree) -> Unit {
 /// it is laid out too, drawn off and grown or shrunk by nothing): where a change told now puts it, said once at that
 /// moment, never followed.
 pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  self.tree.modals_held += 1
+  defer { self.tree.modals_released() }
+  if !self.alive() { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
+  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   let mut x = 0.0
   let mut y = 0.0
   let mut i = self.at
@@ -3812,8 +3854,11 @@ pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
 /// counted, as a frame would lay it out; its offset with it): where it goes for that change's cause, said once at that
 /// moment (View::laid_size's terms), never followed.
 pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  self.tree.modals_held += 1
+  defer { self.tree.modals_released() }
+  if !self.alive() { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
+  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   (
     n.flex.left + n.look.dx + n.look.sx * n.flex.width,
     n.flex.top + n.look.dy + n.look.sy * n.flex.height,
@@ -4131,20 +4176,83 @@ fn Tree::modals_told(self : Tree) -> Unit {
   if !self.bar_cols.is_empty() {
     self.bars_due = true
   }
-  if self.committing > 0 {
-    self.modals_due = true
-    return
+  self.modals_due = true
+  self.modals_at = self.cause_now()
+  self.modals_budget = self.brought_budget
+  if self.modals_telling > 0 {
+    let life = match self.modal_telling_life {
+      Some(life) => life
+      None => {
+        let life = Ref(true)
+        self.modal_telling_life = Some(life)
+        life
+      }
+    }
+    self.modal_life = Some(life)
+  } else {
+    self.modal_life = None
   }
-  self.modals_now()
+  self.modals_settled()
+}
+
+///|
+/// A property application or geometry query has finished using its nodes and computing its return value.
+fn Tree::modals_released(self : Tree) -> Unit {
+  self.modals_held -= 1
+  if self.modals_held == 0 && self.modals_due { self.modals_settled() }
 }
 
 ///|
 /// A change committed whole (the outermost Tree::at_cause or event ending, its moment still the cause's): what a modal
 /// layer said in it told now.
 fn Tree::modals_settled(self : Tree) -> Unit {
-  if self.committing == 0 && self.modals_due {
-    self.modals_due = false
-    self.modals_now()
+  if self.gone || self.committing > 0 || self.modals_held > 0 || self.laying > 0 || self.layouts_active > 0 {
+    return
+  }
+  if self.modals_due && !self.modals_asked {
+    self.modals_asked = true
+    // A layout can pull properties from a still-open signal batch. Their values are available to geometry now;
+    // their input/focus notifications belong to the whole change, after all structural readers have returned.
+    @signals.after_flush(fn() {
+      self.modals_asked = false
+      if self.gone || self.committing > 0 || self.modals_held > 0 || self.laying > 0 || self.layouts_active > 0 {
+        return
+      }
+      if self.modals_due {
+        // A notification held in a signal batch may outlive the operation that asked for it. It belongs to the
+        // operation dispatching it, except for a descendant of another modal telling: that chain retains its pass
+        // ancestry even when the signal queue tells it after its parent callback returns.
+        let was_budget = self.brought_budget
+        self.brought_budget = match (self.modals_budget, was_budget) {
+          (Some((_, said_stop)), Some((_, telling_stop))) if physical_equal(said_stop, telling_stop) => self.modals_budget
+          (_, Some(_)) => was_budget
+          (Some(_), None) if self.modal_life is Some(life) && life.val => self.modals_budget
+          _ => Some((Ref(0), Ref(false)))
+        }
+        defer { self.brought_budget = was_budget }
+        self.modals_due = false
+        self.modals_budget = None
+        self.modal_life = None
+        let was = self.cause_at
+        self.cause_at = self.modals_at
+        let was_life = self.modal_telling_life
+        self.modal_telling_life = None
+        self.modals_telling += 1
+        self.modals_now()
+        self.modals_telling -= 1
+        let life = self.modal_telling_life
+        self.modal_telling_life = was_life
+        if life is Some(life) {
+          if @signals.batch_depth() > 0 {
+            // A batch opened by the callback outlived it. Its notifications belong to a later operation.
+            life.val = false
+          } else {
+            @signals.after_all_flushed(fn() { life.val = false })
+          }
+        }
+        self.cause_at = was
+      }
+    })
   }
   self.withins_settled()
 }
@@ -5323,6 +5431,22 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 /// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
 /// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
 fn Tree::laid_now(self : Tree) -> Unit {
+  // Independent reads are separate work, even inside one notification. Start each with that notification's parent
+  // count: layouts caused by this read can carry their own count on to their notifications without adding siblings'
+  // work to one another. Reads made directly in an active layout keep its counter. A fault still stops the operation.
+  let was_budget = self.brought_budget
+  if self.laying == 0 {
+    match was_budget {
+      Some((passes, stopped)) => {
+        let parent = if self.telling_laid || self.modals_telling > 0 { passes.val } else { 0 }
+        self.brought_budget = Some((Ref(parent), stopped))
+      }
+      None => ()
+    }
+  }
+  defer { self.brought_budget = was_budget }
+  self.modals_held += 1
+  defer { self.modals_released() }
   if self.last_w <= 0.0 {
     return
   }
@@ -6664,6 +6788,15 @@ pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
 /// the event's moment their cause), then `f` taken as Tree::event takes it, finding things as they are with it. Inside
 /// another event, both in that one's, as one change.
 pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
+  // An event can advance the timeline and then ask for geometry itself. A layout fault while advancing must still
+  // stop reentrant layout during the rest of that event; independent deadlines keep separate pass counts.
+  let was_budget = self.brought_budget
+  let budget = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  self.brought_budget = Some(budget)
+  defer { self.brought_budget = was_budget }
   // (in an event already: its moment, settled as it began)
   if self.cause_at >= 0.0 {
     @signals.start_batch()
@@ -7019,6 +7152,15 @@ fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
 
 ///|
 fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
+  // A fault stops layouts for this whole advance, including its enclosing frame or bring. The pass count, unlike
+  // that stop flag, belongs to each separate deadline.
+  let stopped = match self.brought_budget {
+    Some((_, stopped)) => stopped
+    None => Ref(false)
+  }
+  // A before-due layout belongs to the selected deadline even if that layout changes the timeline and makes the
+  // loop choose again. Keep its budget until an item at that moment actually runs.
+  let mut before_due_budget : (Double, (Ref[Int], Ref[Bool]))? = None
   while true {
     let mut next = -1
     let mut next_at = 0.0
@@ -7046,13 +7188,24 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if next < 0 {
       return
     }
+    // Each deadline is a separate change, even when one frame advances across many of them. Its layouts and their
+    // reentrant notifications share a bound; the next deadline and the outer frame retain their own bounds.
+    let was_budget = self.brought_budget
+    let budget = match before_due_budget {
+      Some((at, b)) if at == next_at => b
+      _ => (Ref(0), stopped)
+    }
+    self.brought_budget = Some(budget)
     // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
     // (View::laid_before_due): asked once a moment, however many are due then or are said at it as it comes, and not
     // at all while none asks; what that layout said is due chosen among the rest again)
     if self.moves_before_due(next_at) {
       self.laid_before_due_at(next_at)
+      before_due_budget = Some((next_at, budget))
+      self.brought_budget = was_budget
       continue
     }
+    if before_due_budget is Some((at, _)) && at == next_at { before_due_budget = None }
     let d = self.timeline[next]
     let was = self.cause_at
     self.cause_at = next_at
@@ -7097,6 +7250,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if was < 0.0 {
       self.settle_now(next_at)
     }
+    self.brought_budget = was_budget
   }
 }
 
@@ -7172,6 +7326,14 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
 pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
+  let was_budget = self.brought_budget
+  let budget = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  if budget.1.val { return false }
+  self.brought_budget = Some(budget)
+  defer { self.brought_budget = was_budget }
   // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
@@ -7234,6 +7396,14 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
 /// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
 /// the tree has a size (its first frame).
 pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
+  let was_budget = self.brought_budget
+  let budget = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  if budget.1.val { return }
+  self.brought_budget = Some(budget)
+  defer { self.brought_budget = was_budget }
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
@@ -7250,9 +7420,10 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   self.moves_before_due(at) |> ignore
   // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
   // finds things where they are then, nothing else told before the change ends)
-  self.pull()
   if self.last_w >= 0.0 {
     self.brought(at)
+  } else {
+    self.pull()
   }
 }
 
@@ -7266,9 +7437,28 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   let was = self.bringing_at
   self.bringing_at = upto
   defer { self.bringing_at = was }
+  // A notification can synchronously bring this same tree again after a layout returned. Keep its work in the
+  // original call's bound too. A notification queued by this call carries the same budget to its callback.
+  let was_budget = self.brought_budget
+  let (passes, stopped) = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  self.brought_budget = Some((passes, stopped))
+  defer { self.brought_budget = was_budget }
+  if stopped.val { return }
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
-  self.laid_out(upto)
+  // Geometry sees the whole property's change. Publish input ownership only after its last layout pass, before
+  // returning the frame or hit-test geometry. A notification may change focus styling or structure; finish that
+  // work in the same call, with the same layout-pass guard rather than waiting for another picture.
+  while !self.gone && !stopped.val {
+    self.modals_held += 1
+    self.pull()
+    self.laid_out(upto, passes~, stopped~)
+    self.modals_released()
+    if stopped.val || !self.due { break }
+  }
 }
 
 ///|
@@ -7399,8 +7589,14 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
-    return (placing, ordered, "sizes told (owed_laid_size, owed_laid_window, owed_drawn_window, owed_went)")
+  if self.sized.length() > 0 && self.sizes_told() {
+    // In an input batch these cells have marked their dependent properties, but the watchers that queue those
+    // properties have not run yet. Pull the marked bindings before deciding that this layout is complete, as an
+    // input's initial geometry read does; effects and structural changes still wait for the batch to be told whole.
+    self.pull()
+    if self.due {
+      return (placing, ordered, "sizes told (owed_laid_size, owed_laid_window, owed_drawn_window, owed_went)")
+    }
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
@@ -7483,8 +7679,18 @@ fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, no
 /// things are as an event finds them in the middle of its change: Tree::laid_now). Pass after pass while what one tells
 /// marks more to do, each from the start, in a loop: once it ran in itself, as deep as passes came, and a frame whose
 /// passes never stopped (what it told taken at the host's clock, gone on: Tree::brought) ran the stack out, 2000 deep.
-fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
-  if !self.due {
+fn Tree::laid_out(self : Tree, upto : Double, passes? : Ref[Int] = Ref(0), stopped? : Ref[Bool] = Ref(false)) -> Unit {
+  // A layout's notifications carry its counter and stop flag even if this was a standalone geometry read.
+  let was_budget = self.brought_budget
+  let (passes, stopped) = match was_budget {
+    Some(b) => b
+    None => (passes, stopped)
+  }
+  self.brought_budget = Some((passes, stopped))
+  defer { self.brought_budget = was_budget }
+  self.modals_held += 1
+  defer { self.modals_released() }
+  if stopped.val || !self.due {
     return
   }
   // (the passes of this outermost layout and those nested in it (what is under the pointer told after placing lays it
@@ -7498,13 +7704,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   self.laying += 1
   let mut placing = false
   let mut ordered = false
-  let mut passes = 0
   while self.due {
-    passes += 1
+    passes.val += 1
     self.moment_passes += 1
-    self.laid_passes = passes
-    if self.moment_passes > laid_passes_most {
-      let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
+    self.laid_passes = passes.val
+    if self.moment_passes > laid_passes_most || passes.val > laid_passes_most {
+      let said = "view: \{passes.val - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
+      stopped.val = true
       println(said)
       fault(said)
       self.due = false
@@ -7525,6 +7731,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
         // has it: what was marked is laid out as the tree is next laid out, at whatever moment that is (an input's or a
         // frame's), as any change told then; nothing is drawn half laid out)
         let said = "view: marked in its own layout, after it was laid out: \{self.laid_marked_at}"
+        stopped.val = true
         println(said)
         fault(said)
         break
@@ -7541,25 +7748,25 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // change's whole)
   if placing && !self.withins_passing {
     self.withins_passing = true
-    while self.withins_told() && self.due {
+    while !stopped.val && self.withins_told() && self.due {
       self.owed_again("under the pointer told")
-      self.laid_out(upto)
+      self.laid_out(upto, passes~, stopped~)
     }
     self.withins_passing = false
   } else if !self.withins_passing && self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
     // (which column's bar the pointer is along told anew as what is drawn or found there changes without anything
     // placed: an order, what bounds input, what takes it; in this same pass)
     self.withins_passing = true
-    while self.bars_near_told() && self.due {
+    while !stopped.val && self.bars_near_told() && self.due {
       self.owed_again("a column's bar near the pointer told")
-      self.laid_out(upto)
+      self.laid_out(upto, passes~, stopped~)
     }
     self.withins_passing = false
   }
   // (what is made elsewhere for what it built, made as it is done (View::made_after_layout), by the outermost: laid out
   // at once, in its own pass, before it returns)
   if self.laying == 1 {
-    while !self.made_after.is_empty() {
+    while !stopped.val && !self.made_after.is_empty() {
       let now = self.made_after.copy()
       self.made_after.clear()
       self.making_after = true
@@ -7569,7 +7776,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.making_after = false
       if self.due && self.layout_due {
         self.owed_again("made after its layout")
-        self.laid_out(upto)
+        self.laid_out(upto, passes~, stopped~)
       }
     }
   }
@@ -9497,7 +9704,7 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
     self.points_hover = found.1
     then(found.0)
-  })
+  }, property=false)
   if self.gone || self.point_said != mine {
     stop()
   } else {
@@ -9896,7 +10103,20 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
 /// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
-  self.after_laid.push(f)
+  // A notification can wait past the operation which said it (a standalone measure can say one without a layout).
+  // Keep its pass ancestry only while it shares the dispatching operation's stop flag. Otherwise it belongs to the
+  // operation dispatching it: a former operation's stop must neither block this one nor miss a fault in it.
+  let budget = self.brought_budget
+  self.after_laid.push(fn() {
+    let was_budget = self.brought_budget
+    match (budget, was_budget) {
+      (Some((_, said_stop)), Some((_, telling_stop))) if physical_equal(said_stop, telling_stop) =>
+        self.brought_budget = budget
+      _ => ()
+    }
+    defer { self.brought_budget = was_budget }
+    f()
+  })
 }
 
 ///|
