@@ -444,6 +444,9 @@ pub(all) struct Work {
   /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes),
   /// or at a moment come due before what is due then is done (Tree::laid_before_due_at: View::laid_before_due)
   mut settles : Int
+  /// what asks to be laid out before what is due asked whether it went on by itself up to a moment come due
+  /// (View::laid_before_due): once a moment, each till one says so; none while none asks
+  mut due_asked : Int
   /// the keys of a list laid out from its anchor gone through, all of them, as they changed or its rows were measured
   /// otherwise (View::scrolls_anchored: those gone forgotten, the rows measured counted again): none while none of its
   /// rows is named or measured, as its first keys are
@@ -971,10 +974,10 @@ pub struct Tree {
   mut before_causes : Int
   /// what asks to be laid out where it is at a moment come on the timeline before what is due then is done, where it
   /// says it has gone on by itself up to that moment since it was last laid out (View::laid_before_due), by the number
-  /// it was said with; how many were ever said; and the last moment so laid out
+  /// it was said with; how many were ever said; and the last moment they were asked at
   before_due : Map[Int, (Double) -> Bool]
   mut before_due_told : Int
-  mut laid_due_at : Double
+  mut due_asked_at : Double
   /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
@@ -1171,7 +1174,7 @@ pub fn Tree::new(
     before_causes: 0,
     before_due: {},
     before_due_told: 0,
-    laid_due_at: -1.0,
+    due_asked_at: -1.0,
     standing: false,
     settle_asked: false,
     settle_at: 0.0,
@@ -1204,6 +1207,7 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      due_asked: 0,
       keys_swept: 0,
     },
   }
@@ -6374,6 +6378,7 @@ fn Tree::laid_before_due_at(self : Tree, at : Double) -> Unit {
 /// to `at` since it was last laid out.
 fn Tree::moves_before_due(self : Tree, at : Double) -> Bool {
   for _, moves in self.before_due {
+    self.work.due_asked = self.work.due_asked + 1
     if moves(at) {
       return true
     }
@@ -6567,12 +6572,15 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if next < 0 {
       return
     }
-    // (what moves by itself laid out where it is at this moment before what is due then is done, where asked
-    // (View::laid_before_due): once a moment; what that layout said is due chosen among the rest again)
-    if self.cause_at < 0.0 && next_at > self.laid_due_at && self.moves_before_due(next_at) {
-      self.laid_due_at = next_at
-      self.laid_before_due_at(next_at)
-      continue
+    // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
+    // (View::laid_before_due): asked once a moment, however many are due then or are said at it as it comes, and not
+    // at all while none asks; what that layout said is due chosen among the rest again)
+    if self.cause_at < 0.0 && next_at > self.due_asked_at && self.before_due.length() > 0 {
+      self.due_asked_at = next_at
+      if self.moves_before_due(next_at) {
+        self.laid_before_due_at(next_at)
+        continue
+      }
     }
     let d = self.timeline[next]
     let was = self.cause_at

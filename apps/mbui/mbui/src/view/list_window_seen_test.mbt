@@ -403,8 +403,9 @@ test "scrolls_window flung, let go at a moment come due on the way (its page clo
 /// A column 300 by 100 of `0..<400` 40 tall at rest, telling seen where `seen` says so, with what is due that holds
 /// nothing of it (three at 100; one at 150 saying another there as it is done; one at 200), drawn at 0 and every `dt`
 /// till 1 s: the work its tree did after its first frame (layouts where things stood before what was due, nodes laid
-/// out again, nodes visited, computes, bindings run) and how many of what was due were done.
-fn at_rest_due(seen : Bool, dt : Double) -> (Int, Int, Int, Int, Int, Int) {
+/// out again, nodes visited, computes, bindings run), how many of what was due were done, and how often what asks to be
+/// laid out before what is due was asked whether it went on by itself.
+fn at_rest_due(seen : Bool, dt : Double) -> (Int, Int, Int, Int, Int, Int, Int) {
   let keys = fn() { Array::makei(400, fn(i) { i }) }
   let row = fn(b : @view.View, _k : Int) { b.height(Is(Some(40.0))) |> ignore }
   let told : ((Array[Int]) -> Unit)? = if seen { Some(fn(_) {  }) } else { None }
@@ -436,15 +437,25 @@ fn at_rest_due(seen : Bool, dt : Double) -> (Int, Int, Int, Int, Int, Int) {
   }
   let w = tree.work()
   tree.dispose()
-  (w.settles - w0.settles, w.laid - w0.laid, w.visited - w0.visited, w.computes - w0.computes, w.bound - w0.bound, done.val)
+  (
+    w.settles - w0.settles,
+    w.laid - w0.laid,
+    w.visited - w0.visited,
+    w.computes - w0.computes,
+    w.bound - w0.bound,
+    done.val,
+    w.due_asked - w0.due_asked,
+  )
 }
 
 ///|
-test "scrolls_window at rest, telling seen: nothing laid out for it at the moments come due (three at one, one said at a moment as it comes, another), the tree's work as with nothing told seen, drawn every 16 ms or once long after" {
+test "scrolls_window at rest, telling seen: nothing laid out for it at the moments come due (three at one, one said at a moment as it comes, another), the layouts' work as with nothing told seen; asked whether it went on by itself once a moment, three times, however many were due then, drawn every 16 ms or once long after" {
   for dt in [16.0, 1000.0] {
     let told = at_rest_due(true, dt)
-    assert_eq(told, at_rest_due(false, dt), msg="every \{dt} ms")
-    assert_eq((told.0, told.5), (0, 6), msg="every \{dt} ms")
+    let none = at_rest_due(false, dt)
+    assert_eq((told.0, told.1, told.2, told.3, told.4, told.5), (none.0, none.1, none.2, none.3, none.4, none.5), msg="every \{dt} ms")
+    // (no layout for it; all six done; asked at 100, 150 and 200, once each; a list telling nothing, never asked)
+    assert_eq((told.0, told.5, told.6, none.6), (0, 6, 3, 0), msg="every \{dt} ms")
   }
 }
 
