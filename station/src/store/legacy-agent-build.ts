@@ -58,6 +58,14 @@ const mark = (keys: string, proposed: boolean) => `INSERT INTO legacy_agent_dirt
         WHERE e.kind='message' AND e.author_kind='agent'
       ${proposed ? `UNION ${proposedTime}` : ""}
     ) t WHERE NOT EXISTS (SELECT 1 FROM legacy_agent_times x WHERE x.thread=t.thread AND x.at=t.at AND x.n=t.n);`;
+// An ordinary append has no displaced row. Record its key and proposed time directly, leaving the more expensive
+// collision lookup to a separate trigger which runs only if a conflicting agent message actually exists.
+const markNew = `INSERT INTO legacy_agent_dirty(thread,n,old_at)
+  SELECT NEW.thread,NEW.n,e.at FROM (SELECT 1) x LEFT JOIN entries e ON e.thread=NEW.thread AND e.n=NEW.n
+    AND e.kind='message' AND e.author_kind='agent'
+  WHERE NOT EXISTS (SELECT 1 FROM legacy_agent_dirty d WHERE d.thread=NEW.thread AND d.n=NEW.n);
+  INSERT INTO legacy_agent_times(thread,at,n) SELECT NEW.thread,NEW.at,NEW.n
+  WHERE NOT EXISTS (SELECT 1 FROM legacy_agent_times x WHERE x.thread=NEW.thread AND x.at=NEW.at AND x.n=NEW.n);`;
 const changed = `OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.rowid IS NOT NEW.rowid
   OR OLD.kind IS NOT NEW.kind OR OLD.author_kind IS NOT NEW.author_kind OR OLD.at IS NOT NEW.at OR OLD.ts IS NOT NEW.ts`;
 
@@ -79,8 +87,9 @@ export function installLegacyAgent(db: DatabaseSync, preferNative = false): bool
       CREATE TABLE legacy_agent_times(thread INTEGER NOT NULL,at INTEGER NOT NULL,n INTEGER NOT NULL,
         PRIMARY KEY(thread,at,n)) WITHOUT ROWID;
       CREATE INDEX legacy_agent_times_by_key ON legacy_agent_times(thread,n,at);
-      CREATE TRIGGER legacy_agent_before_insert BEFORE INSERT ON entries WHEN (${newAgent}) OR ${displacesAgent}
-        BEGIN ${mark(`${newKey} UNION ${conflicts}`,true)} END;
+      CREATE TRIGGER legacy_agent_before_insert BEFORE INSERT ON entries WHEN ${newAgent} BEGIN ${markNew} END;
+      CREATE TRIGGER legacy_agent_before_insert_conflict BEFORE INSERT ON entries WHEN ${displacesAgent}
+        BEGIN ${mark(conflicts,false)} END;
       CREATE TRIGGER legacy_agent_before_update BEFORE UPDATE ON entries WHEN (${changed}) AND
         ((${oldAgent}) OR (${newAgent}) OR ${displacesAgent})
         BEGIN ${mark(`${oldKey} UNION ${newKey} UNION ${conflicts}`,true)} END;

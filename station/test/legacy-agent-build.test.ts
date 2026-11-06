@@ -204,6 +204,43 @@ for (const recursive of [false,true]) test(`nested person and agent replacements
   } finally { rig.close(); }
 });
 
+for (const recursive of [false,true]) test(`agent-time reconciliation remains exact when later triggers replace entries (recursive triggers ${recursive})`, () => {
+  const rig = database(), { db } = rig;
+  try {
+    db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+    for (let n=1;n<=3;n++) put(db,1,n,n*10);
+    while (!legacyAgentStep(db,8).ready) { /* prepare */ }
+    db.exec(`CREATE TRIGGER later_person BEFORE INSERT ON entries WHEN NEW.text='outer-person' BEGIN
+        INSERT OR REPLACE INTO entries VALUES(NEW.thread,NEW.n,'message','agent','inner',NULL,'inner-person',60,'inner-agent');
+      END;
+      CREATE TRIGGER later_agent BEFORE INSERT ON entries WHEN NEW.text='outer-agent' BEGIN
+        INSERT OR REPLACE INTO entries VALUES(NEW.thread,NEW.n,'message','person','inner',NULL,'inner-agent',60,'inner-person');
+      END;
+      CREATE TRIGGER later_agent_again BEFORE INSERT ON entries WHEN NEW.text='outer-again' BEGIN
+        INSERT OR REPLACE INTO entries VALUES(NEW.thread,NEW.n,'message','agent','inner',NULL,'inner-again',80,'inner-again');
+      END;`);
+    const at = (n: number) => LEGACY_ASKED_DURING.replaceAll("?1","NEW.thread").replaceAll("?2",String(n)).replaceAll("?3",String(n));
+    db.exec(`CREATE TABLE later_observed(which TEXT,n INTEGER);
+      CREATE TRIGGER later_observe AFTER INSERT ON entries BEGIN
+        INSERT INTO later_observed SELECT NEW.text,(${at(60)}) WHERE NEW.text IN ('inner-agent','outer-person','inner-person');
+        INSERT INTO later_observed SELECT NEW.text,(${at(70)}) WHERE NEW.text='outer-agent';
+        INSERT INTO later_observed SELECT NEW.text,(${at(80)}) WHERE NEW.text='inner-again';
+        INSERT INTO later_observed SELECT NEW.text,(${at(90)}) WHERE NEW.text='outer-again';
+      END;`);
+    db.exec("INSERT OR REPLACE INTO entries VALUES(1,1,'message','person','outer',NULL,'outer-person',50,'outer-person')");
+    db.exec("INSERT OR REPLACE INTO entries VALUES(1,2,'message','agent','outer',NULL,'outer-agent',70,'outer-agent')");
+    db.exec("INSERT OR REPLACE INTO entries VALUES(1,3,'message','agent','outer',NULL,'outer-again',90,'outer-again')");
+    assert.deepEqual(db.prepare("SELECT which,n FROM later_observed ORDER BY rowid").all().map((r) => ({ ...r })),
+      [{ which:"inner-agent",n:1 },{ which:"outer-person",n:null },{ which:"inner-person",n:null },
+        { which:"outer-agent",n:2 },{ which:"inner-again",n:3 },{ which:"outer-again",n:3 }]);
+    for (const [from,to] of [[10,10],[20,20],[30,30],[60,60],[70,70],[80,80],[90,90],[0,100]])
+      assert.equal(actual(db,1,from,to),expected(db,1,from,to));
+    while (legacyAgentDrain(db,2)) { /* reconcile */ }
+    assert.deepEqual(db.prepare("SELECT thread,at,n FROM legacy_agent_build ORDER BY thread,at,n").all(),
+      db.prepare("SELECT thread,at,n FROM entries WHERE kind='message' AND author_kind='agent' ORDER BY thread,at,n").all());
+  } finally { rig.close(); }
+});
+
 test("many changes to one agent time are removed in bounded batches", () => {
   const rig = database(), { db } = rig;
   try {
