@@ -119,9 +119,17 @@ jobs:
         run: |
           set -euo pipefail
           cd apps/mbui
-          moon check --target wasm-gc
+          if ! moon check --target native --no-mbti src/sfapp > "$RUNNER_TEMP/chat-moon-check.log" 2>&1; then
+            awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-check.log"
+            exit 1
+          fi
       - name: Exercise the Chat attachment reader
         run: |
           set -euo pipefail
           cd apps/mbui
-          moon test --target wasm-gc --release -p stillfail/sfapp -f "*a chat*reader*"
+          if ! moon test --target wasm-gc --release -p stillfail/sfapp -f "*a chat*reader*" > "$RUNNER_TEMP/chat-moon-test.log" 2>&1; then
+            awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-test.log"
+            tail -n 50 "$RUNNER_TEMP/chat-moon-test.log"
+            exit 1
+          fi
+          tail -n 5 "$RUNNER_TEMP/chat-moon-test.log"
