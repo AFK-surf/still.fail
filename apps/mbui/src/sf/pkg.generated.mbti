@@ -258,6 +258,8 @@ pub let card_line : @ui.TextStyle
 
 pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : String, title_after? : () -> Unit) -> Unit
 
+pub fn card_lines_node(@view.View, () -> String, words? : () -> String, note? : () -> String, bad? : () -> String, title_after? : (@view.View) -> Unit, in_row? : Bool) -> Unit
+
 pub let card_mark_out : @ui.Style
 
 pub fn card_node(@view.View, (@view.View) -> Unit, gap? : Double, fill? : Bool) -> @view.View
