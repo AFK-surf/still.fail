@@ -1,6 +1,10 @@
 // The store's schema (once the Rust station's store.rs `// ── schema`): the tables as CREATE … IF NOT EXISTS, and the
 // columns that came after, added in place on open (add_*_columns).
 import type { DatabaseSync } from "node:sqlite";
+import { hasLegacySaid, installLegacySaid } from "./legacy-said-build.ts";
+import { hasLegacyAgent, installLegacyAgent } from "./legacy-agent-build.ts";
+import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-cards.ts";
+import { hasLegacyEdits, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
@@ -32,12 +36,11 @@ CREATE TABLE IF NOT EXISTS decision_checks (
   created_at INTEGER NOT NULL,
   result TEXT NOT NULL
 );
--- A session's latest check (review.ts undecided, for every done chat) and those of the last days (the archive policy's
--- view, in every overview): without them each scanned every check.
+-- A session's latest check (review.ts undecided, for every done chat).
 CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
-CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
 -- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
--- rows of those latest (a station: many checks of many sessions in a week).
+-- rows of those latest (a station: many checks of many sessions in a week). Existing decision_checks_at indexes stay
+-- for older connections, but need not be created: this index also covers searches by created_at alone.
 CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
@@ -131,14 +134,6 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
--- A message's latest edit (the merged view, at each message any list or page reads): by the thread, the message and
--- the edit's own number, found at once. With (thread, target) alone, node's SQLite (3.53) took the latest from the
--- primary key instead, going back over the whole thread for a message never edited: every message read had a long
--- chat's every page read with it, 5 to 8 s on a station with its pages put out (2026-10-25).
-CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
--- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
--- touched): without it each went over the thread's every entry.
-CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
 -- The first person to answer a card is found by its entry number, without reading intervening agent messages.
 CREATE INDEX IF NOT EXISTS entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
 CREATE TABLE IF NOT EXISTS deliveries (
@@ -289,9 +284,6 @@ CREATE TABLE IF NOT EXISTS closed_cards (
   at INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 );
--- The cards closed lately (store.ts answersSince, at each list of chats).
-CREATE INDEX IF NOT EXISTS closed_cards_at ON closed_cards (at);
-CREATE INDEX IF NOT EXISTS closed_cards_thread_at ON closed_cards (thread, at);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same. The one record
 -- of it: a chat's usage and the usage page are both added up from here (usage/module.ts, read/usage.ts). calls: how
@@ -431,6 +423,27 @@ export const MERGED = `CREATE VIEW merged AS
 const has = (db: DatabaseSync, table: string, column: string): boolean =>
   db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column) !== undefined;
 
+const hasEditIndex = (db: DatabaseSync) =>
+  db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits'").get() !== undefined;
+
+export const usesLegacyEdits = (db: DatabaseSync): boolean => !hasEditIndex(db) && hasLegacyEdits(db);
+
+/// A small store can build the native lookup under one writer. Prepare a larger older store in bounded steps.
+export function addEditIndex(db: DatabaseSync): void {
+  if (hasEditIndex(db) || hasLegacyEdits(db)) return;
+  let prepare = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!hasEditIndex(db) && !hasLegacyEdits(db)) {
+      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+        db.exec("CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL");
+      else prepare = true;
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  if (prepare) installLegacyEdits(db,true);
+}
+
 /// Older records with no runtime belong to the session's original runtime. Remember it on the session when it first
 /// changes, instead of rewriting every old transcript record while opening the database.
 export function addRuntimeSessionRuntime(db: DatabaseSync): void {
@@ -514,14 +527,36 @@ export function addClientColumn(db: DatabaseSync): void {
   // A message's card; an options card is kept in `options` too, which stations from before cards read.
   if (!has(db, "entries", "card")) db.exec("ALTER TABLE entries ADD COLUMN card TEXT");
   // A database from before cards has no card column when SCHEMA runs. Make the login lookup only after adding it.
-  db.exec(`CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%'`);
+  addLoginCardIndex(db);
   // A chat's latest card is looked for on every list of chats: only its posts with one are read.
   db.exec("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");
-  // What people said lately is looked for on every list of chats (the cards they answered: `answersSince`).
-  db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
-  // A prior upgrade may have added the table column without rebuilding this view.
-  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity") || !has(db, "merged", "letter")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
+  // A prior upgrade may have added the table column without rebuilding this view. Older stores use their prepared
+  // lookup once ready, while a store that acquired the native index goes back to the native view.
+  const legacyEdits = usesLegacyEdits(db);
+  const view = (db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get() as { sql: string } | undefined)?.sql ?? "";
+  const usesLegacy = view.includes("legacy_edit_meta");
+  const obsoleteOldView = !usesLegacy && view.includes("INDEXED BY entries_target");
+  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity") || !has(db, "merged", "letter") || legacyEdits !== usesLegacy || obsoleteOldView) {
+    const original = "SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n";
+    const merged = legacyEdits ? MERGED.replace(original,legacyEditLatest("m.thread","m.n","1",legacyEditsUseOldIndex(db))) : MERGED;
+    db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${merged} COMMIT;`);
+  }
+}
+
+/// Keep the native index for older connections and prepare a per-login lookup in bounded batches.
+function addLoginCardIndex(db: DatabaseSync): void {
+  const native = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'").get() !== undefined;
+  if (hasLegacyLoginCards(db)) return;
+  if (!native()) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!hasLegacyLoginCards(db) && !native() && db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+        db.exec(`CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%'`);
+      db.exec("COMMIT");
+    } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  }
+  installLegacyLoginCards(db);
 }
 
 /// The column letters came with (entries.letter, rows.ts Letter): what two chats' agents write each other, kept apart
@@ -530,17 +565,25 @@ export function addClientColumn(db: DatabaseSync): void {
 /// whose `merged` view has the column.
 export function addLetterColumn(db: DatabaseSync): void {
   if (has(db, "entries", "letter")) return;
-  db.exec("ALTER TABLE entries ADD COLUMN letter TEXT");
-  db.exec("CREATE INDEX IF NOT EXISTS entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
-  const before = db.prepare(
+  const version = () => (db.prepare("PRAGMA main.data_version").get() as { data_version: number }).data_version;
+  const readHeadings = () => db.prepare(
     `SELECT thread, n, text FROM entries e WHERE kind = 'message' AND author_kind = 'agent' AND (text LIKE '来自 %' OR text LIKE 'From %')
      AND author NOT IN (SELECT session FROM thread_sessions WHERE thread = e.thread)`,
   ).all() as { thread: number; n: number; text: string }[];
-  if (before.length === 0) return;
-  const mark = db.prepare("UPDATE entries SET letter = ? WHERE thread = ? AND n = ?");
-  db.exec("BEGIN");
+  // Most upgrades can read the headings without holding the writer. If another connection commits in the meantime,
+  // read them again under the writer lock: entries or a session membership may have changed.
+  const readVersion = version();
+  let before = readHeadings();
+  db.exec("BEGIN IMMEDIATE");
   try {
-    for (const r of before) mark.run(JSON.stringify({ way: "in", ...headedFrom(r.text) }), r.thread, r.n);
+    // Another opener may have completed the same upgrade while the headings were being read.
+    if (!has(db, "entries", "letter")) {
+      if (version() !== readVersion) before = readHeadings();
+      db.exec("ALTER TABLE entries ADD COLUMN letter TEXT");
+      db.exec("CREATE INDEX IF NOT EXISTS entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
+      const mark = db.prepare("UPDATE entries SET letter = ? WHERE thread = ? AND n = ?");
+      for (const r of before) mark.run(JSON.stringify({ way: "in", ...headedFrom(r.text) }), r.thread, r.n);
+    }
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -1229,8 +1272,8 @@ export function addPendingCards(db: DatabaseSync): void {
 /// - sessions_models: the chats someone started by when, with their runtime and model (store.ts MODELS_USED_BY).
 /// - sessions_efforts: the efforts someone's chats on a runtime and model ran at, by when (store.ts EFFORTS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
-  db.exec(ENTRIES_SAID_INDEX);
-  db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+  addSaidIndex(db);
+  addAgentIndex(db);
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
   // The archive's, a page at a time by
   // when each was archived (ARCHIVED_PAGE): its whole list was made at once, 60 s on a station (2026-11-03).
@@ -1238,6 +1281,40 @@ export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
   addEffortIndex(db);
+}
+
+/// As for messages, a large older store cannot install a native time index without scanning it under a writer lock.
+function addAgentIndex(db: DatabaseSync): void {
+  const native = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_agent_at'").get() !== undefined;
+  if (hasLegacyAgent(db) || native()) return;
+  let prepare = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!hasLegacyAgent(db) && !native()) {
+      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+        db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+      else prepare = true;
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  if (prepare) installLegacyAgent(db,true);
+}
+
+/// A native index is cheap on a new or small store. For an older large one, answer from the old table while the
+/// equivalent lookup is prepared in bounded transactions. Recheck under the lock before a native index is built.
+function addSaidIndex(db: DatabaseSync): void {
+  const native = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_said'").get() !== undefined;
+  if (hasLegacySaid(db) || native()) return;
+  let prepare = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!hasLegacySaid(db) && !native()) {
+      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined) db.exec(ENTRIES_SAID_INDEX);
+      else prepare = true;
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  if (prepare) installLegacySaid(db, true);
 }
 
 /// A new or small store can install this at once. An older large store keeps the existing creator/time lookup for
