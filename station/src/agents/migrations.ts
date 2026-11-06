@@ -120,6 +120,7 @@ export const NOTES: [number, string][] = [
   [113, "Station notices now arrive as via=\"station\" from=\"station\" (before: ember), and new still.fail chats have addresses CHAT/… and session keys chat:c-…; chats made before keep EMBER/… and chat:c-…, and both work everywhere."],
   [114, "The old names from before the rename are gone: `ember-job` (use `stillfail-job`), the EMBER_* variables (STILLFAIL_* only), and in inline HTML a widget's API is `window.openai` and its theme event `viz:theme` (window.ember and ember-viz:theme still work in widgets made before)."],
   [115, "If station_task prepare fails or is interrupted, start refuses that key until a prepare succeeds: retry the intended prepare, or use a new key for different work. A failed re-prepare cannot silently start the previous command."],
+  [116, "A new built-in skill, stillfail-github-ci: scripts that wait for a pull request's checks or given workflow runs and exit at the first failure, and the pitfalls of reading checks and merging. Use it instead of writing your own polling loop."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
