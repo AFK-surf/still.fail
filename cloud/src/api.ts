@@ -9,7 +9,7 @@ import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
-import type { FeedbackStatus } from "./types";
+import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { serveModels } from "./models";
@@ -326,6 +326,14 @@ export async function blockAccount(env: Env, sub: string, on: boolean): Promise<
   return answer;
 }
 
+/** The console's bug reports (feedback.ts), those the changelog fixes marked first (changelog.ts). */
+export async function feedbackList(env: Env): Promise<AdminFeedback[]> {
+  const dir = env.DIRECTORY.getByName("primary");
+  const entries = await changelog(env.RELEASES);
+  await dir.markFixed(entries.flatMap((e) => e.fixes.map((number) => ({ number, version: e.version, parts: e.parts }))));
+  return dir.adminFeedback();
+}
+
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env);
@@ -392,11 +400,7 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   // Bug reports about still.fail (feedback.ts), and marking where each is: { status }.
   // Those the changelog fixes marked first (changelog.ts).
   if (path === "/v1/admin/feedback" && method === "GET") {
-    return directory(async () => {
-      const entries = await changelog(env.RELEASES);
-      await dir.markFixed(entries.flatMap((e) => e.fixes.map((number) => ({ number, version: e.version, parts: e.parts }))));
-      return { feedback: await dir.adminFeedback() };
-    });
+    return directory(async () => ({ feedback: await feedbackList(env) }));
   }
   const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
   if (status && method === "POST") {

@@ -40,6 +40,8 @@ else ~/stillfail-deploy:
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
+  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and nothing else
+            (POST /v1/admin/feedback/list, the team's feedback monitor's). Without it nobody reads them so.
   admin     STILLFAIL_ADMIN_EMAIL, or <deploy>/admin-email: the operator console's Google account.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
@@ -88,6 +90,7 @@ VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
 APNS = DEPLOY / "apns.json"
 REVIEW = DEPLOY / "review-accounts.json"
+FEEDBACK = DEPLOY / "feedback-token"
 
 
 def admin_email(dry_run: bool) -> str:
@@ -291,6 +294,10 @@ def review() -> dict:
     if not isinstance(accounts, list) or not all(isinstance(a, dict) and "@" in a.get("email", "") and len(a.get("password", "")) >= 12 for a in accounts):
         sys.exit(f"{REVIEW}: expected a list of {{email, password (12 characters at least), name}}")
     return {"REVIEW_ACCOUNTS": json.dumps(accounts)}
+
+
+def feedback() -> dict:
+    return {"FEEDBACK_TOKEN": FEEDBACK.read_text().strip()} if FEEDBACK.exists() else {}
 
 
 @contextmanager
@@ -508,7 +515,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:
