@@ -115,6 +115,8 @@ Without a window (mbui-render, the bench) the offscreen target is the canvas: it
   into Windows or WebGL, whose existing checks cover the spinner case above. iOS shares the Metal implementation,
   but these field cases have no separate iOS rendering run. No result
   from these synthetic environments establishes behavior or frame times on a user's device.
+  Both Android entry points select an emulator explicitly, verify `ro.kernel.qemu`, and pin every adb call to
+  that serial before installing, waking, stopping or writing anything (`render_android_device_test.sh`).
 - **Glyph availability and frame paths** (`src/ui/paint_retry_wbtest.mbt`): deliberately large fake glyph metrics
   fill the real atlas allocator beyond its first reset; the first frame with room must put the newly drawable
   glyphs in the actual host damage while preserving a distant region. This checks allocation and presentation,

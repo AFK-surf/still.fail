@@ -51,6 +51,8 @@ jobs:
         run: bash scripts/ios-terminate-test.sh
       - name: A partial repaint check cannot reuse a missing frame from its preceding run
         run: bash scripts/render_paint_damage_test.sh
+      - name: Android rendering entry points accept only a verified emulator before writing to a device
+        run: bash scripts/render_android_device_test.sh
       - name: "Android's frame pacing (FramePacer, MBView's) on a clock of its own: each refresh a new frame while the app asks, the display's rate, a phone's recorded frames replayed (scripts/framepacer_test.sh; its known list only shortens)"
         run: sh scripts/framepacer_test.sh
       - name: Check
