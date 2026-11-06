@@ -322,3 +322,164 @@ test "a notification from a stopped event can lay out in the next frame" {
   assert_false(t.due)
   t.dispose()
 }
+
+///|
+test "a modal notification held past a stopped measurement can lay out" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let armed = Ref(false)
+  let marked = Ref(false)
+  let called = Ref(0)
+  let callback_layouts = Ref(-1)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && !marked.val {
+          marked.val = true
+          v.tree.modals_told()
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  t.on_modals(fn() {
+    called.val += 1
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    callback_layouts.val = t.work.computes - before
+  })
+  @signals.start_batch()
+  t.layout_marked_at(0)
+  armed.val = true
+  t.laid_as_now()
+  let marked_during = marked.val
+  let called_during = called.val
+  @signals.end_batch()
+  assert_true(marked_during)
+  assert_eq(called_during, 0, msg="the modal notification waits for the signal batch")
+  assert_eq(called.val, 1, msg="the batch delivered the modal notification")
+  assert_eq(callback_layouts.val, 1, msg="the later callback can lay out after the old fault, got \{callback_layouts.val}")
+  t.dispose()
+}
+
+///|
+test "a modal notification held by a batch keeps independent geometry reads separate" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let width = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let item : Ref[View?] = Ref(None)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      item.val = Some(v)
+      v.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  let requested = Array::makei(laid_passes_most + 1, fn(i) { (i + 2).to_double() })
+  let observed : Array[Double] = []
+  t.on_modals(fn() {
+    for w in requested {
+      width.set(w)
+      t.laid_as_now()
+      observed.push(item.val.unwrap().laid_size().0)
+    }
+  })
+  @signals.start_batch()
+  t.event(10.0, fn() { t.modals_told() })
+  assert_true(observed.is_empty())
+  @signals.end_batch()
+  assert_eq(observed, requested)
+  t.dispose()
+}
+
+///|
+test "modal feedback held by a batch keeps the layout pass guard" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let width = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let armed = Ref(false)
+  let steps = Ref(0)
+  let guard_stopped = Ref(false)
+  let guard_computes = Ref(-1)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && steps.val < 100 { v.tree.modals_told() }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  t.on_modals(fn() {
+    steps.val += 1
+    width.set((steps.val + 1).to_double())
+    let before = t.work.computes
+    t.laid_as_now()
+    if steps.val == laid_passes_most + 1 {
+      guard_computes.val = t.work.computes - before
+      if t.brought_budget is Some((_, stopped)) { guard_stopped.val = stopped.val }
+    }
+  })
+  @signals.start_batch()
+  armed.val = true
+  t.event(10.0, fn() {
+    t.layout_marked_at(0)
+    t.laid_as_now()
+  })
+  assert_eq(steps.val, 0)
+  @signals.end_batch()
+  // The first callback starts a new operation; its 65th requested pass reaches the existing 64-pass guard.
+  assert_eq(steps.val, laid_passes_most + 1, msg="modal feedback stopped at its layout guard: \{steps.val}")
+  assert_true(guard_stopped.val, msg="the guard stopped this feedback operation")
+  assert_eq(guard_computes.val, 0, msg="the rejected pass did not perform layout")
+  assert_false(t.due, msg="the existing layout limit clears due on fault")
+  t.dispose()
+}
+
+///|
+test "a modal descendant held past its stopped telling can lay out" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let armed = Ref(false)
+  let marked = Ref(false)
+  let called = Ref(0)
+  let callback_layouts = Ref(-1)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && !marked.val {
+          marked.val = true
+          v.tree.modals_told()
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  t.on_modals(fn() {
+    called.val += 1
+    if called.val == 1 {
+      // This batch remains open after the first modal telling returns.
+      @signals.start_batch()
+      armed.val = true
+      t.layout_marked_at(0)
+      t.laid_as_now()
+    } else {
+      t.layout_marked_at(0)
+      let before = t.work.computes
+      t.laid_as_now()
+      callback_layouts.val = t.work.computes - before
+    }
+  })
+  t.event(10.0, fn() { t.modals_told() })
+  assert_true(marked.val)
+  assert_eq(called.val, 1)
+  @signals.end_batch()
+  assert_eq(called.val, 2)
+  assert_eq(callback_layouts.val, 1, msg="the later modal telling can lay out, got \{callback_layouts.val}")
+  t.dispose()
+}
