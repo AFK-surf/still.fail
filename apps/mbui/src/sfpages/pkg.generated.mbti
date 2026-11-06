@@ -382,6 +382,12 @@ pub fn mine_landing(String) -> MineLanding?
 
 pub fn model_triple(@ui.Ctx, @sfbase.Source, String, String, up? : Bool, page? : @json.Json?, small? : Bool, floating? : Bool, saved? : String) -> Unit
 
+pub fn model_triple_node(@view.View, @sfbase.Source, String, String, saved? : String, saved_live? : () -> String, page? : () -> @json.Json?, small? : Bool, floating? : Bool, owner? : ModelTripleOwner) -> Unit
+
+pub fn model_triple_owner(@view.View) -> ModelTripleOwner
+
+pub fn model_triple_owner_at(@view.View) -> ModelTripleOwner?
+
 pub let msg_name : @ui.TextStyle
 
 pub let msg_name_room : @ui.Style
@@ -898,6 +904,14 @@ pub(all) struct MineLanding {
 }
 
 type MineRow
+
+pub struct ModelTripleOwner {
+  shown : @ref.Ref[Int32]
+  opened_for : @ref.Ref[String]
+  anchor : @ref.Ref[@view.View?]
+  reanchor : @ref.Ref[(@view.View) -> Unit]
+}
+pub fn ModelTripleOwner::close(Self) -> Unit
 
 pub(all) struct NewChatFrame {
   core : @settings.Core

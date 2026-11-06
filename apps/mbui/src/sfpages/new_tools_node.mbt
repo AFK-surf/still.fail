@@ -235,7 +235,7 @@ fn new_triple_node(
   // (its panel open: followed by what follows the presenters, opened and let go in the same change)
   let open = fn() {
     @sf.presenting() |> ignore
-    triple.open == me()
+    triple.open.get() == me()
   }
   let value = fn() { field(page(), "value") }
   let vo = fn() { field(page(), "valueOption") }
@@ -244,7 +244,7 @@ fn new_triple_node(
   let can = fn() { items(page(), "options").length() > 0 && !saving() }
   let press = fn(at : @view.View) {
     if can() && !open() {
-      triple.asked = ""
+      triple.asked.set("")
       open_triple_panel(src, station(), "new", @sf.beside_node(at).anchor(), page=page())
     }
   }
