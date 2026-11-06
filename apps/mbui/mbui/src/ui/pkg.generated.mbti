@@ -492,6 +492,8 @@ pub fn probe_keep_staged_body() -> Bool
 
 pub fn probe_discard_staged_tells(@view.View) -> Unit
 
+pub fn probe_in_old_layer() -> Bool
+
 pub fn probe_kept_sheet_body(Ctx, String, () -> Unit) -> Unit
 
 pub fn probe_old_layer(@view.View) -> Unit
@@ -1363,6 +1365,7 @@ pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
 pub fn Ctx::now_of(Self, Mover, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
+pub fn Ctx::on_drag_input(Self, Int32, (Drag, DragInput, Double) -> Unit) -> Unit
 pub fn Ctx::on_key(Self, Int32, (Int32, Int32) -> Bool) -> Unit
 pub fn Ctx::on_page_release(Self, String, () -> Unit) -> Unit
 pub fn Ctx::on_press(Self, Int32, () -> Unit) -> Unit
@@ -1538,6 +1541,13 @@ pub(all) enum DragAxis {
   Vertical
   Horizontal
   Free
+}
+
+#derive(Eq, Show, @debug.Debug)
+pub(all) enum DragInput {
+  DragMoved
+  DragEnded
+  DragCancelled
 }
 
 pub struct Drawing {

@@ -76,6 +76,12 @@ let old_islands : Array[OldIsland] = []
 let old_layer_staged_tells : Map[@view.NodeId, Array[(Int, () -> Unit)]] = {}
 
 ///|
+/// Whether an old layer is being measured before a real frame (framework staging only).
+pub fn probe_in_old_layer() -> Bool {
+  probe_causal_layer.val
+}
+
+///|
 /// Discard work said by an independently staged old layer that was removed before its first real build. Its owner
 /// still handles the layer's own close lifecycle; the staged body never became part of an actual frame.
 pub fn probe_discard_staged_tells(v : @view.View) -> Unit {

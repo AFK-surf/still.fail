@@ -279,6 +279,10 @@ priv struct CtxPress {
 let ctx_presses : Map[Int, CtxPress] = {}
 
 ///|
+// Drag callbacks have the same build, kept-part and island lifetime as press callbacks.
+let ctx_drag_inputs : Map[Int, CtxDragInput] = {}
+
+///|
 // The current independently staged old island and its build, distinct from the full-frame build number.
 let ctx_press_stage : Ref[(@view.NodeId, Int)?] = Ref(None)
 
@@ -312,12 +316,16 @@ fn ctx_press_remove(id : Int) -> Unit {
 fn ctx_presses_built() -> Unit {
   let gone = ctx_presses.iter().filter(fn(e) { e.1.build < builds_made.val }).map(fn(e) { e.0 }).collect()
   for id in gone { ctx_press_remove(id) }
+  let gone_drags = ctx_drag_inputs.iter().filter(fn(e) { e.1.build < builds_made.val }).map(fn(e) { e.0 }).collect()
+  for id in gone_drags { ctx_drag_inputs.remove(id) }
 }
 
 ///|
 fn ctx_presses_owner_gone(owner : @view.NodeId) -> Unit {
   let gone = ctx_presses.iter().filter(fn(e) { e.1.owner == Some(owner) }).map(fn(e) { e.0 }).collect()
   for id in gone { ctx_press_remove(id) }
+  let gone_drags = ctx_drag_inputs.iter().filter(fn(e) { e.1.owner == Some(owner) }).map(fn(e) { e.0 }).collect()
+  for id in gone_drags { ctx_drag_inputs.remove(id) }
 }
 
 ///|
@@ -332,6 +340,8 @@ fn ctx_press_stage_end() -> Unit {
     Some((owner, stage)) => {
       let gone = ctx_presses.iter().filter(fn(e) { e.1.owner == Some(owner) && e.1.stage != stage }).map(fn(e) { e.0 }).collect()
       for id in gone { ctx_press_remove(id) }
+      let gone_drags = ctx_drag_inputs.iter().filter(fn(e) { e.1.owner == Some(owner) && e.1.stage != stage }).map(fn(e) { e.0 }).collect()
+      for id in gone_drags { ctx_drag_inputs.remove(id) }
     }
     None => ()
   }
@@ -348,6 +358,7 @@ fn made_forget() -> Unit {
   made_placed.clear()
   made_presses.clear()
   ctx_presses.clear()
+  ctx_drag_inputs.clear()
   ctx_press_stage.val = None
   ctx_press_stage_no.val = 0
   keys_taken.clear()

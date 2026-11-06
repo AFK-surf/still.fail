@@ -159,6 +159,40 @@ test "a removed old island immediately releases its press callback" {
 }
 
 ///|
+test "old drag input callbacks leave with their build and their island" {
+  let shown = @signals.signal(true)
+  let callback = @signals.signal(true)
+  let target = Ref(0)
+  let inputs : Array[DragInput] = []
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(parent) {
+      old(parent, fn(c) {
+        let id = c.id("drag")
+        target.val = id
+        c.drag_area(id, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+        if callback.get() { c.on_drag_input(id, fn(_, phase, _) { inputs.push(phase) }) }
+      }).height(Is(Some(40.0))) |> ignore
+    })
+  })
+  t.draw()
+  assert_true(ctx_drag_inputs.contains(target.val))
+  callback.set(false)
+  t.draw()
+  assert_false(ctx_drag_inputs.contains(target.val))
+  callback.set(true)
+  t.draw()
+  assert_true(ctx_drag_inputs.contains(target.val))
+  t.touch(0, 20.0, 20.0)
+  t.touch(1, 20.0, 50.0)
+  assert_eq(inputs, [DragMoved])
+  shown.set(false)
+  assert_false(ctx_drag_inputs.contains(target.val))
+  t.touch(2, 20.0, 50.0)
+  assert_eq(inputs, [DragMoved])
+}
+
+///|
 test "remeasuring a staged old island drops a callback no longer built" {
   let shown = @signals.signal(false)
   let callback = @signals.signal(true)

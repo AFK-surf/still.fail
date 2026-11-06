@@ -126,3 +126,40 @@ test "a projected old surface moves its focused editor's IME at an input before 
   finger(1, 5.0, 5.0)
   assert_eq(t.ime_rect().1, before.1 - 80.0)
 }
+
+///|
+test "a passive hold and an old projected surface share the input's current placement" {
+  let extent = @signals.signal(20.0)
+  let pressed = Ref(0)
+  let held = Ref(0)
+  let lifted = Ref(0)
+  let t = Tester::new(fn(_) {  }, w=300.0, h=300.0, platform=1)
+  set_view_app(fn(root) {
+    let measured = root.box(fn(v) {
+      v.over(Is(true)).width(Is(Some(1.0))).height(By(fn() { Some(extent.get()) })) |> ignore
+    })
+    let projection = root.box(fn(v) {
+      v.over(Is(true)).width(Is(Some(1.0))).height(Is(Some(1.0)))
+        .offset(Painted(fn(laid) { (0.0, -laid.size(measured).unwrap_or((0.0, 0.0)).1) })) |> ignore
+    })
+    old(root, fn(c) {
+      let id = c.id("moving hold surface")
+      let surface = c.box(left=40.0, top=160.0, w=Px(100.0), h=Px(40.0), id~, fn() {  })
+      c.moved_with_node(surface, projection)
+      c.on_press(id, fn() { pressed.val += 1 })
+    }).over(Is(true)) |> ignore
+    let anchor = root.box(fn(v) {
+      v.over(Is(true)).offset(Is((40.0, 60.0))).width(Is(Some(100.0))).height(Is(Some(40.0))) |> ignore
+    })
+    observe_finger_hold(anchor, fn() { true }, fn() { held.val += 1 }, fn() { lifted.val += 1 }, fn() {  })
+  })
+  t.draw()
+  extent.set(100.0)
+  t.touch(0, 70.0, 80.0)
+  t.touch(2, 70.0, 80.0)
+  assert_eq((pressed.val, held.val, lifted.val), (1, 0, 0))
+  t.touch(0, 70.0, 80.0)
+  t.advance(long_press_ms)
+  t.touch(2, 70.0, 80.0)
+  assert_eq((pressed.val, held.val, lifted.val), (1, 1, 1))
+}
