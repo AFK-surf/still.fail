@@ -6,14 +6,16 @@
 ///|
 /// A kind of value nodes lend what they hold (View::lends), each lender's kept by it till it is let go.
 pub struct Lent[T] {
-  /// the lenders, each by the node that lends (its tree, its index and its making)
-  priv lenders : Array[(View, T)]
+  /// the lenders, each by the node that lends (its tree, its index and its making), kept by its index: a lender found
+  /// and let go of among those at its index alone (nodes of other trees, or another making of it not let go yet),
+  /// not among every node that lends
+  priv lenders : Map[Int, Array[(View, T)]]
 }
 
 ///|
 /// A kind of value lent, none lent yet.
 pub fn[T] Lent::new() -> Lent[T] {
-  { lenders: [] }
+  { lenders: {} }
 }
 
 ///|
@@ -23,13 +25,26 @@ pub fn[T] Lent::new() -> Lent[T] {
 /// it again.
 pub fn[T] View::lends(self : View, key : Lent[T], value : T) -> View {
   guard self.alive() else { return self }
-  match key.lenders.search_by(fn(e) { e.0.same(self) }) {
-    Some(i) => key.lenders[i] = (self, value)
+  let at = match key.lenders.get(self.at) {
+    Some(a) => a
     None => {
-      key.lenders.push((self, value))
+      let a = []
+      key.lenders[self.at] = a
+      a
+    }
+  }
+  match at.search_by(fn(e) { e.0.same(self) }) {
+    Some(i) => at[i] = (self, value)
+    None => {
+      at.push((self, value))
       self.owns(fn() {
-        match key.lenders.search_by(fn(e) { e.0.same(self) }) {
-          Some(i) => key.lenders.remove(i) |> ignore
+        match key.lenders.get(self.at) {
+          Some(a) => {
+            a.retain(fn(e) { !e.0.same(self) })
+            if a.is_empty() {
+              key.lenders.remove(self.at)
+            }
+          }
           None => ()
         }
       })
@@ -42,11 +57,11 @@ pub fn[T] View::lends(self : View, key : Lent[T], value : T) -> View {
 ///|
 /// What of kind `key` is lent to it: its own, else the nearest of what holds it that lends one; None where none does.
 pub fn[T] View::lent(self : View, key : Lent[T]) -> T? {
-  guard key.lenders.length() > 0 else { return None }
+  guard !key.lenders.is_empty() else { return None }
   let mut at : View? = Some(self)
   while at is Some(v) {
-    match key.lenders.search_by(fn(e) { e.0.same(v) }) {
-      Some(i) => return Some(key.lenders[i].1)
+    match key.lenders.get(v.at).bind(fn(a) { a.search_by(fn(e) { e.0.same(v) }).map(fn(i) { a[i].1 }) }) {
+      Some(value) => return Some(value)
       None => at = v.parent()
     }
   }
