@@ -2119,7 +2119,7 @@ export const SHAPES: Record<string, Shape> = {
     ["failsGone", map(vec("String")), { default: true, doc: "The failures let go in 待处理, by workspace: each as its item's `failure` said it. `prefs.set\n{failsGone: {<workspace>: [failure]}}` adds to those kept. Gone from 待处理 and the workspace's mark until it fails again." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
-    ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead." }],
+    ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong), all (those and the unread; none: this). `badgeKinds`, when kept, says it instead." }],
     ["badgeKinds", opt("BadgeKinds"), { default: true, doc: "What the app's badge counts, kind by kind (the notifications page); none: as `badge` says." }],
     ["invite", opt("String"), { default: true, doc: "The invite code a page was opened with, kept through signing in until a workspace is made with it." }],
     ["fillOff", opt("bool"), { default: true, doc: "Files opened and let go before all of them came are not brought whole after everything else on this\ndevice (fill.ts); none: they are." }],
