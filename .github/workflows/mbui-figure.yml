@@ -149,3 +149,9 @@ jobs:
             fi
             tail -n 5 "$RUNNER_TEMP/chat-moon-test.log"
           done <<< "$TEST_FILTERS"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: chat-test-logs
+          path: ${{ runner.temp }}/chat-moon-*.log
+          if-no-files-found: ignore
