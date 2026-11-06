@@ -821,6 +821,10 @@ export class Hub {
     return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).find(dir);
   }
 
+  sessionsInArguments(lines: readonly string[], home: string) {
+    return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).findArguments(lines, home);
+  }
+
   /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
   /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
   /// station runs things in sandboxes (agents.ts).
