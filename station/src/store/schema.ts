@@ -36,9 +36,7 @@ CREATE TABLE IF NOT EXISTS decision_checks (
   created_at INTEGER NOT NULL,
   result TEXT NOT NULL
 );
--- A session's latest check (review.ts undecided, for every done chat).
-CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
--- The time lookup is installed after SCHEMA: an older populated table must not be indexed in one long startup write.
+-- Decision lookups are installed after SCHEMA: an older populated table must not be indexed in one long startup write.
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
   connect TEXT NOT NULL,

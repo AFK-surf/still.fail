@@ -31,6 +31,8 @@ import { installUsageCompactions, usageCompactionsReady } from "./usage-compacti
 import { installPeopleSinceIndex } from "./legacy-people-since.ts";
 import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, hasLegacyArchivePolicy, installArchivePolicyIndex } from "./archive-policy-index.ts";
 import { hasLegacyDecisionTime, installDecisionTimeIndex } from "./legacy-decision-time.ts";
+import { hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex,
+  DecisionSessionsUnavailable, LEGACY_LAST_DECISION_SHARED, LEGACY_LAST_DECISION_SEPARATE } from "./legacy-decision-session.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
@@ -248,7 +250,43 @@ WHERE s.ws=?2 OR (?3 AND s.ws IS NULL) ORDER BY d.created_at,d.id`;
 // While preparing without the older time index, treat the recent window as large without scanning it: try the bounded
 // session lookups first, and group the source only if those lookups cannot answer exactly.
 const DECISION_SCOPE_BATCH = 64;
-const decisionScoped = (legacy: boolean, withoutTime = false) => `WITH RECURSIVE
+/// Before the old session index is complete, the last 64 checks can prove a session's most recent check, or that the
+/// whole table has no check for it. A missing session in a full tail stays unknown until preparation finishes.
+export const RECENT_LAST_DECISION = `WITH
+recent AS MATERIALIZED (SELECT id,session FROM decision_checks NOT INDEXED ORDER BY id DESC LIMIT ${DECISION_SCOPE_BATCH}),
+chosen AS MATERIALIZED (SELECT id FROM recent WHERE session=?1 ORDER BY id DESC LIMIT 1)
+SELECT (SELECT COUNT(*) FROM recent) AS n, EXISTS(SELECT 1 FROM chosen) AS found,
+  (SELECT d.result FROM chosen c CROSS JOIN decision_checks d ON d.id=c.id) AS result`;
+// If an old store's session lookup is not ready, a small recent time range can still answer exactly. Select at most
+// 65 keys, then group only when that proves the complete range has at most 64; the count and answers share a snapshot.
+const smallDecisionScope = (table: "decision_checks" | "legacy_decision_time", index: string) => `WITH
+recent AS MATERIALIZED (SELECT id,session FROM ${table} INDEXED BY ${index} WHERE created_at>=?1 LIMIT ${DECISION_SCOPE_BATCH + 1}),
+size AS MATERIALIZED (SELECT COUNT(*) AS n FROM recent),
+latest AS MATERIALIZED (SELECT MAX(id) AS id,session FROM recent WHERE (SELECT n FROM size)<=${DECISION_SCOPE_BATCH} GROUP BY +session),
+selected AS MATERIALIZED (
+  SELECT d.id,d.session,d.created_at,d.result FROM latest l
+  CROSS JOIN sessions s ON s.key=l.session AND s.ws=?2
+  CROSS JOIN decision_checks d ON d.id=l.id
+)
+SELECT size.n,selected.id,selected.session,selected.created_at,selected.result FROM size
+LEFT JOIN selected ON 1 ORDER BY selected.created_at,selected.id`;
+export const SMALL_DECISION_SCOPE = {
+  native: smallDecisionScope("decision_checks", "decision_checks_lately"),
+  old: smallDecisionScope("decision_checks", "decision_checks_at"),
+  prepared: smallDecisionScope("legacy_decision_time", "legacy_decision_time_at"),
+};
+const decisionScoped = (legacy: boolean, withoutTime = false, sessionIndex: "shared" | "separate" | null = null) => {
+const sessionTable = sessionIndex === "shared" ? "legacy_decision_time" : "legacy_decision_session";
+const sessionMeta = sessionIndex === "shared" ? "legacy_decision_time_meta" : "legacy_decision_session_meta";
+const sessionKey = sessionIndex === "shared" ? "legacy_decision_time_by_session" : "legacy_decision_session_by_session";
+const source = sessionIndex ? `SELECT d.id,d.created_at FROM session_state i CROSS JOIN ${sessionTable} p INDEXED BY ${sessionKey}
+  CROSS JOIN decision_checks d ON d.id=p.id WHERE i.complete=1 AND p.session=c.key ORDER BY p.id DESC`
+  : "SELECT id, created_at FROM decision_checks INDEXED BY decision_checks_session WHERE session = c.key ORDER BY id DESC";
+const remaining = sessionIndex ? `SELECT 1 FROM session_state i CROSS JOIN ${sessionTable} p INDEXED BY ${sessionKey}
+  WHERE i.complete=1 AND p.session=l.key ORDER BY p.id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}`
+  : `SELECT 1 FROM decision_checks INDEXED BY decision_checks_session WHERE session = l.key ORDER BY id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}`;
+return `WITH RECURSIVE
+${sessionIndex ? `session_state AS MATERIALIZED (SELECT complete FROM ${sessionMeta} WHERE id=1),` : ""}
 ${legacy ? `index_state AS MATERIALIZED (
   SELECT complete, EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_at') AS has_old
   FROM legacy_decision_time_meta WHERE id=1
@@ -277,16 +315,15 @@ chosen AS MATERIALIZED (
 ),
 lookups AS MATERIALIZED (
   SELECT c.key, (SELECT id FROM (
-    SELECT id, created_at FROM decision_checks INDEXED BY decision_checks_session
-    WHERE session = c.key ORDER BY id DESC LIMIT ${DECISION_SCOPE_BATCH + 1}
+    ${source} LIMIT ${DECISION_SCOPE_BATCH + 1}
   ) WHERE created_at >= ?1 ORDER BY id DESC LIMIT 1) AS id
   FROM chosen c WHERE (SELECT COUNT(connect) FROM connects) <= ${DECISION_SCOPE_BATCH} AND (SELECT COUNT(*) FROM chosen) <= ${DECISION_SCOPE_BATCH}
 ),
 mode AS MATERIALIZED (
-  SELECT ${withoutTime ? DECISION_SCOPE_BATCH + 1 : legacy ? "(SELECT n FROM recent_count)" : "(SELECT COUNT(*) FROM recent)"} < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
+  SELECT ${sessionIndex ? "(SELECT complete FROM session_state)=0 OR " : ""}${withoutTime ? DECISION_SCOPE_BATCH + 1 : legacy ? "(SELECT n FROM recent_count)" : "(SELECT COUNT(*) FROM recent)"} < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
     OR (SELECT COUNT(*) FROM chosen) > ${DECISION_SCOPE_BATCH} OR EXISTS (
       SELECT 1 FROM lookups l WHERE l.id IS NULL AND EXISTS (
-        SELECT 1 FROM decision_checks INDEXED BY decision_checks_session WHERE session = l.key ORDER BY id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}
+        ${remaining}
       )
     ) AS use_global
 ),
@@ -305,9 +342,18 @@ LEFT JOIN sessions s ON s.key = l.session
 CROSS JOIN decision_checks d ON d.id = l.id
 WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
 ORDER BY d.created_at, d.id`;
+};
 export const LATEST_DECISIONS_SCOPED = decisionScoped(false);
 export const LEGACY_LATEST_DECISIONS_SCOPED = decisionScoped(true);
 export const LATEST_DECISIONS_SCOPED_NO_TIME = decisionScoped(false, true);
+const sessionDecisionQueries = {
+  shared: { native: decisionScoped(false, false, "shared"), legacy: decisionScoped(true, false, "shared"),
+    noTime: decisionScoped(false, true, "shared") },
+  separate: { native: decisionScoped(false, false, "separate"), legacy: decisionScoped(true, false, "separate"),
+    noTime: decisionScoped(false, true, "separate") },
+};
+export const decisionScopedWithSession = (legacy: boolean, withoutTime: boolean, session: "shared" | "separate") =>
+  sessionDecisionQueries[session][withoutTime ? "noTime" : legacy ? "legacy" : "native"];
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
@@ -422,6 +468,7 @@ export class Store {
   readonly #legacyEditsOldIndex: boolean;
   readonly #legacyArchivePolicy: boolean;
   readonly #legacyDecisionTime: boolean;
+  readonly #legacyDecisionSession: "shared" | "separate" | null;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -436,6 +483,8 @@ export class Store {
   requestSessionChat: ((session: string) => void) | null = null;
   /// Request bounded preparation while a synchronous caller keeps its immediate answer for an old session.
   requestLatestThread: ((session: string) => void) | null = null;
+  /// Wait for a missing older decision-session lookup without scanning the source on the calling thread.
+  waitForDecisionSessions: (() => Promise<boolean>) | null = null;
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
   /// Hand-written title changes in this process, for requests that must not overwrite a later rename.
@@ -454,6 +503,8 @@ export class Store {
     this.#legacyEditsOldIndex = this.#legacyEdits && legacyEditsUseOldIndex(db);
     this.#legacyArchivePolicy = hasLegacyArchivePolicy(db);
     this.#legacyDecisionTime = hasLegacyDecisionTime(db);
+    this.#legacyDecisionSession = db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session'").get()
+      ? null : hasSharedDecisionSession(db) ? "shared" : hasLegacyDecisionSession(db) ? "separate" : null;
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -495,7 +546,8 @@ export class Store {
         }
       }
       db.exec(SCHEMA);
-      installDecisionTimeIndex(db);
+      installDecisionTimeIndex(db, true);
+      installDecisionSessionIndex(db);
       installPeopleSinceIndex(db);
       installClosedCardsIndex(db);
       addEditIndex(db);
@@ -1764,33 +1816,89 @@ export class Store {
     });
   }
 
+  /// Whether the session lookup has all old checks. The builder only publishes it after its last batch.
+  decisionSessionsReady(): boolean {
+    if (this.#legacyDecisionSession === null) return true;
+    const table = this.#legacyDecisionSession === "shared" ? "legacy_decision_time_meta" : "legacy_decision_session_meta";
+    return this.#one(`SELECT complete FROM ${table} WHERE id=1`)?.complete === 1;
+  }
+
+  async prepareDecisionSessions(): Promise<void> {
+    if (this.decisionSessionsReady()) return;
+    if (this.waitForDecisionSessions === null || !await this.waitForDecisionSessions() || !this.decisionSessionsReady())
+      throw new DecisionSessionsUnavailable();
+  }
+
+  /// A complete small recent range can be read through a time index without the still-preparing session index.
+  #smallRecentDecisionScope(since: number, workspace: string | null): Json[] | null {
+    const timeIndex = this.#one(`SELECT name FROM sqlite_master WHERE type='index'
+      AND name IN ('decision_checks_lately','decision_checks_at') ORDER BY name='decision_checks_lately' DESC LIMIT 1`)?.name;
+    const source = timeIndex === "decision_checks_lately" ? "native" : timeIndex === "decision_checks_at" ? "old"
+      : this.#legacyDecisionTime && this.#one("SELECT complete FROM legacy_decision_time_meta WHERE id=1")?.complete === 1 ? "prepared" : null;
+    if (source === null) return null;
+    let rows: Json[];
+    try { rows = this.#all(SMALL_DECISION_SCOPE[source], since, workspace); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/no such (?:index|table): (?:main\.)?(?:decision_checks_lately|decision_checks_at|legacy_decision_time(?:_at)?)$/.test(message)) throw error;
+      return null;
+    }
+    if (rows[0]?.n > DECISION_SCOPE_BATCH) return null;
+    return rows.filter((row) => row.id !== null).map((row) => ({
+      id: row.id, session: row.session, at: row.created_at, detail: parsed(row.result) ?? null,
+    }));
+  }
+
   /// The session's latest decision record, if any.
   lastDecision(session: string): Json | null {
-    const row = this.#one("SELECT result FROM decision_checks WHERE session = ? ORDER BY id DESC LIMIT 1", session);
+    if (!this.decisionSessionsReady()) {
+      const recent = this.#one(RECENT_LAST_DECISION, session);
+      if (recent?.found === 1) return parsed(recent.result) ?? null;
+      if (recent && recent.n < DECISION_SCOPE_BATCH) return null;
+      throw new DecisionSessionsUnavailable();
+    }
+    const source = () => this.#one("SELECT result FROM decision_checks WHERE session = ? ORDER BY id DESC LIMIT 1", session);
+    let row: Json | undefined;
+    try { row = this.#legacyDecisionSession === null ? source() : this.#one(
+      this.#legacyDecisionSession === "shared" ? LEGACY_LAST_DECISION_SHARED : LEGACY_LAST_DECISION_SEPARATE, session); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/no such (?:index|table): (?:main\.)?legacy_decision_(?:time|session)(?:_meta|_by_session)?$/.test(message)) throw error;
+      row = source();
+    }
     return row ? (parsed(row.result) ?? null) : null;
   }
 
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
+    if (viewer?.home === false && !this.decisionSessionsReady()) {
+      const small = this.#smallRecentDecisionScope(since, viewer.workspace);
+      if (small !== null) return small;
+      throw new DecisionSessionsUnavailable();
+    }
     let rows: Json[];
     try {
       if (viewer === undefined) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS : LATEST_DECISIONS, since);
       else if (viewer.home !== false) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK : LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
-      else rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED : LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
+      else rows = this.#all(this.#legacyDecisionSession
+        ? decisionScopedWithSession(this.#legacyDecisionTime, false, this.#legacyDecisionSession)
+        : this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED : LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately|legacy_decision_time_at)$/.test(message)
-        && !/no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message)) throw error;
+      if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately|legacy_decision_time_at|legacy_decision_time_by_session|legacy_decision_session_by_session)$/.test(message)
+        && !/no such table: (?:main\.)?legacy_decision_(?:time|session)(?:_meta)?$/.test(message)) throw error;
       const fallback = () => viewer === undefined ? this.#all(LATEST_DECISIONS, since)
         : this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, flag(viewer.home !== false));
       if (viewer?.home === false && (/no such index: (decision_checks_lately|legacy_decision_time_at)$/.test(message)
         || /no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message))) {
         // A time index can disappear after this store opened. Keep the bounded session path if its indexes remain.
-        try { rows = this.#all(LATEST_DECISIONS_SCOPED_NO_TIME, since, viewer.workspace, 0); }
+        try { rows = this.#all(this.#legacyDecisionSession
+          ? decisionScopedWithSession(false, true, this.#legacyDecisionSession)
+          : LATEST_DECISIONS_SCOPED_NO_TIME, since, viewer.workspace, 0); }
         catch (retryError) {
           const retryMessage = retryError instanceof Error ? retryError.message : "";
-          if (!/no such index: (sessions_by_connect|decision_checks_session)$/.test(retryMessage)) throw retryError;
+          if (!/no such (?:index|table): (?:main\.)?(?:sessions_by_connect|decision_checks_session|legacy_decision_(?:time|session)(?:_meta|_by_session)?)$/.test(retryMessage)) throw retryError;
           rows = fallback();
         }
       } else rows = fallback();
