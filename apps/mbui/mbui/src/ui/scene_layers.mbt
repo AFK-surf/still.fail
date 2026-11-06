@@ -2046,7 +2046,7 @@ fn Ctx::scene_emitted(
         } else {
           match self.scene_moved_by(p.tree, l, c) {
             Some(m) => {
-              copy_not_count("(moved by an offset in what holds it)")
+              copy_not_count(if m == (0.0, 0.0) { "(put by an offset in what holds it, not moved)" } else { "(moved by an offset in what holds it)" })
               self.scene_emitted(p, c, moved=m)
             }
             None => self.scene_redrawn_in(p, l, c)
@@ -2310,9 +2310,11 @@ fn scene_copyable(l : SceneLayer) -> Bool {
 /// kept), as it keeps how it is drawn where that stands, else by a walk of the tree from it. Where the tree no longer
 /// has it in its holder, nothing (as the walk leaves out what is out of its row).
 fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLayer) -> Unit {
-  copy_not_count("drawn anew at its reference")
   let tree = by.tree
-  guard scene_place_now(tree, c) is Some(place) else { return }
+  guard scene_place_now(tree, c) is Some(place) else { copy_not_count("(at its reference, not in what holds it)")
+    return
+  }
+  copy_not_count("drawn anew at its reference")
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
   // (its outer from where it was, as far below it as it was: insts_moved_by)
   clip_say_from(if c.from_rel == scene_no_level { -1 } else { clip_top() / clip_n + c.from_rel })

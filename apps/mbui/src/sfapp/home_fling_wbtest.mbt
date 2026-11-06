@@ -28,7 +28,7 @@ test "the chats' list flung on a phone: no frame of it drawn again whole, rows c
       out.push("at \{f.at}: drawn again whole (\{f.whole_why})")
     }
   }
-  println("COPY_NOTS \{@ui.scene_copy_nots()}")
+  println("COPY_NOTS frames=\{frames.length()} \{@ui.scene_copy_nots()}")
   assert_true(frames.length() > 100, msg="\{frames.length()} frames")
   assert_eq(out, [])
 }
