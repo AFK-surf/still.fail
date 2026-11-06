@@ -334,6 +334,25 @@ fn on_grid(v : Double) -> Double {
 let absolute_seen : Ref[Bool] = { val: false }
 
 ///|
+// A custom container measured this child but left it unplaced before its absolute descendants could be placed.
+// A compute generation is nonnegative; this value is kept in skip_gen until the child is placed.
+let absolute_pending : Int = -2
+
+///|
+/// A custom container may place a child it measured in an earlier layout. Its cached size can stand, but its absolute
+/// descendants still need their first placement in this compute. Check after the callback, whatever placed the child.
+fn placed_custom_children(node : Node) -> Unit {
+  if !absolute_seen.val {
+    for c in node.children {
+      if c.line >= 0 && c.skip_gen == absolute_pending {
+        absolute_seen.val = true
+        break
+      }
+    }
+  }
+}
+
+///|
 /// Whether `n`'s layout in this compute() is the one it had (its subtree
 /// untouched). (A node is laid out at most once in a compute but for
 /// baselines, which reuse does not take.)
@@ -416,7 +435,7 @@ pub fn compute(
   root.left = on_grid(b.mar_l + dx)
   root.top = on_grid(b.mar_t + dy)
   if absolute_seen.val && !(kept(root) && s.position != Static) {
-    layout_static_absolute(root, root, 0.0, 0.0)
+    layout_static_absolute(root, root, 0.0, 0.0, false)
   }
   if round {
     round_layout(root, 0.0, 0.0)
@@ -605,7 +624,7 @@ fn size_node_in(
       same(node.p_cbh, cb_h) {
       // (laid out before this compute and found so: reused; laid out in this one already, its absolute boxes are
       // still to be placed with the rest)
-      if node.p_gen != generation.val {
+      if node.p_gen != generation.val && node.skip_gen != absolute_pending {
         node.skip_gen = generation.val
       }
       counters[1] = counters[1] + 1
@@ -754,6 +773,7 @@ fn size_uncached(
       // its own as a leaf's measure is)
       if node.sized_by_children && known(w) && !known(h) {
         let said = layout(fmax(w - pbw, 0.0), undef, b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+        placed_custom_children(node)
         out_h.val = clamp_size((if known(said) { said } else { 0.0 }) + pbh, b.min_h, b.max_h)
         return w
       }
@@ -766,6 +786,7 @@ fn size_uncached(
       if perform {
         guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
         layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t) |> ignore
+        placed_custom_children(node)
       }
       out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
       return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }
@@ -2521,11 +2542,22 @@ fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
 /// boxes in between pass their absolute children up), and at its static
 /// position in its parent when it has no insets. (ox, oy): the parent's
 /// border box in cb's.
-fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> Unit {
+fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double, revealed : Bool) -> Unit {
+  // A newly revealed cached subtree was never published at its measured places. Visit its path again so the view
+  // tree updates what is drawn and hit, even where ordinary flex layout was reused.
+  if revealed { node.laid_gen = generation.val }
   if node.layout_children is Some(_) {
     // The container has already placed its direct children; absolute descendants still use their own holders.
     for c in node.children {
-      if c.line >= 0 && !kept(c) && c.children.length() > 0 { layout_static_absolute(c, c, 0.0, 0.0) }
+      if c.line < 0 {
+        // This subtree was laid out but not placed: its absolute descendants were not visited. Its measured size
+        // can be reused, but its absolute placement cannot, if a later custom layout puts it in the tree.
+        if (revealed || c.p_gen == generation.val) && c.children.length() > 0 { c.skip_gen = absolute_pending }
+      } else if (revealed || !kept(c)) && c.children.length() > 0 {
+        let child_revealed = revealed || c.skip_gen == absolute_pending
+        if c.skip_gen == absolute_pending { c.skip_gen = -1 }
+        layout_static_absolute(c, c, 0.0, 0.0, child_revealed)
+      }
     }
     return
   }
@@ -2535,22 +2567,22 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
       continue
     }
     if cs.display == Contents {
-      layout_static_absolute(cb, c, ox, oy)
+      layout_static_absolute(cb, c, ox, oy, revealed)
       continue
     }
     // a box whose layout was reused holds its absolute boxes as they were
     // (and one with no children has none to place)
     if cs.position == Absolute {
       place_absolute(cb, node, c, ox, oy)
-      if !kept(c) && c.children.length() > 0 {
-        layout_static_absolute(c, c, 0.0, 0.0)
+      if (revealed || !kept(c)) && c.children.length() > 0 {
+        layout_static_absolute(c, c, 0.0, 0.0, revealed)
       }
     } else if c.children.length() == 0 {
       ()
     } else if cs.position == Static {
-      layout_static_absolute(cb, c, ox + c.left, oy + c.top)
-    } else if !kept(c) {
-      layout_static_absolute(c, c, 0.0, 0.0)
+      layout_static_absolute(cb, c, ox + c.left, oy + c.top, revealed)
+    } else if revealed || !kept(c) {
+      layout_static_absolute(c, c, 0.0, 0.0, revealed)
     }
   }
 }

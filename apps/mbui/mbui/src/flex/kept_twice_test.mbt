@@ -65,3 +65,22 @@ test "a child kept from an earlier compute: its absolute boxes as they were plac
   @flex.compute(root, width=300.0, height=300.0, round=false, reuse=true)
   assert_eq(over.width, 80.0)
 }
+
+///|
+test "a custom flex container places an overlay in a previously unplaced measured child" {
+  let (root, row, part) = kept_twice_tree(Ref(false))
+  let over = put_over(root, row, part)
+  let show = Ref(false)
+  root.layout_children = Some(fn(w, _h, _x, _y) {
+    row.line = -1
+    @flex.layout_child(row, w) |> ignore
+    if show.val { row.line = 0 }
+    0.0 / 0.0
+  })
+  @flex.compute(root, width=300.0, height=300.0, round=false, reuse=true)
+  assert_eq(over.width, 0.0)
+  show.val = true
+  root.dirty = true
+  @flex.compute(root, width=300.0, height=300.0, round=false, reuse=true)
+  assert_eq((over.width, over.height), (80.0, 50.0))
+}
