@@ -33,6 +33,7 @@ fn wide_page_node(
   scroll : @view.Scroll,
   about : () -> String,
   tips : TipLayer,
+  seen : ((Array[String]) -> Unit)?,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
     let f = frame()
@@ -53,7 +54,16 @@ fn wide_page_node(
   }
   v.box(fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    // (the blocks of those that came in sight, by their keys)
+    let seen = seen.map(fn(tell) {
+      fn(came : Array[WideItem]) {
+        let keys = came.filter_map(fn(i) { if i is WideBlock(k) { Some(k) } else { None } })
+        if keys.length() > 0 {
+          tell(keys)
+        }
+      }
+    })
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, seen?=seen, fn(s, item) {
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore

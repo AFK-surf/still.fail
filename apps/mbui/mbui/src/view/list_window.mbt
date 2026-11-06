@@ -2,8 +2,11 @@
 // lists; as an old view's list builds only the rows in view, ui's Ctx::list): laid out in the column's own layout from
 // where it is scrolled to, as a list from its anchor is (View::scrolls_anchored, retained.md rule 11), each block made
 // and measured as that layout comes to it, in that same layout, till what shows is filled; one never laid out counted
-// as `est` (its height kept by its key as wide as the column was as it was laid out), so a block that does not show is
-// not made and nothing of it measured, and nothing a block measures is told back to lay the column out again. As what
+// as `est` (its height kept by its key as wide as the column was as it was laid out). A block a scroll goes past is
+// made too, only to be measured, and let go in the same layout (so it stops where many smaller scrolls would): what a
+// block's make does is make its nodes and read what they show, never start what lasts (retained.md: what a layout
+// makes is a cache of the picture); what a page keeps for a block it starts as the block is told seen. Nothing a block
+// measures is told back to lay the column out again. As what
 // is over what shows changes height (a block laid out again taller than it was counted, one come or gone over it), what
 // shows stays where it is: the column is where its anchor is. ui's ListRows::in_node alone is laid out the way before
 // it still, its blocks' heights told back (View::scrolls_window_rooms).
@@ -41,8 +44,14 @@ pub fn View::list_room(self : View) -> ListRoom? {
 /// A page's list (`s`: Scroll::list) scrolling up and down in it (View::scrolls, `slop` and `bar` as there) holding the
 /// blocks `keys` names, in their order, one under another from its top, nothing else: each made by `make` in a node of
 /// its own as it comes to show (its room, from the column's top to its foot, met by any of it), let go as it no more
-/// does, as tall in the column meanwhile as it was last laid out (`est` where it never was). How tall each that does
-/// not show was is forgotten as the column is laid out at another width or all words are measured anew.
+/// does, as tall in the column meanwhile as it was last laid out (`est` where it never was); one a scroll goes past made
+/// too, only to be measured, and let go in the same layout. So `make` makes a block's nodes and reads what they show,
+/// and starts nothing outside them (a draft, a call to the core, anything said): what is kept for a block is started
+/// as `seen` tells it came in sight, told once the frame is painted: in sight as it was laid out (at an input's moment
+/// or a frame's), or gone across as it went on by itself (a fling, a wheel's notches easing in), whether the frames
+/// between were many or one; never one gone past as it was moved at once (a wheel's turn, a drag's move, its bar,
+/// put) nor as it was first laid out where it was scrolled to. How tall each that does not show was is forgotten as the
+/// column is laid out at another width or all words are measured anew.
 /// `from_end` (a chat's, an old view's list's `from_end` and `stick_end`): shorter than the column, its blocks at its
 /// foot; first shown at its end; at its end, kept there as what it holds grows or what shows is laid out taller,
 /// no longer once it is scrolled from there, again once it is back. `follows` says, followed, whether it is kept at its
@@ -78,11 +87,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
+  seen? : (Array[K]) -> Unit,
 ) -> View {
   // (only what shows: nothing made ahead of it; each never laid out counted as `est`, not as the mean of those laid out)
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown, put?=put, rooms?=rooms,
     fresh~, read_from_top~, cover~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
+    seen?=seen,
   )
 }
 

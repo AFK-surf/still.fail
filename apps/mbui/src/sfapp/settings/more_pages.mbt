@@ -723,17 +723,18 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
 }
 
 ///|
-/// A station's rule's draft (`decisionForm`) opened for what shows it (its rows made once, src/sfpages
-/// automatic_decisions.mbt), by the name it is then known by; dropped by decision_form_drop as they are let go.
-pub fn decision_form_open(core : Core, station : String) -> String {
+/// A station's rule's draft (`decisionForm`) opened for the page that shows it (src/sfpages automatic_decisions.mbt
+/// completion_node, once the station's section came in sight there; never by a section being made), by the name it is
+/// then known by, told `opened` once the core has opened it; dropped by decision_form_drop as that page is let go.
+pub fn decision_form_open(core : Core, station : String, opened? : (String) -> Unit = fn(_) {  }) -> String {
   profile_forms.val += 1
   let f = "mbui-decision-" + profile_forms.val.to_string()
-  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
+  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]), then=fn(_) { opened(f) })
   f
 }
 
 ///|
-/// A station's rule's draft `form` (decision_form_open's) dropped: what showed it let go.
+/// A station's rule's draft `form` (decision_form_open's) dropped: the page that opened it let go.
 pub fn decision_form_drop(core : Core, station : String, form : String) -> Unit {
   act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.drop", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]))
 }

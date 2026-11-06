@@ -175,7 +175,9 @@ priv enum PageItem {
 /// their form from where they are made, nothing said round their making. In either: back where the frame says it goes
 /// (`on_back` as it is pressed), its title, what it is for (`lead`) under it, what it does (`actions`) at its title's
 /// line's end, then its blocks, those `blocks` names now by their keys, each made by `block`, then the frame's room at
-/// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window). What it says
+/// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window: one a scroll
+/// goes past made only to be measured, so a block makes its nodes and starts nothing), the keys of the blocks that came
+/// in sight told `seen` (View::scrolls_window's: what a page keeps for a block started then). What it says
 /// of itself told `said` as that changes (a frame's bar that names it: its title, and what it is for by a mark beside
 /// it, `about`). Where its list is scrolled to its own, the same through its arrangements, or kept by whoever holds it
 /// (`scroll`: a page of parts, each part's page its own as it was left).
@@ -193,6 +195,7 @@ pub fn page_node(
   width? : () -> Double,
   scroll? : @view.Scroll,
   tips? : TipLayer,
+  seen? : (Array[String]) -> Unit,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
@@ -224,8 +227,8 @@ pub fn page_node(
       None => own_scroll
     }
     match l {
-      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
-      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips)
+      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, seen)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips, seen)
     }
   })
   // (its own layer only where it has what is for by a mark to say: nothing over a page that has none)
@@ -321,6 +324,7 @@ fn narrow_page_node(
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
   scroll : @view.Scroll,
+  seen : ((Array[String]) -> Unit)?,
 ) -> Unit {
   let items = fn() -> Array[PageItem] {
     let f = frame()
@@ -345,7 +349,16 @@ fn narrow_page_node(
   }
   v.box(fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    // (the blocks of those that came in sight, by their keys)
+    let seen = seen.map(fn(tell) {
+      fn(came : Array[PageItem]) {
+        let keys = came.filter_map(fn(i) { if i is Block(k) { Some(k) } else { None } })
+        if keys.length() > 0 {
+          tell(keys)
+        }
+      }
+    })
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, seen?=seen, fn(s, item) {
       with_look(Narrow, fn() {
         match item {
           // under what stands over it (a status bar)

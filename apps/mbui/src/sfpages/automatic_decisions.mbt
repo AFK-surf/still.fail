@@ -52,7 +52,8 @@ pub fn decisions_node(
 ///|
 /// The completion rule's page (AutomaticDecisionCompletion, the narrow app's AutomaticDecisionCompletionScreen) made
 /// once as nodes (page_node, laid out by the `width` its frame gives it, narrow where none is given): a section a
-/// station, its rule where it can be set (completion_station_node), else why not (offline, older, connecting); while
+/// station, its rule where it can be set (completion_station_node, its draft the page's: opened once its section came
+/// in sight and it may be set, dropped as the page is let go), else why not (offline, older, connecting); while
 /// the stations are read the first time, their sections in their bones, what could not be read said instead; 重新发现模型
 /// at its title's end (where a frame's bar names it, in that bar: `bar_actions`). All as the core says it. What it
 /// says of itself told `said`; what is said of what the pointer rests on, in `tips`.
@@ -68,30 +69,69 @@ pub fn completion_node(
   bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
 ) -> Unit {
   let topic = fn() { @settings.stations_of(core, here()) }
-  // (the stations' drafts the page's own, as the old frame kept them by station: each opened as its rows first come,
-  // kept while the station goes offline and comes back, all dropped as the page is let go)
-  let forms : Map[String, String] = {}
-  let form_of = fn(station : String) -> String {
-    match forms.get(station) {
-      Some(f) => f
-      None => {
-        let f = @settings.decision_form_open(core, station)
-        forms[station] = f
-        f
-      }
-    }
-  }
-  v.owns(fn() {
-    for station, form in forms {
-      @settings.decision_form_drop(core, station, form)
-    }
-    forms.clear()
-  })
-  |> ignore
   let stations = fn() {
     match topic().value {
       Some(Array(a)) => a
       _ => []
+    }
+  }
+  // (the stations' drafts the page's own, by station, as the old frame kept them: each opened once its section has come
+  // in sight (page_node's `seen`: in sight as the page was laid out, or gone across as it went on by itself; not one a
+  // jump went past, made only to be measured) and its rule may be changed here (online, read, its managers'), whichever
+  // comes later; kept while it goes offline and comes back, in sight or not; all dropped as the page is let go. Never
+  // by a section being made: it reads its draft by its station once the core has opened it)
+  let seen : @signals.Signal[Map[String, Bool]] = @signals.signal({})
+  let asked : Map[String, String] = {}
+  let forms : @signals.Signal[Map[String, String]] = @signals.signal({})
+  v.reacts(
+    fn() {
+      let looked = seen.get()
+      stations().filter_map(fn(st) {
+        let s = Some(st)
+        let station = text(s, "station")
+        let rule = field(field(s, "overview"), "automaticDecisions")
+        if looked.contains(station) && flag(s, "online") && rule is Some(Object(_)) && flag(rule, "canEdit") {
+          Some(station)
+        } else {
+          None
+        }
+      })
+    },
+    fn(due) {
+      for station in due {
+        if !asked.contains(station) {
+          asked[station] = @settings.decision_form_open(core, station, opened=fn(form) {
+            let now = @signals.untracked(fn() { forms.get() }).copy()
+            now[station] = form
+            forms.set(now)
+          })
+        }
+      }
+    },
+  )
+  v.owns(fn() {
+    for station, form in asked {
+      @settings.decision_form_drop(core, station, form)
+    }
+    asked.clear()
+  })
+  |> ignore
+  let saw = fn(keys : Array[String]) {
+    let looked = @signals.untracked(fn() { seen.get() })
+    let came = keys.filter_map(fn(k) {
+      if k.has_prefix("station/") {
+        let station = k.unsafe_substring(start=8, end=k.length())
+        if looked.contains(station) { None } else { Some(station) }
+      } else {
+        None
+      }
+    })
+    if came.length() > 0 {
+      let now = looked.copy()
+      for station in came {
+        now[station] = true
+      }
+      seen.set(now)
     }
   }
   // 重新发现模型: every online station's models read again
@@ -177,7 +217,7 @@ pub fn completion_node(
               },
               fn(p, why) {
                 if why == "" {
-                  completion_station_node(p, core, station, form_of, view, tips?)
+                  completion_station_node(p, core, station, fn() { forms.get().get(station) }, view, tips?)
                 } else {
                   @sf.page_note_node(p, fn() { @sf.t(why) })
                 }
@@ -194,27 +234,40 @@ pub fn completion_node(
     said?,
     width?,
     tips?,
+    seen=saw,
   )
 }
 
 ///|
 /// A station's rule (AutomaticDecisionPanel, the narrow app's DecisionPanel) as nodes: only its managers' (else said
-/// so); its draft (`decisionForm`, the page's: `form_of` opens it the first time it is asked for) read as the core says
-/// it (its rows in their bones while it is read the first time, what could not be read said instead).
+/// so); its draft (`decisionForm`, the page's: `form` its name, once the page has opened it) read as the core says it
+/// (its rows in their bones while it is read the first time, what could not be read said instead). It opens nothing:
+/// made only to be measured, it reads what it would show.
 fn completion_station_node(
   v : @view.View,
   core : Core,
   station : String,
-  form_of : (String) -> String,
+  form : () -> String?,
   view : () -> Json?,
   tips? : @sf.TipLayer,
 ) -> Unit {
-  v.pick(fn() { flag(view(), "canEdit") }, fn(p, can) {
-    if !can {
-      @sf.page_note_node(p, fn() { @sf.t("web-pages.automaticDecisions.adminOnly") })
-      return
+  v.pick(fn() { (flag(view(), "canEdit"), form()) }, fn(p, now) {
+    let form = match now {
+      (false, _) => {
+        @sf.page_note_node(p, fn() { @sf.t("web-pages.automaticDecisions.adminOnly") })
+        return
+      }
+      (true, Some(f)) => f
+      // (its managers', its draft not opened by the page yet: as while it is read)
+      (true, None) => {
+        @sf.waiting_node(
+          p,
+          fn(s) { form_rows_node(s, core.quiet(), station, "", view, fn() { Some({ "enabled": true }) }) },
+          note=fn() { { reading: true, text: @sf.t("web-pages.automaticDecisions.readingConfig"), failing: [] } },
+        )
+        return
+      }
     }
-    let form = form_of(station)
     let topic = fn() { (core.topic)("decisionForm", { "station": str(station), "form": str(form) }) }
     p.pick(
       fn() {
