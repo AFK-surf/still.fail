@@ -35,7 +35,9 @@ team, shows them the report, and sends it once they agree. The reports wait in t
   `x-stillfail-channel: beta`). Kept in the Directory's `feedback` table, numbered from 1 (FB-n); the same sender's
   same key answers the report kept (200, `duplicate: true`); 20 per sender a day (429). The console:
   `GET /v1/admin/feedback` (newest 500, with station, workspace and account), `POST /v1/admin/feedback/<id>/status`
-  `{ status: new | triaged | fixed | wontfix }`.
+  `{ status: new | triaged | fixed | wontfix }`. The team's feedback monitor reads the same list with
+  `POST /v1/admin/feedback/list` and `Authorization: Bearer <FEEDBACK_TOKEN>` (on the public host; the deploy's
+  `feedback-token`, GitHub's production secret `FEEDBACK_TOKEN`): a token that reads the reports and nothing else.
 - **Old and new together**: an old station has no tool and no skill. A new station on an old cloud gets 404 and the
   agent hands the person the report to pass on. An old console never asks for the list.
 - **Told when fixed** (docs/changelog.md): a commit's `Fixes: FB-<n>` trailer marks the report fixed (its version and

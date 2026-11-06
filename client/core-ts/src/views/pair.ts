@@ -518,7 +518,17 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     const y = trying(inner, workspaces);
     y.approvers = approvers;
     // What it says of itself: an app's signing key, and each workspace's credential for its main endpoint.
-    const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))) : null;
+    const signer = inner.host.appKeys ? yield* Effect.tapError(
+      Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))),
+      (error) => Effect.sync(() => {
+        // A failed key read ends the request; leaving it as "finding" would imply devices were still being contacted.
+        // A cancelled or newer request must not be changed by this one's late failure.
+        if (tryings.get(inner) !== y) return;
+        y.state = "failed";
+        y.error = error.message;
+        changed(inner, y);
+      }),
+    ) : null;
     if (signer) signerKnown(inner, signer.id);
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(

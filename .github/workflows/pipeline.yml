@@ -424,6 +424,7 @@ jobs:
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
         run: sh .github/deploy.sh api
 
   # The app for the browser (each of the web's pages: apps/mbui/scripts/web-app.sh), built where MoonBit's cache is

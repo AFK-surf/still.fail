@@ -35,7 +35,7 @@ const QUEUE_MOST = 30;
 /// view cannot start low and climb as the pace asks of a helper's. A phone's UI stays sharp at these where 1.5 Mbit/s
 /// (the pace's start, which this took before) left 1280 and up soft; a still screen sends nothing at any of them.
 export function bitrateOf(side: number): number {
-  return side <= 480 ? 1_000_000 : side <= 720 ? 1_500_000 : side <= 1080 ? 2_500_000 : side <= 1440 ? 3_500_000 : 4_000_000;
+  return side <= 480 ? 2_000_000 : side <= 720 ? 3_000_000 : side <= 1080 ? 5_000_000 : side <= 1440 ? 7_000_000 : 8_000_000;
 }
 /// A preview (a link's card): about two pictures a second, small and cheap.
 export const PEEK_FPS = 2;

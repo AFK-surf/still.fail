@@ -6,7 +6,7 @@
 # The secrets, each a file's content (none of them needed for --dry-run): CLOUDFLARE_API_TOKEN (without it, the
 # machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), AXIOM_JSON,
 # VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, APNS_JSON (apns.json, the APNs key), POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple), REVIEW_ACCOUNTS_JSON
-# (review-accounts.json, App Store review's password sign-in).
+# (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's).
 set -eu
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile --prefer-offline > /dev/null
@@ -25,6 +25,7 @@ put apns.json "${APNS_JSON:-}"
 put posthog.json "${POSTHOG_JSON:-}"
 put apple.json "${APPLE_JSON:-}"
 put review-accounts.json "${REVIEW_ACCOUNTS_JSON:-}"
+put feedback-token "${FEEDBACK_TOKEN:-}"
 umask 022
 # (another cloud's builds apart: STILLFAIL_CLOUD, cloud/deploy.py CLOUDS)
 builds="$HOME/${STILLFAIL_CLOUD:-stillfail}-deploy/builds"

@@ -17,7 +17,7 @@ import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
-import { existingRunners, listening, type RunnerInfo } from "./runner.ts";
+import { liveRunners, listening, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import { Said, stationLang, tr } from "../ops/i18n.ts";
 import { run } from "../updates/runtimes.ts";
@@ -693,7 +693,7 @@ export class CodexDriver implements AgentDriver {
     // One left by the station before that no session handed over is on (`sweepLeft`, later) is one of them already: the
     // sessions are all taken up by now (`host` waits for that).
     await this.serial(async () => {
-      for (const info of this.leftRunners(key)) if (info.id !== on.proc.info.id) this.keepDraining(this.holdLeft(profile, info, key));
+      for (const info of await this.leftRunners(key)) if (info.id !== on.proc.info.id) this.keepDraining(this.holdLeft(profile, info, key));
     });
     for (const host of [...this.draining]) {
       if (host === on || host.key !== key || !host.alive()) continue;
@@ -719,17 +719,18 @@ export class CodexDriver implements AgentDriver {
 
   /// The runners of a host key an earlier station left, the oldest first: its own (`runnerId`) and those of app-servers
   /// started while one was being replaced (`<id>.<n>`); none this driver holds.
-  private leftRunners(key: string): RunnerInfo[] {
+  private async leftRunners(key: string): Promise<RunnerInfo[]> {
     const base = runnerId("codex", key);
+    const runners = await liveRunners(this.data, { strict: true });
     const held = new Set([...this.hosts.values(), ...this.draining].map((h) => h.proc.info.id));
-    return existingRunners(this.data)
+    return runners
       .filter((r) => (r.id === base || r.id.startsWith(`${base}.`)) && !held.has(r.id) && listening(r))
       .sort((a, b) => a.startedAt - b.startedAt);
   }
 
   /// What an earlier station left of a host key taken up: the newest as its app-server, any older as being replaced.
   private async takeUpLeft(profile: Profile, key: string): Promise<Host | null> {
-    const left = this.leftRunners(key);
+    const left = await this.leftRunners(key);
     const newest = left.pop();
     if (newest === undefined) return null;
     for (const older of left) this.keepDraining(await this.takeUp(profile, older, key));
@@ -741,7 +742,7 @@ export class CodexDriver implements AgentDriver {
   private sweepLeft(profile: Profile, key: string) {
     wall.after(ORPHANS_MS, () => {
       void this.serial(async () => {
-        for (const info of this.leftRunners(key)) this.keepDraining(this.holdLeft(profile, info, key));
+        for (const info of await this.leftRunners(key)) this.keepDraining(this.holdLeft(profile, info, key));
       }).catch((error) => log.warn("agents::codex", "a codex app-server left being replaced not taken up", { key, error: String(error) }));
     });
   }

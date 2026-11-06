@@ -58,6 +58,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;
   ADMIN_TOKEN?: string;
+  /** Reads the console's bug reports and nothing else (POST /v1/admin/feedback/list): the team's feedback monitor's. Unset: nobody. */
+  FEEDBACK_TOKEN?: string;
   /** The console admin's Google email (wrangler.jsonc; the tests and the dev cloud set their own). Unset: no admin. */
   ADMIN_EMAIL?: string;
   /** Cloudflare Access in front of the console's host (admin.ts accessAdmin): its team's domain

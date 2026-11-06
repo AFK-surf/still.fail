@@ -47,14 +47,14 @@ test("a view's size: what it asked, at least 1280 to drive; a preview as small a
   assert.equal(sideOf({ ...options, maxWidth: 3840, maxHeight: 2160 }), 2560);
 });
 
-test("a view's rate by its side: 1 Mbit/s at 480, 1.5 at 720, 2.5 at 1080, 3.5 at 1440, 4 above", () => {
-  assert.deepEqual([320, 480, 481, 720, 1080, 1280, 1440, 1600, 2560].map(bitrateOf), [1e6, 1e6, 1.5e6, 1.5e6, 2.5e6, 3.5e6, 3.5e6, 4e6, 4e6]);
+test("a view's rate by its side: 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440, 8 above", () => {
+  assert.deepEqual([320, 480, 481, 720, 1080, 1280, 1440, 1600, 2560].map(bitrateOf), [2e6, 2e6, 3e6, 3e6, 5e6, 7e6, 7e6, 8e6, 8e6]);
 });
 
 test("what scrcpy is run with: a view's rate by its side (not the pace's start), a preview's small, slow and not waking it", () => {
   const options = { codecs: ["h264" as const], bitrate: 1_500_000 };
-  assert.deepEqual(viewArgs({ ...options, maxWidth: 1600, maxHeight: 2400 }), { maxSide: 2400, bitrate: 4_000_000, wake: true });
-  assert.deepEqual(viewArgs({ ...options, maxWidth: 700, maxHeight: 1000, fps: 30 }), { maxSide: 1280, bitrate: 3_500_000, fps: 30, wake: true });
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 1600, maxHeight: 2400 }), { maxSide: 2400, bitrate: 8_000_000, wake: true });
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 700, maxHeight: 1000, fps: 30 }), { maxSide: 1280, bitrate: 7_000_000, fps: 30, wake: true });
   assert.deepEqual(viewArgs({ ...options, maxWidth: 640, maxHeight: 640, peek: true, fps: 60 }), { maxSide: 640, bitrate: PEEK_BITRATE, fps: PEEK_FPS, wake: false });
   assert.equal(PEEK_FPS, 2);
   assert.equal(PEEK_BITRATE, 300_000);
