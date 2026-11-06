@@ -18,7 +18,7 @@ test "a host's predicted frame leaves a later touch able to cancel its deadline 
           .ground(By(fn() { color.get() }))
           .says(Is(Some(@view.said(Button, label="cancel"))))
           .on_press(fn() { pressed.push(v.cause_at() - epoch.val); (cancel.val)() }) |> ignore
-        v.reacts(fn() { v.laid_window_told() }, fn(_) { })
+        v.reacts(fn() { v.owed_laid_window() }, fn(_) { })
       }) |> ignore
     })
     t.draw()
