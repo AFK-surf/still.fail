@@ -172,6 +172,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   fixed_estimate? : Bool = false,
   on_grid? : Bool = false,
   sighted? : (Sighted[K]) -> Unit,
+  seen? : (Array[K]) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
@@ -196,6 +197,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let sighted_rows : Ref[Array[(K, Double, Double)]] = Ref([])
   let sighted_h : Ref[Double] = Ref(-1.0)
   let sighted_cover : Ref[(Double, Double)] = Ref((-1.0, -1.0))
+  // (the rows in sight as last laid out, and how many times it had been moved at once by then: what came in sight anew
+  // is what is not among them, and what it went across as it went on by itself)
+  let seen_last : Set[K] = Set::new()
+  let seen_moves : Ref[Int] = Ref(s.moved_at_once)
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -621,6 +626,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             }
           _ => ()
         }
+        // (first laid out: what it walks to where it was scrolled before it was made, gone past at once)
+        let first_laid = seen_x.val is None
         let by = match seen_x.val {
           Some(x) => if from_end { x - c.x } else { c.x - x }
           // (from its start, first laid out: as far down as it was scrolled, as its rows are counted)
@@ -952,6 +959,45 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             if !fresh_in.is_empty() || !left.is_empty() || moved {
               let s : Sighted[K] = { came: fresh_in, left, width: l.width, rows, height: h, cover: covered }
               self.tree.said_after_paint(fn() { tell(s) })
+            }
+          }
+          None => ()
+        }
+        // (what came in sight since it was last laid out (at an input's moment or a frame's): in sight now, or gone
+        // across on the way as it went on by itself (a fling, a wheel's notches easing in, a glide to its end: each row
+        // of that way in sight at a moment of it, whether the frames between were many or one); not what it went past
+        // as it was moved at once (a wheel's turn, a drag's move, its bar, put) or as it was first laid out where it was
+        // scrolled to, made only to be measured: seen, told once the frame is painted)
+        match seen {
+          Some(tell) => {
+            let at_once = first_laid || s.moved_at_once != seen_moves.val
+            seen_moves.val = s.moved_at_once
+            let came : Array[K] = []
+            let told : Set[K] = Set::new()
+            let came_in = fn(k : K) {
+              if !seen_last.contains(k) && !told.contains(k) {
+                told.add(k)
+                came.push(k)
+              }
+            }
+            if !at_once {
+              for k in went_past {
+                came_in(k)
+              }
+            }
+            let now : Array[K] = []
+            for q in 0..<r.keys.length() {
+              if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
+                now.push(r.keys[q])
+                came_in(r.keys[q])
+              }
+            }
+            seen_last.clear()
+            for k in now {
+              seen_last.add(k)
+            }
+            if !came.is_empty() {
+              self.tree.said_after_paint(fn() { tell(came) })
             }
           }
           None => ()
