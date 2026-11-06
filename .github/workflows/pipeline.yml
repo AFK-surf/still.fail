@@ -777,6 +777,16 @@ jobs:
           UNSIGNED: 1
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh scripts/release.sh --beta desktop
+      # (monoid's Mac app is this one renamed: hand it over before --files consumes the staging copy)
+      - if: github.ref == 'refs/heads/main' && vars.MONOID_CI == 'on'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-beta-${{ github.sha }}
+          path: ${{ runner.temp }}/release/desktop/stillfail-beta-*-arm64-mac.zip
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         if: github.ref == 'refs/heads/main'
         env:
@@ -789,15 +799,6 @@ jobs:
           export STILLFAIL_RELEASE_CACHE_KEY="desktop/stillfail-beta-0.1.$build-arm64-mac.zip"
           export STILLFAIL_RELEASE_CACHE_SOURCE="$work/out/mac/stillfail-beta-$build-arm64-mac.zip"
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
-      # (monoid's Mac app is this one renamed: monoid-desktop)
-      - if: github.ref == 'refs/heads/main' && vars.MONOID_CI == 'on'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-beta-${{ github.sha }}
-          path: ${{ runner.temp }}/release/desktop/stillfail-beta-*-arm64-mac.zip
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
       # (handed to put through the bucket, not a run artifact: scripts/release-put.sh --hand)
       - id: hand
         if: github.ref == 'refs/heads/main'
