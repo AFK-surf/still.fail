@@ -104,6 +104,7 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 - `GET /v1/usage?from&to&tz`（`usage`）：和用量页同一份明细，按天、chat、人、账号、模型相加：`calls`、`input`、`cacheRead`、
   `cacheWrite`、`output`、`cost`（按价目的美元，没价目为 null），以及各行的 `thread`；`people` 是各人的 `name`、`email`（不知道的是 null）和 `via`（`slack`、`feishu`、`cloud`、`local`）。
   一次最多 31 天。`person` 是那一轮由谁的消息开始的：多人在同一个 chat 里说话，这个 chat 就有每人一行，chat 的总量是它所有行相加。
+  统计开始之前记下的调用（compact 统计 2026-11-03 起），station 启动后由后台分批补进来，新的日子先到；回答里的 `since` 说明从什么时候起是全的。
 - `GET /v1/chats?since&limit&before`（`chats`）：在 `since` 之后有动静的 chat，最近活动的在前：`thread`、标题、状态（`all_done` /
   `need_human` / `waiting` / 进行中）、创建人、创建时间、最后活动时间、runtime 和模型。用 `thread` 和用量对上。不带 `limit` 一次给全部；
   带 `limit`（最多 1000）就分页：`more` 说后面还有，下一页带上这页的 `next` 作 `before`。只为 `since` 之后有动静的 chat 汇总，
