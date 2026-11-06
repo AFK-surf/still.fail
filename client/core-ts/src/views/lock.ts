@@ -25,7 +25,7 @@
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
 // (someone confirmed something): what waits for it then is tried at once.
-import { Effect, Schedule } from "effect";
+import { Deferred, Effect, Schedule } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
@@ -89,6 +89,8 @@ type Part = {
 
 /// What the signing key of this device is, as loaded (undefined: not loaded yet), per core.
 const signers = new WeakMap<Inner, string | null>();
+/// The initial read of the kept signing key, while it is still in flight.
+const signerLoads = new WeakMap<Inner, Deferred.Deferred<void>>();
 
 /// This device's base key (the mesh's, the same in every workspace), once known, per core.
 const bases = new WeakMap<Inner, string>();
@@ -96,6 +98,12 @@ const bases = new WeakMap<Inner, string>();
 /// This device's signing key (`ed25519:<hex>`) and base key, as known now.
 export const signerOf = (inner: Inner): string | null => signers.get(inner) ?? null;
 export const baseOf = (inner: Inner): string | null => bases.get(inner) ?? null;
+
+/// Await the initial read only while it has not answered yet. Once read (even as absent), no request waits on it.
+export function signerLoading(inner: Inner): Effect.Effect<void> | null {
+  const pending = signerLoads.get(inner);
+  return pending === undefined || signers.has(inner) ? null : Deferred.await(pending);
+}
 
 /// This device's signing key as known now (loaded, or made as it is put forward): what shows whether it signs told
 /// (the lock's, and the vault's, whose page waits on it).
@@ -257,9 +265,12 @@ export function install(inner: Inner): void {
   handlers.lock = (core, call, _progress, _at, ctx) => run(core, call as Of, ctx);
   handlers.lockPrompt = (core, call, _progress, _at, ctx) => runPrompt(core, (call as Extract<Call, { kind: "lockPrompt" }>).name, (call as Extract<Call, { kind: "lockPrompt" }>).params, ctx);
   // The signing key, once (it is the device's).
-  inner.runner.fork(
+  const loaded = Deferred.makeUnsafe<void>();
+  signerLoads.set(inner, loaded);
+  inner.runner.fork(Effect.ensuring(
     Effect.map(Effect.orElseSucceed(Signer.load(inner.host), () => null), (s) => signerKnown(inner, s?.id ?? null)),
-  );
+    Effect.sync(() => { Deferred.doneUnsafe(loaded, Effect.void); }),
+  ));
   // The workspace view says how far the cloud's lock goes and how many wait: read again when that changes.
   inner.data.onChange((topic) => {
     if (topic.topic !== "workspace" || inner.provider.kind !== "stillfail") return;
