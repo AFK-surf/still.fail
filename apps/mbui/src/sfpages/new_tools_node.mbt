@@ -192,7 +192,6 @@ fn new_model_node(row : @view.View, src : Source, v : () -> Json?, address : () 
     p is None || items(p, "options").length() == 0 || text(v(), "runtime") == "" || field(v(), "model") is None
   }
   row.pick(fn() { if flag(v(), "waiting") { 0 } else if none() { 1 } else { 2 } }, fn(slot, which) {
-    slot.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     match which {
       // (its profiles read: a made-up model's, in its bones)
       0 => {
@@ -218,7 +217,11 @@ fn new_model_node(row : @view.View, src : Source, v : () -> Json?, address : () 
 }
 
 ///|
-/// The new chat's model control uses the shared model triple, with its page's pick and its own open request.
+/// The model's control (model_triple's, small, in a row) in `parent`, of the pick "new" on `station` as `page` (the
+/// page's `pick`) says: the maker's mark, the model's name (cut short last, never left out), then, each left out in turn
+/// short of room (triple_drop_*), the runtime, how hard it thinks, fast, the account (its mark, its name, its
+/// allowance), a ring while what was picked is saved, else a chevron; the hover's ground while its panel is open.
+/// Pressed, its panel beside it (open_triple_panel); asked from elsewhere (open_triple), so.
 fn new_triple_node(
   parent : @view.View,
   src : Source,
@@ -227,8 +230,112 @@ fn new_triple_node(
   going : () -> Bool,
   asks : Bool,
 ) -> Unit {
-  let (_, press) = triple_control_node(parent, src, station, "new", page, true, true, false, going, fn() { "" })
+  let me = fn() { station() + "\u{1}new" }
+  let saving = fn() { doing("pick.save/" + station() + "/new") }
+  // (its panel open: followed by what follows the presenters, opened and let go in the same change)
+  let open = fn() {
+    @sf.presenting() |> ignore
+    triple.open.get() == me()
+  }
+  let value = fn() { field(page(), "value") }
+  let vo = fn() { field(page(), "valueOption") }
+  let account = fn() { field(page(), "account") }
+  let runtime = fn() { text(value(), "runtime") }
+  let can = fn() { items(page(), "options").length() > 0 && !saving() }
+  let press = fn(at : @view.View) {
+    if can() && !open() {
+      triple.asked.set("")
+      open_triple_panel(src, station(), "new", @sf.beside_node(at).anchor(), page=page())
+    }
+  }
+  let dot = fn(p : @view.View) {
+    capsule_words_node(p, fn() { "·" }, style=fn() { triple_muted_xs }) |> ignore
+  }
+  let part = fn(p : @view.View, drop : Int, body : (@view.View) -> Unit) {
+    p.box(fn(q) {
+      q.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))).drops(Is(drop)) |> ignore
+      body(q)
+    })
+    |> ignore
+  }
+  let capsule = new_capsule_node(parent, fn() { text(vo(), "name") }, going, press, lit=open, fn(b) {
+    b.show(fn() { items(page(), "options").length() == 0 }, fn(n) {
+      capsule_words_node(n, fn() { @sf.t("web-main.model.none") }, style=fn() { triple_muted_xs }) |> ignore
+    })
+    b.show(fn() { items(page(), "options").length() > 0 }, fn(m) {
+      m.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))).min_width(Is(Some(0.0))).fits(Is(true)) |> ignore
+      @sf.maker_mark_node(m, fn() { text(field(vo(), "maker"), "id") }, runtime, 14.0) |> ignore
+      capsule_words_node(m, fn() {
+        let model = text(value(), "model")
+        if model == "" {
+          @sf.t("web-main.model.pick")
+        } else {
+          match text(vo(), "name") {
+            "" => model
+            n => n
+          }
+        }
+      }, style=fn() { triple_name_xs })
+      |> ignore
+      m.show(fn() { !flag(page(), "runtimeFixed") && items(vo(), "runtimes").length() > 1 }, fn(s) {
+        part(s, triple_drop_runtime, fn(q) {
+          dot(q)
+          capsule_words_node(q, fn() { @settings.runtime_label(runtime()) }, style=fn() { triple_words_xs }) |> ignore
+        })
+      })
+      m.show(fn() { text(value(), "effort") != "" || items(page(), "efforts").length() > 0 }, fn(s) {
+        part(s, triple_drop_effort, fn(q) {
+          dot(q)
+          capsule_words_node(q, fn() {
+            let effort = text(value(), "effort")
+            if effort == "" { @sf.t("web-main.model.defaultEffort") } else { effort_text(effort) }
+          }, style=fn() { triple_words_xs })
+          |> ignore
+        })
+      })
+      m.show(fn() { text(page(), "fastText") != "" }, fn(s) {
+        part(s, triple_drop_effort, fn(q) {
+          dot(q)
+          capsule_words_node(q, fn() { text(page(), "fastText") }, style=fn() { triple_words_xs }) |> ignore
+        })
+      })
+      m.show(fn() { account() is Some(Object(_)) }, fn(a) {
+        let profile = fn() { field(account(), "profile") }
+        let marked = fn() { profile() is Some(Object(_)) }
+        a.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
+        // (the dot before it goes with what follows it: its mark where it has one, else its name)
+        a.show(marked, fn(s) {
+          part(s, triple_drop_account, fn(q) {
+            dot(q)
+            @sf.maker_mark_node(q, fn() { text(profile(), "mark") }, runtime, 14.0) |> ignore
+          })
+        })
+        a.box(fn(q) {
+          q.row(Is(true)).gap(By(fn() { if marked() { 0.0 } else { 6.0 } })).lines_up(Is(Some(Middle)))
+          .drops(Is(triple_drop_name)) |> ignore
+          q.show(fn() { !marked() }, fn(d) { dot(d) })
+          capsule_words_node(q, fn() { text(account(), "text") }, style=fn() {
+            match text(account(), "level") {
+              "amber" => triple_amber
+              "red" => triple_red
+              _ => triple_words_xs
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+        a.show(marked, fn(s) {
+          part(s, triple_drop_account, fn(q) { @sf.quota_chips_node(q, fn() { field(profile(), "quota") }, small=true) })
+        })
+      })
+    })
+    // what was picked on its way: a ring in place of the chevron
+    b.show(saving, fn(s) { @sf.spinner_node(s, size=12.0) |> ignore })
+    b.show(fn() { !saving() }, fn(c) {
+      @sf.icon_node(c, "chevron-down", 12.0, By(fn() { @sf.theme().p.muted })) |> ignore
+    })
+  })
   if asks {
-    new_opens_said(parent, "model", press)
+    new_opens_said(parent, "model", fn() { press(capsule) })
   }
 }

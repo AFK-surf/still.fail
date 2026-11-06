@@ -16,11 +16,11 @@ priv struct Triple {
   open : @signals.Signal[String]
   mut shown : Int
   asked : @signals.Signal[String]
-  mut accounts_asked : Bool
+  accounts_asked : @signals.Signal[String]
 }
 
 ///|
-let triple : Triple = { open: @signals.signal(""), shown: 0, asked: @signals.signal(""), accounts_asked: false }
+let triple : Triple = { open: @signals.signal(""), shown: 0, asked: @signals.signal(""), accounts_asked: @signals.signal("") }
 
 ///|
 /// One panel's filter, what it shows and its pick: whether all the models are shown (past those used most and
@@ -59,7 +59,7 @@ fn triple_reset() -> Unit {
   triple.open.set("")
   triple.shown = 0
   triple.asked.set("")
-  triple.accounts_asked = false
+  triple.accounts_asked.set("")
 }
 
 ///|
@@ -111,6 +111,51 @@ fn pick_save(src : Source, station : String, of : String, patch : Map[String, Js
     p[k] = v
   }
   act(src, @sf.t("common.confirm"), "pick.save/" + station + "/" + of, "pick.save", Json::object(p), done~)
+}
+
+///|
+/// A model is either drafted for borrowing, or saved together with the settings last used for it.
+fn triple_choose_model(
+  src : Source,
+  station : String,
+  of : String,
+  v : Json?,
+  o : Json?,
+  saved : String,
+  close : () -> Unit,
+) -> Unit {
+  let model = text(o, "model")
+  if text(o, "availability") == "borrowable" {
+    pick_draft(src, station, of, { "model": Json::string(model) })
+  } else {
+    triple.open.set("")
+    close()
+    if text(v, "option") != model || text(field(v, "value"), "model") != model {
+      let p : Map[String, Json] = { "model": Json::string(model) }
+      match field(o, "usual") {
+        Some(Object(u)) =>
+          for k in ["runtime", "effort", "fast", "context"] {
+            p[k] = u.get(k).unwrap_or(Json::null())
+          }
+        _ => ()
+      }
+      pick_save(src, station, of, p, done=saved)
+    }
+  }
+}
+
+///|
+fn triple_like(src : Source, station : String, of : String, model : String, liked : Bool) -> Unit {
+  (src.call)(
+    "pick.like",
+    { "station": Json::string(station), "of": Json::string(of), "model": Json::string(model), "liked": Json::boolean(liked) },
+    fn(res) {
+      match res {
+        Ok(_) => ()
+        Err(e) => toast_later(@sf.t("web-main.pick.failed", args=[("error", error_words(e))]))
+      }
+    },
+  )
 }
 
 ///|
@@ -352,62 +397,21 @@ fn triple_body(
   saved : String,
   close : () -> Unit,
 ) -> Unit {
-  let options = items(v, "options")
   let draft = field(v, "draft")
-  let words = contents.query.trim(chars=" ").to_string().to_lower()
+  // A sheet browses makers a step at a time; an anchored panel shows the maker and its models side by side.
+  let sheet = !@sf.in_small_panel()
+  contents.sheet = sheet
+  let models = triple_models(v, contents.query, contents.all, contents.kind, sheet)
+  let { options, listed, near, liked, kinds, kind, kind_open, series, searching, all } = models
   // (the search, where the panel's head has none: a sheet's, its head its own)
   if !@sf.in_small_panel() && options.length() > 8 {
     c.box(style=triple_search, fn() { triple_find_field(c, contents, v) }) |> ignore
   }
-  let listed = options.filter(fn(o) {
-    let o = Some(o)
-    words == "" ||
-    text(o, "name").to_lower().contains(words) ||
-    text(o, "model").to_lower().contains(words) ||
-    items(o, "ids").iter().any(fn(i) { i is String(s) && s.to_lower().contains(words) })
-  })
   // two levels (2026-11-02 用户「两级优化」): first the models used most here (the core's `near`), nearest what opened
   // the panel, then those starred (`liked`), then the way to all of them; there, every model of a maker (the core's
   // `makers`, 「分组应该是模型厂商，而不是供应商」; 「我 20 个 provider 你怎么排」: a list of them, not a row), each starred
   // there by the box before it (「星标改成前面的选择框」). Typed, every one that matches, whatever its kind. None used nor starred: all of them at
   // once.
-  let searching = words != ""
-  let model_of = fn(id : Json) -> Json? {
-    guard id is String(id) else { return None }
-    options.search_by(fn(o) { text(Some(o), "model") == id }).map(fn(i) { options[i] })
-  }
-  let near : Array[Json] = items(v, "near").filter_map(model_of)
-  let liked : Array[Json] = items(v, "liked").filter_map(model_of)
-  let all = searching || contents.all || (near.is_empty() && liked.is_empty())
-  let kinds = items(v, "makers")
-  let kind_of = fn(o : Json) -> String { text(field(Some(o), "maker"), "id") }
-  // (the kind browsed: as chosen, else the picked model's, else the first)
-  let kind = if kinds.iter().any(fn(k) { text(Some(k), "id") == contents.kind }) {
-    contents.kind
-  } else {
-    match model_of(Json::string(text(v, "option"))) {
-      Some(o) if kinds.iter().any(fn(k) { text(Some(k), "id") == kind_of(o) }) => kind_of(o)
-      _ => kinds.get(0).map(fn(k) { text(Some(k), "id") }).unwrap_or("")
-    }
-  }
-  // (a sheet: the kinds, a kind's models a step further; beside what opened it, the two side by side)
-  let sheet = !@sf.in_small_panel()
-  contents.sheet = sheet
-  let kind_open = !sheet || contents.kind != ""
-  let rest = listed.filter(fn(o) {
-    searching || kinds.length() < 2 || kind_of(o) == kind
-  })
-  let series : Array[(String, Array[Json])] = []
-  for o in rest {
-    let who = match text(Some(o), "family") {
-      "" => @sf.t("web-main.model.otherSeries")
-      f => f
-    }
-    match series.search_by(fn(s) { s.0 == who }) {
-      Some(i) => series[i].1.push(o)
-      None => series.push((who, [o]))
-    }
-  }
   let efforts = items(v, "efforts")
   let fast = flag(v, "fastAvailable")
   let all_efforts : Array[(String, String)] = []
@@ -811,8 +815,8 @@ fn triple_find_input(c : @ui.Ctx, t : @sf.Theme, contents : TriplePanel) -> Unit
 fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let draft = field(v, "draft")
   let who = c.id("triple/who")
-  if c.clicked(who) || triple.accounts_asked {
-    triple.accounts_asked = false
+  if c.clicked(who) || triple.accounts_asked.get() == station + "\u{1}" + of {
+    triple.accounts_asked.set("")
     @sf.panel(
       @sf.t("web-main.model.account"),
       fn(c, close) { triple_accounts(c, src, station, of, close) },
@@ -1023,16 +1027,7 @@ fn triple_model_row(
         label=@sf.t("web-main.model.likeModel", args=[("model", text(o, "name"))]),
       ).value
     if (now == On) != liked {
-      (src.call)(
-        "pick.like",
-        { "station": Json::string(station), "of": Json::string(of), "model": Json::string(model), "liked": Json::boolean(now == On) },
-        fn(res) {
-          match res {
-            Ok(_) => ()
-            Err(e) => toast_later(@sf.t("web-main.pick.failed", args=[("error", error_words(e))]))
-          }
-        },
-      )
+      triple_like(src, station, of, model, now == On)
     }
   }
   let mut pressed = false
@@ -1076,25 +1071,7 @@ fn triple_model_row(
     row()
   }
   if pressed {
-    if text(o, "availability") == "borrowable" {
-      // (another station's: borrowed first, from the foot)
-      pick_draft(src, station, of, { "model": Json::string(model) })
-    } else {
-      // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
-      triple.open.set("")
-      close()
-      if !picked || text(field(v, "value"), "model") != model {
-        let p : Map[String, Json] = { "model": Json::string(model) }
-        match field(o, "usual") {
-          Some(Object(u)) =>
-            for k in ["runtime", "effort", "fast", "context"] {
-              p[k] = u.get(k).unwrap_or(Json::null())
-            }
-          _ => ()
-        }
-        pick_save(src, station, of, p, done=saved)
-      }
-    }
+    triple_choose_model(src, station, of, v, o, saved, close)
   }
 }
 
@@ -1767,6 +1744,6 @@ pub fn open_triple(station : String, of : String) -> Unit {
 ///|
 /// The same with its accounts open over it (a screen's fixture).
 pub fn open_triple_accounts(station : String, of : String) -> Unit {
-  triple.accounts_asked = true
+  triple.accounts_asked.set(station + "\u{1}" + of)
   open_triple(station, of)
 }

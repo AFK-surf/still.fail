@@ -9,6 +9,7 @@ fn triple_test_pick(name : String, effort : String, who : String, runtime? : Str
       { "model": "Alpha", "name": "Alpha", "runtimes": ["codex"], "family": "Family" },
       { "model": "Beta", "name": "Beta", "runtimes": ["codex"], "family": "Family" },
     ],
+    "near": ["Alpha", "Beta"],
     "option": Json::string(name),
     "draft": { "runtime": Json::string(runtime), "effort": Json::string(effort), "profile": "a" },
     "runtimes": ["codex", "claude"],
@@ -172,6 +173,20 @@ test "model triple node: an account request opens the existing accounts and sele
 }
 
 ///|
+test "model triple node: requesting accounts while its panel is open does not toggle it closed" {
+  let state : @signals.Signal[Json?] = @signals.signal(Some(triple_test_pick("Alpha", "high", "Account A")), same=fn(_, _) { false })
+  let calls : Array[(String, Json)] = []
+  let t = triple_node_tester(state, @signals.signal(600.0), calls, 0)
+  t.click(Button, label=triple_test_label("Alpha", "high", "Account A"))
+  t.run_for(@ui.move_most_ms)
+  open_triple_accounts("ws/st", "session:one")
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.presenting())
+  assert_true(t.find("Account B") is Some(_))
+  assert_eq(calls.length(), 1, msg="the original model panel was not reopened")
+}
+
+///|
 test "model triple node: a touch and an early open request both use the loaded pick" {
   let state : @signals.Signal[Json?] = @signals.signal(None, same=fn(_, _) { false })
   let calls : Array[(String, Json)] = []
@@ -209,7 +224,11 @@ test "new chat's shared model node follows its station and opens its page pick w
     @ui.set_tree_theme(@sf.ui_theme_now)
     root.box(fn(row) {
       row.offset(Is((50.0, 120.0))).width(Is(Some(600.0))).height(Is(Some(44.0))) |> ignore
-      new_triple_node(row, src, fn() { station.get() }, fn() { Some(pick.get()) }, fn() { false }, true)
+      let (_, press) = triple_control_node(
+        row, src, fn() { station.get() }, "new", fn() { Some(pick.get()) },
+        true, true, false, fn() { false }, fn() { "" },
+      )
+      new_opens_said(row, "model", press)
     }) |> ignore
     @ui.old(root, fn(c) { @sf.presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
     @sf.presented_nodes(root)
@@ -260,4 +279,90 @@ test "model triple node: a floating small control follows the page's pick and op
   t.click(Button, label~)
   assert_eq(calls.length(), 1)
   assert_eq(text(Some(calls[0].1), "of"), "new")
+}
+
+///|
+test "model triple node: invoking the control again closes its panel" {
+  @sfbase.reset()
+  triple_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  let pick = @signals.signal(triple_test_pick("Alpha", "high", "Account A"), same=fn(_, _) { false })
+  let press : Ref[() -> Unit] = Ref(fn() {  })
+  let src = @sfbase.made_source(call=fn(_, _, done) { done(Ok({})) })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=1000.0, h=700.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(row) {
+      let (_, action) = triple_control_node(row, src, fn() { "ws/st" }, "new", fn() { Some(pick.get()) },
+        true, true, false, fn() { false }, fn() { "" })
+      press.val = action
+    }) |> ignore
+    @ui.old(root, fn(c) { @sf.presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    @sf.presented_nodes(root)
+  })
+  t.draw()
+  (press.val)()
+  assert_true(@sf.presenting())
+  (press.val)()
+  assert_false(@sf.presenting())
+}
+
+///|
+test "model triple node: shared owner outlives a replacement control and closes with its page" {
+  @sfbase.reset()
+  triple_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  let page = @signals.signal(true)
+  let wide = @signals.signal(false)
+  let pick = triple_test_pick("Alpha", "high", "Account A")
+  let owner_at : Ref[ModelTripleOwner?] = Ref(None)
+  let controls : Array[@view.View] = []
+  let presses : Array[() -> Unit] = []
+  let transfers : Array[@view.View] = []
+  let calls : Array[String] = []
+  let src = @sfbase.made_source(call=fn(name, _, done) { calls.push(name); done(Ok({})) })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=1000.0, h=700.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.show(fn() { page.get() }, fn(screen) {
+      let owner = model_triple_owner(screen)
+      owner_at.val = Some(owner)
+      screen.pick(fn() { wide.get() }, fn(row, _) {
+        row.offset(Is((50.0, 120.0))).width(Is(Some(600.0))).height(Is(Some(44.0))) |> ignore
+        let shared = model_triple_owner_at(row).unwrap()
+        let (control, press) = triple_control_node(row, src, fn() { "ws/st" }, "new", fn() { Some(pick) },
+          true, true, false, fn() { false }, fn() { "" }, owner=shared)
+        controls.push(control)
+        presses.push(press)
+      })
+    })
+    @ui.old(root, fn(c) { @sf.presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    @sf.presented_nodes(root)
+  })
+  t.draw()
+  t.click(Button, label=triple_test_label("Alpha", "high", "Account A"))
+  let serial = @sf.last_presented()
+  let owner = owner_at.val.unwrap()
+  owner.reanchor.val = fn(control) { transfers.push(control) }
+  wide.set(true)
+  t.draw()
+  assert_true(@sf.presented_open_of(serial), msg="replacing the control keeps the same panel open")
+  assert_eq(calls, ["pick.set"], msg="the panel was not reopened")
+  assert_eq(controls.length(), 2)
+  assert_eq(transfers.length(), 1)
+  assert_true(@sf.beside_node(transfers[0]).anchor() == @sf.beside_node(controls[1]).anchor())
+  assert_true(@sf.beside_node(owner.anchor.val.unwrap()).anchor() == @sf.beside_node(controls[1]).anchor())
+  owner.close()
+  assert_false(@sf.presented_open_of(serial), msg="leaving an entry closes its panel")
+  (presses[1])()
+  let next = @sf.last_presented()
+  assert_true(next != serial && @sf.presented_open_of(next), msg="the same window owner can open for a later entry")
+  assert_eq(calls, ["pick.set", "pick.set"])
+  page.set(false)
+  t.draw()
+  assert_false(@sf.presented_open_of(next), msg="the owner's actual lifetime closes the panel")
 }

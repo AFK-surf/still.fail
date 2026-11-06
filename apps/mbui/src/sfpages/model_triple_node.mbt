@@ -2,6 +2,52 @@
 // shared presenter in model_triple.mbt, anchored to the actual control node.
 
 ///|
+/// An owner that outlives a control when a page replaces it at a layout breakpoint. A page can share one between its
+/// narrow and wide controls; otherwise the control's parent owns it. The presenter supplies the reanchoring action.
+pub struct ModelTripleOwner {
+  shown : Ref[Int]
+  opened_for : Ref[String]
+  anchor : Ref[@view.View?]
+  reanchor : Ref[(@view.View) -> Unit]
+}
+
+///|
+/// Create the owner at a node that survives the page's layout changes, and lend it to that node's descendants.
+pub fn model_triple_owner(parent : @view.View) -> ModelTripleOwner {
+  let owner : ModelTripleOwner = {
+    shown: Ref(0),
+    opened_for: Ref(""),
+    anchor: Ref(None),
+    reanchor: Ref(fn(_) {  }),
+  }
+  parent.lends(model_triple_owner_lent, owner).owns(fn() { owner.close() }) |> ignore
+  owner
+}
+
+///|
+// kept across runs: an owner is lent by each window, not shared between windows
+let model_triple_owner_lent : @view.Lent[ModelTripleOwner] = @view.Lent::new()
+
+///|
+/// The closest owner lent by the page's window, if it has one.
+pub fn model_triple_owner_at(node : @view.View) -> ModelTripleOwner? {
+  node.lent(model_triple_owner_lent)
+}
+
+///|
+/// Close the owner's panel when its page is actually left or its pick's identity changes.
+pub fn ModelTripleOwner::close(owner : ModelTripleOwner) -> Unit {
+  let serial = owner.shown.val
+  if serial != 0 {
+    if @sf.presented_open_of(serial) { @sf.close_presented_of(serial) }
+    if triple.shown == serial { triple.open.set("") }
+    owner.shown.val = 0
+    owner.opened_for.val = ""
+    owner.reanchor.val = fn(_) {  }
+  }
+}
+
+///|
 /// The control for the pick of `of` on `station`. It is absent until the pick is read, as the old view's is.
 /// `page` supplies a page's own live pick instead of reading the topic; `small` and `floating` select the composer's
 /// row and glass-capsule appearances. `saved_live` supplies the current toast when it can change, such as with the
@@ -31,7 +77,11 @@ pub fn model_triple_node(
     // A fixture can ask before the pick arrives; take the request when this control can open it.
     control.reacts(fn() { (triple.asked.get(), items(pick(), "options").length() > 0, doing("pick.save/" + station + "/" + of)) }, fn(_) {
       if @signals.untracked(fn() { triple.asked.get() }) == station + "\u{1}" + of {
-        press()
+        if @signals.untracked(fn() { triple.open.get() == station + "\u{1}" + of }) {
+          triple.asked.set("")
+        } else {
+          press()
+        }
       }
     })
   })
@@ -51,7 +101,9 @@ fn triple_control_node(
   floating : Bool,
   going : () -> Bool,
   saved : () -> String,
+  owner? : ModelTripleOwner,
 ) -> (@view.View, () -> Unit) {
+  let owner = match owner { Some(shared) => shared; None => model_triple_owner(parent) }
   let me = fn() { station() + "\u{1}" + of }
   let saving = fn() { doing("pick.save/" + station() + "/" + of) }
   let open = fn() { triple.open.get() == me() }
@@ -95,18 +147,12 @@ fn triple_control_node(
   let words = fn() { if small { triple_words_xs } else { triple_words } }
   let muted = fn() { if small { triple_muted_xs } else { triple_muted } }
   let at : Ref[@view.View?] = Ref(None)
-  let shown = Ref(0)
-  let opened_for = Ref("")
-  let close_owned = fn() {
-    if shown.val != 0 {
-      @sf.close_presented_of(shown.val)
-      if triple.shown == shown.val { triple.open.set("") }
-      shown.val = 0
-      opened_for.val = ""
-    }
-  }
   let press = fn() {
-    if can() && !open() {
+    if can() {
+      if open() {
+        @sf.close_presented_of(triple.shown)
+        return
+      }
       match at.val {
         Some(control) => {
           triple.asked.set("")
@@ -114,8 +160,8 @@ fn triple_control_node(
             src, station(), of, @sf.beside_node(control).anchor(), saved=saved(),
             page=if page_pick { pick() } else { None },
           )
-          shown.val = @sf.last_presented()
-          opened_for.val = me()
+          owner.shown.val = @sf.last_presented()
+          owner.opened_for.val = me()
         }
         None => ()
       }
@@ -186,10 +232,32 @@ fn triple_control_node(
     })
   })
   at.val = Some(control)
+  owner.anchor.val = Some(control)
+  let key = @signals.untracked(me)
+  let serial = owner.shown.val
+  if owner.opened_for.val == key && @sf.presented_open_of(serial) {
+    // The replacement can be made while a layout change is still being applied. Hand it over only once that
+    // change has settled, and only if the same control and presenter still belong to this owner.
+    @signals.after_flush(fn() {
+      if control.alive() && owner.shown.val == serial && owner.opened_for.val == key &&
+        @sf.presented_open_of(serial) {
+        match owner.anchor.val {
+          Some(current) if @sf.beside_node(current).anchor() == @sf.beside_node(control).anchor() =>
+            (owner.reanchor.val)(control)
+          _ => ()
+        }
+      }
+    })
+  }
   control.reacts(me, fn(key) {
-    if opened_for.val != "" && opened_for.val != key { close_owned() }
+    if owner.opened_for.val != "" && owner.opened_for.val != key { owner.close() }
   })
-  control.owns(close_owned) |> ignore
+  control.owns(fn() {
+    match owner.anchor.val {
+      Some(current) if @sf.beside_node(current).anchor() == @sf.beside_node(control).anchor() => owner.anchor.val = None
+      _ => ()
+    }
+  }) |> ignore
   (control, press)
 }
 
