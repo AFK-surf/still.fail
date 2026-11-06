@@ -126,7 +126,7 @@ test "分享图片: the chat's sheet lists the public links made before (making 
 }
 
 ///|
-test "分享图片: the page shows the picture as it would be, 取消 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out" {
+test "分享图片: the page shows the picture as it would be, 取消, 复制 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out; 复制 copies it" {
   let calls : Array[Made] = []
   let t = publish_core(calls, menu=true)
   open_publish_page()
@@ -160,7 +160,6 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   assert_true(@sfpages.publish_left_out("f1") && @sfpages.publish_left_out("f2"))
   assert_true(viewer.get() is None)
   // nothing is published
-  assert_true(t.query(Button, label="复制图片") is None)
   t.click(Button, label="保存到相册")
   t.run_for(@kit.presence_in_ms)
   assert_eq(named(calls, "chat.publish").length(), 0)
@@ -180,7 +179,24 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
-  // 取消, beside it at the foot, closes it: gone as a dialog goes
+  // 复制 between 取消 and 保存到相册 (2026-11-06 用户「手机上都加复制」), the two before it as wide as their words, none
+  // cut short; pressed, the picture on the clipboard, nothing more in the album, the button 已复制 a moment
+  let cancel = t.query(Button, label="取消").unwrap().rect
+  let copy = t.query(Button, label="复制").unwrap().rect
+  let save = t.query(Button, label="保存到相册").unwrap().rect
+  assert_true(cancel.0 < copy.0 && copy.0 < save.0 && cancel.1 == copy.1 && copy.1 == save.1, msg="\{(cancel, copy, save)}")
+  assert_true(copy.2 < save.2, msg="\{(cancel, copy, save)}")
+  assert_true(t.find("保存到…") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Button, label="复制")
+  t.frame()
+  t.frame()
+  match t.clipboard_png().bind(png_size) {
+    Some((pw, _)) => assert_eq(pw, 1520)
+    None => fail("no picture copied")
+  }
+  assert_eq(t.kept().length(), 1)
+  assert_true(t.query(Button, label="已复制") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // 取消, beside them at the foot, closes it: gone as a dialog goes
   t.click(Button, label="取消")
   t.run_for(@kit.pop_out_ms)
   assert_true(t.find("部署登录页") is None)
@@ -199,11 +215,13 @@ test "分享图片 on an iPhone Duo: the system's tabs put away, its way back an
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("部署登录页") is Some(_))
     let said = t.nav_said()
-    for id in ["\"bare\":true", "分享图片", "lead/over/close", "over/act", "保存到相册"] {
+    for id in ["\"bare\":true", "lead/over/close", "over/copy", "复制图片", "over/act", "保存到相册"] {
       if !said.contains(id) {
         fail("\{size}: the bars handed hold no \{id}: \{said}")
       }
     }
+    // (its title upright, in the bar across the top; on its side none, the system floating it over the page's top)
+    assert_eq(said.contains("\"title\":\"分享图片"), side == 0.0, msg=said)
     // (none of the tabs' own buttons while it is up: the chat's)
     assert_false(said.contains("page/chat/"), msg=said)
     // (none of its own: no bar across the top, no band of 取消 and 保存到相册 at the foot)
@@ -221,6 +239,12 @@ test "分享图片 on an iPhone Duo: the system's tabs put away, its way back an
     t.post(@hostapi.system_channel, "{\"nav\":\"over/act\"}")
     t.run_for(@kit.presence_in_ms)
     assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
+    // 复制图片 chosen there: the picture on the clipboard, nothing more in the album, 已复制 there a moment
+    t.post(@hostapi.system_channel, "{\"nav\":\"over/copy\"}")
+    t.run_for(@ui.move_most_ms / 4.0)
+    assert_true(t.clipboard_png() is Some(_), msg="\{size}: nothing copied")
+    assert_eq(t.kept_ways().length(), 1)
+    assert_true(t.nav_said().contains("已复制"), msg=t.nav_said())
     // closed there: gone as a dialog goes, the tabs back
     t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
     t.run_for(@kit.pop_out_ms)

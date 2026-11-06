@@ -129,8 +129,11 @@ fn viewer_head(
 /// wide screen the bar a file opened has (viewer_bar: back to `back` by name, `name` and `meta`), the doing a button in
 /// words (`label`) at its end; on a small screen no bar over it, but a band of glass along the window's foot with 取消
 /// and the doing side by side, as wide as each other (2026-10-26 用户「应该放下面，俩按钮，一个取消一个保存到相册」「pc 的话直接跟附件
-/// 预览一样，有顶栏」「pc 也用文字按钮，不要用图标」). `busy`: the doing under way; `disabled`: nothing to do it to yet. What it
-/// gives back: whether it was closed (its way back, 取消), whether the doing was pressed, the frame after.
+/// 预览一样，有顶栏」「pc 也用文字按钮，不要用图标」). `copy`: a second doing before it, copying (a phone's 复制图片 beside
+/// its 保存到相册, 2026-11-06 用户「手机上都加复制」), at the foot 取消 and it as wide as their words, the doing the
+/// rest. `busy`: a doing under way (`busy_copy`: the copying), the other not pressed meanwhile; `disabled`: nothing to
+/// do it to yet. What it gives back: whether it was closed (its way back, 取消), whether the doing was pressed, whether
+/// the copying was, the frame after.
 pub fn viewer_frame_act(
   c : @ui.Ctx,
   key : String,
@@ -139,11 +142,18 @@ pub fn viewer_frame_act(
   meta : String,
   ink : ViewerInk,
   label : String,
+  copy? : String,
   busy? : Bool = false,
+  busy_copy? : Bool = false,
   disabled? : Bool = false,
-) -> (Bool, Bool) {
+) -> (Bool, Bool, Bool) {
   let mut closed = false
   let mut acted = false
+  let mut copied = false
+  let act_busy = busy && !busy_copy
+  let act_off = disabled || (busy && busy_copy)
+  let copy_busy = busy && busy_copy
+  let copy_off = disabled || (busy && !busy_copy)
   if layout(c.width) is Small {
     c.box(style=vfr_act_room, fn() {
       c.spacer()
@@ -155,10 +165,20 @@ pub fn viewer_frame_act(
       let right = vfr_act_side_at(@ui.window_corner_at(2), bottom)
       c.box(style=vfr_act_band.then(@ui.style(pl=room(left), pr=room(right), pb=room(bottom))), glass=glass_foot(), fn() {
         c.box(style=vfr_act_row, fn() {
-          if button(c, t("common.cancel"), key=key + "/cancel", w=Fill(1.0)) {
+          // (with a copying beside it, 取消 and it as wide as their words, the doing the rest: three as wide as each
+          // other cut 保存到相册 short on a phone, 保存到…, as the Mac's text drew it at 390, and Save to Photos further,
+          // 2026-11-06)
+          if button(c, t("common.cancel"), key=key + "/cancel", w=if copy is Some(_) { Auto } else { Fill(1.0) }) {
             closed = true
           }
-          if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~, w=Fill(1.0)) {
+          match copy {
+            Some(words) =>
+              if button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off) {
+                copied = true
+              }
+            None => ()
+          }
+          if button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off, w=Fill(1.0)) {
             acted = true
           }
         })
@@ -170,14 +190,21 @@ pub fn viewer_frame_act(
   } else {
     c.box(style=vfr_layer, fn() {
       closed = viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
-        if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~) {
+        match copy {
+          Some(words) =>
+            if button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off) {
+              copied = true
+            }
+          None => ()
+        }
+        if button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off) {
           acted = true
         }
       }, capsule_end=true)
     })
     |> ignore
   }
-  (closed, acted)
+  (closed, acted, copied)
 }
 
 ///|

@@ -41,6 +41,8 @@ priv struct Publishing {
   /// the going through them as its picture is asked for, and how many times it was asked
   mut walk : PublishWalk?
   mut walks : Int
+  /// the picture asked for copied, not kept in the photo album (a phone's 复制图片 beside its 保存到相册)
+  mut copying : Bool
 }
 
 ///|
@@ -68,6 +70,7 @@ let publishing : Publishing = {
   viz_failed: {},
   stills: {},
   walk: None,
+  copying: false,
   walks: 0,
 }
 
@@ -174,8 +177,10 @@ fn publish_kept(p : Json?) -> Int {
 let publish_shot : String = "publish/picture"
 
 ///|
-/// Its picture asked for: the pages of HTML in it grabbed first (publish_walk), then taken.
-fn publish_go(c : @ui.Ctx) -> Unit {
+/// Its picture asked for (`copy`: copied, a phone's 复制图片; else as @sf.picture_out_way says): the pages of HTML in it
+/// grabbed first (publish_walk), then taken.
+fn publish_go(c : @ui.Ctx, copy? : Bool = false) -> Unit {
+  publishing.copying = copy || !@sf.picture_to_album()
   publishing.busy.set(true)
   publishing.stills.clear()
   let todo = publish_viz_todo()
@@ -318,8 +323,9 @@ fn publish_viz_grab_size(png : Bytes) -> (Double, Double)? {
 fn publish_take(c : @ui.Ctx) -> Unit {
   c.take_shot(publish_shot, fn(png) {
     publishing.busy.set(false)
-    let (_, icon) = @sf.picture_out_way()
-    if picture_out(c, png, copy_said=icon == "copy") && icon == "copy" {
+    let copy = publishing.copying
+    // (copied said where its button does not say it: the system's bars, their buttons icons)
+    if picture_out(c, png, copy_said=copy && !@sf.native_on(), copy~) && copy {
       publishing.copied.set(publishing.copied.get() + 1)
     }
   })
@@ -408,22 +414,26 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
             return
           }
           let (label, _) = @sf.picture_out_way()
-          // (copied: 已复制 a moment after)
+          // (copied: 已复制 a moment after; on a phone 复制图片 beside 保存到相册, the user 2026-11-06「手机上都加复制」)
           let shown = publishing.copied.get() > 0 &&
             !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
-          let (closed, acted) = @sf.viewer_frame_act(
+          // (复制 in the band, beside 保存到相册 on a picture's own page: 复制图片 there cut the row short in English)
+          let copy_label = if shown { @sf.t("common.copied") } else { @sf.t("common.copy") }
+          let (closed, acted, copied) = @sf.viewer_frame_act(
             c,
             "publish",
             if r.title != "" { r.title } else { @sf.t("common.close") },
             @sf.t("web-pages.chat.shareImage"),
             text(p, "hiddenText"),
             @sf.page_viewer_ink(),
-            if shown { @sf.t("common.copied") } else { label },
+            if shown && !@sf.picture_to_album() { @sf.t("common.copied") } else { label },
+            copy?=if @sf.picture_to_album() { Some(copy_label) } else { None },
             busy=publishing.busy.get(),
+            busy_copy=publishing.copying && @sf.picture_to_album(),
             disabled=p is None || publish_kept(p) == 0,
           )
-          if acted && p is Some(_) && publish_kept(p) > 0 {
-            publish_go(c)
+          if (acted || copied) && p is Some(_) && publish_kept(p) > 0 {
+            publish_go(c, copy=copied)
           }
           if closed {
             publish_close()
@@ -446,11 +456,17 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
 
 ///|
 /// Its way back and its doing where the system has bars of its own (an iPhone Duo's), as a picture opened has its
-/// (sfbase's vf_native): 分享图片 their title (with how much was hidden), close at their lead, 保存到相册 (复制图片, 已复制 a
-/// moment after) once there is something in the picture; neither while it is being taken.
+/// (sfbase's vf_native): 分享图片 their title upright (with how much was hidden), close at their lead, 复制图片 (已复制 a
+/// moment after) and 保存到相册 once there is something in the picture; neither while it is being taken. On its side no title:
+/// the system floats it over the page's top, on the chat's name and its first message (seen on the Duo's simulator,
+/// 2026-11-06), and the page says what it is and what was hidden itself.
 fn publish_native(c : @ui.Ctx, p : Json?) -> Unit {
   let hidden = text(p, "hiddenText")
-  let title = @sf.t("web-pages.chat.shareImage") + (if hidden != "" { " · " + hidden } else { "" })
+  let title = if @sf.native_side() {
+    ""
+  } else {
+    @sf.t("web-pages.chat.shareImage") + (if hidden != "" { " · " + hidden } else { "" })
+  }
   // (kept as said while it is open, built again or not)
   if !@sf.native_over_up(title, alive=publish_open, owner="publish", over=1) {
     return
@@ -467,12 +483,21 @@ fn publish_native(c : @ui.Ctx, p : Json?) -> Unit {
   let (label, icon) = @sf.picture_out_way()
   let shown = publishing.copied.get() > 0 &&
     !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
-  @sf.native_over_act("act", if shown { @sf.t("common.copied") } else { label }, icon, fn() {
+  let go = fn(copy : Bool) {
     c.tell("publish/go", fn() {
       if !publishing.busy.get() {
-        publish_go(c)
+        publish_go(c, copy~)
       }
     })
+  }
+  // (a phone's 复制图片 before its 保存到相册, as a picture opened has copy before download)
+  if @sf.picture_to_album() {
+    @sf.native_over_act("copy", if shown { @sf.t("common.copied") } else { @sf.t("desktop.contextMenu.copyImage") }, "copy", fn() {
+      go(true)
+    })
+  }
+  @sf.native_over_act("act", if shown && !@sf.picture_to_album() { @sf.t("common.copied") } else { label }, icon, fn() {
+    go(false)
   })
 }
 
