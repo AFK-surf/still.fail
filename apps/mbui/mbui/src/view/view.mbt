@@ -2405,7 +2405,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         if !n.live || n.gen != gen {
           return
         }
-        let v = watch.read(fn() { f({ tree, }) })
+        // (its own binding: what it reads laid out as told last, wherever its painting is set off from, as Roomed's)
+        let v = reads_own(fn() { watch.read(fn() { f({ tree, }) }) })
         if last.val != Some(v) {
           last.val = Some(v)
           apply(v)

@@ -183,9 +183,10 @@ fn View::scroll_bar(
   // (across, as an old view's foot_bar along the view it is for: `bar_in` in from either side, no more than leaves it
   // its least twice, what scrolls and what it holds as wide less that)
   // (`size`: the column's, as it is laid out now: told by layout (Roomed), painting (Laid) or a press)
-  let track = fn(size : (Double, Double)?, x : Double) {
+  // (`inset`: how far in from its ends it runs, as it is now)
+  let track = fn(size : (Double, Double)?, x : Double, inset : Double) {
     let (vh, ends) = match size {
-      Some((w, h)) => if across { (w, dclamp(bar_in_now(), 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
+      Some((w, h)) => if across { (w, dclamp(inset, 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
       None => (0.0, 0.0)
     }
     let content = vh + s.most_now()
@@ -243,20 +244,29 @@ fn View::scroll_bar(
       thumb.owns(fn() { if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) } }) |> ignore
       let held_y = Ref(0.0)
       // (as long as the column is laid out now gives it, in the same layout; where along it as it is painted)
-      let long = Roomed(self, fn(w, h) { Some(track(Some((w, h)), 0.0).1 + b.grab * 2.0) })
+      let long = Roomed(self, fn(w, h) { Some(track(Some((w, h)), 0.0, bar_in_now()).1 + b.grab * 2.0) })
       let thick = Is(Some(b.size + b.grab * 2.0))
       // (along its right; across, along its foot)
       (if across { thumb.height(thick).width(long) } else { thumb.width(thick).height(long) })
-      .offset(Painted(fn(laid) {
-        let size = laid.size(self)
-        let (w, h) = size.unwrap_or((0.0, 0.0))
-        let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
-        if across {
-          (track(size, x).0 - b.grab, h - b.inset - b.size - b.grab)
-        } else {
-          (w - b.inset - b.size - b.grab, track(size, x).0 - b.grab)
+      .offset({
+        let place = fn(size : (Double, Double)?) {
+          let (w, h) = size.unwrap_or((0.0, 0.0))
+          let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
+          if across {
+            (track(size, x, bar_in_now()).0 - b.grab, h - b.inset - b.size - b.grab)
+          } else {
+            (w - b.inset - b.size - b.grab, track(size, x, bar_in_now()).0 - b.grab)
+          }
         }
-      }))
+        // (in by what it holds is padded: where the column and that padding are as it is painted (Painted), the padding
+        // read nowhere else; else by the column's size as told, followed as its other reads are, nothing worked out at
+        // each paint for every bar)
+        match bar_in_of {
+          Some(_) =>
+            Painted(fn(laid) { place(laid.size(self)) })
+          None => By(fn() { place(self.laid_size_told()) })
+        }
+      })
       // (a target while it shows: coming, out or going, or out at rest along its edge or held; said by its state,
       // never by the time, as a structure's change is said)
       .presses(By(fn() {
@@ -273,7 +283,8 @@ fn View::scroll_bar(
           }
           Moved => {
             let (_, _, sc) = self.tree.placed(self.at)
-            let (_, _, ratio) = track(self.shown_size(), s.at(self.tree))
+            // (its size as shown, how far in as it is now: held before a frame or after, the same)
+            let (_, _, ratio) = track(self.shown_size(), s.at(self.tree), bar_in_now())
             let w = if across { d.wx } else { d.wy }
             s.moved(d.at, (w - held_y.val) / (if sc > 0.0 { sc } else { 1.0 }) * ratio) |> ignore
             held_y.val = w
@@ -287,7 +298,7 @@ fn View::scroll_bar(
       })
       |> ignore
       thumb.box(fn(ink) {
-        let long = Roomed(self, fn(w, h) { Some(track(Some((w, h)), 0.0).1) })
+        let long = Roomed(self, fn(w, h) { Some(track(Some((w, h)), 0.0, bar_in_now()).1) })
         (if across { ink.height(Is(Some(b.size))).width(long) } else { ink.width(Is(Some(b.size))).height(long) })
         .offset(Is((b.grab, b.grab)))
         .radius(Is(b.size / 2.0))
