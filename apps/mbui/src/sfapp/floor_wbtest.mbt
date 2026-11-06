@@ -34,10 +34,21 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   let em = emits_of(emit_chat)
   let rd = reading_of(emit_chat)
   let working = tr("android-chat.chat.working")
+  let original_held : Ref[(Double, Bool, Double)?] = Ref(None)
+  t.each_frame(Some(fn() {
+    if t.time() >= original_held_at && original_held.val is None {
+      let mut alpha = 0.0
+      for w in t.words() {
+        if w.0.contains(working) { alpha = dmax(alpha, w.5) }
+      }
+      original_held.val = Some((t.time(), t.find(working) is Some(_), alpha))
+    }
+  }))
+  defer { t.each_frame(None) }
   fn state(label : String) {
     let pictures = t.words().filter(fn(w) { w.0.contains(working) })
     let ended = em.ended.get("s-c1")
-    let linger = rd.linger.get("s-c1").map(fn(l) { (l.at, dmax(l.at, emit_ended(em, "s-c1")) + linger_ms) })
+    let linger = rd.linger.get("s-c1").map(fn(l) { (l.at, dmax(l.at, ended.unwrap_or(-1.0)) + linger_ms) })
     println("floor \{label} at \{t.time()}: phase \{em.current.map(fn(p) { (p.pose, p.clock.end()) })}, ended \{ended}, linger \{linger}, node \{t.find(working)}, pictures \{pictures}")
   }
   // its answer out of its avatar, its turn over: its line stays its moment from there
@@ -71,9 +82,11 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   assert_eq(floor_now(), 0.0)
   assert_true(t.at_end())
   t.assert_idle()
-  // Preserve the former absolute sampling times as well as the cause-relative checks above. They follow the
-  // complete departure; no picture is inserted into a reply's handover to make its endpoint available.
-  if t.time() <= original_held_at { t.run_for(original_held_at - t.time()); state("original held sample") }
+  // Observe the first existing frame reaching the former held sample even if departure crosses it. Afterwards,
+  // retain the original absolute gone-time assertion; no picture is inserted into the reply's handover.
+  if t.time() < original_held_at { t.run_for(original_held_at - t.time()) }
+  println("floor original held requested \{original_held_at}, first frame (time, node, alpha) \{original_held.val}")
+  assert_true(original_held.val is Some(_), msg="the original held sampling time was observed")
   assert_true(t.time() <= original_gone_at, msg="the complete departure must fit before the original gone sample")
   t.run_for(original_gone_at - t.time())
   state("original gone sample")

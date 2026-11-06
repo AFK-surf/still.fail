@@ -138,8 +138,8 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       assert_true(rd.shown_by is None, msg="releasing the page removes its navigation reader")
       assert_eq((tree.alive(), tree.bindings_held(), tree.due_count()), (0, 0, 0))
     }
-    assert_eq(covered_phases[0], covered_phases[1], msg="navigation hides the same phase at the same cause without pictures")
-    assert_eq(covered_phases[0], covered_phases[2])
+    assert_true(covered_phases[0] == covered_phases[1], msg="navigation hides the same phase at the same cause without pictures: \{covered_phases}")
+    assert_true(covered_phases[0] == covered_phases[2], msg="navigation hides the same phase at 120 Hz: \{covered_phases}")
     if pictures[0] != pictures[1] {
       // Keep the complete comparison below, and name its first differing instances on CI instead of only the
       // assertion's message. Atlas slots have already been replaced by glyph content keys by drawn_text.
