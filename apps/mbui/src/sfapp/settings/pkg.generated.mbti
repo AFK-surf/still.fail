@@ -429,6 +429,8 @@ pub fn workspace_view(Core, Here) -> Read
 
 pub fn you(@ui.Ctx, String) -> Unit
 
+pub fn you_node(@view.View, () -> String) -> @view.View
+
 // Errors
 
 // Types and methods

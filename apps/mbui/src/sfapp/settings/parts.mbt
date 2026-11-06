@@ -1332,6 +1332,15 @@ pub fn you(c : @ui.Ctx, words : String) -> Unit {
 }
 
 ///|
+/// The current person's or device's mark in the retained tree. It follows `words` and the theme, and wraps as `you` does.
+pub fn you_node(parent : @view.View, words : () -> String) -> @view.View {
+  parent.box(fn(mark) {
+    @sf.style_node(mark, fn() { you_ground })
+    @sf.words_node(mark, words, fn() { you_words }) |> ignore
+  })
+}
+
+///|
 /// You's wash: 6 in at its sides, 6 round.
 // kept across runs: a value (no field of it changes)
 let you_ground : @ui.Style = @ui.css("px=S1_5 radius=Md bg=AccentBg")
