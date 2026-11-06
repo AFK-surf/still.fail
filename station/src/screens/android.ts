@@ -42,7 +42,7 @@ export const PEEK_FPS = 2;
 export const PEEK_BITRATE = 300_000;
 /// The most previews of this machine's devices running at once, besides the views: each is a run of scrcpy and an
 /// encoder on a device, and a video decoder in the client showing its card (a page of cards would use up a phone's
-/// hardware decoders). One more is refused (503) and its card asks again later.
+/// hardware decoders). One more is refused (503); a caller may try again after a place is freed.
 export const PEEKS_MOST = 2;
 /// What a view opened to drive shows at least, however small the window it opened in: scrcpy cannot change its size
 /// without starting over.
@@ -324,9 +324,11 @@ function adbRun(path: string, args: string[]): Promise<string> {
   });
 }
 
-function connect(port: number): Promise<net.Socket> {
+function connect(port: number, signal: AbortSignal): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(port, "127.0.0.1");
+    const socket = net.connect({ port, host: "127.0.0.1", signal });
+    // Aborting a connection can also emit an error after connect has resolved.
+    socket.on("error", () => {});
     socket.once("connect", () => (socket.off("error", reject), resolve(socket)));
     socket.once("error", reject);
   });
@@ -355,9 +357,11 @@ export class AndroidView implements ScreenView {
   readonly #gone: () => void;
   readonly #sized: (size: { width: number; height: number }) => void;
   readonly #input = new AndroidInput();
+  readonly #stopped = new AbortController();
   #server: ChildProcess | null = null;
   #video: net.Socket | null = null;
   #control: net.Socket | null = null;
+  #pending: net.Socket | null = null;
   #port = 0;
   #ended = false;
   #size = { width: 0, height: 0 };
@@ -379,9 +383,24 @@ export class AndroidView implements ScreenView {
     const scid = randomInt(1, 0x7fffffff).toString(16).padStart(8, "0");
     const jar = `/data/local/tmp/stillfail-scrcpy-${scid}.jar`;
     const name = `localabstract:scrcpy_${scid}`;
+    try {
+      await this.#start(file, jar, name, scid, options);
+    } finally {
+      void this.#adb.run(["shell", `rm -f ${jar}`]).catch(() => {});
+    }
+  }
+
+  async #start(file: string, jar: string, name: string, scid: string, options: { maxSide: number; bitrate: number; fps?: number; wake: boolean }) {
     await this.#adb.run(["push", file, jar]);
-    this.#port = Number((await this.#adb.run(["forward", "tcp:0", name])).trim());
-    if (!Number.isInteger(this.#port) || this.#port <= 0) throw new Error("adb gave no port for the view");
+    if (this.#ended) throw new Error("the view's program ended");
+    const port = Number((await this.#adb.run(["forward", "tcp:0", name])).trim());
+    if (!Number.isInteger(port) || port <= 0) throw new Error("adb gave no port for the view");
+    if (this.#ended) {
+      // close ran before adb returned the port, so it could not remove this forward then.
+      void this.#adb.run(["forward", "--remove", `tcp:${port}`]).catch(() => {});
+      throw new Error("the view's program ended");
+    }
+    this.#port = port;
     const args = [
       `scid=${scid}`, "log_level=warn", "audio=false", "control=true", "tunnel_forward=true", "cleanup=false", "video_codec=h264",
       `max_size=${options.maxSide}`, `video_bit_rate=${options.bitrate}`, `max_fps=${options.fps ?? 60}`, `power_on=${options.wake}`,
@@ -400,8 +419,18 @@ export class AndroidView implements ScreenView {
     while (this.#video === null) {
       if (this.#ended) throw new Error(said.trim() || "the view's program ended");
       if (wall.now() > until) throw new Error(said.trim() || "the view's program did not start");
-      const socket = await connect(this.#port).catch(() => null);
+      const socket = await connect(this.#port, this.#stopped.signal).catch(() => null);
+      if (this.#ended) {
+        socket?.destroy();
+        throw new Error(said.trim() || "the view's program ended");
+      }
+      this.#pending = socket;
       const first = socket === null ? null : await firstOf(socket);
+      this.#pending = null;
+      if (this.#ended) {
+        socket?.destroy();
+        throw new Error(said.trim() || "the view's program ended");
+      }
       if (socket === null || first === null) {
         socket?.destroy();
         await wall.sleep(100);
@@ -415,12 +444,15 @@ export class AndroidView implements ScreenView {
       stream.heard(first);
       socket.resume();
     }
-    const control = await connect(this.#port);
+    const control = await connect(this.#port, this.#stopped.signal);
+    if (this.#ended) {
+      control.destroy();
+      throw new Error(said.trim() || "the view's program ended");
+    }
     // (what it answers, a clipboard's change, nobody here asks)
     control.on("data", () => {});
     control.on("error", () => this.close());
     this.#control = control;
-    void this.#adb.run(["shell", `rm -f ${jar}`]).catch(() => {});
   }
 
   #session(size: { width: number; height: number }) {
@@ -485,6 +517,8 @@ export class AndroidView implements ScreenView {
   close() {
     if (this.#ended) return;
     this.#ended = true;
+    this.#stopped.abort();
+    this.#pending?.destroy();
     this.#video?.destroy();
     this.#control?.destroy();
     this.#server?.kill();

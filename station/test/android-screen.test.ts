@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { parseInput } from "../src/mesh/screens.ts";
+import { EventEmitter } from "node:events";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -75,6 +77,75 @@ test("previews of a machine's devices: at most two at once, one more refused bef
   await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 503);
   assert.ok(asked > 0);
   assert.equal(peeks.running, PEEKS_MOST - 1);
+});
+
+for (const step of ["push", "forward"] as const) {
+  test(`a device gone while its preview is ${step === "push" ? "being copied" : "opening a tunnel"} leaves no view behind`, async () => {
+    const reached = Promise.withResolvers<void>(), resume = Promise.withResolvers<void>();
+    const calls: string[][] = [];
+    let shells = 0;
+    const adb = {
+      run: async (args: string[]) => {
+        calls.push(args);
+        if (args[0] === step && (step !== "forward" || args[1] === "tcp:0")) {
+          reached.resolve();
+          await resume.promise;
+        }
+        return args[0] === "forward" && args[1] === "tcp:0" ? "12345" : "";
+      },
+      shell: () => { shells++; throw new Error("a gone device must not start a server"); },
+    };
+    const peeks = new PeekCount();
+    const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb, file: "server", changed: () => {}, peeks });
+    const opening = screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true });
+    await reached.promise;
+    screen.gone();
+    assert.equal(peeks.running, 0, "the preview place is released when the device goes");
+    resume.resolve();
+    await assert.rejects(opening);
+    assert.equal(shells, 0, "a gone device does not start a server");
+    if (step === "push") assert.equal(calls.some((a) => a[0] === "forward"), false, "no tunnel is opened after the copy");
+    else assert.ok(calls.some((a) => a[0] === "forward" && a[1] === "--remove" && a[2] === "tcp:12345"), "a tunnel finishing after close is removed");
+    assert.ok(calls.some((a) => a[0] === "shell" && a[1]?.startsWith("rm -f /data/local/tmp/stillfail-scrcpy-")), "the copied server is removed");
+    assert.equal(peeks.running, 0, "the place is released only once");
+  });
+}
+
+test("a device gone while a preview waits for its first byte closes the connection", { timeout: 10_000 }, async () => {
+  const connected = Promise.withResolvers<net.Socket>();
+  const listener = net.createServer((socket) => connected.resolve(socket));
+  await new Promise<void>((resolve) => listener.listen(0, "127.0.0.1", resolve));
+  const address = listener.address();
+  assert.ok(address && typeof address !== "string");
+  const calls: string[][] = [];
+  let killed = 0;
+  const server = Object.assign(new EventEmitter(), { stdout: null, stderr: null, kill: () => { killed++; return true; } });
+  const adb = {
+    run: async (args: string[]) => {
+      calls.push(args);
+      return args[0] === "forward" && args[1] === "tcp:0" ? String(address.port) : "";
+    },
+    shell: () => server as any,
+  };
+  const peeks = new PeekCount();
+  const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb, file: "server", changed: () => {}, peeks });
+  const opening = assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }));
+  const socket = await connected.promise;
+  try {
+    const closed = new Promise<void>((resolve) => socket.once("close", resolve));
+    // Let the opening view begin reading; the fake device deliberately sends no first byte.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    screen.gone();
+    await opening;
+    await closed;
+    assert.equal(killed, 1);
+    assert.equal(peeks.running, 0);
+    assert.ok(calls.some((a) => a[0] === "forward" && a[1] === "--remove" && a[2] === `tcp:${address.port}`));
+  } finally {
+    screen.gone();
+    socket.destroy();
+    await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test("a finger: down, moves, up, in the picture's pixels with its size", () => {
