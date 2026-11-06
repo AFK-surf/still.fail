@@ -2694,13 +2694,21 @@ let view_down_most : Int = 20
 ///|
 /// The hold now (a press of a node's, a gesture's not its own yet, an old view's, nobody's) taken over at
 /// (x, y) at `at` by what holds what it went down on, where one says it takes it as it has moved so far
-/// (Tree::claimer_of): what had it called off (a node's press let go unpressed; a gesture's told Off; the old view's told
-/// the press is called off, as the host calls one off), the rest of it that one's,
-/// down where it went down, moved to where it is now. Whether it was.
+/// (Tree::claimer_of): another's hold called off (a node's press let go unpressed; a gesture's told Off; the old view's
+/// told the press is called off), then that one's down and move. The one already holding it can claim its own hold
+/// without interruption. Whether the move was delivered to a different node.
 fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool {
   guard view_down.val is Some((x0, y0, chain, events)) else { return false }
   guard tree.claimer_of(chain, x - x0, y - y0) is Some(id) else { return false }
   view_down.val = None
+  // (the held node itself won: keep this same hold and deliver the move normally, without cancelling and restarting)
+  if view_held.val is Some(Dragging(held)) && held == id {
+    match tree.view_of(id) {
+      Some(v) => v.yield_drag(false)
+      None => ()
+    }
+    return false
+  }
   // (a finger setting off scrolling lets go of the keyboard, as an old view's list does: Ctx::scroll_lets_go; one
   // taking it over for anything else, not)
   if tree.claims_scroll(id) && tree.scrolls_for(id).map(tree_said_id) != Some(g().focused_id()) {
@@ -2816,6 +2824,16 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           match old_press_owner(g(), x, y, island) {
             Some(o) if old_wheel_there(o, x, y) => Some(o)
             _ => None
+          }
+        // (a small target reached from outside its drawing: the claim chain starts with that target, not the sibling
+        // or ground physically at this point)
+        Pressed(id) | Dragged(id) =>
+          match tree.view_of(id) {
+            Some(v) => {
+              let (rx, ry, rw, rh) = v.rect()
+              if x < rx || y < ry || x >= rx + rw || y >= ry + rh { Some(id) } else { None }
+            }
+            None => None
           }
         _ => None
       }

@@ -2192,6 +2192,8 @@ pub let sleep_ms : Double
 
 pub fn slider(@ui.Ctx, String, Double, Double, Double, step? : Double, ink? : Int64, accent? : Int64, ground? : Int64) -> Double
 
+pub fn slider_node(@view.View, () -> Double, () -> Double, () -> Double, (Double) -> Unit, (Double) -> Unit, step? : () -> Double, label? : () -> String, ink? : () -> Int64, accent? : () -> Int64, ground? : () -> Int64, disabled? : () -> Bool, cancel? : () -> Unit) -> @view.View
+
 pub let small_button : @ui.Len
 
 pub let small_corner : Double
