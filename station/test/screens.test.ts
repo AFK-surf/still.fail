@@ -24,10 +24,10 @@ import { described, letGo } from "../src/tools/screen.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import { USAGES, SimInput } from "../src/screens/sim-input.ts";
 import type { SimDebug } from "../src/screens/sim-debug.ts";
-import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
+import { SIMCTL, Simulator, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, rateCeiling } from "../src/mesh/screen-pace.ts";
@@ -1949,6 +1949,42 @@ test("a simulator says it can be debugged; other screens neither say so nor answ
   assert.equal(hub.debugOf("simulator:U"), debug);
   assert.throws(() => hub.debugOf("browser:T"), (e: ScreenRefused) => e.status === 405);
   assert.throws(() => hub.debugOf("simulator:gone"), (e: ScreenRefused) => e.status === 404);
+});
+
+test("a preview prefers a picture when the source and viewer both have one", () => {
+  const own = ["h265", "h264", "jpeg"] as const;
+  assert.equal(codecFor({ codecs: ["jpeg", "h264", "h265"] }, own), "h265");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, own), "jpeg");
+  assert.equal(codecFor({ codecs: ["h264"], peek: true }, own), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, ["h264"]), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg"] }, ["h264"]), undefined);
+});
+
+test("a simulator preview uses JPEG when both picture and video are available", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: false, control: false, display });
+  const helper = new HelperApp({ app, dir, launch: fake.launch });
+  const sim = new Simulator({ udid: "U", name: "iPhone", runtime: "iOS", type: "phone" }, helper, { width: 1206, height: 2622 });
+  const cases: { codecs: ("jpeg" | "h264")[]; peek: boolean; expected: "jpeg" | "h264" }[] = [
+    { codecs: ["jpeg", "h264"], peek: true, expected: "jpeg" },
+    { codecs: ["h264"], peek: true, expected: "h264" },
+    { codecs: ["jpeg", "h264"], peek: false, expected: "h264" },
+  ];
+  try {
+    for (const { codecs, peek, expected } of cases) {
+      const view = await sim.open({ maxWidth: 640, maxHeight: 640, codecs, peek });
+      try {
+        assert.equal(fake.views.at(-1).codec, expected, "the helper is asked for the right codec");
+        assert.equal((await view.next())!.config?.codec, expected, "the frame says the negotiated codec");
+      } finally {
+        view.close();
+      }
+    }
+  } finally {
+    sim.gone();
+    await helper.quit();
+    fake.close();
+  }
 });
 
 test("a simulator a screen while it is booted: listed with its device's name and size, a view the helper's simulator.view, input as the device takes it; gone as it shuts down", { skip: WINDOWS }, async () => {
