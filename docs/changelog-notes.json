@@ -617,5 +617,18 @@
   "edbc74824d": {
     "text": ["新功能：API key 的 Profile 可以停用、再启用，key 和设置都保留"],
     "parts": ["station", "android", "desktop"]
+  },
+  "af6bd167b0": {
+    "fixes": [1],
+    "parts": ["station"]
+  },
+  "c77bd2089ed": {
+    "fixes": [2],
+    "parts": ["cloud"]
+  },
+  "257b89c894": {
+    "text": ["修复：网页版打开 agent 起的网页服务不再是一片空白"],
+    "fixes": [8, 9],
+    "parts": ["web"]
   }
 }
