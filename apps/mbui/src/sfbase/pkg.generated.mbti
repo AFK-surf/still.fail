@@ -628,9 +628,9 @@ pub fn flight_settled(Double, Bool) -> Double
 
 pub fn flight_settled_of(@ui.Ctx, SendFlight) -> Double
 
-pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_start(@ui.Ctx, String, String, String, String, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
-pub fn flight_start_from(@ui.Ctx, String, String, String, String, Double, Array[FlyingFile], @ui.FieldLines?, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_start_from(@ui.Ctx, String, String, String, String, Array[FlyingFile], @ui.FieldLines?, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
 pub fn flight_takes(String, String) -> Bool
 
@@ -3313,7 +3313,6 @@ pub(all) struct SendFlight {
   field_y : Double
   field_w : Double
   field_h : Double
-  room : Double
   mut hold : (Double) -> Unit
   desk : Bool
   lines : @ui.FieldLines?
@@ -3865,6 +3864,7 @@ pub(all) struct Writing {
   mut seen_rev : Double
   mut adopted : Int32
   mut taken : (String, Array[@json.Json], Array[@json.Json])?
+  held_by : @signals.Signal[@view.NodeId?]
 }
 
 // Type aliases

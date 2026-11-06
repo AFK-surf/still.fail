@@ -2570,7 +2570,10 @@ fn Ctx::island_of_id(self : Ctx, id : Int) -> @view.NodeId? {
 /// The field with the focus where it takes typing now, when it is an old view's: that old view's node of the window's
 /// tree and where the field is in it (x, y, w, h from its top left, as the old frame last laid it out): what a list
 /// it is in reads to keep it in view as the keyboard comes up (Ctx::list_holds_field's, for a list of the tree's).
+/// Read so, what reads it is told as the focus moves (View::scrolls_anchored's `keep`: the field it keeps let go as
+/// another takes the focus).
 pub fn focused_field_in() -> (@view.NodeId, (Double, Double, Double, Double))? {
+  hand.focus_id.get() |> ignore
   let c = g()
   let focus = c.typing_allowed()
   guard focus != 0 else { return None }

@@ -18,6 +18,8 @@
 /// or its images); `screens`, its links to screens: a paragraph of only one its card, one bare in a sentence its title.
 /// `one_line`: its first words (within a block too), on one line, cut short with an ellipsis; `tracking`, its letters' spacing besides
 /// their own (a size of the theme's, as its style says).
+/// `text_face` and `code_face`: faces tried for prose and code as they change (None: the chosen face; Some(0): the
+/// app's face for that kind).
 /// The node.
 pub fn markdown_node(
   parent : @view.View,
@@ -41,6 +43,8 @@ pub fn markdown_node(
   screens? : ScreensNode,
   one_line? : Bool = false,
   tracking? : () -> @view.Spacing = fn() { @view.letters_own },
+  text_face? : () -> Int? = fn() { None },
+  code_face? : () -> Int? = fn() { None },
 ) -> @view.View {
   parent.box(fn(col) {
     // (its words asked of the core as it is made and as they change, none where it is told their reading; read by it
@@ -62,7 +66,10 @@ pub fn markdown_node(
         let now = size()
         if now > 0.0 { now } else { theme().t.body }
       },
-      line,
+      line: fn() { line },
+      serif: fn() { false },
+      text_face,
+      code_face,
       ink: fn() {
         let i = ink()
         if i != 0L { i } else { theme().p.text }
@@ -84,6 +91,7 @@ pub fn markdown_node(
       screens,
       one_line,
       tracking,
+      fixed: false,
     }
     let blocks = fn() { md_node_blocks(text(), tree()) }
     if one_line {
@@ -97,10 +105,69 @@ pub fn markdown_node(
 }
 
 ///|
+/// A visible part of a long Markdown document, as read by the core's reader.book. `nodes` are that part's nodes and
+/// their offsets are in the whole `text`. Both are fixed for this node's lifetime; only the visible parts are decoded,
+/// each kept by its own node and released with it. No Markdown request or whole-text cache is used. `apart` keeps the
+/// gap before a part after another; the remaining settings follow the reader as it changes them.
+pub fn markdown_part_node(
+  parent : @view.View,
+  text : String,
+  nodes : Array[Json],
+  apart? : Bool = false,
+  size? : () -> Double = fn() { 0.0 },
+  line? : () -> Double = fn() { 0.0 },
+  serif? : () -> Bool = fn() { false },
+  ink? : () -> Int64 = fn() { 0L },
+  document? : Bool = false,
+  found? : () -> Array[String] = fn() { [] },
+  on_link? : (String) -> Unit = fn(_) {  },
+  text_face? : () -> Int? = fn() { None },
+  code_face? : () -> Int? = fn() { None },
+) -> @view.View {
+  let blocks = core_blocks(nodes, text)
+  parent.box(fn(col) {
+    @ui.words_picked(col)
+    let md : MdNode = {
+      size: fn() {
+        let now = size()
+        if now > 0.0 { now } else { theme().t.body }
+      },
+      line,
+      serif,
+      text_face,
+      code_face,
+      ink: fn() {
+        let now = ink()
+        if now != 0L { now } else { theme().p.text }
+      },
+      document,
+      bleed: Bleed(0.0),
+      copy: true,
+      paths: false,
+      found,
+      on_link,
+      on_link_hold: None,
+      links_made: None,
+      chat_title: fn(_) { None },
+      code: fn(_) { None },
+      files: fn(_) { None },
+      screens: None,
+      one_line: false,
+      tracking: fn() { @view.letters_own },
+      fixed: true,
+    }
+    md_blocks_node(col, md, fn() { blocks }, false, apart~)
+  })
+}
+
+///|
 /// What every block of a markdown_node is drawn with (Md's, of the window's tree).
 priv struct MdNode {
   size : () -> Double
-  line : Double
+  line : () -> Double
+  serif : () -> Bool
+  text_face : () -> Int?
+  code_face : () -> Int?
   ink : () -> Int64
   document : Bool
   bleed : TableBleed
@@ -118,6 +185,8 @@ priv struct MdNode {
   one_line : Bool
   /// how far apart its letters are set besides their own spacing (a size of the theme's own, as it says it)
   tracking : () -> @view.Spacing
+  /// A reader part's blocks do not change during its node's lifetime.
+  fixed : Bool
 }
 
 ///|
@@ -172,14 +241,18 @@ fn md_node_laying(text : String, tree : Json?) -> Bool {
 /// larger of the margins between them (Md::piece's), the first's top and the last's foot the column's own; `tight`: a
 /// tight list's item's (its paragraphs keep no margin of their own). Each by its place among them, made again where its
 /// kind changes.
-fn md_blocks_node(col : @view.View, md : MdNode, blocks : () -> Array[MdBlock], tight : Bool) -> Unit {
-  let count = fn() { Array::makei(blocks().length(), fn(i) { i }) }
-  col.each(count, fn(i) { i }, fn(slot, i) {
-    let i = @signals.untracked(fn() { i.get() })
+fn md_blocks_node(col : @view.View, md : MdNode, blocks : () -> Array[MdBlock], tight : Bool, apart? : Bool = false) -> Unit {
+  md_indexed(col, fn() { blocks().length() }, md.fixed, fn(slot, i) {
     let block = fn() { blocks().get(i) }
     slot
     .padding(By(fn() {
-      if i == 0 {
+      if i == 0 && apart {
+        let top = match blocks().get(i) {
+          Some(b) => md_node_margins(md, b, tight).0
+          None => 0.0
+        }
+        (0.0, dmax(paragraph_after, top), 0.0, 0.0)
+      } else if i == 0 {
         (0.0, 0.0, 0.0, 0.0)
       } else {
         let bs = blocks()
@@ -196,6 +269,22 @@ fn md_blocks_node(col : @view.View, md : MdNode, blocks : () -> Array[MdBlock], 
       md_block_node(p, md, kind, block, tight)
     })
   })
+}
+
+///|
+/// A fixed reader part needs no keyed child rows: the windowed list's own stable row names its words when it is
+/// recycled. Dynamic Markdown keeps keyed rows so its blocks and list items can change independently.
+fn md_indexed(parent : @view.View, count : () -> Int, fixed : Bool, draw : (@view.View, Int) -> Unit) -> Unit {
+  if fixed {
+    let n = @signals.untracked(count)
+    for i in 0..<n {
+      parent.box(fn(slot) { draw(slot, i) }) |> ignore
+    }
+  } else {
+    parent.each(fn() { Array::makei(count(), fn(i) { i }) }, fn(i) { i }, fn(slot, i) {
+      draw(slot, @signals.untracked(fn() { i.get() }))
+    })
+  }
 }
 
 ///|
@@ -397,7 +486,7 @@ fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?
           Some(CodeBlock(_, _, colours)) => colours
           _ => None
         }
-      })
+      }, face=md.code_face)
     }
     // (drawn another way, as its language says: a chart, its code as it changes; another language's made again)
     8 => {
@@ -448,6 +537,7 @@ fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?
           md.on_link,
           md.on_link_hold,
           files=md.files,
+          md~,
         )
       })
       |> ignore
@@ -586,7 +676,7 @@ fn md_words_node(
     }
     let out = []
     runs_of(now, out, weight >= 600, false, false, "", theme().p.accent_text, titles, md.paths)
-    found_weight(out, (md.found)())
+    md_node_faces(md, found_weight(out, (md.found)()))
   }
   let look = fn() -> @view.WordsLook {
     let size = size()
@@ -609,10 +699,25 @@ fn md_words_node(
 }
 
 ///|
+/// Prose and code keep the chosen faces unless a face is explicitly tried. Some(0) is an explicit face too.
+fn md_node_faces(md : MdNode, runs : Array[@ui.Run]) -> Array[@ui.Run] {
+  let text_face = (md.text_face)()
+  let code_face = (md.code_face)()
+  let serif = (md.serif)()
+  if text_face is None && code_face is None && !serif { return runs }
+  runs.map(fn(run) {
+    let face = if run.code || run.mono { code_face } else { text_face }
+    let run = match face { Some(_) => { ..run, face }; None => run }
+    if serif && !run.mono { { ..run, serif: true } } else { run }
+  })
+}
+
+///|
 /// A line of `size`'s words (Md::lh's).
 fn md_line(md : MdNode, size : Double) -> Double {
-  if md.line > 0.0 {
-    return (size * md.line).round()
+  let line = (md.line)()
+  if line > 0.0 {
+    return (size * line).round()
   }
   let k : Float = 1.65
   (Float::from_double(size) * k).to_double()
@@ -634,9 +739,7 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
       _ => md_marker_w
     }
   }
-  let count = fn() { Array::makei(list().map(fn(l) { l.items.length() }).unwrap_or(0), fn(i) { i }) }
-  p.each(count, fn(i) { i }, fn(row, i) {
-    let i = @signals.untracked(fn() { i.get() })
+  md_indexed(p, fn() { list().map(fn(l) { l.items.length() }).unwrap_or(0) }, md.fixed, fn(row, i) {
     let item = fn() { list().bind(fn(l) { l.items.get(i) }) }
     // (as far under the item before as the larger of their margins: stack's)
     row
@@ -694,9 +797,7 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
       blocks.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
       // (a nested list a level deeper; the rest as the list's own blocks)
       let bs = fn() { item().map(fn(it) { it.blocks }).unwrap_or([]) }
-      let count = fn() { Array::makei(bs().length(), fn(k) { k }) }
-      blocks.each(count, fn(k) { k }, fn(slot, k) {
-        let k = @signals.untracked(fn() { k.get() })
+      md_indexed(blocks, fn() { bs().length() }, md.fixed, fn(slot, k) {
         let b = fn() { bs().get(k) }
         slot
         .padding(By(fn() {
@@ -799,7 +900,13 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
 /// the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
 /// desktop's width 12 on 1.6), scrolled across rather than wrapped. Pressed, the key copies the code and says so
 /// copied_ms.
-pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
+pub fn code_block_node(
+  p : @view.View,
+  code : () -> String,
+  lang : () -> String,
+  colours : () -> String?,
+  face? : () -> Int? = fn() { None },
+) -> Unit {
   let over = native_input() is Mouse
   let key_inset = capsule_in(row_corner, code_key_h)
   let copied = @signals.signal(false)
@@ -862,9 +969,13 @@ pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String,
       held.padding(Is((14.0, 12.0, 14.0, 12.0))).lines_up(Is(Some(Start))) |> ignore
       held.box(fn(w) {
         let runs = fn() {
-          match colours() {
+          let plain = match colours() {
             Some(ink) => core_ink(code(), ink, theme().dark)
             None => [@ui.span(code(), mono=true)]
+          }
+          match face() {
+            Some(n) => plain.map(fn(run) { { ..run, face: Some(n) } })
+            None => plain
           }
         }
         let look : @view.WordsLook = {

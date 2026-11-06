@@ -5,25 +5,39 @@
 pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
-  room : () -> Double
+  /// what of the room it takes at its page's foot is not its laid size: how tall it is opened with one line where it
+  /// stands, and how far its ground is on its way to its shape (its page's layout reads them as its content)
+  room_of : () -> (Double, Double)
 }
 
 ///|
-/// The active page owns its draft's editor. A stack can hold the same chat twice: take the editor after the
-/// navigation change has released its previous owner, within that same change and before any frame is drawn.
-pub fn composer_on_page(parent : @view.View, active : () -> Bool, make : (@view.View) -> Unit) -> Unit {
-  let ready = @signals.signal(false, same=fn(a, b) { a == b })
-  let live = Ref(true)
-  parent.owns(fn() { live.val = false }) |> ignore
-  parent.show(fn() { ready.get() && active() }, make)
-  parent.reacts(active, fn(on) {
-    if on {
-      @signals.after_flush(fn() {
-        if live.val && @signals.untracked(active) { ready.set(true) }
-      })
-    } else {
-      ready.set(false)
-    }
+/// The room a composer takes at its page's foot (what the list leaves free under its last row): as tall as it is laid
+/// out (`total`, its capsule `cap` of that) with its ground as drawn (a line more or less: the list's rows go with the
+/// ground as it reshapes, the frame it does), at least as tall as that opened with one line: `opened` and `shape` its
+/// ChatComposerNode's `room_of`. Worked out by its page's layout as it measures it (Layout::reported's "composer" and
+/// "cap").
+pub fn composer_room_in(total : Double, cap : Double, of : (Double, Double)) -> Double {
+  let (opened, shape) = of
+  dmax(total + shape, total - cap + opened)
+}
+
+///|
+/// The active page owns its draft's editor (`draft`'s field is one editor's). A stack can hold the same chat twice:
+/// made as its page is active and no other page's composer holds the draft, else as that one lets it go, in the same
+/// change, before its page is laid out (nothing made a flush later: its page laid out again for it).
+pub fn composer_on_page(
+  parent : @view.View,
+  src : Source,
+  draft : String,
+  active : () -> Bool,
+  make : (@view.View) -> Unit,
+) -> Unit {
+  let w = @signals.untracked(fn() { @sfbase.writing(src, draft) })
+  let me = parent.id()
+  parent.show(fn() { active() && w.held_by.get().map_or(true, fn(h) { h == me }) }, fn(f) {
+    @signals.untracked(fn() { w.held_by.set(Some(me)) })
+    f.owns(fn() { if @signals.untracked(fn() { w.held_by.get() }) == Some(me) { w.held_by.set(None) } }) |> ignore
+    make(f)
   })
 }
 
@@ -47,20 +61,20 @@ pub fn chat_composer_node(
   let draft = r.station + ":" + r.session
   let node : Ref[ComposerNode?] = Ref(None)
   let extras : Ref[ComposerExtrasNode?] = Ref(None)
-  let root_at : Ref[@view.View?] = Ref(None)
-  let room = fn(settled : Bool) {
+  // (how tall it is opened with one line where it stands, and how far its ground is on its way to its shape)
+  let room_of = fn() {
     let n = node.val.unwrap()
-    let root = root_at.val.unwrap()
-    let total = root.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
-    let cap = n.cap.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
     let look = @ui.style_words(@sf.theme().t.words)
     let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
     let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)
-    let shape = if settled { 0.0 } else { (n.ground)().3 }
-    dmax(total + shape, total - cap + opened)
+    (opened, (n.ground)().3)
   }
-  let root = parent.box(fn(root) {
-    root_at.val = Some(root)
+  let root_at : Ref[@view.View?] = Ref(None)
+  // (as tall as it is laid out, said to its page's layout as it is measured there ("composer"): what of what holds it
+  // is its own, the rest (the recent chats under a fold) not)
+  parent.box(fn(holder) {
+  holder.shrink(Is(0.0)) |> ignore
+  let root = holder.box(fn(root) {
     // (as wide as its room leaves it `side` in from each side, its widest at most: composer_width_in, said to layout;
     // its foot in by what holds it is laid out as wide as (`parent`'s width, Roomed: in the same layout, nothing of its
     // size read back))
@@ -79,7 +93,7 @@ pub fn chat_composer_node(
           Some(v) => send_in_chat_with(src, r, v, w, fn(row, words, marks, runs) {
             let n = node.val.unwrap()
             let files = composer_flying_nodes(src, w, r.station, extras.val.unwrap(), place().corner)
-            @sfbase.flight_start_from(@ui.current(), w.key, r.station + "\u{1}" + r.session, row, words, room(false), files, w.field.lines(),
+            @sfbase.flight_start_from(@ui.current(), w.key, r.station + "\u{1}" + r.session, row, words, files, w.field.lines(),
               hold=(n.hold)(), desk=true, marks~, runs~)
             sent(row)
             @sfbase.chat_latest(@ui.current(), src, r, v, @sf.t("web-main.chat.toLatest"))
@@ -98,12 +112,13 @@ pub fn chat_composer_node(
     })) |> ignore
     body.shrink(Is(0.0)) |> ignore
   })
-  composing.node_rooms[draft] = room
-  root.owns(fn() {
-    match composing.node_rooms.get(draft) {
-      Some(f) if physical_equal(f, room) => composing.node_rooms.remove(draft)
-      _ => ()
-    }
+  root_at.val = Some(root)
+  holder.layout_box(Is(()), sized=true, fn(l, _) {
+    let (_, h) = l.measure(root, l.width)
+    l.report("composer", h)
+    l.size_to(h)
+    l.place(root, 0.0, 0.0)
   }) |> ignore
-  { root, composer: node.val.unwrap(), room: fn() { room(false) } }
+  }) |> ignore
+  { root: root_at.val.unwrap(), composer: node.val.unwrap(), room_of }
 }
