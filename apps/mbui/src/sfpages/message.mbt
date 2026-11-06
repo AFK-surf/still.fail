@@ -54,7 +54,7 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
 
 ///|
 /// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: sfbase's picking), its
-/// turn shared as a picture from there (`turn`: its seq; the sharing over the window, open_publish); out of a list, as
+/// chat shared as a picture from there with it alone ticked (`turn`: its seq; 多选, open_publish); out of a list, as
 /// they are.
 pub fn picking(
   here : MessageHere,
@@ -71,7 +71,7 @@ pub fn picking(
 ) -> Unit {
   match here.list {
     Some(_) => {
-      let share = if turn >= 0.0 { here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } }) } else { None }
+      let share = if turn >= 0.0 { here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, picked=Some(turn)) } }) } else { None }
       let link = if turn >= 0.0 { @sfbase.message_link(here.station, here.session, turn) } else { "" }
       // gone to by a quote of it: the passage quoted lit as it flashes (chat_list.mbt passage_lit)
       let lit = if ts != "" { passage_lit(c, here, ts) } else { None }
@@ -132,7 +132,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     share_link=@sfbase.message_link(here.station, here.session, m.seq),
     share_words=m.text,
     share=if here.list is Some(_) {
-      here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(m.seq)) } })
+      here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, picked=Some(m.seq)) } })
     } else { None },
     fn() { message_avatar(c, src, here, m, agent) },
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },

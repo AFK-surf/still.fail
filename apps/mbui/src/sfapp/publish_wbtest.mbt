@@ -290,6 +290,86 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
 }
 
 ///|
+test "多选: the chat's picture opened from a message has that message alone ticked, brought into sight; the others ticked join it" {
+  let calls : Array[Made] = []
+  // (short, so that Ana's message, the last, is under the window's foot as the page opens)
+  let t = publish_core(calls, menu=true, height=520.0)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // the whole chat asked for, as 分享图片 asks it
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_true(field(Some(asked[0].params), "turn") is None)
+  assert_eq(t.all(Checkbox, label="放进图片").map(fn(n) { n.check == Some(On) }), [false, false, false, true])
+  assert_true(@sfpages.publish_message_left_out(4.0) && @sfpages.publish_message_left_out(6.0))
+  assert_true(!@sfpages.publish_message_left_out(9.0))
+  match t.rect_of("截图、日志和构建缓存都附上了") {
+    Some((_, y, _, h)) => assert_true(y > 0.0 && y + h < 520.0, msg="\{(y, h)}")
+    None => fail("Ana's message not drawn")
+  }
+  // another ticked (the one over it, scrolled back to): both in the picture, the rest not
+  t.wheel(195.0, 260.0, -150.0)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.all(Checkbox, label="放进图片")[2].rect
+  assert_true(y > 0.0 && y + h < 520.0, msg="\{(y, h)}")
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(!@sfpages.publish_message_left_out(7.0) && @sfpages.publish_message_left_out(6.0))
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  let words = t.shots()[0].join("|")
+  assert_true(words.contains("截图、日志和构建缓存都附上了") && words.contains("Axiom 查询 token") && !words.contains("跑了 42 秒") && !words.contains("帮我把登录页部署到预发"), msg=words)
+}
+
+///|
+test "多选: a message not ticked fades, its box to tick does not" {
+  let calls : Array[Made] = []
+  let t = publish_core(calls, menu=true)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sfpages.publish_message_left_out(6.0))
+  // the boxes of those not ticked drawn whole, not faded with their messages
+  // (how opaque the box of message `i` is drawn: its own and every box's it is in)
+  let box_alpha = fn(i : Int) -> Double {
+    let (x, y, w, h) = t.all(Checkbox, label="放进图片")[i].rect
+    let laid = t.boxes()
+    let by_index : Map[Int, @ui.Laid] = {}
+    for b in laid {
+      by_index[b.index] = b
+    }
+    let mut most = 0.0
+    for b in laid {
+      if (b.x - x).abs() < 0.5 && (b.y - y).abs() < 0.5 && (b.w - w).abs() < 0.5 && (b.h - h).abs() < 0.5 {
+        let mut a = 1.0
+        let mut at = Some(b)
+        while at is Some(n) {
+          a = a * n.opacity
+          at = by_index.get(n.parent)
+        }
+        most = dmax(most, a)
+      }
+    }
+    most
+  }
+  t.run_for(@ui.move_most_ms)
+  assert_eq(box_alpha(1), 1.0)
+}
+
+///|
+test "多选 from a message the preview does not hold: all of it ticked" {
+  let calls : Array[Made] = []
+  let t = publish_core(calls, menu=true)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(11.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.all(Checkbox, label="放进图片").iter().all(fn(n) { n.check == Some(On) }))
+}
+
+///|
 /// Whether the picture's boxes to tick (one for each of fix_preview's four messages) stand in one column of their own
 /// before its words, 12 short of where they start (its title's start, less the pictures' `reach` out in the margin
 /// before them), not over a message; each on the middle of its message's first line: the viewer's own words, Ana's

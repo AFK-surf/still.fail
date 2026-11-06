@@ -218,7 +218,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       if context.share_link != "" {
         entries.push(@kit.menu_item("copy-message-link", label=@sf.t("web-main.chat.copyMessageLink")))
       }
-      entries.push(@kit.menu_item("share-turn", label=@sf.t("web-main.chat.shareTurn")))
+      entries.push(@kit.menu_item("share-turn", label=@sf.t("web-main.chat.selectMessages")))
     }
   }
   if entries.is_empty() {
@@ -311,7 +311,7 @@ let context_icons : Map[String, String] = {
   "copy": "copy",
   "copy-message": "copy",
   "copy-message-link": "link",
-  "share-turn": "photo",
+  "share-turn": "check-circle",
 }
 
 ///|

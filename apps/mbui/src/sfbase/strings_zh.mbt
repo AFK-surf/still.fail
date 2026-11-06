@@ -854,7 +854,7 @@ let zh : Map[String, String] = {
   "web-main.chat.pin": "固定",
   "web-main.chat.pinFailed": "无法固定：{error}",
   "web-main.chat.quote": "引用",
-  "web-main.chat.shareTurn": "分享这一轮",
+  "web-main.chat.selectMessages": "多选",
   "web-main.chat.rename": "重命名",
   "web-main.chat.regenerateTitle": "重新生成标题",
   "web-main.chat.regenerateTitle.done": "标题已重新生成",
