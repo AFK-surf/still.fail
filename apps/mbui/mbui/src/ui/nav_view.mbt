@@ -23,6 +23,19 @@ priv struct NavHosted {
 }
 
 ///|
+// A retained page's participation is the stack's declared state, followed by
+// descendants even while that page is laid out nowhere.
+let nav_page_shown : @view.Lent[() -> Bool] = @view.Lent::new()
+
+///|
+/// Whether the navigation page holding `v` is shown, read as navigation changes
+/// it. This says nothing about clipping or painted opacity. Outside a stack,
+/// true; a nested stack also follows the page holding it.
+pub fn page_shown(v : @view.View) -> Bool {
+  v.lent(nav_page_shown).map_or(true, fn(shown) { shown() })
+}
+
+///|
 /// What shows of the stack changed (which pages, how they move): what reads it told.
 fn[P] Nav::shown_told(self : Nav[P]) -> Unit {
   self.shown.set(@signals.untracked(fn() { self.shown.get() }) + 1)
@@ -203,6 +216,10 @@ pub fn[P] nav_view(
       fn(pv, serial) {
         let k = @signals.untracked(fn() { serial.get() })
         let entry = nav.entry(k)
+        let outer_shown = pv.lent(nav_page_shown)
+        pv.lends(nav_page_shown, fn() {
+          outer_shown.map_or(true, fn(shown) { shown() }) && nav.shows(k)
+        }) |> ignore
         pv
           .over(Is(true))
           .shift(By(fn() { nav.shift_of(k, fn() { pv.drawn_at() }) }))

@@ -52,8 +52,9 @@ pub fn chat_list_node(
       scroll.glide_to(scroll.at(v.tree) - d, glide=false)
     }
   })
-  // (shown while it is laid out somewhere: what comes out of its avatars played on then, linger_tick)
-  let shown_by = fn() { !v.shown_nowhere() }
+  // Navigation is an input: returning to this retained page resumes its reply
+  // deadlines even when no picture or layout has followed the return yet.
+  let shown_by = fn() { @ui.page_shown(v) }
   @sfbase.reading_of(rk).shown_by = Some(shown_by)
   // (its reading not made again as it goes: let go with its page, the old list's way)
   v.owns(fn() {
