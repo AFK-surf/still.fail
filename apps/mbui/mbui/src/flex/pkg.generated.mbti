@@ -16,6 +16,8 @@ pub fn computes() -> Int32
 
 pub let counters : FixedArray[Int32]
 
+pub fn intrinsic_height_limit() -> Double?
+
 pub fn layout_child(Node, Double, height? : Double, containing_height? : Double) -> (Double, Double)
 
 pub fn layout_child_fitted(Node, Double, containing_height? : Double) -> (Double, Double)

@@ -96,6 +96,8 @@ pub fn View::list_room_ground(self : View) -> View {
 /// those `shown` reports in sight. `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last
 /// block, laid out even while the last block is off screen. Where its host sets a page's list's rows on its pixels
 /// (Tree::set_rows_grid), each block's room is as tall as whole pixels.
+/// `natural=true` makes an otherwise unsized window as tall as its rows, up to the height available from its holder;
+/// it measures only enough rooms to fill that height. An explicitly sized or grown window keeps its assigned height.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -106,6 +108,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   bar? : ScrollBar,
   from_end? : Bool = false,
   align_end? : Bool = true,
+  natural? : Bool = false,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
@@ -124,7 +127,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
 ) -> View {
   // (only what shows: nothing made ahead of it; each never laid out counted as `est`, not as the mean of those laid out)
   self.scrolls_anchored_impl(
-    s, keys, make, est~, from_end~, align_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
+    s, keys, make, est~, from_end~, align_end~, natural~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
     put?=put, put_fraction?=put_fraction, put_fraction_lead_within_row~, rooms?=rooms, room_transforms~,
     fresh~, read_from_top~, cover~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
     seen?=seen, position?=position,

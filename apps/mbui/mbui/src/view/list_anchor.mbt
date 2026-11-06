@@ -248,6 +248,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   indexed? : AnchoredSource[K],
   fixed_estimate? : Bool = false,
   align_end? : Bool = true,
+  natural? : Bool = false,
   on_grid? : Bool = false,
   sighted? : (Sighted[K]) -> Unit,
   seen? : (Array[K]) -> Unit,
@@ -665,6 +666,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         window_cover.val = (c.cover, foot_covered)
         // (the row a key is, looked for from where it was, out both ways)
         let find = fn(k : K, near : Int) -> Int? {
+          if n == 0 { return None }
           match indexed {
             Some(source) => return (source.find)(k, near)
             None => ()
@@ -789,13 +791,65 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
           room_h
         }
+        // This sizing probe is not a displayed window: keep the old visible slots, and count actual rooms only
+        // until they fill the holder's available height. The committed layout places rows and reports them.
+        if natural && l.height == @double.infinity {
+          for k in slots.keys().collect() {
+            match slots.get(k) {
+              Some(slot) if slot.alive() => slot_of(k) |> ignore
+              _ => ()
+            }
+          }
+          let room = held.tree.nodes[held.at].flex.sizing_h
+          let available = if room == room { room } else { @flex.intrinsic_height_limit().unwrap_or(room) }
+          let limit = if available == available { dmax(0.0, available - foot) } else { @double.infinity }
+          let start = match laid.val {
+            Some(was) if was.keys.length() > 0 => {
+              let q = if from_end { was.keys.length() - 1 } else { 0 }
+              find(was.keys[q], if from_end { was.last } else { was.first }).unwrap_or(if from_end { n - 1 } else { 0 })
+            }
+            _ => if from_end { n - 1 } else { 0 }
+          }
+          let mut left = if from_end { start } else { start - 1 }
+          let mut right = if from_end { start + 1 } else { start }
+          let mut height = 0.0
+          while height < limit && (left >= 0 || right < n) {
+            let i = if from_end && left >= 0 || right >= n {
+              let i = left
+              left -= 1
+              i
+            } else {
+              let i = right
+              right += 1
+              i
+            }
+            height += dmax(0.0, measure(i))
+          }
+          let wanted = height + dmax(0.0, foot)
+          l.size_to(if available == available { dmin(dmax(0.0, available), wanted) } else { wanted })
+          return
+        }
         // (shown nowhere yet: no room to show anything in, as a page pushed on is before it is laid out where it goes.
         // Nothing of this one kept as how it was laid out, no put taken: laid out where it shows, it lays its rows out
         // from where it was, what it was asked to put then put; what it had made kept made meanwhile)
         if h <= 0.0 {
-          match laid.val {
-            Some(was) => for k in was.keys { slot_of(k) |> ignore }
-            None => ()
+          if natural {
+            // A room can open from zero, so keep its node through that first frame. A departed key is different: when
+            // the last room finishes closing, release it even though the window itself is now zero tall.
+            let present = match indexed {
+              Some(source) => source.contains
+              None => {
+                let here : Set[K] = Set::new()
+                for k in all { here.add(k) }
+                fn(k) { here.contains(k) }
+              }
+            }
+            for k in slots.keys().collect() { if present(k) { slot_of(k) |> ignore } }
+          } else {
+            match laid.val {
+              Some(was) => for k in was.keys { slot_of(k) |> ignore }
+              None => ()
+            }
           }
           return
         }
@@ -1643,6 +1697,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
         })
       },
+      sized=natural,
     )
     |> ignore
   })
@@ -1826,6 +1881,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       for k in now { here.add(k) }
       forget_missing(fn(k) { here.contains(k) })
     })
+  }
+  if natural {
+    // Its held box is itself a viewport, not the list's full extent. Pass it the available height for its intrinsic
+    // size; the surrounding scroll view still owns clipping, the scroll extent, and the content's offset.
+    self.tree.nodes[self.at].flex.style.overflow = @flex.Overflow::Visible
+    self.tree.layout_marked_at(self.at)
   }
   out
 }

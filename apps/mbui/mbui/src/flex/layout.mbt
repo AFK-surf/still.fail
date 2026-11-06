@@ -6,6 +6,26 @@
 let undef : Double = 0.0 / 0.0
 
 ///|
+// An upper bound for an intrinsically sized, windowed child. It is separate from the room ordinary flex children
+// receive: an unbounded scrolling column can contain a capped box without making its other children bounded.
+let intrinsic_height_cap : Ref[Double] = Ref(undef)
+
+///|
+/// A conservative height limit for an intrinsically sized window during a size probe, when its own room is unbounded.
+/// A custom container must pass its own constraints to the children it measures. Reading the limit marks the result
+/// as dependent on an ancestor's constraint, so flex does not reuse that size as though the ancestor had no effect.
+pub fn intrinsic_height_limit() -> Double? {
+  // Even an absent limit can change when an ancestor is capped later; do not retain this intrinsic result as an
+  // unconditionally reusable measurement.
+  vague.val = true
+  if known(intrinsic_height_cap.val) {
+    Some(intrinsic_height_cap.val)
+  } else {
+    None
+  }
+}
+
+///|
 fn known(x : Double) -> Bool {
   x == x
 }
@@ -441,8 +461,12 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 pub fn layout_child(node : Node, width : Double, height? : Double, containing_height? : Double) -> (Double, Double) {
   let h = height.unwrap_or(undef)
   let ch = containing_height.unwrap_or(undef)
+  // The custom layout chooses its children's constraints; a bound on the container is not a bound on its content.
+  let was_cap = intrinsic_height_cap.val
+  intrinsic_height_cap.val = undef
   let w = size_node(node, width, h, width, h, width, ch, true)
   let h = out_h.val
+  intrinsic_height_cap.val = was_cap
   node.width = w
   node.height = h
   (w, h)
@@ -452,8 +476,11 @@ pub fn layout_child(node : Node, width : Double, height? : Double, containing_he
 /// Lay out a custom container's child at its intrinsic width, with `most` available, within the current compute.
 pub fn layout_child_fitted(node : Node, most : Double, containing_height? : Double) -> (Double, Double) {
   let ch = containing_height.unwrap_or(undef)
+  let was_cap = intrinsic_height_cap.val
+  intrinsic_height_cap.val = undef
   let w = size_node(node, undef, undef, most, undef, most, ch, true)
   let h = out_h.val
+  intrinsic_height_cap.val = was_cap
   node.width = w
   node.height = h
   (w, h)
@@ -1137,6 +1164,20 @@ fn layout_flex(
     inner_h
   } else if known(ah) {
     fmax(clamp_size(ah, b.min_h, b.max_h) - pbh, 0.0)
+  } else {
+    undef
+  }
+  // Keep ordinary children's available space unchanged. A window whose height is intrinsic can instead use this
+  // separate upper bound to stop measuring once its enclosing box is full. A scrolling axis has unbounded content.
+  let was_cap = intrinsic_height_cap.val
+  intrinsic_height_cap.val = if s.overflow == Scroll && !row {
+    undef
+  } else if known(avail_inner_h) {
+    avail_inner_h
+  } else if known(was_cap) {
+    fmax(clamp_size(was_cap, b.min_h, b.max_h) - pbh, 0.0)
+  } else if known(b.max_h) {
+    fmax(clamp_size(b.max_h, b.min_h, b.max_h) - pbh, 0.0)
   } else {
     undef
   }
@@ -1886,6 +1927,7 @@ fn layout_flex(
   }
   pool.count = 0
   depth.val = d
+  intrinsic_height_cap.val = was_cap
   out_h.val = fh
   fw
 }

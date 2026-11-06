@@ -1128,11 +1128,14 @@ pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
 pub fn Tree::scroll_short(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
   let n = self.nodes[id.at]
-  n.scroll_held >= 0 &&
-  n.scroll_held < self.nodes.length() &&
-  self.nodes[n.scroll_held].live &&
-  !n.scroll_across &&
-  self.nodes[n.scroll_held].flex.height < n.flex.height - 0.5
+  guard n.scroll_held >= 0 && n.scroll_held < self.nodes.length() && self.nodes[n.scroll_held].live && !n.scroll_across else {
+    return false
+  }
+  // A virtual list's holder is the viewport, while its counted content extent is what can end above that viewport.
+  match self.scrolls_at.get(id.at).bind(fn(s) { s.content_extent }) {
+    Some(extent) => @signals.untracked(extent) < n.flex.height - 0.5
+    None => self.nodes[n.scroll_held].flex.height < n.flex.height - 0.5
+  }
 }
 
 ///|
