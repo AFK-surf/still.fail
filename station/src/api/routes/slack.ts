@@ -216,7 +216,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       }
     }
     const name = identity.botName === "" ? DEFAULT_APP_NAME : identity.botName;
-    const taken = new Set(slack.connects().map((c) => c.id));
+    const taken = new Set(connectsRaw(raw()).map((c: Json) => c?.id));
     const base = connectSlug(name);
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;

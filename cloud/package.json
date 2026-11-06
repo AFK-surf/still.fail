@@ -21,10 +21,10 @@
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "esbuild": "0.28.2",
     "jsonc-parser": "3.3.1",
-    "miniflare": "5.20260907.0-alpha",
+    "miniflare": "5.20260917.0-alpha",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
-    "wrangler": "4.129.1"
+    "wrangler": "4.134.0"
   },
   "packageManager": "pnpm@10.33.0"
 }
