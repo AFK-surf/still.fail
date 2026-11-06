@@ -259,6 +259,68 @@ describe("dirsync", { concurrency: true }, () => {
     assert.equal(again.sync, undefined);
   });
 
+  test("another start preserves a synced file changed by the preceding task when the source is unchanged", async () => {
+    const p = await pair();
+    const dir = join(p.home, "recordings");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "trace"), "original\n");
+    await p.run("record", dir, "echo rerecorded > trace");
+    await rounds(p.clock, "5 seconds", () => p.a.told.length === 1);
+    await p.run("next", dir, "true");
+    assert.equal(readFileSync(join(p.mirror("recordings"), "trace"), "utf8"), "rerecorded\n");
+    assert.equal(readFileSync(join(dir, "trace"), "utf8"), "original\n");
+  });
+
+  test("sync refuses to overwrite different changes on the source and the mirror", async () => {
+    const p = await pair();
+    const dir = join(p.home, "conflicts");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "trace"), "original\n");
+    await p.run("record", dir, "echo remote > trace");
+    await rounds(p.clock, "5 seconds", () => p.a.told.length === 1);
+    writeFileSync(join(dir, "trace"), "local\n");
+    await p.use("station_task", { key: "next", action: "prepare", command: "true", dir });
+    await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /conflict.*trace|trace.*conflict/i);
+    assert.equal(readFileSync(join(p.mirror("conflicts"), "trace"), "utf8"), "remote\n");
+    assert.equal(readFileSync(join(dir, "trace"), "utf8"), "local\n");
+  });
+
+  test("sync refuses to overwrite a new result made in the mirror with a different new source file", async () => {
+    const p = await pair();
+    const dir = join(p.home, "new-results");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "input"), "input\n");
+    await p.run("record", dir, "echo remote > trace");
+    await rounds(p.clock, "5 seconds", () => p.a.told.length === 1);
+    writeFileSync(join(dir, "trace"), "local\n");
+    await p.use("station_task", { key: "next", action: "prepare", command: "true", dir });
+    await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /conflict.*trace|trace.*conflict/i);
+    assert.equal(readFileSync(join(p.mirror("new-results"), "trace"), "utf8"), "remote\n");
+    assert.equal(readFileSync(join(dir, "trace"), "utf8"), "local\n");
+  });
+
+  test("a later task cannot replace a same-named result while the preceding task brings it back", async () => {
+    const p = await pair();
+    const dir = join(p.home, "back-race");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "input"), "input\n");
+    p.state.hold.add("file.get");
+    try {
+      await p.run("first", dir, "echo first > trace", { back: ["trace"] });
+      await until("the first result is being downloaded", () => p.state.held.length > 0);
+      await p.use("station_task", { key: "second", action: "prepare", command: "echo second > trace", dir, back: ["trace"] });
+      await assert.rejects(p.use("station_task", { key: "second", action: "start" }), /first.*(collect|bring|result)/i);
+    } finally {
+      p.release();
+    }
+    await rounds(p.clock, "5 seconds", () => p.a.told.length === 1);
+    assert.equal(readFileSync(join(p.home, "station-back", "first", "trace"), "utf8"), "first\n");
+    const started = await p.use("station_task", { key: "second", action: "start" });
+    await until("the second task ends", () => p.b.store.getJob(started.job.id)!.state !== "running");
+    await rounds(p.clock, "5 seconds", () => p.a.told.length === 2);
+    assert.equal(readFileSync(join(p.home, "station-back", "second", "trace"), "utf8"), "second\n");
+  });
+
   test("a directory outside Git: all its files but dependencies and build output", async () => {
     const p = await pair();
     const dir = join(tempdir(), "plain");
