@@ -28,6 +28,9 @@ priv struct Run {
   /// what owns what is made now (an effect, a scope): what is reading where something is, else this (Solid's Owner
   /// apart from its Listener: `untracked` stops following reads, never owning)
   mut owner : ReactiveNode?
+  /// what asked for the computed being worked out now (asker, as it began: what is reading, running or owning where
+  /// it was read): what its getter asks for is asked by that
+  mut computed_for : ReactiveNode?
   queued : Array[ReactiveNode?]
   /// how deep in flushes, and what is to be done once the outermost is over (after_flush): not this library's
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
@@ -63,6 +66,7 @@ let run : Run = {
   queued_length: 0,
   active_sub: None,
   owner: None,
+  computed_for: None,
   queued: [],
   flushing: 0,
   afters: [],
@@ -237,10 +241,14 @@ fn owner_now() -> ReactiveNode? {
 }
 
 ///|
-/// What asks for what is done now (after_flush): what is reading where something is; else the effect or the watch
-/// running (a watch's told runs with nothing reading, as does what an effect runs untracked); else the owner set
+/// What asks for what is done now (after_flush): what is reading where something is, an effect, a watch, a scope; a
+/// computed being worked out none (it owns nothing, and is let go only as it is no more read, Computed::dispose, to be
+/// worked out again as it is read): what asked as it began to be (computed_for: an effect or a watch reading it, or
+/// what that is in); else the effect or the watch running (a watch's told runs with nothing reading, as does what an
+/// effect runs untracked); else the owner set
 fn asker() -> ReactiveNode? {
   match run.active_sub {
+    Some(s) if s.kind is ComputedNode => run.computed_for
     Some(s) => Some(s)
     None =>
       match run.running {
@@ -416,6 +424,8 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   }
   c.deps_tail = None
   c.flags = MUTABLE | RECURSED_CHECK
+  let prev_for = run.computed_for
+  run.computed_for = asker()
   let prev_sub = set_active_sub(Some(c))
   run.cycle += 1
   let old_value = state.value
@@ -424,6 +434,7 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   run.computing -= 1
   state.value = Some(value)
   run.active_sub = prev_sub
+  run.computed_for = prev_for
   c.flags = c.flags & RECURSED_CHECK.lnot()
   purge_deps(c)
   match old_value {
@@ -438,6 +449,21 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
   let was = state.current
   state.current = state.pending
   !same_as(state.same, was, state.current)
+}
+
+///|
+/// Whether what an effect or a watch read changed, its computeds worked out again to say (check_dirty): for it, as it
+/// would be as it runs, nothing reading (whatever is: an effect a flush runs inside of): what their getters ask for is
+/// its (asker, computed_for)
+fn dirty_for(d : Link, e : ReactiveNode) -> Bool {
+  let running = run.running
+  let sub = run.active_sub
+  run.running = Some(e)
+  run.active_sub = None
+  let dirty = check_dirty(d, e)
+  run.active_sub = sub
+  run.running = running
+  dirty
 }
 
 ///|
@@ -462,7 +488,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
       (
         (flags & PENDING) != 0 &&
         (match e.deps {
-          Some(d) => check_dirty(d, e)
+          Some(d) => dirty_for(d, e)
           None => false
         })
       )
@@ -481,7 +507,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     o.marked_by.val = None
     return
   }
-  if (flags & DIRTY) != 0 || ((flags & PENDING) != 0 && check_dirty(e.deps.unwrap(), e)) {
+  if (flags & DIRTY) != 0 || ((flags & PENDING) != 0 && dirty_for(e.deps.unwrap(), e)) {
     if (flags & HAS_CHILD_EFFECT) != 0 {
       let mut link = e.deps_tail
       while true {
@@ -688,11 +714,14 @@ fn[T] Computed::read_value(self : Computed[T]) -> T {
     }
   } else if flags == 0 {
     node.flags = MUTABLE | RECURSED_CHECK
+    let prev_for = run.computed_for
+    run.computed_for = asker()
     let prev_sub = set_active_sub(Some(node))
     run.computing += 1
     state.value = Some((state.getter)(None))
     run.computing -= 1
     run.active_sub = prev_sub
+    run.computed_for = prev_for
     node.flags = node.flags & RECURSED_CHECK.lnot()
   }
   track(node)
@@ -907,9 +936,12 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
 /// is built for it after it ran (a list's rows, laid out after the part they are in was built). Let go as the
 /// computed's run reads anew, as what it read is.
 pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
+  let prev_for = run.computed_for
+  run.computed_for = asker()
   let prev_sub = set_active_sub(Some(self.0))
   let v = f()
   run.active_sub = prev_sub
+  run.computed_for = prev_for
   v
 }
 
@@ -1032,7 +1064,7 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   if (e.flags & (DIRTY | PENDING)) != 0 {
     let dirty = (e.flags & DIRTY) != 0 ||
       (match e.deps {
-        Some(d) => check_dirty(d, e)
+        Some(d) => dirty_for(d, e)
         None => false
       })
     e.flags = WATCHING
@@ -1164,7 +1196,7 @@ pub fn Watch::changed_now(self : Watch) -> Bool {
     return false
   }
   let dirty = match e.deps {
-    Some(d) => check_dirty(d, e)
+    Some(d) => dirty_for(d, e)
     None => false
   }
   // (looked at and found the same: watching again, as a watch told is as it runs (run_effect), so that what changes

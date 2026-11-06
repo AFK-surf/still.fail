@@ -432,3 +432,102 @@ fn af_kept_set_in_told() -> Unit raise {
   assert_eq(af_kept_set_in, [])
   assert_eq(af_go_runs.val, 0)
 }
+
+///|
+// kept across runs: what the sixth stopped run below's computeds read, set in the layout it stops in
+let af_worked : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_worked, what a computed read by an effect or a watch made in the sixth stopped run and owned
+// by none of it asked as it was worked out there, done
+let af_kept_worked : Array[String] = []
+
+///|
+// kept across runs: as af_worked, what sets an effect made in the sixth stopped run and owned by none of it going, which
+// reads a watch of the run's own
+let af_worked_go : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+test "panic: a run stopped in a layout, computeds worked out in it, read by effects, watches and the run, kept or its own" {
+  af_run()
+  // (a computed whose getter asks to wait for the change told whole, both ways, once what it reads is set)
+  let asking = fn(said : (String) -> Unit) {
+    @signals.computed(fn(_) {
+      let v = af_worked.get()
+      if v > 0 {
+        @signals.after_flush(fn() { said("after_flush") })
+        @signals.after_all_flushed(fn() { said("after_all_flushed") })
+      }
+      v
+    })
+  }
+  // (one read by an effect owned by none of the run: kept)
+  let kept = asking(fn(w) { af_kept_worked.push(w) })
+  @signals.effect(fn() { kept.get() |> ignore }) |> ignore
+  // (one read by an effect of the run's own, let go as a run begins, on_reset)
+  let owns = asking(fn(w) { af_note("a computed read by the stopped run's own effect: \{w}") })
+  let own = @signals.effect(fn() { owns.get() |> ignore })
+  on_reset(own)
+  // (one read by the run's own steps, let go as a run begins, on_reset: Computed::dispose)
+  let top = asking(fn(w) { af_note("a computed read by the stopped run: \{w}") })
+  top.get() |> ignore
+  on_reset(fn() { top.dispose() })
+  // (one read by a watch owned by none of the run: kept)
+  let by_kept_watch = asking(fn(w) { af_kept_worked.push("the watch's: \{w}") })
+  let kept_watch = @signals.watch(fn() {  })
+  // (one read by a watch of the run's own, let go as a run begins, on_reset, as it reads in an effect kept from the
+  // run)
+  let by_own_watch = asking(fn(w) { af_note("a computed read by the stopped run's own watch: \{w}") })
+  let own_watch = @signals.watch(fn() {  })
+  on_reset(fn() { own_watch.stop() })
+  @signals.effect(fn() {
+    if af_worked_go.get() > 0 {
+      own_watch.read(fn() { by_own_watch.get() }) |> ignore
+    }
+  })
+  |> ignore
+  @signals.afters_held(fn() {
+    // (both effects run now, their computeds worked out in them; what they ask held back by the layout)
+    af_worked.set(1)
+    top.get() |> ignore
+    kept_watch.read(fn() { by_kept_watch.get() }) |> ignore
+    af_worked_go.set(1)
+    af_reached.push("worked out")
+    abort("stopped")
+  })
+}
+
+///|
+test "a Tester started after a run stopped in a layout: what a kept effect's computed asked done, none else" {
+  af_stopped(["batch", "held", "watched", "told as read", "told in an effect's set", "worked out"])
+  af_next() |> ignore
+  af_kept_worked_told()
+}
+
+///|
+/// wasm-gc, Wasm, JS: what the computeds read by the effect and the watch kept from the stopped layout asked as they
+/// were worked out there, done as the Tester began (the effect's, the watch's, kept), in the order of each way; and as
+/// the effect's is worked out after
+#cfg(any(target="wasm-gc", target="wasm", target="js"))
+fn af_kept_worked_told() -> Unit raise {
+  assert_eq(
+    af_kept_worked,
+    ["after_flush", "the watch's: after_flush", "after_all_flushed", "the watch's: after_all_flushed"],
+    msg="the kept effect's and the kept watch's computeds', asked in the stopped layout: done as the run began",
+  )
+  af_kept_worked.clear()
+  af_worked.set(2)
+  // (the kept effect's computed's as it runs after, and the kept watch's as it is told: worked out to say whether it
+  // changed, for it)
+  assert_eq(af_kept_worked, [
+    "after_flush", "the watch's: after_flush", "after_all_flushed", "the watch's: after_all_flushed",
+  ])
+  assert_eq(af_done, [], msg="nor what the stopped run's own computeds ask as they are read again")
+}
+
+///|
+/// Native and LLVM: no stopped run here, no computed of it
+#cfg(any(target="native", target="llvm"))
+fn af_kept_worked_told() -> Unit raise {
+  assert_eq(af_kept_worked, [])
+}

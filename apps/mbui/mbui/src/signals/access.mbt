@@ -124,6 +124,7 @@ pub fn reset_globals() -> Unit {
   run.batch_changed = false
   run.active_sub = None
   run.owner = None
+  run.computed_for = None
   run.flushing = 0
   run.afters_held = 0
   run.draining = false
