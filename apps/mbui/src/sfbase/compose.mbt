@@ -843,7 +843,7 @@ pub fn drafts_given_read() -> Unit {
 ///|
 /// What takes what is put into a draft from elsewhere as it is put there, by the draft's key: the composers of the
 /// window's tree's that say so (draft_taker_said), each with its node, the last said first, each let go with its node
-/// (one of a draft going while another of it stays: the one that stays takes it).
+/// (what is put there after one of a draft goes, another of it still there takes; none, it waits for the next made).
 // kept across runs: each let go with its node
 let draft_takers : Map[String, Array[(@view.View, () -> Unit)]] = {}
 

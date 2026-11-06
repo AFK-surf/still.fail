@@ -197,8 +197,9 @@ pub fn composer_node(
         composing.picking.set(None)
         // (left for the draft as what is shared in is, then taken at this moment as an event of the tree's by the draft's
         // composer (draft_take_at): what follows a draft's files reads layout, which nothing has yet as the host's
-        // answers are handed on; that composer let go first, another of the draft's takes them then, or the next as
-        // it comes)
+        // answers are handed on; done before any change of the tree's after it, so before one letting this composer go.
+        // This composer gone before the picker answers, this is asked no more: what it gave waits, taken by the draft's
+        // next composer as it comes)
         if !@signals.untracked(no_files) {
           let list = @sfbase.shared_into.get(w.key).unwrap_or([])
           for f in files {
