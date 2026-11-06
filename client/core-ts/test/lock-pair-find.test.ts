@@ -203,6 +203,42 @@ test("one workspace's credential fails: the other can still ask and the failed w
   assert.equal(w.dials[PHONE_APP], 1, "a code already showing is not requested a second time");
 });
 
+test("a workspace's credential request hangs: another workspace can still show a code", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" }, true);
+  w.core.inner.cloudSync.credential = (ws) => ws === "ws"
+    ? Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" })
+    : Effect.never;
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(PAIR_REDIAL_MS + 2_000);
+  assert.equal((await w.pair()).state, "code");
+  assert.deepEqual((w.hellos[0] as { workspaces: { ws: string }[] }).workspaces.map((x) => x.ws), ["ws"]);
+  assert.equal((await w.secondLock!()).me.pair.state, "failed");
+});
+
+test("a credential request that never answers ends with a network error after the tries", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" });
+  w.core.inner.cloudSync.credential = () => Effect.never;
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS + 2_000);
+  const p = await w.pair();
+  assert.equal(p.state, "failed");
+  assert.match(p.error, /网络连接失败/);
+  assert.deepEqual(w.hellos, []);
+});
+
+test("a credential request that hangs once is retried and can then show a code", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" });
+  let requests = 0;
+  w.core.inner.cloudSync.credential = () => Effect.suspend(() => ++requests === 1
+    ? Effect.never
+    : Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" }));
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(PAIR_REDIAL_MS + 2_000);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(requests, 2);
+  assert.equal(w.dials[PHONE_APP], 1);
+});
+
 test("a cancelled try stops retrying its unavailable credential", async () => {
   const w = await waiting({ [PHONE_APP]: "credential" });
   let requests = 0;
@@ -215,7 +251,7 @@ test("a cancelled try stops retrying its unavailable credential", async () => {
   assert.deepEqual(w.hellos, []);
 });
 
-test("cancelled while a credential is being fetched: the other workspaces are not fetched", async () => {
+test("cancelled while credentials are being fetched: no further attempts or dialogs follow", async () => {
   const w = await waiting({ [PHONE_APP]: "credential" }, true);
   const release = Deferred.makeUnsafe<void>();
   const requests: string[] = [];
@@ -224,10 +260,11 @@ test("cancelled while a credential is being fetched: the other workspaces are no
     return Effect.andThen(Deferred.await(release), Effect.fail(new CoreError("network", "网络连接失败")));
   });
   await w.ask("lock.pair", { workspace: "ws" });
-  assert.equal(requests.length, 1);
+  await w.host.time.pass(500);
+  assert.deepEqual([...requests].sort(), ["w2", "ws"]);
   await w.ask("lock.pairCancel", { workspace: "ws" });
   Deferred.doneUnsafe(release, Effect.void);
   await w.host.time.pass(PAIR_REDIAL_MS);
-  assert.equal(requests.length, 1, "no further credential requests follow cancellation");
+  assert.deepEqual([...requests].sort(), ["w2", "ws"], "no further credential requests follow cancellation");
   assert.deepEqual(w.hellos, []);
 });

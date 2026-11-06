@@ -75,6 +75,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
+      - name: "A key that focuses a field and the next typed key belong to the right recipients"
+        run: |
+          mkdir -p out/host
+          cl.exe -nologo -W3 -Isrc/host scripts/win_input_test.c -Foout/host/ -Feout/host/win_input_test.exe user32.lib
+          out/host/win_input_test.exe
       - name: kitdemo
         run: scripts/host_contract.sh windows build
       - name: "The host's contract: a run's tape = a Tester's frames"
