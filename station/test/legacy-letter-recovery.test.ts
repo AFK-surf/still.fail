@@ -112,3 +112,79 @@ test("an older prepared writer sees the column only after the old letters are ma
     assert.equal(db.prepare("SELECT letter FROM entries WHERE n=3").get()?.letter, null);
   } finally { old.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+for (const journal of ["DELETE", "WAL"] as const) for (const change of ["messages", "join", "leave"] as const) test(`an old writer's ${change} between scan and lock is included in the upgrade (${journal})`, () => {
+  const dir = mkdtempSync(join(tmpdir(), "legacy-letter-scan-race-"));
+  const path = join(dir, "old.db"), db = oldStore(path);
+  db.exec(`PRAGMA journal_mode=${journal}`);
+  const old = new DatabaseSync(path);
+  try {
+    if (change === "leave") old.exec("INSERT INTO thread_sessions VALUES(1,'other')");
+    let changed = false;
+    const raced = new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.includes("SELECT thread, n, text FROM entries e")) return statement;
+        return new Proxy(statement, { get(query, method) {
+          if (method === "all") return (...args: Parameters<typeof query.all>) => {
+            const found = query.all(...args);
+            if (!changed) {
+              changed = true;
+              if (change === "messages") old.exec(`BEGIN;
+                UPDATE entries SET text='ordinary' WHERE thread=1 AND n=1;
+                INSERT INTO entries VALUES(1,3,'message','agent','other','From [New](https://x/new):');
+                COMMIT`);
+              else if (change === "join") old.exec("INSERT INTO thread_sessions VALUES(1,'other')");
+              else old.exec("DELETE FROM thread_sessions WHERE thread=1 AND session='other'");
+            }
+            return found;
+          };
+          const value = Reflect.get(query, method, query);
+          return typeof value === "function" ? value.bind(query) : value;
+        } });
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    addLetterColumn(raced);
+    assert.equal(changed, true);
+    const want = change === "messages"
+      ? [null, expected[1], { way: "in", title: "New", link: "https://x/new" }]
+      : change === "join" ? [null, null] : expected;
+    assert.deepEqual(letters(db), want);
+  } finally { old.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an old-letter upgrade interrupted on its locked reread rolls back and retries", () => {
+  const dir = mkdtempSync(join(tmpdir(), "legacy-letter-reread-"));
+  const path = join(dir, "old.db");
+  let db = oldStore(path);
+  const old = new DatabaseSync(path);
+  try {
+    let reads = 0;
+    const interrupted = new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.includes("SELECT thread, n, text FROM entries e")) return statement;
+        return new Proxy(statement, { get(query, method) {
+          if (method === "all") return (...args: Parameters<typeof query.all>) => {
+            if (++reads === 2) throw new Error("interrupted locked reread");
+            const found = query.all(...args);
+            old.exec("INSERT INTO thread_sessions VALUES(1,'other')");
+            return found;
+          };
+          const value = Reflect.get(query, method, query);
+          return typeof value === "function" ? value.bind(query) : value;
+        } });
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    assert.throws(() => addLetterColumn(interrupted), /interrupted locked reread/);
+    assert.equal(db.prepare("PRAGMA table_info(entries)").all().some((row) => row.name === "letter"), false);
+    db.close();
+    db = new DatabaseSync(path);
+    addLetterColumn(db);
+    assert.deepEqual(letters(db), [null, null]);
+  } finally { old.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
+});
