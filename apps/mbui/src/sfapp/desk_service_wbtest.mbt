@@ -1,4 +1,4 @@
-// A web service and a visualization beside a chat on the desktop (sfdesk/service_tab.mbt; ember web/src/pages/Chat.tsx's
+// A web service and a visualization beside a chat on the desktop (sfdesk/service_tab.mbt; still.fail web/src/pages/Chat.tsx's
 // side panel, Preview.tsx): asked as a page, the chat's page with it in front among the side panel's tabs, its page
 // served from the station; closed, its site view let go.
 

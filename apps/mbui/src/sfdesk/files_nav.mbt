@@ -1,4 +1,4 @@
-// The files' sidebar (ember web/src/pages/FilesNav.tsx, FilesNav.css.ts), as Finder's: the person's own folders kept at
+// The files' sidebar (still.fail web/src/pages/FilesNav.tsx, FilesNav.css.ts), as Finder's: the person's own folders kept at
 // hand (个人收藏, of any station: favorites.mbt, including old pins), then every station of the workspace with a drive,
 // opened to its places. A row opens its folder in the side in front; something dragged onto one goes into it, and a
 // folder dragged onto 个人收藏 is kept there (drag.mbt).

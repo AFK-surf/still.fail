@@ -1,4 +1,4 @@
-// One view of a station's screen (ember apps/android app/remote/ScreenSession.kt; docs/remote-screens.md, docs/client-core.md
+// One view of a station's screen (still.fail apps/android app/remote/ScreenSession.kt; docs/remote-screens.md, docs/client-core.md
 // `screen.view`): the core's call kept open while the viewer is in sight, its values taken apart (the state, a config,
 // frames with their bytes), frames handed to the decoder (@ui.Stream: H.264 or JPEG, drawn as the picture the viewer
 // shows), each acknowledged once shown (the stream says so) or dropped; input, 只看/控制 and key frames told back to

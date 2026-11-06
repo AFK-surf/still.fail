@@ -14,7 +14,7 @@
 //   clicked, or the app started again, brings it back; the icon's menu (the app's words: menu_setup's `"role": "tray"`
 //   menu) brings it back or quits. Where the desktop shows none (GNOME's own), its window closed ends it, as apps
 //   there do: nothing would show that it runs;
-// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is.
+// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,stillfail-beta"): as it starts, or the one running is.
 // A program without one (a demo, a test app's scripted run) ends as its window closes, as before. So does a window of
 // the app's own (@hostapi.window_open: the program run again with MBUI_WINDOW): it runs beside the app's one run, not
 // handed to it, with no icon among the desktop's and none of its notifications.
@@ -47,7 +47,7 @@ static const char *app_name(void) {
   return v && *v ? v : window_title ? window_title : app_id();
 }
 
-// a link of the app's schemes (MBUI_SCHEMES: "stillfail,ember"), else 0
+// a link of the app's schemes (MBUI_SCHEMES: "stillfail,stillfail-beta"), else 0
 static int app_link(const char *s) {
   const char *schemes = getenv("MBUI_SCHEMES");
   const char *colon = s ? strchr(s, ':') : NULL;

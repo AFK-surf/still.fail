@@ -15,8 +15,8 @@ D="$(cd "$(dirname "$0")" && pwd)"
 export APP=${APP:-stillfail}
 if [ "$APP" = stillfail ]; then
   t=linux-$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/')
-  engine=$(cd "$EMBER" && node scripts/native.ts path engine $t) || exit 1
-  shell=$(cd "$EMBER" && node scripts/native.ts path shell $t) || exit 1
+  engine=$(cd "$SF_SRC" && node scripts/native.ts path engine $t) || exit 1
+  shell=$(cd "$SF_SRC" && node scripts/native.ts path shell $t) || exit 1
   export MBUI_LINUX_CFLAGS="-I$A/engine -I$MBUI_DIR/src/host $(pkg-config --cflags libsecret-1)"
   export MBUI_LINUX_LDFLAGS="-L$engine -L$shell -lstillfail_engine -lstillfail_shell $(pkg-config --libs libsecret-1) -Wl,-rpath,\$ORIGIN"
 fi

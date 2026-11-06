@@ -1,4 +1,4 @@
-// A chat shared with the viewer's other workspaces (docs/chat-share.md; ember web/src/pages/ChatPage.tsx ShareOf,
+// A chat shared with the viewer's other workspaces (docs/chat-share.md; still.fail web/src/pages/ChatPage.tsx ShareOf,
 // ShareDialog, the phone's ShareSheet in mobile/Chat.tsx; ChatPage.css.ts shareList, shareWrite), one on every screen:
 // from its info's 共享 row, for those who may change it (its starter, an owner or admin), the presenters' panel (a
 // sheet with touch short of Large, the web's dialog otherwise) ticks the workspaces it is shared with and

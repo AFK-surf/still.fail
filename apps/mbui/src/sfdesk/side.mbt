@@ -1,4 +1,4 @@
-// A sidebar's top row (ember web/src/Sidebar.css.ts brand), the frame's; its rows are the library's (src/sf
+// A sidebar's top row (still.fail web/src/Sidebar.css.ts brand), the frame's; its rows are the library's (src/sf
 // side_rows.mbt).
 
 ///|

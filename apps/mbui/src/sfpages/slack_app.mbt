@@ -1,4 +1,4 @@
-// A connect's Slack app on the desktop (ember web/src/pages/SlackApp.tsx SlackAppSection, ConfigTokenForm, AppFields,
+// A connect's Slack app on the desktop (still.fail web/src/pages/SlackApp.tsx SlackAppSection, ConfigTokenForm, AppFields,
 // AppForm; SlackApp.css.ts): folded on its page (it is changed now and then), its look and permissions edited here and
 // written into the app's manifest with the viewer's configuration token (`connect.putSlackApp`, given what the form
 // started from: the core writes only what differs); without one, a way to add it. The permissions' sections are the

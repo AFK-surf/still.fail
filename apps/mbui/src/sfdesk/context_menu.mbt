@@ -1,4 +1,4 @@
-// What a right click in the desktop's window offers, as the desktop app's own (ember apps/desktop/src/context-menu.mts:
+// What a right click in the desktop's window offers, as the desktop app's own (still.fail apps/desktop/src/context-menu.mts:
 // Electron shows none of its own): a link's (在浏览器中打开链接 and 复制链接), an image's (复制图片), then the words: a
 // field's editing (剪切, 复制, 粘贴, 全选, each as it can be done now), elsewhere the words picked (复制); a line between
 // them; nothing where there is none of these (the page's ground). A message of a chat's list right clicked offers its

@@ -1,4 +1,4 @@
-// Visualizations (ember apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt, Prose.kt; web/src/Viz.tsx): an HTML
+// Visualizations (still.fail apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt, Prose.kt; web/src/Viz.tsx): an HTML
 // file an agent placed in its message's text (`[title](figure.html)` on a line of its own), drawn there in a page's
 // view (src/ui/native.mbt NativeView::page) instead of shown as a card, with ways under it to open it over the whole
 // screen or as a page of its own (PreviewFile, service.mbt). (A ```mermaid block is the app's own picture:

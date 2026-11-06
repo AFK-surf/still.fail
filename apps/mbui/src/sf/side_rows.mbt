@@ -1,4 +1,4 @@
-// A sidebar's rows (ember web/src/Sidebar.css.ts navRow, navNew, navScroll; SidebarList.tsx NavItem, NavAction): a
+// A sidebar's rows (still.fail web/src/Sidebar.css.ts navRow, navNew, navScroll; SidebarList.tsx NavItem, NavAction): a
 // row of one line, a row laid out as a chat's (list_row), the band's action over a list, the list under the band; a
 // row's ground as the web moves it. The sidebar's frame (its top row, its width, its fold)
 // is the shell's.

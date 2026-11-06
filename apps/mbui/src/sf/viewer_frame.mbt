@@ -1,4 +1,4 @@
-// The frame round a file opened over the whole window, whatever the tier and the input (ember web/src/FilePreview.tsx,
+// The frame round a file opened over the whole window, whatever the tier and the input (still.fail web/src/FilePreview.tsx,
 // FilePreview.css.ts): what draws it gives what it says and does (sfbase's viewer: the file, its stages, what is read).
 // In the Small tier one bar floats at the top, as wide as what it holds and never narrower once open (fpHead: the
 // file's name, its kind and size, its tools and close); otherwise the bar every file opened has across the top

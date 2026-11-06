@@ -1,6 +1,6 @@
 // A station's drive as the core shows it, what the phone's drive pages and the desktop's files' page both read (client/core-ts shapes: StationView.overview.drive is DriveRoots, the `drive`
 // topic's DriveFolder of DriveEntry, `drivePlace`'s DrivePlace; the prefs' `driveViews` and `reader`), read into what
-// the drive's pages draw (ember apps/android drive/Files.kt, DriveScreen.kt; shared data/Drives.kt).
+// the drive's pages draw (still.fail apps/android drive/Files.kt, DriveScreen.kt; shared data/Drives.kt).
 
 
 ///|

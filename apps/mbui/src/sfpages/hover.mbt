@@ -1,4 +1,4 @@
-// A card over what the pointer rests on, as the web's (ember web/src/Peeks.tsx Hover, Hover.css.ts card, cardTile):
+// A card over what the pointer rests on, as the web's (still.fail web/src/Peeks.tsx Hover, Hover.css.ts card, cardTile):
 // opened once the pointer has rested on it 320 ms, closed 120 ms after it has left both it and the card; under it and
 // at its start, 6 away, kept in the window; a small panel (the popover's: 6 in, what it holds 10 in more), 320 wide
 // (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 and clear over 160 ms as it comes,

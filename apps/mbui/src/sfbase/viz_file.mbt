@@ -1,4 +1,4 @@
-// A visualization's file as both frames show it (ember apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt; web
+// A visualization's file as both frames show it (still.fail apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt; web
 // Viz.tsx): the web's stylesheet and bridge and tokens round it, its CSP, what its widget keeps (`widget.state`,
 // `widget.setState`), fetched once a file (`station.file`); served to a page of its own (a service's page's `file:`,
 // service_page.mbt) with what it kept. Drawing it is each frame's own.

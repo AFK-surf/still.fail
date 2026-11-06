@@ -1,4 +1,4 @@
-// The band over the sidebar's chats' lists (ember web/src/SidebarList.tsx NavTop; SidebarActions.tsx): 新建对话 and the
+// The band over the sidebar's chats' lists (still.fail web/src/SidebarList.tsx NavTop; SidebarActions.tsx): 新建对话 and the
 // filter; the lists under it are sfpages' (sidebar.mbt).
 
 ///|

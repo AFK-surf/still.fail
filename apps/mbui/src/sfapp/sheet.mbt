@@ -1,4 +1,4 @@
-// The app's sheets (ember apps/android shared/ui/Sheet.kt SheetHost), one at a time: each the library's panel
+// The app's sheets (still.fail apps/android shared/ui/Sheet.kt SheetHost), one at a time: each the library's panel
 // (@sf.panel, src/sf presenters.mbt), with a finger the phone's sheet, its share of the screen, a draggable one between
 // half (55%) and nearly all (94%); with a mouse beside what opened it. What it shows is its kind's (SheetKind), drawn
 // anew each frame by what the frame tells (sheet_contents).

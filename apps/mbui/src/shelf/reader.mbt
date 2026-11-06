@@ -1,4 +1,4 @@
-// The reader (ember web/ui viewer/Reader.tsx, Reader.css.ts, ViewerBar):
+// The reader (still.fail web/ui viewer/Reader.tsx, Reader.css.ts, ViewerBar):
 // the text on its paper, cut into pages. With a mouse, the viewer's bar
 // across the top (back, the name and where in it, the tools) and the
 // contents or the layout docked at the right; on a phone, floating bars

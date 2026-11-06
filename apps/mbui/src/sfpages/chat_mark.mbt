@@ -1,4 +1,4 @@
-// A chat's state as a mark in a line (ember web/src/ChatMark.tsx ChatMark `inline`, ChatMark.css.ts chatMarkInline):
+// A chat's state as a mark in a line (still.fail web/src/ChatMark.tsx ChatMark `inline`, ChatMark.css.ts chatMarkInline):
 // before a row's title in the chats' lists (sidebar.mbt, a finger's and a mouse's alike), on the rail's lists and
 // workspaces. One meaning to a mark wherever it is (an agent's corner, agent_mark.mbt, says the same): yellow spokes
 // stepping round at work, a blue dot when it is the viewer's turn (a card or an agent waiting on them, or something
@@ -89,7 +89,7 @@ let mark_pop_peak : Double = 1.3
 let mark_pop_peak_at : Double = 0.6
 
 
-// A row's second line from where its chat stands (ember web/src/ChatMark.tsx WaitingText `slot`, ChatMark.css.ts
+// A row's second line from where its chat stands (still.fail web/src/ChatMark.tsx WaitingText `slot`, ChatMark.css.ts
 // leadLine, leadSlot, waitingLead; Sidebar.css.ts navSessionLast): by what the core says leads it (ChatItem's
 // state_lead, its card's lead word state_lead_text, what follows state_rest), never read out of the words. A lead said
 // as an icon (needs the viewer a bell, done a check, done and offered to archive the archive box, waiting the waiting

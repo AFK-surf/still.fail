@@ -1,4 +1,4 @@
-// 关于 and 更新日志, one page each in every frame (ember web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
+// 关于 and 更新日志, one page each in every frame (still.fail web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
 // narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build, the way to a newer one,
 // what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
 // terms and privacy policy on its site; last, where the device keeps one, its performance record (性能记录: what

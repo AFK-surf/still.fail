@@ -1,5 +1,5 @@
 // This device's password manager, for an app that fills a login it does not hold itself (still.fail's: a page of a
-// station's browser seen and driven from the app, ember docs/remote-screens.md): 1Password, through its command-line
+// station's browser seen and driven from the app, still.fail docs/remote-screens.md): 1Password, through its command-line
 // tool `op` signed in by its desktop app (1Password › Settings › Developer › Integrate with 1Password CLI), which asks
 // the person (Touch ID, Windows Hello) in its own window. The host only runs `op` with the arguments given and gives
 // back what it said; what to ask it and what its answers mean is here. macOS (apple_passwords.m) and Windows

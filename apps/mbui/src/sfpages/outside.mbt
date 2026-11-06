@@ -1,4 +1,4 @@
-// The desktop's asking before a message that refers to chats of the viewer's other workspaces goes (ember web/src/
+// The desktop's asking before a message that refers to chats of the viewer's other workspaces goes (still.fail web/src/
 // OutsideShare.tsx useOutsideShare, OutsideList; ChatRef.css.ts outsideList, outsideItem, outsideCannot, refChip,
 // refChipStation): the presenters' panel, 分享对话 and what sharing does, then each chat as a reference shows (`@` and its title in
 // the accent) and whose it is, those the viewer may not share saying so; 取消, and 分享并发送 (仍然发送 with none to

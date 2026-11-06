@@ -1,4 +1,4 @@
-// What a chat's list holds on the desktop besides its messages (ember web/src/Chat.tsx ChatRows, OutboxRow, Activity,
+// What a chat's list holds on the desktop besides its messages (still.fail web/src/Chat.tsx ChatRows, OutboxRow, Activity,
 // useSteady; Chat.css.ts chatUnreadLine, chatOlder, chatNewer, chatEmpty, msgUnsent, msgUnsentBtn, agentActivity,
 // activityLine, activityAvatar, activityRing, activityTail, activityNowText, activityElapsed, activityStop): the line
 // over what is new, the pages being brought in, what was sent from here and is not in the chat yet, where it stands,

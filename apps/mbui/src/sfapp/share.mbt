@@ -1,4 +1,4 @@
-// Sharing (ember apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand; docs/share-in.md).
+// Sharing (still.fail apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand; docs/share-in.md).
 //
 // In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link, some text or files,
 // ACTION_SEND_MULTIPLE of files, iOS's share extension's as the app next comes to the front, @ui.shared_in;

@@ -1,4 +1,4 @@
-// The files' page on a wide screen (ember web/src/pages/Files.tsx FilesShell, Files.css.ts), as Finder's window: a row
+// The files' page on a wide screen (still.fail web/src/pages/Files.tsx FilesShell, Files.css.ts), as Finder's window: a row
 // of tabs, each a folder of a station of the workspace (tabs.mbt: the core keeps them), the one shown below; a tab split
 // in two shows two folders side by side, of one station or two, to drag from one to the other. The side in front (its
 // top lined in the accent) is what the page's address says and what the keys work on; a press in the other one puts it

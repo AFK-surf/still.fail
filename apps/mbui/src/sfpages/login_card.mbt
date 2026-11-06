@@ -1,4 +1,4 @@
-// A station's login to a command-line tool its agents use, as a card, the one on every screen (ember
+// A station's login to a command-line tool its agents use, as a card, the one on every screen (still.fail
 // web/src/MachineLogins.tsx LoginCard, ActiveCard, CancelLogin, PasteSteps, CodeField, CardCode, StepButton;
 // MachineLogins.css.ts card…; the web's phone the same card): in a chat under the agent's message (decision.mbt), on
 // the station page's 登录 while it is under way (station_cards.mbt, settings' station_logins.mbt).

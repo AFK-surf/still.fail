@@ -1,4 +1,4 @@
-// A chat's own find on the desktop (ember web/src/ChatFind.tsx, ChatFind.css.ts): ⌘F opens its bar in the chat's
+// A chat's own find on the desktop (still.fail web/src/ChatFind.tsx, ChatFind.css.ts): ⌘F opens its bar in the chat's
 // bar, in place of its buttons, so it covers nothing of the chat. The core looks in all the chat's messages
 // (`chat.find`: those not in the window shown too, and with `bring` those not on the device), 120 ms after the last
 // key, answering which have the words and how many times; the list goes to the one the reader is at (the window moved

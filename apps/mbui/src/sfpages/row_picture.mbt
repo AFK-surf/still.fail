@@ -1,4 +1,4 @@
-// Who is in a chat, small at its row's second line's end (ember web/src/RowPicture.tsx RowAside, Face;
+// Who is in a chat, small at its row's second line's end (still.fail web/src/RowPicture.tsx RowAside, Face;
 // RowPicture.css.ts), as the chats' lists draw it with a finger and with a mouse alike: its agents' marks (a maker's
 // once) and its people's faces, those that lead first.
 

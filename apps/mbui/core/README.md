@@ -12,7 +12,7 @@ src/host/apple_core.mm  the engine on macOS and iOS (Objective-C++, ARC): Hermes
                         loop, __native, the shell, secure.* (the Keychain) and listen.*
 src/host/apple_auth.m   a sign-in's browser page: ASWebAuthenticationSession (macOS and iOS)
 src/host/android_core.c the engine on Android: still.fail's own, prebuilt (below)
-core/hermes.ts          still.fail's entry: ember's hosts/hermes-start.ts, no app's modules
+core/hermes.ts          still.fail's entry: still.fail's hosts/hermes-start.ts, no app's modules
 core/media-hermes.ts    the media app's entry (still.fail's core with the media module): what the apps ship
 core/smoke.m            headless smoke test on macOS: accounts, auth.begin, stop
 core/delta-vectors.ts   test vectors from core-ts's diff and apply -> src/core/vectors_test.mbt
@@ -28,7 +28,7 @@ apple`).
 
 ## Building and the smoke test
 
-`scripts/core.sh` builds from the still.fail checkout it is in (`$EMBER`), with pnpm and rustup's cargo. Everything it
+`scripts/core.sh` builds from the still.fail checkout it is in (`$SF_SRC`), with pnpm and rustup's cargo. Everything it
 makes goes to `out/core/` (ignored); the shell's intermediate build goes to `$CARGO_TARGET_DIR` (`out/core-target`).
 
 ```sh
@@ -52,7 +52,7 @@ TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-a
   and the headers of Hermes and its JSI (`include`; the JSI is compiled into the framework). Fetched once into
   `~/Library/Caches/stillfail-build/hermes-apple-0.81.4`, which every worktree shares (as
   `scripts/core.sh` keeps hermesc), never committed; `out/core/hermes` links to it.
-- **The shell** is the crate's `cdylib` built as a static library (`cargo rustc --crate-type staticlib`), so ember's
+- **The shell** is the crate's `cdylib` built as a static library (`cargo rustc --crate-type staticlib`), so still.fail's
   Cargo.toml is untouched. What it needs from the system (`-framework Security -framework CoreFoundation … -liconv`) is
   what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. `apple` takes it from
   still.fail's natives (scripts/native.ts `shell-apple`, by the shell's sources: built once by CI's natives job, else
@@ -89,7 +89,7 @@ stops the core and prints timings and the process's memory footprint.
   `at_rest` and `next_wake` see them, and awaits the core while it runs what is due; the core's `monotonic` and `now`
   are the app's clock then too. On a device none of
   this: the engine's timers, real time.
-- `__native` is ember's `HermesNative` (hosts/hermes-globals.ts) as it is, plus `os`; the engine starts the core with
+- `__native` is still.fail's `HermesNative` (hosts/hermes-globals.ts) as it is, plus `os`; the engine starts the core with
   `__stillfail.start(cloudOrigin, beta, os)` (`macos`, `ios`; hosts/engine.ts takes the third over hermes-start.ts's
   `android`). Bytes are ArrayBuffers both ways: `call(id, op, json, ArrayBuffer?)`, `emitBytes(client, json,
   ArrayBuffer)`, `__stillfail.receiveBytes(client, json, ArrayBuffer)`, `complete(id, json, error, ArrayBuffer?)`,
@@ -120,7 +120,7 @@ stops the core and prints timings and the process's memory footprint.
 ## Measurements
 
 `scripts/core.sh smoke` compares the native core's engines. The following example compares two runs on one test
-machine against JavaScriptCore's earlier implementation (`ember dda655bbf`):
+machine against JavaScriptCore's earlier implementation (`still.fail dda655bbf`):
 
 | | Hermes 0.81.4 (`core.hbc`) | JavaScriptCore (`core.js`, before) |
 |---|---|---|
@@ -197,13 +197,13 @@ What differs from macOS:
 Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engine, the one Windows' app runs too.
 
 - **Engine**: `apps/mbui/engine/engine.cpp` (its C API `engine.h`), prebuilt for Android with the NDK's CMake
-  (`apps/mbui/engine/android`; `node scripts/native.ts path engine android-arm64` in the ember checkout:
+  (`apps/mbui/engine/android`; `node scripts/native.ts path engine android-arm64` in the still.fail checkout:
   `libstillfail_hermes.so`, `libjsi.so`, `libc++_shared.so`), on the shell `libstillfail_shell.so` (`... path shell
   android-arm64`). Hermes itself (`libhermes.so`, and its headers for the engine's build) and `libfbjni.so` come from
   React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go into
   `out/android/apk/jniLibs`, which Gradle packs; nothing is committed. (Until 2026-10-23 the engine was still.fail's
   Kotlin app's, JNI and all, built in its tree; that app is gone.)
-- **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as ember's `hermes-bundle.ts` does (esbuild, Babel's
+- **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as still.fail's `hermes-bundle.ts` does (esbuild, Babel's
   class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts` (still.fail alone) or, for coredemo by default,
   `core/media-hermes.ts` (with the media module). It goes into the APK's assets.
 - **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): starts the engine through its C
@@ -217,13 +217,13 @@ Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engi
   `secureUser`). `MBUI_SECURE_TEST=1` makes coredemo round-trip
   `secure.set`, `secure.get` (the same bytes back, sealed on disk), `secure.delete` and `secure.get` again (`{none}`)
   through CoreHost's own answers and log `SECURE_TEST …`.
-- **`listen.*`**: `dev.mbui.Loopback` (android/), the twin of apple_listen.m and of ember's Loopback.kt: a
+- **`listen.*`**: `dev.mbui.Loopback` (android/), the twin of apple_listen.m and of still.fail's Loopback.kt: a
   `ServerSocket` on 127.0.0.1 or ::1 (port 0: the system's pick), each request read whole (64 KB head, 1 MB body,
   15 s), answered once, its connection closed. CoreHost answers `listen.open {port, host}` → `{id, port}` (an error
   such as `BindException: … (Address already in use)`), `listen.next` → `{request, method, path, headers}` + body or
   `{end: true}` (a waiting one is answered as a request comes, never blocking a thread), `listen.respond`,
   `listen.close`; a core's listeners close with it. While any listener is open, `dev.mbui.LoginService` (a
-  `specialUse` foreground service, as ember's LoginRelay.kt) holds the process up so the cached apps freezer does not
+  `specialUse` foreground service, as still.fail's LoginRelay.kt) holds the process up so the cached apps freezer does not
   stop it answering the browser. `scripts/android.sh listen-test` runs it with core/listen-test.js in the core's place
   (a POST from the emulator's shell; then build again without it).
 - **Sign-in**: no browser session on Android, macOS and Windows (`@core.has_browser_session()` false), so 登录 signs in on
@@ -273,8 +273,8 @@ memory).
 `auth.begin {redirect_uri, return_to, device_name?}` answers `{url}`: still.fail cloud's login page (Google), with
 PKCE (the smoke test prints one). The person signs in in a browser; the cloud sends the browser to `redirect_uri`
 with a query, and the app finishes with `auth.complete {query}` (the callback URL's query string), as the web and the
-desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly `stillfail://auth/callback`,
-`stillfail-beta://auth/callback`, `ember://auth/callback` and loopback `http://127.0.0.1:<port>/oauth/callback`
+desktop app do (still.fail docs/client-core.md, "Sign-in"). The cloud accepts exactly `stillfail://auth/callback`,
+`stillfail-beta://auth/callback` and loopback `http://127.0.0.1:<port>/oauth/callback`
 (cloud/src/auth.ts `APP_REDIRECTS`, `validRedirect`). Two ways back:
 
 - **Custom scheme** (`stillfail://auth/callback`, what the smoke test asks for). Needs nothing from the core, only
@@ -293,13 +293,13 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   service (on Android: `dev.mbui.BrowserLogin`, above). The listener is `src/host/apple_listen.m` (`listen_api.h`: BSD sockets on a dispatch source, a request
   read whole, answered once, its connection closed). The core demo's login command is still.fail's sign-in on it:
   `scripts/mac.sh login` (MBUI_AUTH_LOGIN=1) asks `auth.begin` with that address, `auth.complete`s what comes back,
-  and exits 0 once signed in (1 when not). An app like that is what a station's remote login (ember
+  and exits 0 once signed in (1 when not). An app like that is what a station's remote login (still.fail
   docs/remote-login.md) can run as its command: it takes the page from `BROWSER`, sees the loopback `redirect_uri`
   and its `state`, and the person's phone (the still.fail Android or desktop app) listens on that port there and
   relays the browser's way back to this process, after checking with `lsof` that the port is this command's.
   `scripts/core.sh login-test` runs it up to the person's step, with curl as the browser coming back.
 
-The core's own `listen.*` (`listen.open/next/respond/close`, ember client/core-ts hosts/bridge.ts) is the other way
+The core's own `listen.*` (`listen.open/next/respond/close`, still.fail client/core-ts hosts/bridge.ts) is the other way
 round: this device taking a station's login callback for it (`canRelay`; machine logins on the station page and in
 login cards). apple_core.mm answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
 listen` tests it with core/listen-test.js in the core's place (`scripts/android.sh listen-test` on Android's).

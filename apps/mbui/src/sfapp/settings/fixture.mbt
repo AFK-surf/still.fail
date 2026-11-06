@@ -3517,7 +3517,7 @@ pub fn fixture_machine_sessions(core : Core) -> Unit {
       ("session", if session == "" { Json::null() } else { str(session) }),
     ])
   }
-  let own = "~/.stillfail/sessions/ember/c-41f2/workspace"
+  let own = "~/.stillfail/sessions/chat/c-41f2/workspace"
   machine_sessions["ws1/st1"] = [
     s("m1", "codex", "检查线程并操作应用内浏览器", "~/Documents/GitHub/still.fail", "今天", "3 分钟前", ""),
     s("m2", "codex", "Use your image generation tool to make the app icon", own, "今天", "20 分钟前", ""),

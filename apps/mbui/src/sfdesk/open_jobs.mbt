@@ -1,5 +1,5 @@
 // The services and background jobs left up a long while (an hour), across the chats of the workspace's stations, so
-// none is forgotten running (ember web/src/OpenJobs.tsx OpenJobs, OpenJobs.css.ts): web services and background jobs,
+// none is forgotten running (still.fail web/src/OpenJobs.tsx OpenJobs, OpenJobs.css.ts): web services and background jobs,
 // each under its heading, three of a group and the rest folded under 还有 N 个; nothing at all while there are none.
 // Each leads to its chat (a service opens there, in its 任务 tab) and stops from here. The core puts them together (its
 // `longJobs` view); shown in the list the sidebar's foot opens (lists.mbt) and in 待处理's panel (attention.mbt).

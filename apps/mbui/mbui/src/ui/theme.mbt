@@ -6,7 +6,7 @@
 ///|
 /// The theme: colours RRGGBBAA, corners and sizes in logical pixels. Made from one of its kinds (Theme::light, …) and
 /// changed where the app differs (`{ ..Theme::light(), accent: 0x… }`). By default still.fail's (its web and apps'
-/// tokens: the wide screen's white canvas and ember orange, the phone's warm paper); iOS's colours, what mbui had
+/// tokens: the wide screen's white canvas and still.fail orange, the phone's warm paper); iOS's colours, what mbui had
 /// hard-coded, are Theme::ios_light and Theme::ios_dark.
 pub(all) struct Theme {
   /// dark (what draws over it picks its own shades by it)
@@ -228,7 +228,7 @@ pub fn RadiusScale::tailwind() -> RadiusScale {
 }
 
 ///|
-/// still.fail's light theme, the wide screen's (web/ui styles/tokens.css.ts): the white canvas, ink, ember orange.
+/// still.fail's light theme, the wide screen's (web/ui styles/tokens.css.ts): the white canvas, ink, still.fail orange.
 pub fn Theme::light() -> Theme {
   {
     dark: false,

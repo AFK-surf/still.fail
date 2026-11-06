@@ -1,4 +1,4 @@
-// What a chat's cards and buttons do (slice 8: ember apps/android chat/screens/Decisions.kt DecisionUnder, OptionButton;
+// What a chat's cards and buttons do (slice 8: still.fail apps/android chat/screens/Decisions.kt DecisionUnder, OptionButton;
 // Chat.kt AskDismiss, ArchiveUnder, archiveChat; LoginCards.kt; AppState.kt act, isDoing); a sheet's head (SheetHead). The
 // chat's sheets (sheets.mbt) are the library's presenters'. What is done is said to
 // the core as the Android app says it, under way on its button (a spinner), said in a toast when it could not be;

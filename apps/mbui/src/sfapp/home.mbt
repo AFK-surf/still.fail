@@ -1,4 +1,4 @@
-// Home (ember apps/android chat/screens/Home.kt, web/src/mobile/Home.tsx): the workspace's chats' lists (sfpages'
+// Home (still.fail apps/android chat/screens/Home.kt, web/src/mobile/Home.tsx): the workspace's chats' lists (sfpages'
 // sidebar.mbt, every tier's) under a top bar (the filter · the workspace's switcher and settings).
 
 ///|

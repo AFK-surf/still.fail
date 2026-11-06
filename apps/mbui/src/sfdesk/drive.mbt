@@ -1,4 +1,4 @@
-// A folder of a station's drive on a wide screen (ember web/src/pages/Drive.tsx FolderView, DriveRow, NameField,
+// A folder of a station's drive on a wide screen (still.fail web/src/pages/Drive.tsx FolderView, DriveRow, NameField,
 // ListHead, UploadRow, Empty; Drive.css.ts): its entries in one of three ways (DriveViews: columns, a tree, a list),
 // each row chosen by a press, opened by a double click (a folder gone into, a text read, a video played, a picture or
 // code previewed, the rest downloaded), its name changed in place, its ⋯ (on hover) or a right click giving what can be

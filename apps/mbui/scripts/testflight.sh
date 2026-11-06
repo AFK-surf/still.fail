@@ -68,7 +68,7 @@ profile() {
 profile app fail.still.iphone
 profile share fail.still.iphone.share
 export APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.iphone
-export MBUI_IOS_BUILD=$RELEASE_BUILD MBUI_IOS_VERSION=$RELEASE_VERSION EMBER=$PWD
+export MBUI_IOS_BUILD=$RELEASE_BUILD MBUI_IOS_VERSION=$RELEASE_VERSION SF_SRC=$PWD
 bash "$D/ios.sh" build
 APPDIR=$PWD/apps/mbui/out/ios-device/MBUI.app
 SHARE=$APPDIR/PlugIns/Share.appex

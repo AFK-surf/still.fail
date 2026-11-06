@@ -1,5 +1,5 @@
 // still.fail laid out Medium or Large (@sf.layout: a desktop's window from 600 wide, a tablet's, an opened foldable's,
-// a phone on its side): the web app's wide frame (ember web/src/cloud/workspace.tsx WorkspaceShell,
+// a phone on its side): the web app's wide frame (still.fail web/src/cloud/workspace.tsx WorkspaceShell,
 // styles/shell.css.ts), which the desktop app shows too. The rail at the left (Rail.tsx: the places, the workspaces,
 // settings: rail.mbt), the sidebar beside it on the same ground (the chats' lists, or the settings', the files', a
 // place's), and the page the stack has on top in the rest (the chat open, a settings page, a folder…); laid out Small,

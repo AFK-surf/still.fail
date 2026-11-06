@@ -1,4 +1,4 @@
-// A service's page speaking with the app (ember apps/android chat/screens/PreviewWeb.kt PreviewLink, page.js): page.js
+// A service's page speaking with the app (still.fail apps/android chat/screens/PreviewWeb.kt PreviewLink, page.js): page.js
 // first in each of its pages (/_stillfail/page.js, its tag put in each of the service's HTML pages), behind a script of
 // the app's that gives it there what the Android app's JavascriptInterface (StillFailPreviewNative) gives it: its
 // WebSockets carried through the core (preview.socket), its requests' bodies left here before they go (stash), its top

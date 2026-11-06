@@ -21,7 +21,7 @@
 //   local cloud's mock login hands it out (/__dev/account?user=alice). Only with MBUI_CLOUD: never on the real cloud.
 // - MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in as a login command: the app listens on 127.0.0.1, hands the
 //   login page to $BROWSER (else `open`), and exits 0 once the browser has come back and the sign-in is done (1 when
-//   it failed). A station's remote login runs it as its login command (ember docs/remote-login.md).
+//   it failed). A station's remote login runs it as its login command (still.fail docs/remote-login.md).
 
 ///|
 /// How signing in stands: what to say of it, and whether one is under way.

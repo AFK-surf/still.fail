@@ -1,4 +1,4 @@
-// The viewer's frame, whatever the tier and the input (ember web/src/FilePreview.tsx; drawn by the library's
+// The viewer's frame, whatever the tier and the input (still.fail web/src/FilePreview.tsx; drawn by the library's
 // viewer_frame.mbt, what it says and does given from here): over the whole window, on the page's own canvas whatever
 // it shows (a PDF's a step greyer). In any tier but Small (the web's `docked`) the bar every file opened has across
 // the top (back to the chat or the folder by name, the file's name, which of how many, its size and kind; its tools,

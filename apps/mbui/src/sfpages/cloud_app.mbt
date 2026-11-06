@@ -1,4 +1,4 @@
-// Signed in with no workspace yet (the web's cloud/CloudApp.tsx Landing, InviteCodeForm; ember apps/android
+// Signed in with no workspace yet (the web's cloud/CloudApp.tsx Landing, InviteCodeForm; still.fail apps/android
 // settings/screens/Workspaces.kt Landing, Blocked): the invitations
 // waiting, each joined by its 加入 (`invitation.accept`); else said so, with 创建 workspace (`workspace.create`, the
 // invite code still.fail cloud wants once it asks for one), 用邀请链接加入 (the invitation's sheet, links_sheet.mbt) and

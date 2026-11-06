@@ -1,4 +1,4 @@
-// A station's folders pinned laid out narrow, as the web's narrow app has them (ember web/src/mobile/Drive.tsx
+// A station's folders pinned laid out narrow, as the web's narrow app has them (still.fail web/src/mobile/Drive.tsx
 // RootsPage, RootRow, Empty; Drive.css.ts m*), in a box narrower than @sf.page_narrow_most, in whichever frame (the
 // phone's stack, a tablet's pane); and what a narrow page is given of its frame (NarrowOf), its bar, the rows on a
 // card. A folder's own page is one on every screen (drive_page.mbt).

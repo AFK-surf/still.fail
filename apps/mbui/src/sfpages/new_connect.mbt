@@ -1,4 +1,4 @@
-// A new connect on the desktop, in a dialog (ember web/src/pages/Connect.tsx NewConnectDialog, CoreNewConnectDialog,
+// A new connect on the desktop, in a dialog (still.fail web/src/pages/Connect.tsx NewConnectDialog, CoreNewConnectDialog,
 // SlackTeamIcon, TokenOwner, MadeAppSteps; FeishuConnect.tsx useFeishuStep; Connect.css.ts, FeishuConnect.css.ts): the
 // core's wizard (`connectFlow {station, form}`: its step, title, count, what can be done, what is wrong) drawn a step
 // at a time — the platform; Slack's (the workspace to make its app in, a configuration token to add, the app's look

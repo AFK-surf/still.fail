@@ -1,4 +1,4 @@
-// The remote screen's stage (ember apps/android app/remote/ScreenViewer.kt Stage, Over, Ended, Drops, Pointer and the
+// The remote screen's stage (still.fail apps/android app/remote/ScreenViewer.kt Stage, Over, Ended, Drops, Pointer and the
 // gestures): the frame fitted and zoomed, its pointer; how the view is, and the files sent, over it; what a finger does
 // on it.
 

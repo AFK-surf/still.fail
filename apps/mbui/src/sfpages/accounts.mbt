@@ -1,4 +1,4 @@
-// A profile's page on the desktop (ember web/src/pages/Accounts.tsx AccountView and its sections; Accounts.css.ts): who
+// A profile's page on the desktop (still.fail web/src/pages/Accounts.tsx AccountView and its sections; Accounts.css.ts): who
 // the account is and whether it works now (its provider's mark, its name renamed here, the runtimes it serves, what it
 // is, its last check, checking again; its ⋯ to delete it, or stop the machine's own), signing it in where that comes
 // first, what is left of its allowance, what it spent, the stations it is on, sharing it, the workspaces it serves,

@@ -1,4 +1,4 @@
-// An agent's execution history in the desktop's side panel, its head as the web's (ember web/src/History.tsx's head,
+// An agent's execution history in the desktop's side panel, its head as the web's (still.fail web/src/History.tsx's head,
 // pages/ChatPage.tsx SessionHead, SessionDetails, HistorySummary; History.css.ts, ChatPage.css.ts): how it runs in one
 // control (the model, how hard it thinks, the account: model_triple.mbt), what needs seeing to beside it; at the
 // head's end 只看收发 and 详情. 详情 unfold under the head, open to begin with: what it has used (the large figures, a

@@ -1,4 +1,4 @@
-// A chat's row in the chats' lists (ember web/src/Sidebar.tsx ChatRow, ArchiveButton, Rename.tsx TitleInput;
+// A chat's row in the chats' lists (still.fail web/src/Sidebar.tsx ChatRow, ArchiveButton, Rename.tsx TitleInput;
 // web/src/mobile/Home.tsx ChatRow, SwipeArchive, useRowMenu, useRowArchive; Sidebar.css.ts navSession…, mobile/Home.css.ts
 // mChatRow…): one row in every tier, the web's desktop row with a mouse and its phone row with a finger. Its state's
 // mark before its title (bolder while something in it is unread), its station's mark, then where it stands or the

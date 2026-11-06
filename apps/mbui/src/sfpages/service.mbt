@@ -1,5 +1,5 @@
 // A web service an agent started (a dev server, a report it serves), or a visualization it posted, as one view on
-// every screen (ember web/src/Preview.tsx StationPreview, ServiceFrame, PreviewBar, Restart; PreviewStage.tsx,
+// every screen (still.fail web/src/Preview.tsx StationPreview, ServiceFrame, PreviewBar, Restart; PreviewStage.tsx,
 // ViewportSize.tsx, PreviewLoad.tsx; Android's Preview.kt the phone's): found by its job (the `job` topic), known by
 // its name, never its port; what serves its page and what it keeps is sfbase's (service_page.mbt, viz_file.mbt), its
 // marks service_marks.mbt. The frame puts it where it goes: the phone's stack a page of its own under a bar with its

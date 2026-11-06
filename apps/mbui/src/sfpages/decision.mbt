@@ -1,4 +1,4 @@
-// What a post asks, under it in its chat on the desktop (ember web/src/Decisions.tsx MessageDecision,
+// What a post asks, under it in its chat on the desktop (still.fail web/src/Decisions.tsx MessageDecision,
 // DecisionOptions; Chat.tsx AskDismiss; Decisions.css.ts decision, options, settledLine; Chat.css.ts askDismiss): who
 // decides, then the options while it waits for the viewer (numbered, pressing one answers with it: decision.answer);
 // once settled, how it went in one quiet line. A login card stays as its login goes; an agent's request about a vault

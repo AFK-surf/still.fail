@@ -1,4 +1,4 @@
-// A message's files on the desktop (ember web/src/Chat.tsx Files, FileItem, MessageFileCard, imageBox.ts; Chat.css.ts
+// A message's files on the desktop (still.fail web/src/Chat.tsx Files, FileItem, MessageFileCard, imageBox.ts; Chat.css.ts
 // msgFiles, msgImage, msgImageWait, msgVideo, fileCardOpen; styles/later.css.ts): side by side, wrapping 6 apart; an
 // image in a box of its own proportions (known before it loads), brushed in from its top once decoded; a video's
 // still on black with its capsule (its length) in its foot's corner; anything else a card. Pressed, each opens in the file viewer

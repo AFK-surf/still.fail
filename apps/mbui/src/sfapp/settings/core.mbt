@@ -1,4 +1,4 @@
-// Settings and the pages under it, as still.fail's Android app has them (ember apps/android: app/screens/SettingsHome.kt
+// Settings and the pages under it, as still.fail's Android app has them (still.fail apps/android: app/screens/SettingsHome.kt
 // and settings/*.kt: Me, Archive, Usage, Stations, Profiles, Connects, Vault, Security, Settings.kt's Workspace,
 // Memory), over the core's topics and calls. The app (src/sfapp) pushes them on its page stack and hands them `Core`:
 // what to read and call, and how to move between pages. Everything said is the core's (or the Chinese catalog's).

@@ -1,4 +1,4 @@
-// A message a chat is to show (ember web/src/jumpTo.ts): a row's state line pressed where the core says what its
+// A message a chat is to show (still.fail web/src/jumpTo.ts): a row's state line pressed where the core says what its
 // state is about, a notification's, a search's. Asked for here as the chat is opened (by either frame); its page takes
 // it once the message is in, goes there and flashes it.
 

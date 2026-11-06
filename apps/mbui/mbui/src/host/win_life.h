@@ -12,7 +12,7 @@
 // - goes on with its window closed, put away to its icon in the notification area (its core, its notifications on):
 //   the icon clicked, or the app started again, brings it back; the icon's menu (the app's words: menu_setup's
 //   `"role": "tray"` menu) brings it back or quits;
-// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is;
+// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,stillfail-beta"): as it starts, or the one running is;
 //   built in still.fail's desktop app's place (MBUI_OWN), its schemes are claimed for it (links_claimed).
 // A program without one (a demo, a test app's scripted run) ends as its window closes, as before. So does a window of
 // the app's own (@hostapi.window_open: the program run again with MBUI_WINDOW): it runs beside the app's one run, not
@@ -167,7 +167,7 @@ static void say_shown(ULONGLONG at) {
   say_system(b, (size_t)n);
 }
 
-// a link of the app's schemes (MBUI_SCHEMES: "stillfail,ember"), else 0
+// a link of the app's schemes (MBUI_SCHEMES: "stillfail,stillfail-beta"), else 0
 static int app_link(const WCHAR *s) {
   const WCHAR *schemes = app_env(L"MBUI_SCHEMES");
   if (!schemes || !s) return 0;

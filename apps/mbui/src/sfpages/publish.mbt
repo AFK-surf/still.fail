@@ -1,4 +1,4 @@
-// A chat shared as a picture (2026-10-26 用户：「静态分享功能改成分享图片吧，把内容直接渲染成一张长图」; ember
+// A chat shared as a picture (2026-10-26 用户：「静态分享功能改成分享图片吧，把内容直接渲染成一张长图」; still.fail
 // web/src/Publish.tsx PublishDialog, PublishPicture, FileToggle; Publish.css.ts, FilePreview.css.ts fp; the phone's
 // PublishSheet in mobile/Chat.tsx, the same), one on every screen: from its info's 分享图片, over the whole window as a
 // file is previewed, the picture as it would be (`chat.publishPreview`, asked as it opens: what the chat holds now,

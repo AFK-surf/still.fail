@@ -1,4 +1,4 @@
-// A new chat (ember web/src/NewChat.tsx and NewChat.css.ts, web/src/mobile/NewChat.tsx and NewChat.css.ts;
+// A new chat (still.fail web/src/NewChat.tsx and NewChat.css.ts, web/src/mobile/NewChat.tsx and NewChat.css.ts;
 // apps/android NewChat.kt; its frequent combinations in the model's panel, model_triple.mbt): say what to do, having
 // picked where it runs (the station) and on what (the model, its runtime, how hard it thinks, who runs it), as the
 // core keeps them (the `newChat` topic; `newChat.pick`, `pick.set`, `pick.save`). One page in every frame, laid out by

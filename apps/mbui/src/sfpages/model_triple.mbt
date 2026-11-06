@@ -1,4 +1,4 @@
-// The one way a model is chosen (ember web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
+// The one way a model is chosen (still.fail web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
 // same): a control that says the model, the runtime (where it can still change and the model runs on more than one),
 // how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it with keyboard and mouse,
 // a sheet with touch): the models, each saying how it runs picked (as it last ran here), the ones used most nearest

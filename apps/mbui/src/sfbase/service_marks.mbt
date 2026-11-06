@@ -1,4 +1,4 @@
-// Marking a service's page for its chat's agent (ember apps/android chat/screens/Preview.kt: MarkMode, MarksOver, Note,
+// Marking a service's page for its chat's agent (still.fail apps/android chat/screens/Preview.kt: MarkMode, MarksOver, Note,
 // putIntoChat; web/src/annotate/Marks.tsx): the bar's edit key starts picking, page.js holds the page's taps and says
 // what was picked (`marked`: picked, focus, at); each mark a box on its element with a numbered pin on its corner and
 // what is said of it in a bubble beside it. Put into the chat, each mark goes into its draft as a screenshot of what

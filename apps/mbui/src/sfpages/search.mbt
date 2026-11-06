@@ -1,4 +1,4 @@
-// The search at the top of the chats' lists with a finger (ember web/src/mobile/Home.tsx SearchField, SearchPage;
+// The search at the top of the chats' lists with a finger (still.fail web/src/mobile/Home.tsx SearchField, SearchPage;
 // apps/android chat/screens/Search.kt), in every tier (with a mouse ⌘K's panel has it: a finger has no keys to press):
 // a field at a list's top; tapped, the lists go up and away with their bar, the field comes up from where it was to
 // the top of the lists' box (narrowing as 取消 comes in beside it), and under it what the words find (the finder,

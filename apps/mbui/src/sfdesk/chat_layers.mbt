@@ -1,4 +1,4 @@
-// What lies over a chat's pane on the desktop round its composer (ember web/src/Chat.tsx useSelectionQuote, ChatSide.tsx
+// What lies over a chat's pane on the desktop round its composer (still.fail web/src/Chat.tsx useSelectionQuote, ChatSide.tsx
 // useChatDrop, DropHint; ChatPage.css.ts dropHint; keymap.ts composer.focus, panel.close): a passage of a message
 // picked (with the mouse its pill, with a finger its handles and bar: sfbase's pick.mbt) quoted into the chat's draft;
 // a row of the 文件 tab carried over the pane frosting it under the composer, let go there into the draft; the

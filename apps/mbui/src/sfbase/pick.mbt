@@ -1,4 +1,4 @@
-// Picking a passage of a message where it is, in its chat, as both frames do it. With a finger (ember apps/android
+// Picking a passage of a message where it is, in its chat, as both frames do it. With a finger (still.fail apps/android
 // chat/screens/MessagePick.kt, ui/Pick.kt; web mobile/pick.tsx): held still on its words it picks the word under it
 // and, sliding on, widens it by words (the list holds still meanwhile); lifted, the passage has handles at its ends to
 // move, and a bar over it to quote it into the chat's draft, copy it, or take all of the message; a tap anywhere else

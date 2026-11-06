@@ -1,4 +1,4 @@
-// The sheets over a chat (slice 8): its own, from "…" (ember apps/android chat/screens/ChatInfo.kt openChatInfo,
+// The sheets over a chat (slice 8): its own, from "…" (still.fail apps/android chat/screens/ChatInfo.kt openChatInfo,
 // askTitle, InfoList, InfoRow), an agent's card (AgentSheet.kt openAgent, AgentStatus, AgentLines, AgentTiles,
 // AgentNotes, StopButton), its services and jobs and one job (Jobs.kt openJobs, JobGroups, JobInfoRow, JobDot, metaOf,
 // openJob, JobBody), and the jobs left up a long while at the top of Home (OpenJobs.kt). What they show is the core's

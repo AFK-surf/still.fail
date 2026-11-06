@@ -1,4 +1,4 @@
-// Marking an image opened in the viewer (ember apps/android chat/screens/ImageMarks.kt; web/src/annotate/ImageMarks.tsx):
+// Marking an image opened in the viewer (still.fail apps/android chat/screens/ImageMarks.kt; web/src/annotate/ImageMarks.tsx):
 // boxes, arrows, lines drawn by hand and words, drawn on the image where it is shown (zoomed and panned with it); a
 // mark picked again to move, stretch, recolour or remove; undo and redo. Boxes and arrows are numbered: a pin on each,
 // and something said about it in a note. Done, the image with its marks (and their pins), drawn again at its own size

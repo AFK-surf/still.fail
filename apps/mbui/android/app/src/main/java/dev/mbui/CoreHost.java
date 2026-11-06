@@ -212,7 +212,7 @@ final class CoreHost {
     }
 
     /**
-     * An error as ember's app says it (SecureStore.errorText): a secure call's code (user_cancelled, no_device_lock…),
+     * An error as still.fail's app says it (SecureStore.errorText): a secure call's code (user_cancelled, no_device_lock…),
      * key_invalidated when the screen lock was taken off (what was sealed for the person cannot open), else the
      * exception's class and its message.
      */
@@ -232,7 +232,7 @@ final class CoreHost {
         }
     }
 
-    // ── listen.* (ember client/core-ts hosts/bridge.ts; ember's Loopback.kt, as apple_core.mm answers them) ──
+    // ── listen.* (still.fail client/core-ts hosts/bridge.ts; still.fail's Loopback.kt, as apple_core.mm answers them) ──
     //   listen.open {port, host} → {id, port}, or the error (the port taken: "… Address already in use")
     //   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
     //   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}
@@ -349,7 +349,7 @@ final class CoreHost {
 
     private static final class Unsupported extends Exception {}
 
-    // ── secure.* (ember client/core-ts hosts/bridge.ts; ember apps/android core SecureStore.kt) ──
+    // ── secure.* (still.fail client/core-ts hosts/bridge.ts; still.fail apps/android core SecureStore.kt) ──
     //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
     //   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes.
     // `user: false`: each value a file of <data>/secure (the key's UTF-8 in hex), sealed with AES-GCM under one key of

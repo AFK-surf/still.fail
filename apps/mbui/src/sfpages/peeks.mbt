@@ -1,4 +1,4 @@
-// What a link in a message is, while it is pointed at (ember web/src/Peeks.tsx LinkHover, LinkCard; ChatRef.tsx
+// What a link in a message is, while it is pointed at (still.fail web/src/Peeks.tsx LinkHover, LinkCard; ChatRef.tsx
 // RefChip's RefPreview; Hover.css.ts): a small card over it. A web link's as the core reads it from the link's station
 // (the `linkPreview` topic: GET /link-preview, kept, read again each time a card shows it): a page by its title, its
 // site and icon, its picture over them; a GitHub pull request or issue as GitHub says it: its state, where it is and

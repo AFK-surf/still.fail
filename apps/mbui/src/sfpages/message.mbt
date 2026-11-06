@@ -1,4 +1,4 @@
-// A chat's message on the desktop (ember web/src/Chat.tsx MessageRow, MineMessage, OthersMessage, SystemNotice,
+// A chat's message on the desktop (still.fail web/src/Chat.tsx MessageRow, MineMessage, OthersMessage, SystemNotice,
 // BlockedLine, AgentAvatar, MessageAvatar, Quotes, PersonWords, MineBubble, ProseWithFiles, SentElsewhere; Chat.css.ts,
 // styles/conversation.css.ts, styles/chat.css.ts): the viewer's own on the right in its bubble; still.fail's own a
 // pill across the chat; anyone else's with its picture out in the margin before its name and time, what it quotes, its

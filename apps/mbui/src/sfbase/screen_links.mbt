@@ -1,4 +1,4 @@
-// Links to a station's screens and to its 共享调试 in an agent's words (ember apps/android chat/screens/ScreenLinks.kt,
+// Links to a station's screens and to its 共享调试 in an agent's words (still.fail apps/android chat/screens/ScreenLinks.kt,
 // AdbLinks.kt; docs/remote-screens.md, docs/adb-share.md), as the web draws them: one alone in a paragraph is its card
 // (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
 // `screenCard` and `adbCard` topics). A screen its station previews is live in its card while the card is built (the

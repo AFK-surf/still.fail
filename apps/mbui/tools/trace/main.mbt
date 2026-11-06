@@ -459,7 +459,7 @@ let calm_subs : Array[(@re.Regex, String)] = [
   // a run's own: its mark, the workspace's and stations' ids (a fresh local still.fail makes new ones), ports
   (re("\\b[0-9A-HJKMNP-TV-Z]{26}\\b"), "<ws>"),
   (re("\\b[0-9a-f]{64}\\b"), "<st>"),
-  (re("ember(%3A|:)c-[0-9a-f]{10}"), "<session>"),
+  (re("(ember|chat)(%3A|:)c-[0-9a-f]{10}"), "<session>"),
   (re("127\\.0\\.0\\.1:\\d+"), "127.0.0.1:<port>"),
   (re("message=\\d+"), "message=<n>"),
 ]

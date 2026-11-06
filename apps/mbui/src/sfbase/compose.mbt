@@ -1,4 +1,4 @@
-// What is being written to a chat as the core keeps it (ember web/src/draft.ts useDraft; the core's composer.ts, the
+// What is being written to a chat as the core keeps it (still.fail web/src/draft.ts useDraft; the core's composer.ts, the
 // `composer` topic, by the draft's key: `<station>:<chat>`, `new:<workspace>` the workspace's new chat): its words,
 // the passages it quotes, the files going up to the station (the core sends them up and says how far), whether it can
 // be sent, what went wrong. Each chat has its own while the page shows another; the core keeps each on the device as the

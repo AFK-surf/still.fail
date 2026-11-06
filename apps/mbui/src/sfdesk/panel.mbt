@@ -1,4 +1,4 @@
-// Beside a chat on the desktop (ember web/src/pages/ChatPage.tsx's side panel, ChatSide.tsx useSidePanel, SidePane,
+// Beside a chat on the desktop (still.fail web/src/pages/ChatPage.tsx's side panel, ChatSide.tsx useSidePanel, SidePane,
 // FilesTab; ChatPage.css.ts sidePanel, sideBar, sideTab): the side panel at the pane's right, a tab each for what is
 // opened in it (an agent's execution history, the chat's services and jobs, the stations' files, what its agents and
 // other chats' wrote each other), the one in front shown; its edge drags its width (pressed, the panel closes), its

@@ -1,4 +1,4 @@
-// A service's page and what serves it, as both frames show one (ember apps/android chat/screens/Preview.kt, PreviewWeb.kt;
+// A service's page and what serves it, as both frames show one (still.fail apps/android chat/screens/Preview.kt, PreviewWeb.kt;
 // web Preview.tsx, PreviewStage.tsx): found by its job, known by its name, never its port. Its page is a site view
 // (src/ui/native.mbt `NativeView::site`) whose every request is answered here from the station through the core
 // (`station.preview` with `stream`), redirects followed here (to the service only, 5 at most) and its cookies kept here

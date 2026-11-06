@@ -1,4 +1,4 @@
-// A chat in the wide frame's pane (ember web/src/pages/ChatPage.tsx, styles/sidebar.css.ts pageBar, session.css.ts,
+// A chat in the wide frame's pane (still.fail web/src/pages/ChatPage.tsx, styles/sidebar.css.ts pageBar, session.css.ts,
 // dock.css.ts): its bar (45 high, the title 14 in 600, who is in it, its agents; at its end 归档 while nothing is left
 // in it, its services and jobs, its info), the messages in a column 760 wide at most in the middle of the pane (the
 // phone's rows: chat.mbt), the composer at its foot, 804 at most. What the phone's chat page does (reading, following

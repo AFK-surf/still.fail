@@ -1,4 +1,4 @@
-// still.fail's design system (ember web/ui: styles/tokens.css.ts, the values
+// still.fail's design system (still.fail web/ui: styles/tokens.css.ts, the values
 // in web/src/styles/global.css.ts, the phone's in mobile/styles/root.css.ts),
 // for mbui: its colours, type and measures, said once here, so a view built
 // with them looks as still.fail's own pages do.
@@ -2756,7 +2756,7 @@ pub let edge_tip_ms : Double = 300.0
 pub let edge_tip_gap : Double = 14.0
 
 // ---------------------------------------------------------------------------
-// The desktop's sidebar and rail (sfdesk: ember web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
+// The desktop's sidebar and rail (sfdesk: still.fail web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
 
 ///|
 /// An agent's and a chat's marks' colours, bright in both themes, one meaning each wherever they are (ChatMark.css.ts:

@@ -35,7 +35,7 @@ mkdir -p "$STATE"
 cd "$A"
 
 # the local still.fail's places, its own beside another's on the same machine
-e2e_env() { export E2E_WORK=$C/e2e-ios E2E_STATION=/tmp/mbui-e2e-ios E2E_PORT=19500 E2E_RELAY=19040 E2E_NOBUILD=1 EMBER=$REPO; }
+e2e_env() { export E2E_WORK=$C/e2e-ios E2E_STATION=/tmp/mbui-e2e-ios E2E_PORT=19500 E2E_RELAY=19040 E2E_NOBUILD=1 SF_SRC=$REPO; }
 
 device() {  # the simulator's id and state, "" when there is none of that name
   xcrun simctl list devices -j | python3 -c "

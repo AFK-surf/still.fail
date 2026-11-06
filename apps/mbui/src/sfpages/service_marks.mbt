@@ -1,4 +1,4 @@
-// What marking a service's page shows on the phone (ember apps/android chat/screens/Preview.kt: MarkMode, MarksOver,
+// What marking a service's page shows on the phone (still.fail apps/android chat/screens/Preview.kt: MarkMode, MarksOver,
 // Note): the bar's edit key, the mode's bar, each mark's box, pin and bubble, its note; what marking does is sfbase's
 // (service_marks.mbt).
 

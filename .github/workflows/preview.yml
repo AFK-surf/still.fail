@@ -301,7 +301,7 @@ jobs:
             shell-apple-target-ios-arm64-
       - name: The iOS app for a device, as an .ipa
         run: |
-          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
+          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui SF_SRC=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
           zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
       - uses: actions/upload-artifact@v4

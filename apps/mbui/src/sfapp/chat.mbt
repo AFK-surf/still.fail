@@ -1,4 +1,4 @@
-// A chat, read (ember apps/android chat/screens/Chat.kt ChatScreen, Messages; ui/Follow.kt): its bar over its messages
+// A chat, read (still.fail apps/android chat/screens/Chat.kt ChatScreen, Messages; ui/Follow.kt): its bar over its messages
 // (back, the title, its people and its agents' marks with the station they run on, "…"), the messages as the core's
 // `chat` view gives them, newest at the bottom, the list following its newest while it is at its end and "jump to
 // the newest" over the composer's room otherwise; the page before loaded as the reader nears the top, what is in view

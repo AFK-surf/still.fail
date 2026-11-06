@@ -1,4 +1,4 @@
-// 快捷键 (ember web/src/Shortcuts.tsx ShortcutsPage, Shortcuts.css.ts), one page made once on every screen: each action
+// 快捷键 (still.fail web/src/Shortcuts.tsx ShortcutsPage, Shortcuts.css.ts), one page made once on every screen: each action
 // of the core's keymap (the prefs' `keymap`) gets new keys by pressing them (`keys.set`). ⌘/'s list of them is the
 // shell's (sfdesk shortcuts.mbt keys_dialog).
 

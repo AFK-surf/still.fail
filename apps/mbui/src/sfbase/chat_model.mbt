@@ -140,7 +140,7 @@ pub(all) struct Card {
 }
 
 ///|
-/// An agent's ask to sign in to a site as its card says it (SignInAsk, ember docs/vault.md 登录态): its id, the site,
+/// An agent's ask to sign in to a site as its card says it (SignInAsk, still.fail docs/vault.md 登录态): its id, the site,
 /// why, the chat's tab it is on (a screen of the chat's station), and how it goes (`status`: "" waiting, filling, code,
 /// person, left, done, denied, expired, ended; `why` a person is needed; what the agent `said` is left; whether it is
 /// to be kept, `keep`; the vault request keeping it, `save`, and how that went, `kept`).
@@ -339,7 +339,7 @@ pub(all) struct Message {
   seq : Double
   thread : Double
   ts : String
-  /// person | agent | ember
+  /// person | agent | the station (ember, as the station stores it)
   author_kind : String
   author : String
   text : String

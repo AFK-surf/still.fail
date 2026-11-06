@@ -1,4 +1,4 @@
-// A web service an agent started, or a visualization it posted, in a tab of the chat's side panel on the desktop (ember
+// A web service an agent started, or a visualization it posted, in a tab of the chat's side panel on the desktop (still.fail
 // web/src/pages/ChatPage.tsx's `service:<job>` and `file:[…]` tabs; Preview.tsx ServiceFrame, FileFrame, PreviewBar,
 // Restart; Preview.css.ts): the bar over it (back, forward, reload; how far the page's resources came; where it is, its
 // name then its path, typed to go elsewhere — a visualization's only its name), the page under it, what is said over it

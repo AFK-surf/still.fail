@@ -1,5 +1,5 @@
 // The core's engine on Android, for an app's Android source to #include (scripts/android.sh compiles
-// src/<app>/android_engine.c for the apps with the core; moon never sees these files): the core in ember's Hermes
+// src/<app>/android_engine.c for the apps with the core; moon never sees these files): the core in still.fail's Hermes
 // engine (src/host/android_core.c), handed to mbui/core as the library loads, with the shell's remote screens' frames
 // handed to mbui's streams (mb_stream_route_take). Its browser session (web_auth) is mbui's android_host.c
 // mb_host_web_auth: a Custom Tab the browser comes back from on the app's own scheme, its package's, as an intent the

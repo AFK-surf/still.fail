@@ -1,4 +1,4 @@
-// A message gone to flashing (ember apps/android chat/screens/ChatMotion.kt flash, flashed): which, how lit, and the
+// A message gone to flashing (still.fail apps/android chat/screens/ChatMotion.kt flash, flashed): which, how lit, and the
 // accent's ground it is drawn in (by its message: messages.mbt).
 
 ///|

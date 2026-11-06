@@ -1,4 +1,4 @@
-// How the remote screen's viewer looks (ember apps/android app/remote/ScreenViewer.kt), its sizes as Android says
+// How the remote screen's viewer looks (still.fail apps/android app/remote/ScreenViewer.kt), its sizes as Android says
 // them: on the scale's steps where they are one, else named in src/sf/tokens.mbt.
 
 // ── the page ──────────────────────────────────────────────────────────────

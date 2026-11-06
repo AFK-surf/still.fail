@@ -1,4 +1,4 @@
-// The chats' sidebar as the web's lists (ember web/src/Sidebar.tsx ChatList, Sidebar.css.ts navSlider, navTrack;
+// The chats' sidebar as the web's lists (still.fail web/src/Sidebar.tsx ChatList, Sidebar.css.ts navSlider, navTrack;
 // pages/Archive.tsx ArchiveRows, ArchivePage; Archive.css.ts): under the band (新建对话 and the filter), one track of
 // the lists side by side, 全部, 我参与的, 监控中 and 已归档, slid from one to another as the list shown changes
 // (240 ms, ease out); only those in view are drawn. 已归档 is a list of the sidebar's like the others: a field to look

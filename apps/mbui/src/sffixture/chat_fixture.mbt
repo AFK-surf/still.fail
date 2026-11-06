@@ -1761,7 +1761,7 @@ pub let table_images_md : Json = [
 /// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.
 pub let fixture_viz_html : String =
   #|<div class="viz-card" style="padding:16px"><b>本周发布</b><p>周一 2 个、周三 1 个、周五 3 个</p>
-  #|<button onclick="ember.setWidgetState({seen:true})">看过了</button></div>
+  #|<button onclick="openai.setWidgetState({seen:true})">看过了</button></div>
 
 ///|
 pub fn with_md_message(v : Json) -> Json {

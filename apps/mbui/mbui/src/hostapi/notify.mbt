@@ -1,4 +1,4 @@
-// The system's notifications, as still.fail's Android app shows them (ember apps/android app/Notices.kt, Push.kt;
+// The system's notifications, as still.fail's Android app shows them (still.fail apps/android app/Notices.kt, Push.kt;
 // docs/notifications.md → Clients): one channel, one notification per tag (a newer one with the same tag replaces the
 // older), tapped it brings the app to the front with what it was shown with (`opens`); whether the system lets the
 // app show them, asking it to; and a push service's token and what it delivered. (A link the system opens the app with

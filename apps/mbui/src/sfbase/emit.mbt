@@ -1,4 +1,4 @@
-// An agent's message coming out of its activity's avatar (ember apps/android chat/screens/ChatMotion.kt; web
+// An agent's message coming out of its activity's avatar (still.fail apps/android chat/screens/ChatMotion.kt; web
 // useEmissions), one at a time: the activity folds to its avatar (Fold), the avatar glides to where the message goes
 // (Float), the message comes out of it as it is there (Spit), and the avatar glides on to where the activity now is,
 // which unfolds again (Return). One way from its activity and back, no hop (the user, 2026-10-31: 「整个头像运动需要流

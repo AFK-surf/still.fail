@@ -104,8 +104,8 @@ if [ "${PLATFORM:-mac}" = windows ]; then
       || { echo 'wasm-app: wasmtime: not the release asked for' >&2; exit 1; }
     (cd "$A/out" && unzip -q -o wasmtime-win.zip && rm -f wasmtime-win.zip)
   fi
-  engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1
-  shell=$(cd "$EMBER" && node scripts/native.ts path shell win32-x64) || exit 1
+  engine=$(cd "$SF_SRC" && node scripts/native.ts path engine win32-x64) || exit 1
+  shell=$(cd "$SF_SRC" && node scripts/native.ts path shell win32-x64) || exit 1
   # WebView2's SDK (win_views.cpp), as mbui's win.sh fetches it
   WV2=$MBUI_DIR/out/webview2/1.0.4258.31
   if [ ! -f "$WV2/build/native/include/WebView2.h" ]; then

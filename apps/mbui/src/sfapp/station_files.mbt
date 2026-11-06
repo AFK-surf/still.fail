@@ -1,4 +1,4 @@
-// A station's files put into a message (ember apps/android chat/screens/StationFiles.kt, as the phone's web does it:
+// A station's files put into a message (still.fail apps/android chat/screens/StationFiles.kt, as the phone's web does it:
 // web/src/mobile/StationFiles.tsx), the draft's side: what ＋'s Station 文件 (sfdesk's station_pick.mbt, the one picker
 // of every frame) put into it comes in by files_into. Each goes into the draft named by its path (which station has
 // it, and where: the message says so in a line of its own, `common.pathOn`; nothing goes up), or as a file where the

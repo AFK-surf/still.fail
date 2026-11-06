@@ -1,4 +1,4 @@
-// A new chat in the Small stack (ember web/src/mobile/NewChat.tsx; apps/android NewChat.kt, ChatHost.kt): the pages'
+// A new chat in the Small stack (still.fail web/src/mobile/NewChat.tsx; apps/android NewChat.kt, ChatHost.kt): the pages'
 // (sfpages new_chat.mbt), risen from the bottom over the page under it (380 ms, (.2, .8, .2, 1)) under its bar (取消,
 // 新对话), over the navigation bar. The first message makes the chat and the page becomes it in place
 // (@ui.Nav::become), its composer and focus kept; its scene leaves over the chat (new_chat_leaving).

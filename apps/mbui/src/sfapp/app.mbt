@@ -1,4 +1,4 @@
-// still.fail, as its Android app is (ember apps/android app/App.kt): signed out it is the sign-in page; signed in,
+// still.fail, as its Android app is (still.fail apps/android app/App.kt): signed out it is the sign-in page; signed in,
 // the chats of one workspace are home (Home.kt), and everything else a page pushed over it (@ui.Nav: sliding in,
 // swiped back from the left edge; a new chat rising from the bottom), or a sheet from the bottom (sheet.mbt). The
 // places of the bottom bar (bar.mbt) are the pages at the stack's root, switched in place.

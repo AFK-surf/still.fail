@@ -8,12 +8,12 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 APP=stillfail bash "$D/web.sh" build >/dev/null
 . "$D/env.sh"
-out=$EMBER/web/public/mbui
+out=$SF_SRC/web/public/mbui
 mkdir -p "$out"
 # minified (MoonBit's names are long: 25 MB to 9.5, brotli 4.3 MB to 2.1) by esbuild, the version pinned here: the
 # web's own where its packages have it, else fetched (CI's mbui-web, whose install has none: deployed unminified once)
 ESBUILD=0.28.2
-es=$(ls -d "$EMBER"/node_modules/.pnpm/esbuild@$ESBUILD/node_modules/esbuild/bin/esbuild 2>/dev/null | tail -1)
+es=$(ls -d "$SF_SRC"/node_modules/.pnpm/esbuild@$ESBUILD/node_modules/esbuild/bin/esbuild 2>/dev/null | tail -1)
 if [ -n "$es" ]; then
   "$es" --minify "$MBUI_APP_MOD/out/web/demo.js" --outfile="$out/app.js" --log-level=error
 else

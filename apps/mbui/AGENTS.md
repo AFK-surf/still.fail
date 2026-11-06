@@ -29,7 +29,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What the app looks like and how it moves is what it does now; a change means to differ and says why. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
-- Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `ember … apps/android` mean the Kotlin
+- Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `still.fail … apps/android` mean the Kotlin
   Android app's (gone in #2547: `git show 5065f823b^:apps/android/…`); `apps/desktop/…` the Electron app's (gone in
   #2182: `git show eba1e7f47^:apps/desktop/…`). They say where a way of doing a thing came from; where they name a
   format this app still reads (a sealed value's, a store's files, an updater's), the old file is its spec.
