@@ -7,7 +7,7 @@
 // the test says.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
@@ -18,19 +18,23 @@ const LAPTOP_APP = "e2".repeat(32);
 
 /// How a trusted device answers when dialled: not there (the dial fails at once), not answering (the dial hangs), a
 /// code shown, that it approves this one nowhere it asks, or nothing (reached, its answer lost).
-type Way = "away" | "silent" | "code" | "no" | "mute";
+type Way = "away" | "silent" | "code" | "credential" | "no" | "mute";
 
 /// A core waiting in `ws` (its device not in the lock, the owner's two apps in it), its mesh's base key ME, and the
 /// trusted devices' ends as `ways` says now: each dial of each counted.
-async function waiting(ways: Record<string, Way>) {
+async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   const owner = elsewhere();
   const r = await rig(() => ({
     ws: genesis("ws", owner, false, [], {}, ME, [
       { id: PHONE_APP, sub: "s1", kind: "app", label: "still.fail Android · Pixel 8", sign_key: owner.id },
       { id: LAPTOP_APP, sub: "s1", kind: "app", label: "still.fail 桌面版 · MacBook", sign_key: owner.id },
     ]),
+    ...(secondWorkspace ? { w2: genesis("w2", owner, false, [], {}, ME, [
+      { id: PHONE_APP, sub: "s1", kind: "app", label: "still.fail Android · Pixel 8", sign_key: owner.id },
+    ]) } : {}),
   }));
-  r.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null } as never);
+  r.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "this fixture has no station link")) } as never);
+  r.core.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const dials: Record<string, number> = {};
   const hellos: unknown[] = [];
   const open = (id: string): Effect.Effect<Duplex, CoreError> =>
@@ -43,9 +47,11 @@ async function waiting(ways: Record<string, Way>) {
         Effect.sync(() => {
           r.core.inner.runner.fork(
             Effect.gen(function* () {
-              hellos.push(yield* there.next());
+              const hello = yield* there.next();
+              hellos.push(hello);
               if (way === "mute") return;
-              yield* there.send(way === "code" ? { t: "code", workspaces: ["ws"] } : { t: "no", error: "not_here" });
+              const hasCredential = way === "credential" && (hello as { workspaces?: { ws: string; credential: string }[] }).workspaces?.some((w) => w.ws === "ws" && w.credential === "signed-member");
+              yield* there.send(way === "code" || hasCredential ? { t: "code", workspaces: ["ws"] } : { t: "no", error: "not_here" });
             }),
           );
           return here;
@@ -53,8 +59,9 @@ async function waiting(ways: Record<string, Way>) {
     });
   dialer.open = (_inner, id) => open(id);
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  const secondLock = secondWorkspace ? await r.watch({ topic: "lock", workspace: "w2" }) : null;
   const pair = async () => (await lock()).me.pair;
-  return { ...r, ways, dials, hellos, lock, pair };
+  return { ...r, ways, dials, hellos, lock, pair, secondLock };
 }
 
 test("a trusted device opened after the new device asked shows its code: dialled again every PAIR_REDIAL_MS", async () => {
@@ -141,4 +148,86 @@ test("asked again, the try before stops dialling", async () => {
   const dials = { ...w.dials };
   await w.host.time.pass(60_000);
   assert.deepEqual(w.dials, dials);
+});
+
+test("a credential temporarily unavailable: the new device asks again and the trusted device can show a code", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" });
+  let requests = 0;
+  w.core.inner.cloudSync.credential = () => Effect.suspend(() => ++requests === 1
+    ? Effect.fail(new CoreError("network", "网络连接失败"))
+    : Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" }));
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(PAIR_REDIAL_MS + 2_000);
+  assert.equal((await w.pair()).state, "code", "the trusted device can show a code once the credential is available");
+  assert.equal(w.hellos.length, 1, "the trusted device is not asked with an empty credential");
+  assert.equal((w.hellos[0] as { workspaces: { credential: string }[] }).workspaces[0]?.credential, "signed-member");
+});
+
+test("a credential unavailable throughout: the waiting page says why rather than claiming no trusted device answered", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" });
+  w.core.inner.cloudSync.credential = () => Effect.fail(new CoreError("network", "网络连接失败"));
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS + 2_000);
+  const p = await w.pair();
+  assert.equal(p.state, "failed");
+  assert.match(p.error, /网络连接失败/);
+  assert.deepEqual(w.hellos, [], "no trusted device is asked without a credential");
+});
+
+test("an expired login: the waiting page says why without repeating a rejected request", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" });
+  let requests = 0;
+  w.core.inner.cloudSync.credential = () => Effect.suspend(() => {
+    requests++;
+    return Effect.fail(new CoreError("invalid_session", "登录已失效，请重新登录", 401));
+  });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(PAIR_REDIAL_MS + 2_000);
+  const p = await w.pair();
+  assert.deepEqual([p.state, p.error], ["failed", "登录已失效，请重新登录"]);
+  assert.equal(requests, 1);
+  assert.deepEqual(w.hellos, []);
+});
+
+test("one workspace's credential fails: the other can still ask and the failed workspace says why", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" }, true);
+  w.core.inner.cloudSync.credential = (ws) => ws === "ws"
+    ? Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" })
+    : Effect.fail(new CoreError("invalid_session", "登录已失效，请重新登录", 401));
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(2_000);
+  assert.equal((await w.pair()).state, "code");
+  const other = (await w.secondLock!()).me.pair;
+  assert.deepEqual([other.state, other.error], ["failed", "登录已失效，请重新登录"]);
+  assert.deepEqual((w.hellos[0] as { workspaces: { ws: string }[] }).workspaces.map((x) => x.ws), ["ws"]);
+  assert.equal(w.dials[PHONE_APP], 1, "a code already showing is not requested a second time");
+});
+
+test("a cancelled try stops retrying its unavailable credential", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" });
+  let requests = 0;
+  w.core.inner.cloudSync.credential = () => Effect.suspend(() => { requests++; return Effect.fail(new CoreError("network", "网络连接失败")); });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  const before = requests;
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS);
+  assert.equal(requests, before);
+  assert.deepEqual(w.hellos, []);
+});
+
+test("cancelled while a credential is being fetched: the other workspaces are not fetched", async () => {
+  const w = await waiting({ [PHONE_APP]: "credential" }, true);
+  const release = Deferred.makeUnsafe<void>();
+  const requests: string[] = [];
+  w.core.inner.cloudSync.credential = (ws) => Effect.suspend(() => {
+    requests.push(ws);
+    return Effect.andThen(Deferred.await(release), Effect.fail(new CoreError("network", "网络连接失败")));
+  });
+  await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(requests.length, 1);
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  Deferred.doneUnsafe(release, Effect.void);
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal(requests.length, 1, "no further credential requests follow cancellation");
+  assert.deepEqual(w.hellos, []);
 });

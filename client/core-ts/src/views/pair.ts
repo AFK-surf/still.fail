@@ -47,7 +47,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -188,6 +188,13 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
   return Effect.gen(function* () {
     const hello = yield* Effect.timeoutOption(d.next(), "30 seconds");
     if (hello._tag === "None" || !isObject(hello.value) || hello.value.t !== "hello") return;
+    // An app can accept a connection while its kept signing key is still being read at startup. That is not a refusal:
+    // wait for the read, unless the new device goes away, before deciding whether this device may approve it.
+    const loading = signerLoading(inner);
+    if (loading !== null && arr(get(hello.value, "workspaces")).length > 0) {
+      const stillHere = yield* Effect.raceFirst(Effect.as(loading, true), Effect.as(Effect.orElseSucceed(d.next(), () => null), false));
+      if (!stillHere) return;
+    }
     const { places, who } = placesFor(inner, hello.value, peer, me);
     if (places.length === 0 || who === null) return yield* d.send({ t: "no", error: "not_here" });
     const all = askingsOf(inner);
@@ -310,7 +317,8 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]> };
+/// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string> };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -318,6 +326,8 @@ let runs = 0;
 function mine(inner: Inner, ws: string): J | null {
   const y = tryings.get(inner);
   if (!y || !y.workspaces.includes(ws)) return null;
+  const credentialError = y.credentialErrors?.get(ws);
+  if (credentialError !== undefined) return { state: "failed", devices: 0, error: credentialError };
   // Signed in elsewhere, not here: no trusted device that answered approves it in this one (2026-11-04: a web page
   // waiting in three workspaces, approved in two, showed this one's page as it was, its code typed, as though nothing
   // had come of it).
@@ -409,18 +419,44 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     if (workspaces.length === 0) return yield* Effect.fail(CoreError.invalid("this device waits in no workspace"));
     const y = trying(inner, workspaces);
     y.approvers = approvers;
-    // What it says of itself, in each workspace: a credential for its main endpoint; an app's signing key.
-    const credentials: J[] = [];
-    for (const ws of workspaces) {
-      const c = yield* Effect.result(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)));
-      if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
-    }
+    // What it says of itself: an app's signing key, and each workspace's credential for its main endpoint.
     const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))) : null;
     if (signer) signerKnown(inner, signer.id);
-    const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(
       Effect.gen(function* () {
+        // Without any credential the trusted devices must refuse the request. A brief cloud outage used to be silently
+        // dropped here, so even after it recovered each device was asked with no credential and showed no code.
+        // Retry until one workspace can be asked, on the same schedule as the device dials. Keep partial success: a
+        // workspace whose credential failed says why, while those with credentials can still be approved.
+        let credentials: J[] = [];
+        let failures = new Map<string, CoreError>();
+        for (let n = 0; n < PAIR_DIAL_TRIES && looking(inner, y); n++) {
+          const began = inner.host.nowMs();
+          credentials = [];
+          failures = new Map();
+          for (const ws of workspaces) {
+            if (!looking(inner, y)) break;
+            const c = yield* Effect.result(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)));
+            if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
+            else failures.set(ws, c.failure);
+          }
+          if (credentials.length > 0 || !looking(inner, y)) break;
+          // A rejected or expired login will not recover by asking again, unlike a network failure or rate limit.
+          if ([...failures.values()].every((e) => e.status !== undefined && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429)) break;
+          const wait = PAIR_REDIAL_MS - (inner.host.nowMs() - began);
+          if (wait > 0 && n + 1 < PAIR_DIAL_TRIES) yield* Effect.sleep(wait);
+        }
+        if (!looking(inner, y)) return;
+        y.credentialErrors = new Map([...failures].map(([ws, error]) => [ws, error.message]));
+        if (credentials.length === 0 && failures.size > 0) {
+          y.state = "failed";
+          y.error = failures.values().next().value!.message;
+          changed(inner, y);
+          return;
+        }
+        changed(inner, y);
+        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
         yield* Effect.forEach(trusted, (id) => seek(inner, y, id, relays, hello), { concurrency: "unbounded", discard: true });
         // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials.
         if (tryings.get(inner) !== y || y.state !== "finding") return;
