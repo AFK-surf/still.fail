@@ -7,6 +7,10 @@ import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { Store } from "../src/store/store.ts";
 import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+import { keyPart, sandboxName } from "../src/agents/sandbox-name.ts";
+import { installLegacySaid } from "../src/store/legacy-said-build.ts";
+import { installLegacyAgent } from "../src/store/legacy-agent-build.ts";
+import { installPeopleSinceIndex } from "../src/store/legacy-people-since.ts";
 
 // The release's main.js loads and answers: a module importing createRequire as the bundle's banner did declared it
 // twice, and every station updated to 0.1.7119 kept its old one (the new one exited with 1 before it was ready).
@@ -34,6 +38,8 @@ test("the workers in a station release start and process a batch", { skip: !proc
     const put = store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     put.run(saidThread, 1, "agent", "s", "first", 1);
     for (let n = 2; n <= 70; n++) put.run(saidThread, n, "person", "p", `m${n}`, n);
+    store.db.exec("DROP INDEX entries_people_since");
+    installPeopleSinceIndex(store.db);
     store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(saidThread);
     const turn = store.db.prepare("INSERT INTO turns(id,session_key,kind,started_at) VALUES (?,'old-turn','input',?)");
     for (let n = 0; n < 70; n++) turn.run(`old-${n}`, n);
@@ -48,8 +54,10 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-binding','old-count'); DELETE FROM session_binding_rows; UPDATE session_binding_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM bindings), complete=0");
     store.db.exec("INSERT INTO pins(viewer,session,at) VALUES('old-viewer','old-count',1); DELETE FROM archive_pin_rows; UPDATE archive_mark_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM pins), complete=0 WHERE kind='pins'");
     store.insertJob({ id: "old-job", sessionKey: "old-count", name: "old-job", command: "true", cwd: "/", port: null,
-      token: "old-job", state: "running", pgid: null, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
+      token: "old-job", state: "running", pgid: 12345, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
     store.db.exec("DELETE FROM session_up_job_rows; UPDATE session_up_job_meta SET fresh=0");
+    store.db.prepare("INSERT INTO chat_shares(session,shared,write,by,at) VALUES (?,?,0,'a',1)")
+      .run("old-share", JSON.stringify([{ workspace: "other", name: "Other", used: 1 }]));
     store.db.prepare("UPDATE entries SET attachments=? WHERE thread=? AND n=1")
       .run(JSON.stringify([{ path: "/w/bundle.html", name: "bundle.html" }]), thread);
     store.db.prepare("UPDATE entries SET card=? WHERE thread=? AND n=1").run('{"type":"text"}', thread);
@@ -57,9 +65,17 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.prepare("DELETE FROM widget_source_scopes WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
+    installLegacySaid(store.db);
+    installLegacyAgent(store.db);
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/workspace-activity-worker.js", { kind: "recovery" }],
+      ["sessions/workspace-activity-worker.js", { kind: "sandbox" }],
+      ["sessions/workspace-activity-worker.js", { kind: "directory" }],
+      ["sessions/workspace-activity-worker.js", { kind: "chat-share" }],
+      ["sessions/workspace-activity-worker.js", { kind: "process-jobs" }],
+      ["sessions/workspace-activity-worker.js", { kind: "legacy-said" }],
+      ["sessions/workspace-activity-worker.js", { kind: "legacy-agent" }],
       ["sessions/session-count-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
@@ -71,6 +87,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/widget-sources-worker.js", { thread }],
       ["read/cc-index-worker.js", { session: "old-cc" }],
       ["read/card-posts-worker.js", { thread }],
+      ["read/card-posts-worker.js", { thread: saidThread, people: true }],
       ["read/archive-mark-worker.js", { scope: "all" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
@@ -95,6 +112,12 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT said_other_n FROM thread_state WHERE thread=?").get(saidThread)?.said_other_n, 1);
     assert.equal(store.db.prepare("SELECT n FROM session_turns WHERE session='old-turn'").get()?.n, 70);
     assert.deepEqual(store.recoveryWaits()?.map(({ row }) => row.key), ["old-count"]);
+    assert.equal(store.db.prepare("SELECT name FROM sandbox_name_rows WHERE session=?").get("old-count")?.name, sandboxName(keyPart("old-count")));
+    assert.equal(store.db.prepare("SELECT root FROM session_dir_rows WHERE session=?").get("old-count")?.root, "/w");
+    assert.equal(store.db.prepare("SELECT workspace FROM chat_share_targets WHERE session=?").get("old-share")?.workspace, "other");
+    assert.equal(store.db.prepare("SELECT job FROM process_job_rows WHERE job=?").get("old-job")?.job, "old-job");
+    assert.equal(store.db.prepare("SELECT scanned FROM legacy_said_meta WHERE id=1").get()?.scanned, 1);
+    assert.equal(store.db.prepare("SELECT scanned FROM legacy_agent_meta WHERE id=1").get()?.scanned, 1);
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
     assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");
@@ -103,5 +126,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT name FROM widget_source_rows WHERE thread=? AND path='/w/bundle.html'").get(thread)?.name, "bundle.html");
     assert.equal(store.db.prepare("SELECT complete FROM cc_sessions WHERE session='old-cc'").get()?.complete, 1);
     assert.equal(store.db.prepare("SELECT n FROM card_posts WHERE thread=?").get(thread)?.n, 1);
+    assert.equal(store.db.prepare("SELECT complete FROM legacy_people_time_scopes WHERE thread=?").get(saidThread)?.complete, 1);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });

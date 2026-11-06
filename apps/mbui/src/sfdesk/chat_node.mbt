@@ -30,7 +30,8 @@ fn chat_root_node(
     page.reacts(open, fn(o) {
       let to = if o { 1.0 } else { 0.0 }
       if slide.target() != to {
-        let pane = page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(page.window().0)
+        // (as wide as the pane is laid out at the cause's moment: View::laid_size)
+        let pane = page.laid_size().0
         slide.go(to, @motion.move(over=side_whole(pane)), at=page.cause_at())
       }
     })
@@ -102,12 +103,10 @@ fn chat_talk_node(
   corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64,
 ) -> Unit {
-  let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
   let radii = fn() {
     let roots = @ui.tree_corner_roots_now()
     corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) })
   }
-  let geometry = fn() { @sfpages.composer_geometry(width(), radii()) }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
   // (its composer while made: what its page's layout and its picks read of the room it takes)
@@ -157,6 +156,9 @@ fn chat_talk_node(
     // waits): the draft's field is one editor's, and the same chat may be under it (its history asked as a page, a
     // service beside it))
     let f = body.box(fn(f) {
+      // (its shape by whether the talk's width lets it follow the panel's corners, picked as the talk is laid out
+      // (View::by_room): nothing of the talk's width read back)
+      f.by_room(By(radii), sized=true, fn(radii, pane, _) { @sfpages.composer_follows(pane, radii) }, fn(f, follows) {
       @sfpages.composer_on_page(f, src, r.station + ":" + r.session, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
         let made = @sfpages.chat_composer_node(
           f,
@@ -167,7 +169,7 @@ fn chat_talk_node(
           // (its lines as many as the talk's height gives them)
           (talk, fn(_, h) { h }),
           fn(pane) { @sfpages.composer_geometry(pane, radii()).1 },
-          fn() { geometry().2 },
+          fn() { @sfpages.composer_place_of(follows, radii()) },
           fn(_key) { (latest.val)() },
           active=fn() { app.nav.drawn_stay().0 == k },
           drops=talk,
@@ -177,33 +179,35 @@ fn chat_talk_node(
         made_now.set(Some(made))
         f.owns(fn() { made_now.set(None) }) |> ignore
       })
+      }) |> ignore
     })
-    body.layout_box(By(fn() { (made_now.get().map(fn(m) { (m.room_of)() }), (lift.val)()) }), fn(lay, k) {
-      let (of, lift) = k
+    // (what flies over its messages and its composer, laid out after them in the same layout: what flies as big as
+    // what it lands on as that is laid out, Layout::anchor)
+    let fl = body.box(fn(fl) {
+      @sfpages.chat_flight_layer_made(r, fl)
+      @sfbase.send_flight_node(
+        fl,
+        r.station + ":" + r.session,
+        fn(f) { (landing.val)(f.key).bind(fn(l) { l.text }) },
+        quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) },
+        files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
+      )
+    })
+    body.layout_box(By(fn() { (lift.val)() }), fn(lay, lift) {
       let (_, ch) = lay.measure(f, lay.width)
-      let room = match of {
-        Some(o) => @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), o)
-        None => 0.0
+      // (the room the composer takes, all of it as measuring it in this layout said (made in it or not): composer_room_in)
+      let room = match (lay.reported(f, "opened"), lay.reported(f, "shape")) {
+        (Some(opened), Some(shape)) =>
+          @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), (opened, shape))
+        _ => 0.0
       }
       lay.measure(l, lay.width, height=lay.height, foot=(0.0, room + lift)) |> ignore
       lay.place(l, 0.0, 0.0)
       lay.place(f, 0.0, lay.height - ch)
+      lay.measure(fl, lay.width, height=lay.height) |> ignore
+      lay.place(fl, 0.0, 0.0)
     })
     |> ignore
-  })
-  |> ignore
-  talk.box(fn(fl) {
-    fl
-    .over(Is(true))
-    |> ignore
-    @sfpages.chat_flight_layer_made(r, fl)
-    @sfbase.send_flight_node(
-      fl,
-      r.station + ":" + r.session,
-      fn(f) { (landing.val)(f.key).bind(fn(l) { l.text }) },
-      quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) },
-      files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
-    )
   })
   |> ignore
   // (what is picked of a message: the finger's bar or the mouse's pill over it: pick_node.mbt)

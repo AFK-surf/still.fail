@@ -2062,13 +2062,13 @@ test "layout-read-back" {
         "  match c.rect_of(c.id(\"rail\")) { _ => () }\n" +
         "  let r = c.laid_rect(id)\n" +
         "  let m = @motion.measured_rect(c, \"thumb\")\n" +
-        "  let z = v.laid_size_told()\n" +
-        "  let q = p.laid_window_told()\n" +
-        "  let d = v.drawn_window_told()\n" +
+        "  let z = v.owed_laid_size()\n" +
+        "  let q = p.owed_laid_window()\n" +
+        "  let d = v.owed_drawn_window()\n" +
         "}\n",
       ),
-      ("src/app/card_wbtest.mbt", "test \"t\" {\n  t.ctx().rect_of(1)\n  v.laid_size_told()\n}\n"),
-      ("src/ui/list.mbt", "fn w(c : Ctx) -> Unit {\n  c.rect_of(1) |> ignore\n  v.laid_window_told() |> ignore\n}\n"),
+      ("src/app/card_wbtest.mbt", "test \"t\" {\n  t.ctx().rect_of(1)\n  v.owed_laid_size()\n}\n"),
+      ("src/ui/list.mbt", "fn w(c : Ctx) -> Unit {\n  c.rect_of(1) |> ignore\n  v.owed_laid_window() |> ignore\n}\n"),
     ],
     "layout-read-back",
     6,

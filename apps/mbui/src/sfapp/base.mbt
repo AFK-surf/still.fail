@@ -227,7 +227,7 @@ pub using @sfbase {
   asks_in_view,
   at_end_asked,
   at_end_env,
-  chat_tick,
+  chat_play,
   entries_of,
   flash_held,
   flash_held_ms,

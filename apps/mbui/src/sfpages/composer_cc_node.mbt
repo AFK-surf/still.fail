@@ -50,7 +50,7 @@ fn cc_chooser_node(parent : @view.View, src : Source, r : ChatRef, view : () -> 
       }) |> ignore
       @sf.icon_node(b, "chevron-down", 12.0, By(fn() { if lit() { @sf.theme().p.text } else { @sf.theme().p.muted } })) |> ignore
     })
-    let popup = @sf.popup_root_node(button)
+    @sf.popup_root_when(button, open, fn(popup) {
     @sf.menu_node(popup, open, fn(_) { button }, fn() {
       choices().map(fn(o) {
         Some(@sf.menu_item_of(o.place, fn() {
@@ -69,5 +69,6 @@ fn cc_chooser_node(parent : @view.View, src : Source, r : ChatRef, view : () -> 
       min_w=@sf.chooser_menu_w, mark_node=fn(m, i) {
         cc_mark_node(m, fn() { choices().get(i).map(fn(o) { o.via }).unwrap_or("") })
       })
+    })
   })
 }

@@ -2,6 +2,8 @@
 // Option is `T | null`; where the Rust leaves a None Value out (EntryRow's agentIdentity, options, card) it is undefined.
 // The readers (read/store.ts) read rows with these same conversions, leaving out what is not for the pages (tokens).
 
+import { LEGACY_SAID_LATEST } from "./legacy-said-build.ts";
+
 export type Json = any;
 
 /// The page's own threads live on this surface (stored under the name of before the rename: the stations' data and
@@ -582,7 +584,9 @@ export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), 
 
 /// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
 /// readers' (who keeps watch).
-export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
+// The process watchers need a stable choice when equally large jobs start together. The former query's usual
+// jobs_up plan read ties by port and rowid; spell that order out so either query plan gives the same answer.
+export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC, port, rowid";
 
 /// The jobs running, and the services stopped on their own that hold their port (an exited one with a port), the latest
 /// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
@@ -611,10 +615,9 @@ export const SESSION_OF_RUNTIME = `SELECT key FROM (
 
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the
 /// latest card, or post with options, before a person's message (schema.ts addClientColumn's entries_cards and
-/// entries_options), and the cards closed since (closed_cards_at).
+/// entries_options), and the cards closed since in each requested thread.
 export const CARD_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL";
 export const OPTIONS_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL";
-export const CLOSED_SINCE = "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?";
 /// The same cards for one thread, by thread and time, with insertion order for ties across threads.
 export const CLOSED_THREAD_SINCE = "SELECT thread, n, viewer, at, rowid AS ordering FROM closed_cards WHERE thread = ? AND at >= ?";
 /// A thread's people's messages since `?2` (the items of a sidebar a change touched), by schema.ts entries_people_since.
@@ -628,6 +631,13 @@ export const LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
     UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
   )
 )`;
+/// On an old store whose ordinary messages were prepared in bounded batches, use its equivalent lookup.
+export const LEGACY_LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
+  SELECT MAX(n) FROM (
+    SELECT (SELECT n FROM (${LEGACY_SAID_LATEST})) AS n
+    UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
+  )
+)`;
 
 /// A page of messages as merged, latest first. Merge the two ordered message indexes to select a page before reading
 /// the messages and their edits; a page does not walk the edits that followed its messages. Like LAST_MESSAGE, old
@@ -638,6 +648,12 @@ export const MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN 
   UNION ALL
   SELECT n FROM entries
     WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
+  ORDER BY n DESC LIMIT ?3
+) ORDER BY n DESC`;
+export const LEGACY_MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (
+  SELECT n FROM legacy_said WHERE thread = ?1 AND n < ?2
+  UNION ALL
+  SELECT n FROM entries WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
   ORDER BY n DESC LIMIT ?3
 ) ORDER BY n DESC`;
 

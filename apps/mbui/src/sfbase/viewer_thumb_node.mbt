@@ -86,7 +86,7 @@ fn tree_thumb_of(c : @ui.Ctx, node : @view.View, look : () -> ThumbLook, laid? :
   // Follow placement even while it is laid out nowhere, so showing the same node again tells its readers (but where it
   // is read as a frame is painted, `laid`: where it is drawn in that frame, Laid::drawn, nothing followed).
   if laid is None {
-    ignore(node.drawn_window_told())
+    ignore(node.owed_drawn_window())
   }
   guard node.alive() && !node.shown_nowhere() else { return None }
   guard @ui.view_tree() is Some(tree) else { return None }

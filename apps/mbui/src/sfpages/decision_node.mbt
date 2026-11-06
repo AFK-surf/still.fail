@@ -383,7 +383,8 @@ fn under_node(
   let room = @motion.Way::new(if first { 1.0 } else { 0.0 })
   let seen = @motion.Way::new(if first { 1.0 } else { 0.0 })
   let inner : Ref[@view.View?] = Ref(None)
-  let tall = fn() { inner.val.bind(fn(v) { v.laid_size_told() }).map(fn(z) { z.1 }).unwrap_or(0.0) }
+  // (how tall it is laid out at its cause's moment: how far its room moves, View::laid_size)
+  let tall = fn() { inner.val.map(fn(v) { v.laid_size().1 }).unwrap_or(0.0) }
   // (at rest once both are where they go, as under_rest asks)
   let n = @sfbase.under_goes_told(fn() {
     let now = parent.logic_at()
@@ -392,11 +393,13 @@ fn under_node(
   })
   parent.owns(fn() { @sfbase.under_goes.remove(n) |> ignore }) |> ignore
   let was_on = Ref(first)
+  let kept = @signals.signal(first)
+  let stop_leaving : Ref[() -> Unit] = Ref(fn() { })
+  parent.owns(fn() { (stop_leaving.val)() }) |> ignore
   let was_way : Ref[(Double, Double)?] = Ref(None)
   parent.reacts(fn() { (shown(), @ui.row_way_node(parent)) }, fn(now) {
     let (on, way) = now
     let at = parent.cause_at()
-    let far = @signals.untracked(tall)
     let to = if on { 1.0 } else { 0.0 }
     // (a change within a row shares the list's height curve, including a later start while sent words leave;
     // another cause while it goes puts its remaining part on the same new way as the other rows)
@@ -408,7 +411,8 @@ fn under_node(
           let delay = dmax(0.0, start - at)
           room.go(to, @sfbase.under_row_spec(ms, delay), at=if delay > 0.0 { at } else { start }, velocity=0.0)
         }
-        None => room.go(to, @motion.move(over=far), at~)
+        // (how far: as tall as it is laid out at the cause's moment, asked only where its own way is timed by it)
+        None => room.go(to, @motion.move(over=@signals.untracked(tall)), at~)
       }
     }
     was_way.val = way
@@ -428,8 +432,17 @@ fn under_node(
       }
       was_on.val = on
     }
+    // The room's last moment owns its release. A predicted picture may show it shut before that moment;
+    // it cannot drop the node ahead of an input that opens it again.
+    (stop_leaving.val)()
+    stop_leaving.val = if !on && room.goes_at(at) {
+      parent.at_moment(room.end(), fn() { kept.set(false) })
+    } else {
+      kept.set(on)
+      fn() { }
+    }
   })
-  parent.show(fn() { shown() || way_shown(room, parent) > 0.0 }, fn(r) {
+  parent.show(fn() { kept.get() }, fn(r) {
     // (cut at both ends as it opens and closes, fading out to them: under_post's reveal)
     r.opens(By(fn() { Some(dmin(1.0, way_shown(room, r))) })).clips(By(fn() { way_shown(room, r) < 1.0 }))
     .cuts_softly(By(fn() { way_shown(room, r) < 1.0 })) |> ignore

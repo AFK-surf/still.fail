@@ -16,6 +16,7 @@ import { SCHEMA_VERSION } from "../src/store/schema.ts";
 import { usageCardOutcomesComplete } from "../src/store/usage-chat-stats.ts";
 import { readArchive } from "../src/store/archive.ts";
 import { MANUAL, Store, newMessage, turnSummaryJson } from "../src/store/store.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 
 const live = process.env.STILLFAIL_COMPAT_DATA ?? join(homedir(), ".stillfail");
 const present = existsSync(join(live, "stillfail.db"));
@@ -97,7 +98,10 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       assert.deepEqual(store.participants(null), read.participants(r, null));
       assert.deepEqual(store.listBindings(), read.listBindings(r));
       assert.deepEqual(store.listJobs(null).map(noToken), read.listJobs(r, null));
-      assert.deepEqual(store.answersSince(0), withCards(() => read.answersSince(r, 0)));
+      const threads = (store.db.prepare("SELECT thread AS id FROM entries UNION SELECT thread AS id FROM closed_cards").all() as { id: number }[]).map((t) => t.id);
+      const byQuestion = (a: read.CardAnswer, b: read.CardAnswer) =>
+        a.question.thread - b.question.thread || a.question.n - b.question.n;
+      assert.deepEqual(referenceAnswersSince(store, 0).sort(byQuestion), withCards(() => read.answersSince(r, 0, threads)).sort(byQuestion));
       const stats = store.sessionStats(null);
       for (const [key, s] of read.sessionStats(r, null)) {
         const mine = stats.get(key)!;

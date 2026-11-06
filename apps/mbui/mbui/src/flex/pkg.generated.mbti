@@ -91,6 +91,7 @@ pub(all) struct Node {
   mut measure : ((Double, MeasureMode, Double, MeasureMode) -> (Double, Double))?
   mut layout_children : ((Double, Double, Double, Double) -> Double)?
   mut sized_by_children : Bool
+  mut on_room : ((Double, Double) -> Unit)?
   mut room_said : Bool
   mut room_w : Double
   mut room_h : Double
@@ -111,7 +112,9 @@ pub(all) struct Node {
   mut box_memo : Box?
   mut box_ver : Int32
   mut dirty : Bool
+  mut laid_grid : Double
   mut p_ok : Bool
+  mut p_gen : Int32
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -166,6 +169,7 @@ pub(all) struct Style {
   mut min_held : Bool
   mut wrap_least : Bool
   mut content_share : Double
+  mut content_share_across : Double
   mut rows_grid : Double
   // private fields
 }

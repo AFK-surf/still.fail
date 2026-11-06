@@ -92,7 +92,9 @@ fn link_peeks_node(
   // (in the chat's flight layer, in a place of its own there let go with the words; nothing of it in the words: what
   // is laid out in them theirs alone)
   guard @signals.untracked(fn() { chat_flight_layer(here_ref(here())) }) is Some(l) else { return }
-  // (made again for another link, closed first: on_link's)
+  // (made again for another link, closed first: on_link's; made once the layout the words are made in is over (a
+  // list's row as it comes into it), never in it: the layer is no part of what that layout lays out)
+  w.made_after_layout(fn() {
   l.box(fn(place) {
     place.over(Is(true)) |> ignore
     place.show(fn() { open.get() is Some(_) }, fn(anchor) {
@@ -154,6 +156,7 @@ fn link_peeks_node(
   })
   .lives_with(w)
   |> ignore
+  })
 }
 
 ///|

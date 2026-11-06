@@ -13,7 +13,7 @@ test "a width that flips each time its size is told: the frame's passes stop at 
       root.box(fn(child) {
         child.width(By(fn() { Some(if wide.get() { 120.0 } else { 80.0 }) })).height(Is(Some(10.0))) |> ignore
         // (told its size, it asks for the other: no size it settles at)
-        child.reacts(fn() { child.laid_size_told() }, fn(_) { wide.set(!@signals.untracked(fn() { wide.get() })) })
+        child.reacts(fn() { child.owed_laid_size() }, fn(_) { wide.set(!@signals.untracked(fn() { wide.get() })) })
       })
       |> ignore
     },
@@ -39,7 +39,7 @@ test "the trace on: each pass's sizes told otherwise said, from what to what" {
     fn(root) {
       root.box(fn(child) {
         child.width(By(fn() { Some(if wide.get() { 120.0 } else { 80.0 }) })).height(Is(Some(10.0))) |> ignore
-        child.reacts(fn() { child.laid_size_told() }, fn(_) {  })
+        child.reacts(fn() { child.owed_laid_size() }, fn(_) {  })
       })
       |> ignore
     },

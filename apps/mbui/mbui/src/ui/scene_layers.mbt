@@ -2024,18 +2024,55 @@ fn Ctx::scene_spliced(self : Ctx, drawn : Array[(SceneLayer, Int, Int, FixedArra
   let pieces = old_segs.length() / 4 + grown_segs
   let new_total = new_tail + (pieces + 5) / 6
   let out = FixedArray::make(imax(new_total, total) * inst_size + inst_size, 0.0)
-  let segs : Array[Double] = []
   // (where an instance of the frame's, and a piece, as they were, are now: moved on by those drawn again before it)
-  let at_moves : Array[(Int, Int)] = []
-  let seg_moves : Array[(Int, Int)] = []
+  let at_moves : Array[(Int, Int, Int)] = []
+  let seg_moves : Array[(Int, Int, Int)] = []
+  // (the pieces put together anew in the order they are in, whatever order the instances are in (a layer raised over
+  // the scrim after one drawn before it: its instances after that one's, its pieces still before them): each one's
+  // pieces where it says they are, its own, never where the one before it in the instances left off)
+  let by_pieces = Array::makei(order.length(), fn(x) { x })
+  by_pieces.sort_by(fn(x, y) { (order[x].2, order[x].8).compare((order[y].2, order[y].8)) })
+  // (a Tester's: spliced, with the pieces in another order than the instances, and one drawn to another number)
+  if looks_check.val {
+    let mut other_order = false
+    for p, x in by_pieces {
+      if p != x {
+        other_order = true
+      }
+    }
+    let resized = order.iter().any(fn(d) { d.6 != d.7 })
+    spliced_said.val = (
+      spliced_said.val.0 + 1,
+      spliced_said.val.1 + (if other_order { 1 } else { 0 }),
+      spliced_said.val.2 + (if resized { 1 } else { 0 }),
+    )
+  }
+  let segs : Array[Double] = []
+  let new_seg_of = Array::make(order.length(), 0)
+  let mut k = 0
+  for x in by_pieces {
+    let (_, _, seg_from, _, ls, _, _, _, seg_count) = order[x]
+    for q in (k * 4)..<(seg_from * 4) {
+      segs.push(old_segs[q])
+    }
+    let new_seg = segs.length() / 4
+    new_seg_of[x] = new_seg
+    for q in 0..<ls.length() {
+      segs.push(ls[q])
+    }
+    seg_moves.push((seg_from + seg_count, new_seg + ls.length() / 4 - (seg_from + seg_count), x))
+    k = imax(k, seg_from + seg_count)
+  }
+  for q in (k * 4)..<old_segs.length() {
+    segs.push(old_segs[q])
+  }
   let mut i = 0
   let mut j = 0
-  let mut k = 0
   // (who drew what, where that is kept (a check's): each run where it now is, put once all are taken)
   let owned = inst_owners_kept()
   let runs : Array[(OwnersRun, Int)] = []
-  for d in order {
-    let (l, start, seg_from, inst, ls, owners, n, count, seg_count) = d
+  for x, d in order {
+    let (l, start, _, inst, _, owners, n, count, _) = d
     // (what lies before it, as it was, moved on)
     if owned {
       runs.push((owners_run(i, start), j))
@@ -2045,10 +2082,7 @@ fn Ctx::scene_spliced(self : Ctx, drawn : Array[(SceneLayer, Int, Int, FixedArra
       scene_moved_insts.val = scene_moved_insts.val + (start - i)
     }
     j = j + (start - i)
-    for q in (k * 4)..<(seg_from * 4) {
-      segs.push(old_segs[q])
-    }
-    let new_seg = segs.length() / 4
+    let new_seg = new_seg_of[x]
     for b in l.bands {
       inst[b * inst_size + 12] = inst[b * inst_size + 12] + new_seg.to_double()
     }
@@ -2057,15 +2091,10 @@ fn Ctx::scene_spliced(self : Ctx, drawn : Array[(SceneLayer, Int, Int, FixedArra
       Some(o) => runs.push((o, j))
       None => ()
     }
-    for q in 0..<ls.length() {
-      segs.push(ls[q])
-    }
-    at_moves.push((start + count, j + n - (start + count)))
-    seg_moves.push((seg_from + seg_count, new_seg + ls.length() / 4 - (seg_from + seg_count)))
+    at_moves.push((start + count, j + n - (start + count), x))
     scene_moved_to(l, j, new_seg)
     j = j + n
     i = start + count
-    k = seg_from + seg_count
   }
   if owned {
     runs.push((owners_run(i, tail), j))
@@ -2079,9 +2108,6 @@ fn Ctx::scene_spliced(self : Ctx, drawn : Array[(SceneLayer, Int, Int, FixedArra
   }
   if owned {
     owners_cut(new_tail)
-  }
-  for q in (k * 4)..<old_segs.length() {
-    segs.push(old_segs[q])
   }
   // (how far what was at `at` moved: as far as the last drawn again before it grew)
   // (`edge` of a layer, its start or its end: moved as what is before it moved; where it is just where one drawn
@@ -2108,10 +2134,10 @@ fn Ctx::scene_spliced(self : Ctx, drawn : Array[(SceneLayer, Int, Int, FixedArra
     }
     by
   }
-  let moved_by = fn(moves : Array[(Int, Int)], at : Int, l : SceneLayer, is_end : Bool) {
+  let moved_by = fn(moves : Array[(Int, Int, Int)], at : Int, l : SceneLayer, is_end : Bool) {
     let mut by = 0
-    for k, m in moves {
-      if at > m.0 || (at == m.0 && holds_drawn(l, k) == is_end) {
+    for m in moves {
+      if at > m.0 || (at == m.0 && holds_drawn(l, m.2) == is_end) {
         by = m.1
       }
     }
@@ -2493,27 +2519,47 @@ fn scene_holds_all(o : SceneLayer, x : SceneLayer) -> Bool {
 /// frame's `tail` instances or its `pieces`, one drawn into fewer than it says it drew; None where the frame can be put
 /// together round them (scene_spliced).
 fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], tail : Int, pieces : Int) -> String? {
-  let order = spans.copy()
-  order.sort_by(fn(a, b) { (a.1, a.2).compare((b.1, b.2)) })
-  let mut end = 0
-  let mut seg_end = 0
-  for s in order {
-    let (at, start, count, seg_from, seg_count, n, segs_now, room) = s
-    let what = "layer \{at} at \{start} for \{count} (now \{n}), pieces at \{seg_from} for \{seg_count} (now \{segs_now})"
+  let what = fn(s : (Int, Int, Int, Int, Int, Int, Int, Int)) {
+    let (at, start, count, seg_from, seg_count, n, segs_now, _) = s
+    "layer \{at} at \{start} for \{count} (now \{n}), pieces at \{seg_from} for \{seg_count} (now \{segs_now})"
+  }
+  for s in spans {
+    let (_, start, count, seg_from, seg_count, n, _, room) = s
     if start < 0 || count < 0 || seg_from < 0 || seg_count < 0 || n < 0 {
-      return Some(what + ": less than none")
-    }
-    if start < end || seg_from < seg_end {
-      return Some(what + ": begun before the one before it ends, at \{end}, pieces at \{seg_end}")
+      return Some(what(s) + ": less than none")
     }
     if start + count > tail || seg_from + seg_count > pieces {
-      return Some(what + ": past the frame's \{tail} instances, \{pieces} pieces")
+      return Some(what(s) + ": past the frame's \{tail} instances, \{pieces} pieces")
     }
     if room < n {
-      return Some(what + ": drawn into \{room} instances")
+      return Some(what(s) + ": drawn into \{room} instances")
     }
-    end = start + count
-    seg_end = seg_from + seg_count
+  }
+  // (the instances in the order they are in, and the pieces in theirs, each apart: a layer raised over the scrim after
+  // one drawn before it has its instances after that one's, its pieces still before them, scene_spliced)
+  let by_insts = spans.copy()
+  by_insts.sort_by(fn(a, b) { (a.1, a.2).compare((b.1, b.2)) })
+  let mut end = 0
+  for s in by_insts {
+    if s.1 < end {
+      return Some(what(s) + ": begun before the one before it ends, at \{end}")
+    }
+    end = s.1 + s.2
+  }
+  let by_pieces = spans.copy()
+  by_pieces.sort_by(fn(a, b) { (a.3, a.4).compare((b.3, b.4)) })
+  let mut seg_end = 0
+  for s in by_pieces {
+    if s.3 < seg_end {
+      return Some(what(s) + ": its pieces begun before the ones before them end, at \{seg_end}")
+    }
+    seg_end = s.3 + s.4
   }
   None
 }
+
+///|
+/// A Tester's: how many frames were spliced (Ctx::scene_spliced), how many of them with the pieces of those drawn again
+/// in another order than their instances, and how many with one drawn to another number of instances.
+// kept across runs: counts on
+let spliced_said : Ref[(Int, Int, Int)] = Ref((0, 0, 0))

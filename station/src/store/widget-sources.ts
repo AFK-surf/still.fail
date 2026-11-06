@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { usesLegacyEdits } from "./schema.ts";
+import { legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
 
 // The effective files of messages in threads whose widget sources have been requested. Triggers follow both old and new
 // station processes while those threads are prepared. The source of truth remains the merged view.
@@ -32,33 +34,46 @@ export const WIDGET_SOURCE_ORIGINAL = `SELECT t.channel, t.thread_ts, json_extra
 
 const candidates = (row: string) => `SELECT ${row}.thread AS thread, ${row}.n AS n WHERE ${row}.kind = 'message'
   UNION SELECT ${row}.thread, ${row}.target WHERE ${row}.target IS NOT NULL`;
-const conflicts = `SELECT e.thread, e.n FROM entries e WHERE e.thread = NEW.thread AND e.n = NEW.n AND e.kind = 'message'
+const conflicts = (entryRowid = "NEW.rowid") => `SELECT e.thread, e.n FROM entries e WHERE e.thread = NEW.thread AND e.n = NEW.n AND e.kind = 'message'
   UNION SELECT e.thread, e.target FROM entries e WHERE e.thread = NEW.thread AND e.n = NEW.n AND e.target IS NOT NULL
   UNION SELECT e.thread, e.n FROM entries e WHERE NEW.ts IS NOT NULL AND e.thread = NEW.thread AND e.ts = NEW.ts AND e.kind = 'message'
   UNION SELECT e.thread, e.target FROM entries e WHERE NEW.ts IS NOT NULL AND e.thread = NEW.thread AND e.ts = NEW.ts AND e.target IS NOT NULL
-  UNION SELECT e.thread, e.n FROM entries e WHERE e.rowid = NEW.rowid AND e.kind = 'message'
-  UNION SELECT e.thread, e.target FROM entries e WHERE e.rowid = NEW.rowid AND e.target IS NOT NULL`;
+  UNION SELECT e.thread, e.n FROM entries e WHERE e.rowid = ${entryRowid} AND e.kind = 'message'
+  UNION SELECT e.thread, e.target FROM entries e WHERE e.rowid = ${entryRowid} AND e.target IS NOT NULL`;
 // A new message without a conflict can be added directly below. An edit needs the old projection only when it becomes
 // the latest and actually changes the effective files; replacements may also displace other messages or edits.
-const needsInsert = `(NEW.kind = 'message' AND NEW.target IS NOT NULL)
+const needsInsert = (legacyEdits: boolean, oldIndex: boolean, entryRowid = "NEW.rowid") => `(NEW.kind = 'message' AND NEW.target IS NOT NULL)
   OR (NEW.target IS NOT NULL AND EXISTS (SELECT 1 FROM merged m
     WHERE m.thread=NEW.thread AND m.n=NEW.target AND m.attachments IS NOT NEW.attachments
-      AND NOT EXISTS (SELECT 1 FROM entries x WHERE x.thread=NEW.thread AND x.target=NEW.target AND x.n>NEW.n)))
+      AND ${legacyEdits ? `COALESCE((${legacyEditLatest("NEW.thread","NEW.target","1",oldIndex)})<=NEW.n,1)`
+        : "NOT EXISTS (SELECT 1 FROM entries x WHERE x.thread=NEW.thread AND x.target=NEW.target AND x.n>NEW.n)"}))
   OR EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.n=NEW.n)
   OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.ts=NEW.ts))
-  OR EXISTS (SELECT 1 FROM entries e WHERE e.rowid=NEW.rowid)`;
+  OR EXISTS (SELECT 1 FROM entries e WHERE e.rowid=${entryRowid})`;
 // REPLACE can silently remove an entry in a different thread by rowid. A stage left by IGNORE is cleared on the next
 // write even when that write is outside the requested threads.
 const trackedInsert = `EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=NEW.thread)
   OR EXISTS (SELECT 1 FROM entries e JOIN widget_source_scopes s ON s.thread=e.thread WHERE e.rowid=NEW.rowid)
   OR EXISTS (SELECT 1 FROM widget_source_changed)`;
 const trackedUpdate = `(${trackedInsert}) OR EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=OLD.thread)`;
-const stage = (updating: boolean) => `DELETE FROM widget_source_changed WHERE thread IS NOT NULL;
+const stage = (updating: boolean, legacyEdits = false, oldIndex = false, entryRowid = "NEW.rowid") => `DELETE FROM widget_source_changed WHERE thread IS NOT NULL;
   INSERT INTO widget_source_changed (thread, n, existed, attachments, at, dirty)
     SELECT k.thread, k.n, m.n IS NOT NULL, m.attachments, m.created_at, 0
-    FROM (${candidates("NEW")} UNION ${conflicts}${updating ? ` UNION ${candidates("OLD")}` : ""}) k
+    FROM (${candidates("NEW")} UNION ${conflicts(entryRowid)}${updating ? ` UNION ${candidates("OLD")}` : ""}) k
     LEFT JOIN merged m ON m.thread = k.thread AND m.n = k.n
-    WHERE EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=k.thread)${updating ? "" : ` AND (${needsInsert})`};`;
+    WHERE EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=k.thread)${updating ? "" : ` AND (${needsInsert(legacyEdits,oldIndex,entryRowid)})`};`;
+// The older lookup expands to several SQLite subqueries. Put that work behind a view trigger, so SQLite allocates the
+// large trigger frame only for an entry whose widget scope actually needs staging. The view carries the entry rowid
+// explicitly because a replacement can displace a tracked entry in a different thread.
+const beforeGate = (oldIndex: boolean) => `CREATE VIEW widget_source_before_gate(thread,n,kind,target,ts,entry_rowid,attachments) AS
+  SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL WHERE 0;
+  CREATE TRIGGER widget_source_before_gate_run INSTEAD OF INSERT ON widget_source_before_gate
+    BEGIN ${stage(false,true,oldIndex,"NEW.entry_rowid")} END;`;
+const beforeAdd = (legacyEdits: boolean) => `CREATE TRIGGER widget_source_before_add BEFORE INSERT ON entries
+  WHEN ${trackedInsert} BEGIN ${legacyEdits
+    ? `INSERT INTO widget_source_before_gate(thread,n,kind,target,ts,entry_rowid,attachments)
+        VALUES(NEW.thread,NEW.n,NEW.kind,NEW.target,NEW.ts,NEW.rowid,NEW.attachments);`
+    : stage(false)} END;`;
 const changed = `(c.dirty = 1 OR c.existed IS NOT (m.n IS NOT NULL)
   OR c.attachments IS NOT m.attachments OR c.at IS NOT m.created_at)`;
 const changes = `SELECT c.thread, c.n FROM widget_source_changed c
@@ -96,10 +111,37 @@ const updated = `OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR O
 
 export function installWidgetSources(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='widget_source_meta'").get() !== undefined;
-  if (installed()) { checkWidgetSources(db); return; }
+  const beforeAddSql = () => (db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='widget_source_before_add'").get() as { sql: string } | undefined)?.sql;
+  const needsBeforeAdd = () => {
+    const sql = beforeAddSql();
+    if (sql === undefined) return false;
+    const gated = sql.includes("widget_source_before_gate");
+    const gate = db.prepare("SELECT 1 FROM sqlite_master WHERE type='view' AND name='widget_source_before_gate'").get() !== undefined;
+    const gateTrigger = db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='widget_source_before_gate_run'").get() !== undefined;
+    const legacy = usesLegacyEdits(db);
+    return gated !== legacy || gate !== legacy || gateTrigger !== legacy || (!gated && sql.includes("FROM entries x INDEXED BY entries_target"));
+  };
+  const updateBeforeAdd = () => {
+    if (needsBeforeAdd()) {
+      const legacy = usesLegacyEdits(db);
+      db.exec(`DROP TRIGGER widget_source_before_add;
+        DROP TRIGGER IF EXISTS widget_source_before_gate_run; DROP VIEW IF EXISTS widget_source_before_gate;
+        ${legacy ? beforeGate(legacyEditsUseOldIndex(db)) : ""} ${beforeAdd(legacy)}`);
+    }
+  };
+  if (installed()) {
+    checkWidgetSources(db);
+    if (!needsBeforeAdd()) return;
+    db.exec("BEGIN IMMEDIATE");
+    try { checkWidgetSources(db); updateBeforeAdd(); db.exec("COMMIT"); }
+    catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+    return;
+  }
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!installed()) db.exec(`
+    if (!installed()) {
+      const legacy = usesLegacyEdits(db);
+      db.exec(`
       CREATE TABLE widget_source_meta (id INTEGER PRIMARY KEY CHECK (id=1), version INTEGER NOT NULL) WITHOUT ROWID;
       INSERT INTO widget_source_meta SELECT 1, ${VERSION};
       CREATE TABLE widget_source_scopes (thread INTEGER PRIMARY KEY, last_n INTEGER, end_n INTEGER, complete INTEGER NOT NULL) WITHOUT ROWID;
@@ -109,7 +151,8 @@ export function installWidgetSources(db: DatabaseSync): void {
       CREATE TABLE widget_source_invalid (thread INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY(thread,n)) WITHOUT ROWID;
       CREATE TABLE widget_source_changed (thread INTEGER NOT NULL, n INTEGER NOT NULL, existed INTEGER NOT NULL,
         attachments TEXT, at INTEGER, dirty INTEGER NOT NULL, PRIMARY KEY(thread,n)) WITHOUT ROWID;
-      CREATE TRIGGER widget_source_before_add BEFORE INSERT ON entries WHEN ${trackedInsert} BEGIN ${stage(false)} END;
+      ${legacy ? beforeGate(legacyEditsUseOldIndex(db)) : ""}
+      ${beforeAdd(legacy)}
       CREATE TRIGGER widget_source_add AFTER INSERT ON entries WHEN EXISTS (SELECT 1 FROM widget_source_changed) BEGIN ${reconcile} END;
       CREATE TRIGGER widget_source_fast_add AFTER INSERT ON entries WHEN NEW.kind='message' AND NEW.target IS NULL
         AND EXISTS (SELECT 1 FROM widget_source_scopes WHERE thread=NEW.thread)
@@ -127,7 +170,7 @@ export function installWidgetSources(db: DatabaseSync): void {
         WHEN NOT EXISTS (SELECT 1 FROM entries WHERE thread=OLD.id)
         BEGIN DELETE FROM widget_source_scopes WHERE thread=OLD.id; END;
     `);
-    else checkWidgetSources(db);
+    } else { checkWidgetSources(db); updateBeforeAdd(); }
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }

@@ -172,13 +172,13 @@ fn panel_node(
             }
           })
         }
-        // (the side of what opened it it went on, as the tree placed it (View::went_told: flipped there for want of room,
+        // (the side of what opened it it went on, as the tree placed it (View::owed_went: flipped there for want of room,
         // told as it goes to the other): what its parts keep nearest what opened it is by that side (panel_opens_up), read
         // as each is built, so built again as it goes to the other side, never as it only moves; what was told before
         // given back after, for no other panel to read)
         let opened = fn() {
           let was = beside_given.val
-          beside_given.val = { side: p.went_told().unwrap_or(x.side), room: 1.0e9, panel: 0 }
+          beside_given.val = { side: p.owed_went().unwrap_or(x.side), room: 1.0e9, panel: 0 }
           was
         }
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what

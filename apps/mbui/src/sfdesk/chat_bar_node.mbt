@@ -72,8 +72,9 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
   let native = fn() { @sf.native_on() }
   let jobs = fn() { (src.topic)("chatJobs", chat_jobs_summary_params(r)).value }
   chat_bar_said(parent, src, w, r, view, chat)
-  let popup = @sf.popup_root_node(parent)
-  let tips = @sf.TipLayer::new(fn() { Some(popup) })
+  // (its tips' window layer made as a tip first shows, its panels' as one first opens: never as the bar is built in
+  // a layout, a pane's, which lays out nothing of the window's: popup_root_lazy, popup_root_when)
+  let tips = @sf.TipLayer::new({ let tips_layer = @sf.popup_root_lazy(parent); fn() { Some(tips_layer()) } })
   let info_at : Ref[@view.View?] = Ref(None)
   let jobs_at : Ref[@view.View?] = Ref(None)
   let room = fn(p : @view.View, n : () -> Double) {
@@ -181,6 +182,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
     room(row, fn() { let (_, _, ml, mr) = page_bar_room(); mr + dmin(0.0, ml) })
   }) |> ignore
   let active = fn() { app.nav.drawn_stay().0 == stint && view() is Some(_) }
+  @sf.popup_root_when(parent, fn() { active() && (chat_own.info_open.get() || chat_own.jobs_open.get()) }, fn(popup) {
   popup.pick(fn() { (@sf.native_side(), column_short.get()) }, fn(layer, arrangement) {
     let (from_side, short) = arrangement
     // This branch chooses the window layer's anchor; it must keep the window's room for the panel beside it.
@@ -204,6 +206,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
       }, fn() { chat_own.jobs_open.set(false) }, w=jobs_pop_w,
       side=if from_side && !short { Left } else { Bottom },
       along=if from_side && !short { Start } else { End })
+  })
   })
 }
 
