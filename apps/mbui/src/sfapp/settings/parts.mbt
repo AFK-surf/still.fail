@@ -1089,11 +1089,11 @@ fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 ///|
 /// The wide frame's row words (pages.css.ts listRow, cardRowText: 13; what is under them 12).
 // kept across runs: a value (no field of it changes)
-let wide_row_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full)
+let wide_row_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, weight=Medium, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Full)
+let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, weight=Medium, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1110,7 +1110,7 @@ let wide_value : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=
 ///|
 /// A row's title: the body's words on one line, as wide as the row lets them.
 // kept across runs: a value (no field of it changes)
-let row_title_words : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@sf.full_words)
+let row_title_words : @ui.TextStyle = @sf.body.then(row_title_strong).then(@sf.one_line).then(@sf.full_words)
 
 ///|
 /// A row's title with a tag after it: its words' width, on one line.
@@ -1118,9 +1118,15 @@ let row_title_words : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@sf.full_
 let row_title_tagged : @ui.TextStyle = @sf.body.then(@sf.one_line)
 
 ///|
+/// A row's title as strong as the library's rows' titles (link_row's, a switch row's: Medium), so a page's rows of this
+/// file and of the library read as one (2026-11-06, 左子健: 共享调试的标题为啥没有加粗，为啥跟别的设置项不一样; 检查所有同类问题).
+// kept across runs: a value (no field of it changes)
+let row_title_strong : @ui.TextStyle = @ui.text_style(weight=Medium)
+
+///|
 /// A row's title in lines where it is long.
 // kept across runs: a value (no field of it changes)
-let row_title_lines : @ui.TextStyle = @sf.body.then(@sf.full_words)
+let row_title_lines : @ui.TextStyle = @sf.body.then(row_title_strong).then(@sf.full_words)
 
 ///|
 /// A row's title with a line under it, as wide as the row lets them; the title in lines where it is long, or cut to
@@ -1249,26 +1255,6 @@ fn row_icon(c : @ui.Ctx, name : String) -> Unit {
 /// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
 // kept across runs: a value (no field of it changes)
 let near_beside : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-/// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
-/// in still.fail's colours; the row it is in takes the tap. Its knob slides as mbui's switch's does
-/// (`@kit.switch_knob` by `key`, unique where it is asked); Android's jumps.
-pub fn switch(c : @ui.Ctx, key : String, on : Bool) -> Unit {
-  let t = @sf.theme()
-  @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
-    c,
-    {
-      on,
-      t: @kit.switch_knob(c, key, on),
-      hovered: false,
-      pressed: false,
-      held: 0.0,
-      focus_shown: false,
-      disabled: false,
-    },
-  )
-}
 
 ///|
 /// A connect's presence, a station's state (PageParts.kt PresenceDot): online green, at work the accent, failing red,

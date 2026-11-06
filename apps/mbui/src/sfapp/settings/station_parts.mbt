@@ -449,7 +449,9 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
               row_title(c, tr("android-misc.adb.title"))
               let adb = text(view, "adb")
               doing_mark(c, there && (text(view, "phase") != "offered" || adb == "" || adb == "connecting"), None)
-              switch(c, "adb-switch", there)
+              // (the library's switch, as every switch's look; the row takes the press, its mark of what is on its way
+              // beside it)
+              @sf.switch_look(c, "adb-switch", there)
             }) {
             if there {
               act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
@@ -575,12 +577,8 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             }
             if grant {
               let busy = is_doing(core, ["adb.grant"], [])
-              if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
-                  // (its switch across the row's middle: a round control out of the row's corners)
-                  row_lines(c, tr("android-misc.adb.grant.title"), "", wrap_title=true)
-                  doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
-                  switch(c, "adb-grant", false)
-                }) {
+              // (the library's switch row, as every setting's)
+              if @sf.switch_row(c, "adb-grant", tr("android-misc.adb.grant.title"), false, busy~) {
                 act(
                   core,
                   tr("android-misc.adb.grantWhat"),
@@ -712,13 +710,9 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
       blocks.push(fn() {
         list_card(c, fn() {
           let on = flag(view, "on")
-          // (the switch in the row's middle, off its corners, as settings' switches are; what it is for one short line
-          // beside it, 2026-11-06 左子健: 字有点太多了, 还是字小一点简洁一点放下边吧)
-          if list_row(c, key="adb-on", fn() {
-              c.box(style=fill_words, fn() { row_lines(c, tr("android-misc.adb.title"), tr("android-misc.adb.on.note"), wrap_sub=true) })
-              |> ignore
-              switch(c, "adb-on-switch", on)
-            }) {
+          // (the library's switch row, as every setting's: its title as strong as 默认最长授权's under it, the switch alone
+          // answering; 2026-11-06 左子健: 共享调试的标题为啥没有加粗，为啥跟别的设置项不一样)
+          if @sf.switch_row(c, "adb-on-switch", tr("android-misc.adb.title"), on, note=tr("android-misc.adb.on.note")) != on {
             // (turned on: the notification it shows allowed, and Wireless debugging on where the app may)
             if !on {
               if @ui.notice_permission() != "granted" {
