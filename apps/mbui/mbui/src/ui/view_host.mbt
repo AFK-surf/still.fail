@@ -1378,6 +1378,10 @@ fn Ctx::tree_step(
     // composited: Ctx::scene_layer_outside)
     let skippable = scene_layer_skippable(tree, p, c)
     if skippable && self.scene_layer_left_out(c.id, ox + x, oy + y, clip_top()) {
+      match scene.layers.get(c.id) {
+        Some(l) => scene_left_out(l, scene.drawing, self.ninst, self.segs.length() / 4)
+        None => ()
+      }
       return
     }
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none

@@ -2074,7 +2074,9 @@ fn Ctx::scene_emitted(
     // (wholly outside what it is drawn in and the window where it is put: left out, as the walk leaves it out)
     match scene.layers.get(cid) {
       Some(c) if along =>
-        if !self.scene_layer_put_out(c, moved) {
+        if self.scene_layer_put_out(c, moved) {
+          scene_left_out(c, None, self.ninst, self.segs.length() / 4)
+        } else {
           self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
         }
       // (as kept where nothing of it changed, where it was put; moved in it, put where it is now, its block moved by
@@ -2082,12 +2084,19 @@ fn Ctx::scene_emitted(
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
       Some(c) =>
         if scene_copyable(c) && (c.shown == (0.0, 0.0) || scene_still(c)) {
-          if !self.scene_layer_put_out(c, (0.0, 0.0)) {
+          if self.scene_layer_put_out(c, (0.0, 0.0)) {
+            scene_left_out(c, None, self.ninst, self.segs.length() / 4)
+          } else {
             self.scene_emitted(p, c)
           }
         } else {
           match self.scene_moved_by(p.tree, l, c) {
-            Some(m) => if !self.scene_layer_put_out(c, m) { self.scene_emitted(p, c, moved=m) }
+            Some(m) =>
+              if self.scene_layer_put_out(c, m) {
+                scene_left_out(c, None, self.ninst, self.segs.length() / 4)
+              } else {
+                self.scene_emitted(p, c, moved=m)
+              }
             None => self.scene_redrawn_in(p, l, c)
           }
         }
@@ -2343,6 +2352,7 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
   guard scene_place_now(tree, c) is Some(place) else { return }
   // (wholly outside what it is drawn in and the window: left out, as the walk leaves it out)
   guard !self.scene_layer_put_out(c, (place.0 - c.held.0 - c.shown.0, place.1 - c.held.1 - c.shown.1)) else {
+    scene_left_out(c, None, self.ninst, self.segs.length() / 4)
     return
   }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
@@ -2588,9 +2598,7 @@ fn scene_layer_skippable(tree : @view.Tree, p : TreePaint, c : @view.Content) ->
 /// and the window (Flutter's picture culled whole as it is composited; what is inside drawn whole, cut where it is put).
 fn Ctx::scene_layer_left_out(self : Ctx, id : @view.NodeId, x : Double, y : Double, k : Int) -> Bool {
   // (one holding what changed or moved in it: drawn, what changed of it reaching where it reaches now)
-  guard scene.layers.get(id) is Some(l) && scene_kept_but_place(l) && l.skippable && !scene.holding.contains(id) else {
-    return false
-  }
+  guard scene.layers.get(id) is Some(l) && scene_skip_may(l) else { return false }
   let (cx0, cy0, cx1, cy1) = (clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3])
   self.scene_reach_out(l, x - l.held.0 - l.shown.0, y - l.held.1 - l.shown.1, cx0, cy0, cx1, cy1)
 }
@@ -2599,7 +2607,7 @@ fn Ctx::scene_layer_left_out(self : Ctx, id : @view.NodeId, x : Double, y : Doub
 /// Whether kept layer `c`, put as far again from where it is as (`mx`, `my`) (its holder put as kept), is left out
 /// (Ctx::scene_layer_left_out): by the clip it began in, as its holder has it.
 fn Ctx::scene_layer_put_out(self : Ctx, c : SceneLayer, m : (Double, Double)) -> Bool {
-  guard scene_kept_but_place(c) && c.skippable && !scene.holding.contains(c.id) else { return false }
+  guard scene_skip_may(c) else { return false }
   self.scene_reach_out(c, m.0, m.1, c.clip[0], c.clip[1], c.clip[2], c.clip[3])
 }
 
@@ -2622,4 +2630,36 @@ fn Ctx::scene_reach_out(
   let (ax0, ay0) = (dmax(cx0, 0.0), dmax(cy0, 0.0))
   let (ax1, ay1) = (dmin(cx1, self.width), dmin(cy1, self.height))
   x0 + mx >= ax1 || y0 + my >= ay1 || x1 + mx <= ax0 || y1 + my <= ay0
+}
+
+///|
+/// Whether layer `l` may be left out by where it reached as last drawn: drawn the frame before (or left out then),
+/// nothing of it nor of what it holds changed or moved in it (marked, told, holding one that is), nothing of it drawn
+/// otherwise than by the tree or each frame, nothing drawn moved after it is drawn (scene_layer_skippable). The same
+/// in a frame drawn anew (a check's): whether it is left out is no matter of what is kept.
+fn scene_skip_may(l : SceneLayer) -> Bool {
+  l.seen >= 0 &&
+  l.seen >= scene.frame - 1 &&
+  l.skippable &&
+  !l.own_only &&
+  !l.each &&
+  !l.told &&
+  !scene.marked.contains(l.id) &&
+  !scene.holding.contains(l.id)
+}
+
+///|
+/// Layer `l` left out of the frame (wholly outside what it is drawn in and the window), at instance `k` and piece `s`:
+/// kept as it is, said seen in it with nothing in it, so the frame after leaves it out or puts it where it comes to;
+/// what holds it (`outer`, where one is being drawn) keeps a reference to it.
+fn scene_left_out(l : SceneLayer, outer : SceneLayer?, k : Int, s : Int) -> Unit {
+  l.start = k
+  l.count = 0
+  l.seg_from = s
+  l.seg_count = 0
+  l.seen = scene.frame
+  match outer {
+    Some(o) => o.inner.push(l.id)
+    None => ()
+  }
 }
