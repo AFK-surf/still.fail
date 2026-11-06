@@ -2372,7 +2372,7 @@ pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
 
-pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool) -> TipHand
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool, shortcut? : () -> String, passive_hold? : Bool) -> TipHand
 
 pub let title : @ui.TextStyle
 
