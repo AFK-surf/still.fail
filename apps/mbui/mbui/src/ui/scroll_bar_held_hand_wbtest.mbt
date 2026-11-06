@@ -24,13 +24,14 @@ fn hand_bar() -> @view.ScrollBar {
 ///|
 /// A window 400×300 with the pointer a mouse's: across (not `down`), a column 200×60 scrolling across what it holds,
 /// 600 wide padded `pad()` at each side, its bar in by that; `down`, a column 60 wide `tall()` tall scrolling down what it
-/// holds, 600 tall. `covered` a button over all of the window while set; `said` what is done with the column as `host`
+/// holds, 600 tall. `covered` a button over all of the window while set, `cover` its node and how often it was pressed; `said` what is done with the column as `host`
 /// hands on what it has once (on_host_said). Its bar brought out by the wheel at 10, drawn at 0 and 300.
 fn hand_window(
   pad : () -> Double,
   down? : Bool = false,
   tall? : () -> Double = fn() { 200.0 },
   covered? : @signals.Signal[Bool] = @signals.signal(false),
+  cover? : Ref[(@view.NodeId?, Int)] = Ref((None, 0)),
   host? : OnceHad = OnceHad::new(),
   said? : (@view.View) -> Unit = fn(_) {  },
 ) -> (Tester, @view.Scroll) {
@@ -57,7 +58,8 @@ fn hand_window(
     })
     |> ignore
     root.show(fn() { covered.get() }, fn(k) {
-      k.over(Is(true)).on_press(fn() {  }) |> ignore
+      cover.val = (Some(k.id()), cover.val.1)
+      k.over(Is(true)).on_press(fn() { cover.val = (cover.val.0, cover.val.1 + 1) }) |> ignore
     })
   })
   t.frame_at(0.0)
@@ -246,12 +248,28 @@ test "across, in by its padding changed with no frame between: a button over it 
   let at = 316.0
   let p = hand_middle(fn() { hand_window(fn() { 40.0 }) }, at)
   let covered = @signals.signal(false, same=fn(a, b) { a == b })
+  let cover : Ref[(@view.NodeId?, Int)] = Ref((None, 0))
   let pad = @signals.signal(10.0, same=fn(a, b) { a == b })
-  let (t, s) = hand_window(fn() { pad.get() }, covered~)
+  let (t, s) = hand_window(fn() { pad.get() }, covered~, cover~)
   pad.set(40.0)
   covered.set(true)
-  let r = hand_press(t, s, p, at)
-  assert_true(!r.took && r.moved == 0.0, msg="\{r}")
+  let tree = view_tree().unwrap()
+  let from = s.at(tree)
+  t.advance(at - t.time())
+  t.touch_at(0, p.0, p.1, at)
+  // (the press the button's, as the host took it: held by it, over the thumb there at that moment)
+  let held = match view_held.val {
+    Some(Node(id)) => Some(id)
+    _ => None
+  }
+  let target = tree.target_at(p.0, p.1)
+  t.touch_at(2, p.0, p.1, at)
+  t.frame_at(at + 40.0)
+  assert_true(cover.val.0 is Some(_), msg="the button made")
+  assert_eq(held, cover.val.0, msg="the press held by the button")
+  assert_true(target == @view.Target::Pressed(cover.val.0.unwrap()), msg="the button over all at the press")
+  assert_eq(cover.val.1, 1, msg="pressed once")
+  assert_true(!hand_holds_thumb() && s.at(tree) == from, msg="the thumb not taken, the column not moved")
 }
 
 ///|
@@ -286,14 +304,15 @@ test "down: the column's height changed alone, one place pressed at one moment t
 }
 
 ///|
-test "across, in by its padding: the padding changed as the host hands something on, the column laid out there (laid_size): the bar painted, pressed and moved as one made so, a frame before it or none" {
+test "across, in by its padding: the padding changed as the host hands something on, the column laid out there (laid_size): the bar painted, pressed and moved as one made so, handed on in a frame before the press or in the frame at its moment" {
   let at = 316.0
   let p = hand_middle(fn() { hand_window(fn() { 40.0 }) }, at)
   let fresh = {
     let (t, s) = hand_window(fn() { 40.0 })
     hand_press(t, s, p, at)
   }
-  // (handed on as the frame at 308 begins: drawn by it; or as the press's tree is brought to it, no frame between)
+  // (handed on as the frame at 308 begins, drawn by it; or as the frame at the press's own moment begins, drawn then,
+  // the press after it at that moment)
   let each = fn(frame : Bool) {
     let host = OnceHad::new()
     let pad = @signals.signal(10.0, same=fn(a, b) { a == b })
@@ -312,7 +331,7 @@ test "across, in by its padding: the padding changed as the host hands something
   }
   let framed = each(true)
   let at_press = each(false)
-  println("handed on: fresh \{fresh}; a frame before \{framed}; at the press \{at_press}")
+  println("handed on: fresh \{fresh}; in a frame before \{framed}; in the frame at the press \{at_press}")
   assert_true(hand_alike(framed, fresh), msg="a frame before: \{framed}")
   assert_true(hand_alike(at_press, fresh), msg="at the press's frame: \{at_press}")
 }
