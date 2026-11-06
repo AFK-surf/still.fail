@@ -42,6 +42,7 @@ on:
 jobs:
   # (a job of its own: a failure here is not the host's contracts' failure, and takes none of their time)
   log-files:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     runs-on: windows-latest
     timeout-minutes: 5
     defaults:
@@ -63,7 +64,47 @@ jobs:
           grep -q 'handle line https://a.example/p?token=hunter3' out/logs/stderr.txt
           grep -q 'after the stall' out/logs/stderr.txt
 
+  explorer-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Real HGLOBAL contracts
+        run: |
+          mkdir -p out/host/explorer
+          cl.exe -nologo -W3 -D_CRT_SECURE_NO_WARNINGS -I"$MOON_HOME/include" -Isrc/host scripts/win_drop_test.c -Foout/host/explorer/ -Feout/host/explorer/win_drop_test.exe user32.lib shell32.lib ole32.lib uuid.lib
+          out/host/explorer/win_drop_test.exe
+      - name: Build retained node probe
+        run: APP=drop_probe bash scripts/win.sh build
+      - name: Drag from Explorer into the app
+        run: |
+          printf 'hello from Explorer\n' > out/host/explorer/mbui-drag-source
+          env MBUI_BENCH=-1 MBUI_WIN=560x400 ./out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe > out/host/explorer/probe.log 2>&1 &
+          proc=$!
+          pid=$(cat /proc/$proc/winpid)
+          code=0
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$PWD/test/host/explorer-drop-probe.ps1")" -AppId "$pid" -FilePath "$(cygpath -w "$PWD/out/host/explorer/mbui-drag-source")" -LogPath "$(cygpath -w "$PWD/out/host/explorer/probe.log")" -ShotPath "$(cygpath -w "$PWD/out/host/explorer/hover.png")" || { code=$?; kill "$proc" 2>/dev/null || :; }
+          wait "$proc" || :
+          cat out/host/explorer/probe.log
+          exit "$code"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-drop-probe
+          path: apps/mbui/mbui/out/host/explorer/
+          if-no-files-found: ignore
+
   contracts:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     runs-on: windows-latest
     timeout-minutes: 5
     defaults:
