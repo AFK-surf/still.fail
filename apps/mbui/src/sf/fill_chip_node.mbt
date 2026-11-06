@@ -37,6 +37,8 @@ pub fn fill_chip_node(
     b
     .bone_whole(Is(true))
     .height(Is(Some(if small { fill_chip_small_h } else { fill_chip_h })))
+    .cuts(Is(true))
+    .min_width(Is(Some(0.0)))
     .radius(Is(fill_chip_corner))
     .ground(By(fn() { @ui.tree_theme().neutral }))
     .lies_along(Is(Middle))
@@ -58,16 +60,19 @@ pub fn fill_chip_node(
     b.box(fn(w) {
       w
       .row(Is(true))
+      .min_width(Is(Some(0.0)))
       .padding(Is(if small { (5.0, 0.0, 5.0, 0.0) } else { (8.0, 0.0, 8.0, 0.0) }))
       .gap(By(fn() { if chip_joined(mark(), words()) { 0.0 } else { 5.0 } }))
       .lines_up(Is(Some(Middle)))
       |> ignore
       w.show(fn() { mark() != "" }, fn(m) {
         m.words(By(mark)).words_look(By(fn() { @ui.style_words(chip_text) })).ink(By(fn() { @ui.style_ink(chip_text) }))
+        .cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true))
         |> ignore
       })
       w.box(fn(n) {
         n.words(By(words)).words_look(By(fn() { @ui.style_words(chip_text) })).ink(By(fn() { @ui.style_ink(chip_text) }))
+        .cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true))
         |> ignore
       })
       |> ignore

@@ -97,6 +97,31 @@ test "station meter nodes keep the row's eight-point gap" {
 }
 
 ///|
+test "station meter alerts give way inside a narrow row and keep their full accessible readings" {
+  let room = @signals.signal(180.0, same=fn(a, b) { a == b })
+  let memory = meter_reading("Memory", "amber", "left 5.0 GB", "27 / 32 GB", 16)
+  let disk = meter_reading("Disk", "red", "left 1.0 GB", "99 / 100 GB", 1)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=500.0, h=160.0, platform=0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let tips = @sf.TipLayer::new(fn() { Some(root) })
+    root.box(fn(holder) {
+      holder.width(By(fn() { Some(room.get()) })) |> ignore
+      meter_chips_node(holder, fn() { [memory, disk] }, tips~, alerts=true)
+    }) |> ignore
+  })
+  t.draw()
+  let m = t.get(Text, label="Memory left 5.0 GB · Memory 27 / 32 GB")
+  let d = t.get(Text, label="Disk left 1.0 GB · Disk 99 / 100 GB")
+  let (mx, _, mw, _) = m.rect
+  let (dx, _, dw, _) = d.rect
+  assert_true(mx >= 0.0 && mw > 0.0 && dx > mx && dx + dw <= 180.0, msg=t.semantics_dump())
+  room.set(500.0)
+  t.draw()
+  assert_true(t.find("left 5.0 GB") is Some(_) && t.find("left 1.0 GB") is Some(_), msg=t.drawn_text())
+}
+
+///|
 test "a station meter follows its level's tint without changing its words or fill" {
   let meters = @signals.signal([meter_reading("Memory", "amber", "left 5 G", "27 / 32 G", 16)], same=fn(a, b) { a == b })
   let t = meter_row_tester(meters, false, 0)

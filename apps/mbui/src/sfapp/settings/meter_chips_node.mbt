@@ -11,7 +11,7 @@ pub fn meter_chips_node(
   alerts? : Bool = false,
 ) -> Unit {
   parent.box(fn(row) {
-    row.row(Is(true)).height(Is(Some(20.0))).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
+    row.row(Is(true)).height(Is(Some(20.0))).min_width(Is(Some(0.0))).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
     // Key by the mark, as meter_chip does, so inserting or reordering readings cannot give an open tip to another one.
     // Count equal marks before filtering, so a repeated mark still has its own node as other levels change.
     row.each(
@@ -29,7 +29,10 @@ pub fn meter_chips_node(
         visible
       },
       fn(item) { (item.0, item.1) },
-      fn(chip, item) { @sf.meter_chip_node(chip, fn() { Some(item.get().2) }, tips~) |> ignore },
+      fn(chip, item) {
+        chip.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
+        @sf.meter_chip_node(chip, fn() { Some(item.get().2) }, tips~) |> ignore
+      },
     )
   }) |> ignore
 }
