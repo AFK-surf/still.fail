@@ -4317,7 +4317,8 @@ pub fn View::fits(self : View, on : Live[Bool]) -> View {
 ///|
 /// Whether its row left it out as it was last laid out (View::drops), followed: told once all of the layout is done, as
 /// one change of all its rows left out.
-pub fn View::left_out(self : View) -> Bool {
+/// Owed: as View::owed_laid_size (what is left out said in the layout of what holds it: layout_box).
+pub fn View::owed_left_out(self : View) -> Bool {
   self.tree.outs_said.get() |> ignore
   match self.live() {
     Some(n) => n.out
@@ -7234,9 +7235,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     let (p, o, why) = self.laid_pass(upto)
     placing = placing || p
     ordered = ordered || o
-    // (one pass a frame (retained.md rule 10): a pass more only for what is owed, each counted by what it is, the count
-    // only ever smaller; anything else that marks the tree in its own layout is a fault, saying where it marked it)
-    if self.due {
+    // (one layout a frame (retained.md rule 10): what comes after it places, never lays out again (a column brought to
+    // what is to be in sight moves what it holds: placed, in this frame); a layout more only for what is owed, each
+    // counted by what it is, the count only ever smaller; anything else that marks the tree's layout in its own layout
+    // is a fault, saying where it marked it)
+    if self.due && self.layout_due {
       if why == "" {
         // (a fault: stopped in a test's run, told the host once; where it goes on, laid out the next frame, not again
         // in this one)

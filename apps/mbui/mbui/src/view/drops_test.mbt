@@ -47,7 +47,7 @@ fn drops_row(
           m
           .width(Is(Some(40.0)))
           .drops(Is(-1))
-          .words(By(fn() { "+\{["b1", "b2", "b3", "b4"].filter(fn(k) { views[k].left_out() }).length()}" }))
+          .words(By(fn() { "+\{["b1", "b2", "b3", "b4"].filter(fn(k) { views[k].owed_left_out() }).length()}" }))
           |> ignore
         })
         |> ignore
@@ -67,7 +67,7 @@ test "drops: a row 400 wide holding four 100 wide: all of them, no ⋯; 260 wide
   let ids : Map[String, @view.NodeId] = {}
   let views : Map[String, @view.View] = {}
   let t = drops_row(w, pressed, ids, views)
-  let outs = fn() { ["b1", "b2", "b3", "b4", "more"].filter(fn(k) { views[k].left_out() }) }
+  let outs = fn() { ["b1", "b2", "b3", "b4", "more"].filter(fn(k) { views[k].owed_left_out() }) }
   assert_eq(outs(), ["more"], msg="400: all four, no ⋯")
   // (what the last two take input as, followed together)
   let takes : Array[(Bool, Bool)] = []
@@ -126,7 +126,7 @@ test "drops: what a node left out hosts not read out by its id; that node let go
     time=fn() { 0.0 },
   )
   t.frame(800.0, 300.0) |> ignore
-  assert_true(views["b"].left_out(), msg="150 wide: the second left out")
+  assert_true(views["b"].owed_left_out(), msg="150 wide: the second left out")
   assert_false(t.reads_out(ids["hosted"]), msg="what it hosts: not read out by its id")
   let was = ids["b"]
   t.event(10.0, fn() { shown.set(false) })
@@ -137,10 +137,10 @@ test "drops: what a node left out hosts not read out by its id; that node let go
   })
   // (made, not laid out yet: nothing of the one before in it)
   assert_true(ids["b"].at == was.at && ids["b"].gen != was.gen, msg="made again in its place: \{was.at} \{was.gen}, \{ids["b"].at} \{ids["b"].gen}")
-  assert_false(views["b"].left_out(), msg="made, before a frame: not left out")
+  assert_false(views["b"].owed_left_out(), msg="made, before a frame: not left out")
   assert_true(t.reads_out(ids["hosted"]), msg="what it hosts, before a frame: read out")
   t.frame(800.0, 300.0) |> ignore
-  assert_false(views["b"].left_out(), msg="room for it: the new one not left out")
+  assert_false(views["b"].owed_left_out(), msg="room for it: the new one not left out")
   assert_true(t.drawn_of(ids["b"]) is Some(_), msg="the new one drawn")
 }
 

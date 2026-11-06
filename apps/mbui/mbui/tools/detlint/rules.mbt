@@ -69,7 +69,7 @@ let built_by_hand : Array[String] = ["forget_parts", "built_from_changed"]
 /// a Ctx's reads of where or how large a node was laid out (layout-read-back)
 let layout_read_back : Array[String] = [
   "rect_of", "laid_size", "laid_rect", "owed_laid_size", "owed_laid_window", "owed_drawn_window", "owed_went",
-  "owed_once_laid_out",
+  "owed_once_laid_out", "owed_left_out",
 ]
 
 ///|
