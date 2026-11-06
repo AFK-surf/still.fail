@@ -763,12 +763,10 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
-  /// every binding's watch and what runs it, by a number of its own, while it lives (let go as it stops): what is asked
-  /// at once (View::laid_size, Tree::bring_to) pulls those whose reads changed by then, told or not
-  pulls : Map[Int, (@signals.Watch, Bound)]
-  mut pulls_made : Int
+  /// how many bindings live: what is asked at once (View::laid_size, Tree::bring_to) pulls those whose reads changed
+  mut pulls_held : Int
   /// those marked as what they read changed, since they last ran (Tree::pull)
-  pulls_marked : Array[Int]
+  pulls_marked : Array[Bound]
   mut layout_due : Bool
   /// the node whose own layout (View::layout_box) is running now, building and measuring its children (-1 none)
   mut layout_owner : Int
@@ -990,6 +988,7 @@ struct Bound {
   mut queued : Bool
   mut marked : Bool
   mut live : Bool
+  mut watch : @signals.Watch?
   mut run : () -> Unit
 }
 
@@ -1054,8 +1053,7 @@ pub fn Tree::new(
     after_paint: [],
     first_drawn: [],
     bindings_due: [],
-    pulls: {},
-    pulls_made: 0,
+    pulls_held: 0,
     pulls_marked: [],
     timeline: [],
     told: 0,
@@ -1755,7 +1753,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
-  self.pulls.clear()
+  self.pulls_held = 0
   self.pulls_marked.clear()
   self.timeline.clear()
   self.changed.clear()
@@ -2001,11 +1999,9 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  } }
+  let b : Bound = { queued: false, marked: false, live: true, watch: None, run: fn() {  } }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
-  let k = self.pulls_made
-  self.pulls_made = k + 1
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
@@ -2020,7 +2016,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
-      self.pulls_marked.push(k)
+      self.pulls_marked.push(b)
     }
   })
   b.run = fn() {
@@ -2037,11 +2033,14 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     self.cause_at = was
   }
   (b.run)()
-  self.pulls[k] = (w, b)
+  b.watch = Some(w)
+  self.pulls_held += 1
   fn() {
+    if !b.live { return }
     b.live = false
     b.run = fn() {  }
-    self.pulls.remove(k)
+    b.watch = None
+    self.pulls_held -= 1
     w.stop()
   }
 }
@@ -2055,9 +2054,9 @@ fn Tree::pull(self : Tree) -> Unit {
   while self.pulls_marked.length() > 0 {
     let marked = self.pulls_marked.copy()
     self.pulls_marked.clear()
-    for k in marked {
-      match self.pulls.get(k) {
-        Some((w, b)) if b.marked => {
+    for b in marked {
+      match b.watch {
+        Some(w) if b.live && b.marked => {
           self.work.pulled = self.work.pulled + 1
           if w.changed_now() {
             (b.run)()
@@ -2074,7 +2073,7 @@ fn Tree::pull(self : Tree) -> Unit {
 ///|
 /// How many bindings the tree holds (each property bound By, while its node lives): for a test to see what is let go.
 pub fn Tree::bindings_held(self : Tree) -> Int {
-  self.pulls.length()
+  self.pulls_held
 }
 
 ///|
@@ -6600,11 +6599,8 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
   }
   self.bindings_due.clear()
   // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
-  let still = self.pulls_marked.filter(fn(k) {
-    match self.pulls.get(k) {
-      Some((_, b)) => b.marked
-      None => false
-    }
+  let still = self.pulls_marked.filter(fn(b) {
+    b.live && b.watch is Some(_) && b.marked
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
