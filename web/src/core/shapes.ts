@@ -86,6 +86,14 @@ export interface AdbGrant {
 	lastUsedAt?: number;
 	/** Last use in words, refreshed each minute. */
 	time?: Record<string, Stamp>;
+	/** Whose: the account of its workspace. */
+	sub?: string;
+	/** Granted before signatures: nothing lends on it until it is signed. */
+	unsigned?: boolean;
+	/** Waiting, and this device is not on that account's own lock: it joins as it allows. */
+	join?: boolean;
+	/** Its station is from before signatures: nothing allowed there lends. */
+	oldStation?: boolean;
 	/** Granted: whether this device, as the phone, takes it: signed by a device on the person's own lock pinned here (docs/personal-lock.md). */
 	held?: boolean;
 }
@@ -116,10 +124,14 @@ export interface AdbPersonalPair {
 	error?: string;
 	until?: number;
 	untilText?: string;
+	/** The devices showing the code, by name. */
+	showing?: string[];
 }
 
 /** The person's own lock as this device has it (docs/personal-lock.md, the `adbShare` topic's `personal`). */
 export interface AdbPersonal {
+	sub: string;
+	email: string;
 	/** `none` (no lock yet), `member`, `outside` (a lock this device is not on), `replaced` (the cloud has another than the one pinned here). */
 	standing: string;
 	devices?: AdbPersonalDevice[];
@@ -160,8 +172,10 @@ export interface AdbShareView {
 	lends?: AdbLend[];
 	/** The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them. */
 	screens?: string[];
-	/** The person's own lock as this device has it (docs/personal-lock.md). */
-	personal?: AdbPersonal;
+	/** Each account's own lock as this device has it (docs/personal-lock.md). */
+	personal?: AdbPersonal[];
+	/** The live grants from before signatures, waiting to be signed here (`adb.personalConfirm`). */
+	toConfirm?: number;
 }
 
 export interface AgentCardLine {
@@ -557,6 +571,14 @@ export interface Attachment {
 	 * picture; absent for every other file.
 	 */
 	upload?: string;
+	/** Whose: the account of its workspace. */
+	sub?: string;
+	/** Granted before signatures: nothing lends on it until it is signed. */
+	unsigned?: boolean;
+	/** Waiting, and this device is not on that account's own lock: it joins as it allows. */
+	join?: boolean;
+	/** Its station is from before signatures: nothing allowed there lends. */
+	oldStation?: boolean;
 	/**
 	 * In a chat's page: its picture (an image's thumbnail, a video's still) is kept on this device, a decode away
 	 * (the app's first page waits for it); absent for every other file.

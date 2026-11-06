@@ -8,6 +8,10 @@
 // nothing could reach it.
 
 ///|
+// kept across runs: reset with the page's state (settings reset)
+let phone_joining : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
+
+///|
 /// The request's card while it waits: its words, and its answer where it is the viewer's (`mine`) and a core is there.
 /// `how`: the 共享调试 page opened, where this phone lacks something first.
 pub fn phone_card(
@@ -42,10 +46,9 @@ pub fn phone_card(
 }
 
 ///|
-/// Whether this device is outside the person's own lock, or remembers another than the cloud has.
-fn adb_outside(view : Json?) -> Bool {
-  let standing = text(field(view, "personal"), "standing")
-  standing == "outside" || standing == "replaced"
+/// A request as the core has it (`adbShare`'s `grants`): whose it is, and what stands in its way.
+fn phone_row(core : Core, request : String) -> Json? {
+  items((core.topic)("adbShare", Map([])).value, "grants").iter().find_first(fn(g) { text(Some(g), "id") == request })
 }
 
 ///|
@@ -53,14 +56,14 @@ fn adb_outside(view : Json?) -> Bool {
 /// and 查看步骤 (`how`) in 允许's place.
 fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit) -> Unit {
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
-  let lacks = match adb_ready(c) {
+  let row = phone_row(core, request)
+  // (a station from before signatures: allowed, nothing would lend)
+  let lacks = if flag(row, "oldStation") { Some(tr("android-misc.personal.updateStation")) } else { match adb_ready(c) {
     AdbLacks(step) => Some(step)
     // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
     AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
-    // (on a person's own lock it does not know: allowed, it could sign nothing; joined on its page)
-    AdbLends if adb_outside((core.topic)("adbShare", Map([])).value) => Some(tr("android-misc.adb.ask.personal"))
     _ => None
-  }
+  } }
   // (up to its owner's 默认最长授权, starting at the longest)
   let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
   let scope = match vault_picked.get("phone/" + request) {
@@ -95,6 +98,16 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       }
     })
   }
+  // Allowed on a device outside the person's own lock: it joins right here (the code shown on a device on it), then the
+  // request goes on as it was allowed.
+  let sub = text(row, "sub")
+  let joining = phone_joining.contains(request)
+  if joining && !flag(row, "join") {
+    phone_joining.remove(request)
+    decide(true)
+  } else if joining {
+    personal_join(c, core, personal_of((core.topic)("adbShare", Map([])).value, sub), "phone/" + request)
+  }
   match lacks {
     Some(step) => c.text(fill("android-misc.adb.ask.first", [("step", step)]), style=@sf.ask_note) |> ignore
     None => ()
@@ -104,8 +117,13 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       if @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary) {
         how()
       }
-    } else if @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
-      decide(true)
+    } else if !joining && @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
+      if flag(row, "join") {
+        phone_joining[request] = true
+        (core.call)("adb.personalJoin", obj([("sub", str(sub))]), fn(_) {  })
+      } else {
+        decide(true)
+      }
     }
     if @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under) {
       decide(false)

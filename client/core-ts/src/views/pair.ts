@@ -673,7 +673,14 @@ export function personalBegin(inner: Inner, sub: string): Effect.Effect<unknown,
 export const personalProve = (inner: Inner, typed: string): Effect.Effect<unknown, CoreError> => prove(inner, typed);
 export const personalCancel = (inner: Inner): void => cancel(inner);
 /// How far this device's try to join the person's own lock got (`adbShare`'s `personal.pair`).
-export const personalPairState = (inner: Inner, sub: string): J => mine(inner, personOf(sub));
+export const personalPairState = (inner: Inner, sub: string): J => {
+  const at = mine(inner, personOf(sub));
+  if (at === null) return null;
+  // Which of the person's devices show the code, by name: where to look.
+  const y = tryings.get(inner);
+  const known = new Map(inner.adb.personal().approvers(sub).map((d) => [d.id, d.label]));
+  return { ...at, showing: [...(y?.met.keys() ?? [])].map((id) => known.get(id) ?? "").filter((n) => n !== "") };
+};
 
 function cancel(inner: Inner): void {
   const y = tryings.get(inner);

@@ -59,6 +59,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Profiles(only) => profiles_page(c, core, here, only)
     Archive => archive_page(c, core, here)
     AdbShare(a) => adb_page(c, core, here, a)
+    PersonalLock => personal_lock_page(c, core)
     NewProfile(a) => new_profile_page(c, core, here, a)
     ProfileAccount(k) => profile_account_page(c, core, here, k)
     KeptFiles => kept_page(c, core)

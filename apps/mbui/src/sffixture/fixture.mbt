@@ -836,7 +836,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "phase": "off",
         "tunnels": 0,
         "on": f.mode != "chat-phone-off",
-        "personal": { "standing": if f.mode == "chat-phone-outside" { "outside" } else { "member" }, "devices": [] },
+        "personal": [{ "sub": "s", "email": "lin@example.com", "standing": if f.mode == "chat-phone-outside" { "outside" } else { "member" }, "devices": [], "pair": { "state": "code", "devices": 1, "showing": ["MacBook Pro"] } }],
+        "grants": if f.mode == "chat-phone-outside" { [{ "id": "p-1", "status": "pending", "sub": "s", "join": true }] } else { [] },
       })
     // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))

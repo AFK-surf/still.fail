@@ -300,7 +300,7 @@ export class Core {
           changed: () => inner.store.invalidate({ topic: "adbShare" }),
         }),
         subOf: (workspace) => inner.workspaces.owner(workspace),
-        sub: () => inner.accounts.list()[0]?.sub ?? null,
+        subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
         pair: {
           begin: (sub) => personalBegin(inner, sub),
           code: (typed) => personalProve(inner, typed),
