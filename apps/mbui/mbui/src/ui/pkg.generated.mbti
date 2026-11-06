@@ -864,6 +864,13 @@ pub struct ClipboardRead {
 }
 pub fn ClipboardRead::got(Self) -> Clipboard?
 
+pub struct CodeField {
+  // private fields
+}
+pub fn CodeField::clear(Self) -> Unit
+pub fn CodeField::new() -> Self
+pub fn CodeField::text(Self) -> String
+
 #derive(Eq, Show, @debug.Debug)
 pub(all) enum Color {
   Clear
@@ -913,13 +920,6 @@ pub(all) enum Color {
   Exact(Int64)
   Data(Int64)
 }
-
-pub struct CodeField {
-  // private fields
-}
-pub fn CodeField::clear(Self) -> Unit
-pub fn CodeField::new() -> Self
-pub fn CodeField::text(Self) -> String
 
 type CoverAsk
 
