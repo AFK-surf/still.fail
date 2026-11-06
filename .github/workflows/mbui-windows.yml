@@ -72,10 +72,14 @@ jobs:
           scripts/textdiff.sh windows
           echo "textdiff: $((SECONDS - s)) s, its build's C:"
           grep -E ' compiled \(|^mbc: linked' "$MBC_LOG" | cut -c1-220 || true
+      # Keep the build distinct and trace its command: run 42303931969 exhausted the job's five minutes inside
+      # win.sh before its output said which part of the build was waiting.
+      - name: Build WebView2 example
+        if: matrix.check == 'webviews'
+        run: APP=webdemo bash -x scripts/win.sh build
       - name: Web views (WebView2) - a page, a site the app answers, and with no runtime to be had
         if: matrix.check == 'webviews'
         run: |
-          APP=webdemo scripts/win.sh build
           mkdir -p out/webviews
           D=$(cygpath -w "$PWD/out/webviews")
           EXE=out/win/mod/_build/native/release/build/webdemo/webdemo.exe
