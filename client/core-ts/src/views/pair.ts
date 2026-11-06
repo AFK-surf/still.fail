@@ -10,6 +10,12 @@
 // nothing. Its prompt closed (`lockPrompt.hide`), it is no longer shown and the code still holds: a person closes it
 // once they have read the code.
 //
+// Someone made a member after the lock was turned on is in none of its entries: the cloud says they are a member, and
+// nothing signs that as it happens (a web page may add them; they may not have signed in yet). An owner's or admin's
+// device shows the code for their first device all the same, and the code typed makes them a member of the lock as it
+// signs that device in (2026-11-06: a colleague added to a workspace in security mode asked, and no device anywhere
+// showed a code: 「他请求安全码根本跳不出来」).
+//
 // A new device (`lock.pair`, its waiting page): dials them all, and once one or more show a code, proves the code typed
 // (`lock.pairCode`) to each; the one whose code it was approves it. `me.pair` says how far it got. A trusted device that
 // ends it while nothing is typed (turned away, the code too old, gone) is heard at once, not once a code is typed: the
@@ -106,7 +112,8 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 /// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
 /// `personal`: it asks into this person's own locks, each account's it can be let into here, not a workspace
 /// (docs/personal-lock.md); `places` is empty then. `seed`: the key, read as the person was asked before the code showed.
-type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
+/// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on).
+type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -179,14 +186,16 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const upgrade = had !== undefined && had.kind === "app" && get(hello, "kind") === "app" && key !== null && had.sign_key !== key;
     if (lock.disabled || mine?.sign_key !== signer || !mine.own || (had !== undefined && !upgrade)) continue;
     const c = credentialOf(str(get(w, "credential")) ?? "", lock.cloudKeys, ws, peer, now);
-    if (c === null || !lock.members.has(c.sub) || (had !== undefined && c.sub !== had.sub)) continue;
+    if (c === null || c.sub === "" || (had !== undefined && c.sub !== had.sub)) continue;
     // Another person's: only their first device that signs, by an owner or admin (any later one they approve from a
     // device of their own: one approved for them would be no one's, signing nothing; lock-check.ts Device `own`).
     const role = lock.members.get(mine.sub);
     if (c.sub !== mine.sub && ((role !== "owner" && role !== "admin") || lock.signed.has(c.sub))) continue;
     who ??= c;
     if (c.sub !== who.sub) continue;
-    places.push({ ws, sub: c.sub, account });
+    // (not in the lock: the credential is the cloud's word they are a member; the person here, who gives them the code,
+    // is what makes it so)
+    places.push({ ws, sub: c.sub, account, ...(lock.members.has(c.sub) ? {} : { joins: true }) });
   }
   return { places, who };
 }
@@ -258,7 +267,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
 }
 
 /// The new device signed in where it asked and this device approves it: an app as one that signs too, a web page for
-/// WEB_DEVICE_SECS.
+/// WEB_DEVICE_SECS; its person made a member first where the lock has not heard of them.
 function approve(inner: Inner, a: Asking): Effect.Effect<J> {
   return Effect.gen(function* () {
     if (a.personal) {
@@ -278,7 +287,8 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const body: J = { id: a.device, sub: p.sub, kind: a.kind, label: a.label };
       if (a.kind === "app" && a.signKey !== null) body.sign_key = a.signKey;
       if (a.kind === "web") body.exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
-      const signed = yield* Effect.result(new Lock(inner, p.ws, p.account, null, true).append("device", body));
+      const lock = new Lock(inner, p.ws, p.account, null, true);
+      const signed = yield* Effect.result(Effect.andThen(p.joins === true ? lock.admit(p.sub, a.email) : Effect.void, lock.append("device", body)));
       if (signed._tag === "Success") done.push(p.ws);
       else failed.push({ ws: p.ws, error: signed.failure.message });
       yield* Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" });
@@ -293,14 +303,19 @@ function shown(inner: Inner): J[] {
   return [...askingsOf(inner).values()]
     .filter((a) => !a.hidden)
     .sort((a, b) => a.at - b.at)
-    .map((a) => ({
-      device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
-      deviceText: deviceText(a), until: a.until, untilText: untilText(inner, a.until),
-      workspaces: a.places.map((p) => {
-        const v = view(inner, p.ws);
-        return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
-      }),
-    }));
+    .map((a) => {
+      // Who reads the code out decides this: that it also lets someone new into the lock is said as they do.
+      const joins = a.places.filter((p) => p.joins === true).map((p) => nameOf(inner, p.ws));
+      return {
+        device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
+        deviceText: deviceText(a) + (joins.length > 0 ? t("core-misc.lock.pairJoins", { names: joins.join(t("core-misc.lock.listSep")) }) : ""),
+        until: a.until, untilText: untilText(inner, a.until),
+        workspaces: a.places.map((p) => {
+          const v = view(inner, p.ws);
+          return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
+        }),
+      };
+    });
 }
 
 /// 14:05 前有效: when a code is too old, as the clock says it here.
