@@ -2014,7 +2014,7 @@ pub fn segmented_height() -> Double
 
 pub fn segmented_item_w(Double, Int32) -> Double
 
-pub fn segmented_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, head? : Bool, said? : String) -> Unit
+pub fn segmented_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, head? : Bool, said? : String, bar? : Bool) -> Unit
 
 pub fn segmented_node_height(Look) -> Double
 

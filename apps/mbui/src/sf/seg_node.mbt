@@ -1,8 +1,6 @@
-// A choice of a few as nodes of the window's tree (segmented's, parts.mbt, its wide way: the web's Segmented): a quiet
-// pill track, the chosen one lifted out of it (the theme's lifted, a hairline round it) sliding to it as a thing moved
-// does (@motion's move_spring), its options equal columns as wide as the widest of their words in the chosen weight with
-// segmented_in either side, `item_w` at least; each chosen by a press, the arrows along it, a screen reader's
-// Activate, read out as a radio of a group.
+// A choice of a few as nodes of the window's tree (segmented's wide and bar ways, parts.mbt): a quiet pill track, the
+// chosen one lifted out of it and sliding to it. The wide track gives its options equal columns; the bar track gives
+// each its word's width. A press, an arrow or a screen reader's Activate chooses one, read out as a radio in a group.
 
 ///|
 /// Its options' columns as segmented has them: each as wide as the widest of their words in the chosen weight with
@@ -30,32 +28,60 @@ pub fn seg_node(
   item_w? : Double = 0.0,
   said? : String = "",
 ) -> @view.View {
+  seg_track_node(parent, labels, chosen, choose, item_w, said, false)
+}
+
+///|
+/// The wide and bar tracks share their input, semantics and thumb; the bar keeps each word's own width and does not
+/// give way to a pick when its container has less room.
+fn seg_track_node(
+  parent : @view.View,
+  labels : () -> Array[String],
+  chosen : () -> Int,
+  choose : (Int) -> Unit,
+  item_w : Double,
+  said : String,
+  bar : Bool,
+) -> @view.View {
+  let pad = if bar { segmented_bar_pad } else { segmented_pad }
+  let high = if bar { icon_button_side - 2.0 * pad } else { segmented_h }
+  let corner = if bar { high / 2.0 } else { segmented_corner }
+  let words_size = fn() { if bar { theme().t.meta } else { theme().t.ui } }
   // (measured again as all words are, the system's size of words changed: View::words_redone)
   let col = fn() {
     parent.words_redone() |> ignore
     seg_node_cols(labels(), item_w)
   }
+  let cols = fn() {
+    if bar {
+      parent.words_redone() |> ignore
+      let c = @ui.current()
+      let size = c.sp(words_size())
+      labels().map(fn(l) { dmax(item_w, choice_words_w(c, l, size, weight=500, tree=true) + 2.0 * segmented_bar_in) })
+    } else {
+      Array::make(labels().length(), col())
+    }
+  }
   let gaps = fn() { segmented_gap * (labels().length() - 1).to_double() }
   // (as wide as its columns, its track round them: what it is laid out before it gives way)
-  let whole = fn() { col() * labels().length().to_double() + gaps() + 2.0 * segmented_pad }
-  // (a line of its own round its track, whatever way `parent` lays out what it holds: the track's basis its width
-  // there; it gives way as the track does, down to nothing)
+  let whole = fn() { cols().fold(init=0.0, fn(s, w) { s + w }) + gaps() + 2.0 * pad }
+  // (a line of its own round its track, whatever way `parent` lays out what it holds: the wide track gives way as its
+  // line does; a bar's line stays as wide as the track, for the bar to arrange)
   parent.box(fn(line) {
-    line.row(Is(true)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+    line.row(Is(true)).width(By(fn() { if bar { Some(whole()) } else { None } })).shrink(Is(if bar { 0.0 } else { 1.0 })).min_width(Is(Some(0.0))) |> ignore
     line.box(fn(track) {
       // (its options' nodes, for the focus the arrows move)
       let options : Array[@view.View] = []
       let ink = fn() { theme().p.text }
       track
       .row(Is(true))
-      .radius(Is(segmented_corner + segmented_pad))
+      .radius(Is(corner + pad))
       .ground(By(fn() { alpha(ink(), 0.06) }))
-      // (as wide as its columns where its line has the room, giving way to what it has: down to nothing, its options
-      // fitted to it)
+      // (as wide as its columns; the wide track gives way to its line, with its options fitted to it)
       .basis(By(fn() { Some(whole()) }))
       // (as high as its options with its pad round them: not stretched to its line's height)
-      .height(Is(Some(segmented_h + 2.0 * segmented_pad)))
-      .shrink(Is(1.0))
+      .height(Is(Some(high + 2.0 * pad)))
+      .shrink(Is(if bar { 0.0 } else { 1.0 }))
       .min_width(Is(Some(0.0)))
       // (a roving group, as @kit.toggle_group's: Tab stops at the chosen one alone; ← and → go to the one before and after,
       // round from the ends, Home and End to the first and the last, each chosen and its focus as it is)
@@ -80,6 +106,9 @@ pub fn seg_node(
         match to {
           Some(i) => {
             if i != now {
+              if bar && @ui.pointing() is Finger {
+                @ui.haptic(TextHandleMove)
+              }
               choose(i)
             }
             match options.get(i) {
@@ -101,13 +130,13 @@ pub fn seg_node(
           // and the system's size of words have it; taken before the layout, followed)
           By(fn() {
             track.words_redone() |> ignore
-            (labels(), col(), gaps(), theme().t.ui)
+            (labels(), col(), gaps(), words_size())
           }),
           fn(at, room, _) {
             let (words, col, gaps, size) = at
             // (what its options have of the track's room: its pad round them, made by the child it picks)
-            let w = room - 2.0 * segmented_pad
-            if w < col * words.length().to_double() + gaps - 0.5 {
+            let w = room - 2.0 * pad
+            if !bar && w < col * words.length().to_double() + gaps - 0.5 {
               let f = fitted(@ui.current(), words, w - gaps, size, 500, segmented_in, segmented_least, tree=true)
               let key = "\{f.fit} \{f.widths}"
               fits[key] = Some(f)
@@ -125,7 +154,7 @@ pub fn seg_node(
             let widths = fn() {
               match f {
                 Some({ widths, fit: Whole | Smaller(_) }) => widths
-                _ => Array::make(labels().length(), col())
+                _ => cols()
               }
             }
             let smaller = fn() {
@@ -136,7 +165,7 @@ pub fn seg_node(
             }
             let x_of = fn(k : Int) {
               let ws = widths()
-              let mut x = segmented_pad
+              let mut x = pad
               for i in 0..<k {
                 x = x + ws.get(i).unwrap_or(0.0) + segmented_gap
               }
@@ -146,7 +175,7 @@ pub fn seg_node(
             // not side by side: the chosen one's words as its option has them (cut short where they must be), a chevron at
             // its end; pressed, a pick of them all beside it, the chosen one marked (search none: a few short words)
             // (its pad round what it holds: the track's, laid out by its room and filled by it)
-            v.padding(Is((segmented_pad, segmented_pad, segmented_pad, segmented_pad))) |> ignore
+            v.padding(Is((pad, pad, pad, pad))) |> ignore
             if f is Some({ fit: Menu, .. }) {
               v.box(fn(m) {
               let words = fn() { labels().get(chosen()).unwrap_or("") }
@@ -214,31 +243,57 @@ pub fn seg_node(
               // (the thumb's way from where the chosen one is in this arrangement)
               let way = @motion.Way::new(@signals.untracked(fn() { x_of(chosen()) }))
               strip.row(Is(true)).gap(Is(segmented_gap)) |> ignore
-              // (the thumb's way said at the moment the chosen one changes, from where it is then; where only where it is
-              // changes, its columns another width (the words' size, their language, the room), there at once)
-              let last = Ref(@signals.untracked(chosen))
-              strip.reacts(fn() { (chosen(), x_of(chosen())) }, fn(at) {
-                let (k, x) = at
-                if k == last.val {
-                  way.put(x)
-                } else {
-                  way.go(x, @motion.move_spring, at=strip.cause_at())
-                }
-                last.val = k
-              })
+              let first = @signals.untracked(chosen)
+              let cover : @signals.Signal[(Array[(Int, Double)], Int)] = @signals.signal(([(first, 1.0)], first))
+              let cover_way = EdgeWay::new(1.0)
+              if bar {
+                // A bar's options can have different widths. As in Ctx::cover, interpolate both edges, including
+                // when the choice changes again in flight; changing words or their size moves the endpoints with them.
+                strip.reacts(chosen, fn(k) {
+                  let (from, to) = @signals.untracked(fn() { cover.get() })
+                  if k != to {
+                    let p = cover_way.way.value_at(strip.cause_at())
+                    cover.set((@ui.cover_set_out(from, to, p), k))
+                    cover_way.go_from(strip, 0.0, 1.0, @motion.cover_spring)
+                  }
+                })
+                strip.owns(fn() { (cover_way.due)() }) |> ignore
+              } else {
+                // Where only a column's position changes, put the thumb there without starting another motion.
+                let last = Ref(first)
+                strip.reacts(fn() { (chosen(), x_of(chosen())) }, fn(at) {
+                  let (k, x) = at
+                  if k == last.val {
+                    way.put(x)
+                  } else {
+                    way.go(x, @motion.move_spring, at=strip.cause_at())
+                  }
+                  last.val = k
+                })
+              }
               // the thumb: where its way has it, as each frame draws it while it goes, as wide as the chosen one
               strip.box(fn(th) {
+                let bar_rect = fn() {
+                  let (from, to) = cover.get()
+                  @ui.cover_rect(from, to, cover_way.shown(th), fn(k) {
+                    if k >= 0 && k < labels().length() { Some((x_of(k), 0.0, w_of(k), high)) } else { None }
+                  }).unwrap_or((0.0, 0.0, 0.0, high))
+                }
                 let x = fn() {
-                  way.said()
-                  let now = th.logic_at()
-                  way.value_at(if way.goes_at(now) { th.drawn_at() } else { @double.infinity })
+                  if bar {
+                    bar_rect().0
+                  } else {
+                    way.said()
+                    let now = th.logic_at()
+                    way.value_at(if way.goes_at(now) { th.drawn_at() } else { @double.infinity })
+                  }
                 }
                 th
                 .over(Is(true))
-                .offset(By(fn() { (x() - segmented_pad, 0.0) }))
-                .width(By(fn() { Some(w_of(chosen())) }))
-                .height(Is(Some(segmented_h)))
-                .radius(Is(segmented_corner))
+                .offset(By(fn() { (x() - pad, 0.0) }))
+                .width(By(fn() { Some(if bar { bar_rect().2 } else { w_of(chosen()) }) }))
+                .height(Is(Some(high)))
+                .radius(Is(corner))
                 .ground(By(fn() { @ui.tree_theme().lifted }))
                 .edge(By(fn() { (0.5, theme().p.line) }))
                 .shadow(By(fn() { (1.0, 0.0, theme().p.shadow) }))
@@ -253,7 +308,7 @@ pub fn seg_node(
                 strip.box(fn(o) {
                   o
                   .width(By(fn() { Some(w_of(k)) }))
-                  .height(Is(Some(segmented_h)))
+                  .height(Is(Some(high)))
                   // (its words in its middle both ways, as the old view's option is: align and justify centre)
                   .lines_up(Is(Some(Middle)))
                   .lies_along(Is(Middle))
@@ -263,6 +318,9 @@ pub fn seg_node(
                   .says(By(fn() { Some(@view.said(Radio, label=label(), check=if on() { On } else { Off })) }))
                   .on_press(fn() {
                     if !@signals.untracked(on) {
+                      if bar && @ui.pointing() is Finger {
+                        @ui.haptic(TextHandleMove)
+                      }
                       choose(k)
                     }
                   })
@@ -272,7 +330,7 @@ pub fn seg_node(
                     w
                     .words(By(label))
                     .words_look(By(fn() {
-                      let size = theme().t.ui * smaller()
+                      let size = words_size() * smaller()
                       // (its line so many times its size as drawn, at the system's size of words: an old view's words' as
                       // Ctx::text has them, where none is said (a negative line: view_line's))
                       { size, weight: if on() { 500 } else { 400 }, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
@@ -768,7 +826,9 @@ pub fn seg_head_node(
 /// A choice of a few on a page made once (segmented's), by how the page is laid out (look_node), in `slot`, which it
 /// lays out: narrow, Seg (seg_fill_node) sharing its line, the slot growing from none to what the line leaves it, or
 /// at a head's end (`head`) as wide as its options (seg_head_node); wide, the web's Segmented (seg_node), as wide as
-/// its options, the slot as wide as it. `labels`, `chosen`, `choose`, `said`: theirs.
+/// its options, the slot as wide as it. `bar`, on either page, keeps the bar's 32-high track and each option as wide
+/// as its own words, leaving it to the bar to arrange where space is short. `labels`, `chosen`, `choose`, `said`:
+/// theirs; the labels' words may change, but their number stays the same while this node is mounted.
 pub fn segmented_node(
   slot : @view.View,
   labels : () -> Array[String],
@@ -776,7 +836,14 @@ pub fn segmented_node(
   choose : (Int) -> Unit,
   head? : Bool = false,
   said? : String = "",
+  bar? : Bool = false,
 ) -> Unit {
+  if bar {
+    // The slot participates in its parent's row too: let the bar give way or drop another item before this choice.
+    slot.keeps_held(Is(true)) |> ignore
+    seg_track_node(slot, labels, chosen, choose, 0.0, said, true) |> ignore
+    return
+  }
   match look_node(slot) {
     Wide => seg_node(slot, labels, chosen, choose, said~) |> ignore
     Narrow if head => seg_head_node(slot, labels, chosen, choose, said~) |> ignore
