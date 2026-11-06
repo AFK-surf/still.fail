@@ -16,6 +16,8 @@ import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, installArchivePolicyIndex } from
 import { installDecisionTimeIndex } from "../src/store/legacy-decision-time.ts";
 import { LEGACY_LAST_DECISION_REPAIR, installDecisionSessionIndex } from "../src/store/legacy-decision-session.ts";
 import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
+import { installLegacySaid, LEGACY_SAID_BOUNDARY_TAIL, LEGACY_SAID_DRAIN, LEGACY_SAID_DRAIN_THREAD,
+  LEGACY_SAID_HEAD_FIRST, LEGACY_SAID_HEAD_TAIL, LEGACY_SAID_NEEDS_DRAIN } from "../src/store/legacy-said-build.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
 import { CARD_POST_AFTER, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE } from "../src/store/card-post-index.ts";
@@ -1647,6 +1649,25 @@ test("what the station asks again and again is planned by an index, never a scan
   assertChatSharePlans();
   assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
+  const oldSaid = memory();
+  installLegacySaid(oldSaid.db);
+  const oldSaidPlan = (sql: string, ...args: (number | string)[]) =>
+    (oldSaid.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
+  const needsDrain = oldSaidPlan(LEGACY_SAID_NEEDS_DRAIN,1);
+  assert.ok(needsDrain.some((line) => line.includes("legacy_said_dirty USING PRIMARY KEY (thread=?)")), needsDrain.join(" | "));
+  for (const [sql,args] of [
+    [LEGACY_SAID_HEAD_FIRST,[1]], [LEGACY_SAID_HEAD_TAIL,[1]], [LEGACY_SAID_BOUNDARY_TAIL,[1,100,"alice"]],
+  ] as [string,(number | string)[]][]) {
+    const plan = oldSaidPlan(sql,...args);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH ") && line.includes("(thread=?")), plan.join(" | "));
+    assert.ok(!plan.some((line) => /^SCAN (e|entries)\b/.test(line)), plan.join(" | "));
+  }
+  for (const [sql,args] of [[LEGACY_SAID_DRAIN,[64]], [LEGACY_SAID_DRAIN_THREAD,[1,64]]] as [string,number[]][]) {
+    const plan = oldSaidPlan(sql,...args);
+    assert.ok(plan.every((line) => !line.includes("TEMP B-TREE")), plan.join(" | "));
+    if (sql === LEGACY_SAID_DRAIN_THREAD)
+      assert.ok(plan.some((line) => line.includes("SEARCH d USING PRIMARY KEY (thread=?)")), plan.join(" | "));
+  }
   const store = memory();
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);

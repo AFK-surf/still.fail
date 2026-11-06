@@ -47,6 +47,57 @@ export function legacySaidLatest(except?: string): string {
 export const LEGACY_SAID_LATEST = legacySaidLatest();
 export const LEGACY_SAID_SCAN = "SELECT n, author_kind, author FROM legacy_said WHERE thread = ?1 AND n < ?2 ORDER BY n DESC LIMIT ?3";
 
+type SaidHead = { n: number; author_kind: string; author: string };
+type HeadProbe = { n: number | null; author_kind: string | null; author: string | null };
+
+export const LEGACY_SAID_NEEDS_DRAIN = `SELECT 1 FROM legacy_said_meta m WHERE m.id=1 AND m.scanned=1 AND EXISTS (
+    SELECT 1 FROM legacy_said_dirty WHERE thread=?1 LIMIT 1 OFFSET 64)`;
+export const LEGACY_SAID_HEAD_FIRST = `SELECT CASE WHEN e.kind='message' AND e.letter IS NULL THEN e.n END AS n,
+    CASE WHEN e.kind='message' AND e.letter IS NULL THEN e.author_kind END AS author_kind,
+    CASE WHEN e.kind='message' AND e.letter IS NULL THEN e.author END AS author
+    FROM entries e WHERE e.thread=? ORDER BY e.n DESC LIMIT 1`;
+export const LEGACY_SAID_HEAD_TAIL = `WITH tail AS MATERIALIZED (
+      SELECT n,kind,letter,author_kind,author FROM entries WHERE thread=? ORDER BY n DESC LIMIT 65
+    ), latest AS MATERIALIZED (
+      SELECT n,author_kind,author FROM tail WHERE kind='message' AND letter IS NULL ORDER BY n DESC LIMIT 1
+    ) SELECT (SELECT n FROM latest) AS n,(SELECT author_kind FROM latest) AS author_kind,
+      (SELECT author FROM latest) AS author,(SELECT COUNT(*) FROM tail) AS count`;
+export const LEGACY_SAID_BOUNDARY_TAIL = `WITH tail AS MATERIALIZED (
+      SELECT n,kind,letter,author_kind,author FROM entries WHERE thread=?1 AND n<?2 ORDER BY n DESC LIMIT 65
+    ) SELECT (SELECT n FROM tail WHERE kind='message' AND letter IS NULL
+      AND NOT (author_kind='person' AND author=?3) ORDER BY n DESC LIMIT 1) AS n,
+      (SELECT COUNT(*) FROM tail) AS count`;
+// Order by integer keys, not their text aliases: the latter require sorting the whole dirty queue.
+export const LEGACY_SAID_DRAIN = "SELECT CAST(d.thread AS TEXT) thread,CAST(d.n AS TEXT) n FROM legacy_said_dirty d ORDER BY d.thread,d.n LIMIT ?";
+export const LEGACY_SAID_DRAIN_THREAD = "SELECT CAST(d.thread AS TEXT) thread,CAST(d.n AS TEXT) n FROM legacy_said_dirty d WHERE d.thread=? ORDER BY d.n LIMIT ?";
+
+/// A completed lookup can merge at most 64 changed keys without walking an unbounded changed tail.
+export function legacySaidThreadNeedsDrain(db: DatabaseSync, thread: number): boolean {
+  return db.prepare(LEGACY_SAID_NEEDS_DRAIN).get(thread) !== undefined;
+}
+
+/// Return an exact latest message when the source tail or a small changed set proves it. A larger changed set is
+/// left for the requested worker to fold in bounded slices. The not-yet-prepared lookup still uses its old reader.
+export function legacySaidReadHead(db: DatabaseSync, thread: number): { known: boolean; row?: SaidHead } {
+  const first = db.prepare(LEGACY_SAID_HEAD_FIRST).get(thread) as HeadProbe | undefined;
+  if (!first) return { known: true };
+  if (first.n !== null) return { known: true, row: first as SaidHead };
+  if (!legacySaidThreadNeedsDrain(db, thread)) {
+    return { known: true, row: db.prepare(LEGACY_SAID_LATEST).get(thread) as SaidHead | undefined };
+  }
+  // Only qualifying keys cross into JavaScript; an unrelated entry's 64-bit n need not fit a JavaScript number.
+  const tail = db.prepare(LEGACY_SAID_HEAD_TAIL).get(thread) as HeadProbe & { count: number };
+  if (tail.n !== null) return { known: true, row: tail as SaidHead };
+  return { known: tail.count < 65 };
+}
+
+/// A short raw tail can also prove the last message from another author while changed keys are being folded.
+export function legacySaidReadBoundary(db: DatabaseSync, thread: number, before: number, author: string):
+  { known: boolean; other: number | null } {
+  const result = db.prepare(LEGACY_SAID_BOUNDARY_TAIL).get(thread,before,author) as { n: number | null; count: number };
+  return { known: result.n !== null || result.count < 65, other: result.n };
+}
+
 // Mark before the entry changes. The view reads marked keys from entries, so it remains correct regardless of the
 // order in which other triggers run, and even if INSERT OR IGNORE never runs an AFTER INSERT trigger. A REPLACE may
 // remove several rows without firing their DELETE triggers, including one identified only by its rowid. Do not fold
@@ -193,14 +244,14 @@ export function publishLegacySaid(db: DatabaseSync): boolean {
 }
 
 /// Fold no more than `limit` dirty keys back into the shadow, including keys left by ignored writes or deletes.
-export function legacySaidDrain(db: DatabaseSync, limit = BATCH): number {
+function drain(db: DatabaseSync, limit: number, thread?: number): number {
   limitOf(limit);
   db.exec("BEGIN IMMEDIATE");
   try {
     const m = meta(db);
     if (m.version !== VERSION) throw new Error(`legacy said version ${m.version} is incompatible with ${VERSION}`);
-    const keys = db.prepare(`SELECT CAST(thread AS TEXT) thread,CAST(n AS TEXT) n FROM legacy_said_dirty
-      ORDER BY thread,n LIMIT ?`).all(limit) as { thread: string; n: string }[];
+    const select = thread === undefined ? LEGACY_SAID_DRAIN : LEGACY_SAID_DRAIN_THREAD;
+    const keys = (thread === undefined ? db.prepare(select).all(limit) : db.prepare(select).all(thread,limit)) as { thread: string; n: string }[];
     const drop = db.prepare("DELETE FROM legacy_said_build WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)");
     const put = db.prepare(`INSERT INTO legacy_said_build(thread,n,author_kind,author)
       SELECT thread,n,author_kind,author FROM entries WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)
@@ -210,6 +261,13 @@ export function legacySaidDrain(db: DatabaseSync, limit = BATCH): number {
     db.exec("COMMIT");
     return keys.length;
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+export function legacySaidDrain(db: DatabaseSync, limit = BATCH): number { return drain(db,limit); }
+
+/// A reader waiting on one chat does not need to drain earlier, unrelated chats first.
+export function legacySaidDrainThread(db: DatabaseSync, thread: number, limit = BATCH): number {
+  return drain(db,limit,thread);
 }
 
 /// Check only the metadata and the first changed key. A previous connection can write without a local notification.

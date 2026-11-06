@@ -23,7 +23,7 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
-import { hasLegacySaid, LEGACY_HAS_UNREAD, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
+import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -479,20 +479,32 @@ export class SaidUnavailable extends Refused {
 }
 
 export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
-  const r = one(s, s.legacySaid ? LEGACY_SAID_LATEST : SAID_LATEST, thread);
-  if (!r) return null;
-  const state = r.author_kind === "person" ? one(s, SAID_STATE, thread) : null;
-  const boundary = saidBoundary(state, r);
-  let other = boundary.other;
-  if (!boundary.known) {
-    // Most old chats can answer from a few nearby messages without recording any history at all. For a longer run,
-    // leave the reader and prepare only this chat in bounded slices before trying the snapshot again.
-    const nearby = all(s, s.legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
-    const previous = nearby.find((p) => p.author_kind !== "person" || p.author !== r.author);
-    if (previous) other = previous.n;
-    else if (nearby.length === SAID_BATCH_SIZE) throw new SaidUnavailable([thread]);
-  }
-  return { n: r.n, authorKind: r.author_kind, author: r.author, other };
+  // On old stores the bounded head probe, dirty-key check and boundary read must see the same snapshot.
+  if (s.legacySaid) s.db.exec("SAVEPOINT said_read");
+  try {
+    const head = s.legacySaid ? legacySaidReadHead(s.db, thread) : { known: true, row: one(s, SAID_LATEST, thread) };
+    if (!head.known) throw new SaidUnavailable([thread]);
+    const r = head.row;
+    if (!r) return null;
+    const state = r.author_kind === "person" ? one(s, SAID_STATE, thread) : null;
+    const boundary = saidBoundary(state, r);
+    let other = boundary.other;
+    if (!boundary.known) {
+      // Most old chats can answer from a few nearby messages without recording any history at all. For a longer run,
+      // leave the reader and prepare only this chat in bounded slices before trying the snapshot again.
+      if (s.legacySaid && legacySaidThreadNeedsDrain(s.db, thread)) {
+        const near = legacySaidReadBoundary(s.db,thread,r.n,r.author);
+        if (!near.known) throw new SaidUnavailable([thread]);
+        other = near.other;
+      } else {
+        const nearby = all(s, s.legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
+        const previous = nearby.find((p) => p.author_kind !== "person" || p.author !== r.author);
+        if (previous) other = previous.n;
+        else if (nearby.length === SAID_BATCH_SIZE) throw new SaidUnavailable([thread]);
+      }
+    }
+    return { n: r.n, authorKind: r.author_kind, author: r.author, other };
+  } finally { if (s.legacySaid) s.db.exec("RELEASE said_read"); }
 }
 
 /// Where a viewer read each of these chats to (none: nothing of it).
