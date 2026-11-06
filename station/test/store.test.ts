@@ -62,6 +62,7 @@ import { VaultStore } from "../src/vault/store.ts";
 import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, RUNNER_TAKEUP_NAMES, RUNNER_TAKEUP_SESSIONS, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
   SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
 import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_ARGUMENTS, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_INITIAL, SESSION_DIR_LIVE_FEW, SESSION_DIR_LIVE_MANY, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
+import { installChatShareIndex, SHARE_DIRTY, SHARE_DUE, SHARE_FIRST, SHARE_LAPSED_WORKSPACE, SHARE_LIVE, SHARE_NEXT, SHARE_NEXT_TIME } from "../src/store/chat-share-index.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -124,6 +125,23 @@ function assertSandboxPlans() {
     assert.match(sql, /LIMIT \?$/);
   assert.match(plan(SANDBOX_SCAN_NEXT, "s", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
   assert.match(plan(SANDBOX_PRUNE_NEXT, "s", "z", 64), /SEARCH sandbox_name_rows USING PRIMARY KEY .*session>\?/);
+}
+
+function assertChatSharePlans() {
+  const db = memory().db;
+  installChatShareIndex(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  for (const [sql, args] of [[SHARE_LIVE, [0]], [SHARE_DUE, [0, 1]]] as const) {
+    const p = plan(sql, ...args);
+    assert.match(p, /SEARCH t USING COVERING INDEX chat_share_target_time .*used>\?/);
+    assert.match(p, /SEARCH c USING INDEX sqlite_autoindex_chat_shares_1 .*session=\?/);
+    assert.doesNotMatch(p, /SCAN (?:t|c|chat_shares)\b/);
+  }
+  assert.match(plan(SHARE_NEXT_TIME, 0), /SEARCH t USING COVERING INDEX chat_share_target_time .*used>\?/);
+  assert.match(plan(SHARE_LAPSED_WORKSPACE, "w", 0), /SEARCH t USING COVERING INDEX chat_share_target_workspace .*workspace=\? AND used<\?/);
+  assert.match(plan(SHARE_NEXT, "s", "z", 64), /SEARCH chat_shares USING COVERING INDEX sqlite_autoindex_chat_shares_1 .*session>\?/);
+  for (const sql of [SHARE_FIRST, SHARE_NEXT, SHARE_DIRTY]) assert.match(sql, /LIMIT \?$/);
 }
 
 function assertSessionDirectoryPlans() {
@@ -1556,6 +1574,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assertAwakeJobPlan();
   assertSessionJobPlans();
   assertSandboxPlans();
+  assertChatSharePlans();
   assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
@@ -1770,6 +1789,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertAwakeJobPlan();
   assertSessionJobPlans();
   assertSandboxPlans();
+  assertChatSharePlans();
   assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
