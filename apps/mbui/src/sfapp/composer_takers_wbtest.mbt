@@ -157,3 +157,42 @@ test "a file picked for a chat, the picker answering as the frame begins and the
     assert_eq(a.files.get().length(), a_before + 1, msg="\{width}: once, back on it")
   }
 }
+
+///|
+test "a file quoted and a file shared into a chat while its station is offline: left for its composer, taken once as the station is back, the same composer" {
+  let calls : Array[Made] = []
+  let off = @signals.signal(true)
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !off.get() {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["offline"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  let draft = "ws1/st1:s-c1"
+  let w = @sfbase.writings.get(draft).unwrap()
+  let quotes = w.quotes.get().length()
+  let adds = fn() { named(calls, "composer.add").length() }
+  let adds_before = adds()
+  @sfbase.quote_file_into(draft, "林", "1.0", "user", Json::object({ "name": Json::string("plan.md"), "size": Json::number(1200.0) }))
+  @sfbase.shared_into[draft] = [{ name: "a.png", bytes: b"\x89PNG\r\n\x1a\n", held: 0, size: 8.0, src: "" }]
+  @sfbase.draft_given_to(draft)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(w.quotes.get().length(), quotes, msg="no quote put in while offline")
+  assert_eq(adds(), adds_before, msg="no file put in while offline")
+  assert_true(@sfbase.quoted_into.contains(draft) && @sfbase.shared_into.contains(draft), msg="both left for the composer")
+  off.set(false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(w.quotes.get().length(), quotes + 1, msg="the quote in the draft once the station is back")
+  assert_eq(adds(), adds_before + 1, msg="the file put in once the station is back")
+  assert_true(!@sfbase.quoted_into.contains(draft) && !@sfbase.shared_into.contains(draft), msg="nothing left waiting")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(w.quotes.get().length(), quotes + 1, msg="not again")
+  assert_eq(adds(), adds_before + 1, msg="not again")
+}
