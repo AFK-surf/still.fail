@@ -1,17 +1,18 @@
 // A layer put elsewhere than it was drawn (a list's rows scrolled) and copied as kept comes to what drawing it anew
 // there comes to, number for number (the Tester's check of every frame, Ctx::scene_check): what it holds lying between
-// its pixels (a tenth of a point, three tenths of a pixel at scale 3), it moved by whole pixels.
+// its pixels (a tenth of a point, a fifth of a pixel at scale 2), it moved by whole pixels (29.5 points, as a phone's
+// list was flung, 59 of its pixels).
 
 ///|
 test "rows scrolled by whole pixels, what they hold between pixels: copied as kept, the same as drawn anew, number for number" {
-  let t = Tester::new(fn(_) {  }, w=390.0, h=600.0, scale=3.0)
+  let t = Tester::new(fn(_) {  }, w=390.0, h=600.0, scale=2.0)
   set_view_app(fn(root) {
     root
     .width(Is(Some(390.0)))
     .height(Is(Some(600.0)))
     .scrolls_window(@view.Scroll::list(), fn() { Array::makei(200, fn(i) { i }) }, est=199.0 / 3.0, fn(row, k) {
       row.height(Is(Some(199.0 / 3.0))).ground(Is(if k % 2 == 0 { 0xF2F2F2FFL } else { 0xFFFFFFFFL })) |> ignore
-      // (each row 199 pixels tall, its place a third of a point off whole points, as a phone's rows are; a badge three
+      // (each row 199/3 points tall, its place a third of a point off whole points, as a phone's rows are; a badge three
       // tenths of a pixel off its row's pixels, a line of words seven tenths off)
       row.box(fn(b) {
         b.offset(Is((22.0, 18.1))).width(Is(Some(30.0))).height(Is(Some(30.0))).radius(Is(15.0))
@@ -32,17 +33,17 @@ test "rows scrolled by whole pixels, what they hold between pixels: copied as ke
     |> ignore
   })
   t.draw()
-  // (dragged up by whole pixels of its own, a step a frame (37 points, 111 of its pixels), each frame checked against
+  // (dragged up by whole pixels of its own, a step a frame (29.5 points, 59 of its pixels), each frame checked against
   // one drawn anew)
   t.touch_at(0, 195.0, 500.0, t.time())
   t.clock_frame()
   for i in 1..=8 {
-    t.touch_at(1, 195.0, 500.0 - 37.0 * i.to_double(), t.time())
+    t.touch_at(1, 195.0, 500.0 - 29.5 * i.to_double(), t.time())
     t.clock_frame()
   }
   // (what is checked lies between pixels as drawn: some instance's place, in pixels, no whole number)
   let c = g()
-  let between = Array::makei(c.ninst, fn(k) { c.inst[k * inst_size + 1] * 3.0 }).any(fn(v) { v != v.round() })
+  let between = Array::makei(c.ninst, fn(k) { c.inst[k * inst_size + 1] * 2.0 }).any(fn(v) { v != v.round() })
   assert_true(between, msg="every instance on whole pixels")
   assert_true(scene_done().copied > 0, msg="\{scene_done()}: \{scene_alone_why()}")
 }
