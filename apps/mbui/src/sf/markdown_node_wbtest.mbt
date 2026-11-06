@@ -182,14 +182,15 @@ test "Markdown as nodes: its blocks' words where an old view's markdown draws th
 ///|
 /// A Markdown node of `text` read as `tree` says (as it changes) at `size`, its code blocks of language `a` and `b` and
 /// the files it names drawn as words saying which, a .jpg an image `ratio` (of its name) wide over its height as the file
-/// was when it was made, filling its place, a press on it said into `pressed`; in a window 390 wide. What the tree draws,
-/// its words.
+/// is now, filling its place, each made said into `made`, a press on it into `pressed`; in a window 390 wide. What the
+/// tree draws, its words.
 fn mn_live(
   text : () -> String,
   tree : () -> Json?,
   size : () -> Double,
   ratio? : (String) -> Double = fn(_) { 1.0 },
   pressed? : Array[String] = [],
+  made? : Array[String] = [],
 ) -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=900.0, platform=2)
   let said = fn(v : @view.View, words : () -> String) { v.words(By(words)) |> ignore }
@@ -212,11 +213,16 @@ fn mn_live(
         } else if name.has_suffix(".jpg") {
           Some({
             draw: fn(v) { said(v, fn() { "file:" + name }) },
-            // (as a message's image is: its proportion as the file had it when it was made, filling its place, pressed)
+            // (as a message's image is: made once, its proportion as the file is now, filling its place, pressed)
             image: Some((ratio(name), fn(v) {
-              let r = @signals.untracked(fn() { ratio(name) })
+              made.push(name)
               v.box(fn(i) {
-                i.width_share(Is(1.0)).aspect(Is(r)).presses(Is(true)).on_press(fn() { pressed.push(name + "@" + r.to_string()) }) |> ignore
+                i
+                .width_share(Is(1.0))
+                .aspect(By(fn() { ratio(name) }))
+                .presses(Is(true))
+                .on_press(fn() { pressed.push(name + "@" + @signals.untracked(fn() { ratio(name) }).to_string()) })
+                |> ignore
                 said(i, fn() { "img:" + name })
               })
               |> ignore
@@ -335,9 +341,10 @@ test "Markdown as nodes: a row of images, one of them twice, each as wide as its
 }
 
 ///|
-test "Markdown as nodes: images of other proportions in rows, each drawn as tall as its proportion makes it at its width, the rows as tall as their images, what follows under them; their proportions changed, made again so, each pressed as itself" {
+test "Markdown as nodes: images of other proportions in rows, each drawn as tall as its proportion makes it at its width, the rows as tall as their images, what follows under them; a proportion changed, the same images laid out at it, each pressed as itself" {
   let ratios : @signals.Signal[Map[String, Double]] = @signals.signal({ "a.jpg": 1.37, "b.jpg": 0.61, "c.jpg": 2.13 })
   let pressed : Array[String] = []
+  let made : Array[String] = []
   let img = fn(src : String) { Json::array([Json::string("img"), Json::array([]), Json::object({ "src": Json::string(src), "alt": Json::string("") })]) }
   let tree = fn() {
     Some(
@@ -347,7 +354,7 @@ test "Markdown as nodes: images of other proportions in rows, each drawn as tall
       ]),
     )
   }
-  let t = mn_live(fn() { "images" }, tree, fn() { 15.0 }, ratio=fn(n) { ratios.get().get(n).unwrap_or(1.0) }, pressed~)
+  let t = mn_live(fn() { "images" }, tree, fn() { 15.0 }, ratio=fn(n) { ratios.get().get(n).unwrap_or(1.0) }, pressed~, made~)
   let view = @ui.view_tree().unwrap()
   let check = fn(at : String) raise {
     let rs = ratios.get()
@@ -376,7 +383,7 @@ test "Markdown as nodes: images of other proportions in rows, each drawn as tall
         assert_true((next - (d.y + tallest + 8.0)).abs() < 0.01, msg="\{at}: a row at \{d.y} \{tallest} tall, the next at \{next}: \{tops}")
       }
     }
-    // (each pressed as itself: its file and the proportion it was made with)
+    // (each pressed as itself: its file and its proportion now)
     for d in images {
       pressed.clear()
       t.tap(d.x + d.w / 2.0, d.y + d.h / 2.0)
@@ -385,8 +392,10 @@ test "Markdown as nodes: images of other proportions in rows, each drawn as tall
     }
   }
   check("as made")
-  // (a file's proportion changed: its images made again at it, the rows worked out again)
+  assert_eq(made, ["a.jpg", "b.jpg", "c.jpg", "a.jpg", "b.jpg"])
+  // (a file's proportion changed: the same images drawn at it, the rows worked out again, none made again)
   ratios.set({ "a.jpg": 0.5, "b.jpg": 0.61, "c.jpg": 2.13 })
   t.draw()
   check("a.jpg's proportion changed")
+  assert_eq(made, ["a.jpg", "b.jpg", "c.jpg", "a.jpg", "b.jpg"])
 }

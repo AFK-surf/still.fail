@@ -391,7 +391,15 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
               (r, fn(v : @view.View) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { None }, at, @sf.message_file_corner, by, fills=true))
+                // (the file as the message has it now: its size or its upload told later; while it is not placed, as last)
+                let last = Ref::new(a)
+                let now = fn() {
+                  if placed_of(m(), name) is Some(b) {
+                    last.val = b
+                  }
+                  last.val
+                }
+                ignore(media_file_node(v, src, here, now, "image", fn() { None }, at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
