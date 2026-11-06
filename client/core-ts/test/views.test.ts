@@ -2794,3 +2794,24 @@ test("still.fail's notice is shown as a line: a failure's mark taken off, no clo
   const m = shownMessage({ authorKind: "stillfail", author: "stillfail", text: "⚠️ 出错了。", seq: 3 }, [], {}, [], [], [], null);
   assert.deepEqual(m.notice, { failed: true, words: "出错了" });
 });
+
+test("a_slack_threads_row_has_its_link_there_as_its_page_does_for_its_menu", async () => {
+  const t = setup();
+  const chats = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  await t.read(chats, 1);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const slack = { ...row("k", t.host.nowMs()), connect: "c1", origin: { teamName: "AFK", channel: "C1", channelName: "ops", threadTs: "1.2" } };
+  t.set(rows("ws/st"), [row("7", t.host.nowMs()), slack]);
+  const connected = { state: "connected", workspace: { team: "AFK", teamId: "T1", url: "https://afk.slack.com/", botUserId: "U0BOT", botName: "bot" } };
+  t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: { state: "disabled" } }], []));
+  await t.read(chats, 1);
+  const of = (id: string) => chats.value.days.flatMap((d: J) => d.items).find((r: J) => r.id === id);
+  assert.deepEqual([of("k").slackUrl, of("k").feishuUrl, of("7").slackUrl], [undefined, undefined, undefined], "not signed in: none");
+  t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: connected }], []));
+  await t.read(chats, 1);
+  assert.deepEqual([of("k").slackUrl, of("k").slackApp, of("7").slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+});

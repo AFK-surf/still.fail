@@ -6,20 +6,40 @@
 // row turning while it is told (its key: xshare_key). What it lists is the chat's `xshare`.
 
 ///|
-/// The workspaces ticked (as it was shared as it opened), whether their agents may send.
+/// The workspaces ticked (as it was shared as it opened), whether their agents may send; whether the chat's sharing was
+/// read yet (opened from a row's menu, its page's `xshare` comes after: ticked as it is shared once it has come).
 priv struct XSharing {
   ticked : Map[String, Bool]
   mut write : Bool
+  mut read : Bool
 }
 
 ///|
-let xsharing : XSharing = { ticked: {}, write: false }
+let xsharing : XSharing = { ticked: {}, write: false, read: false }
 
 ///|
 /// As at the start (the package's reset).
 fn xsharing_reset() -> Unit {
   xsharing.ticked.clear()
   xsharing.write = false
+  xsharing.read = false
+}
+
+///|
+/// Ticked as chat `r` is shared now, once its `xshare` is read (once only: what is ticked afterwards is the viewer's).
+fn xsharing_read(src : Source, r : ChatRef) -> Unit {
+  if xsharing.read {
+    return
+  }
+  let share = field((src.topic)("chat", chat_params(r)).value, "xshare")
+  guard share is Some(_) else { return }
+  xsharing.read = true
+  for p in items(share, "places") {
+    if flag(Some(p), "on") {
+      xsharing.ticked[text(Some(p), "workspace")] = true
+    }
+  }
+  xsharing.write = flag(share, "write")
 }
 
 ///|
@@ -32,20 +52,15 @@ pub fn xshare_key(station : String, session : String) -> String {
 /// Opens what changes where chat `r` (its thread) is shared, ticked as it is shared now, from `from`.
 pub fn open_xshare(src : Source, r : ChatRef, thread : Double?, from~ : @sf.Anchor) -> Unit {
   xsharing_reset()
-  let share = field((src.topic)("chat", chat_params(r)).value, "xshare")
-  for p in items(share, "places") {
-    if flag(Some(p), "on") {
-      xsharing.ticked[text(Some(p), "workspace")] = true
-    }
-  }
-  xsharing.write = flag(share, "write")
+  xsharing_read(src, r)
   @sf.panel(
     @sf.t("web-pages.chat.xshare"),
     fn(c, _) { xshare_body(c, src, r) },
     from~,
     description=@sf.t("web-pages.chat.xshare.lead"),
     foot=fn(c, close) {
-      if @sf.button(c, @sf.t("common.done"), key="xshare/done", tone=Primary) {
+      // (not before what it is shared with now is read: 完成 would share it with none)
+      if @sf.button(c, @sf.t("common.done"), key="xshare/done", tone=Primary, disabled=!xsharing.read) {
         xshare_done(src, r, thread)
         close()
       }
@@ -75,6 +90,7 @@ fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
 ///|
 /// The workspaces, each a row with its box; 允许它们的 agent 发言 (off while none is ticked: the switch's note says so).
 fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  xsharing_read(src, r)
   let share = field((src.topic)("chat", chat_params(r)).value, "xshare")
   c.box(style=xshare_list, fn() {
     for p in items(share, "places") {

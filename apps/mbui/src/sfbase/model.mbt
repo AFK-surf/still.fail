@@ -141,6 +141,13 @@ pub(all) struct ChatItem {
   client_key : String
   /// the chat an agent opened it from (chat_create): the way back there, a link only
   opener : Opener?
+  /// what its menu offers besides the list's own, as its page's "…" (the core's mayShare, mayPublish, slackUrl, slackApp,
+  /// feishuUrl): shared with the viewer's other workspaces, a picture of it, it in Slack or Feishu ("" none)
+  may_share : Bool
+  may_publish : Bool
+  slack_url : String
+  slack_app : String
+  feishu_url : String
 }
 
 ///|
@@ -319,6 +326,11 @@ pub fn chat_item(v : Json) -> ChatItem {
     },
     client_key: text(s, "clientKey"),
     opener: opener_of(s),
+    may_share: flag(s, "mayShare"),
+    may_publish: flag(s, "mayPublish"),
+    slack_url: text(s, "slackUrl"),
+    slack_app: text(s, "slackApp"),
+    feishu_url: text(s, "feishuUrl"),
   }
 }
 

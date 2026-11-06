@@ -4,7 +4,8 @@
 // `mode`: "home" (signed in, the chats), "signin" (signed out), "loading" (the list being read), "empty" (a
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
 // read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
-// scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept).
+// scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept);
+// "home-share" (one of them shared and pictured from its row's menu, and in Slack).
 
 ///|
 pub(all) struct Fixture {
@@ -310,6 +311,22 @@ pub fn webdemo_days() -> Array[Json] {
 }
 
 ///|
+/// 夜里的构建又失败了 as its row says what its menu offers besides the list's own (home-share): shared with the viewer's
+/// other workspaces, a picture of it, it in Slack.
+fn fix_row_share(r : Json) -> Json {
+  match r {
+    Object(m) if text(Some(r), "id") == "c3" => {
+      let o = m.copy()
+      o["mayShare"] = Json::boolean(true)
+      o["mayPublish"] = Json::boolean(true)
+      o["slackUrl"] = Json::string("https://example.slack.com/archives/C1/p1")
+      Json::object(o)
+    }
+    other => other
+  }
+}
+
+///|
 /// A row as a station that knows pins says it (home-pins): 给设置页加一个深色模式开关 pinned, 盯着 CI，绿了告诉我 kept
 /// (保留), the rest neither.
 fn fix_pins(r : Json) -> Json {
@@ -436,6 +453,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
   ]
   // home-pins: rows from a station that knows pins, for their menus' 固定 and 保留
   let today = if f.mode == "home-pins" || f.mode == "chat-actions" { today.map(fix_pins) } else { today }
+  let today = if f.mode == "home-share" { today.map(fix_row_share) } else { today }
   // chat-opener: the first row's chat and 夜里的构建 opened by 和 Ana 一起看新版的引导页's agent (chat_create)
   let today = if f.mode.has_prefix("chat-opener") {
     today.mapi(fn(i, r) { if i == 0 || i == 2 { with_opener(Some(r)).unwrap_or(r) } else { r } })
