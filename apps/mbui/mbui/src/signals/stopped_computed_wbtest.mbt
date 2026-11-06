@@ -1,4 +1,4 @@
-// A run stopped in a computed's getter, worked out for an effect reading it: what it was worked out for (computed_for,
+// A run stopped in a computed's getter, worked out for an effect reading it: what it was worked out for (asked_for,
 // what its getter asks for is asked by) left as the getter stopped, never put back; a run beginning
 // (reset_globals) puts it back, nothing of the stopped run held by it. In this order, in one program, as a package's
 // tests run (wasm-gc's: on native and LLVM moon's test driver skips a panic test, and the second sees nothing of it).
@@ -21,7 +21,7 @@ test "a run beginning after a run stopped in a computed's getter: what it was wo
   getter_stopped()
   reset_globals()
   run_told()
-  assert_true(run.computed_for is None, msg="what the stopped getter was worked out for: put back as a run begins")
+  assert_true(run.asked_for is None, msg="what the stopped getter was worked out for: put back as a run begins")
   // (a computed worked out in the new run, for nothing reading: what its getter asks done, by none)
   let done : Array[Int] = []
   let n = signal(0)
@@ -34,7 +34,7 @@ test "a run beginning after a run stopped in a computed's getter: what it was wo
   c.get() |> ignore
   end_batch()
   assert_eq(done, [0])
-  assert_true(run.computed_for is None)
+  assert_true(run.asked_for is None)
 }
 
 ///|
@@ -42,7 +42,7 @@ test "a run beginning after a run stopped in a computed's getter: what it was wo
 #cfg(any(target="wasm-gc", target="wasm", target="js"))
 fn getter_stopped() -> Unit raise {
   assert_true(stopped_getter.val, msg="the stopped run's getter: worked out as far as its abort")
-  assert_true(run.computed_for is Some(_), msg="what it was worked out for: left as it stopped")
+  assert_true(run.asked_for is Some(_), msg="what it was worked out for: left as it stopped")
 }
 
 ///|
@@ -50,5 +50,5 @@ fn getter_stopped() -> Unit raise {
 #cfg(any(target="native", target="llvm"))
 fn getter_stopped() -> Unit raise {
   assert_false(stopped_getter.val)
-  assert_true(run.computed_for is None)
+  assert_true(run.asked_for is None)
 }

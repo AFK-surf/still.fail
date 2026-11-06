@@ -531,3 +531,72 @@ fn af_kept_worked_told() -> Unit raise {
 fn af_kept_worked_told() -> Unit raise {
   assert_eq(af_kept_worked, [])
 }
+
+///|
+// kept across runs: what sets the seventh stopped run below's effects going, each calling a trigger
+let af_trigger_go : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_trigger_go, what a trigger called by an effect made in the seventh stopped run and owned by
+// none of it asked, done
+let af_kept_triggered : Array[String] = []
+
+///|
+test "panic: a run stopped in a layout, triggers called in it, by a kept effect, one of its own, the run" {
+  af_run()
+  // (a trigger whose fn asks to wait for the change told whole, both ways)
+  let asking = fn(said : (String) -> Unit) {
+    @signals.trigger(fn() {
+      @signals.after_flush(fn() { said("after_flush") })
+      @signals.after_all_flushed(fn() { said("after_all_flushed") })
+    })
+  }
+  // (called by an effect owned by none of the run: kept)
+  @signals.effect(fn() {
+    if af_trigger_go.get() > 0 {
+      asking(fn(w) { af_kept_triggered.push(w) })
+    }
+  })
+  |> ignore
+  // (by an effect of the run's own, let go as a run begins, on_reset)
+  let own = @signals.effect(fn() {
+    if af_trigger_go.get() > 0 {
+      asking(fn(w) { af_note("a trigger called by the stopped run's own effect: \{w}") })
+    }
+  })
+  on_reset(own)
+  @signals.afters_held(fn() {
+    // (both effects run now, each calling its trigger; what they ask held back by the layout)
+    af_trigger_go.set(1)
+    // (by the run's own steps)
+    asking(fn(w) { af_note("a trigger called by the stopped run: \{w}") })
+    af_reached.push("triggered")
+    abort("stopped")
+  })
+}
+
+///|
+test "a Tester started after a run stopped in a layout: what a trigger a kept effect called asked done, none else" {
+  af_stopped(["batch", "held", "watched", "told as read", "told in an effect's set", "worked out", "triggered"])
+  af_next() |> ignore
+  af_kept_triggered_told()
+}
+
+///|
+/// wasm-gc, Wasm, JS: what the trigger the effect kept from the stopped layout called asked there, done as the Tester
+/// began (the effect's, kept), in the order of each way; and as it runs after
+#cfg(any(target="wasm-gc", target="wasm", target="js"))
+fn af_kept_triggered_told() -> Unit raise {
+  assert_eq(af_kept_triggered, ["after_flush", "after_all_flushed"])
+  af_kept_triggered.clear()
+  af_trigger_go.set(2)
+  assert_eq(af_kept_triggered, ["after_flush", "after_all_flushed"])
+  assert_eq(af_done, [])
+}
+
+///|
+/// Native and LLVM: no stopped run here, no effect of it
+#cfg(any(target="native", target="llvm"))
+fn af_kept_triggered_told() -> Unit raise {
+  assert_eq(af_kept_triggered, [])
+}
