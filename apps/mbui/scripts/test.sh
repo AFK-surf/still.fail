@@ -274,8 +274,10 @@ for t in $targets; do
     shift 4
     d=$(mktemp -d)
     "$TESTEXE" parts "$info" "$j" "$@" > "$d/parts" || { rm -rf "$d"; return 2; }
+    # Native stdout redirected to a file is otherwise block-buffered: an abort can lose even the test driver's
+    # start marker and report the running test as not run. Keep complete lines on systems with coreutils stdbuf.
     [ ! -s "$d/parts" ] || sed "s|^|$d/|" "$d/parts" | xargs -P "$j" -L 1 sh -c \
-      's=$(date +%s); "$0" "$2" > "$1.out" 2>&1; echo "$? $(($(date +%s) - s))" > "$1.code"' "$exe"
+      's=$(date +%s); if command -v stdbuf >/dev/null 2>&1; then stdbuf -oL -eL "$0" "$2"; else "$0" "$2"; fi > "$1.out" 2>&1; echo "$? $(($(date +%s) - s))" > "$1.code"' "$exe"
     "$TESTEXE" said "$info" "$d" "$pkg"
     c=$?
     rm -rf "$d"

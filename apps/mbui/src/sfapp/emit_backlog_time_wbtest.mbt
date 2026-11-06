@@ -122,6 +122,23 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       assert_true(rd.shown_by is None, msg="releasing the page removes its navigation reader")
       assert_eq((tree.alive(), tree.bindings_held(), tree.due_count()), (0, 0, 0))
     }
+    if pictures[0] != pictures[1] {
+      // Keep the complete comparison below, and name its first differing instances on CI instead of only the
+      // assertion's message. Atlas slots have already been replaced by glyph content keys by drawn_text.
+      let direct = pictures[0].split("\n").map(fn(s) { s.to_string() }).to_array()
+      let framed = pictures[1].split("\n").map(fn(s) { s.to_string() }).to_array()
+      let lines = if direct.length() > framed.length() { direct.length() } else { framed.length() }
+      let mut different = 0
+      for i in 0..<lines {
+        if direct.get(i) != framed.get(i) {
+          if different < 8 {
+            println("backlog picture \{width} line \{i}: 0 Hz \{direct.get(i)}; 60 Hz \{framed.get(i)}")
+          }
+          different += 1
+        }
+      }
+      println("backlog picture \{width}: lines \{direct.length()}/\{framed.length()}, different \{different}")
+    }
     assert_eq(pictures[0], pictures[1], msg="all drawing instances at rest are independent of intermediate frames")
     assert_eq(pictures[0], pictures[2])
     assert_eq(words[0], words[1])
