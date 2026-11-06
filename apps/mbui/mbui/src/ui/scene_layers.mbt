@@ -422,13 +422,12 @@ pub(all) struct SceneWork {
   mut recorded : Int
   mut copied : Int
   mut copied_insts : Int
-  mut alone : Int
   mut full : Int
   mut parts : Int
-  /// of it, what the frames of the tree alone drew (`alone_recorded`) and worked out of where the window changed
-  /// (`alone_parts`)
-  mut alone_recorded : Int
-  mut alone_parts : Int
+  /// of the layers copied, those put elsewhere than they were drawn, their blocks moved by how far (`moved`), and the
+  /// instances of theirs moved so (`moved_insts`: Ctx::scene_emitted)
+  mut moved : Int
+  mut moved_insts : Int
 } derive(Eq, Debug, Show)
 
 ///|
@@ -438,11 +437,10 @@ let scene_work : SceneWork = {
   recorded: 0,
   copied: 0,
   copied_insts: 0,
-  alone: 0,
   full: 0,
   parts: 0,
-  alone_recorded: 0,
-  alone_parts: 0,
+  moved: 0,
+  moved_insts: 0,
 }
 
 ///|
@@ -470,10 +468,9 @@ fn scene_unrecorded(f : () -> Unit) -> Unit {
   scene_work.recorded = was.recorded
   scene_work.copied = was.copied
   scene_work.copied_insts = was.copied_insts
-  scene_work.alone = was.alone
   scene_work.full = was.full
-  scene_work.alone_recorded = was.alone_recorded
-  scene_work.alone_parts = was.alone_parts
+  scene_work.moved = was.moved
+  scene_work.moved_insts = was.moved_insts
   scene.parts.work_back(parts)
 }
 
@@ -2055,6 +2052,7 @@ fn Ctx::scene_emitted(
   // drawn, what it reached told so (scene_reach_moved))
   if moved != (0.0, 0.0) {
     l.shown = (l.shown.0 + moved.0, l.shown.1 + moved.1)
+    scene_work.moved = scene_work.moved + 1
     scene_reach_moved(l, moved.0, moved.1)
   }
   let (dx, dy) = l.shown
@@ -2537,6 +2535,7 @@ fn Ctx::scene_block_put(
     l.block.blit_to(self.inst, len=n * inst_size, src_offset=from * inst_size, dst_offset=k * inst_size)
     if dx != 0.0 || dy != 0.0 {
       insts_moved_by(self.inst, k, k + n, dx, dy, l, from, depth, soft)
+      scene_work.moved_insts = scene_work.moved_insts + n
     }
     while band < l.bands.length() && l.bands[band] < to {
       let o = (k + l.bands[band] - from) * inst_size

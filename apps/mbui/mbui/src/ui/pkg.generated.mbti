@@ -2351,11 +2351,10 @@ pub(all) struct SceneWork {
   mut recorded : Int32
   mut copied : Int32
   mut copied_insts : Int32
-  mut alone : Int32
   mut full : Int32
   mut parts : Int32
-  mut alone_recorded : Int32
-  mut alone_parts : Int32
+  mut moved : Int32
+  mut moved_insts : Int32
 }
 
 type Sem

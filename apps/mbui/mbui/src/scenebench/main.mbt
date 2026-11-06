@@ -1,7 +1,7 @@
 // What a frame of the window's tree costs, in milliseconds, natively (docs/retained.md rule 14; matklad's "Benchmark
 // In Milliseconds"): a Tester's window drawn as a host draws it (Tester::measure_as_host: none of a test's checks; its
 // frames the display's, none a step of a test's), each scene's frames timed together, five runs each, every run said in
-// whole ms, and how many of the spinners' frames the window's tree drew alone.
+// whole ms, and how many layers were moved by an offset as they were.
 //
 //   spinner-3000: a spinner turning on the resident clock over a chat's list of 3000 messages, 30000 of its steps
 //   spinner-empty: the same spinner over an empty page, 30000 steps
@@ -103,7 +103,7 @@ fn main {
       runs.push((now_ms() - t0).round().to_int())
     }
     let w1 = @ui.scene_done()
-    said.push("\{name}: \{steps} steps, ms \{runs} (frames of the tree alone \{w1.alone - w0.alone}, painted \{w1.full - w0.full})")
+    said.push("\{name}: \{steps} steps, ms \{runs} (layers moved by an offset \{w1.moved - w0.moved}, painted \{w1.full - w0.full})")
   }
   spin("spinner-3000", 3000)
   spin("spinner-empty", 0)

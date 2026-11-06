@@ -1,6 +1,6 @@
 // What a frame of the window's tree costs is what changed (docs/retained.md rules 14 and 15), counted: a spinner
 // turning over a chat's long list draws as much, and works out as much of where the window changed, as the same
-// spinner over an empty page, each of its frames drawn by the tree alone.
+// spinner over an empty page, each of its frames drawing again what changed alone.
 
 ///|
 /// How long the spinners turn as they are counted.
@@ -59,11 +59,10 @@ fn spinner_over(n : Int) -> (SceneWork, Array[(Double, Double, Double, Double)])
       recorded: after.recorded - before.recorded,
       copied: after.copied - before.copied,
       copied_insts: after.copied_insts - before.copied_insts,
-      alone: after.alone - before.alone,
+      moved: after.moved - before.moved,
       full: after.full - before.full,
       parts: after.parts - before.parts,
-      alone_recorded: after.alone_recorded - before.alone_recorded,
-      alone_parts: after.alone_parts - before.alone_parts,
+      moved_insts: after.moved_insts - before.moved_insts,
     },
     scene_parts(),
   )
@@ -116,11 +115,10 @@ test "a row of a long list changed: the row drawn again, the rest copied as kept
       recorded: after.recorded - before.recorded,
       copied: after.copied - before.copied,
       copied_insts: after.copied_insts - before.copied_insts,
-      alone: after.alone - before.alone,
+      moved: after.moved - before.moved,
       full: after.full - before.full,
       parts: after.parts - before.parts,
-      alone_recorded: after.alone_recorded - before.alone_recorded,
-      alone_parts: after.alone_parts - before.alone_parts,
+      moved_insts: after.moved_insts - before.moved_insts,
     }
   }
   let short = made(30)

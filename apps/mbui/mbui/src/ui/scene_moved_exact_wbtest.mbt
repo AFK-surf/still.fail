@@ -54,5 +54,6 @@ test "rows scrolled by whole pixels, what they hold between pixels: copied as ke
   let c = g()
   let between = Array::makei(c.ninst, fn(k) { c.inst[k * inst_size + 1] * 2.0 }).any(fn(v) { v != v.round() })
   assert_true(between, msg="every instance on whole pixels")
+  assert_true(scene_done().moved > 0, msg="none moved by an offset: \{scene_done()}: \{scene_alone_why()}")
   assert_true(scene_done().copied > 0, msg="\{scene_done()}: \{scene_alone_why()}")
 }
