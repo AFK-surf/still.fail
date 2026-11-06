@@ -390,6 +390,8 @@ fn view_forget() -> Unit {
     Some(t) => t.dispose()
     None => ()
   }
+  passive_hold_cancel()
+  passive_holds.clear()
   // (what was said of its nodes' corners its own: tree_corners_linked)
   tree_links.clear()
   view_app.val = None
@@ -2766,6 +2768,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
   tree.bring_to(at)
+  let held_tip = passive_hold_before(kind, x, y)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
@@ -3014,7 +3017,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     }
     (2, Some(Node(id))) => {
       view_held.val = None
-      if tree.press_held(id) && tree.target_at(x, y) == Pressed(id) {
+      if tree.press_held(id) && !held_tip && tree.target_at(x, y) == Pressed(id) {
         // (words a finger picked: the tap theirs, letting them go, nothing pressed (as an old view's pick takes the
         // press), but on what keeps them)
         tapped.val = if picked.finger && !tree_keeps_picked(id) { true } else { tree.run_press_at(id, at) }
@@ -3065,10 +3068,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       view_held.val = None
       tree.gesture_tap_taken() |> ignore
       // (words a finger picked: a tap's theirs, letting them go, the gesture's tap not done, but on what keeps them)
-      tree.withhold_taps(picked.finger && !tree_keeps_picked(id))
+      tree.withhold_taps(held_tip || (picked.finger && !tree_keeps_picked(id)))
       tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at, finger=view_fingers[0]) |> ignore
       tree.withhold_taps(false)
-      tapped.val = tree.gesture_tap_taken()
+      tapped.val = tree.gesture_tap_taken() && !held_tip
       tapped_on.val = Some(id)
       h_frame_owed()
       true
@@ -3102,7 +3105,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       false
     }
   }
-  if tapped.val {
+  if kind == 0 && !over && button != 2 && pointing() is Finger {
+    passive_hold_down(tree, x, y, at)
+  } else if kind == 1 {
+    passive_hold_after_move()
+  }
+  if tapped.val && !held_tip {
     tree.tapped(at)
     // (words a finger picked let go by a tap anywhere else, as an old view's tap lets them go: finger_select.mbt; not
     // by one on what keeps them picked (keeps_picked: a bar of what to do with them), as Ctx::keeps_selection's)
@@ -3505,6 +3513,12 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
 /// rest of what it does nobody's.
 fn view_hold_lost() -> Unit {
   pointer_down_now.set(false)
+  if passive_holding.val is Some(_) {
+    // The host took this finger; no later move of it may start an ancestor's scroll.
+    view_down.val = None
+    tree_finger_off()
+  }
+  passive_hold_cancel()
   match (view_app.val, view_held.val) {
     (Some(tree), Some(Dragging(_))) | (Some(tree), Some(Node(_))) => {
       // (a field of the tree's holding it: the press called off, nothing of it kept, tree_field.mbt)

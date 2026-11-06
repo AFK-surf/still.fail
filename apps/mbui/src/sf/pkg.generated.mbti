@@ -302,6 +302,8 @@ pub let choice_gap : Double
 
 pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : String, lead? : () -> Unit, tag? : () -> Unit, trail? : () -> Unit, ink? : Int64, disabled? : Bool, busy? : Bool) -> Bool
 
+pub fn choice_row_node(@view.View, () -> String, () -> Bool, () -> Unit, body? : (@view.View) -> Unit, note? : () -> String, lead? : (@view.View) -> Unit, tag? : (@view.View) -> Unit, trail? : (@view.View) -> Unit, ink? : () -> Int64, disabled? : () -> Bool, busy? : () -> Bool) -> @view.View
+
 pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? : String, icon? : (String) -> Unit, extra? : (String) -> (() -> Unit)?, disabled? : Array[String], note? : (String) -> Unit) -> String
 
 pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool) -> @kit.Menu
@@ -793,6 +795,8 @@ pub fn group_node(@view.View, (@view.View) -> Unit, card? : Bool) -> Unit
 pub fn group_row(@ui.Ctx, Bool, Bool, () -> Unit, id? : Int32) -> Unit
 
 pub let group_row_end_radius : @ui.Radius
+
+pub fn group_row_node(@view.View, () -> Bool, () -> Bool, (@view.View) -> Unit) -> Unit
 
 pub fn group_rows(@ui.Ctx, String, Array[(String, () -> Unit)]) -> Unit
 
@@ -2372,7 +2376,7 @@ pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
 
-pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool) -> TipHand
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool, shortcut? : () -> String, passive_hold? : Bool) -> TipHand
 
 pub let title : @ui.TextStyle
 
