@@ -92,6 +92,8 @@ pub fn model_triple_node(
 ///|
 /// The same control for a page that already has its pick (the new chat); `page_pick` also gives the panel its first
 /// value. The returned press is used by the new chat's own open request, and belongs to this node's lifetime.
+/// `in_place` makes the control on `parent` itself, for a row's pick or show callback whose node must be a direct
+/// child of the row. Its fitting parts then give way together with those of the row's other controls.
 fn triple_control_node(
   parent : @view.View,
   src : Source,
@@ -104,6 +106,7 @@ fn triple_control_node(
   going : () -> Bool,
   saved : () -> String,
   owner? : ModelTripleOwner,
+  in_place? : Bool = false,
 ) -> (@view.View, () -> Unit) {
   let owner = match owner { Some(shared) => shared; None => model_triple_owner(parent) }
   let me = fn() { station() + "\u{1}" + of }
@@ -169,7 +172,7 @@ fn triple_control_node(
       }
     }
   }
-  let control = parent.box(fn(b) {
+  let make = fn(b : @view.View) {
     let inset = if floating { 12.0 } else if small { 8.0 } else { 10.0 }
     b.row(Is(true)).height(Is(Some(if floating { 30.0 } else { 28.0 })))
     .padding(Is((inset, 0.0, inset, 0.0)))
@@ -232,7 +235,9 @@ fn triple_control_node(
     b.show(fn() { !saving() }, fn(c) {
       @sf.icon_node(c, "chevron-down", 12.0, By(fn() { @sf.theme().p.muted })) |> ignore
     })
-  })
+  }
+  let control = if in_place { parent } else { parent.box(fn(_) {  }) }
+  make(control)
   at.val = Some(control)
   owner.anchor.val = Some(control)
   let key = @signals.untracked(me)

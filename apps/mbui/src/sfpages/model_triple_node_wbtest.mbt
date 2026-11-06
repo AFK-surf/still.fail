@@ -419,3 +419,65 @@ test "model triple node: the public control can share its page's owner" {
   owner_at.val.unwrap().close()
   assert_false(@sf.presented_open_of(serial))
 }
+
+///|
+test "model triple node: a control made in a choice slot fits with its sibling controls" {
+  @sfbase.reset()
+  triple_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  @sffixture.fixture_reset()
+  @sffixture.new_fix.crowded = true
+  @sffixture.new_fix.tall = true
+  @sffixture.new_fix.model = "deepseek-v4-1-flash"
+  @sffixture.new_fix.d_model = "deepseek-v4-1-flash"
+  let pick = @sffixture.fix_session_pick()
+  let room = @signals.signal(600.0)
+  let src = @sfbase.made_source(call=fn(_, _, done) { done(Ok({})) })
+  let model_slot : Ref[@view.View?] = Ref(None)
+  let model_control : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=700.0, platform=2)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(row) {
+      row.row(Is(true)).offset(Is((10.0, 120.0))).width(By(fn() { Some(room.get()) }))
+      .height(Is(Some(30.0))).gap(Is(4.0)).lines_up(Is(Some(Middle))) |> ignore
+      row.pick(fn() { true }, fn(preset, _) {
+        preset.row(Is(true)).padding(Is((8.0, 0.0, 8.0, 0.0))).gap(Is(6.0))
+        .shrink(Is(1.0)).min_width(Is(Some(0.0))).fits(Is(true)) |> ignore
+        preset.box(fn(mark) { mark.width(Is(Some(14.0))).height(Is(Some(14.0))) |> ignore }) |> ignore
+        (@sf.words_node(preset, fn() { "预设" }, fn() { triple_words_xs })).drops(Is(preset_drop_words)) |> ignore
+        preset.box(fn(chevron) { chevron.width(Is(Some(12.0))).drops(Is(preset_drop_chevron)) |> ignore }) |> ignore
+      })
+      row.pick(fn() { true }, fn(station, _) {
+        station.row(Is(true)).padding(Is((8.0, 0.0, 8.0, 0.0))).gap(Is(6.0))
+        .shrink(Is(1.0)).min_width(Is(Some(0.0))).fits(Is(true)) |> ignore
+        station.box(fn(mark) { mark.width(Is(Some(14.0))).height(Is(Some(14.0))) |> ignore }) |> ignore
+        (@sf.words_node(station, fn() { "Willow" }, fn() { triple_words_xs })).drops(Is(new_drop_station_name)) |> ignore
+        station.box(fn(chevron) { chevron.width(Is(Some(12.0))) |> ignore }) |> ignore
+      })
+      row.pick(fn() { true }, fn(slot, _) {
+        model_slot.val = Some(slot)
+        let (control, _) = triple_control_node(slot, src, fn() { "ws/st" }, "new", fn() { Some(pick) },
+          true, true, true, fn() { false }, fn() { "" }, in_place=true)
+        model_control.val = Some(control)
+      })
+    }) |> ignore
+  })
+  t.draw()
+  assert_true(model_slot.val.unwrap().id() == model_control.val.unwrap().id(), msg="the fitting control is the row's own child")
+  let full = t.shown_of("DeepSeek V4.1 Flash").unwrap().2
+  assert_true(t.find("预设") is Some(_))
+  assert_true(t.find("Willow") is Some(_))
+  room.set(300.0)
+  t.draw()
+  assert_true(t.find("预设") is None, msg="the preset gives way with the model's lesser parts")
+  assert_eq(t.shown_of("DeepSeek V4.1 Flash").unwrap().2, full, msg="the model name stays whole while another control can give way")
+  let model = t.all(Button).filter(fn(b) { b.label.has_prefix("DeepSeek V4.1 Flash") })[0].rect
+  assert_true(model.0 + model.2 <= 310.0, msg="the model stays in the row")
+  room.set(600.0)
+  t.draw()
+  assert_true(t.find("预设") is Some(_), msg="the preset returns when the room returns")
+  assert_eq(t.shown_of("DeepSeek V4.1 Flash").unwrap().2, full)
+}
