@@ -92,6 +92,8 @@ function sessionJson(r: SessionRow): Json {
   if (r.cwd !== null) v.cwd = r.cwd;
   // The most context it runs with (sessions/context-cap.ts): none, the model's whole window.
   if (r.context !== null) v.context = r.context;
+  // Held over it until compacted: what it ran with till now (0: the model's whole window).
+  if (r.contextBefore !== null) v.contextBefore = r.contextBefore;
   Object.assign(v, { running: r.running, createdAt: r.createdAt, lastActiveAt: r.lastActiveAt, archivedAt: r.archivedAt, archivedBy: r.archivedBy, shownAt: r.shownAt });
   return v;
 }

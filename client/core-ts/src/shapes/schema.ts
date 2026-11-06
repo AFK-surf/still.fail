@@ -93,6 +93,7 @@ export const SHAPES: Record<string, Shape> = {
     ["fast", opt("bool")],
     ["afresh", opt("bool"), { doc: "Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);\nabsent: as its station is set (`StationContext::afreshWhenCold`)." }],
     ["context", opt("u32"), { doc: "The most context it runs with, in tokens: its runtime compacts at it (`session.settings`); absent, the\nmodel's whole window." }],
+    ["contextBefore", opt("u32"), { doc: "What it holds is over `context`, lowered meanwhile, until it is compacted once its turn is over: the most it\nran with till then, 0 its model's whole window." }],
     ["runtimeSessionId", opt("String")],
     ["contextActions", opt(vec("String")), { doc: "What its station can do to its context by hand: compact, clear (one from before says none)." }],
     ["workspace", opt("String")],

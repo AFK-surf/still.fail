@@ -726,6 +726,12 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET context = ?1 WHERE key = ?2", context, key);
   }
 
+  /// The most context it ran with while what it holds is over its new most, until compacted (0: the model's whole
+  /// window; null: none over).
+  setSessionContextBefore(key: string, before: number | null): void {
+    this.#updateSession(key, "UPDATE sessions SET context_before = ?1 WHERE key = ?2", before, key);
+  }
+
   /// Whether it goes on afresh once its prompt cache is over (null: as the station is set).
   setSessionAfresh(key: string, afresh: boolean | null): void {
     this.#updateSession(key, "UPDATE sessions SET afresh = ?1 WHERE key = ?2", optFlag(afresh), key);

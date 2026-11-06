@@ -43,6 +43,9 @@ export type SessionRow = {
   afresh: boolean | null;
   /// The most context it runs with, in tokens: its runtime compacts at it (null: the model's whole window).
   context: number | null;
+  /// The most it ran with while what it holds is over `context`, lowered meanwhile, until compacted (0: the model's
+  /// whole window; null: none over).
+  contextBefore: number | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
   /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
   /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
@@ -372,7 +375,7 @@ export function toSession(r: Json): SessionRow {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0,
-    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, context: typeof r.context === "number" ? r.context : null,
+    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, context: typeof r.context === "number" ? r.context : null, contextBefore: typeof r.context_before === "number" ? r.context_before : null,
     runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
