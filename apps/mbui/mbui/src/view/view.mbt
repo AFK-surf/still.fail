@@ -2225,6 +2225,10 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     self.cause_at = told_at.val
     told_at.val = -1.0
     @signals.untracked(fn() { then(v) })
+    // (what it said waits for its change committed whole, done as it ends where no change round it does: Tree::afters_done)
+    if was < 0.0 && self.cause_at >= 0.0 {
+      self.afters_done()
+    }
     self.cause_at = was
   }
   (b.run)()
