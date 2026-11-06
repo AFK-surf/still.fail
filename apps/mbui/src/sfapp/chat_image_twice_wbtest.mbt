@@ -8,7 +8,8 @@
 /// preview is in, `during` ("third": the message places it a third time; "moved": its file told kept at another path;
 /// "fewer": placed three times, the message places it twice, the showing pressed gone if it was the third; "again":
 /// as "fewer", then three times again, a showing come anew in the third's place; "now": shut at once, the finger's
-/// up and the system's back with no frame between; "": nothing); `typing`: the message field tapped and "ab" typed
+/// up, the system's back and the next typed text with no frame between; "now-drawn": the same, frames drawn before
+/// the typed text; "": nothing); `typing`: the message field tapped and "ab" typed
 /// first, shut by the system's back, then "c" typed and the field tapped and "d" typed (what has the focus after: the
 /// viewer took it as it opened, given back to none); then the
 /// preview closed: what the ones beside it were asked by, where the preview flies from and back
@@ -110,22 +111,26 @@ fn twice_pressed(which : Int, during? : String = "", typing? : Bool = false) -> 
   @sfbase.near_asked.clear()
   let pressed = rects()[which]
   let (px, py) = (pressed.0 + pressed.2 / 2.0, pressed.1 + pressed.3 / 2.0)
-  if during == "now" {
-    // (the finger down and up, then the system's back, as the host hands them on: no frame drawn between)
+  if during == "now" || during == "now-drawn" {
+    // (the finger down and up, then the system's back, as the host hands them on: no frame drawn between; "now": the
+    // next typed text told before any frame too, "now-drawn": frames drawn before it)
     t.touch(0, px, py)
     t.touch(2, px, py)
     let opened = viewer.get() is Some(_)
     t.back_told(t.time())
-    t.run_for(@ui.move_most_ms * 2.0)
+    if during == "now-drawn" {
+      t.run_for(@ui.move_most_ms * 2.0)
+    }
     let shut = field_said()
-    t.type_text("c")
-    t.run_for(@ui.move_most_ms)
-    let after_c = field_said()
+    t.text_told("c", t.time())
+    let told_c = field_said()
+    t.run_for(@ui.move_most_ms * 2.0)
+    let after_c = field_said() + " (as typed: \{told_c})"
     tap_field()
     t.type_text("d")
     t.run_for(@ui.move_most_ms)
     @sf.markdown_read.val = None
-    return "pressed \{which}:\{typed} now: opened \{opened}, back, open after \{viewer.get() is Some(_)}; shut \{shut}; c typed \{after_c}; tapped, d typed \{field_said()}"
+    return "pressed \{which}:\{typed} \{during}: opened \{opened}, back, open after \{viewer.get() is Some(_)}; shut \{shut}; c typed \{after_c}; tapped, d typed \{field_said()}"
   }
   t.tap(px, py)
   guard viewer.get() is Some(v) else { fail("pressed, nothing opened") }
@@ -224,11 +229,13 @@ test "the message field typed in, one picture's showing pressed: shut with no fr
   inspect(
     [
       twice_pressed(1, during="now", typing=true),
+      twice_pressed(1, during="now-drawn", typing=true),
       twice_pressed(2, during="fewer", typing=true),
       twice_pressed(2, during="again", typing=true),
     ].join("\n"),
     content=(
-      #|pressed 1: typed: field Some(ab), focused TextField, ime true; now: opened true, back, open after false; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false; tapped, d typed field Some(abd), focused TextField, ime true
+      #|pressed 1: typed: field Some(ab), focused TextField, ime true; now: opened true, back, open after false; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false (as typed: field Some(ab), focused none, ime false); tapped, d typed field Some(abd), focused TextField, ime true
+      #|pressed 1: typed: field Some(ab), focused TextField, ime true; now-drawn: opened true, back, open after false; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false (as typed: field Some(ab), focused none, ime false); tapped, d typed field Some(abd), focused TextField, ime true
       #|pressed 2: typed: field Some(ab), focused TextField, ime true; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false; tapped, d typed field Some(abd), focused TextField, ime true; asked beside [/f], flies from 2, halfway out drawn [true, true, false]; fewer: open on Some(work/s-c1/row-a.png), drawn [true, true]; back to 0, halfway back drawn [false, true]; then [true, true]
       #|pressed 2: typed: field Some(ab), focused TextField, ime true; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false; tapped, d typed field Some(abd), focused TextField, ime true; asked beside [/f], flies from 2, halfway out drawn [true, true, false]; again: open on Some(work/s-c1/row-a.png), drawn [true, true, true]; back to 0, halfway back drawn [false, true, true]; then [true, true, true]
     ),
