@@ -30,6 +30,7 @@ import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdit
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { installPeopleSinceIndex } from "./legacy-people-since.ts";
 import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, hasLegacyArchivePolicy, installArchivePolicyIndex } from "./archive-policy-index.ts";
+import { hasLegacyDecisionTime, installDecisionTimeIndex } from "./legacy-decision-time.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
@@ -223,18 +224,49 @@ LEFT JOIN sessions s ON s.key = l.session
 CROSS JOIN decision_checks d ON d.id = l.id
 WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
 ORDER BY d.created_at, d.id`;
+// Both arms are guarded outside their index loops. The old source stays exact during preparation; after publication
+// only the covering lookup is grouped. The readiness check and both reads share the same SQLite snapshot.
+const LEGACY_DECISION_LATEST = `index_state AS MATERIALIZED (SELECT complete FROM legacy_decision_time_meta WHERE id=1),
+latest AS MATERIALIZED (
+  SELECT MAX(d.id) AS id, d.session FROM index_state i CROSS JOIN decision_checks d
+    WHERE i.complete=0 AND d.created_at>=?1 GROUP BY +d.session
+  UNION ALL
+  SELECT MAX(d.id) AS id, d.session FROM index_state i CROSS JOIN legacy_decision_time d INDEXED BY legacy_decision_time_at
+    WHERE i.complete=1 AND d.created_at>=?1 GROUP BY +d.session
+)`;
+export const LEGACY_LATEST_DECISIONS = `WITH ${LEGACY_DECISION_LATEST}
+SELECT d.id,d.session,d.created_at,d.result FROM latest l CROSS JOIN decision_checks d ON d.id=l.id
+ORDER BY d.created_at,d.id`;
+export const LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK = `WITH ${LEGACY_DECISION_LATEST}
+SELECT d.id,d.session,d.created_at,d.result FROM latest l
+LEFT JOIN sessions s ON s.key=l.session CROSS JOIN decision_checks d ON d.id=l.id
+WHERE s.ws=?2 OR (?3 AND s.ws IS NULL) ORDER BY d.created_at,d.id`;
 // With a small non-home workspace, seek its sessions by connect and inspect only the last few checks of each. If a
 // check has an out-of-order time beyond that bound, or the workspace is large, retain the exact recent-index grouping.
 // Home also uses the grouping because it includes checks for sessions no longer in the sessions table.
 // The fallback's CROSS JOIN puts mode outside the index loop, so a disabled fallback does not traverse recent checks.
+// While preparing without the older time index, treat the recent window as large without scanning it: try the bounded
+// session lookups first, and group the source only if those lookups cannot answer exactly.
 const DECISION_SCOPE_BATCH = 64;
-export const LATEST_DECISIONS_SCOPED = `WITH RECURSIVE
+const decisionScoped = (legacy: boolean, withoutTime = false) => `WITH RECURSIVE
+${legacy ? `index_state AS MATERIALIZED (
+  SELECT complete, EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_at') AS has_old
+  FROM legacy_decision_time_meta WHERE id=1
+),` : ""}
 recent AS MATERIALIZED (
-  SELECT id FROM decision_checks INDEXED BY decision_checks_lately WHERE ?3 = 0 AND created_at >= ?1 LIMIT ${DECISION_SCOPE_BATCH + 1}
+  ${withoutTime ? "SELECT NULL AS id WHERE 0" : legacy ? `SELECT id FROM (SELECT d.id FROM index_state i CROSS JOIN decision_checks d
+    WHERE i.complete=0 AND i.has_old AND ?3=0 AND d.created_at>=?1 LIMIT ${DECISION_SCOPE_BATCH + 1})
+  UNION ALL SELECT id FROM (SELECT d.id FROM index_state i CROSS JOIN legacy_decision_time d INDEXED BY legacy_decision_time_at
+    WHERE i.complete=1 AND ?3=0 AND d.created_at>=?1 LIMIT ${DECISION_SCOPE_BATCH + 1})`
+    : `SELECT id FROM decision_checks INDEXED BY decision_checks_lately WHERE ?3 = 0 AND created_at >= ?1 LIMIT ${DECISION_SCOPE_BATCH + 1}`}
 ),
+${legacy ? `recent_count AS MATERIALIZED (
+  SELECT CASE WHEN i.complete=0 AND NOT i.has_old AND ?3=0 THEN ${DECISION_SCOPE_BATCH + 1}
+    ELSE (SELECT COUNT(*) FROM recent) END AS n FROM index_state i
+),` : ""}
 connects(connect, n) AS (
   SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1), 1
-  WHERE (SELECT COUNT(*) FROM recent) = ${DECISION_SCOPE_BATCH + 1}
+  WHERE ${withoutTime ? DECISION_SCOPE_BATCH + 1 : legacy ? "(SELECT n FROM recent_count)" : "(SELECT COUNT(*) FROM recent)"} = ${DECISION_SCOPE_BATCH + 1}
   UNION ALL
   SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1), n + 1
   FROM connects c WHERE c.connect IS NOT NULL AND n < ${DECISION_SCOPE_BATCH + 1}
@@ -251,7 +283,7 @@ lookups AS MATERIALIZED (
   FROM chosen c WHERE (SELECT COUNT(connect) FROM connects) <= ${DECISION_SCOPE_BATCH} AND (SELECT COUNT(*) FROM chosen) <= ${DECISION_SCOPE_BATCH}
 ),
 mode AS MATERIALIZED (
-  SELECT (SELECT COUNT(*) FROM recent) < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
+  SELECT ${withoutTime ? DECISION_SCOPE_BATCH + 1 : legacy ? "(SELECT n FROM recent_count)" : "(SELECT COUNT(*) FROM recent)"} < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
     OR (SELECT COUNT(*) FROM chosen) > ${DECISION_SCOPE_BATCH} OR EXISTS (
       SELECT 1 FROM lookups l WHERE l.id IS NULL AND EXISTS (
         SELECT 1 FROM decision_checks INDEXED BY decision_checks_session WHERE session = l.key ORDER BY id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}
@@ -259,7 +291,12 @@ mode AS MATERIALIZED (
     ) AS use_global
 ),
 latest AS MATERIALIZED (
-  SELECT MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1 GROUP BY +session
+  ${legacy ? `SELECT MAX(d.id) AS id,d.session FROM mode CROSS JOIN index_state i CROSS JOIN decision_checks d
+    WHERE use_global AND i.complete=0 AND d.created_at>=?1 GROUP BY +d.session
+  UNION ALL SELECT MAX(d.id) AS id,d.session FROM mode CROSS JOIN index_state i
+    CROSS JOIN legacy_decision_time d INDEXED BY legacy_decision_time_at
+    WHERE use_global AND i.complete=1 AND d.created_at>=?1 GROUP BY +d.session`
+    : "SELECT MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1 GROUP BY +session"}
   UNION ALL
   SELECT id, key AS session FROM lookups WHERE id IS NOT NULL AND NOT (SELECT use_global FROM mode)
 )
@@ -268,6 +305,9 @@ LEFT JOIN sessions s ON s.key = l.session
 CROSS JOIN decision_checks d ON d.id = l.id
 WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
 ORDER BY d.created_at, d.id`;
+export const LATEST_DECISIONS_SCOPED = decisionScoped(false);
+export const LEGACY_LATEST_DECISIONS_SCOPED = decisionScoped(true);
+export const LATEST_DECISIONS_SCOPED_NO_TIME = decisionScoped(false, true);
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
@@ -381,6 +421,7 @@ export class Store {
   readonly #legacyEdits: boolean;
   readonly #legacyEditsOldIndex: boolean;
   readonly #legacyArchivePolicy: boolean;
+  readonly #legacyDecisionTime: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -412,6 +453,7 @@ export class Store {
     this.#legacyEdits = usesLegacyEdits(db);
     this.#legacyEditsOldIndex = this.#legacyEdits && legacyEditsUseOldIndex(db);
     this.#legacyArchivePolicy = hasLegacyArchivePolicy(db);
+    this.#legacyDecisionTime = hasLegacyDecisionTime(db);
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -453,6 +495,7 @@ export class Store {
         }
       }
       db.exec(SCHEMA);
+      installDecisionTimeIndex(db);
       installPeopleSinceIndex(db);
       installClosedCardsIndex(db);
       addEditIndex(db);
@@ -1724,16 +1767,26 @@ export class Store {
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
     let rows: Json[];
-    if (viewer === undefined) rows = this.#all(LATEST_DECISIONS, since);
-    else if (viewer.home !== false) rows = this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
-    else {
-      try {
-        rows = this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "";
-        if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately)$/.test(message)) throw error;
-        rows = this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 0);
-      }
+    try {
+      if (viewer === undefined) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS : LATEST_DECISIONS, since);
+      else if (viewer.home !== false) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK : LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
+      else rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED : LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately|legacy_decision_time_at)$/.test(message)
+        && !/no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message)) throw error;
+      const fallback = () => viewer === undefined ? this.#all(LATEST_DECISIONS, since)
+        : this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, flag(viewer.home !== false));
+      if (viewer?.home === false && (/no such index: (decision_checks_lately|legacy_decision_time_at)$/.test(message)
+        || /no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message))) {
+        // A time index can disappear after this store opened. Keep the bounded session path if its indexes remain.
+        try { rows = this.#all(LATEST_DECISIONS_SCOPED_NO_TIME, since, viewer.workspace, 0); }
+        catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : "";
+          if (!/no such index: (sessions_by_connect|decision_checks_session)$/.test(retryMessage)) throw retryError;
+          rows = fallback();
+        }
+      } else rows = fallback();
     }
     return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
