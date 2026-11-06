@@ -4,9 +4,10 @@ import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "./backfill.ts";
 import { hasLegacySaid, legacySaidMaintenanceStep, legacySaidNeedsWork } from "./legacy-said-build.ts";
 import { hasLegacyAgent, legacyAgentMaintenanceStep, legacyAgentNeedsWork } from "./legacy-agent-build.ts";
+import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsNeedsWork } from "./legacy-login-cards.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
@@ -20,13 +21,26 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     needsWork: () => legacySaidNeedsWork(store.db), step: () => legacySaidMaintenanceStep(store.db) });
   if (kinds.includes("legacy-agent") && hasLegacyAgent(store.db)) lookups.push({ kind: "legacy-agent",
     needsWork: () => legacyAgentNeedsWork(store.db), step: () => legacyAgentMaintenanceStep(store.db) });
+  if (kinds.includes("legacy-login") && hasLegacyLoginCards(store.db) && legacyLoginCardsNeedsWork(store.db)) lookups.push({ kind: "legacy-login",
+    needsWork: () => legacyLoginCardsNeedsWork(store.db), step: () => legacyLoginCardsMaintenanceStep(store.db) });
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
   let worker: Worker | null = null;
   let retryCancel: (() => void) | null = null, memoryCancel: (() => void) | null = null;
   let allowed = false, closed = false, requested = false, retryMs = 250, next = 0;
-  let off: () => void = () => {};
+  let off: () => void = () => {}, periodicCancel: () => void = () => {};
+  // Unlike the other lookups, the login keys are kept current by their triggers and have no later reconciliation queue.
+  // Once published, this scan cannot become unfinished again; stop probing it on each message and periodic wake.
+  const retireLogin = () => {
+    const index = lookups.findIndex((lookup) => lookup.kind === "legacy-login");
+    if (index < 0 || lookups[index].needsWork()) return;
+    lookups.splice(index,1);
+    if (index < next) next--;
+    if (next >= lookups.length) next = 0;
+    if (lookups.length === 0) { off(); off = () => {}; periodicCancel(); }
+  };
   const nextLookup = (): Lookup | null => {
+    retireLogin();
     for (let i=0;i<lookups.length;i++) {
       const index = (next+i)%lookups.length, lookup = lookups[index];
       if (lookup.needsWork()) { next = (index+1)%lookups.length; return lookup; }
@@ -56,6 +70,7 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
   const start = () => {
     if (lookups.length === 0 || !allowed || closed || worker !== null || retryCancel !== null || memoryCancel !== null) return;
     try {
+      retireLogin();
       if (!lookups.some((lookup) => lookup.needsWork())) { requested = false; retryMs = 250; resolve(true); return; }
     } catch (error) {
       log.warn("store", "the old message lookup could not be checked", { error: (error as Error).message });
@@ -115,9 +130,13 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
       if ((change.type === "thread" && change.entries.length > 0) || change.type === "threadRemoved") wake();
     });
     // An older connection's writes do not notify this Store. Probe one indexed key periodically once handover ends.
-    work.every(5_000, () => {
+    periodicCancel = work.every(5_000, () => {
       if (!allowed || closed || worker !== null) return;
-      try { if (lookups.some((lookup) => lookup.needsWork())) wake(); }
+      try {
+        retireLogin();
+        if (lookups.length === 0) { requested = false; resolve(true); }
+        else if (lookups.some((lookup) => lookup.needsWork())) wake();
+      }
       catch (error) { log.warn("store", "the old message lookup could not be checked", { error: (error as Error).message }); retry(); }
     });
     void previous.then(() => { allowed = true; wake(); }, (error) => {
@@ -145,5 +164,5 @@ export function buildLegacySaid(store: Store, previous: Promise<void>, workerFil
 
 /// Prepare all entry lookups a store needs after the old station has handed over.
 export function buildLegacyEntryLookups(store: Store, previous: Promise<void>, workerFile?: URL): ReturnType<typeof buildLookups> {
-  return buildLookups(store,previous,["legacy-said","legacy-agent"],workerFile);
+  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login"],workerFile);
 }
