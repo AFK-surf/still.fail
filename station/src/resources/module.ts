@@ -82,7 +82,7 @@ export const ResourcesLive = Layer.effectDiscard(
     }
     const mesh = loadMesh();
     const isApp = appBundles();
-    const whose = runnerSessions(store);
+    const whose = runnerSessions(store, (runners) => hub.runnerNameSessions(runners));
     const watch = yield* Effect.acquireRelease(
       Effect.sync(() => new ResourceWatch({
         clock: hub.clock,

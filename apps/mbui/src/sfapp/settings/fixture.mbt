@@ -36,6 +36,8 @@ priv struct SettingsFixture {
   mut gpus : Bool
   /// Four GPUs, to exercise another row of resource dials.
   mut more_gpus : Bool
+  /// Willow's CPU, memory and disk all running low (settings-stations-low): its card's line of three chips.
+  mut low_meters : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
@@ -118,6 +120,7 @@ let fx : SettingsFixture = {
   elevation: None,
   gpus: false,
   more_gpus: false,
+  low_meters: false,
   none: false,
   login: "",
   login_station: false,
@@ -223,6 +226,7 @@ fn fixture_reset() -> Unit {
   fx.elevation = None
   fx.gpus = false
   fx.more_gpus = false
+  fx.low_meters = false
   fx.congestion = "cubic"
   fx.none = false
   fx_adb.val = ""
@@ -414,6 +418,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-mark" => up("mark", "", 0)
     "settings-station-many-profiles" => fx_station_many_profiles.val = true
     "settings-station-gpu" => fx.gpus = true
+    "settings-stations-low" => fx.low_meters = true
     "settings-station-gpu-many" => {
       fx.gpus = true
       fx.more_gpus = true
@@ -564,7 +569,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" | "settings-run-runtime" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
-    "settings-stations-motion" | "settings-stations-incompatible" => "stations"
+    "settings-stations-motion" | "settings-stations-incompatible" | "settings-stations-low" => "stations"
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
@@ -1210,9 +1215,13 @@ fn fx_station(address : String) -> Json {
           (
             "meters",
             [
-              meter("CPU", 72, "ok", "空闲 72%", "72", "%", "CPU 空闲", "负载 1.4"),
+              meter("CPU", if fx.low_meters { 8 } else { 72 }, if fx.low_meters { "red" } else { "ok" }, if fx.low_meters { "空闲 8%" } else { "空闲 72%" }, if fx.low_meters { "8" } else { "72" }, "%", "CPU 空闲", "负载 1.4"),
               meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "内存剩", "共 32 GB"),
-              meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "磁盘剩", "共 1 TB"),
+              if fx.low_meters {
+                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "磁盘剩", "共 1 TB")
+              } else {
+                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "磁盘剩", "共 1 TB")
+              },
             ],
           ),
           (

@@ -57,7 +57,7 @@ export function reached(serials: { serial: string; adb: string; device: string }
   }
   const lines = serials.map((p) => `- ${p.device || "phone"}: adb -P ${port} -s ${p.serial} … (adb ${p.adb})`);
   return [
-    "Granted. Use this chat's adb server, with -P on every adb command (the station's own adb, 5037, does not have the phone; another server is turned away):",
+    "Granted. Use this chat's adb server, with -P on every adb command (the station's own adb, 5037, does not have the phone; another server is turned away; run from under this session or its own directory, others are refused):",
     ...lines,
     'adb "connected" is ready; "unpaired": the phone needs pairing, and its card in your chat shows its person how (a card under it, in the still.fail app on the phone): leave it to the card, do not send them to the phone\'s settings, and you are told in this session when it connects. Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
     ...(display ? ["", displayed(display)] : []),
