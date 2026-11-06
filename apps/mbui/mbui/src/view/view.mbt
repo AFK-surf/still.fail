@@ -785,6 +785,8 @@ pub struct Tree {
   /// again (View::layout_box)
   mut box_measured : Set[Int]
   mut box_stale : Set[Int]
+  /// what changed them (Tree::layout_marked_at): the node marked, and where what it read was last set
+  mut box_stale_why : String
   // (the node whose children the framework is making, dropping or putting in another order, told to layout: in a
   // layout_box's own layout, what it holds changed, none of its layout properties written; Tree::layout_marked_at)
   mut box_kids_changing : Int
@@ -1150,6 +1152,7 @@ pub fn Tree::new(
     moment_passes: 0,
     box_measured: Set::new(),
     box_stale: Set::new(),
+    box_stale_why: "",
     box_kids_changing: -1,
     laid_marked_at: "",
     told_otherwise: [],
@@ -2095,6 +2098,9 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       return
     }
     if self.box_measured.contains(c) {
+      if !self.box_stale.contains(c) {
+        self.box_stale_why = self.box_stale_why + " node \{at} (last set at \{@signals.last_set_at()})"
+      }
       self.box_stale.add(c)
     }
     let mut i = at

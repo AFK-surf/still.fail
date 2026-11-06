@@ -165,8 +165,10 @@ pub fn[K : Eq] View::layout_box(
     // from those of a box it lays out inside it)
     let was_measured = self.tree.box_measured
     let was_stale = self.tree.box_stale
+    let was_stale_why = self.tree.box_stale_why
     self.tree.box_measured = Set::new()
     self.tree.box_stale = Set::new()
+    self.tree.box_stale_why = ""
     // (sized by what it holds, given no height: as tall as `place` says)
     let unbounded = height != height
     let ctx : Layout = {
@@ -228,10 +230,11 @@ pub fn[K : Eq] View::layout_box(
     // as they went counted), and not measured again: what was placed by is not what it is; a fault, saying which)
     if !self.tree.box_stale.is_empty() {
       let stale = self.tree.box_stale.iter().collect()
-      fault("layout_box node \{self.at}: children \{stale} changed after they were measured in its layout, not measured again")
+      fault("layout_box node \{self.at}: children \{stale} changed after they were measured in its layout, not measured again:\{self.tree.box_stale_why}")
     }
     self.tree.box_measured = was_measured
     self.tree.box_stale = was_stale
+    self.tree.box_stale_why = was_stale_why
     ctx.live.val = false
     self.tree.layout_owner = was_owner
     let said = ctx.said_h.val
