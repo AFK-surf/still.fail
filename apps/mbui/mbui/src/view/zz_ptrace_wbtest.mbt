@@ -1,5 +1,5 @@
 ///|
-fn ptrace(step : Double) -> Unit {
+fn ptrace(step : Double, change? : Bool = false) -> Unit {
   faults_stop.val = false
   let keys = @signals.signal(Array::makei(400, fn(i) { i }))
   let made : Map[Int, View] = {}
@@ -36,7 +36,13 @@ fn ptrace(step : Double) -> Unit {
     None => println("not taken")
   }
   t = 1510.0
+  let mut told = !change
   while t + step < 2600.0 {
+    if !told && t + step >= 1520.0 {
+      told = true
+      println("EVENT at 1520")
+      tree.event(1520.0, fn() { keys.set(keys.get()[0:keys.get().length() - 1].to_array()) })
+    }
     t = t + step
     tree.frame(390.0, 844.0, now=t) |> ignore
     let f = @signals.untracked(fn() { scroll.fling.get() })
@@ -59,6 +65,6 @@ fn ptrace(step : Double) -> Unit {
 
 ///|
 test "ptrace" {
-  ptrace(1000.0 / 60.0)
-  ptrace(1000.0 / 30.0)
+  ptrace(1000.0 / 60.0, change=true)
+  ptrace(1.0e9, change=true)
 }
