@@ -251,6 +251,9 @@ export class Updates {
   private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty(), devin: empty(), hermes: empty(), agy: empty() };
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
+  /// Version refusals from several conversations join one update of the machine's Codex.
+  private codexRecovery: Promise<void> | null = null;
+  private codexUpdateSerial = 0;
   private listeners = new Set<() => void>();
   private more: MoreSoftware[] = [];
   /// The version the station's last update in this process went for: updating by itself, not tried again.
@@ -671,6 +674,7 @@ export class Updates {
   /// Updates one (`station`, `claude`, `codex`, `dsh`, or software added: `module:<id>`), or installs a runtime the machine has not: answers once it has
   /// started; how it goes shows in `get`. Refusals are said in `lang`.
   async update(id: string, lang: Lang = stationLang()): Promise<void> {
+    if (this.closed) throw new Error("updates are closed");
     const more = this.more.find((m) => m.has(id));
     if (more !== undefined) return more.update(id, lang);
     const kind = KINDS.find((k) => k === id);
@@ -687,6 +691,7 @@ export class Updates {
     if (this.items.station.updating !== null) throw refused(lang, item.installed ? "station.updates.stationBusyUpdate" : "station.updates.stationBusyInstall", { name });
     const how = item.how;
     if (how === null) throw refused(lang, "station.updates.notHere", { name });
+    if (kind === "codex") this.codexUpdateSerial++;
     this.set(kind, (i) => {
       i.updating = this.fibers.now();
       i.progress = null;
@@ -695,6 +700,53 @@ export class Updates {
       i.done = null;
     });
     this.spawn(() => this.updateRuntime(kind, how));
+  }
+
+  /// Updates the same installation and through the same path as the software page, or joins its update. A stale
+  /// app-server may have failed after someone already updated the binary; in that case no second install is needed.
+  async updateOldCodex(runningVersion: string | null, lang: Lang = stationLang()): Promise<void> {
+    if (this.codexRecovery === null) {
+      const work = this.updateOldCodexOnce(runningVersion, lang);
+      this.codexRecovery = work;
+      void work.finally(() => { if (this.codexRecovery === work) this.codexRecovery = null; }).catch(() => {});
+    }
+    await this.codexRecovery;
+    const actual = this.items.codex.version;
+    if (actual === null) throw refused(lang, "station.notice.codexVersionUnknown");
+    if (runningVersion !== null && !newer(runningVersion, actual)) throw refused(lang, "station.notice.codexNoNewVersion");
+  }
+
+  private async updateOldCodexOnce(runningVersion: string | null, lang: Lang) {
+    if (this.items.codex.updating !== null) return this.waitForCodexUpdate(lang);
+    // The page's last check may be hours old. Do not overwrite an update that starts while this reading is in flight.
+    const serial = this.codexUpdateSerial;
+    const read = await this.readRuntime("codex");
+    if (this.items.codex.updating !== null) return this.waitForCodexUpdate(lang);
+    if (serial === this.codexUpdateSerial) this.set("codex", (item) => Object.assign(item, read));
+    const item = this.items.codex;
+    if (!item.installed) throw refused(lang, "station.updates.notHere", { name: "Codex" });
+    if (item.note) throw new Error(say(item.note, lang));
+    if (runningVersion !== null && item.version !== null && newer(runningVersion, item.version)) return;
+    const before = item.version;
+    await this.update("codex", lang);
+    await this.waitForCodexUpdate(lang);
+    const after = this.items.codex.version;
+    if (after === null) throw refused(lang, "station.notice.codexVersionUnknown");
+    if (before !== null && !newer(before, after)) throw refused(lang, "station.notice.codexNoNewVersion");
+  }
+
+  private waitForCodexUpdate(lang: Lang): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const inspect = () => {
+        const item = this.items.codex;
+        if (item.updating !== null) return;
+        unlisten();
+        if (item.failed) reject(new Error(say(item.failed, lang)));
+        else resolve();
+      };
+      const unlisten = this.changes(inspect);
+      inspect();
+    });
   }
 
   /// A person chose to replace an incomplete Codex with an npm installation. Unknown installations are never changed
@@ -792,10 +844,22 @@ export class Updates {
       failed = e instanceof NotFinished ? { key: "station.updates.timedOut" } : e instanceof Failed ? e.words : { text: (e as Error).message };
     }
     if (failed) log.warn("updates", "the runtime not updated", { runtime: kind, failed: say(failed, "en") });
-    let read = await this.readRuntime(kind);
+    let read: Item;
+    try {
+      read = await this.readRuntime(kind);
+    } catch (error) {
+      this.set(kind, (item) => { item.updating = null; item.progress = null; item.percent = null; item.failed = failed ?? { text: (error as Error).message }; });
+      this.autoUpdate("a runtime update ended without a version reading");
+      return;
+    }
     if (failed === null && !read.installed && (await linkBesideNpm(kind, how, this.env).catch(() => false))) {
       log.info("updates", "the runtime npm installed off PATH linked beside npm", { runtime: kind, npm: how.program });
-      read = await this.readRuntime(kind);
+      try { read = await this.readRuntime(kind); }
+      catch (error) {
+        this.set(kind, (item) => { item.updating = null; item.progress = null; item.percent = null; item.failed = { text: (error as Error).message }; });
+        this.autoUpdate("a runtime update ended without a version reading");
+        return;
+      }
     }
     // Done without an error but not there, or not newer: installed somewhere the station's PATH does not find.
     if (failed === null) {

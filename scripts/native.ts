@@ -130,8 +130,8 @@ const HERMES_LINUX_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_
 /// ICU's libraries the Linux engine carries: Ubuntu 24.04's (the prebuild workflow's), what its build links.
 const ICU_LINUX = ["libicuuc.so.74", "libicui18n.so.74", "libicudata.so.74"];
 /// How Hermes and the engine are built on Windows: clang-cl (MSVC's own fails on HadesGC.cpp at this tag), CMake and
-/// Ninja, as a release with no debugger.
-const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DCMAKE_BUILD_TYPE=Release", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"];
+/// Ninja, as a release with no debugger and the CRT linked in (a clean Windows install need not have VC++ redist).
+const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW", "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"];
 /// The bsdtar Windows has (Git Bash's GNU tar takes C:\… for a remote host).
 const TAR = osPlatform() === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 
@@ -327,7 +327,7 @@ const PARTS: Record<string, Part> = {
     msvc: true,
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", "vendor/libadb", ...VENDORED],
     recipe: (t) =>
-      t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN }
+      t === "win32-x64" ? { cargo: SHELL_TESTS, rustflags: SHELL_WIN_RUSTFLAGS, xwin: XWIN }
       : LINUX(t) ? { cargo: shellLinux(t) }
       : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS },
     build(t, out) {
@@ -547,6 +547,7 @@ function shellLinuxBuild(t: Target, target: string, out: string) {
 /// build, the tests' (whose library is the DLL: the crate has no dev-dependency to build what is below it with other
 /// features), not run (a Mac builds them; CI's Windows runs them). Two builds took 2 of the 8 minutes, 2026-10-23.
 const SHELL_TESTS = ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc", "--no-run", "--message-format=json-render-diagnostics"];
+const SHELL_WIN_RUSTFLAGS = "-C target-feature=+crt-static";
 /// cargo-xwin, which cross-builds the Windows parts on a Mac with the Windows SDK and MSVC's CRT (Microsoft's, which it
 /// downloads: xwin), clang-cl and lld-link (Homebrew's llvm and lld).
 const XWIN = "0.23.1";
@@ -568,7 +569,7 @@ function xwinEnv(): { XWIN_CACHE_DIR: string; PATH: string } {
 function shellWin(out: string) {
   const cross = osPlatform() === "darwin";
   const target = cross ? join(BUILD(), "target") : targetDir(join(ROOT, "client/target"), "shell");
-  const env = { CARGO_TARGET_DIR: target, ...(cross ? xwinEnv() : {}) };
+  const env = { CARGO_TARGET_DIR: target, CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: SHELL_WIN_RUSTFLAGS, ...(cross ? xwinEnv() : {}) };
   const xwin = (args: string[]) => (cross ? ["xwin", ...args] : args);
   // the library and the tests' executables, from cargo's own account of what it built
   rustTarget("x86_64-pc-windows-msvc");
@@ -724,7 +725,7 @@ function hermesCross(src: string, work: string): string[] {
     ...["EXE", "SHARED", "MODULE"].map((k) => `set(CMAKE_${k}_LINKER_FLAGS_INIT "${libs} /manifest:no")`),
     "set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)",
     "set(CMAKE_TRY_COMPILE_CONFIGURATION Release)",
-    "set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)",
+    "set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)",
     "set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)",
     "",
   ].join("\n"));
