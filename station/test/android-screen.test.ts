@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { parseInput } from "../src/mesh/screens.ts";
+import { EventEmitter } from "node:events";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { makeScreens } from "../src/screens/source.ts";
-import { AndroidScreens, AndroidInput, KEYCODES, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
+import { ScreenRefused } from "../src/screens/hub.ts";
+import { wall } from "../src/ops/fibers.ts";
+import { AndroidScreen, AndroidScreens, AndroidInput, KEYCODES, PEEKS_MOST, PEEK_BITRATE, PEEK_FPS, PeekCount, bitrateOf, viewArgs, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
 
 const size = { width: 1000, height: 2000 };
 
@@ -44,6 +48,141 @@ test("a view's size: what it asked, at least 1280 to drive; a preview as small a
   assert.equal(sideOf({ ...options, maxWidth: 400, maxHeight: 800 }), 1280);
   assert.equal(sideOf({ ...options, maxWidth: 400, maxHeight: 800, peek: true }), 800);
   assert.equal(sideOf({ ...options, maxWidth: 3840, maxHeight: 2160 }), 2560);
+});
+
+test("a view's rate by its side: 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440, 8 above", () => {
+  assert.deepEqual([320, 480, 481, 720, 1080, 1280, 1440, 1600, 2560].map(bitrateOf), [2e6, 2e6, 3e6, 3e6, 5e6, 7e6, 7e6, 8e6, 8e6]);
+});
+
+test("what scrcpy is run with: a view's rate by its side (not the pace's start), a preview's small, slow and not waking it", () => {
+  const options = { codecs: ["h264" as const], bitrate: 1_500_000 };
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 1600, maxHeight: 2400 }), { maxSide: 2400, bitrate: 8_000_000, wake: true });
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 700, maxHeight: 1000, fps: 30 }), { maxSide: 1280, bitrate: 7_000_000, fps: 30, wake: true });
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 640, maxHeight: 640, peek: true, fps: 60 }), { maxSide: 640, bitrate: PEEK_BITRATE, fps: PEEK_FPS, wake: false });
+  assert.equal(PEEK_FPS, 2);
+  assert.equal(PEEK_BITRATE, 300_000);
+});
+
+test("previews of a machine's devices: at most two at once, one more refused before anything runs on a device", async () => {
+  const peeks = new PeekCount();
+  for (let i = 0; i < PEEKS_MOST; i++) assert.equal(peeks.take(), true);
+  assert.equal(peeks.take(), false);
+  let asked = 0;
+  const adb = { run: async () => (asked++, ""), shell: () => { throw new Error("nothing runs"); } };
+  const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb: adb as any, file: "/nonexistent", changed: () => {}, peeks });
+  await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["jpeg", "h264"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 503);
+  await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["jpeg"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 415);
+  assert.equal(asked, 0);
+  // One ended: another may start (its run failing here gives its place back too).
+  peeks.free();
+  await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 503);
+  assert.ok(asked > 0);
+  assert.equal(peeks.running, PEEKS_MOST - 1);
+});
+
+for (const step of ["push", "forward"] as const) {
+  test(`a device gone while its preview is ${step === "push" ? "being copied" : "opening a tunnel"} leaves no view behind`, async () => {
+    const reached = Promise.withResolvers<void>(), resume = Promise.withResolvers<void>();
+    const calls: string[][] = [];
+    let shells = 0;
+    const adb = {
+      run: async (args: string[]) => {
+        calls.push(args);
+        if (args[0] === step && (step !== "forward" || args[1] === "tcp:0")) {
+          reached.resolve();
+          await resume.promise;
+        }
+        return args[0] === "forward" && args[1] === "tcp:0" ? "12345" : "";
+      },
+      shell: () => { shells++; throw new Error("a gone device must not start a server"); },
+    };
+    const peeks = new PeekCount();
+    const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb, file: "server", changed: () => {}, peeks });
+    const opening = screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true });
+    await reached.promise;
+    screen.gone();
+    assert.equal(peeks.running, 0, "the preview place is released when the device goes");
+    assert.equal(peeks.take(), true, "another preview can take it");
+    resume.resolve();
+    await assert.rejects(opening);
+    assert.equal(shells, 0, "a gone device does not start a server");
+    if (step === "push") assert.equal(calls.some((a) => a[0] === "forward"), false, "no tunnel is opened after the copy");
+    else assert.ok(calls.some((a) => a[0] === "forward" && a[1] === "--remove" && a[2] === "tcp:12345"), "a tunnel finishing after close is removed");
+    assert.ok(calls.some((a) => a[0] === "shell" && a[1]?.startsWith("rm -f /data/local/tmp/stillfail-scrcpy-")), "the copied server is removed");
+    assert.equal(peeks.running, 1, "the late failure does not release the other preview's place");
+    peeks.free();
+  });
+}
+
+test("a device gone while a preview waits for its first byte closes the connection", { timeout: 10_000 }, async () => {
+  const connected = Promise.withResolvers<net.Socket>();
+  const listener = net.createServer((socket) => connected.resolve(socket));
+  await new Promise<void>((resolve) => listener.listen(0, "127.0.0.1", resolve));
+  const address = listener.address();
+  assert.ok(address && typeof address !== "string");
+  const calls: string[][] = [];
+  let killed = 0;
+  const server = Object.assign(new EventEmitter(), { stdout: null, stderr: null, kill: () => { killed++; return true; } });
+  const adb = {
+    run: async (args: string[]) => {
+      calls.push(args);
+      return args[0] === "forward" && args[1] === "tcp:0" ? String(address.port) : "";
+    },
+    shell: () => server as any,
+  };
+  const peeks = new PeekCount();
+  const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb, file: "server", changed: () => {}, peeks });
+  const opening = assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }));
+  const socket = await connected.promise;
+  try {
+    const closed = new Promise<void>((resolve) => socket.once("close", resolve));
+    // Let the opening view begin reading; the fake device deliberately sends no first byte.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    screen.gone();
+    await opening;
+    await closed;
+    assert.equal(killed, 1);
+    assert.equal(peeks.running, 0);
+    assert.ok(calls.some((a) => a[0] === "forward" && a[1] === "--remove" && a[2] === `tcp:${address.port}`));
+  } finally {
+    screen.gone();
+    socket.destroy();
+    await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("a preview whose first byte never arrives reaches its startup deadline", { timeout: 10_000 }, async (t) => {
+  const connected = Promise.withResolvers<net.Socket>();
+  const listener = net.createServer((socket) => connected.resolve(socket));
+  await new Promise<void>((resolve) => listener.listen(0, "127.0.0.1", resolve));
+  const address = listener.address();
+  assert.ok(address && typeof address !== "string");
+  const after = wall.after;
+  let deadline: (() => void) | undefined;
+  t.mock.method(wall, "after", (ms: number, f: () => void) => {
+    if (ms === 15_000) { deadline = () => void f(); return () => {}; }
+    return after(ms, f);
+  });
+  const server = Object.assign(new EventEmitter(), { stdout: null, stderr: null, kill: () => true });
+  const adb = {
+    run: async (args: string[]) => args[0] === "forward" && args[1] === "tcp:0" ? String(address.port) : "",
+    shell: () => server as any,
+  };
+  const peeks = new PeekCount();
+  const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb, file: "server", changed: () => {}, peeks });
+  const opening = assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }));
+  const socket = await connected.promise;
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.ok(deadline, "the startup deadline remains armed while awaiting the first byte");
+    deadline();
+    await opening;
+    assert.equal(peeks.running, 0, "a timed-out preview gives back its place");
+  } finally {
+    screen.gone();
+    socket.destroy();
+    await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test("a finger: down, moves, up, in the picture's pixels with its size", () => {
