@@ -48,7 +48,7 @@ fn photo_days_now() -> Result[Array[@gallery.Day], String]? {
   }
   let s = @core.subscribe("media.timeline", params~)
   // MBUI_CORE_DUMP=1: what the timeline says, as it changes
-  if env("MBUI_CORE_DUMP") == "1" {
+  if env("MBUI_CORE_DUMP") == "1" && @ui.content_kept() {
     dump_one("media.timeline", s)
   }
   match (s.value(), s.error) {

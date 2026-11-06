@@ -28,11 +28,14 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
 }
 
 ///|
-let dump : Bool = @ui.env("MBUI_CORE_DUMP") == "1"
+/// MBUI_CORE_DUMP=1: what each topic the app follows holds, on the log (DUMP …): never of a real account's core, which
+/// is all this app's is (@ui.content_kept).
+let dump : Bool = @ui.env("MBUI_CORE_DUMP") == "1" && @ui.content_kept()
 
 ///|
-/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs.
-let call_log : Bool = @ui.env("MBUI_CALL_LOG") == "1"
+/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs; never
+/// of a real account's core (@ui.content_kept).
+let call_log : Bool = @ui.env("MBUI_CALL_LOG") == "1" && @ui.content_kept()
 
 ///|
 /// The fields whose values are secrets (keys, tokens, passwords, a vault item's value, recovery words, a sign-in's code):

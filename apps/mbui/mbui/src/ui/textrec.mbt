@@ -38,7 +38,8 @@ fn text_recording() -> Bool {
   if text_rec.val < 0 {
     text_rec.val = if @hostapi.env("MBUI_TEXT_RECORD") == "1" { 1 } else { 0 }
   }
-  text_rec.val == 1
+  // (a real account's words never written down: content_kept)
+  text_rec.val == 1 && content_kept()
 }
 
 ///|

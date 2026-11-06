@@ -11,6 +11,8 @@
 
 ///|
 fn main {
+  // (the made-up chats: what a run of them shows, is typed and is told may be kept, its tape and its text)
+  @ui.set_data_source(MadeUp)
   // no core here: the real core's answers to its pure calls, kept (src/sfkept)
   @sf.kept_call.val = Some(@sfkept.answer)
   // MBUI_DARK=1: the dark theme

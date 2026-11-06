@@ -1,0 +1,32 @@
+// Where what the app shows and is told comes from (DataSource), said once by the app's main: a real account's (the
+// core of a person, on a phone or a desktop) or made up (a fixture's chats, a Tester's). What writes down what a run
+// shows, is typed and is told (the run's tape: MBUI_DRAW_LOG's INPUT, MSG, CLIPSAID, VIEWSAID… lines and a Tester's
+// `start_tape`; MBUI_TEXT_RECORD's TEXTREC lines; the app's own dumps of its core, src/stillfail) writes only of a
+// made-up one: a real account's run keeps none of it, on the log, its file or a tape, whatever its environment says.
+// Real till the main says otherwise: what runs before it says (a package's start) keeps nothing either.
+
+///|
+/// Where what the app shows and is told comes from.
+pub(all) enum DataSource {
+  /// A person's account, its core's own: nothing of it written down.
+  RealAccount
+  /// Made up (a fixture's chats, a Tester's): a run's tape and text kept as the environment asks.
+  MadeUp
+} derive(Eq, Show)
+
+///|
+// kept across runs: a Tester sets it as it starts (reset_globals: a test's data is made up)
+let data_source : Ref[DataSource] = Ref::new(RealAccount)
+
+///|
+/// The app's main says where its data comes from, before anything is drawn.
+pub fn set_data_source(s : DataSource) -> Unit {
+  data_source.val = s
+}
+
+///|
+/// Whether what the run shows, is typed and is told may be written down (the tape, the text, the core's dumps): only
+/// of made-up data.
+pub fn content_kept() -> Bool {
+  data_source.val == MadeUp
+}

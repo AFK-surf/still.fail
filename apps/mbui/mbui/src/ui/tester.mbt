@@ -89,6 +89,8 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
+  // (a test's data is made up: its tape and text kept as it asks, datasource.mbt)
+  data_source.val = MadeUp
   // (every frame checked till the test says otherwise: Tester::scene_checks_every)
   checks_every.val = 1
   checks_frame.val = 0

@@ -87,7 +87,7 @@ fn dump_one(name : String, s : @core.Sub) -> Unit {
 
 ///|
 fn dump(accounts : @core.Sub) -> Unit {
-  if env("MBUI_CORE_DUMP") != "1" {
+  if env("MBUI_CORE_DUMP") != "1" || !@ui.content_kept() {
     return
   }
   dump_one("accounts", accounts)

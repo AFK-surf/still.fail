@@ -88,14 +88,18 @@ fn frame_ended_outside() -> Unit {
 }
 
 ///|
-/// Whether the run's tape is being kept: on a real host's log (MBUI_DRAW_LOG), or a Tester's (Tester::start_tape).
+/// Whether the run's tape is being kept: on a real host's log (MBUI_DRAW_LOG), or a Tester's (Tester::start_tape); of
+/// made-up data alone (content_kept: a real account's run keeps none).
 fn taping() -> Bool {
-  draw_logging() || tape.val is Some(_)
+  content_kept() && (draw_logging() || tape.val is Some(_))
 }
 
 ///|
-/// A line of the run's tape, where it is kept.
+/// A line of the run's tape, where it is kept (none of a real account's: content_kept).
 fn tape_line(s : String) -> Unit {
+  if !content_kept() {
+    return
+  }
   if draw_logging() {
     @hostapi.log(s)
   }
