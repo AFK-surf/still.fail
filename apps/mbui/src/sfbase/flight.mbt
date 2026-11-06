@@ -122,8 +122,8 @@ pub(all) struct FlyingFile {
 pub let send_flight : @signals.Signal[SendFlight?] = @signals.signal(None)
 
 ///|
-/// Told each time the words' way is said (set out, timed again as long as it is far): what reads where they land
-/// (Reading's landing) reads it, the way being the flight's own, not a signal.
+/// Told as the words' way is said where their landing sets them out (flight_set_out_on, a node's change, never a
+/// build): what reads where they land (Reading's landing) reads it, the way being the flight's own, not a signal.
 let flight_way_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
@@ -605,7 +605,6 @@ fn flight_placed_at(c : @ui.Ctx, f : SendFlight, at : Double) -> Unit {
       f.way.animate(1.0, @motion.tween(f.ms, ease=Linear), start_at=at)
       (f.hold)(flight_settle * f.ms)
     }
-    flight_way_told.set(flight_way_told.get() + 1)
   }
 }
 
@@ -636,7 +635,6 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
         if !f.carried {
           (f.hold)(dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
         }
-        flight_way_told.set(flight_way_told.get() + 1)
       }
     }
     None => ()

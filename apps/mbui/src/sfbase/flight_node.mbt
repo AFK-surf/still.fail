@@ -55,6 +55,7 @@ fn flight_set_out_on(node : @view.View, f : SendFlight, from : (Double, Double),
     }
     f.timed = true
     flight_placed_at(@ui.current(), f, node.cause_at())
+    flight_way_told.set(flight_way_told.get() + 1)
   })
 }
 

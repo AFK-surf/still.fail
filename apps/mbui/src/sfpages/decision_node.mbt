@@ -397,7 +397,6 @@ fn under_node(
   parent.reacts(fn() { (shown(), @ui.row_way_node(parent)) }, fn(now) {
     let (on, way) = now
     let at = parent.cause_at()
-    let far = @signals.untracked(tall)
     let to = if on { 1.0 } else { 0.0 }
     // (a change within a row shares the list's height curve, including a later start while sent words leave;
     // another cause while it goes puts its remaining part on the same new way as the other rows)
@@ -409,7 +408,8 @@ fn under_node(
           let delay = dmax(0.0, start - at)
           room.go(to, @sfbase.under_row_spec(ms, delay), at=if delay > 0.0 { at } else { start }, velocity=0.0)
         }
-        None => room.go(to, @motion.move(over=far), at~)
+        // (how far: as tall as it is laid out at the cause's moment, asked only where its own way is timed by it)
+        None => room.go(to, @motion.move(over=@signals.untracked(tall)), at~)
       }
     }
     was_way.val = way

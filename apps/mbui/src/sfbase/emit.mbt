@@ -770,12 +770,14 @@ pub fn emit_flight_by(
   match t.pose {
     Float => {
       // from its activity's avatar, or on from the message before it (where it let that one out)
-      // (that one's place gone before this sets out from it: where that one was aimed, as it came in there)
+      // (that one's place gone before this sets out from it: where that one was let out, as its Spit had it, where that
+      // one was aimed, else where what it came in over is, the activities' first or the outbox: the same place)
       let start = match t.from.bind(place) {
         Some(r) => (r.0, r.1 + 3.0)
         None =>
-          match (t.from, e.aimed) {
-            (Some(from), Some(a)) if from == "emit-landing/" + key + "/" + seq_s(e.aimed_at) => a
+          match (t.from, e.aimed, first) {
+            (Some(from), Some(a), _) if from == "emit-landing/" + key + "/" + seq_s(e.aimed_at) => a
+            (Some(_), _, Some(f)) => f
             _ => avatar
           }
       }
