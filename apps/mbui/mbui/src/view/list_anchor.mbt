@@ -891,7 +891,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // beyond_end). Not as it is counted, by the mean of those measured over all it holds, nor where the hand has
         // it alone once at its end: the one a fling to it is planned to, whatever frames came before (2026-11-06: at 60
         // and at 144 a second 28 apart, its bounce 4 ms apart))
-        foot_hand.val = if r.keys.length() > 0 && r.last == n - 1 {
+        // (laid out from its end only for now: one from its top says how far past its foot it was asked to go otherwise,
+        // its rows short of the window counted as past it (list_laid_from_top's beyond_end))
+        foot_hand.val = if from_end && r.keys.length() > 0 && r.last == n - 1 {
           let last_foot = r.tops[r.keys.length() - 1] + r.heights[r.keys.length() - 1]
           Some(c.x + last_foot - h - r.beyond_end)
         } else {
