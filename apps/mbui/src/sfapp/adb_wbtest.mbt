@@ -549,6 +549,7 @@ test "settings' shared debugging: a taken back chat can be approved here for its
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("已收回，需在手机重新允许") is Some(_))
   assert_true(t.find("1 小时内") is Some(_))
+  assert_true(t.find("记录键盘升起时的帧时间") is Some(_))
   t.tap_text("在手机允许")
   t.draw()
   assert_true(calls.iter().any(fn(call) { call.0 == "adb.approveHere" && call.1 == { "station": "ws1/st1", "request": "p-local", "proof": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" } }), msg="\{calls.map(fn(call) { call.0 })}")

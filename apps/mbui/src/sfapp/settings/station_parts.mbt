@@ -906,7 +906,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
           // (narrow, 收回 by its title alone, the line under it as wide as the row: when it was used, and why it was asked;
           // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压; wide, the library's link_row has it by the
           // row's side)
-          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, goes=station != "" && session != "", control=fn() {
+          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=!approve_here, goes=station != "" && session != "", control=fn() {
               if approve_here {
                 if @sf.button(c, tr("android-misc.adb.chats.approveHere"), key="adb-approve-here/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
                   act(core, tr("android-misc.adb.chats.approveHere"), "adb.approveHere", obj([("station", str(station)), ("request", str(request)), ("proof", str(proof))]))
