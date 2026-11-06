@@ -886,8 +886,13 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         for q in 0..<r.keys.length() {
           l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + c.x)
         }
+        // (the row it is put at kept too while it is put there, out of sight)
+        let put_kept = match pinned.val {
+          Some((k, _)) if !r.keys.contains(k) && !c.kept.contains(k) => Some(k)
+          _ => None
+        }
         // (and those kept out of sight, as far off as they are counted to be)
-        match Some(c.kept) {
+        match Some(match put_kept { Some(k) => [..c.kept, k]; None => c.kept }) {
           Some(kept) =>
             for k in kept {
               match find(k, r.first) {
@@ -906,21 +911,6 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               }
             }
           None => ()
-        }
-        // (and the row it is put at, out of sight while it is put there: kept made, out of sight beside the rows laid out
-        // on its side, as a kept row is)
-        let put_kept = match pinned.val {
-          Some((k, _)) if r.keys.length() > 0 && !r.keys.contains(k) =>
-            match find(k, r.first) {
-              Some(i) => {
-                let q = r.keys.length() - 1
-                let top = if i < r.first { r.tops[0] - pinned_tall.val } else { r.tops[q] + r.heights[q] }
-                l.place(slot_of(k), 0.0, top + c.x)
-                Some(k)
-              }
-              None => None
-            }
-          _ => None
         }
         // (what came in sight or within `ahead` of it, or was gone past on the way, since the last layout: sighted, told
         // once the frame is painted, whether the frames between were many or one)
