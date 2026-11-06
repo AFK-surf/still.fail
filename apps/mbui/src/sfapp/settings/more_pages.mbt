@@ -533,12 +533,8 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
   blocks.push(fn() { section_header(c, tr("android-settings.files.fill.title"), start=S6) })
   blocks.push(fn() {
     list_card(c, fn() {
-      // (the switch in the row's middle, off its corners, as settings' switches are)
-      if list_row(c, key="kept-fill", fn() {
-          c.box(style=fill_words, fn() { row_lines(c, tr("android-settings.files.fill.on"), tr("android-settings.files.fill.on.sub"), wrap_sub=true) })
-          |> ignore
-          switch(c, "kept-fill-switch", on)
-        }) {
+      // (the library's switch row, as every setting's)
+      if @sf.switch_row(c, "kept-fill-switch", tr("android-settings.files.fill.on"), on, note=tr("android-settings.files.fill.on.sub")) != on {
         set("fillOff", if on { Json::boolean(true) } else { Json::null() })
       }
       if on {

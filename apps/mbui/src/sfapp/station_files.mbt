@@ -361,8 +361,8 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       c.box(w=Fill(1.0), padx=@sf.panel_card_in, pb=14.0, fn() {
         c.box(dir=Row, w=Fill(1.0), padx=@sf.card_pad, pady=10.0, gap=12.0, radius=@sf.card_corner, bg=t.p.chip, align=ACenter, id~, fn() {
           c.text(tr("web-main.file.chatAsFiles"), size=t.t.ui, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
-          // the settings' switch (PageParts.kt Switch)
-          @settings.switch(c, "ref/chat-files", chat)
+          // the library's switch, as every switch (its row takes the press)
+          @sf.switch_look(c, "ref/chat-files", chat)
         })
         |> ignore
       })

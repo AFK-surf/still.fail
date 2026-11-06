@@ -1956,7 +1956,9 @@ pub fn switch_row(
     Narrow if in_words.val > 0 && in_card.val == 0 =>
       wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?)
     Wide =>
-      if in_list.val > 0 {
+      // (on a settings card holding its rows the ladder's inset in (rows_held) as in a list: its words a row's padding in,
+      // its switch out of the card's corner)
+      if in_list.val > 0 || rows_held_now.val {
         // (its title as strong as its list's other rows' titles: link_row's, a setting's)
         let mut now = on
         c.box(style=wide_in_list(), fn() {
@@ -1976,7 +1978,8 @@ pub fn switch_row(
         c.box(style=pg_row_words, fn() {
           led_title(c, title, pg_switch_title, lead)
           if note != "" {
-            c.text(note, style=meta.then(full_words)) |> ignore
+            // (in even lines where it takes two beside the switch, not a word or two left on the last)
+            c.text(note, style=switch_row_note) |> ignore
           }
         })
         |> ignore
@@ -1987,6 +1990,10 @@ pub fn switch_row(
     }
   }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_row_note : @ui.TextStyle = meta.then(full_words).then(@ui.text_style(balance=true))
 
 ///|
 /// A row that says how something stands, going nowhere: its title, a note under it, or `value` at its end (a control:

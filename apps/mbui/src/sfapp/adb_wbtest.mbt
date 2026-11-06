@@ -475,3 +475,15 @@ test "settings' 共享调试: its settings at the top, the lists after them" {
   guard t.find("已授权的对话") is Some((_, chats_y)) else { fail("the chats are shown") }
   assert_true(lasts_y < chats_y)
 }
+
+///|
+test "settings' 共享调试: its switch is the library's switch row, its title as strong as the setting's under it" {
+  let t = settings_tester("adb:", shows="settings-adb-chats-long", platform=2)
+  let calls_before = t.words().filter(fn(w) { w.0 == "共享调试" }).length()
+  assert_true(calls_before >= 2)
+  let title = t.words().filter(fn(w) { w.0 == "共享调试" }).iter().find_first(fn(w) { w.2 > 60.0 }).unwrap()
+  let lasts = t.words().filter(fn(w) { w.0 == "默认最长授权" })[0]
+  // the same size and line as a setting's title
+  assert_eq(title.4, lasts.4)
+  assert_eq(title.1, lasts.1)
+}
