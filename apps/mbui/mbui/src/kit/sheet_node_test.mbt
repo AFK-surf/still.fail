@@ -190,6 +190,42 @@ test "tree sheet can fit changing contents up to a share and only enables detent
 }
 
 ///|
+test "tree sheet uses the current fitted content at the release of a drag" {
+  for draw in [false, true] {
+    let (t, k) = node_sheet_case(tall=0.7, fit=true, grows=true)
+    t.run_for(sheet_test_late_ms)
+    let sheet = k.surface.val.unwrap()
+    let y = sheet.rect().1 + 10.0
+    t.touch(0, 190.0, y)
+    t.touch(1, 190.0, y - 80.0)
+    // The body grows while the finger is down, with or without a frame before release.
+    k.content.set(580.0)
+    if draw { t.draw() }
+    t.touch(2, 190.0, y - 80.0)
+    t.run_for(sheet_test_late_ms)
+    assert_true((sheet.rect().3 - 844.0 * 0.55).abs() < 0.01, msg="frame=\{draw}, height after release: \{sheet.rect().3}")
+  }
+}
+
+///|
+test "tree sheet stops offering detents when fitted content becomes short during a drag" {
+  for draw in [false, true] {
+    let (t, k) = node_sheet_case(tall=0.7, fit=true, grows=true)
+    k.content.set(580.0)
+    t.run_for(sheet_test_late_ms)
+    let sheet = k.surface.val.unwrap()
+    let y = sheet.rect().1 + 10.0
+    t.touch(0, 190.0, y)
+    t.touch(1, 190.0, y - 80.0)
+    k.content.set(100.0)
+    if draw { t.draw() }
+    t.touch(2, 190.0, y - 80.0)
+    t.run_for(sheet_test_late_ms)
+    assert_eq(sheet.rect().3, 125.0, msg="frame=\{draw}")
+  }
+}
+
+///|
 test "tree sheet detents: the grabber toggles the sheet and the reported stack height stays its requested height" {
   let (t, k) = node_sheet_case(tall=0.55, grows=true)
   t.run_for(sheet_test_late_ms)

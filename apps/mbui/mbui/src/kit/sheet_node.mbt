@@ -64,7 +64,6 @@ pub fn sheet_node(
     let size_way = @motion.Way::new(0.0)
     let size_done : Ref[() -> Unit] = Ref(fn() {  })
     let base_h = Ref(0.0)
-    let hand_detents = Ref(false)
     let hand_y = Ref(0.0)
     let dragged = Ref(false)
     let tracking = Ref(false)
@@ -181,9 +180,6 @@ pub fn sheet_node(
             if tracking.val {
               (size_done.val)()
               base_h.val = dmax(0.0, d.h - under)
-              let total = @signals.untracked(fn() { sheet.window().1 })
-              let normal = requested.laid_size().1
-              hand_detents.val = grows && (!(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0)
               hand_y.val = d.wy
               dragged.val = false
             }
@@ -192,7 +188,8 @@ pub fn sheet_node(
             let delta = d.wy - hand_y.val
             if delta.abs() > @ui.touch_slop() { dragged.val = true }
             let total = @signals.untracked(fn() { sheet.window().1 })
-            let detents = hand_detents.val
+            let normal = requested.laid_size().1
+            let detents = grows && (!(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0)
             let top = if detents { total * 0.94 } else { base_h.val }
             let least = if detents { 120.0 } else { 0.0 }
             let from = if @signals.untracked(fn() { size_mode.get() }) == 1 {
@@ -210,7 +207,8 @@ pub fn sheet_node(
             tracking.val = false
             let total = @signals.untracked(fn() { sheet.window().1 })
             let h = if @signals.untracked(fn() { size_mode.get() }) == 1 { @signals.untracked(fn() { held.get() }) } else { base_h.val }
-            let detents = hand_detents.val
+            let normal = requested.laid_size().1
+            let detents = grows && (!(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0)
             if dragged.val && (if detents { h / total < 0.3 } else { base_h.val - h > 80.0 }) {
               dismiss()
             } else {
@@ -220,7 +218,7 @@ pub fn sheet_node(
                 } else if (h - total * 0.55).abs() <= (h - total * 0.94).abs() {
                   total * 0.55
                 } else { total * 0.94 }
-              } else if fit && tall > 0.0 { requested.laid_size().1 } else { base_h.val }
+              } else if fit && tall > 0.0 { normal } else { base_h.val }
               settle(h, to, d.at, -d.vy * 1000.0, detents)
             }
           }
