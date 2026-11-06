@@ -523,7 +523,7 @@ test "a column of the tree's that scrolls: held still past a pause, moved a litt
 }
 
 ///|
-test "a column of the tree's that scrolls: one move past the slop, let go a frame on where it stopped: what a finger's speed is worked out as there (slowing to it, back) taken as an old view's box kept to a height takes it, flung back the same way" {
+test "a column of the tree's that scrolls: one move past the slop, let go a frame on where it stopped: flung on at how fast that move went, the lift saying its place again no move of it (as Android's VelocityTracker takes no ACTION_UP), as an old view's box kept to a height is by the same events" {
   let go = fn(t : Tester, y : Double, at : () -> Double) {
     t.touch(0, 80.0, y)
     t.run_for(hand_step_ms)
@@ -538,7 +538,7 @@ test "a column of the tree's that scrolls: one move past the slop, let go a fram
   let (old_go, old_rest) = go(old_t, 150.0, capped_at)
   let (t, k) = scroll_node_case(platform=2)
   let (now, rest) = go(t, 200.0, fn() { scroll_node_at(k) })
-  assert_eq((rest < now, old_rest < old_go), (true, true), msg="\{now} \{rest} \{old_go} \{old_rest}")
+  assert_eq((rest > now, old_rest > old_go), (true, true), msg="\{now} \{rest} \{old_go} \{old_rest}")
 }
 
 ///|

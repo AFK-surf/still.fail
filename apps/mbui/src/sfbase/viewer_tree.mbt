@@ -883,7 +883,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
       }
       // where it was let go, and when, the last of its way: as a move of its own first (however far from the last
       // move, or with none: a down and an up alone; how fast it went as of then, none where it paused longer than
-      // tracker_gap_ms first: Velocity::get); the last of a pinch let go, nothing of its own
+      // tracker_gap_ms first: Velocity::get_at); the last of a pinch let go, nothing of its own
       if v.held {
         v.one_finger_at(d, has_before, has_after)
       }
@@ -1050,7 +1050,7 @@ fn Viewer::image_let_go(
   let at = d.at
   let (x, y) = (d.wx, d.wy)
   let zoomed = z.zoomed_at(at)
-  let (vx, vy) = v.speed.get(at)
+  let (vx, vy) = v.speed.get_at(at)
   let s = strip.value_at(at)
   if v.held && (v.swiping || s != 0.0) && (!zoomed || s != 0.0) {
     // on to the one beside it (this press's way far enough, or flung that way), else back
