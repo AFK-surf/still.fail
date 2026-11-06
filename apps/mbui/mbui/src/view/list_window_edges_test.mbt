@@ -263,19 +263,41 @@ test "scrolls_window: a block scrolled away and back: let go, made again known a
   assert_eq((c.made.contains(2), c.live[2].row_place() == (row, place), c.top(2), c.hit(90.0)), (true, true, Some(80.0), Some(2)))
 }
 
+
 ///|
-/// A windowed list of 3000 blocks 40 high (counted 40) from its end, in a column 300 by 100, block 0 put `off` over the
-/// window's top; then laid out again 20 narrower (what it measured of the blocks not laid out forgotten) and 40 taller:
-/// the nodes made and let go in the frame it was put, those made and laid out by the two layouts after, the blocks in
-/// sight then (each one's key, top and height), what a press 50 down hits, whether block 0 is made then, and whether it
-/// is after a wheel.
-fn put_far_over(off : Double) -> ((Int, Int), (Int, Int), Array[(Int, Double, Double)], Int?, Bool, Bool) {
+/// What a windowed list with a block put far over its window does (put_far_over).
+priv struct PutFar {
+  /// the nodes made and let go in the frame it was put
+  put_frame : (Int, Int)
+  /// block 0's top and height then
+  put_row : (Double, Double)?
+  /// the nodes made and laid out by the layouts after it
+  after : (Int, Int)
+  /// the blocks made then besides block 0: each one's key, top and height
+  in_sight : Array[(Int, Double, Double)]
+  /// block 0's top and height then, and the top of the block in it
+  row : (Double, Double)?
+  inner : Double?
+  /// what a press 50 down hits then
+  hit : Int?
+  /// whether block 0 is made after a wheel
+  after_wheel : Bool
+} derive(Eq, Debug)
+
+///|
+/// A windowed list of 3000 blocks from its end, each 40 high (counted 40) but those between block 0 and the first in
+/// sight once it is put, `between` high at a width under 300; in a column 300 by 100; block 0 (a block 10 high in it)
+/// put `off` over the window's top; then laid out again 20 narrower (what it measured of the blocks not laid out
+/// forgotten) and 40 taller; then wheeled.
+fn put_far_over(off : Double, between? : Double = 40.0) -> PutFar {
   let scroll = @view.Scroll::list()
   let keys = Array::makei(3000, fn(i) { i })
+  let first = (-off / 40.0).to_int()
   let wide = @signals.signal(300.0)
   let tall = @signals.signal(100.0)
   let put : @signals.Signal[(Int, Double)?] = @signals.signal(None)
   let live : Map[Int, @view.View] = {}
+  let inner : Ref[@view.View?] = Ref(None)
   let pressed : Ref[Int?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
@@ -283,17 +305,30 @@ fn put_far_over(off : Double) -> ((Int, Int), (Int, Int), Array[(Int, Double, Do
       o.scrolls_window(scroll, fn() { keys }, est=40.0, from_end=true, put~, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
-        b.height(Is(Some(40.0))).on_press(fn() { pressed.val = Some(k) }) |> ignore
+        b
+        .height(By(fn() { Some(if k > 0 && k < first && wide.get() < 300.0 { between } else { 40.0 }) }))
+        .on_press(fn() { pressed.val = Some(k) })
+        |> ignore
+        if k == 0 {
+          inner.val = Some(b.box(fn(i) { i.height(Is(Some(10.0))) |> ignore }))
+        }
       })
       |> ignore
     })
     |> ignore
   })
+  let rect = fn(k : Int) {
+    live.get(k).map(fn(b) {
+      let (_, y, _, h) = b.rect()
+      (y, h)
+    })
+  }
   tree.frame(390.0, 844.0, now=0.0) |> ignore
   let w0 = tree.work()
   put.set(Some((0, off)))
   tree.frame(390.0, 844.0, now=16.0) |> ignore
   let w1 = tree.work()
+  let put_row = rect(0)
   wide.set(280.0)
   tree.frame(390.0, 844.0, now=32.0) |> ignore
   tall.set(140.0)
@@ -302,34 +337,69 @@ fn put_far_over(off : Double) -> ((Int, Int), (Int, Int), Array[(Int, Double, Do
   let ks = live.keys().collect().filter(fn(k) { k > 0 })
   ks.sort()
   let in_sight = ks.map(fn(k) {
-    let (_, y, _, h) = live[k].rect()
+    let (y, h) = rect(k).unwrap()
     (k, y, h)
   })
+  let row = rect(0)
+  let inner_top = if live.contains(0) { inner.val.map(fn(i) { i.rect().1 }) } else { None }
   tree.press(150.0, 50.0) |> ignore
-  let kept = live.contains(0)
   tree.wheel_at(150.0, 50.0, 0.0, -10.0, 0, 49.0) |> ignore
   tree.frame(390.0, 844.0, now=1000.0) |> ignore
-  (
-    (w1.made - w0.made, w1.let_go - w0.let_go),
-    (w2.made - w1.made, w2.laid - w1.laid),
+  {
+    put_frame: (w1.made - w0.made, w1.let_go - w0.let_go),
+    put_row,
+    after: (w2.made - w1.made, w2.laid - w1.laid),
     in_sight,
-    pressed.val,
-    kept,
-    live.contains(0),
-  )
+    row,
+    inner: inner_top,
+    hit: pressed.val,
+    after_wheel: live.contains(0),
+  }
 }
 
 ///|
-test "scrolls_window from its end, its first block put 4000 and 40000 over the window's top: in the frame it is put, the blocks it goes past made, measured and let go; the layouts after it, narrower and taller, the same however far it was put; the block put at kept made till the hand moves the list" {
+test "scrolls_window from its end, its first block put 4000 and 40000 over the window's top: in the frame it is put, the blocks it goes past made, measured and let go; the layouts after it, narrower and taller, the same however far it was put; the block put at made, out of sight as far off as it is counted to be, till the hand moves the list" {
   let near = put_far_over(-4000.0)
   let far = put_far_over(-40000.0)
-  // (the frame put: block 0 and those in sight made, those between made, measured and let go, those shown before let
-  // go: 99 between and 999, two nodes a block)
-  assert_eq((near.0, far.0), ((206, 204), (2006, 2004)))
-  // (narrower, then taller: the block over those in sight come in, nothing of the blocks between gone through)
-  assert_eq(near.1, far.1)
-  assert_eq(near.2, [(99, 0.0, 40.0), (100, 40.0, 40.0), (101, 80.0, 40.0), (102, 120.0, 40.0)])
-  assert_eq(far.2, [(999, 0.0, 40.0), (1000, 40.0, 40.0), (1001, 80.0, 40.0), (1002, 120.0, 40.0)])
-  assert_eq((near.3, far.3), (Some(100), Some(1000)))
-  assert_eq((near.4, near.5, far.4, far.5), (true, false, true, false))
+  // (the frame put: block 0 (three nodes) and those in sight made, those between made, measured and let go (two nodes a
+  // block: 99 and 999), those shown before let go; then 20 narrower, 40 taller: block 99 or 999 come in over those in
+  // sight, nothing of those between gone through)
+  assert_eq((near.after == far.after, { ..near, after: (0, 0) }, { ..far, after: (0, 0) }), (
+    true,
+    {
+      put_frame: (207, 204),
+      put_row: Some((-4000.0, 40.0)),
+      after: (0, 0),
+      in_sight: [(99, 0.0, 40.0), (100, 40.0, 40.0), (101, 80.0, 40.0), (102, 120.0, 40.0)],
+      row: Some((-3960.0, 40.0)),
+      inner: Some(-3960.0),
+      hit: Some(100),
+      after_wheel: false,
+    },
+    {
+      put_frame: (2007, 2004),
+      put_row: Some((-40000.0, 40.0)),
+      after: (0, 0),
+      in_sight: [(999, 0.0, 40.0), (1000, 40.0, 40.0), (1001, 80.0, 40.0), (1002, 120.0, 40.0)],
+      row: Some((-39960.0, 40.0)),
+      inner: Some(-39960.0),
+      hit: Some(1000),
+      after_wheel: false,
+    },
+  ))
+}
+
+///|
+test "scrolls_window from its end, its first block put 4000 over the window's top, the blocks between 60 high once it is narrower: what shows stays where it is, the one of them come in as tall as it is; those between not measured, the block put at as far off as it is counted to be" {
+  let p = put_far_over(-4000.0, between=60.0)
+  assert_eq({ ..p, after: (0, 0) }, {
+    put_frame: (207, 204),
+    put_row: Some((-4000.0, 40.0)),
+    after: (0, 0),
+    in_sight: [(99, -20.0, 60.0), (100, 40.0, 40.0), (101, 80.0, 40.0), (102, 120.0, 40.0)],
+    row: Some((-3980.0, 40.0)),
+    inner: Some(-3980.0),
+    hit: Some(100),
+    after_wheel: false,
+  })
 }
