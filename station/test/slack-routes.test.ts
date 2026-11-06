@@ -373,6 +373,16 @@ test("a single-session connect can be set to wake without a mention, and pointed
     assert.equal(t.store.getSession(bound.session)!.title, "night shift");
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", { session: "nope" }), [500, { error: "unknown session nope" }]);
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", { session: bound.session }), [200, { session: bound.session }]);
+    // Another model reaches the session it is bound to, as a chat's own change does.
+    assert.equal(t.store.getSession(bound.session)!.model, null);
+    assert.equal((await t.ask("PUT", "/connects/ds", { bind: { model: "deepseek-flash" } }))[0], 400, "no profile runs it: refused for both");
+    assert.equal(hubConfig(t.config.raw(), t.data).connects[0]!.bind.model, undefined);
+    t.config.update((raw) => (raw.profiles[0].models = ["deepseek-flash"]));
+    const [changed, why] = await t.ask("PUT", "/connects/ds", { bind: { model: "deepseek-flash" } });
+    assert.equal(changed, 200, JSON.stringify(why));
+    assert.deepEqual([t.store.getSession(bound.session)!.model, t.store.getSession(bound.session)!.effort], ["deepseek-flash", null]);
+    await t.ask("PUT", "/connects/ds", { requireMention: true });
+    assert.equal(t.store.getSession(bound.session)!.model, "deepseek-flash", "an edit that leaves the model alone leaves the session's");
     await t.ask("PUT", "/connects/ds", { mode: "multi-session" });
     assert.equal(hubConfig(t.config.raw(), t.data).connects[0]!.requireMention, true, "multi-session always needs a mention");
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", {}), [500, { error: "connect ds is not single-session" }]);
