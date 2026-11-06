@@ -1926,6 +1926,9 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   } else {
     None
   }
+  // (each once, in order: a node's block made where it is drawn, then put there, tells its bands twice)
+  l.bands_at.sort()
+  l.bands_at.dedup()
   let band = Ref(0)
   let take = fn(from : Int, to : Int, sfrom : Int, sto : Int) {
     if to > from {
