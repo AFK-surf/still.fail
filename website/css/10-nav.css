@@ -1,28 +1,121 @@
-/* ---------- Nav ---------- */
-.nav { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.92); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); box-shadow: 0 1px 0 var(--line); }
-.nav .w { display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
-.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: none; }
+/* ---------- Nav ----------
+   A translucent material over the page (Apple's materials): content scrolls under it and fades out at its lower edge
+   (the scroll-edge effect) instead of meeting a hard line. The edge appears only once something is under it. */
+.nav { position: sticky; top: 0; z-index: 30; isolation: isolate; }
+.nav::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: rgba(255,255,255,.86); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+}
+.nav::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 18px; pointer-events: none;
+  background: linear-gradient(rgba(255,255,255,.72), rgba(255,255,255,0));
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(#000, transparent); mask-image: linear-gradient(#000, transparent);
+  opacity: 0; transition: opacity var(--dur-ui) ease;
+}
+.nav[data-scrolled]::after { opacity: 1; }
+.nav .w { position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
+.brand {
+  display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: none;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.brand:active { transform: scale(.97); }
 .brand img { width: 26px; height: 26px; border-radius: 6px; }
-.wordmark { font-weight: 600; font-size: 22px; letter-spacing: -.035em; line-height: 1; }
-.nav-list { display: flex; gap: clamp(14px, 1.6vw, 28px); flex: 1; min-width: 0; }
-.nav-list a { text-decoration: none; font-size: 15px; font-weight: 500; color: var(--graphite); white-space: nowrap; line-height: var(--nav); }
-.nav-list a:hover, .nav-list a[aria-current=true] { color: var(--ink); }
-.nav-list a[aria-current=true] { box-shadow: inset 0 -2px 0 currentColor; }
-.nav-tools { display: flex; align-items: center; gap: 10px; flex: none; margin-left: auto; }
-.seg { display: inline-flex; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); padding: 2px; }
-.seg button { border: 0; background: transparent; height: 28px; min-width: 36px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--graphite); }
-.seg button[aria-pressed=true] { background: var(--ink); color: #fff; }
-.icon-link { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--ink); }
-.icon-link:hover { background: var(--mist); }
+/* The wordmark sits 1 px high so its x-height centres on the mark, not its cap height. */
+.wordmark { font-weight: 600; font-size: 22px; letter-spacing: -.035em; line-height: 1; transform: translateY(-1px); }
+
+/* Sections. One indicator under the current one, sliding from link to link as the page scrolls. */
+.nav-list { position: relative; display: flex; align-self: stretch; gap: clamp(14px, 1.6vw, 28px); flex: 1; min-width: 0; }
+.nav-list a {
+  display: flex; align-items: center; text-decoration: none; font-size: 15px; font-weight: 500; letter-spacing: -.003em;
+  color: var(--graphite); white-space: nowrap; transition: color var(--dur-ui) ease;
+}
+.nav-list a[aria-current=true] { color: var(--ink); }
+.nav-list a:focus-visible { outline-offset: -2px; border-radius: 6px; }
+.nav-ind {
+  position: absolute; left: 0; bottom: 0; width: 1px; height: 2px; background: var(--ink); pointer-events: none;
+  transform-origin: 0 0; transform: translateX(var(--x, 0px)) scaleX(var(--w, 0));
+  opacity: 0; transition: transform 280ms var(--ease-out), opacity var(--dur-ui) ease;
+}
+.nav-ind[data-on] { opacity: 1; }
+.nav-ind[data-jump] { transition: opacity var(--dur-ui) ease; }
+.nav-list .nav-cta { display: none; }
+
+.nav-tools { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+/* Language: a segmented control whose thumb slides to the chosen side. */
+.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 34px; padding: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); }
+.seg::before {
+  content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: 34px; border-radius: 999px; background: var(--ink);
+  transition: transform var(--dur-ui) var(--ease-out);
+}
+:root[data-lang=en] .seg::before { transform: translateX(100%); }
+.seg button {
+  position: relative; border: 0; background: transparent; height: 32px; padding: 0; border-radius: 999px;
+  font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer; color: var(--graphite);
+  transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.seg button[aria-pressed=true] { color: #fff; }
+.seg button:active { transform: scale(.92); }
+.icon-link, .menu-btn {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--ink); border: 0; background: transparent;
+  transition: background-color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.icon-link:active, .menu-btn:active { transform: scale(.92); }
 .icon-link svg { width: 20px; height: 20px; }
-.menu-btn { display: none; border: 0; background: transparent; width: 40px; height: 40px; border-radius: 999px; cursor: pointer; place-items: center; }
-.menu-btn svg { width: 22px; height: 22px; }
-@media (max-width: 1180px) {
-  .nav-list { display: none; }
+.menu-btn { display: none; cursor: pointer; padding: 0; }
+.menu-btn svg { width: 22px; height: 22px; overflow: visible; }
+/* The three bars fold into a cross: the same lines, so the button says what a press will do next. */
+.menu-btn path { transform-box: view-box; transform-origin: 12px 12px; transition: transform var(--dur-ui) var(--ease-out), opacity var(--dur-ui) ease; }
+.nav[data-open] .menu-btn .m1 { transform: rotate(45deg) translateY(5px); }
+.nav[data-open] .menu-btn .m2 { opacity: 0; }
+.nav[data-open] .menu-btn .m3 { transform: rotate(-45deg) translateY(-5px); }
+.nav-scrim { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .nav-list a:hover { color: var(--ink); }
+  .seg button[aria-pressed=false]:hover { color: var(--ink); }
+  .icon-link:hover, .menu-btn:hover { background: var(--mist); }
+}
+
+/* Narrow screens: the sections move into a sheet that slides down from under the bar (the way it goes back), over a
+   dimmed page. It is hidden from focus and screen readers while closed (visibility), and holds the call to action. */
+@media (max-width: 980px) {
   .menu-btn { display: grid; }
-  .nav[data-open] .nav-list { display: flex; position: absolute; top: var(--nav); left: 0; right: 0; flex-direction: column; gap: 0; background: #fff; padding: 8px var(--gr) 16px var(--gl); box-shadow: 0 1px 0 var(--line), 0 20px 30px -20px rgba(0,0,0,.2); }
-  .nav[data-open] .nav-list a { line-height: 48px; border-bottom: 1px solid var(--line); box-shadow: none; }
+  .nav-ind { display: none; }
+  .nav-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: -2; align-self: auto; flex-direction: column; gap: 0;
+    max-height: calc(100dvh - var(--nav)); overflow-y: auto; overscroll-behavior: contain;
+    padding: 4px var(--gr) 20px var(--gl); background: #fff; border-radius: 0 0 20px 20px;
+    box-shadow: 0 24px 48px -24px rgba(26,27,30,.28);
+    visibility: hidden; transform: translateY(-100%);
+    transition: transform 220ms var(--ease-out), visibility 0s linear 220ms;
+  }
+  .nav[data-open] .nav-list { visibility: visible; transform: none; transition: transform 380ms var(--ease-drawer), visibility 0s; }
+  .nav-list a { min-height: 52px; font-size: 17px; color: var(--ink); box-shadow: inset 0 -1px 0 var(--line); }
+  .nav-list a[aria-current=true]::after { content: ""; width: 6px; height: 6px; margin-left: 10px; border-radius: 50%; background: var(--brand); }
+  .nav-list .nav-cta { display: inline-flex; align-self: stretch; margin-top: 20px; min-height: 0; font-size: 16px; color: #fff; box-shadow: none; }
+  .nav[data-open]::before { background: #fff; }
+  .nav[data-open]::after { opacity: 0; }
+  .nav-scrim {
+    display: block; position: fixed; inset: 0; z-index: -3; background: rgba(26,27,30,.32);
+    opacity: 0; visibility: hidden; transition: opacity 220ms ease, visibility 0s linear 220ms;
+  }
+  .nav[data-open] .nav-scrim { opacity: 1; visibility: visible; transition: opacity 300ms ease, visibility 0s; }
+  :root.menu-open { overflow: hidden; }
 }
 @media (max-width: 640px) {
-  .nav .btn-ink { display: none; }
+  .nav .nav-tools > .btn-ink { display: none; }
+  .nav-tools { gap: 4px; }
+}
+/* Reduced motion: the sheet and scrim cross-fade in place. */
+@media (prefers-reduced-motion: reduce) and (max-width: 980px) {
+  .nav-list { transform: none; opacity: 0; }
+  .nav[data-open] .nav-list { opacity: 1; }
+  .nav-list, .nav-scrim { transition: opacity 200ms ease, visibility 0s linear 200ms !important; }
+  .nav[data-open] .nav-list, .nav[data-open] .nav-scrim { transition: opacity 200ms ease, visibility 0s !important; }
+}
+/* Reduced transparency: a solid bar. */
+@media (prefers-reduced-transparency: reduce) {
+  .nav::before { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .nav::after { display: none; }
+  .nav[data-scrolled]::before { box-shadow: 0 1px 0 var(--line); }
 }

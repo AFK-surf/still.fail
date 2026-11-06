@@ -1,16 +1,37 @@
-/* ---------- Footer ---------- */
-.foot { padding-block: clamp(48px, 5vw, 80px) 32px; }
-.foot-grid { display: grid; grid-template-columns: minmax(0, 8fr) repeat(4, minmax(0, 3fr)); gap: var(--gap); }
-.foot-grid .fh { font-size: 13px; font-weight: 500; color: var(--graphite); margin-bottom: 14px; }
-.foot-grid ul { display: flex; flex-direction: column; gap: 10px; }
-.foot-grid a { text-decoration: none; font-size: 15px; color: var(--ink); }
-.foot-grid a:hover { color: var(--brand-deep); }
-.foot-tag { margin-top: 16px; color: var(--graphite); font-size: var(--t-small); max-width: 22em; }
-.foot-base { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: clamp(48px, 5vw, 80px); padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--graphite); }
-@media (max-width: 1180px) {
-  .foot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .foot-grid > :first-child { grid-column: 1 / -1; }
+/* ---------- Footer ----------
+   On the 24-unit grid: inside the 1U margins, 22 columns with no gutter, so every column starts on a unit line.
+   The identity takes 10U; the four lists 3U each. */
+.foot { padding-block: clamp(56px, 5.6vw, 96px) 28px; }
+.foot-grid { display: grid; grid-template-columns: repeat(22, minmax(0, 1fr)); row-gap: 40px; align-items: start; }
+.foot-id { grid-column: 1 / span 10; display: flex; flex-direction: column; gap: 16px; padding-right: var(--gap); }
+.foot-grid > :nth-child(2) { grid-column: 11 / span 3; }
+.foot-grid > :nth-child(3) { grid-column: 14 / span 3; }
+.foot-grid > :nth-child(4) { grid-column: 17 / span 3; }
+.foot-grid > :nth-child(5) { grid-column: 20 / span 3; }
+.foot-grid > :not(.foot-id) { padding-right: 12px; }
+.foot-id .brand { align-self: flex-start; }
+.foot-tag { color: var(--graphite); font-size: var(--t-small); line-height: 1.55; letter-spacing: var(--tr-small); max-width: 22em; text-wrap: pretty; }
+.foot-grid .fh { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: .01em; color: var(--graphite); margin: 4px 0 14px; }
+.foot-grid ul { display: flex; flex-direction: column; gap: 4px; }
+.foot-grid li a {
+  display: inline-flex; align-items: center; min-height: 30px; text-decoration: none; font-size: 15px; line-height: 1.3; color: var(--ink);
+  transition: color var(--dur-ui) ease;
+}
+.foot-grid li a:focus-visible { outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .foot-grid li a:hover { color: var(--brand-deep); }
+}
+.foot-base {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px 24px; flex-wrap: wrap;
+  margin-top: clamp(56px, 5.6vw, 96px); padding-top: 20px; border-top: 1px solid var(--line);
+  font-size: 13px; line-height: 18px; letter-spacing: .01em; color: var(--graphite);
+}
+@media (max-width: 1120px) {
+  .foot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: var(--gap); }
+  .foot-grid > :nth-child(n) { grid-column: auto; padding-right: 0; }
+  .foot-grid > .foot-id { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
-  .foot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .foot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 36px; }
+  .foot-grid li a { min-height: 36px; }
 }

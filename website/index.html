@@ -6,9 +6,9 @@
 <!-- Language before the first paint: ?lang= or #en / #zh, then the visitor's choice, then the browser's. -->
 <script>(function(){var r=document.documentElement,l,q=new URLSearchParams(location.search).get("lang");r.classList.remove("no-js");try{l=localStorage.getItem("monoid.site.lang")}catch(e){}if(location.hash==="#en"||location.hash==="#zh")l=location.hash.slice(1);if(q==="en"||q==="zh")l=q;if(l!=="en"&&l!=="zh")l=/^zh/i.test(navigator.language||"")?"zh":"en";r.dataset.lang=l;r.lang=l==="en"?"en":"zh-CN";if(matchMedia("(min-width:1024px) and (min-height:760px) and (prefers-reduced-motion:no-preference)").matches)r.classList.add("scrolly")})()</script>
 <title>monoid · One devices</title>
-<meta name="description" content="monoid 把你每台电脑上的 agent 连成一台电脑：订阅账号进同一个号池，团队一起指挥，iPhone、Android 和桌面端随时接着干。">
+<meta name="description" content="monoid 把每台电脑上的 agent 连成一台：订阅账号共用一个号池，团队在 Slack 里一起指挥，iPhone、Android、桌面和网页随时接手。">
 <meta property="og:title" content="monoid · One devices">
-<meta property="og:description" content="号池、协同、多端。One account pool, one team, every device.">
+<meta property="og:description" content="号池、协同、多端：把每台电脑上的 agent 连成一台。One account pool, one team, every device.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://monoid.build/">
 <meta name="twitter:card" content="summary_large_image">
@@ -81,25 +81,28 @@
 <header class="nav" id="nav">
   <div class="w">
     <a class="brand" href="#top" aria-label="monoid"><img src="assets/mark.svg" alt="" width="26" height="26"><span class="wordmark">monoid</span></a>
-    <nav class="nav-list" aria-label="页面">
-      <a href="#pool"><span class="zh">号池</span><span class="en">Account pool</span></a>
+    <nav class="nav-list" id="nav-list" aria-label="页面" data-aria-en="Sections">
+      <a href="#pool"><span class="zh">号池</span><span class="en">Pool</span></a>
       <a href="#teams"><span class="zh">协同</span><span class="en">Teams</span></a>
-      <a href="#devices"><span class="zh">多端</span><span class="en">Every device</span></a>
+      <a href="#devices"><span class="zh">多端</span><span class="en">Devices</span></a>
       <a href="#security"><span class="zh">安全</span><span class="en">Security</span></a>
       <a href="#changelog"><span class="zh">更新</span><span class="en">Changelog</span></a>
       <a href="#download"><span class="zh">下载</span><span class="en">Download</span></a>
       <a href="#faq"><span class="zh">常见问题</span><span class="en">FAQ</span></a>
+      <a class="btn btn-ink nav-cta" data-app href="https://app.monoid.build"><span class="zh">打开 monoid</span><span class="en">Open monoid</span></a>
+      <span class="nav-ind" aria-hidden="true"></span>
     </nav>
     <div class="nav-tools">
-      <div class="seg" role="group" aria-label="Language">
-        <button type="button" data-set-lang="zh" aria-pressed="true">中</button>
-        <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+      <div class="seg" role="group" aria-label="语言" data-aria-en="Language">
+        <button type="button" data-set-lang="zh" aria-pressed="true" lang="zh-CN">中</button>
+        <button type="button" data-set-lang="en" aria-pressed="false" lang="en">EN</button>
       </div>
-      <a class="icon-link" href="https://github.com/AFK-surf/still.fail" aria-label="GitHub" title="GitHub"><svg><use href="#b-github"/></svg></a>
+      <a class="icon-link" href="https://github.com/AFK-surf/still.fail" aria-label="GitHub" title="GitHub"><svg aria-hidden="true"><use href="#b-github"/></svg></a>
       <a class="btn btn-ink sm" data-app href="https://app.monoid.build"><span class="zh">打开 monoid</span><span class="en">Open monoid</span></a>
-      <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false"><svg class="ico"><use href="#i-menu"/></svg></button>
+      <button class="menu-btn" type="button" aria-label="菜单" data-aria-en="Menu" aria-expanded="false" aria-controls="nav-list"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="m1" d="M4 7h16"/><path class="m2" d="M4 12h16"/><path class="m3" d="M4 17h16"/></svg></button>
     </div>
   </div>
+  <div class="nav-scrim" aria-hidden="true"></div>
 </header>
 
 <main id="top">
@@ -217,7 +220,7 @@
             <div class="win-cols">
               <div class="side">
                 <span class="label"><span class="zh">今天</span><span class="en">Today</span></span>
-                <div class="row on"><b><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small>Server · <span class="zh">进行中</span><span class="en">In progress</span></small></div>
+                <div class="row on"><b><i class="mk-busy"></i><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small>Server · <span class="zh">跑压测</span><span class="en">Load test</span></small></div>
                 <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
                 <div class="row"><b><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · <span class="zh">跑测试</span><span class="en">Running tests</span></small></div>
                 <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">等你决定</span><span class="en">Needs your call</span></small></div>
@@ -228,10 +231,7 @@
                 <span class="bubble agent"><span class="zh">orders 表少了 (user_id, created_at) 联合索引。加上后 p99 回到 120 ms，迁移在 <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>0042_orders_index.sql</span></span><span class="en">The orders table was missing a (user_id, created_at) index. With it, p99 is back to 120 ms; the migration is in <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>0042_orders_index.sql</span></span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
                 <span class="who r">Alex <span class="av" style="background:var(--ink)">A</span></span>
                 <span class="bubble user"><span class="zh">合进去，在 Server 上再跑一遍压测</span><span class="en">Merge it, and run the load test again on Server</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                <div class="task" style="align-self:flex-start;max-width:84%">
-                  <div class="task-t"><svg class="ico c-mut"><use href="#i-run"/></svg><span class="zh">在 Server 上跑压测</span><span class="en">Load test on Server</span></div>
-                  <span class="cap"><svg class="ico c-mut"><use href="#i-run"/></svg><span class="zh">进行中</span><span class="en">In progress</span></span>
-                </div>
+                <div class="act"><i class="ag"></i><span class="zh">在 Server 上跑压测</span><span class="en">Running the load test on Server</span><span class="t">8s</span></div>
               </div>
             </div>
           </div>
@@ -495,7 +495,7 @@
                   <div class="status"><span>9:41</span><span>●●●</span></div>
                   <div class="app-h"><span class="zh">对话</span><span class="en">Chats</span></div>
                   <div class="list">
-                    <div class="row on"><b><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
+                    <div class="row on"><b><i class="mk-busy"></i><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
                     <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
                     <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">只剩 React Router 8</span><span class="en">Only React Router 8 left</span></small></div>
                     <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small><span class="zh">回到 120 ms</span><span class="en">Back to 120 ms</span></small></div>
@@ -507,7 +507,7 @@
                   <div class="chatv">
                     <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
                     <span class="bubble agent"><span class="zh">改好了，正在 Willow 上跑测试</span><span class="en">Fixed, running the tests on Willow</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                    <div class="task" style="padding:9px 10px"><div class="task-t" style="font-size:12px"><svg class="ico c-mut"><use href="#i-run"/></svg>pnpm test login</div><span class="bar-g" style="width:88%"></span><span class="bar-g" style="width:60%"></span></div>
+                    <div class="act"><i class="ag"></i><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span><span class="t">12s</span></div>
                   </div>
                 </div>
               </div>
@@ -571,7 +571,7 @@
               <div class="status"><span>9:41</span><span>●●●</span></div>
               <div class="app-h"><span class="zh">对话</span><span class="en">Chats</span></div>
               <div class="list">
-                <div class="row on"><b><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
+                <div class="row on"><b><i class="mk-busy"></i><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
                 <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
                 <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">只剩 React Router 8</span><span class="en">Only React Router 8 left</span></small></div>
                 <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small><span class="zh">回到 120 ms</span><span class="en">Back to 120 ms</span></small></div>
@@ -972,9 +972,9 @@
 <footer class="band foot" data-tone="paper">
   <div class="w">
     <div class="foot-grid">
-      <div>
+      <div class="foot-id">
         <a class="brand" href="#top" aria-label="monoid"><img src="assets/mark.svg" alt="" width="26" height="26"><span class="wordmark">monoid</span></a>
-        <p class="foot-tag"><span class="zh">号池、协同、多端。把你的电脑连成一台。</span><span class="en">One account pool, one team, every device. Your computers, as one.</span></p>
+        <p class="foot-tag"><span class="zh">把每台电脑上的 agent 连成一台。</span><span class="en">The agents on all your computers, as one.</span></p>
       </div>
       <div><p class="fh"><span class="zh">产品</span><span class="en">Product</span></p><ul>
         <li><a href="#pool"><span class="zh">号池</span><span class="en">Account pool</span></a></li>
@@ -1002,8 +1002,8 @@
       </ul></div>
     </div>
     <div class="foot-base">
-      <span>© 2026 monoid · <span class="zh">MIT 许可开源</span><span class="en">Open source under MIT</span></span>
-      <span>No full stop until it's done</span>
+      <span>© 2026 monoid · <span class="zh">MIT 开源</span><span class="en">Open source, MIT</span></span>
+      <span lang="en">No full stop until it's done</span>
     </div>
   </div>
 </footer>

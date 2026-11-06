@@ -10,37 +10,129 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } },
   };
 
+  const nav = $("#nav");
+  const sheet = $("#nav-list", nav);
+  const ind = $(".nav-ind", nav);
+
   // ---- Language: both are in the page, one is shown ----
+  // Labels read by screen readers follow too: an element keeps its Chinese label in aria-label and its English one in
+  // data-aria-en.
+  for (const el of $$("[data-aria-en]")) el.dataset.ariaZh = el.getAttribute("aria-label") || "";
   function setLang(l, remember) {
     root.dataset.lang = l;
     root.lang = l === "en" ? "en" : "zh-CN";
     for (const b of $$("[data-set-lang]")) b.setAttribute("aria-pressed", String(b.dataset.setLang === l));
     for (const a of $$("[data-legal]")) a.href = (l === "en" ? "/en" : "") + new URL(a.href).pathname.replace(/^\/en/, "");
+    for (const el of $$("[data-aria-en]")) el.setAttribute("aria-label", l === "en" ? el.dataset.ariaEn : el.dataset.ariaZh);
     if (remember) store.set("monoid.site.lang", l);
+    placeInd(false); // the labels changed width
   }
-  setLang(root.dataset.lang === "en" ? "en" : "zh", false);
   for (const b of $$("[data-set-lang]")) b.addEventListener("click", () => setLang(b.dataset.setLang, true));
 
-  // ---- Mobile menu ----
-  const nav = $("#nav");
-  const menu = $(".menu-btn");
-  menu.addEventListener("click", () => {
-    const open = !nav.hasAttribute("data-open");
-    nav.toggleAttribute("data-open", open);
-    menu.setAttribute("aria-expanded", String(open));
-  });
-  for (const a of $$(".nav-list a")) a.addEventListener("click", () => { nav.removeAttribute("data-open"); menu.setAttribute("aria-expanded", "false"); });
+  // ---- The bar: its lower edge fades the page out only once something has scrolled under it ----
+  let under = false;
+  const edge = () => { const s = scrollY > 1; if (s !== under) { under = s; nav.toggleAttribute("data-scrolled", s); } };
+  addEventListener("scroll", edge, { passive: true });
+  edge();
 
-  // ---- Which section is on screen: its nav link is marked ----
-  const links = new Map($$(".nav-list a").map((a) => [a.hash.slice(1), a]));
-  const spy = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      for (const a of links.values()) a.removeAttribute("aria-current");
-      links.get(e.target.id)?.setAttribute("aria-current", "true");
+  // ---- Mobile menu: a sheet from under the bar. Escape or the dimmed page closes it; Tab stays inside while open ----
+  const menu = $(".menu-btn", nav);
+  const narrow = matchMedia("(max-width: 980px)");
+  const isOpen = () => nav.hasAttribute("data-open");
+  function setMenu(open, refocus) {
+    if (open === isOpen()) return;
+    nav.toggleAttribute("data-open", open);
+    root.classList.toggle("menu-open", open);
+    menu.setAttribute("aria-expanded", String(open));
+    if (open) $("a", sheet).focus({ preventScroll: true });
+    else if (refocus) menu.focus({ preventScroll: true });
+  }
+  menu.addEventListener("click", () => setMenu(!isOpen(), true));
+  $(".nav-scrim", nav).addEventListener("click", () => setMenu(false, true));
+  for (const a of $$("a", sheet)) a.addEventListener("click", () => setMenu(false, false));
+  narrow.addEventListener("change", () => setMenu(false, false));
+  document.addEventListener("keydown", (e) => {
+    if (!isOpen()) return;
+    if (e.key === "Escape") { e.preventDefault(); setMenu(false, true); return; }
+    if (e.key !== "Tab") return;
+    const stops = $$("a[href], button", nav).filter((el) => el.getClientRects().length);
+    const first = stops[0], last = stops[stops.length - 1];
+    if (!nav.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // ---- Links within the page land where they point ----
+  // Bands below the fold are laid out only as they come near (content-visibility), so their heights settle during a
+  // long smooth scroll and it would stop short (and the devices scene would snap it). So a far jump goes most of the
+  // way at once, lets the bands near the target settle, then glides the last stretch, and checks where it landed.
+  const targetY = (t) => t.id === "top" ? 0 : t.getBoundingClientRect().top + scrollY - (parseFloat(getComputedStyle(t).scrollMarginTop) || 0);
+  const frames = (n) => new Promise((ok) => { const f = () => (n-- ? requestAnimationFrame(f) : ok()); f(); });
+  const settle = () => new Promise((ok) => {
+    let done = false;
+    const end = () => { if (!done) { done = true; removeEventListener("scrollend", end); ok(); } };
+    addEventListener("scrollend", end);
+    setTimeout(end, 900);
+  });
+  async function go(t) {
+    const far = Math.abs(targetY(t) - scrollY) > innerHeight * 1.5;
+    if (reduce || far) {
+      const y = targetY(t);
+      scrollTo({ top: reduce ? y : y - Math.sign(y - scrollY) * innerHeight * 0.6, behavior: "instant" });
+      await frames(2);
     }
+    if (!reduce) { scrollTo({ top: targetY(t), behavior: "smooth" }); await settle(); }
+    for (let i = 0; i < 4 && Math.abs(targetY(t) - scrollY) > 2; i++) { scrollTo({ top: targetY(t), behavior: "instant" }); await frames(2); }
+  }
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest?.('a[href^="#"]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const id = decodeURIComponent(a.hash.slice(1));
+    const t = id && document.getElementById(id);
+    if (!t) return;
+    e.preventDefault();
+    if (isOpen()) setMenu(false, false);
+    history.pushState(null, "", id === "top" ? location.pathname + location.search : "#" + id);
+    go(t);
+    // Keyboard users continue from the section they jumped to.
+    if (!t.matches("a, button, input, [tabindex]")) t.setAttribute("tabindex", "-1");
+    t.focus({ preventScroll: true });
+  });
+  if (location.hash.length > 3) {
+    const t = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (t) addEventListener("load", () => frames(2).then(() => go(t)), { once: true });
+  }
+
+  // ---- Which section is on screen: its link is marked, and one indicator slides under it ----
+  // A thin stripe across the middle of the screen decides; a band with no link (the hero, the overview) clears it.
+  const links = new Map($$('a[href^="#"]', sheet).map((a) => [a.hash.slice(1), a]));
+  let current = null;
+  function placeInd(slide) {
+    if (!current || !current.offsetWidth) { ind.removeAttribute("data-on"); return; }
+    // Coming from nowhere, it appears in place; from another link, it slides.
+    ind.toggleAttribute("data-jump", !slide || !ind.hasAttribute("data-on"));
+    ind.style.setProperty("--x", current.offsetLeft + "px");
+    ind.style.setProperty("--w", current.offsetWidth);
+    ind.setAttribute("data-on", "");
+  }
+  function mark(a) {
+    if (a === current) return;
+    current?.removeAttribute("aria-current");
+    current = a || null;
+    current?.setAttribute("aria-current", "true");
+    placeInd(true);
+  }
+  const seen = new Map();
+  const spy = new IntersectionObserver((entries) => {
+    for (const e of entries) seen.set(e.target, e.isIntersecting);
+    let on = null;
+    for (const [s, hit] of seen) if (hit) on = s;
+    mark(on && links.get(on.id));
   }, { rootMargin: "-45% 0px -50% 0px" });
-  for (const id of links.keys()) { const s = document.getElementById(id); if (s) spy.observe(s); }
+  for (const s of $$("main > section")) spy.observe(s);
+  new ResizeObserver(() => placeInd(false)).observe(sheet);
+  document.fonts?.ready.then(() => placeInd(false));
+  setLang(root.dataset.lang === "en" ? "en" : "zh", false);
 
   // ---- Tabs (the product overview and the devices) ----
   for (const group of $$("[data-tabs]")) {
@@ -229,13 +321,39 @@
   }
 
   // ---- Reveal on scroll ----
-  if (reduce || !("IntersectionObserver" in window)) {
-    for (const el of $$(".rv")) el.classList.add("in");
-  } else {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-    }, { rootMargin: "0px 0px -8% 0px" });
-    for (const el of $$(".rv")) io.observe(el);
+  // Everything is visible at the first paint. Then only what starts below the fold is set to wait (.rv-wait), and it
+  // comes in as it reaches the screen (.rv-in, removed again once done so the element's own transitions return).
+  // Groups (.split-head, .head, [data-stagger]) bring their children in one after another, at most 6 steps.
+  {
+    const rvs = $$(".rv");
+    const STAGGER = 60, DUR = 520;
+    for (const g of rvs) if (g.matches(".split-head, .head, [data-stagger]")) [...g.children].forEach((c, i) => c.style.setProperty("--i", Math.min(i, 6)));
+    const show = (el) => { el.classList.add("in"); };
+    if (!("IntersectionObserver" in window)) rvs.forEach(show);
+    else {
+      const met = new WeakSet();
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const el = e.target;
+          if (!met.has(el)) {
+            met.add(el);
+            // Already on screen (or above it, after a jump to an anchor): leave it be. A band not yet laid out
+            // (content-visibility) reports an empty box: it is far below.
+            const r = e.boundingClientRect;
+            if ((r.width || r.height) && r.top < innerHeight) { show(el); io.unobserve(el); continue; }
+            el.classList.add("rv-wait");
+          }
+          if (!e.isIntersecting) continue;
+          io.unobserve(el);
+          el.classList.add("rv-in");
+          el.classList.remove("rv-wait");
+          show(el);
+          const steps = el.matches(".split-head, .head, [data-stagger]") ? Math.min(el.children.length - 1, 6) : 0;
+          setTimeout(() => el.classList.remove("rv-in"), DUR + steps * STAGGER + 80);
+        }
+      }, { rootMargin: "0px 0px -8% 0px" });
+      rvs.forEach((el) => io.observe(el));
+    }
   }
 
   // ---- The teams grid's pictures move only while they are on screen ----
