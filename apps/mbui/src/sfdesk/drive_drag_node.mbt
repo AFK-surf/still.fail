@@ -99,6 +99,15 @@ fn drive_node_target(
             return None
           }
         }
+        match tree.root().pointer_here_told() {
+          Some((x, y)) => for (id, island) in drive_node_old_views.iter() {
+            if tree.holds(v.id(), id) && @ui.let_go_here(island.view) &&
+              drive_node_old_at(@ui.current(), x, y) is Some(_) {
+              return None
+            }
+          }
+          None => ()
+        }
         match now.into {
           None => Some("keep")
           Some(at) => Some(fdrag_effect(d, at.station, @ui.mods_held()))

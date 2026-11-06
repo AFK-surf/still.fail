@@ -191,6 +191,65 @@ test "folder drag gives an old folder inside chat priority over the chat" {
 }
 
 ///|
+test "folder drag gives an old folder inside a new target priority over its hint and drop" {
+  drag_reset()
+  let calls : Array[(String, Json)] = []
+  let effect : Ref[() -> String?] = Ref(fn() { None })
+  let writable = @signals.signal(true)
+  let src = @sfbase.made_source(topic=fn(name, _) {
+    match name { "drive" => Some({ "entries": [] }); "stations" => Some([]); _ => None }
+  }, call=fn(name, params, done) { calls.push((name, params)); done(Ok({})) })
+  let from : DriveAt = { station: "ws/source", root: Some("/src"), path: "" }
+  let entry = @sfbase.dv_entry({ "name": "Source.txt", "kind": "text", "size": 2 })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=400.0, h=300.0, platform=0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(source) {
+      source.width(Is(Some(200.0))).height(Is(Some(70.0))) |> ignore
+      @sf.words_node(source, fn() { "Source" }, fn() { @sf.theme().items.name }) |> ignore
+      source.gesture(fdrag_slop, drag=fn(d) { drive_node_drag(src, from, entry, d) }) |> ignore
+    }) |> ignore
+    root.box(fn(outer) {
+      outer.width(Is(Some(220.0))).height(Is(Some(100.0))) |> ignore
+      effect.val = drive_side_target_node(outer, src, fn() { "ws" },
+        fn() { Some({ station: "ws/other", root: Some("/dst"), path: "outer" }) }, fn() { "Outer" },
+        fn() { true }, fn() { true })
+      @ui.old(outer, fn(c) {
+        drag_frame(c, src, "ws", outside=false)
+        let id = c.id("old-folder-in-new-target")
+        fdrag_target(c, id, "old-folder", Some({ station: "ws/other", root: Some("/dst"), path: "nested" }),
+          "Folder", writable.get(), true, 1, outside=false) |> ignore
+        c.interact(id) |> ignore
+        c.box(id~, w=Px(180.0), h=Px(70.0), fn() { c.text("Old folder") |> ignore }) |> ignore
+      }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    }) |> ignore
+    drive_drag_window_node(root, src, fn() { "ws" })
+  })
+  t.draw()
+  t.draw()
+  let (sx, sy) = t.find("Source").unwrap()
+  let (dx, dy) = t.find("Old folder").unwrap()
+  t.press_at(sx, sy)
+  t.move(dx, dy)
+  t.draw()
+  assert_true((effect.val)() is None, msg="the nested old folder owns the hint")
+  t.release(dx, dy)
+  let moves = calls.filter(fn(c) { c.0 == "drive.transfer" })
+  assert_eq(moves.length(), 1)
+  assert_eq(text(field(Some(moves[0].1), "to"), "path"), "nested")
+  writable.set(false)
+  t.draw()
+  t.press_at(sx, sy)
+  t.move(dx, dy)
+  t.draw()
+  assert_eq((effect.val)(), Some("copy"))
+  t.release(dx, dy)
+  let moves = calls.filter(fn(c) { c.0 == "drive.transfer" })
+  assert_eq(moves.length(), 2)
+  assert_eq(text(field(Some(moves[1].1), "to"), "path"), "outer")
+}
+
+///|
 test "folder drag chat hint follows the actual target without taking the drop" {
   drag_reset()
   let src = @sfbase.made_source(topic=fn(_, _) { None }, call=fn(_, _, done) { done(Ok({})) })
