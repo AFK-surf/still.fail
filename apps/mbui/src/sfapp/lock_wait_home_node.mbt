@@ -8,13 +8,14 @@ fn lock_wait_home_node(
   core : @settings.Core,
   here : () -> @settings.Here,
   tips : @sf.TipLayer,
+  foot : () -> Double,
 ) -> Unit {
   parent.box(fn(page) {
     page.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
     @sfpages.lock_wait_page_node(page, core, here)
   })
   |> ignore
-  parent.box(fn(foot) { foot.height(By(fn() { Some(nav_foot()) })) |> ignore }) |> ignore
+  parent.box(fn(room) { room.height(By(fn() { Some(foot()) })) |> ignore }) |> ignore
   parent.box(fn(bar) {
     bar.over(Is(true)).lies_along(Is(Start)) |> ignore
     home_top_bar_node(

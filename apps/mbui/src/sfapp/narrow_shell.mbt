@@ -664,7 +664,7 @@ fn narrow_made_as(
           // (all of the page's room, the lock's page and Home alike)
           q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
           if waiting {
-            lock_wait_home_node(q, src, core, here, tips)
+            lock_wait_home_node(q, src, core, here, tips, fn() { nav_foot() })
           } else {
             home_node(q, src, tips, stint)
           }
