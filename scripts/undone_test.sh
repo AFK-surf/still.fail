@@ -64,4 +64,20 @@ other "a picture main changed put back" 1 "printf '\\001\\002\\003\\000old' > pi
 other "a picture main changed changed again" 0 "printf '\\001\\002\\003\\000newer' > pic.bin"
 other "a script main made runnable made not again" 1 "chmod -x run.sh"
 other "an empty file main added deleted" 1 "rm empty.txt"
+other "a picture moved without undoing it" 0 "git mv pic.bin moved.bin"
+other "a script moved with its executable mode" 0 "git mv run.sh moved.sh"
+other "a script moved and made not executable" 1 "git mv run.sh moved.sh; chmod -x moved.sh"
+other "a mode undone while the picture changes again" 1 "chmod -x run.sh; printf '\\001\\002\\003\\000newer' > pic.bin"
+# An object read that fails cannot be treated as proof that the branch left main's changes intact.
+real_git=$(command -v git)
+mkdir -p "$repo/fakebin"
+cat > "$repo/fakebin/git" <<'EOF'
+#!/bin/sh
+[ "$1" = ls-tree ] && exit 7
+exec "$UNDONE_REAL_GIT" "$@"
+EOF
+chmod +x "$repo/fakebin/git"
+got=0
+UNDONE_REAL_GIT="$real_git" PATH="$repo/fakebin:$PATH" sh "$script" "$base2" HEAD > /dev/null 2>&1 || got=$?
+if [ "$got" = 2 ]; then echo "ok   object read failure is rejected"; else echo "FAIL object read failure: $got, not 2"; fails=1; fi
 exit $fails
