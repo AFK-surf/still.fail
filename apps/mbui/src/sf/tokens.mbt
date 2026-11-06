@@ -1354,19 +1354,303 @@ pub fn begin(_c : @ui.Ctx) -> Theme {
 }
 
 ///|
+/// A colour theme the app can be drawn in (外观 › 主题色: the prefs' `accent`), by day and by night: the accent itself (a
+/// mark, a fill, a caret), its ink (words in it, a chosen row's) and the grounds in its hue (Grounds), each as far off
+/// the page as still.fail's orange's (its ink 6.9 to 1 and more on paper, 7 to 1 on a raised ground in the dark; white
+/// on the accent 4 to 1 and more by day, 3 by night). The accent's ground is its ink at the theme's tone, as the
+/// orange's.
+pub(all) struct AccentTone {
+  /// what the prefs keep ("": still.fail's orange) and its name's word (`web-pages.appearance.accent.<key>`)
+  key : String
+  light : Int64
+  light_text : Int64
+  dark : Int64
+  dark_text : Int64
+  /// the grounds in its hue by day and by night (None: the palettes' own, the orange's warm paper)
+  light_grounds : Grounds?
+  dark_grounds : Grounds?
+}
+
+///|
+/// A theme's grounds (the palette's of those names), in its hue: the page's and the sidebar's a step under it, what is
+/// chosen and the chips a step under that, the cards' and what floats. Each the orange's warm one's lightness, turned
+/// to the accent's hue a little more saturated (OKLCH: the page's 0.012 by day, 0.016 by night; the sidebar's 0.024 and
+/// 0.018, what is chosen 0.036 and 0.028), as Slack's themes tint the frame: what is read on them as it was.
+pub(all) struct Grounds {
+  bg : Int64
+  canvas : Int64
+  raised : Int64
+  sidebar : Int64
+  list : Int64
+  selected : Int64
+  paper : Int64
+  card : Int64
+  card2 : Int64
+  chip : Int64
+  /// mbui's theme's `faint` (a quiet ground: a track's, a placeholder's), in the hue as the rest
+  faint : Int64
+}
+
+///|
+/// The colour themes to choose from, still.fail's orange first (the palettes' own).
+pub let accents : Array[AccentTone] = [
+  {
+    key: "",
+    light: 0xCC5A34FFL,
+    light_text: 0x8F2B01FFL,
+    dark: 0xE8734FFFL,
+    dark_text: 0xF6A383FFL,
+    light_grounds: None,
+    dark_grounds: None,
+  },
+  {
+    key: "blue",
+    light: 0x2F6BD8FFL,
+    light_text: 0x174A9EFFL,
+    dark: 0x5C93F0FFL,
+    dark_text: 0x9DBDF7FFL,
+    light_grounds: Some({
+      bg: 0xEFF4FCFFL, canvas: 0xFFFFFFFFL, raised: 0xFFFFFFFFL, sidebar: 0xE0EAFAFFL,
+      list: 0xF8FAFEFFL, selected: 0xCFDDF4FFL, paper: 0xEEF3FBFFL, card: 0xFFFFFFFFL,
+      card2: 0xF8FAFEFFL, chip: 0xDEE5F1FFL, faint: 0xE6EDF8FFL,
+    }),
+    dark_grounds: Some({
+      bg: 0x181C24FFL, canvas: 0x23272FFFL, raised: 0x272C35FFL, sidebar: 0x11151EFFL,
+      list: 0x191D24FFL, selected: 0x2B3442FFL, paper: 0x23272FFFL, card: 0x23272FFFL,
+      card2: 0x282D36FFL, chip: 0x2D333DFFL, faint: 0x2D333DFFL,
+    }),
+  },
+  {
+    key: "teal",
+    light: 0x16847AFFL,
+    light_text: 0x075E56FFL,
+    dark: 0x2FA194FFL,
+    dark_text: 0x80D2C7FFL,
+    light_grounds: Some({
+      bg: 0xEBF6F4FFL, canvas: 0xFFFFFFFFL, raised: 0xFFFFFFFFL, sidebar: 0xD8EFEBFFL,
+      list: 0xF7FBFBFFL, selected: 0xC2E4DFFFL, paper: 0xEAF5F3FFL, card: 0xFFFFFFFFL,
+      card2: 0xF7FBFAFFL, chip: 0xD8E9E6FFL, faint: 0xE1F0EEFFL,
+    }),
+    dark_grounds: Some({
+      bg: 0x141F1DFFL, canvas: 0x1F2A28FFL, raised: 0x232F2DFFL, sidebar: 0x0C1816FFL,
+      list: 0x15201EFFL, selected: 0x233835FFL, paper: 0x1F2A28FFL, card: 0x1F2A28FFL,
+      card2: 0x24302EFFL, chip: 0x273634FFL, faint: 0x273634FFL,
+    }),
+  },
+  {
+    key: "purple",
+    light: 0x7B52D3FFL,
+    light_text: 0x5633A6FFL,
+    dark: 0x9E7BEBFFL,
+    dark_text: 0xC6AEF6FFL,
+    light_grounds: Some({
+      bg: 0xF3F2FBFFL, canvas: 0xFFFFFFFFL, raised: 0xFFFFFFFFL, sidebar: 0xEAE7F8FFL,
+      list: 0xFAFAFDFFL, selected: 0xDDD8F2FFL, paper: 0xF3F1FAFFL, card: 0xFFFFFFFFL,
+      card2: 0xFAF9FDFFL, chip: 0xE5E2F0FFL, faint: 0xEDEBF6FFL,
+    }),
+    dark_grounds: Some({
+      bg: 0x1C1B23FFL, canvas: 0x27262EFFL, raised: 0x2C2B34FFL, sidebar: 0x16141DFFL,
+      list: 0x1D1C24FFL, selected: 0x343141FFL, paper: 0x27262EFFL, card: 0x27262EFFL,
+      card2: 0x2D2C35FFL, chip: 0x33313CFFL, faint: 0x33313CFFL,
+    }),
+  },
+  {
+    key: "pink",
+    light: 0xC94079FFL,
+    light_text: 0x951F55FFL,
+    dark: 0xE56C9FFFL,
+    dark_text: 0xF5A6C8FFL,
+    light_grounds: Some({
+      bg: 0xFBF0F3FFL, canvas: 0xFFFFFFFFL, raised: 0xFFFFFFFFL, sidebar: 0xF8E3E9FFL,
+      list: 0xFDF9FAFFL, selected: 0xF1D3DBFFL, paper: 0xFAEFF2FFL, card: 0xFFFFFFFFL,
+      card2: 0xFDF9FAFFL, chip: 0xEFE0E4FFL, faint: 0xF6E8ECFFL,
+    }),
+    dark_grounds: Some({
+      bg: 0x23191CFFL, canvas: 0x2E2427FFL, raised: 0x34292CFFL, sidebar: 0x1C1215FFL,
+      list: 0x231A1DFFL, selected: 0x402D33FFL, paper: 0x2E2427FFL, card: 0x2E2427FFL,
+      card2: 0x352A2DFFL, chip: 0x3B2E32FFL, faint: 0x3B2E32FFL,
+    }),
+  },
+]
+
+///|
+/// A colour theme of the person's own hue (外观 › 主题色 › 自定义: the prefs' `accent` `custom:<hue>`, 0 to 359): made
+/// by the rule the five above follow, in OKLCH: the accent at lightness 0.56 by day and 0.65 by night, its ink at 0.425
+/// and 0.80, each as saturated as the five (0.17, 0.155, 0.15, 0.10) where sRGB has it at that hue, less where it does
+/// not; the grounds the orange's lightness at the chroma Grounds says. Every hue so stands as the five do: its ink 6.8 to
+/// 1 and more on its page, 5.4 on what is chosen, white on its accent 4.3 by day and 3 by night (custom_tone_wbtest.mbt).
+pub fn custom_tone(hue : Int) -> AccentTone {
+  let h = hue.to_double()
+  let day = fn(l, c) { oklch(l, c, h) }
+  {
+    key: "custom:" + hue.to_string(),
+    light: day(0.56, 0.17),
+    light_text: day(0.425, 0.15),
+    dark: day(0.65, 0.155),
+    dark_text: day(0.80, 0.10),
+    light_grounds: Some({
+      bg: day(0.965, 0.012),
+      canvas: 0xFFFFFFFFL,
+      raised: 0xFFFFFFFFL,
+      sidebar: day(0.934, 0.024),
+      list: day(0.986, 0.005),
+      selected: day(0.893, 0.036),
+      paper: day(0.962, 0.012),
+      card: 0xFFFFFFFFL,
+      card2: day(0.985, 0.005),
+      chip: day(0.920, 0.018),
+      faint: day(0.940, 0.016),
+    }),
+    dark_grounds: Some({
+      bg: day(0.227, 0.016),
+      canvas: day(0.273, 0.015),
+      raised: day(0.293, 0.017),
+      sidebar: day(0.197, 0.018),
+      list: day(0.231, 0.015),
+      selected: day(0.322, 0.028),
+      paper: day(0.273, 0.015),
+      card: day(0.273, 0.015),
+      card2: day(0.298, 0.017),
+      chip: day(0.318, 0.020),
+      faint: day(0.318, 0.020),
+    }),
+  }
+}
+
+///|
+/// The hue a custom theme's key says (`custom:<0..359>`), or None.
+pub fn custom_hue(key : String) -> Int? {
+  guard key.has_prefix("custom:") else { return None }
+  let digits = key.unsafe_substring(start=7, end=key.length())
+  if digits.length() < 1 || digits.length() > 3 || !digits.iter().all(fn(ch) { ch >= '0' && ch <= '9' }) {
+    return None
+  }
+  let n = digits.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - '0'.to_int()) })
+  if n < 360 {
+    Some(n)
+  } else {
+    None
+  }
+}
+
+///|
+/// The colour theme a key names: one of the five, or one of a hue's own; None for one not known.
+pub fn tone_of(key : String) -> AccentTone? {
+  match accents.search_by(fn(a) { a.key == key }) {
+    Some(i) => Some(accents[i])
+    None => custom_hue(key).map(custom_tone)
+  }
+}
+
+///|
+/// The colour of OKLCH lightness `l`, chroma `c` and hue `h` (degrees), as 0xRRGGBBFF: at that lightness and hue, as
+/// saturated as sRGB has it up to `c` (less by 0.005 at a time till it does).
+pub fn oklch(l : Double, c : Double, h : Double) -> Int64 {
+  let rad = h * 3.141592653589793 / 180.0
+  let mut c = c
+  while c > 0.0 {
+    let (r, g, b) = oklab_linear(l, c * @dmath.cos(rad), c * @dmath.sin(rad))
+    if r >= -0.0001 && r <= 1.0001 && g >= -0.0001 && g <= 1.0001 && b >= -0.0001 && b <= 1.0001 {
+      break
+    }
+    c = c - 0.005
+  }
+  let c = if c < 0.0 { 0.0 } else { c }
+  let (r, g, b) = oklab_linear(l, c * @dmath.cos(rad), c * @dmath.sin(rad))
+  (srgb_byte(r) << 24) | (srgb_byte(g) << 16) | (srgb_byte(b) << 8) | 0xFFL
+}
+
+///|
+/// OKLab to linear sRGB (Björn Ottosson's matrices).
+fn oklab_linear(l : Double, a : Double, b : Double) -> (Double, Double, Double) {
+  let l_ = l + 0.3963377774 * a + 0.2158037573 * b
+  let m_ = l - 0.1055613458 * a - 0.0638541728 * b
+  let s_ = l - 0.0894841775 * a - 1.2914855480 * b
+  let (l3, m3, s3) = (l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_)
+  (
+    4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3,
+    -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3,
+    -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3,
+  )
+}
+
+///|
+/// A linear sRGB channel as its byte (clamped, the sRGB curve).
+fn srgb_byte(v : Double) -> Int64 {
+  let v = if v < 0.0 { 0.0 } else if v > 1.0 { 1.0 } else { v }
+  let e = if v <= 0.0031308 { 12.92 * v } else { 1.055 * @dmath.pow(v, 1.0 / 2.4) - 0.055 }
+  (e * 255.0).round().to_int64()
+}
+
+///|
+/// The accent as set (set_accent): a signal, as dark_set, so what is made once of the theme's colours follows it.
+// kept across runs: put back as a Tester starts (icons.mbt)
+let accent_set : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// The colour theme from now on, by its key (one of the five's, `custom:<hue>`; "" or one not known: still.fail's
+/// orange).
+pub fn set_accent(key : String) -> Unit {
+  accent_set.set(if tone_of(key) is Some(_) { key } else { "" })
+}
+
+///|
+/// The colour theme drawn now (accent_set's).
+fn accent_now() -> AccentTone {
+  tone_of(@signals.untracked(fn() { accent_set.get() })).unwrap_or(accents[0])
+}
+
+///|
+/// The accent drawn now, by its key ("": still.fail's orange).
+pub fn accent_key() -> String {
+  accent_set.get()
+}
+
+///|
+/// `p` in the colour theme `key` (light or dark as `dark`), its accent and its grounds: the orange's palette as it is.
+fn accented(p : Palette, dark : Bool, key : String) -> Palette {
+  match tone_of(key) {
+    None => p
+    Some(a) if a.key == "" => p
+    Some(a) => {
+      let (accent, ink) = if dark { (a.dark, a.dark_text) } else { (a.light, a.light_text) }
+      let p = { ..p, accent, accent_text: ink, accent_bg: alpha(ink, if dark { tone_dark } else { tone_light }) }
+      match (if dark { a.dark_grounds } else { a.light_grounds }) {
+        None => p
+        Some(g) =>
+          {
+            ..p,
+            bg: g.bg,
+            canvas: g.canvas,
+            raised: g.raised,
+            sidebar: g.sidebar,
+            list: g.list,
+            selected: g.selected,
+            paper: g.paper,
+            card: g.card,
+            card2: g.card2,
+            chip: g.chip,
+          }
+      }
+    }
+  }
+}
+
+///|
 /// The theme light or dark as `dark` says, its sizes by the native input (begin's): what it is made of known whenever it
 /// is asked, not only as a frame begins.
 fn theme_of(dark : Bool) -> Theme {
   let touch = native_input() is Finger
+  let accent = @signals.untracked(fn() { accent_set.get() })
   // (one of each: the same whenever it is asked, what is made of it kept as long as it is)
-  match themes_made.get((dark, touch)) {
+  match themes_made.get((dark, touch, accent)) {
     Some(t) => return t
     None => ()
   }
   let t : Theme = {
     dark,
     touch,
-    p: if dark { dark_palette } else { light_palette },
+    p: accented(if dark { dark_palette } else { light_palette }, dark, accent),
     t: if touch { narrow_type } else { wide_type },
     rows: if touch { narrow_rows } else { wide_rows },
     control_h: if touch { narrow_control_h } else { wide_control_h },
@@ -1375,14 +1659,14 @@ fn theme_of(dark : Bool) -> Theme {
     items: if touch { narrow_items } else { wide_items },
     chat_list: if touch { touch_chat_list } else { mouse_chat_list },
   }
-  themes_made[(dark, touch)] = t
+  themes_made[(dark, touch, accent)] = t
   t
 }
 
 ///|
-/// The themes made (theme_of), by light or dark and the native input.
+/// The themes made (theme_of), by light or dark, the native input and the accent.
 // kept across runs: each a value of what it is made of
-let themes_made : Map[(Bool, Bool), Theme] = {}
+let themes_made : Map[(Bool, Bool, String), Theme] = {}
 
 ///|
 /// Whether a ground is drawn on in place of the page's now (with_ground): the theme is current's, as it says, till then.
@@ -1430,6 +1714,8 @@ let behind_dark : Int64 = 0x00000059L
 /// set), its sizes by the native input; on a ground in place of the page's, that one (with_ground).
 pub fn theme() -> Theme {
   let dark = dark_set.get().unwrap_or(false)
+  // (read as a signal too: what is made once of the accent follows it)
+  accent_set.get() |> ignore
   if ground_over.val > 0 {
     current.val
   } else {
@@ -1440,11 +1726,7 @@ pub fn theme() -> Theme {
 ///|
 /// The palette, light or dark (what a page drawn apart from the frame's own is told: a visualization's, viz_file.mbt).
 pub fn palette_of(dark : Bool) -> Palette {
-  if dark {
-    dark_palette
-  } else {
-    light_palette
-  }
+  accented(if dark { dark_palette } else { light_palette }, dark, accent_set.get())
 }
 
 // ---------------------------------------------------------------------------
@@ -1699,6 +1981,19 @@ fn ui_theme_of(t : Theme) -> @ui.Theme {
     leading: leading_scale,
     radii,
     link: t.p.accent_text,
+    // the accent itself the palette's (外观 › 主题色), what a style's Accent says
+    accent: t.p.accent,
+    // the grounds the palette's too (the same as mbui's still.fail theme's in the orange; a colour theme's in its hue):
+    // what a style's Bg, Surface, Raised, Card and ListGround say
+    bg: t.p.bg,
+    surface: t.p.canvas,
+    raised: t.p.raised,
+    card: t.p.card,
+    list: t.p.list,
+    faint: match (if t.dark { accent_now().dark_grounds } else { accent_now().light_grounds }) {
+      Some(g) => g.faint
+      None => base.faint
+    },
     // a tone's ink and ground the palette's (a ground the ink at an opacity: tone_light), what a style's AccentText,
     // AccentBg, Danger, DangerBg and WarnInk say, not mbui's own still.fail theme's opaque grounds
     accent_text: t.p.accent_text,

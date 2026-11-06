@@ -2085,6 +2085,7 @@ export const SHAPES: Record<string, Shape> = {
     ["onlyWatching", "bool", { default: true, doc: "The chat list shows only the watching chats (监控中); never with `only_mine`." }],
     ["listFilter", map("ListFilter"), { default: true, doc: "The list filter chosen in each workspace, by workspace; one not there goes by `only_mine` and `only_watching`\n(one filter for all, as devices kept it before)." }],
     ["appearance", "Appearance", { default: true }],
+    ["accent", opt("String"), { doc: "The app's colour theme on this device: `blue`, `teal`, `purple`, `pink`, `custom:<hue>` (0 to 359: a theme the app\nmakes of that hue), or none for still.fail's orange." }],
     ["windowZoom", opt("String"), { default: true, doc: "The window's content size on this device, as a percentage; none means 100%." }],
     ["motion", opt("String"), { doc: "Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to\nfollow the system's setting." }],
     ["haptics", opt("String"), { doc: "Haptics on this device: `off`, or none for on (a long press taken, a card answered, what is copied, a\nchat open in front coming to need the viewer)." }],

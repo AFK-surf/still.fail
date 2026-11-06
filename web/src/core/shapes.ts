@@ -6089,6 +6089,11 @@ export interface PrefsView {
 	 */
 	listFilter?: Record<string, ListFilter>;
 	appearance?: Appearance;
+	/**
+	 * The app's colour theme on this device: `blue`, `teal`, `purple`, `pink`, `custom:<hue>` (0 to 359: a theme the app
+	 * makes of that hue), or none for still.fail's orange.
+	 */
+	accent?: string;
 	/** The window's content size on this device, as a percentage; none means 100%. */
 	windowZoom?: string;
 	/**

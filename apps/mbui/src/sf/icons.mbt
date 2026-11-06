@@ -38,6 +38,8 @@ fn init {
     tiles_made.clear()
     copied_at.clear()
     dark_set.set(None)
+    accent_set.set("")
+    custom_hue_kept.val = 210
     current.val = {
       dark: false,
       touch: false,
