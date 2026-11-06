@@ -238,6 +238,7 @@ pub fn Scroll::on_activity(self : Scroll, owner : View, f : (ScrollActivity) -> 
 
 ///|
 fn Scroll::activity_tell(self : Scroll, activity : ScrollActivity) -> Unit {
+  if self.activity_observers.is_empty() { return }
   for observer in self.activity_observers.copy() {
     if observer.live { @signals.untracked(fn() { (observer.tell)(activity) }) }
   }
@@ -632,8 +633,9 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
     (self.on_scrolled)(end_t)
     self.fling.set(None)
     // (within how far it can go as of then: what holds it may have come to be shorter meanwhile)
-    self.x.set(dclamp(end_x, 0.0, self.most()))
-    self.activity_stop(end_t, end_x)
+    let at = dclamp(end_x, 0.0, self.most())
+    self.x.set(at)
+    self.activity_stop(end_t, at)
   })
   self.activity_start(t, x0)
 }

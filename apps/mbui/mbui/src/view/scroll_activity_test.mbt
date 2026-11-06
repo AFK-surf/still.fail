@@ -49,9 +49,11 @@ test "scroll activity reports an unpainted coast ending or interrupted at the ev
   assert_true(events[1].1 != Some((0, 0.0)))
   tree.wheel_at(50.0, 50.0, 0.0, 80.0, @view.wheel_notch, 60.0) |> ignore
   assert_eq(events[2].0, @view.ScrollCoasting(60.0))
+  tree.wheel_at(50.0, 50.0, 0.0, 40.0, @view.wheel_notch, 65.0) |> ignore
+  assert_eq(events[3].0, @view.ScrollCoasting(65.0))
   let end = scroll.glides_till().unwrap()
   tree.advance(end)
-  assert_eq(events[3].0, @view.ScrollStopped(end, true))
+  assert_eq(events[4].0, @view.ScrollStopped(end, true))
   let count = events.length()
   tree.dispose()
   tree.advance(end + 1000.0)
@@ -95,8 +97,12 @@ test "a scroll activity listener leaves with its owner" {
   tree.frame(200.0, 200.0, now=0.0) |> ignore
   tree.wheel_at(50.0, 50.0, 0.0, 40.0, 0, 10.0) |> ignore
   assert_eq(events, [@view.ScrollMoved(10.0)])
+  tree.wheel_at(50.0, 50.0, 0.0, 80.0, @view.wheel_notch, 20.0) |> ignore
+  assert_eq(events, [@view.ScrollMoved(10.0), @view.ScrollCoasting(20.0)])
+  let end = scroll.glides_till().unwrap()
   watching.set(false)
-  tree.wheel_at(50.0, 50.0, 0.0, 40.0, 0, 20.0) |> ignore
-  assert_eq(events, [@view.ScrollMoved(10.0)])
+  tree.advance(end)
+  tree.wheel_at(50.0, 50.0, 0.0, 40.0, 0, end + 10.0) |> ignore
+  assert_eq(events, [@view.ScrollMoved(10.0), @view.ScrollCoasting(20.0)])
   tree.dispose()
 }
