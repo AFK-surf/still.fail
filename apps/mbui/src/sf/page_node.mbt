@@ -535,6 +535,7 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
       .radius(Is(corner))
       .ground(By(fn() { @ui.tree_theme().color(Card) }))
       .clips(Is(true))
+      .lends(part_at, { ..at, list: true })
       |> ignore
       rows(card)
     })

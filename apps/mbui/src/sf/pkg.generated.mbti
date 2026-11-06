@@ -1992,6 +1992,12 @@ pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actio
 
 pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String, actions? : (() -> Bool, (@view.View) -> Unit)) -> Unit
 
+pub fn setting_link_node(@view.View, () -> String, () -> String, () -> Unit, note? : () -> String) -> Unit
+
+pub fn setting_node(@view.View, () -> String, (@view.View) -> Unit, note? : () -> String) -> Unit
+
+pub fn setting_switch_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String) -> Unit
+
 pub fn section_none_node(@view.View, () -> String) -> Unit
 
 pub let section_note_gap : Double

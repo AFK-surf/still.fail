@@ -75,6 +75,32 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
 }
 
 ///|
+test "外观's choice follows an outstanding pref immediately and returns to the core's value if it fails" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    let calls : Array[(String, Json)] = []
+    let pending : Array[(Result[Json, Json]) -> Unit] = []
+    let t = setting_tester(Appearance, w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          if name == "prefs.set" {
+            calls.push((name, params))
+            pending.push(done)
+          } else {
+            (s.call)(name, params, done)
+          }
+        } }
+    })
+    t.click(Radio, label="减少")
+    t.frame()
+    assert_eq(calls.length(), 1, msg="\{w}: one choice, one request")
+    assert_eq(text(Some(calls[0].1), "motion"), "reduce", msg="\{w}")
+    assert_eq(t.get(Radio, label="减少").check, Some(On), msg="\{w}: the pending choice")
+    pending[0](Err(Json::string("failed")))
+    t.frame()
+    assert_eq(t.get(Radio, label="减少").check, Some(Off), msg="\{w}: the core's value again")
+  }
+}
+
+///|
 test "外观: wide setting titles have the same weight as the rows in 自动决策" {
   for platform in [0, 2] {
     let decision = @ui.Tester::new(fn(c) {
