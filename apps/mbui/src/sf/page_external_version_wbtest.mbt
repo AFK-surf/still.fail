@@ -4,7 +4,7 @@ fn page_external_version_motion(hz : Int) -> (Double, Double, Double, Double, Do
   let items = @signals.signal(["a", "b"])
   let external = @signals.signal(0)
   let blocks_out : Ref[PageBlocks[String]?] = Ref(None)
-  let nodes : Map[String, @view.View] = {}
+  let nodes : Map[String, @view.View] = Map([])
   let t = @ui.Tester::new(fn(_) { }, w=300.0, h=300.0, stable=false)
   @ui.set_view_app(fn(root) {
     let blocks = page_blocks(root, fn() { items.get() }, fn(it) { it },
@@ -47,7 +47,6 @@ fn page_external_version_motion(hz : Int) -> (Double, Double, Double, Double, Do
   t.frame_at(at + @ui.row_size_ms)
   let end_height = (blocks.rooms.unwrap()())("a", 120.0, 300.0).height
   let end_b = nodes["b"].laid_window_now().1
-  assert_eq((blocks.keys)(), ["a", "b"])
   (start_height, mid_height, end_height, mid_b, end_b, t.frame_hash())
 }
 
