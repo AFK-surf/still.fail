@@ -15,7 +15,7 @@ on:
         type: string
       external:
         description: Also add it to the external group and submit it to Beta App Review
-        default: false
+        default: true
         type: boolean
       round:
         description: Which run of its wait this is
