@@ -11,13 +11,14 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
 import { PLATFORMS, changes, pack } from "../../scripts/module-bundle.ts";
 import { filesOf as nativeFiles } from "../../scripts/native.ts";
 import { stationDrive } from "../src/drive/drive.ts";
-import { ask } from "../src/modules/forward.ts";
+import { ask, forward } from "../src/modules/forward.ts";
 import { keep, type Life } from "../src/modules/live.ts";
 import { ModuleSet, modulesOf } from "../src/modules/modules.ts";
 import { Packages, readInstalled } from "../src/modules/packages.ts";
@@ -34,10 +35,88 @@ delete process.env.EMBER_CONFIG;
 const MEDIA = fileURLToPath(new URL("../../media/service", import.meta.url));
 const temp = (prefix: string) => realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 
-/// Looks every 20 ms until `what` holds (a process starting, a socket answering: no event here). No deadline.
-const until = async (what: () => boolean | Promise<boolean>) => {
-  while (!(await what())) await new Promise((r) => setTimeout(r, 20));
+/// Looks every 20 ms until `what` holds; cancellation stops the wait, and checks use the signal for their resources.
+const until = async (what: (signal: AbortSignal) => boolean | Promise<boolean>, signal: AbortSignal) => {
+  signal.throwIfAborted();
+  let onAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([aborted, (async () => {
+      while (!(await what(signal))) await sleep(20, undefined, { signal });
+      signal.throwIfAborted();
+    })()]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
 };
+
+test("a cancelled package wait stops while polling", async () => {
+  const cancel = new AbortController();
+  let polls = 0;
+  const waiting = until(() => ++polls >= 5, cancel.signal);
+  cancel.abort();
+  await assert.rejects(waiting, { name: "AbortError" });
+});
+
+test("a cancelled package wait stops while its check is still pending", async () => {
+  const cancel = new AbortController();
+  const waiting = until(() => new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 100)), cancel.signal);
+  cancel.abort();
+  await assert.rejects(waiting, { name: "AbortError" });
+});
+
+test("a cancelled package request closes its socket", async (t) => {
+  const dir = temp("mp-cancel-");
+  const socket = join(dir, "module.sock");
+  let received!: () => void;
+  const requestReceived = new Promise<void>((resolve) => { received = resolve; });
+  let closed!: () => void;
+  const socketClosed = new Promise<void>((resolve) => { closed = resolve; });
+  const server = createServer((req, res) => {
+    const timer = setTimeout(() => res.end("{}"), 100);
+    req.socket.once("close", () => { clearTimeout(timer); closed(); });
+    received();
+  });
+  await new Promise<void>((resolve) => server.listen(socket, resolve));
+  t.after(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const cancel = new AbortController();
+  const answer = ask(socket, "/about", AbortSignal.any([cancel.signal, t.signal]));
+  await Promise.race([requestReceived, answer.then(() => { throw new Error("request ended before cancellation"); })]);
+  cancel.abort();
+  await assert.rejects(answer, { name: "AbortError" });
+  await socketClosed;
+});
+
+test("a cancelled package response closes its socket after its headers", async (t) => {
+  const dir = temp("mp-cancel-");
+  const socket = join(dir, "module.sock");
+  let closed!: () => void;
+  const socketClosed = new Promise<void>((resolve) => { closed = resolve; });
+  const server = createServer((req, res) => {
+    res.writeHead(200);
+    res.write("partial");
+    const timer = setTimeout(() => res.end("rest"), 100);
+    req.socket.once("close", () => { clearTimeout(timer); closed(); });
+  });
+  await new Promise<void>((resolve) => server.listen(socket, resolve));
+  t.after(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const cancel = new AbortController();
+  const response = await forward(socket, { method: "GET", path: "/about", headers: {}, body: Buffer.alloc(0) }, null,
+    AbortSignal.any([cancel.signal, t.signal]));
+  const reading = (async () => { for await (const _ of response.body as AsyncIterable<Buffer>) { /* drain */ } })();
+  cancel.abort();
+  await assert.rejects(reading);
+  await socketClosed;
+});
 
 /// A release server: <dir>/<path> at /releases/<path>; what was asked, in order.
 async function releases(t: { after: (f: () => unknown) => void }) {
@@ -165,12 +244,13 @@ function station(t: { after: (f: () => unknown) => void }, base: string, o: { st
   });
   const app = packages.appOf("fake");
   /// What the running fake module says of itself.
-  const said = async () => {
+  const said = async (signal: AbortSignal) => {
     const module = modules.get("fake");
     if (!module?.running) return null;
     try {
-      return JSON.parse((await ask(module.socket, "/about")).body.toString());
+      return JSON.parse((await ask(module.socket, "/about", signal)).body.toString());
     } catch {
+      signal.throwIfAborted();
       return null;
     }
   };
@@ -272,9 +352,9 @@ test("a package with programs: its platform's archive installed, the programs ex
   const { natives } = fakeNatives(t);
   packNative(r.dir, 110, natives);
   const s = station(t, r.base, { modules: [{ id: "fake", package: "fake" }] });
-  await until(async () => (await s.said())?.build === 110);
+  await until(async (signal) => (await s.said(signal))?.build === 110, t.signal);
   const bin = join(s.app, "110", "bin");
-  assert.deepEqual(await s.said(), { build: 110, bin, ffmpeg: `ffmpeg ${machine} -version` });
+  assert.deepEqual(await s.said(t.signal), { build: 110, bin, ffmpeg: `ffmpeg ${machine} -version` });
   assert.deepEqual(r.asked.slice(0, 2), ["/releases/modules/fake/fake-beta.json", `/releases/modules/fake/fake-0.1.110-${machine}.tar.gz`]);
   assert.equal(s.modules.get("fake")!.spec.env.MODULE_BIN_DIR, bin);
   assert.equal(statSync(join(bin, "ffprobe")).mode & 0o777, 0o700);
@@ -298,12 +378,12 @@ test("a package: installed from its signed feed, run by the station's Node, upda
   const r = await releases(t);
   packFake(r.dir, 101);
   const s = station(t, r.base);
-  await until(async () => (await s.said())?.build === 101);
-  const first = await s.said();
+  await until(async (signal) => (await s.said(signal))?.build === 101, t.signal);
+  const first = await s.said(t.signal);
   assert.deepEqual(first.argv, [join(s.app, "101", "main.mjs"), "--more"]);
   assert.equal(first.extra, "x");
   assert.deepEqual(readdirSync(join(s.app, "101")).sort(), ["lib", "main.mjs", "module.json"]);
-  await until(() => s.state().ran === 101);
+  await until(() => s.state().ran === 101, t.signal);
   assert.deepEqual(s.state(), { package: "fake", current: 101, previous: null, ran: 101, failed: [] });
   assert.deepEqual(r.asked.slice(0, 2), ["/releases/modules/fake/fake-beta.json", "/releases/modules/fake/fake-0.1.101.tar.gz"]);
   assert.deepEqual(s.packages.get("en"), [{ id: "module:fake", name: "Module fake", installed: true, version: "0.1.101", latest: "0.1.101", newer: false, downgrade: false, updatable: true, state: "idle" }]);
@@ -311,9 +391,9 @@ test("a package: installed from its signed feed, run by the station's Node, upda
   // A newer build: installed when the packages are read, and run in place of the one before (kept).
   packFake(r.dir, 102);
   await s.packages.read();
-  await until(async () => (await s.said())?.build === 102);
+  await until(async (signal) => (await s.said(signal))?.build === 102, t.signal);
   assert.deepEqual({ ...s.state(), ran: null }, { package: "fake", current: 102, previous: 101, ran: null, failed: [] });
-  await until(() => s.state().ran === 102);
+  await until(() => s.state().ran === 102, t.signal);
   assert.deepEqual(readdirSync(s.app).sort(), ["101", "102", "state.json"]);
 
   // One that ends before it answers, again and again: the one before it is gone back to, and not taken again.
@@ -321,10 +401,10 @@ test("a package: installed from its signed feed, run by the station's Node, upda
   await s.packages.read();
   assert.equal(s.state().current, 103);
   assert.deepEqual(readdirSync(s.app).sort(), ["102", "103", "state.json"]);
-  await until(() => s.state().current === 102);
+  await until(() => s.state().current === 102, t.signal);
   assert.deepEqual(s.state(), { package: "fake", current: 102, previous: null, ran: 102, failed: [103] });
   assert.equal(existsSync(join(s.app, "103")), false);
-  await until(async () => (await s.said())?.build === 102);
+  await until(async (signal) => (await s.said(signal))?.build === 102, t.signal);
   const line = s.packages.get("en")[0]!;
   assert.deepEqual([line.version, line.state, line.message], ["0.1.102", "failed", "0.1.103 didn't start; back on 0.1.102"]);
   const asked = r.asked.length;
@@ -334,7 +414,7 @@ test("a package: installed from its signed feed, run by the station's Node, upda
 
   // Named no more: ended; what is installed stays for when it is named again.
   s.config.update((raw) => (raw.modules = []));
-  await until(() => s.modules.get("fake") === undefined);
+  await until(() => s.modules.get("fake") === undefined, t.signal);
   assert.equal(s.state().current, 102);
   assert.deepEqual(s.packages.get("en"), []);
 });
@@ -443,7 +523,7 @@ test("the media service, packed as CI packs it (one bundled main.mjs, ffmpeg in 
   const names = pack(MEDIA, r.dir, { beta: true, build: 3600, unsignedOk: false, natives, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
   assert.deepEqual(names, [...PLATFORMS.map((p) => `modules/media/media-0.1.3600-${p}.tar.gz`), "modules/media/media-beta.json"]);
   const s = station(t, r.base, { station: 4000, modules: [{ id: "media", package: "media" }] });
-  await until(() => s.modules.get("media")?.running === true);
+  await until(() => s.modules.get("media")?.running === true, t.signal);
   const at = s.packages.appOf("media");
   assert.deepEqual(readInstalled(at).current, 3600);
   assert.deepEqual(readdirSync(join(at, "3600")).sort(), ["bin", "main.mjs", "module.json"]);
@@ -452,5 +532,5 @@ test("the media service, packed as CI packs it (one bundled main.mjs, ffmpeg in 
   assert.deepEqual(s.modules.get("media")!.spec.args, [join(at, "3600", "main.mjs")]);
   assert.equal(s.modules.get("media")!.spec.env.MODULE_BIN_DIR, join(at, "3600", "bin"));
   // Its data where it always was, beside the code.
-  await until(() => existsSync(join(s.data, "modules", "media", "media.db")));
+  await until(() => existsSync(join(s.data, "modules", "media", "media.db")), t.signal);
 });
