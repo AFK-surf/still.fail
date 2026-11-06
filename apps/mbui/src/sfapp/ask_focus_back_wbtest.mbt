@@ -57,3 +57,21 @@ test "大屏, keyboard and mouse: a question asked over a chat as a film's fixtu
   let drawn = ask_focus_round(false)
   assert_eq((fixture_first.2, drawn.2), ("TextField 发消息", "TextField 发消息"), msg="fixture \{fixture_first} drawn \{drawn}")
 }
+
+///|
+test "大屏, keyboard and mouse: a new chat's composer says 按空格输入 and Space puts the cursor in it, as in a chat" {
+  new_run()
+  let src = fixture("home")
+  @sfbase.open_page(NewChat)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(film_step_ms)
+  let focused = fn() { t.focused().map(fn(s) { "\{s.role} \{s.label}" }).unwrap_or("none") }
+  // (it opens with the cursor in its composer: let go of, as a click elsewhere in the window lets it go)
+  t.ctx().blur()
+  t.run_for(film_step_ms)
+  assert_true(app.nav.top() == NewChat && t.find("按空格输入") is Some(_), msg="before: \{focused()}")
+  t.key(@ui.key_space)
+  t.run_for(film_step_ms)
+  assert_true(t.ctx().focused_id() != 0 && t.find("按空格输入") is None, msg="after Space: \{focused()}")
+  assert_true(focused().has_prefix("TextField"), msg="after Space: \{focused()}")
+}
