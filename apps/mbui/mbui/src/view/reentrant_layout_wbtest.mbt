@@ -95,7 +95,7 @@ test "a before-deadline self-mark stops layouts in that frame or event, then the
     fault_told.val = None
   }
   for event in [false, true] {
-    faults.clear()
+    // The host is told each distinct fault only once across runs.
     let armed = Ref(false)
     let marked = Ref(false)
     let callback_layouts = Ref(-1)
