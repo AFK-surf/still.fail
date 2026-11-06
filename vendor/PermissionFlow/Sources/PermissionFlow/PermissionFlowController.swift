@@ -131,7 +131,7 @@ public final class PermissionFlowController: ObservableObject {
     }
 
     /// Registers a unique `.app` bundle URL and notifies the host if needed.
-    /// ember: or any other file: an executable that is no app's (still.fail's station launcher) is what macOS lists,
+    /// stillfail: or any other file: an executable that is no app's (still.fail's station launcher) is what macOS lists,
     /// and what is dragged in, for the processes it starts.
     public func registerDroppedApp(_ url: URL) {
         guard url.isFileURL else { return }
@@ -257,7 +257,7 @@ private extension Array where Element == URL {
         var seen = Set<String>()
         return compactMap { url in
             let normalized = url.standardizedFileURL
-            // ember: any file, not only an `.app` (registerDroppedApp).
+            // stillfail: any file, not only an `.app` (registerDroppedApp).
             guard normalized.isFileURL else { return nil }
             return seen.insert(normalized.path).inserted ? normalized : nil
         }

@@ -232,7 +232,7 @@ fn publish_new(path: &Path, bytes: &[u8]) -> Result<bool, StoreError> {
     Ok(installed)
 }
 
-// ember: Android's app sandbox denies hard links. renameat2 with
+// stillfail: Android's app sandbox denies hard links. renameat2 with
 // RENAME_NOREPLACE publishes the complete key atomically without replacing a
 // key another process may already have paired. Android 11 (our minimum) has it.
 #[cfg(target_os = "android")]

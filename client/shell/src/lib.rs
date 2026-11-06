@@ -27,7 +27,6 @@ use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 mod adb;
 
 const MDNS_SERVICE: &str = "stillfail";
-const FORMER_MDNS_SERVICE: &str = "ember";
 
 /// The nodes a DHT starts from: n0-mainline's defaults, with ours (cloud/dht-node, on the relays' machines) in place of relay.pkarr.org.
 fn dht() -> n0_mainline::DhtBuilder {
@@ -1154,7 +1153,6 @@ impl Inner {
         if a.get("lookup").and_then(Value::as_bool).unwrap_or(false) && !relays.is_empty() {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
                 .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish());
         }
         let endpoint = builder.bind().await.map_err(err)?;
@@ -1290,9 +1288,9 @@ impl Inner {
             return Ok(json!(ok));
         }
         // What the DHT lookup's socket and lookups went through since the last take, while the core records (`keep`;
-        // false: none kept from now on): the record's `dht:` lines (client/core-ts mesh.ts, vendor/n0-mainline's ember).
+        // false: none kept from now on): the record's `dht:` lines (client/core-ts mesh.ts, vendor/n0-mainline's `stillfail`).
         if op == "dht.said" {
-            let (lines, dropped) = n0_mainline::ember::said(a.get("keep").and_then(Value::as_bool).unwrap_or(false));
+            let (lines, dropped) = n0_mainline::stillfail::said(a.get("keep").and_then(Value::as_bool).unwrap_or(false));
             return Ok(json!({ "lines": lines.into_iter().map(|s| json!({ "at": s.at_ms, "text": s.text })).collect::<Vec<_>>(), "dropped": dropped }));
         }
         let handle = self.handle(id_of(a)?)?;

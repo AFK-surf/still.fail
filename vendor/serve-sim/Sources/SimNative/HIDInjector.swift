@@ -34,7 +34,7 @@ private func hidLog(_ message: @autoclosure () -> String) {
 /// Apple's Simulator.app always passes NSSize(1.0, 1.0), making ratio = point / 1.0 = point.
 /// The edge parameter (x4) controls whether iOS treats the touch as a system edge gesture
 /// (e.g. bottom edge = swipe-to-home on Face ID devices).
-// ember: public, as still.fail Helper uses it from another module.
+// stillfail: public, as still.fail Helper uses it from another module.
 public actor HIDInjector {
     public init() {}
     let queue = DispatchSerialQueue(label: "hid-injector", qos: .userInteractive)
@@ -491,7 +491,7 @@ public actor HIDInjector {
         }
     }
 
-    // ember: a hardware button by its HID usage (DeviceKit's chrome.json says each), held as long as a person holds it:
+    // stillfail: a hardware button by its HID usage (DeviceKit's chrome.json says each), held as long as a person holds it:
     // through dtuhidd where the guest has it, as sendButton's are.
     public func sendHardwareButton(page: UInt32, usage: UInt32, down: Bool) async {
         if let dtuhidKeys, dtuhidKeys.sendButton(page: page, usage: usage, down: down) { return }
