@@ -2326,7 +2326,9 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   } else {
     self.time_now()
   }
-  if !self.standing && self.committing == 0 {
+  // An existing cause also belongs to a frame or a property being applied, where committing may be zero.
+  // Publishing the focus/structure it changes must not dispatch another deadline midway through that cause.
+  if self.cause_at < 0.0 && !self.standing && self.committing == 0 {
     self.advance_logic(at)
   }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's

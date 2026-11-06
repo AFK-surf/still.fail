@@ -125,6 +125,7 @@ pub fn reset_globals() -> Unit {
   run.owner = None
   run.asked_for = None
   run.flushing = 0
+  run.committing = 0
   run.afters_held = 0
   run.draining = false
   run.flush_trail.clear()
@@ -142,9 +143,9 @@ pub fn reset_globals() -> Unit {
   // after that, it would act on what is no more. Being done (draining), which of them were done is not known: none
   // done again)
   if !draining {
-    for i, f in run.commits {
+    for i in run.commit_index..<run.commits.length() {
       if run.commits_by[i] is Some(o) {
-        afters_kept.push((o, f, 0))
+        afters_kept.push((o, run.commits[i], 0))
       }
     }
     for i, f in run.afters {
@@ -160,6 +161,7 @@ pub fn reset_globals() -> Unit {
   }
   run.commits.clear()
   run.commits_by.clear()
+  run.commit_index = 0
   run.afters.clear()
   run.afters_by.clear()
   run.lasts.clear()
