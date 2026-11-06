@@ -37,15 +37,15 @@
 .brand {
   display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; color: var(--ink); flex: none;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
-  transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+  transition: color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
 .nav .brand { color: var(--n-fg); }
-.brand:active { transform: scale(.97); }
+@media (prefers-reduced-motion: no-preference) { .brand:active { scale: .96; } }
 .brand img { width: 26px; height: 26px; border-radius: 6px; transition: box-shadow var(--dur-ui) ease; }
 /* Over Ink the dark mark gets a hairline, so its square still reads. */
 .nav[data-under=ink]:not([data-open]) .brand img { box-shadow: 0 0 0 1px rgba(255,255,255,.22); }
 /* The wordmark sits 1 px high so its x-height centres on the mark, not its cap height. */
-.wordmark { font-weight: 600; font-size: 22px; letter-spacing: -.035em; line-height: 1; transform: translateY(-1px); }
+.wordmark { font-weight: 600; font-size: 20px; letter-spacing: -.035em; line-height: 1; transform: translateY(-1px); }
 
 /* Sections. One indicator under the current one, sliding from link to link as the page scrolls. */
 .nav-list { position: relative; display: flex; align-self: stretch; gap: clamp(14px, 1.6vw, 28px); flex: 1; min-width: 0; }
@@ -70,7 +70,7 @@
 .icon-link, .menu-btn {
   position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--n-fg); border: 0; background: transparent;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
-  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
 .nav-tools > .btn-ink { background: var(--n-cta); color: var(--n-on-cta); }
 /* Touch: the controls themselves are 44 px; the round ones give back 4 px each side, so the row is no wider. */
@@ -78,10 +78,10 @@
   .icon-link, .menu-btn { width: 44px; height: 44px; margin-inline: -4px; }
   .icon-link::after, .menu-btn::after { content: none; }
 }
-.icon-link:active, .menu-btn:active { transform: scale(.92); }
+@media (prefers-reduced-motion: no-preference) { .icon-link:active, .menu-btn:not(:disabled):active { scale: .96; } }
 .icon-link svg { width: 20px; height: 20px; }
 .menu-btn { display: none; cursor: pointer; padding: 0; }
-.menu-btn svg { width: 22px; height: 22px; overflow: visible; }
+.menu-btn svg { width: 22px; height: 22px; overflow: visible; stroke-width: 2.18; } /* 2 px drawn, as the bar's Book links */
 /* The three bars fold into a cross: the same lines, so the button says what a press will do next. */
 .menu-btn path { transform-box: view-box; transform-origin: 12px 12px; transition: transform var(--dur-ui) var(--ease-out), opacity var(--dur-ui) ease; }
 .nav[data-open] .menu-btn .m1 { transform: rotate(45deg) translateY(5px); }
@@ -108,7 +108,7 @@
     transition: transform 220ms var(--ease-out), visibility 0s linear 220ms;
   }
   .nav[data-open] .nav-list { visibility: visible; transform: none; transition: transform 380ms var(--ease-drawer), visibility 0s; }
-  .nav-list a { min-height: 52px; font-size: 17px; color: var(--ink); box-shadow: inset 0 -1px 0 var(--line); }
+  .nav-list a { min-height: 52px; font-size: 16px; color: var(--ink); box-shadow: inset 0 -1px 0 var(--line); }
   .nav-list a[aria-current=true]::after { content: ""; width: 6px; height: 6px; margin-left: 10px; border-radius: 50%; background: var(--brand); }
   .nav-list .nav-cta { display: inline-flex; align-self: stretch; margin-top: 20px; min-height: 0; font-size: 16px; color: #fff; box-shadow: none; }
   .nav[data-open]::before { background: #fff; }
@@ -132,7 +132,7 @@
 @media (prefers-reduced-motion: reduce) and (max-width: 980px) {
   .nav-list { transform: none; opacity: 0; }
   .nav[data-open] .nav-list { opacity: 1; }
-  .nav-list, .nav-scrim { transition: opacity 200ms ease, visibility 0s linear 200ms !important; }
+  .nav-list, .nav-scrim { transition: opacity 150ms ease-out, visibility 0s linear 150ms !important; }
   .nav[data-open] .nav-list, .nav[data-open] .nav-scrim { transition: opacity 200ms ease, visibility 0s !important; }
 }
 /* Reduced transparency: a solid bar. */

@@ -33,22 +33,23 @@
    top row, a thin white ring (32 px; 44 px to a finger). main.js shows it only where the field moves. */
 .fpause {
   position: absolute; z-index: 1; top: calc(var(--fc) / 2 - 16px); right: max(calc(var(--fc) * 1.5 - 16px), env(safe-area-inset-right, 0px));
-  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
-  background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.75); color: #fff; cursor: pointer;
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid rgba(255,255,255,.75); border-radius: 50%;
+  background: transparent; color: #fff; cursor: pointer;
   -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  transition: background-color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
 .fpause[hidden] { display: none; }
-.fpause::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
-.fpause svg { width: 10px; height: 10px; fill: currentColor; }
-.fpause .pl { display: none; }
-.fpause[aria-pressed=true] .ps { display: none; }
-.fpause[aria-pressed=true] .pl { display: inline; }
-.fpause[aria-pressed=true] svg { transform: translateX(.5px); } /* the triangle's optical centre */
-.fpause:active { transform: scale(.94); }
+.fpause::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+/* Pause and play share the cell and cross-fade (both stay in the DOM, so either way round it can turn back mid-way). */
+.fpause svg { grid-area: 1 / 1; width: 10px; height: 10px; fill: currentColor;
+  transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1), scale 300ms cubic-bezier(0.2, 0, 0, 1), filter 300ms cubic-bezier(0.2, 0, 0, 1); }
+.fpause .pl { translate: .5px 0; } /* the triangle's optical centre */
+.fpause .pl, .fpause[aria-pressed=true] .ps { opacity: 0; scale: .25; filter: blur(4px); }
+.fpause[aria-pressed=true] .pl { opacity: 1; scale: 1; filter: blur(0); }
+@media (prefers-reduced-motion: no-preference) { .fpause:not(:disabled):active { scale: .96; } }
 .fpause:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) {
-  .fpause:hover { background: rgba(255,255,255,.18); box-shadow: inset 0 0 0 1px #fff; }
+  .fpause:hover { background: rgba(255,255,255,.18); border-color: #fff; }
 }
 
 /* ---------- Entrance, once, on load ----------
@@ -92,7 +93,7 @@
    headline steps down, so both calls to action are on the first screen and the field starts on it. */
 @media (max-height: 500px) and (orientation: landscape) {
   .hero > .w { padding-top: 24px; }
-  .hero h1 { font-size: 44px; }
+  .hero h1 { font-size: 34px; }
   .hero-body { grid-template-columns: minmax(0, 1fr) auto; align-items: end; padding-block: 16px 20px; }
   .hero .actions { flex-direction: column; align-items: stretch; justify-content: flex-end; }
   .hero .actions .btn { flex: none; }

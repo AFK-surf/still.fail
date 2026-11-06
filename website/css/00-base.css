@@ -39,11 +39,11 @@
 
   /* Type scale. Size, leading and tracking move as a set: the larger the size, the tighter both get (Apple, UI
      typography); small sizes open up a little. Chinese takes more leading than Latin at the same size. */
-  --t-display: clamp(44px, 7.6vw, 128px);
-  --t-title: clamp(32px, 4.4vw, 72px);
-  --t-head: clamp(20px, 1.8vw, 30px);
-  --t-body: clamp(16px, 1.2vw, 20px);
-  --t-small: clamp(14px, .95vw, 16px);
+  --t-display: clamp(36px, 3.6vw, 52px);
+  --t-title: 32px;
+  --t-head: 20px;
+  --t-body: 16px;
+  --t-small: 14px;
   --lh-display: 1.02; --tr-display: -.034em;
   --lh-title: 1.06;   --tr-title: -.026em;
   --lh-head: 1.24;    --tr-head: -.012em;
@@ -58,7 +58,7 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-  --dur-press: 140ms;
+  --dur-press: 150ms;
   --dur-ui: 200ms;
   --dur-reveal: 520ms;
   --stagger: 60ms;
@@ -136,12 +136,12 @@ h3 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: 600; le
 :root:is(:lang(zh), :lang(ja), :lang(ko)) { --lh-display: 1.08; --lh-title: 1.14; --lh-lead: 1.62; --lh-small: 1.7; }
 /* The band's accent colour, for a word or a mark that leads; at most once per band. */
 .hit { color: var(--hit); }
-.lead { font-size: clamp(18px, 1.55vw, 24px); line-height: var(--lh-lead); letter-spacing: -.004em; color: var(--mut); max-width: 36em; text-wrap: pretty; }
+.lead { font-size: 17px; line-height: var(--lh-lead); letter-spacing: -.004em; color: var(--mut); max-width: 36em; text-wrap: pretty; }
 .note { font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); color: var(--mut); text-wrap: pretty; }
 .tnum { font-feature-settings: "tnum"; }
 /* Eyebrow: a small label with a Central-style icon (24 grid, 2 px round stroke, no fill) */
 .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-small); line-height: 1.3; letter-spacing: var(--tr-small); font-weight: 500; color: var(--hit); }
-.eyebrow svg { width: 18px; height: 18px; flex: none; margin-block: -1px; }
+.eyebrow svg { width: 18px; height: 18px; flex: none; margin-block: -1px; stroke-width: 2.67; } /* 2 px drawn, beside Book */
 .ico { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* ---------- Layout ---------- */
 .band { background: var(--bg); color: var(--fg); position: relative; }
@@ -154,32 +154,37 @@ section[id] { scroll-margin-top: var(--nav); }
 .split-head { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(24px, 4vw, 64px); align-items: end; margin-bottom: clamp(40px, 5vw, 80px); }
 .split-head .lead { padding-bottom: .3em; }
 .split-head > div { display: flex; flex-direction: column; gap: clamp(12px, 1.2vw, 18px); }
+.split-head > div > .btn { align-self: flex-start; }
 /* ---------- Buttons: full round, Ink fill or a hairline ----------
-   Pressed: scale(.97) at once (feedback on press, not on release). Hover only where a pointer can hover. */
+   Pressed: scale .96 at once (feedback on press, not on release; held still under reduced motion). Hover only where a
+   pointer can hover. Every button has a 1 px border, transparent on a fill, so forced colours still draw its edge; the
+   hairline button colours it. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: .5em; height: 44px; padding: 0 22px; border-radius: 999px;
-  font-size: 16px; font-weight: 500; line-height: 1; letter-spacing: -.003em; text-decoration: none; white-space: nowrap; cursor: pointer; border: 0;
+  font-size: 16px; font-weight: 500; line-height: 1; letter-spacing: -.003em; text-decoration: none; white-space: nowrap; cursor: pointer; border: 1px solid transparent;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
-  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, border-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
-.btn:active { transform: scale(.97); }
+@media (prefers-reduced-motion: no-preference) { .btn:not(:disabled):active { scale: .96; } }
 .btn:focus-visible { outline-offset: 3px; }
 .btn svg { width: 18px; height: 18px; flex: none; }
-.btn.lg { height: 52px; padding: 0 26px; font-size: 17px; }
+.btn .ico { stroke-width: 2.67; } /* 2 px drawn at 18 px, beside Book (500) */
+.btn.lg { height: 46px; padding: 0 22px; font-size: 15px; }
 .btn.sm { height: 36px; padding: 0 16px; font-size: 14px; letter-spacing: 0; }
 .btn.sm svg { width: 16px; height: 16px; }
+.btn.sm .ico { stroke-width: 3; }
 .btn-ink { background: var(--ink); color: #fff; }
-.btn-line { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--hair); }
+.btn-line { background: transparent; color: var(--fg); border-color: var(--hair); }
 .btn-paper { background: #fff; color: var(--ink); }
-[data-tone=brand] .btn-line { box-shadow: inset 0 0 0 1px rgba(26,27,30,.45); color: var(--ink); }
-[data-tone=ink] .btn-line { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); color: #fff; }
+[data-tone=brand] .btn-line { border-color: rgba(26,27,30,.45); color: var(--ink); }
+[data-tone=ink] .btn-line { border-color: rgba(255,255,255,.55); color: #fff; }
 .btn .arr { transition: transform var(--dur-ui) var(--ease-out); }
 @media (hover: hover) and (pointer: fine) {
   .btn-ink:hover { background: #000; }
-  .btn-line:hover { box-shadow: inset 0 0 0 1px var(--fg); }
+  .btn-line:hover { border-color: var(--fg); }
   .btn-paper:hover { background: var(--ink); color: #fff; }
-  [data-tone=brand] .btn-line:hover { box-shadow: inset 0 0 0 1px var(--ink); background: rgba(255,255,255,.18); }
-  [data-tone=ink] .btn-line:hover { box-shadow: inset 0 0 0 1px #fff; background: rgba(255,255,255,.08); }
+  [data-tone=brand] .btn-line:hover { border-color: var(--ink); background: rgba(255,255,255,.18); }
+  [data-tone=ink] .btn-line:hover { border-color: #fff; background: rgba(255,255,255,.08); }
   .btn:hover .arr { transform: translateX(3px); }
 }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }

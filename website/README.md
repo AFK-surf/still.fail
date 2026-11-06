@@ -149,11 +149,17 @@ Chinese, Japanese and Korean take more leading than Latin. Its three Latin subse
 `assets/fonts/`, under the team's license; an installed copy is used first. Chinese, Japanese and Korean are set in the
 system's fonts (see Languages), so nothing is downloaded for them. Mono tags use the system's monospace. A half-width space separates Chinese from Latin and figures.
 
-**Product pictures.** Every picture of monoid's own app (the desktop client, the web app, iPhone, iPhone Duo, Android,
-the Slack thread) is HTML/CSS drawn to the product's own values at 1:1 (`.mk*` in 05-components.css: its colours, its
+**Product pictures.** Every picture of monoid's own app (the desktop client, the web app, iPhone Duo, Android, the
+Slack thread) is HTML/CSS drawn to the product's own values at 1:1 (`.mk*` in 05-components.css: its colours, its
 Inter + PingFang type, its radii, its demo data: lin@acme.dev, Willow, Mini, the same chats); a whole picture is
-scaled with `zoom`, never by shrinking its type, and the product's own oranges are used, not the brand's. Pictures are
-`aria-hidden`, unselectable and take no pointer events.
+scaled with `zoom` (or, in the scroll scene, a transform), never by shrinking its type, and the product's own oranges
+are used, not the brand's. Pictures are `aria-hidden`, unselectable and take no pointer events. The phones follow the
+app (`apps/mbui`): the phone chat's top bar has no line under it (docs/mobile-parity.md); the iPhone Duo open is its
+inner screen (890 × 626 points) with the sidebar ending on the fold, the panes as cards and no rail, the places, the
+chat's actions, the bell and the new chat in iOS 27.1's own column down the trailing edge (`sf/native_bars.mbt`,
+`host/ios_nav.h`); Android shows the debug share's ongoing notification as `AdbShare.java` builds it, in the pulled-down
+shade (it is low importance: it never pops up), its small icon in the status bar. The teams grid's pictures are 4:3,
+each drawn 400 × 300 and zoomed in steps to its frame.
 
 **Marks:** the agents' and places' logos in the strip under the hero are the app's own (`web/ui/src/brands.tsx`), in
 their makers' shapes and colours.
@@ -170,7 +176,7 @@ visible `:focus-visible` ring in each band's tone.
 ## Phones
 
 Designed for 375–430 px, not shrunk: the overview, the teams grid and the devices are native horizontal swipers
-(`scroll-snap`, the next card peeking in, dots and a `01 / 05` count that follow the scroll and jump on tap; the
+(`scroll-snap`, the next card peeking in, dots and a `01 / 04` count that follow the scroll and jump on tap; the
 browser owns the gesture and its momentum). The first screen uses `svh`; safe-area insets pad the gutters
 (`viewport-fit=cover`); controls are at least 44 px, with `touch-action: manipulation`, no tap highlight and
 `user-select: none` (content stays selectable). The menu is a sheet from under the bar (Escape or the dimmed page
@@ -179,18 +185,18 @@ screen; checked with WebKit on an iPhone SE, 15 Pro and 15 Pro Max, both ways ro
 
 ## Motion
 
-Tokens in 00-base.css: `--ease-out`, `--ease-in-out`, `--ease-drawer`, `--dur-press` (140 ms), `--dur-ui` (200 ms),
+Tokens in 00-base.css: `--ease-out`, `--ease-in-out`, `--ease-drawer`, `--dur-press` (150 ms), `--dur-ui` (200 ms),
 `--dur-reveal` (520 ms), `--stagger` (60 ms). UI answers in under 300 ms; only explanations take longer. Only
 transform and opacity move.
 
 - **Reveal.** Everything is visible at the first paint; only what starts below the fold waits and comes in as it
   reaches the screen, groups one child after another.
 - **Every device, as one scene played by scrolling** (`#devices`, on screens at least 1024 × 760 with motion allowed:
-  `html.scrolly`, set in the head before the first paint). One conversation travels across the screens in six steps:
-  the iPhone Duo folded, a notification landing on its cover screen; the Duo unfolding on its hinge; Android flying in,
-  a line tying it to the same chat; the camera pulling back to the desktop window with the phones on its corners; the
-  window becoming the web app; Slack coming in, the band turning Ink, lines running from the thread to every screen.
-  The words, a `01 / 06` counter, a rail of the devices (each a link to its step) and a mono tag follow along. The
+  `html.scrolly`, set in the head before the first paint). Four steps, one device each, upright and whole in the
+  middle of the stage at the size that fills it (main.js `fit`, read as the trigger refreshes): the iPhone Duo open on
+  two panels, Android, the desktop app, the web app. Between steps the words and the device cross-fade (opacity and at
+  most 12 px up), scrubbed by the scroll. The words, a `01 / 04` counter, a rail of the devices (each a link to its
+  step) and a mono tag follow along. The
   stage is CSS `position: sticky` in a placeholder sized from the first paint; the scene is built from a `<template>`
   only where it plays (phones never parse it). GSAP ScrollTrigger scrubs one timeline and snaps to each step. Elsewhere,
   and if GSAP cannot load, the devices are the swiper.

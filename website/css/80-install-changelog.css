@@ -1,5 +1,5 @@
 /* ---------- Install: the three steps, and the command from step 02 in a terminal beside them ---------- */
-.card { background: #fff; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--hair); padding: clamp(20px, 2.6vw, 44px); min-width: 0; }
+.card { background: #fff; border-radius: 20px; border: 1px solid var(--hair); padding: calc(clamp(20px, 2.6vw, 44px) - 1px); min-width: 0; }
 .card.install {
   --g: clamp(32px, 3.4vw, 64px);
   display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); gap: var(--g); align-items: center;
@@ -53,41 +53,45 @@
 .card.install .out:nth-child(4) { --k: 2; }
 
 .copy-btn {
-  position: relative; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 10px; border: 0; border-radius: 8px;
+  position: relative; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px 0 9px; border: 1px solid transparent; border-radius: 8px;
   background: rgba(255,255,255,.08); color: #E6E7EA; font-size: 13px; font-weight: 500; letter-spacing: .004em; cursor: pointer;
   touch-action: manipulation; user-select: none; -webkit-user-select: none;
-  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, scale var(--dur-press) ease-out;
 }
-.copy-btn::before { content: ""; position: absolute; inset: -8px -4px; } /* a 48 px tall target on a 32 px button */
-.copy-btn:active { transform: scale(.96); }
+.copy-btn::before { content: ""; position: absolute; inset: -9px -5px; } /* a 48 px tall target on a 32 px button */
+@media (prefers-reduced-motion: no-preference) { .copy-btn:not(:disabled):active { scale: .96; } }
 .copy-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .cb-ico { position: relative; width: 15px; height: 15px; flex: none; }
-.cb-ico svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out), filter var(--dur-ui) var(--ease-out); }
-.cb-done { opacity: 0; transform: scale(.6); filter: blur(2px); }
+.cb-ico svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1), scale 300ms cubic-bezier(0.2, 0, 0, 1), filter 300ms cubic-bezier(0.2, 0, 0, 1); } /* 2 px drawn at 15 px, beside Book */
+.cb-done { opacity: 0; scale: .25; filter: blur(4px); }
 .cb-l { display: grid; }
-.cb-l > * { grid-area: 1 / 1; transition: opacity var(--dur-ui) var(--ease-out), filter var(--dur-ui) var(--ease-out); } /* both labels share a cell: no width jump */
+.cb-l > * { grid-area: 1 / 1; transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1), filter 300ms cubic-bezier(0.2, 0, 0, 1); } /* both labels share a cell: no width jump */
 .cb-b { opacity: 0; filter: blur(2px); }
 .copy-btn.is-copied { color: #7EE2B0; background: rgba(126,226,176,.12); }
-.copy-btn.is-copied .cb-copy { opacity: 0; transform: scale(.6); filter: blur(2px); }
-.copy-btn.is-copied .cb-done { opacity: 1; transform: none; filter: none; }
+.copy-btn.is-copied .cb-copy { opacity: 0; scale: .25; filter: blur(4px); }
+.copy-btn.is-copied .cb-done { opacity: 1; scale: 1; filter: blur(0); }
 .copy-btn.is-copied .cb-a { opacity: 0; filter: blur(2px); }
 .copy-btn.is-copied .cb-b { opacity: 1; filter: none; }
 @media (hover: hover) and (pointer: fine) {
   .copy-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
   .copy-btn.is-copied:hover { background: rgba(126,226,176,.16); color: #7EE2B0; }
 }
+/* Reduced motion: the icon and label only cross-fade. */
+@media (prefers-reduced-motion: reduce) {
+  .cb-ico svg, .cb-l > * { scale: none !important; filter: none !important; transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1) !important; }
+}
 .copy-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* ---------- Changelog: the nightly releases, with dithered pixel covers ---------- */
-.posts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.posts { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .post { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: clamp(20px, 2.4vw, 40px); display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .post.feature { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 3vw, 56px); align-items: start; }
-.post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; box-shadow: inset 0 0 0 1px var(--line); }
+.post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; outline: 1px solid oklch(0 0 0 / .1); outline-offset: -1px; }
 .post .cover svg { width: 100%; height: 100%; display: block; }
 .post-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; flex: 1; }
 .post-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; line-height: 1.3; color: var(--graphite); }
-.post h3 { font-size: clamp(20px, 1.7vw, 28px); letter-spacing: -.018em; line-height: 1.25; text-wrap: balance; }
-.post.feature h3 { font-size: clamp(24px, 2.2vw, 36px); line-height: 1.18; }
+.post h3 { font-size: 18px; letter-spacing: -.018em; line-height: 1.25; text-wrap: balance; }
+.post.feature h3 { font-size: clamp(20px, 1.6vw, 24px); line-height: 1.18; }
 .post p { color: var(--graphite); font-size: var(--t-small); line-height: var(--lh-small); }
 /* Chinese breaks at its spaces and punctuation, never inside a word; balance and pretty wrapping are for Latin. */
 :root:is(:lang(zh), :lang(ja), :lang(ko)) .post h3 > span { overflow-wrap: anywhere; }
@@ -124,21 +128,21 @@
 }
 @media (max-width: 960px) {
   .card.install, .post.feature { grid-template-columns: minmax(0, 1fr); }
-  .card.install { gap: 24px; }
+  .card.install { gap: 24px; border-radius: calc(14px + clamp(20px, 2.6vw, 44px)); } /* stacked: .term 14 + padding + border */
 }
 @media (max-width: 640px) {
   .posts { grid-template-columns: minmax(0, 1fr); border-left: 0; }
   .post { border-right: 0; padding: 24px 0; gap: 18px; }
   .post.feature { gap: 20px; }
-  .card.install { padding: 8px; border-radius: 20px; gap: 8px; }
+  .card.install { padding: 7px; border-radius: 20px; gap: 8px; } /* .term 12 + padding 7 + border 1 */
   .card.install .steps { padding: 4px 12px 0; }
   .steps li { padding: 14px 0; font-size: 16px; grid-template-columns: 2.6em minmax(0, 1fr); }
   .steps li:first-child { border-top: 0; }
   .steps li:last-child { border-bottom: 0; }
-  .term { border-radius: 14px; }
+  .term { border-radius: 12px; }
   .term-body { padding: 16px 16px 20px; font-size: 12.5px; line-height: 1.75; }
-  .copy-btn { height: 36px; padding: 0 14px 0 12px; font-size: 14px; }
-  .copy-btn::before { inset: -4px -6px; } /* 44 px */
+  .copy-btn { height: 36px; padding: 0 13px 0 11px; font-size: 14px; }
+  .copy-btn::before { inset: -5px -7px; } /* 44 px */
   /* A phone wraps the command, but only at its spaces and after the URL's slashes (<wbr>), never inside a word. */
   .term .row.cmd { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: visible; }
   .hb { grid-template-columns: 4.6em minmax(0, 1fr); }

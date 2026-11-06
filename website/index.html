@@ -7,7 +7,7 @@
 <!-- Before the first paint: the devices scene is played by scrolling only on a large screen with motion allowed. -->
 <script>(function(){var r=document.documentElement;r.classList.remove("no-js");if(matchMedia("(min-width:1024px) and (min-height:760px) and (prefers-reduced-motion:no-preference)").matches)r.classList.add("scrolly")})()</script>
 <title data-t="meta.monoid-one-devices.499d">monoid · One devices</title>
-<meta name="description" content="monoid joins the agents on all your computers into one: your subscriptions share one account pool, your team directs them from Slack, and iPhone, Android, desktop and web pick up any time." data-t-content="meta.monoid-joins-the-agents.1792">
+<meta name="description" content="monoid joins the agents on all your computers into one: one account pool, directed by your team from Slack, on every device." data-t-content="meta.monoid-joins-the-agents.ca91">
 <meta property="og:title" content="monoid · One devices" data-t-content="meta.monoid-one-devices.499d">
 <meta property="og:description" content="Account pool, teams, every device: the agents on all your computers, as one." data-t-content="meta.account-pool-teams-every.c744">
 <meta property="og:type" content="website">
@@ -53,6 +53,7 @@
   <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
   <symbol id="i-out" viewBox="0 0 24 24"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-done" viewBox="0 0 24 24"><path d="M15 9.5 10.5 15l-2-2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></symbol>
@@ -80,8 +81,6 @@
   <symbol id="b-apple" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.9-.9-3.1-.8C6.8 7.3 5.3 8.2 4.5 9.6c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7 0 0-2.7-1-2.7-3.9ZM14.1 5.5c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.7-1.3Z"/></symbol>
   <symbol id="b-windows" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M3 5.3 10.4 4.3v7.1H3V5.3Zm8.3-1.1L21 3v8.4h-9.7V4.2ZM3 12.4h7.4v7.2L3 18.6v-6.2Zm8.3 0H21V21l-9.7-1.3v-7.3Z"/></symbol>
   <symbol id="b-android" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M17.6 9.5 19.4 6.4a.4.4 0 0 0-.7-.4l-1.8 3.1A11 11 0 0 0 12 8a11 11 0 0 0-4.9 1.1L5.3 6a.4.4 0 1 0-.7.4l1.8 3.1A10.4 10.4 0 0 0 1 17.8h22a10.4 10.4 0 0 0-5.4-8.3ZM7 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></symbol>
-  <symbol id="r-hermes" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M6 4v16M18 4v16M6 12h12"/></symbol>
-  <symbol id="r-agy" viewBox="0 0 24 24"><path fill="#3186FF" d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"/></symbol>
   <symbol id="r-devin" viewBox="0 0 24 24"><path fill="currentColor" d="M1.984 8.248V3.495C1.984 3.287 2.096 3.093 2.277 2.989L6.391 0.613C6.572 0.509 6.795 0.509 6.976 0.613L11.091 2.989C11.272 3.093 11.383 3.287 11.383 3.495V5.923C11.402 6.729 11.828 7.507 12.578 7.94C13.327 8.373 14.214 8.353 14.922 7.965L17.024 6.752C17.205 6.647 17.428 6.647 17.609 6.752L21.723 9.128C21.904 9.232 22.016 9.425 22.016 9.634V14.385C22.016 14.594 21.904 14.787 21.723 14.892L17.609 17.268C17.428 17.372 17.205 17.372 17.024 17.268L14.939 16.064C14.228 15.667 13.334 15.643 12.578 16.08C11.828 16.513 11.402 17.291 11.384 18.097V20.524C11.384 20.733 11.272 20.926 11.091 21.03L6.976 23.406C6.795 23.51 6.573 23.51 6.392 23.406L2.277 21.03C2.096 20.926 1.984 20.733 1.984 20.524V15.772C1.984 15.563 2.096 15.37 2.277 15.266L6.392 12.89C6.573 12.786 6.795 12.786 6.976 12.89L9.083 14.106C9.79 14.491 10.674 14.51 11.422 14.078C12.178 13.642 12.605 12.855 12.617 12.042C12.598 11.235 12.172 10.374 11.422 9.941C10.673 9.508 9.786 9.528 9.078 9.915L6.967 11.142C6.785 11.247 6.561 11.247 6.379 11.141L2.275 8.754C2.095 8.649 1.984 8.456 1.984 8.248Z"/></symbol>
   <symbol id="r-cursor" viewBox="0 0 24 24"><path fill="currentColor" d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></symbol>
   <symbol id="r-grok" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M6.469 8.776L16.512 23h-4.464L2.005 8.776H6.47zm-.004 7.9l2.233 3.164L6.467 23H2l4.465-6.324zM22 2.582V23h-3.659V7.764L22 2.582zM22 1l-9.952 14.095-2.233-3.163L17.533 1H22z"/></symbol>
@@ -128,7 +127,7 @@
     <h1 id="hero-title" class="display"><span data-t="hero.one-devices.6d97">One devices</span></h1>
     <div class="hero-body">
       <p class="lead">
-        <span data-t="hero.monoid-joins-the-agents.967e">monoid joins the agents on all your computers into one. <b>One account pool</b> for your subscriptions, <b>one team</b> directing them from Slack, <b>every device</b> picking up where you left&nbsp;off.</span>
+        <span data-t="hero.monoid-joins-the-agents.7887">monoid joins the agents on all your computers into one: <b>one account pool</b>, <b>one team</b> in Slack, <b>every device</b> picking up where you left&nbsp;off.</span>
       </p>
       <div class="actions">
         <a class="btn btn-paper lg" href="#download"><span data-t="hero.download-monoid.7e7d">Download monoid</span><svg class="ico arr" aria-hidden="true"><use href="#i-arrow"/></svg></a>
@@ -141,7 +140,7 @@
        and the canvas's label carries the meaning. -->
   <div class="field-wrap">
     <canvas class="field" id="field" role="img" aria-label="You ask once and a ripple reaches every device: a station still running at 3 a.m. on Saturday, the pool moving to the next account at 80%." data-t-aria="hero.you-ask-once-and.1d0b"></canvas>
-    <button class="fpause" type="button" id="pause" aria-pressed="false" aria-label="Pause the animation" data-t-aria="hero.pause-the-animation.83e0" hidden><svg viewBox="0 0 10 10" aria-hidden="true"><rect class="ps" x="1.6" y="1.2" width="2.3" height="7.6" rx=".7"/><rect class="ps" x="6.1" y="1.2" width="2.3" height="7.6" rx=".7"/><path class="pl" d="M2.6 1.7v6.6a.6.6 0 0 0 .9.5l5.3-3.3a.6.6 0 0 0 0-1L3.5 1.2a.6.6 0 0 0-.9.5Z"/></svg></button>
+    <button class="fpause" type="button" id="pause" aria-pressed="false" aria-label="Pause the animation" data-t-aria="hero.pause-the-animation.83e0" hidden><svg class="ps" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.6" y="1.2" width="2.3" height="7.6" rx=".7"/><rect x="6.1" y="1.2" width="2.3" height="7.6" rx=".7"/></svg><svg class="pl" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.6 1.7v6.6a.6.6 0 0 0 .9.5l5.3-3.3a.6.6 0 0 0 0-1L3.5 1.2a.6.6 0 0 0-.9.5Z"/></svg></button>
   </div>
 </section>
 
@@ -151,173 +150,9 @@
     <div class="strip">
       <p><span data-t="works-with.connects-these-agents.74bd">Connects these agents</span></p>
       <ul class="names agents">
-        <li><svg class="lg"><use href="#r-claude"/></svg>Claude Code</li><li><svg class="lg"><use href="#r-codex"/></svg>Codex</li><li><svg class="lg"><use href="#r-cursor"/></svg>Cursor</li><li><svg class="lg"><use href="#r-devin"/></svg>Devin</li><li><svg class="lg"><use href="#r-grok"/></svg>Grok Build</li><li><svg class="lg"><use href="#r-dsh"/></svg>DeepSeek Harness</li><li><svg class="lg"><use href="#r-hermes"/></svg>Hermes Agent</li><li><svg class="lg"><use href="#r-agy"/></svg>Antigravity</li>
+        <li><svg class="lg"><use href="#r-claude"/></svg>Claude Code</li><li><svg class="lg"><use href="#r-codex"/></svg>Codex</li><li><svg class="lg"><use href="#r-cursor"/></svg>Cursor</li><li><svg class="lg"><use href="#r-devin"/></svg>Devin</li><li><svg class="lg"><use href="#r-grok"/></svg>Grok Build</li><li><svg class="lg"><use href="#r-dsh"/></svg>DeepSeek Harness</li>
       </ul>
     </div>
-    <div class="strip">
-      <p><span data-t="works-with.direct-them-from.f17f">Direct them from</span></p>
-      <ul class="names places">
-        <li><svg class="lg"><use href="#b-apple"/></svg>iPhone</li><li><svg class="lg"><use href="#b-android"/></svg>Android</li><li><svg class="lg"><use href="#b-apple"/></svg>Mac</li><li><svg class="lg"><use href="#b-windows"/></svg>Windows</li><li><svg class="lg ico"><use href="#i-globe"/></svg><span data-t="works-with.web.a832">Web</span></li><li><svg class="lg"><use href="#b-slack"/></svg>Slack</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- ============ Product overview ============ -->
-<section class="band sec" data-tone="paper" id="product" aria-labelledby="product-title">
-  <div class="w">
-    <div class="split-head rv">
-      <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-spark"/></svg><span data-t="product.product.dd3b">Product</span></span>
-        <h2 id="product-title"><span data-t="product.keep-the-agents-on.2dc2">Keep the agents on every computer working</span></h2>
-      </div>
-      <p class="lead"><span data-t="product.the-agents-stay-the.55b1">The agents stay the official command-line tools. monoid handles three things around them: which account each one uses, who directs it, and which screen you follow it on.</span></p>
-    </div>
-
-    <div class="overview rv" data-tabs="stack">
-      <ul class="ov-list">
-        <li class="ov-item" data-on>
-          <button type="button" data-tab id="ov-t1" aria-controls="ov-p1" aria-expanded="true"><span class="ov-l"><svg class="ico"><use href="#i-pool"/></svg><span data-t="product.account-pool.abd8">Account pool</span></span><span class="num">01</span></button>
-          <div class="ov-text"><div>
-            <p><span data-t="product.claude-chatgpt-and-google.fac7">Claude, ChatGPT and Google AI subscriptions and API keys go into one pool. Each new chat goes to an account with room left; one past 80% of its 5-hour limit goes last.</span></p>
-            <a href="#pool"><span data-t="product.how-the-pool-picks.7d79">How the pool picks</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
-          </div></div>
-        </li>
-        <li class="ov-item">
-          <button type="button" data-tab id="ov-t2" aria-controls="ov-p2" aria-expanded="false"><span class="ov-l"><svg class="ico"><use href="#i-team"/></svg><span data-t="product.teams.cbfd">Teams</span></span><span class="num">02</span></button>
-          <div class="ov-text"><div>
-            <p><span data-t="product.the-whole-team-talks.2338">The whole team talks to one agent, in a Slack thread or the app. Your computers hand each other tasks and lend each other accounts; new tasks go to the least busy one.</span></p>
-            <a href="#teams"><span data-t="product.how-teams-use-it.4e4a">How teams use it</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
-          </div></div>
-        </li>
-        <li class="ov-item">
-          <button type="button" data-tab id="ov-t3" aria-controls="ov-p3" aria-expanded="false"><span class="ov-l"><svg class="ico"><use href="#i-devices"/></svg><span data-t="product.every-device.14f4">Every device</span></span><span class="num">03</span></button>
-          <div class="ov-text"><div>
-            <p><span data-t="product.mac-windows-the-web.6a08">Mac, Windows, the web, iPhone (and iPhone Duo) and Android. When a chat on your Mac needs you, your phone is notified too; carry on from whichever screen is at hand.</span></p>
-            <a href="#devices"><span data-t="product.see-each-device.cf9d">See each device</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
-          </div></div>
-        </li>
-      </ul>
-
-      <div class="stage">
-        <!-- 01 Account pool -->
-        <div class="pane" id="ov-p1" data-on>
-          <!-- The Profiles place: each account's quota as chips and dials; the new chat lands on the one with room. -->
-          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win list">
-            <div class="mk-app mac">
-              <div class="mk-dock">
-                <span class="mk-tl"><i></i><i></i><i></i></span>
-                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri on"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
-                <div class="mk-side">
-                  <div class="mk-nav"><i class="mk-i plus"></i><span data-t="product.add-profile.190b">Add Profile</span></div>
-                  <div class="mk-day"><span data-t="product.claude-subscription.f9fa">Claude subscription</span></div>
-                  <div class="mk-row on"><div class="l1"><i class="mk-lg a"></i><b>lin@acme.dev</b><span class="run beat"><span data-t="product.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:22%"></i></span><span data-t="product.5h.7988">5h</span><span>78%</span></span><span class="mk-chip"><span class="meter"><i style="width:36%"></i></span><span data-t="product.week.f82b">Week</span><span>64%</span></span></div><div class="l3"><span data-t="product.available-on-willow-resets.3457">Available on Willow · resets Thu</span></div></div>
-                  <div class="mk-row"><div class="l1"><i class="mk-lg a"></i><b>zhou@acme.dev</b></div><div class="chips"><span class="mk-chip am"><span class="meter"><i style="width:84%"></i></span><span data-t="product.5h.7988">5h</span><span>16%</span></span><span class="mk-chip"><span class="meter"><i style="width:48%"></i></span><span data-t="product.week.f82b">Week</span><span>52%</span></span></div><div class="l3"><span data-t="product.past-80-of-its.d09a">Past 80% of its 5h limit, goes last</span></div></div>
-                  <div class="mk-day"><span data-t="product.chatgpt-subscription.7d79">ChatGPT subscription</span></div>
-                  <div class="mk-row"><div class="l1"><i class="mk-lg o"></i><b>zhou@acme.dev</b></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span><span data-t="product.5h.7988">5h</span><span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:29%"></i></span><span data-t="product.week.f82b">Week</span><span>71%</span></span></div><div class="l3"><span data-t="product.available-on-mini-codex.5338">Available on Mini · Codex</span></div></div>
-                  <div class="mk-day g"><span data-t="product.signed-in-on.33dd">Signed in on</span><i class="mk-st laptop"><i class="mk-i laptop"></i></i><span data-t="product.laptop.ed91">Laptop</span></div>
-                  <div class="mk-row"><div class="l1"><i class="mk-lg a"></i><b>lin@acme.dev</b><span class="mk-pillr"><span data-t="product.disabled.f4f4">Disabled</span></span></div><div class="l3"><span data-t="product.signed-out-skipped.bb27">Signed out, skipped</span></div></div>
-                </div>
-              </div>
-              <div class="mk-page">
-                <div class="mk-pg">
-                  <div class="hd"><span class="tile"><i class="mk-lg a"></i></span><div><h4>lin@acme.dev <span class="mk-cc">CC</span></h4><p><span data-t="product.subscription-2-13-models.02cd">Subscription · 2 / 13 models on</span></p></div><i class="mk-i more"></i></div>
-                  <h5><span data-t="product.quota.c6ec">Quota</span><span class="r"><i class="mk-i reload"></i><span data-t="product.refresh.56e3">Refresh</span></span></h5>
-                  <div class="mk-dials">
-                    <div class="mk-dial"><b>78<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span data-t="product.5-hour-left.b204">5-hour left</span></span><span class="sb"><span data-t="product.resets-in-2-h.83cc">Resets in 2 h</span></span></div>
-                    <div class="mk-dial"><b>64<small>%</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="product.week-left.5523">Week left</span></span><span class="sb"><span data-t="product.resets-thu.dc49">Resets Thu</span></span></div>
-                  </div>
-                  <h5><span data-t="product.models.f379">Models</span><span class="n">2 / 13</span></h5>
-                  <div class="mk-chips"><span class="mk-chipm"><i class="mk-lg a"></i>Opus 5.5</span><span class="mk-chipm"><i class="mk-lg a"></i>Sonnet 5.5</span></div>
-                </div>
-              </div>
-            </div>
-          </div></div>
-        </div>
-        <!-- 02 Teams -->
-        <div class="pane" id="ov-p2" inert>
-          <!-- One chat, two people and one agent: zhou asks, the agent answers, you (Lin Xiao) send it on. -->
-          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win">
-            <div class="mk-app mac">
-              <div class="mk-dock">
-                <span class="mk-tl"><i></i><i></i><i></i></span>
-                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
-                <div class="mk-side">
-                  <div class="mk-nav"><i class="mk-i compose"></i><span data-t="product.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
-                  <div class="mk-day"><span data-t="product.today.2434">Today</span></div>
-                  <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span data-t="product.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="product.running-pnpm-bench.3166">Running pnpm bench…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
-                  <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="product.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="product.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i></span></div></div>
-                  <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="product.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2 ink"><span><span data-t="product.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
-                  <div class="mk-row"><div class="l1"><b><span data-t="product.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="product.the-form-still-looks.5649">The form still looks a bit off-centre</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i></span></div></div>
-                  <div class="mk-day"><span data-t="product.yesterday.da24">Yesterday</span></div>
-                  <div class="mk-row"><div class="l1"><b><span data-t="product.write-the-deploy-docs.4973">Write the deploy docs</span></b></div><div class="l2"><span><span data-t="product.thanks-i-ve-read.a513">Thanks, I've read the docs</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
-                </div>
-              </div>
-              <div class="mk-page">
-                <div class="mk-bar"><h4><span data-t="product.why-api-p99-got.6d33">Why API p99 got slow</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="product.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span><span data-t="product.server.cb0c">Server</span></span></span><span class="end"><i class="mk-i more"></i><i class="mk-i panel"></i></span></div>
-                <div class="mk-msgs">
-                  <div class="mk-msg"><i class="mk-face z">Z</i><div class="hd"><b><span data-t="product.zhou.1694">Zhou</span></b><span class="tm"><span data-t="product.12-min-ago.6c78">12 min ago</span></span></div><div class="bd"><span data-t="product.api-p99-got-slow.49c4">API p99 got slow, can you look into it?</span></div></div>
-                  <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span data-t="product.8-min-ago.a296">8 min ago</span></span></div><div class="bd md"><p><span data-t="product.the-orders-table-was.1d61">The orders table was missing a (user_id, created_at) index.</span></p><ul><li><span data-t="product.with-it-p99-is.c04e">With it, p99 is back to 120 ms</span></li><li><span data-t="product.migration.6e45">Migration </span><code>0042_orders_index.sql</code></li></ul></div></div>
-                  <div class="mk-mine"><div class="bub"><span data-t="product.merge-it-and-run.f7b5">Merge it, and run the load test again on Server</span></div><span class="tm"><span data-t="product.just-now.a7f8">just now</span></span></div>
-                  <div class="act beat"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="product.running-pnpm-bench.df11">Running pnpm bench</span></span><span class="t">8s</span></div>
-                </div>
-                <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="product.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
-              </div>
-            </div>
-          </div></div>
-        </div>
-        <!-- 03 Every device: two devices, one event -->
-        <div class="pane" id="ov-p3" inert>
-          <!-- Two devices, one event: the chat on the Mac waits on you, and the phone in your pocket says so. -->
-          <div class="compose-2" aria-hidden="true">
-            <div class="mk-fit"><div class="mk mk-win">
-              <div class="mk-app mac">
-                <div class="mk-dock">
-                  <span class="mk-tl"><i></i><i></i><i></i></span>
-                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
-                  <div class="mk-side">
-                    <div class="mk-nav"><i class="mk-i compose"></i><span data-t="product.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
-                    <div class="mk-day"><span data-t="product.today.2434">Today</span></div>
-                    <div class="mk-row"><div class="l1"><i class="mk-busy"></i><b><span data-t="product.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="product.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
-                    <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="product.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="product.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i></span></div></div>
-                    <div class="mk-row on unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="product.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2 ink"><span><span data-t="product.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
-                    <div class="mk-day"><span data-t="product.yesterday.da24">Yesterday</span></div>
-                    <div class="mk-row"><div class="l1"><b><span data-t="product.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="product.the-orders-table-was.79fa">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i></span></div></div>
-                  </div>
-                </div>
-                <div class="mk-page">
-                  <div class="mk-bar"><h4><span data-t="product.weekly-dependency-updates.8446">Weekly dependency updates</span></h4><span class="mk-faces"><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i></span><span>Willow</span></span></div>
-                  <div class="mk-msgs">
-                    <div class="mk-msg"><i class="mk-face z">Z</i><div class="hd"><b><span data-t="product.zhou.1694">Zhou</span></b><span class="tm"><span data-t="product.1-h-ago.9fa9">1 h ago</span></span></div><div class="bd"><span data-t="product.update-all-the-dependencies.bb31">Update all the dependencies</span></div></div>
-                    <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span data-t="product.now.c9bc">now</span></span></div><div class="bd md"><span data-t="product.the-other-23-packages.681d">The other 23 packages are updated and the tests pass. Only React Router 8 is left: it changes how routes are written, so it's your call.</span></div></div>
-                  </div>
-                  <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="product.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
-                </div>
-              </div>
-            </div></div>
-            <div class="mk-phone">
-              <span class="isl"></span><span class="home"></span>
-              <div class="notif"><img src="assets/mark.svg" alt=""><div><b><span data-t="product.weekly-dependency-updates.8446">Weekly dependency updates</span><em><span data-t="product.now.c9bc">now</span></em></b><span class="m"><span data-t="product.opus-5-5-the.b820">Opus 5.5: The other 23 packages are updated; React Router 8 is your call</span></span></div></div>
-              <div class="mk mk-m">
-                <div class="mk-sb"><span>9:41</span><span class="ic"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></span></div>
-                <div class="mk-mtop"><i class="mk-i gear"></i><b>Acme</b><i class="mk-i chevd"></i><i class="mk-i filter"></i></div>
-                <div class="mk-search"><i class="mk-i search"></i><span data-t="product.search-everything.09d8">Search everything</span></div>
-                <div class="mk-mday"><span data-t="product.today.2434">Today</span></div>
-                <div class="mk-mrow"><div class="l1"><i class="mk-busy"></i><b><span data-t="product.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="product.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
-                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="product.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-i18n-section="product-2" data-t="product-2.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i></span></div></div>
-                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="product.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2 ink"><span><span data-t="product.the-other-23-packages.0345">The other 23 packages are updated and the te…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
-                <div class="mk-mday"><span data-t="product.yesterday.da24">Yesterday</span></div>
-                <div class="mk-mrow"><div class="l1"><b><span data-t="product.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="product.the-orders-table-was.79fa">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="product.l.d160">L</span></i></span></div></div>
-                <div class="mk-mbar"><span class="ball"></span><i class="mk-i chats on"></i><i class="mk-i folder"></i><span class="gap"></span><span class="ling"><i class="mk-i mk-ling"></i></span><i class="mk-i quota"></i><i class="mk-i glyph"></i></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- Phones: the overview is a swiper, one card per item; these dots follow it and jump to a card (main.js). The
-         items' own names are the controls a keyboard or screen reader uses, so the dots stay out of both. -->
-    <div class="ov-nav" aria-hidden="true"><div class="ov-dots"><button type="button" tabindex="-1"></button><button type="button" tabindex="-1"></button><button type="button" tabindex="-1"></button><span class="ov-pill"></span></div></div>
   </div>
 </section>
 
@@ -326,21 +161,20 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-pool"/></svg><span data-t="pool.01-account-pool.601a">01 Account pool</span></span>
-        <h2 id="pool-title"><span data-t="pool.every-account-in-one.6170">Every account in one pool, no limit left unused</span></h2>
+        <h2 id="pool-title"><span data-t="pool.one-pool-no-limit.44f4">One pool, no limit left unused</span></h2>
       </div>
-      <p class="lead"><span data-t="pool.each-station-keeps-a.a0ad">Each station keeps a pool of accounts. Most new chats go to the ones that would otherwise waste their weekly limit (soonest reset, most left), but no account takes them all.</span></p>
+      <p class="lead"><span data-t="pool.new-chats-favour-accounts.3839">New chats favour accounts that reset soonest with the most left, but never pile onto one.</span></p>
     </div>
 
     <div class="pool rv">
       <div class="callouts">
         <div class="callout">
-          <h3><svg class="ico"><use href="#i-gauge"/></svg><span data-t="pool.picks-the-account.911e">Picks the account</span></h3>
-          <p><span data-t="pool.skips-accounts-that-are.c58f">Skips accounts that are signed out, have a refused key or are out of quota. One past 80% of its 5-hour limit goes last.</span></p>
+          <h3><span data-t="pool.picks-the-account.911e">Picks the account</span></h3>
+          <p><span data-t="pool.skips-accounts-signed-out.ba78">Skips accounts signed out, refused or out of quota; one past 80% of its 5-hour limit goes last.</span></p>
         </div>
         <div class="callout">
-          <h3><svg class="ico"><use href="#i-history"/></svg><span data-t="pool.moves-without-losing-work.0dca">Moves without losing work</span></h3>
-          <p><span data-t="pool.a-running-chat-stays.0013">A running chat stays on its account where it can. When it has to move, the agent reads back its own history, and it never moves early while background commands still run.</span></p>
+          <h3><span data-t="pool.moves-without-losing-work.0dca">Moves without losing work</span></h3>
+          <p><span data-t="pool.a-chat-stays-on.3437">A chat stays on its account while it can; when it moves, the agent reads its history back.</span></p>
         </div>
       </div>
 
@@ -351,31 +185,9 @@
           <span class="mtag pt pt-l" style="--x:1.9%;--y:49.3%;--xm:98.1%" aria-hidden="true"><i></i><span data-t="pool.pool-6-accounts.503e">pool · 6 accounts</span></span>
           <span class="mtag pt" style="--x:98.1%;--y:82.2%" aria-hidden="true"><i></i><span data-t="pool.stations-4.dc28">stations · 4</span></span>
         </div>
-        <figcaption class="pool-key">
-          <span class="k-pick"><i></i><span data-t="pool.given-a-chat.8891">given a chat</span></span>
-          <span class="k-ok"><i></i><span data-t="pool.room-left.848f">room left</span></span>
-          <span class="k-low"><i></i><span data-t="pool.past-80-goes-last.5bf1">past 80%, goes last</span></span>
-          <span class="k-out"><i></i><span data-t="pool.signed-out-skipped.851e">signed out, skipped</span></span>
-        </figcaption>
       </figure>
 
-      <div class="callouts">
-        <div class="callout">
-          <h3><svg class="ico"><use href="#i-swap"/></svg><span data-t="pool.shared-between-stations.2457">Shared between stations</span></h3>
-          <p><span data-t="pool.a-station-can-share.c38f">A station can share its signed-in accounts with the rest of its workspace, so the other computers don't sign in again.</span></p>
-        </div>
-        <div class="callout">
-          <h3><svg class="ico"><use href="#i-review"/></svg><span data-t="pool.stopped-work-is-reported.3a6a">Stopped work is reported</span></h3>
-          <p><span data-t="pool.if-a-switch-stops.f55e">If a switch stops background work, the agent is told what stopped at the start of its next turn, and Claude's subagents carry on from where they were.</span></p>
-        </div>
       </div>
-    </div>
-
-    <div class="formula rv">
-      <div><b>80%</b><span><span data-t="pool.of-a-5-hour.9fe4">of a 5-hour limit, and new chats go to other accounts first</span></span></div>
-      <div><b><span data-t="pool.5-min.b45e">5 min</span></b><span><span data-t="pool.between-quota-reads-while.7d8f">between quota reads while someone is watching or a chat is running</span></span></div>
-      <div><b>75%</b><span><span data-t="pool.of-the-way-to.0a03">of the way to compaction before a chat moves early, so little is lost</span></span></div>
-      <div><b>64</b><span><span data-t="pool.stations-per-workspace-at.d223">stations per workspace at most, each able to share its accounts</span></span></div>
     </div>
   </div>
 </section>
@@ -385,10 +197,9 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-team"/></svg><span data-t="teams.02-teams.dfae">02 Teams</span></span>
-        <h2 id="teams-title"><span data-t="teams.one-person-asks-the.baa8">One person asks, the whole team carries on</span></h2>
+        <h2 id="teams-title"><span data-t="teams.one-asks-the-team.eb68">One asks, the team carries on</span></h2>
       </div>
-      <p class="lead"><span data-t="teams.use-it-where-your.5d6a">Use it where your team already talks: mention it in Slack, and everyone in the conversation works with the same agent. The computers in a workspace split the work as one.</span></p>
+      <p class="lead"><span data-t="teams.your-team-works-with.91ac">Your team works with one agent, right where it already talks.</span></p>
     </div>
 
     <div class="rails rv">
@@ -410,10 +221,9 @@
                 </div>
               </div>
             </div>
-            <span class="mtag"><i></i>#eng-web · thread</span>
           </div>
-          <h3><svg class="ico"><use href="#i-chat"/></svg><span data-t="teams.mention-it-in-slack.974c">Mention it in Slack</span></h3>
-          <p><span data-t="teams.mention-it-in-a.05a7">Mention it in a thread and it starts; replies stay in the thread, and from then on it hears everyone there.</span></p>
+          <h3><span data-t="teams.mention-it-in-slack.974c">Mention it in Slack</span></h3>
+          <p><span data-t="teams.mention-it-in-a.fb96">Mention it in a thread and it starts, replies there, and hears everyone in it.</span></p>
         </article>
         <article class="cell" data-seq="1500 4200">
           <div class="vis">
@@ -430,10 +240,9 @@
                 </div></div>
               </div>
             </div>
-            <span class="mtag"><i></i>workspace · Acme</span>
           </div>
-          <h3><svg class="ico"><use href="#i-team"/></svg><span data-t="teams.one-workspace-one-list.b2c8">One workspace, one list</span></h3>
-          <p><span data-t="teams.invite-teammates-and-everyone.bcaf">Invite teammates and everyone sees the same chats, stations and background jobs. A share link shows one chat to someone outside the workspace.</span></p>
+          <h3><span data-t="teams.one-workspace-one-list.b2c8">One workspace, one list</span></h3>
+          <p><span data-t="teams.teammates-see-the-same.a914">Teammates see the same chats, stations and jobs; a share link shows one chat to outsiders.</span></p>
         </article>
         <article class="cell" data-seq="900 1000 2600 1000 1400" data-still="2">
           <div class="vis">
@@ -442,65 +251,14 @@
               <div class="st-lane"><i class="pk dn" data-in="1" data-out="2"></i><i class="pk up" data-in="3" data-out="4"></i><span class="st-say" data-in="1" data-out="3">pnpm test login</span><span class="st-say" data-in="3"><span data-t="teams.results-changes.e5d0">↑ results, changes</span></span></div>
               <div class="mk-row st-srv"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span data-t="teams.server.cb0c">Server</span></b><span class="st-swap"><span class="ok a"></span><span class="run b"><span data-t="teams.1-running.1e6f">1 running</span></span></span></div><div class="chips"><span class="mk-chip"><span class="meter cpu"><i style="width:37%"></i></span>CPU<span class="st-swap"><span class="a">63%</span><span class="b">24%</span></span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span data-t="teams.mem.2555">Mem</span><span>71G</span></span><span class="mk-chip"><span class="meter"><i style="width:99%"></i></span><span data-t="teams.disk.ef99">Disk</span><span>1.4G</span></span></div><div class="l3"><span data-t="teams.relay-46-ms.b49c">Relay · 46 ms</span></div></div>
             </div>
-            <span class="mtag"><i></i>station_task</span>
           </div>
-          <h3><svg class="ico"><use href="#i-server"/></svg><span data-t="teams.stations-hand-off-work.ff6a">Stations hand off work</span></h3>
-          <p><span data-t="teams.an-agent-on-one.9c5b">An agent on one computer can run a build or test on another: only the changed files are synced, and the results come back to the chat.</span></p>
-        </article>
-        <article class="cell" data-seq="1300 500 1300 3200" data-still="3">
-          <div class="vis">
-            <div class="tp frame mk tp-pf" aria-hidden="true">
-              <div class="pf-hd"><span class="tile"><i class="mk-lg a"></i></span><div><b>lin@acme.dev</b><small><span data-t="teams.claude-subscription.f9fa">Claude subscription</span></small></div></div>
-              <div class="pf-sw"><div><b><span data-t="teams.share-with-other-stations.7b40">Share with other stations</span></b><span class="pf-desc"><span data-in="0" data-out="2"><span data-t="teams.currently-used-only-on.01f2">Currently used only on Willow</span></span><span data-in="2"><span data-t="teams.other-stations-borrow-this.c20c">Other stations borrow this station's login</span></span></span></div><i class="pf-tg" data-in="1"></i></div>
-              <div class="pf-card" data-in="2">
-                <div class="r"><b><span data-t="teams.signed-in-on.33dd">Signed in on</span></b><span class="v"><i class="dot"></i>Willow</span><span class="pf-btn"><span data-t="teams.move.76cd">Move</span></span></div>
-                <div class="r"><b><span data-t="teams.stations-that-can-use.80b3">Stations that can use it</span><small data-in="3"><span data-t="teams.in-use-on-mini.1585">In use on Mini, Server</span></small></b><span class="v"><span data-t="teams.all.6a72">All</span></span><span class="pf-btn"><span data-t="teams.change.64fb">Change</span></span></div>
-              </div>
-            </div>
-            <span class="mtag"><i></i>profile · shared</span>
-          </div>
-          <h3><svg class="ico"><use href="#i-key"/></svg><span data-t="teams.lend-accounts-and-skills.3893">Lend accounts and skills</span></h3>
-          <p><span data-t="teams.turn-on-share-with.fd2f">Turn on Share with other stations for a Profile or a skill, and the other computers use it as is, with nothing to set up or sign in to again. One subscription serves the whole workspace.</span></p>
-        </article>
-        <article class="cell" data-seq="1100 500 900 700 700 500 1900" data-still="3">
-          <div class="vis">
-            <div class="tp frame mk tp-sc" aria-hidden="true">
-              <div class="sc-bar"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="t"><span data-t="teams.sign-in-acme.cbd0">Sign in · Acme</span></span><span class="sc-seg"><i class="knob" data-in="1" data-out="6"></i><span><span data-t="teams.watch.d91e">Watch</span></span><span><span data-t="teams.control.ea1d">Control</span></span></span></div>
-              <div class="sc-stage">
-                <div class="sc-page"><i></i><span class="sc-f mail"><span data-in="0" data-out="3"><span data-t="teams.email.84ad">Email</span></span><span class="tx" data-in="3">lin@acme.dev</span></span><span class="sc-f pw"><i></i></span><span class="sc-go"><span data-t="teams.sign-in.ada2">Sign in</span></span></div>
-                <svg class="sc-cur" data-in="2" data-out="6" viewBox="0 0 16 16"><path d="M2 1.5 13 8l-5 1.2L5.6 14 2 1.5Z" fill="#24272B" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>
-              </div>
-            </div>
-            <span class="mtag"><i></i>screen · Willow</span>
-          </div>
-          <h3><svg class="ico"><use href="#i-screen"/></svg><span data-t="teams.share-a-screen.6dfd">Share a screen</span></h3>
-          <p><span data-t="teams.the-browser-desktop-and.79dc">The browser, desktop and iOS Simulator open beside the chat for everyone to watch. You see who is in control, and can disconnect them or switch them to watching.</span></p>
-        </article>
-        <article class="cell" data-seq="1000 4400" data-still="1">
-          <div class="vis">
-            <div class="tp tp-ph" aria-hidden="true">
-              <div class="mk-phone droid">
-                <span class="isl"></span>
-                <div class="notif" data-in="1"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span data-t="teams.now.c9bc">now</span></span><b><span data-t="teams.sharing-debugging-with-willow.1ad9">Sharing debugging with Willow</span></b><span class="m"><span data-t="teams.login-page-on-phones.3581">“Login page on phones” is using a virtual screen in the background</span></span><span class="acts"><span data-t="teams.stop.9e25">Stop</span></span></div></div>
-                <div class="mk mk-m">
-                  <div class="mk-sb"><span>9:41</span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
-                  <div class="mk-mtop"><i class="mk-i gear"></i><b>Acme</b><i class="mk-i chevd"></i><i class="mk-i filter"></i></div>
-                  <div class="mk-search"><i class="mk-i search"></i><span data-t="teams.search-everything.09d8">Search everything</span></div>
-                  <div class="mk-mday"><span data-t="teams.today.2434">Today</span></div>
-                  <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="teams.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="teams.done-the-export-streams.8043">Done: the export streams with the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="teams.l.d160">L</span></i></span></div></div>
-                  <div class="mk-mrow"><div class="l1"><b><span data-t="teams.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="teams.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="teams.z.909f">Z</span></i></span></div></div>
-                </div>
-              </div>
-            </div>
-            <span class="mtag top"><i></i>adb · virtual screen</span>
-          </div>
-          <h3><svg class="ico"><use href="#i-phone"/></svg><span data-t="teams.lend-your-phone-to.d717">Lend your phone to an agent</span></h3>
-          <p><span data-t="teams.your-android-phone-opens.c4ab">Your Android phone opens a virtual screen for the agent to test the app while you keep using it. The notification names the chat using it; after 10 idle minutes the screen closes.</span></p>
+          <h3><span data-t="teams.stations-hand-off-work.ff6a">Stations hand off work</span></h3>
+          <p><span data-t="teams.an-agent-can-build.ba26">An agent can build or test on another computer, syncing only the changed files.</span></p>
         </article>
       </div>
       <div class="tm-nav">
-        <div class="tm-dots"><i class="tm-pill" aria-hidden="true"></i><button type="button" aria-current="true"><span class="dv-vh">Slack</span></button><button type="button"><span class="dv-vh">workspace</span></button><button type="button"><span class="dv-vh">station</span></button><button type="button"><span class="dv-vh"><span data-t="teams.lend-accounts.509a">Lend accounts</span></span></button><button type="button"><span class="dv-vh"><span data-t="teams.screen.5cc8">Screen</span></span></button><button type="button"><span class="dv-vh"><span data-t="teams.phone.7706">Phone</span></span></button></div>
-        <span class="tm-count tnum" aria-hidden="true"><b>01</b> / 06</span>
+        <div class="tm-dots"><i class="tm-pill" aria-hidden="true"></i><button type="button" aria-current="true"><span class="dv-vh">Slack</span></button><button type="button"><span class="dv-vh">workspace</span></button><button type="button"><span class="dv-vh">station</span></button></div>
+        <span class="tm-count tnum" aria-hidden="true"><b>01</b> / 03</span>
       </div>
     </div>
   </div>
@@ -511,168 +269,154 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-devices"/></svg><span data-t="devices.03-every-device.dcbd">03 Every device</span></span>
         <h2 id="devices-title"><span data-t="devices.switch-screens-and-carry.9a56">Switch screens and carry on</span></h2>
       </div>
-      <p class="lead"><span data-t="devices.chats-and-files-stay.aab5">Chats and files stay on your stations, and every device sees the same ones. Start at your desk, review it from your phone on the way.</span></p>
+      <p class="lead"><span data-t="devices.chats-and-files-stay.b6bc">Chats and files stay on your stations: start at your desk, review on your phone.</span></p>
     </div>
 
-    <!-- Large screens with motion allowed (html.scrolly): one scene that plays as you scroll. The same conversation
-         travels from screen to screen: the Duo folded, then open, then Android, the desktop, the web and Slack, which
-         syncs them all (main.js, GSAP ScrollTrigger). -->
+    <!-- Large screens with motion allowed (html.scrolly): the four devices, one a step, played by the scroll: the Duo
+         open on two panels, Android, the desktop app, the web app (main.js, GSAP ScrollTrigger). -->
     <!-- The placeholder keeps the scene's height from the first paint; the scene itself is built from the template
          only where it plays (main.js), so phones never parse or style it. -->
     <div class="dv-show"></div>
     <template id="dv-stage" data-i18n-section="devices-stage">
       <div class="dv-stage">
-        <div class="dv-ink" aria-hidden="true"></div>
         <div class="dv-copy">
-          <p class="dv-no tnum" aria-hidden="true"><b>01</b><span> / 06</span></p>
+          <p class="dv-no tnum" aria-hidden="true"><b>01</b><span> / 04</span></p>
           <div class="dv-steps">
-          <article class="dv-step" data-i="0"><span class="eyebrow">iPhone Duo · <span data-t="devices-stage.folded.682b">folded</span></span><h3><span data-t="devices-stage.folded-the-cover-screen.c09c">Folded, the cover screen still replies</span></h3><p><span data-t="devices-stage.notifications-replies-and-key.3833">Notifications, replies and key approvals, all on the cover screen. The native iPhone app is coming to the App Store.</span></p></article>
-          <article class="dv-step" data-i="1"><span class="eyebrow">iPhone Duo · <span data-t="devices-stage.open.5fc7">open</span></span><h3><span data-t="devices-stage.unfold-it-two-screens.8f30">Unfold it: two screens</span></h3><p><span data-t="devices-stage.chats-on-the-left.a2c7">Chats on the left, the running chat on the right. Test on a station's iOS Simulator, and both screens and the fold come across too.</span></p></article>
-          <article class="dv-step" data-i="2"><span class="eyebrow">Android</span><h3><span data-t="devices-stage.lend-your-phone-to.ec63">Lend your phone to the agent</span></h3><p><span data-t="devices-stage.the-agent-tests-on.bf00">The agent tests on a virtual screen of its own while you keep using the phone. The Android app is out.</span></p></article>
-          <article class="dv-step" data-i="3"><span class="eyebrow">Mac · Windows</span><h3><span data-t="devices-stage.every-computer-s-load.576b">Every computer's load, in one window</span></h3><p><span data-t="devices-stage.the-desktop-app-shows.95df">The desktop app shows each station's CPU, memory and disk, and new tasks go to the least busy one.</span></p></article>
-          <article class="dv-step" data-i="4"><span class="eyebrow"><span data-t="devices-stage.web.a832">Web</span></span><h3><span data-t="devices-stage.open-a-browser-and.fe3b">Open a browser and go</span></h3><p><span data-t="devices-stage.the-same-interface-as.45d1">The same interface as the apps, with nothing to install, on Linux and iPad too.</span></p></article>
-          <article class="dv-step" data-i="5"><span class="eyebrow">Slack</span><h3><span data-t="devices-stage.mention-it-in-slack.de2e">Mention it in Slack, every screen updates</span></h3><p><span data-t="devices-stage.replies-stay-in-the.fe0c">Replies stay in the thread; the same chat turns Done on your phone, computer and the web at once.</span></p></article>
+          <article class="dv-step" data-i="0"><span class="eyebrow">iPhone · iPhone Duo</span><h3><span data-t="devices-stage.unfold-it-two-screens.8f30">Unfold it: two screens</span></h3><p><span data-t="devices-stage.chats-on-the-left.d736">Chats on the left, the running chat on the right. Drive a station's iOS Simulator, both screens and fold included.</span></p></article>
+          <article class="dv-step" data-i="1"><span class="eyebrow">Android</span><h3><span data-t="devices-stage.lend-your-phone-to.ec63">Lend your phone to the agent</span></h3><p><span data-t="devices-stage.the-agent-tests-on.1e13">The agent tests on its own virtual screen while you keep using the phone. The Android app is out.</span></p></article>
+          <article class="dv-step" data-i="2"><span class="eyebrow">Mac · Windows</span><h3><span data-t="devices-stage.every-computer-s-load.576b">Every computer's load, in one window</span></h3><p><span data-t="devices-stage.the-desktop-app-shows.5b0a">The desktop app shows each station's CPU, memory and disk; new tasks go to the least busy.</span></p></article>
+          <article class="dv-step" data-i="3"><span class="eyebrow"><span data-t="devices-stage.web.a832">Web</span></span><h3><span data-t="devices-stage.open-a-browser-and.fe3b">Open a browser and go</span></h3><p><span data-t="devices-stage.the-apps-interface-with.0328">The apps' interface with nothing to install, on Linux and iPad too.</span></p></article>
           </div>
           <ol class="dv-rail" aria-label="Devices" data-t-aria="devices-stage.devices.df48">
             <li data-i="0"><button type="button"><svg class="ico"><use href="#i-duo"/></svg>iPhone</button></li>
-            <li data-i="2"><button type="button"><svg><use href="#b-android"/></svg>Android</button></li>
-            <li data-i="3"><button type="button"><svg class="ico"><use href="#i-screen"/></svg><span data-t="devices-stage.desktop.532c">Desktop</span></button></li>
-            <li data-i="4"><button type="button"><svg class="ico"><use href="#i-globe"/></svg><span data-t="devices-stage.web.a832">Web</span></button></li>
-            <li data-i="5"><button type="button"><svg><use href="#b-slack"/></svg>Slack</button></li>
+            <li data-i="1"><button type="button"><svg><use href="#b-android"/></svg>Android</button></li>
+            <li data-i="2"><button type="button"><svg class="ico"><use href="#i-screen"/></svg><span data-t="devices-stage.desktop.532c">Desktop</span></button></li>
+            <li data-i="3"><button type="button"><svg class="ico"><use href="#i-globe"/></svg><span data-t="devices-stage.web.a832">Web</span></button></li>
           </ol>
           <div class="dv-bar" aria-hidden="true"><i></i></div>
         </div>
+        <!-- One device a step, upright and whole, in the middle of the stage at the size that fills it (main.js: --k);
+             the steps cross-fade as the scroll moves. -->
         <div class="dv-view" aria-hidden="true">
           <div class="dv-tags">
-            <span class="mtag"><i></i>pose · closed · cover screen</span>
             <span class="mtag"><i></i>pose · open · 2 panels</span>
             <span class="mtag"><i></i>virtual display · 2m</span>
             <span class="mtag"><i></i>load → least busy</span>
             <span class="mtag"><i></i>app.monoid.build</span>
-            <span class="mtag"><i></i>sync · 4 screens · 1 chat</span>
           </div>
-          <div class="dv-scene">
-            <div class="d d-laptop">
-              <!-- The Mac app on the station overview; then the same app in a browser, open on the chat. -->
-              <div class="mk mk-win">
-                <div class="mk-browser t-url"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
-                <div class="mk-stack">
-                  <div class="mk-app mac body-desk">
-                    <div class="mk-dock">
-                      <span class="mk-tl t-desk"><i></i><i></i><i></i></span>
-                      <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri on"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
-                      <div class="mk-side">
-                        <div class="mk-nav"><i class="mk-i plus"></i><span data-t="devices-stage.add-station.a826">Add station</span></div>
-                        <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span data-t="devices-stage.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>612G</span></span></div><div class="l3"><span data-t="devices-stage.direct-12-ms.9f57">Direct · 12 ms</span></div></div>
-                        <div class="mk-row"><div class="l1"><i class="mk-st mini"><i class="mk-i mini"></i></i><b>Mini</b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:12%"></i></span>CPU<span>88%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>6.2G</span></span><span class="mk-chip"><span class="meter"><i style="width:58%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>214G</span></span></div><div class="l3"><span data-t="devices-stage.direct-18-ms.60e9">Direct · 18 ms</span></div></div>
-                        <div class="mk-row"><div class="l1"><i class="mk-st laptop"><i class="mk-i laptop"></i></i><b><span data-t="devices-stage.laptop.ed91">Laptop</span></b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span>CPU<span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>14.1G</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>388G</span></span></div><div class="l3"><span data-t="devices-stage.direct-9-ms.b605">Direct · 9 ms</span></div></div>
-                        <div class="mk-row"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span data-t="devices-stage.server.cb0c">Server</span></b><span class="run"><span data-t="devices-stage.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:37%"></i></span>CPU<span>63%</span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>71G</span></span><span class="mk-chip"><span class="meter"><i style="width:99%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>1.4G</span></span></div><div class="l3"><span data-t="devices-stage.relay-46-ms.b49c">Relay · 46 ms</span></div></div>
-                      </div>
-                    </div>
-                    <div class="mk-page">
-                      <div class="mk-pg">
-                        <div class="hd"><span class="tile mk-st willow"><i class="mk-i monitor"></i></span><div><h4>Willow</h4><p><span class="dot"></span><span data-t="devices-stage.idle-apple-m4-max.fad1">Idle · Apple M4 Max · 64 GB · macOS 26.6.2</span></p></div><i class="mk-i more"></i></div>
-                        <div class="mk-seg"><span class="on"><span data-t="devices-stage.overview.0efc">Overview</span></span><span><span data-t="devices-stage.processes.ed73">Processes</span></span><span><span data-t="devices-stage.settings.c7f7">Settings</span></span><span><span data-t="devices-stage.software-devices.59b4">Software &amp; devices</span></span></div>
-                        <h5><span data-t="devices-stage.resources.87df">Resources</span></h5>
-                        <div class="mk-dials">
-                          <div class="mk-dial"><b>81<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span data-t="devices-stage.cpu-idle.1a5d">CPU idle</span></span><span class="sb"><span data-t="devices-stage.load-3-1.0a75">Load 3.1</span></span></div>
-                          <div class="mk-dial"><b>36.6<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices-stage.memory-free.d107">Memory free</span></span><span class="sb"><span data-t="devices-stage.of-64-gb.28fa">of 64 GB</span></span></div>
-                          <div class="mk-dial"><b>612<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices-stage.disk-free.2dfd">Disk free</span></span><span class="sb"><span data-t="devices-stage.of-994-gb.5bad">of 994 GB</span></span></div>
-                        </div>
-                        <div class="mk-kv"><span><span data-t="devices-stage.direct-latency.3492">Direct · latency</span> <b>12 ms</b></span><span>↑ <b>0.4 KB/s</b></span><span>↓ <b>1.2 KB/s</b></span></div>
-                      </div>
-                    </div>
+          <div class="d d-duo">
+            <div class="duo" aria-hidden="true">
+              <!-- Opened as a book (its inner screen 890 × 626 points, apps/mbui sfapp/tabletop_wbtest.mbt): the desktop's
+                   structure with touch's sizes, the panes as cards across (native_in 4 apart), the sidebar ending on the
+                   fold (sfdesk/frame.mbt side_on_fold); no rail of the app's own: iOS 27.1 lays the places, the chat's
+                   actions, the bell and the new chat out in its own glass down the trailing edge (sf/native_bars.mbt,
+                   host/ios_nav.h), the status bar in that column, the composer level with the round new-chat button. -->
+              <div class="duo-scr mk mk-m">
+                <div class="dc side">
+                  <div class="dws"><span class="gl ws"><i class="b">A</i>Acme<i class="mk-i chevd"></i></span><i class="mk-i filter"></i></div>
+                  <div class="mk-search"><i class="mk-i search"></i><span data-t="devices-stage.search-everything.09d8">Search everything</span></div>
+                  <div class="mk-mday"><span data-t="devices-stage.today.2434">Today</span></div>
+                  <div class="mk-mrow on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices-stage.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                  <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="devices-stage.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span></div></div>
+                  <div class="mk-mrow unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices-stage.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices-stage.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                  <div class="mk-mday"><span data-t="devices-stage.yesterday.da24">Yesterday</span></div>
+                  <div class="mk-mrow"><div class="l1"><b><span data-t="devices-stage.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="devices-stage.the-orders-table-was.79fa">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span></div></div>
+                </div>
+                <div class="dc page">
+                  <div class="dbar"><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                  <div class="mk-mmsgs">
+                    <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                    <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices-stage.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices-stage.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices-stage.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
+                    <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.running-pnpm-test-login.e38c">Running pnpm test login</span></span><span class="t">12s</span></div>
                   </div>
-                  <div class="mk-app body-web">
-                    <div class="mk-dock">
-                      <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
-                      <div class="mk-side">
-                        <div class="mk-nav"><i class="mk-i compose"></i><span data-t="devices-stage.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
-                        <div class="mk-day"><span data-t="devices-stage.today.2434">Today</span></div>
-                        <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices-stage.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
-                        <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="devices-stage.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span></div></div>
-                        <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices-stage.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices-stage.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
-                      </div>
+                  <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                </div>
+                <div class="dcol">
+                  <div class="dst"><b>9:41</b><span><i class="wifi"></i><i class="bat"></i></span></div>
+                  <span class="gl two"><i class="mk-i more"></i><i class="mk-i reload"></i></span>
+                  <span class="gl one"><i class="mk-i bell"></i></span>
+                  <span class="gl tabs"><span class="on"><i class="mk-i chats"></i></span><span><i class="mk-i folder"></i></span><span><i class="mk-i glyph"></i></span></span>
+                  <span class="new"><i class="mk-i mk-ling"></i></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d d-android">
+            <div class="mk-phone droid" aria-hidden="true">
+              <span class="isl"></span><span class="gest"></span>
+              <div class="mk mk-m">
+                <div class="mk-sb"><span>9:41<i class="ni"></i></span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
+                <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span><i class="mk-i more"></i></div>
+                <div class="mk-mmsgs">
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-button-was.50b4">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
+                  <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.screenshot-login-page-at.9c76">Screenshot: login page at 375px</span></span><span class="t">4s</span></div>
+                </div>
+                <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+              </div>
+              <!-- Android's notification shade over the app, with the share's ongoing notification as AdbShare.java
+                   builds it for chats' grants (low importance: no pop-up; its small icon in the status bar) -->
+              <div class="shade"><div class="notif"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span data-t="devices-stage.2-min.4774">2 min</span></span><b><span data-t="devices-stage.debugging-shared-with-1.628b">Debugging shared with 1 chat</span></b><span class="m"><span data-t="devices-stage.login-page-on-phones.3581">“Login page on phones” is using a virtual screen in the background</span></span><span class="acts"><span data-t="devices-stage.turn-off-debug-sharing.296a">Turn off debug sharing</span></span></div></div></div>
+            </div>
+          </div>
+          <div class="d d-desk">
+            <div class="mk mk-win">
+              <div class="mk-app mac">
+                <div class="mk-dock">
+                  <span class="mk-tl"><i></i><i></i><i></i></span>
+                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri on"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                  <div class="mk-side">
+                    <div class="mk-nav"><i class="mk-i plus"></i><span data-t="devices-stage.add-station.a826">Add station</span></div>
+                    <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span data-t="devices-stage.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>612G</span></span></div><div class="l3"><span data-t="devices-stage.direct-12-ms.9f57">Direct · 12 ms</span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-st mini"><i class="mk-i mini"></i></i><b>Mini</b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:12%"></i></span>CPU<span>88%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>6.2G</span></span><span class="mk-chip"><span class="meter"><i style="width:58%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>214G</span></span></div><div class="l3"><span data-t="devices-stage.direct-18-ms.60e9">Direct · 18 ms</span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-st laptop"><i class="mk-i laptop"></i></i><b><span data-t="devices-stage.laptop.ed91">Laptop</span></b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span>CPU<span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>14.1G</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>388G</span></span></div><div class="l3"><span data-t="devices-stage.direct-9-ms.b605">Direct · 9 ms</span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span data-t="devices-stage.server.cb0c">Server</span></b><span class="run"><span data-t="devices-stage.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:37%"></i></span>CPU<span>63%</span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>71G</span></span><span class="mk-chip"><span class="meter"><i style="width:99%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>1.4G</span></span></div><div class="l3"><span data-t="devices-stage.relay-46-ms.b49c">Relay · 46 ms</span></div></div>
+                  </div>
+                </div>
+                <div class="mk-page">
+                  <div class="mk-pg">
+                    <div class="hd"><span class="tile mk-st willow"><i class="mk-i monitor"></i></span><div><h4>Willow</h4><p><span class="dot"></span><span data-t="devices-stage.idle-apple-m4-max.fad1">Idle · Apple M4 Max · 64 GB · macOS 26.6.2</span></p></div><i class="mk-i more"></i></div>
+                    <div class="mk-seg"><span class="on"><span data-t="devices-stage.overview.0efc">Overview</span></span><span><span data-t="devices-stage.processes.ed73">Processes</span></span><span><span data-t="devices-stage.settings.c7f7">Settings</span></span><span><span data-t="devices-stage.software-devices.59b4">Software &amp; devices</span></span></div>
+                    <h5><span data-t="devices-stage.resources.87df">Resources</span></h5>
+                    <div class="mk-dials">
+                      <div class="mk-dial"><b>81<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span data-t="devices-stage.cpu-idle.1a5d">CPU idle</span></span><span class="sb"><span data-t="devices-stage.load-3-1.0a75">Load 3.1</span></span></div>
+                      <div class="mk-dial"><b>36.6<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices-stage.memory-free.d107">Memory free</span></span><span class="sb"><span data-t="devices-stage.of-64-gb.28fa">of 64 GB</span></span></div>
+                      <div class="mk-dial"><b>612<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices-stage.disk-free.2dfd">Disk free</span></span><span class="sb"><span data-t="devices-stage.of-994-gb.5bad">of 994 GB</span></span></div>
                     </div>
-                    <div class="mk-page">
-                      <div class="mk-bar"><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
-                      <div class="mk-msgs">
-                        <div class="mk-msg"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><div class="hd"><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
-                        <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices-stage.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices-stage.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices-stage.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
-                        <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.running-pnpm-test-login.e38c">Running pnpm test login</span></span><span class="t">12s</span></div>
-                      </div>
-                      <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
-                    </div>
+                    <div class="mk-kv"><span><span data-t="devices-stage.direct-latency.3492">Direct · latency</span> <b>12 ms</b></span><span>↑ <b>0.4 KB/s</b></span><span>↓ <b>1.2 KB/s</b></span></div>
+                    <h5>Profile<span class="n">1</span></h5>
+                    <div class="mk-card"><i class="mk-lg a" style="--s:18px"></i><span class="t"><span>lin@acme.dev <span class="mk-cc">CC</span></span><small><span data-t="devices-stage.subscription-2-13-models.02cd">Subscription · 2 / 13 models on</span></small></span><i class="mk-i chevr"></i></div>
                   </div>
                 </div>
               </div>
-              <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span data-t="devices-stage.done.e9b4">Done</span></span>
             </div>
-            <svg class="dv-links" viewBox="0 0 900 720" fill="none">
-              <path class="l1" pathLength="1" d="M445 320 C 520 280, 590 290, 625 340"/>
-              <path class="l2" pathLength="1" d="M543 104 C 420 86, 236 104, 156 160"/>
-              <path class="l3" pathLength="1" d="M543 118 C 360 52, 72 112, 86 364"/>
-              <path class="l4" pathLength="1" d="M792 212 C 802 250, 778 290, 722 310"/>
-            </svg>
-            <div class="d d-duo">
-              <!-- Folded, the cover screen is the right panel (its status bar down the right edge); unfolding swings
-                   the left panel in on the hinge (main.js: inner screen first). -->
-              <div class="duo">
-                <div class="scr"><div class="mk mk-m">
-                  <div class="mk-sbd">9:41</div>
-                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+          </div>
+          <div class="d d-web">
+            <div class="mk mk-win web">
+              <div class="mk-browser"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
+              <div class="mk-app">
+                <div class="mk-dock">
+                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
                   <div class="mk-side">
                     <div class="mk-nav"><i class="mk-i compose"></i><span data-t="devices-stage.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
                     <div class="mk-day"><span data-t="devices-stage.today.2434">Today</span></div>
-                    <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices-stage.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
-                    <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="devices-stage.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices-stage.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                    <div class="mk-row on"><div class="l1"><b><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="devices-stage.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span></div></div>
                     <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices-stage.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices-stage.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
                     <div class="mk-day"><span data-t="devices-stage.yesterday.da24">Yesterday</span></div>
                     <div class="mk-row"><div class="l1"><b><span data-t="devices-stage.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="devices-stage.the-orders-table-was.79fa">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span></div></div>
                   </div>
-                </div></div>
-                <div class="scr"><div class="mk mk-m">
-                  <div class="mk-sbd"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></div>
-                  <div class="mk-sbv"><span>9:41</span><i class="bat"></i></div>
-                  <div class="mk-page">
-                    <div class="mk-bar"><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
-                    <div class="mk-msgs">
-                      <div class="mk-msg"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><div class="hd"><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
-                      <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices-stage.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices-stage.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices-stage.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
-                      <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.running-pnpm-test-login.e38c">Running pnpm test login</span></span><span class="t">12s</span></div>
-                    </div>
-                    <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
-                  </div>
-                </div></div>
-              </div>
-              <div class="cover-notif"><img src="assets/mark.svg" alt=""><div><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span><em><span data-t="devices-stage.now.c9bc">now</span></em></b><span data-t="devices-stage.opus-5-5-it.8654">Opus 5.5: It now fills its container; checked at 375px</span></div></div>
-              <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span data-t="devices-stage.done.e9b4">Done</span></span>
-            </div>
-            <div class="d d-android">
-              <div class="mk-phone droid">
-                <span class="isl"></span><span class="gest"></span>
-                <div class="notif"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span data-t="devices-stage.2-min.4774">2 min</span></span><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b><span class="m"><span data-t="devices-stage.using-a-virtual-screen.3634">Using a virtual screen on this phone</span></span></div></div>
-                <div class="mk mk-m">
-                  <div class="mk-sb"><span>9:41</span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
-                  <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i></span><span>Willow</span></span><i class="mk-i more"></i></div>
-                  <div class="mk-mmsgs">
-                    <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
-                    <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-button-was.50b4">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
-                    <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.screenshot-login-page-at.9c76">Screenshot: login page at 375px</span></span><span class="t">4s</span></div>
-                  </div>
-                  <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
                 </div>
-              </div>
-              <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span data-t="devices-stage.done.e9b4">Done</span></span>
-            </div>
-            <div class="d d-slack">
-              <div class="slack">
-                <div class="hd"><span><svg class="sl"><use href="#b-slack"/></svg># eng-web</span><small><span data-t="devices-stage.thread.c283">thread</span></small></div>
-                <div class="msg"><span class="av" style="background:#9A7F72"><span data-t="devices-stage.l.d160">L</span></span><div><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span> <em>10:02</em></b><p><span class="mention">@monoid</span> <span data-t="devices-stage.is-the-login-page.42b4">is the login page fixed?</span></p></div></div>
-                <div class="msg"><span class="av" style="background:var(--brand-deep)"><img src="assets/mark.svg" alt="" width="32" height="32" style="border-radius:8px"></span><div><b>monoid <em>10:03</em></b><p><span data-t="devices-stage.fixed-and-the-tests.98ef">Fixed, and the tests pass.</span></p><div class="att"><span class="cap"><svg class="ico c-ok"><use href="#i-done"/></svg><span data-t="devices-stage.done-login-page-on.9d51">Done · Login page on phones</span></span></div></div></div>
+                <div class="mk-page">
+                  <div class="mk-bar"><h4><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.l.d160">L</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg o"></i></span><span>Mini</span></span><span class="end"><i class="mk-i more"></i><i class="mk-i panel"></i></span></div>
+                  <div class="mk-msgs">
+                    <div class="mk-mine"><div class="bub"><span data-t="devices-stage.add-a-csv-export.1b4f">Add a CSV export to the orders list</span></div><span class="tm"><span data-t="devices-stage.26-min-ago.8b19">26 min ago</span></span></div>
+                    <div class="mk-msg"><i class="mk-av"><i class="mk-lg o"></i></i><div class="hd"><b>Codex</b><span class="tm"><span data-t="devices-stage.3-min-ago.ffa4">3 min ago</span></span></div><div class="bd md"><span data-t="devices-stage.done-the-export-streams.6fe0">Done: the export streams rows by the current filters, 100k rows in about 2.3 s, merged into main (<code>a3f9c21</code>).</span></div></div>
+                  </div>
+                  <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                </div>
               </div>
             </div>
           </div>
@@ -689,40 +433,45 @@
         <div class="txt">
           <span class="eyebrow">iPhone · iPhone Duo</span>
           <h3 id="dv-h1"><span data-t="devices.two-screens-open-folded.cd38">Two screens open; folded, it still replies</span></h3>
-          <p><span data-t="devices.chats-on-the-left.05af">Chats on the left, the running chat on the right. The native app is coming; for now, add the web app to your home screen.</span></p>
+          <p><span data-t="devices.chats-on-the-left.1f45">Chats on the left, the running chat on the right; for now, the web app on your home screen.</span></p>
           <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span data-t="devices.open-on-iphone.0e24">Open on iPhone</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
         </div>
         <div class="vis">
           <span class="mtag on-vis pose-open"><i></i>pose · open · 2 panels</span>
-          <!-- Open, the Duo runs the desktop structure in the phone's colours: rail and chats on the left panel,
-               the sidebar's edge on the fold, the open chat on the right. -->
           <div class="duo" aria-hidden="true">
-            <div class="scr"><div class="mk mk-m">
-              <div class="mk-sbd">9:41</div>
-              <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
-              <div class="mk-side">
-                <div class="mk-nav"><i class="mk-i compose"></i><span data-t="devices.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
-                <div class="mk-day"><span data-t="devices.today.2434">Today</span></div>
-                <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
-                <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="devices.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices.l.d160">L</span></i></span></div></div>
-                <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
-                <div class="mk-day"><span data-t="devices.yesterday.da24">Yesterday</span></div>
-                <div class="mk-row"><div class="l1"><b><span data-t="devices.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="devices.the-orders-table-was.79fa">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices.l.d160">L</span></i></span></div></div>
-                <div class="mk-row"><div class="l1"><b><span data-t="devices.write-the-deploy-docs.4973">Write the deploy docs</span></b></div><div class="l2"><span><span data-t="devices.thanks-i-ve-read.a513">Thanks, I've read the docs</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+            <!-- Opened as a book (its inner screen 890 × 626 points, apps/mbui sfapp/tabletop_wbtest.mbt): the desktop's
+                 structure with touch's sizes, the panes as cards across (native_in 4 apart), the sidebar ending on the
+                 fold (sfdesk/frame.mbt side_on_fold); no rail of the app's own: iOS 27.1 lays the places, the chat's
+                 actions, the bell and the new chat out in its own glass down the trailing edge (sf/native_bars.mbt,
+                 host/ios_nav.h), the status bar in that column, the composer level with the round new-chat button. -->
+            <div class="duo-scr mk mk-m">
+              <div class="dc side">
+                <div class="dws"><span class="gl ws"><i class="b">A</i>Acme<i class="mk-i chevd"></i></span><i class="mk-i filter"></i></div>
+                <div class="mk-search"><i class="mk-i search"></i><span data-t="devices.search-everything.09d8">Search everything</span></div>
+                <div class="mk-mday"><span data-t="devices.today.2434">Today</span></div>
+                <div class="mk-mrow on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices.running-pnpm-test-login.0071">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices.l.d160">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><span><span data-t="devices.done-the-export-streams.d46f">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices.l.d160">L</span></i></span></div></div>
+                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                <div class="mk-mday"><span data-t="devices.yesterday.da24">Yesterday</span></div>
+                <div class="mk-mrow"><div class="l1"><b><span data-t="devices.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="devices.the-orders-table-was.79fa">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices.l.d160">L</span></i></span></div></div>
               </div>
-            </div></div>
-            <div class="scr"><div class="mk mk-m">
-              <div class="mk-sbd"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></div>
-              <div class="mk-page">
-                <div class="mk-bar"><h4><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
-                <div class="mk-msgs">
-                  <div class="mk-msg"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><div class="hd"><b><span data-t="devices.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
-                  <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span data-t="devices.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
+              <div class="dc page">
+                <div class="dbar"><h4><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                <div class="mk-mmsgs">
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><b><span data-t="devices.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
                   <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices.running-pnpm-test-login.e38c">Running pnpm test login</span></span><span class="t">12s</span></div>
                 </div>
-                <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
               </div>
-            </div></div>
+              <div class="dcol">
+                <div class="dst"><b>9:41</b><span><i class="wifi"></i><i class="bat"></i></span></div>
+                <span class="gl two"><i class="mk-i more"></i><i class="mk-i reload"></i></span>
+                <span class="gl one"><i class="mk-i bell"></i></span>
+                <span class="gl tabs"><span class="on"><i class="mk-i chats"></i></span><span><i class="mk-i folder"></i></span><span><i class="mk-i glyph"></i></span></span>
+                <span class="new"><i class="mk-i mk-ling"></i></span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -732,7 +481,7 @@
         <div class="txt">
           <span class="eyebrow">Android</span>
           <h3 id="dv-h2"><span data-t="devices.lend-your-phone-to.ec63">Lend your phone to the agent</span></h3>
-          <p><span data-t="devices.the-agent-tests-on.e364">The agent tests on a virtual screen of its own, out of your way, and it closes after 10 idle minutes.</span></p>
+          <p><span data-t="devices.the-agent-tests-on.4218">The agent tests on its own virtual screen, out of your way, closing after 10 idle minutes.</span></p>
           <div class="actions">
             <a class="btn btn-ink" href="https://app.monoid.build/releases/latest/android"><span data-t="devices.download-for-android.a35a">Download for Android</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>
             <span class="qr"><img src="assets/android-qr.svg" alt="" width="72" height="72"><span data-t="devices.scan-to-download.a9f8">Scan to download</span></span>
@@ -742,10 +491,9 @@
           <span class="mtag on-vis"><i></i>virtual display · 2m</span>
           <div class="mk-phone droid" aria-hidden="true">
             <span class="isl"></span><span class="gest"></span>
-            <div class="notif"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span data-t="devices.2-min.4774">2 min</span></span><b><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></b><span class="m"><span data-t="devices.using-a-virtual-screen.48b1">Using a virtual screen on this phone; it closes after 10 idle minutes</span></span></div></div>
             <div class="mk mk-m">
-              <div class="mk-sb"><span>9:41</span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
-              <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i></span><span>Willow</span></span><i class="mk-i more"></i></div>
+              <div class="mk-sb"><span>9:41<i class="ni"></i></span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
+              <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span><i class="mk-i more"></i></div>
               <div class="mk-mmsgs">
                 <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices.l.d160">L</span></i><b><span data-t="devices.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
                 <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices.6-min-ago.0787">6 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-button-was.50b4">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
@@ -753,6 +501,9 @@
               </div>
               <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
             </div>
+            <!-- Android's notification shade over the app, with the share's ongoing notification as AdbShare.java
+                 builds it for chats' grants (low importance: no pop-up; its small icon in the status bar) -->
+            <div class="shade"><div class="notif"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span data-t="devices.2-min.4774">2 min</span></span><b><span data-t="devices.debugging-shared-with-1.628b">Debugging shared with 1 chat</span></b><span class="m"><span data-t="devices.login-page-on-phones.3581">“Login page on phones” is using a virtual screen in the background</span></span><span class="acts"><span data-t="devices.turn-off-debug-sharing.296a">Turn off debug sharing</span></span></div></div></div>
           </div>
         </div>
       </div>
@@ -762,7 +513,7 @@
         <div class="txt">
           <span class="eyebrow">Mac · Windows</span>
           <h3 id="dv-h3"><span data-t="devices.every-computer-s-load.576b">Every computer's load, in one window</span></h3>
-          <p><span data-t="devices.each-station-s-cpu.ce0b">Each station's CPU, memory and disk in one place, with tasks queued by load. Mac (Apple silicon) and Windows x64, updated every night.</span></p>
+          <p><span data-t="devices.each-station-s-cpu.6b3c">Each station's CPU, memory and disk, with tasks queued by load. Mac (Apple silicon) and Windows x64.</span></p>
           <div class="actions">
             <a class="btn btn-ink" href="https://app.monoid.build/releases/latest/mac"><svg><use href="#b-apple"/></svg><span data-t="devices.download-for-mac.752c">Download for Mac</span></a>
             <a class="btn btn-line" href="https://app.monoid.build/releases/latest/win"><svg><use href="#b-windows"/></svg>Windows</a>
@@ -808,7 +559,7 @@
         <div class="txt">
           <span class="eyebrow"><span data-t="devices.web.a832">Web</span></span>
           <h3 id="dv-h4"><span data-t="devices.open-a-browser-and.fe3b">Open a browser and go</span></h3>
-          <p><span data-t="devices.the-same-interface-as.45d1">The same interface as the apps, with nothing to install, on Linux and iPad too.</span></p>
+          <p><span data-t="devices.the-apps-interface-with.0328">The apps' interface with nothing to install, on Linux and iPad too.</span></p>
           <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span data-t="devices.open-the-web-app.7646">Open the web app</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
         </div>
         <div class="vis">
@@ -840,25 +591,6 @@
           </div></div>
         </div>
       </div>
-
-      <!-- Slack -->
-      <div class="fpanel" id="dv-p5" role="group" aria-roledescription="slide" data-t-aria-roledescription="devices.slide.e75e" aria-labelledby="dv-h5">
-        <div class="txt">
-          <span class="eyebrow">Slack</span>
-          <h3 id="dv-h5"><span data-t="devices.mention-it-in-a.3b10">Mention it in a thread, and it starts</span></h3>
-          <p><span data-t="devices.connect-a-bot-to.0bce">Connect a bot to a station. Everyone in the thread talks to the same agent, and its replies stay in the thread.</span></p>
-        </div>
-        <div class="vis ink">
-          <span class="mtag on-vis"><i></i>thread → 1 session</span>
-          <div class="slack" aria-hidden="true">
-            <div class="hd"># eng-api <small><span data-t="devices.thread-3-replies.3f90">thread · 3 replies</span></small></div>
-            <div class="msg"><span class="av" style="background:#9A7F72"><span data-t="devices.l.d160">L</span></span><div><b><span data-t="devices.lin-xiao.c10a">Lin Xiao</span> <em>10:02</em></b><p><span class="mention">@monoid</span> <span data-t="devices.chart-last-week-s.9e7f">chart last week's signups for the weekly report</span></p></div></div>
-            <div class="msg"><span class="av" style="background:var(--brand-deep)"><img src="assets/mark.svg" alt="" width="32" height="32" style="border-radius:8px"></span><div><b>monoid <em>10:04</em></b><p><span data-t="devices.signups-are-up-12.a291">Signups are up 12% to 1,590.</span></p>
-              <div class="att"><span class="cap"><svg class="ico c-ok"><use href="#i-done"/></svg><span data-t="devices.done-weekly-metrics-report.aa1f">Done · Weekly metrics report</span></span></div></div></div>
-            <div class="msg reply"><span class="av" style="background:#6F7883">Z</span><div><b>zhou <em>10:05</em></b><p><span data-t="devices.great-post-it-to.7e74">Great, post it to #general</span></p></div></div>
-          </div>
-        </div>
-      </div>
       </div>
       <div class="dv-nav">
         <div class="dv-dots">
@@ -867,9 +599,8 @@
           <button type="button" aria-controls="dv-p2"><span class="dv-vh">Android</span></button>
           <button type="button" aria-controls="dv-p3"><span class="dv-vh"><span data-t="devices.desktop.532c">Desktop</span></span></button>
           <button type="button" aria-controls="dv-p4"><span class="dv-vh"><span data-t="devices.web.a832">Web</span></span></button>
-          <button type="button" aria-controls="dv-p5"><span class="dv-vh">Slack</span></button>
         </div>
-        <span class="dv-count tnum" aria-hidden="true"><b>01</b> / 05</span>
+        <span class="dv-count tnum" aria-hidden="true"><b>01</b> / 04</span>
         <div class="dv-arrows">
           <button type="button" data-step="-1" aria-controls="dv-track" disabled><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><span class="dv-vh"><span data-t="devices.previous.50f9">Previous</span></span></button>
           <button type="button" data-step="1" aria-controls="dv-track"><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><span class="dv-vh"><span data-t="devices.next.bc98">Next</span></span></button>
@@ -884,20 +615,19 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-shield"/></svg><span data-t="security.security.f25c">Security</span></span>
-        <h2 id="security-title"><span data-t="security.your-chats-stay-on.5147">Your chats stay on your own computers</span></h2>
+        <h2 id="security-title"><span data-t="security.your-chats-stay-on.97d5">Your chats stay on your computers</span></h2>
       </div>
-      <p class="lead"><span data-t="security.your-phones-and-computers.5bc2">Your phones and computers connect straight to your stations, or through an encrypted relay when they can’t. The cloud runs accounts and relays, and can’t read your content.</span></p>
+      <p class="lead"><span data-t="security.devices-reach-your-stations.3086">Devices reach your stations directly or by encrypted relay; the cloud can’t read your content.</span></p>
     </div>
 
     <div class="sec-grid rv">
       <ul class="sec-notes">
         <li>
-          <h3><svg class="ico" aria-hidden="true"><use href="#i-route"/></svg><span data-t="security.peer-to-peer.4c21">Peer to peer</span></h3>
-          <p><span data-t="security.direct-first-a-relay.341e">Direct first, a relay only when that fails. No ports to open, no VPN, no tunnels.</span></p>
+          <h3><span data-t="security.peer-to-peer.4c21">Peer to peer</span></h3>
+          <p><span data-t="security.no-ports-to-open.85ee">No ports to open, no VPN, no tunnels.</span></p>
         </li>
         <li>
-          <h3><svg class="ico" aria-hidden="true"><use href="#i-server"/></svg><span data-t="security.data-on-your-machines.4dc3">Data on your machines</span></h3>
+          <h3><span data-t="security.data-on-your-machines.4dc3">Data on your machines</span></h3>
           <p><span data-t="security.chats-files-and-history.f35e">Chats, files and history live on the station, not in a cloud database.</span></p>
         </li>
       </ul>
@@ -951,22 +681,14 @@
 
       <ul class="sec-notes">
         <li>
-          <h3><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg><span data-t="security.security-mode.e5d8">Security mode</span></h3>
+          <h3><span data-t="security.security-mode.e5d8">Security mode</span></h3>
           <p><span data-t="security.once-on-members-devices.e746">Once on, members, devices and stations need a trusted device’s signature. The cloud alone can’t add anyone.</span></p>
         </li>
         <li>
-          <h3><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><span data-t="security.vault.fb46">Vault</span></h3>
+          <h3><span data-t="security.vault.fb46">Vault</span></h3>
           <p><span data-t="security.in-security-mode-the.629d">In security mode, the keys agents use stay encrypted until a person approves.</span></p>
         </li>
       </ul>
-    </div>
-
-    <div class="sec-trust rv">
-      <ul>
-        <li><b><span data-t="security.open-source.6cc3">Open source</span></b><span>MIT</span></li>
-        <li><b><span data-t="security.official-clis.8d54">Official CLIs</span></b><span><span data-t="security.agents-run-unmodified-within.7a5a">Agents run unmodified, within their own limits</span></span></li>
-      </ul>
-      <a class="btn btn-line sm" href="https://github.com/AFK-surf/still.fail"><svg aria-hidden="true"><use href="#b-github"/></svg><span data-t="security.read-the-code-on.f943">Read the code on GitHub</span></a>
     </div>
   </div>
 </section>
@@ -976,10 +698,9 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-term"/></svg><span data-t="install.get-started.90e4">Get started</span></span>
         <h2 id="install-title"><span data-t="install.one-command-adds-a.37ce">One command adds a computer</span></h2>
       </div>
-      <p class="lead"><span data-t="install.stations-run-on-macos.e854">Stations run on macOS (Apple silicon), Linux (x64, arm64) and Windows (x64). Agents run with that computer's user permissions.</span></p>
+      <p class="lead"><span data-t="install.stations-run-on-macos.acd8">Stations run on macOS (Apple silicon), Linux (x64, arm64) and Windows (x64), with that computer's user permissions.</span></p>
     </div>
     <div class="card install rv">
       <ol class="steps">
@@ -1010,10 +731,9 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-history"/></svg><span data-t="changelog.shipped-nightly.91ad">Shipped nightly</span></span>
         <h2 id="changelog-title"><span data-t="changelog.a-new-versionevery-morning.1cd6">A new version<br>every morning</span></h2>
       </div>
-      <p class="lead"><span data-t="changelog.it-updates-itself-every.fcbe">It updates itself every night: stations, desktop, Android and the web move together, nothing to download by hand.</span></p>
+      <p class="lead"><span data-t="changelog.stations-desktop-android-and.7dae">Stations, desktop, Android and the web update themselves together every night.</span></p>
     </div>
     <div class="posts rv">
       <article class="post feature">
@@ -1033,24 +753,6 @@
           </ul>
         </div>
       </article>
-      <article class="post">
-        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cvb1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cvb2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cvb4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cvb6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cvb9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cvb12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#1A1B1E"/><rect x="592" width="48" height="352" fill="url(#cvb12)"/><rect x="560" width="32" height="352" fill="url(#cvb9)"/><rect x="512" width="48" height="352" fill="url(#cvb6)"/><rect x="480" width="32" height="352" fill="url(#cvb4)"/><rect x="432" width="48" height="352" fill="url(#cvb2)"/><rect x="400" width="32" height="352" fill="url(#cvb1)"/><rect x="481" y="65" width="14" height="14" rx="2" fill="#EF6334"/><rect x="529" y="145" width="14" height="14" rx="2" fill="#EF6334"/><text x="48" y="304" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="72" letter-spacing="-2.5" fill="#FFFFFF">0.1.7190</text></svg></div>
-        <div class="post-body">
-          <div class="post-meta"><span class="tag"><span data-t="changelog.new.6403">New</span></span><span class="tnum"><span data-t="changelog.nov-4.f7c9">Nov 4</span></span></div>
-          <h3><span data-t="changelog.antigravity-cli-runs-as.9e85">Antigravity CLI runs as an agent, on a Gemini API key</span></h3>
-          <p><span data-t="changelog.a-chat-waiting-on.a9d7">A chat waiting on CI lets its idle agent go and wakes it when it's time, saving the station memory. Auto-update can be turned off in About.</span></p>
-          <p class="tally"><span>4 <span data-t="changelog.new.c2a6">new</span></span><span>5 <span data-t="changelog.improved.2ecf">improved</span></span><span>9 <span data-t="changelog.fixed.7bc5">fixed</span></span></p>
-        </div>
-      </article>
-      <article class="post">
-        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cvc1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DCDCDE"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cvc2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DCDCDE"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cvc4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DCDCDE"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cvc6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DCDCDE"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cvc9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DCDCDE"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cvc12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DCDCDE"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#F1F1F2"/><rect width="48" height="352" fill="url(#cvc12)"/><rect x="48" width="32" height="352" fill="url(#cvc9)"/><rect x="80" width="48" height="352" fill="url(#cvc6)"/><rect x="128" width="32" height="352" fill="url(#cvc4)"/><rect x="160" width="48" height="352" fill="url(#cvc2)"/><rect x="208" width="32" height="352" fill="url(#cvc1)"/><rect x="97" y="81" width="14" height="14" rx="2" fill="#EF6334"/><rect x="33" y="193" width="14" height="14" rx="2" fill="#1A1B1E"/><text x="592" y="304" text-anchor="end" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="72" letter-spacing="-2.5" fill="#1A1B1E">0.1.7075</text></svg></div>
-        <div class="post-body">
-          <div class="post-meta"><span class="tag"><span data-t="changelog.new.6403">New</span></span><span class="tnum"><span data-t="changelog.nov-4.f7c9">Nov 4</span></span></div>
-          <h3><span data-t="changelog.switch-an-agent-s.989d">Switch an agent's runtime mid-chat, with its history kept</span></h3>
-          <p><span data-t="changelog.cap-a-model-s.64ec">Cap a model's context when you pick it. A station's resources show each GPU's load and memory.</span></p>
-          <p class="tally"><span>7 <span data-t="changelog.new.c2a6">new</span></span><span>8 <span data-t="changelog.improved.2ecf">improved</span></span><span>10 <span data-t="changelog.fixed.7bc5">fixed</span></span></p>
-        </div>
-      </article>
     </div>
   </div>
 </section>
@@ -1060,7 +762,6 @@
   <div class="w">
     <div class="split-head rv">
       <div>
-        <span class="eyebrow"><svg class="ico"><use href="#i-up"/></svg><span data-t="download.download.a479">Download</span></span>
         <h2 id="download-title"><span data-t="download.the-same-monoidon-every.f56d">The same monoid<br>on every device</span></h2>
       </div>
       <p class="lead"><span data-t="download.free-for-now-agents.3ee2">Free for now. Agents use your own subscriptions or API keys.</span></p>
@@ -1098,29 +799,20 @@
 <section class="band sec" data-tone="paper" id="faq" aria-labelledby="faq-title" style="padding-top:0">
   <div class="w faq">
     <div class="head rv" style="margin:0">
-      <span class="eyebrow"><svg class="ico"><use href="#i-chat"/></svg><span data-t="faq.faq.0368">FAQ</span></span>
       <h2 id="faq-title"><span data-t="faq.asked-most.39ee">Asked most</span></h2>
     </div>
     <div class="qa rv">
-      <details open><summary><span class="q"><span data-t="faq.how-does-the-pool.254c">How does the pool choose an account?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.only-accounts-that-have.afe0">Only accounts that have the chosen model and still work are considered; those at 80% of their 5-hour limit go last. The rest are weighted by how fast each must spend its weekly limit and what's left of its 5-hour limit, so accounts that reset soon with more left get more chats.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.does-switching-accounts-lose.b22b">Does switching accounts lose context?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.after-a-switch-the.61b0">After a switch, the agent reads its earlier history back. A chat stays on its account until that account can't be used; it moves early only right after or near a compaction, and never while background commands are running.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.how-is-it-different.d2f1">How is it different from Claude Code in a terminal?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.a-terminal-agent-is.639e">A terminal agent is used at that computer. monoid brings the agents on all your computers into one place: accounts share a pool, you direct them from your phone or Slack, see every computer's load, and approve each key before an agent uses it. The agents themselves are unchanged.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.does-it-cost-anything.16cb">Does it cost anything?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+      <details open><summary><span class="q"><span data-t="faq.how-does-the-pool.254c">How does the pool choose an account?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.among-working-accounts-with.3054">Among working accounts with the chosen model, those resetting soonest with the most left get more chats; one past 80% of its 5-hour limit goes last.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.does-switching-accounts-lose.b22b">Does switching accounts lose context?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.the-agent-reads-its.fe09">The agent reads its history back. A chat moves only when it must, or early around a compaction, never while background commands run.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.how-is-it-different.d2f1">How is it different from Claude Code in a terminal?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.a-terminal-agent-is.4454">A terminal agent is tied to one computer. monoid gathers them all: pooled accounts, direction from your phone or Slack, keys you approve. The agents are unchanged.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.does-it-cost-anything.16cb">Does it cost anything?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
         <div class="a"><div><p><span data-t="faq.free-for-now-plans.75c2">Free for now. Plans limit workspaces and members; a workspace holds up to 64 stations. Agents use your own subscriptions or API keys.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.do-my-code-and.b6ce">Do my code and chats go to the cloud?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.no-chats-files-and.9f92">No. Chats, files and history stay on your computers. The cloud handles accounts and relays, and a relay passes on encrypted data it can't read.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.does-my-computer-have.f085">Does my computer have to stay on?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.yes-agents-run-on.0c77">Yes. Agents run on it, so it has to be on and online. The station starts at login; no window has to stay open.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.does-it-work-across.5c37">Does it work across networks?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.yes-devices-connect-directly.8efc">Yes. Devices connect directly, or through an encrypted relay when they can't. No ports, VPN or tunnels to set up.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.does-it-affect-my.0bb8">Does it affect my agent accounts?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.monoid-runs-each-agent.3ce2">monoid runs each agent's official CLI, just as you would in a terminal: unmodified, and within its own limits.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.can-i-use-it.3fbb">Can I use it on an iPhone or iPhone Duo?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
-        <div class="a"><div><p><span data-t="faq.yes-the-app-store.84ad">Yes. The App Store app is coming; until then, add the web app to your home screen and it opens like an app. The iOS Simulator on a station, iPhone Duo's two screens and fold included, can be driven beside the chat.</span></p></div></div></details>
-      <details><summary><span class="q"><span data-t="faq.is-it-open-source.ad0a">Is it open source?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+      <details><summary><span class="q"><span data-t="faq.do-my-code-and.b6ce">Do my code and chats go to the cloud?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.no-chats-files-and.046c">No. Chats, files and history stay on your computers; relays pass on only encrypted data they can't read.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.is-it-open-source.ad0a">Is it open source?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
         <div class="a"><div><p><span data-t="faq.yes-under-the-mit.f731">Yes, under the MIT license. The code is on <a href="https://github.com/AFK-surf/still.fail">GitHub</a>.</span></p></div></div></details>
     </div>
   </div>
@@ -1155,6 +847,7 @@
         <li><a href="#teams"><span data-t="footer.teams.cbfd">Teams</span></a></li>
         <li><a href="#devices"><span data-t="footer.every-device.14f4">Every device</span></a></li>
         <li><a href="#security"><span data-t="footer.security.f25c">Security</span></a></li>
+        <li><a href="https://comma.surf">Comma</a></li>
       </ul></div>
       <div><p class="fh"><span data-t="footer.download.a479">Download</span></p><ul>
         <li><a href="https://app.monoid.build/releases/latest/mac">Mac</a></li>
@@ -1176,7 +869,7 @@
       </ul></div>
     </div>
     <div class="foot-base">
-      <span>© 2026 monoid · <span data-t="footer.open-source-mit.cad9">Open source, MIT</span></span>
+      <span>© 2026 AFK Inc · <span data-t="footer.open-source-mit.cad9">Open source, MIT</span></span>
       <!-- i18n:switcher -->
       <div class="footer-prefs">
         <button class="language-trigger" type="button" popovertarget="languages" aria-haspopup="menu" aria-expanded="false" aria-label="Language: English"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg><span lang="en">English</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button>

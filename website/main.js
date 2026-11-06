@@ -368,10 +368,9 @@
 
   // ---- Every device, as one scene played by scrolling (large screens with motion allowed: html.scrolly, set in the head) ----
   // The stage stays on screen with CSS (position: sticky in a tall track, sized from the first paint, so nothing moves
-  // when the script arrives); GSAP's ScrollTrigger scrubs one timeline through it. The same conversation travels across
-  // the screens: the Duo folded with a notification, then unfolding on its hinge; Android flying in, linked to it; the
-  // camera pulling back to the desktop window with the phones on its edges; the window becoming the web app; Slack coming
-  // in, the band turning Ink, and every screen marked Done at once. GSAP is fetched only as the section comes near.
+  // when the script arrives); GSAP's ScrollTrigger scrubs one timeline through it and snaps to each step. One device a
+  // step, upright and whole in the middle of the picture side: the Duo open on two panels, Android, the desktop app, the
+  // web app; between steps the words and the device cross-fade. GSAP is fetched only as the section comes near.
   const loadScript = (src) => new Promise((ok, fail) => {
     const s = document.createElement("script");
     s.src = src; s.onload = ok; s.onerror = fail;
@@ -380,116 +379,51 @@
   function initScrolly() {
     const { gsap, ScrollTrigger } = window;
     gsap.registerPlugin(ScrollTrigger);
-    const show = $(".dv-show"), stage = $(".dv-stage", show), view = $(".dv-view", show), scene = $(".dv-scene", show);
+    const show = $(".dv-show"), stage = $(".dv-stage", show), view = $(".dv-view", show);
     const steps = $$(".dv-step", show), rail = $$(".dv-rail li", show), tags = $$(".dv-tags .mtag", show);
-    const duoBox = $(".d-duo", scene), duo = $(".duo", duoBox), [inner] = duo.children, coverNote = $(".cover-notif", duoBox);
-    const droid = $(".d-android", scene), laptop = $(".d-laptop", scene), slack = $(".d-slack", scene);
-    const L = (n) => $(`.dv-links .l${n}`, scene);
+    const devices = $$(".dv-view > .d", show), tagRow = $(".dv-tags", view);
     const navH = () => $("#nav").offsetHeight;
 
-    // The scene is drawn at 900 × 720, but across the six steps the devices only ever cover BOX (scene units). That box,
-    // not the whole drawing, is scaled to fill the view below the tag row, with a margin so no device touches an edge.
-    const BOX = { x: 80, y: 32, w: 796, h: 572 }, tagRow = $(".dv-tags", view);
+    // Each device at the size that fills the free area (below the tag row, a margin round it), never over 1:1, its
+    // centre on that area's centre. Read as the trigger refreshes (after layout), never while the page parses.
     const fit = () => {
-      const W = view.clientWidth, H = view.clientHeight, top = tagRow.offsetTop + tagRow.offsetHeight + 16, side = 32, foot = 32;
-      const k = Math.min((W - 2 * side) / BOX.w, (H - top - foot) / BOX.h, 1.3);
-      // Shift so the box's centre lands on the free area's centre (the scene scales about its own centre, 450 × 360).
-      scene.style.setProperty("--k", k.toFixed(3));
-      scene.style.setProperty("--ox", `${((450 - BOX.x - BOX.w / 2) * k).toFixed(1)}px`);
-      scene.style.setProperty("--oy", `${(top + (H - top - foot) / 2 - H / 2 + (360 - BOX.y - BOX.h / 2) * k).toFixed(1)}px`);
+      const W = view.clientWidth, H = view.clientHeight, top = tagRow.offsetTop + tagRow.offsetHeight + 20, side = 40, foot = 40;
+      view.style.setProperty("--oy", `${(top - foot) / 2}px`);
+      for (const d of devices) {
+        const k = Math.min((W - 2 * side) / d.offsetWidth, (H - top - foot) / d.offsetHeight, 1);
+        d.style.setProperty("--k", k.toFixed(3));
+      }
     };
     fit();
     ScrollTrigger.addEventListener("refreshInit", fit);
 
-    /** Places a device's centre at (x, y) of the scene, at `scale`. */
-    const at = (x, y, scale = 1, more = {}) => ({ x, y, xPercent: -50, yPercent: -50, scale, ...more });
-    gsap.set(duoBox, at(450, 360, 1.08));
-    gsap.set(droid, at(760, 900, 1, { rotation: 14, autoAlpha: 0 }));
-    gsap.set(laptop, at(450, 300, 0.78, { autoAlpha: 0 }));
-    gsap.set(slack, at(980, 120, 0.9, { autoAlpha: 0 }));
-    // Folded: only the cover screen shows; the inner one is turned away behind the hinge.
-    gsap.set(duo, { clipPath: "inset(0% 0% 0% 50% round 30px)", xPercent: -25 });
-    gsap.set(inner, { rotationY: 100, transformOrigin: "100% 50%", transformPerspective: 1000, autoAlpha: 0 });
-    gsap.set(coverNote, { y: -30, autoAlpha: 0 });
-    gsap.set(steps.slice(1), { autoAlpha: 0, y: 24 });
+    gsap.set(steps.slice(1), { autoAlpha: 0, y: 12 });
+    gsap.set(devices.slice(1), { autoAlpha: 0, "--ty": "12px" });
 
-    const tl = gsap.timeline({ defaults: { ease: "power2.inOut", duration: 1 } });
-    const labels = [];
+    const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+    const names = ["open", "android", "desktop", "web"], labels = [];
     const stop = (name) => { tl.addLabel(name); labels.push(name); };
-    /** The words, the step number, the rail and the tag move to step `i`, starting at `t`. */
-    const words = (i, t) => {
-      tl.to(steps[i - 1], { autoAlpha: 0, y: -24, duration: 0.4 }, t)
-        .fromTo(steps[i], { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.5, immediateRender: false }, t + 0.3)
-        .to(tags[i - 1], { autoAlpha: 0, duration: 0.25 }, t)
-        .fromTo(tags[i], { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.25, immediateRender: false }, t + 0.45);
-    };
-
-    // 0 · Folded: a notification lands on the cover screen (the first stop shows it landed).
-    tl.to(coverNote, { y: 0, autoAlpha: 1, duration: 0.4, ease: "back.out(1.7)" }, 0.05);
-    stop("closed");
+    stop(names[0]);
+    for (let i = 1; i < names.length; i++) {
+      tl.to({}, { duration: 0.4 }); // each step holds a while before the next comes
+      const t = tl.duration();
+      // Out: a quick fade, up a little; in: a fade, up from a little below. Only opacity and a 12 px move.
+      tl.to([steps[i - 1], tags[i - 1]], { autoAlpha: 0, y: -12, duration: 0.35, ease: "power1.out" }, t)
+        .to(devices[i - 1], { autoAlpha: 0, "--ty": "-12px", duration: 0.4, ease: "power1.out" }, t)
+        .fromTo([steps[i], tags[i]], { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.5, immediateRender: false }, t + 0.3)
+        .fromTo(devices[i], { autoAlpha: 0, "--ty": "12px" }, { autoAlpha: 1, "--ty": "0px", duration: 0.55, immediateRender: false }, t + 0.3);
+      stop(names[i]);
+    }
     tl.to({}, { duration: 0.4 });
-    // 1 · It unfolds: the inner screen swings open on the hinge and the device grows to both halves.
-    let t = tl.duration();
-    words(1, t);
-    tl.to(coverNote, { autoAlpha: 0, y: -16, duration: 0.3 }, t)
-      .to(duo, { clipPath: "inset(0% 0% 0% 0% round 30px)", xPercent: 0, duration: 1 }, t + 0.1)
-      .to(inner, { rotationY: 0, autoAlpha: 1, duration: 1 }, t + 0.1)
-      .to(duoBox, { rotation: -2, duration: 1 }, t + 0.1);
-    stop("open");
-    tl.to({}, { duration: 0.4 });
-    // 2 · Android flies in; a line ties the two screens to the same chat.
-    t = tl.duration();
-    words(2, t);
-    tl.to(duoBox, { ...at(310, 330, 0.8), rotation: 0, duration: 1 }, t)
-      .to(droid, { ...at(705, 375, 1), rotation: 0, autoAlpha: 1, duration: 1, ease: "power3.out" }, t + 0.15)
-      .fromTo($(".notif", droid), { y: -40, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.35, ease: "back.out(1.6)", immediateRender: true }, t + 0.9)
-      .to(L(1), { strokeDashoffset: 0, duration: 0.5 }, t + 0.85);
-    stop("android");
-    tl.to({}, { duration: 0.4 });
-    // 3 · The camera pulls back: the desktop window rises behind, the phones settle on its edges, the load bars fill.
-    t = tl.duration();
-    words(3, t);
-    tl.to(L(1), { autoAlpha: 0, duration: 0.3 }, t)
-      // The phones sit over the window's corners, never its content (the VI's "two devices, one event").
-      .to(duoBox, { ...at(205, 480, 0.5), duration: 1 }, t)
-      .to(droid, { ...at(762, 430, 0.62), duration: 1 }, t)
-      .to(laptop, { ...at(450, 300, 0.92), autoAlpha: 1, duration: 1, ease: "power3.out" }, t + 0.1)
-      .fromTo($$(".body-desk .meter i", laptop), { scaleX: 0 }, { scaleX: 1, transformOrigin: "0% 50%", stagger: 0.08, duration: 0.5, immediateRender: true }, t + 0.7);
-    stop("desktop");
-    tl.to({}, { duration: 0.4 });
-    // 4 · The window becomes the web app: an address bar slides in, the same chat appears in it.
-    t = tl.duration();
-    words(4, t);
-    tl.fromTo($(".t-url", laptop), { autoAlpha: 0, scaleX: 0.2, transformOrigin: "0% 50%" }, { autoAlpha: 1, scaleX: 1, duration: 0.6, immediateRender: true }, t)
-      .to($(".t-desk", laptop), { autoAlpha: 0, duration: 0.2 }, t)
-      .to($(".body-desk", laptop), { autoAlpha: 0, y: -12, duration: 0.4 }, t + 0.2)
-      .fromTo($(".body-web", laptop), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3, immediateRender: true }, t + 0.4)
-      .fromTo($$(".body-web > *", laptop), { y: 14, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.15, duration: 0.4, immediateRender: true }, t + 0.45);
-    stop("web");
-    tl.to({}, { duration: 0.4 });
-    // 5 · Slack comes in; the band turns Ink; lines run from the thread to every screen, and each is marked Done.
-    t = tl.duration();
-    words(5, t);
-    tl.to($(".dv-ink", stage), { opacity: 1, duration: 0.7 }, t)
-      .to(stage, { "--dv-fg": "#FFFFFF", "--dv-mut": "#C9CACD", duration: 0.7 }, t)
-      .to(laptop, { ...at(400, 330, 0.84), duration: 0.9 }, t)
-      .to(droid, { ...at(705, 455, 0.62), duration: 0.9 }, t)
-      .to(slack, { ...at(705, 128, 0.9), autoAlpha: 1, duration: 0.9, ease: "power3.out" }, t + 0.1)
-      .fromTo($$(".slack .msg", slack), { x: -14, autoAlpha: 0 }, { x: 0, autoAlpha: 1, stagger: 0.18, duration: 0.4, immediateRender: true }, t + 0.5)
-      .to([L(2), L(3), L(4)], { strokeDashoffset: 0, stagger: 0.1, duration: 0.5 }, t + 0.9)
-      .to([$(".done", laptop), $(".done", duoBox), $(".done", droid)], { scale: 1, stagger: 0.12, duration: 0.35, ease: "back.out(2)" }, t + 1.25);
-    stop("slack");
-    tl.to({}, { duration: 0.5 });
 
     const pos = (name) => tl.labels[name] / tl.duration();
     const no = $(".dv-no b", show), bar = $(".dv-bar i", show);
-    const railOf = [0, 0, 1, 2, 3, 4];
     let current = -1;
     const mark = (i) => {
       if (i === current) return;
       current = i;
       no.textContent = String(i + 1).padStart(2, "0");
-      rail.forEach((li, k) => li.toggleAttribute("data-on", k === railOf[i]));
+      rail.forEach((li, k) => li.toggleAttribute("data-on", k === i));
       steps.forEach((s, k) => s.setAttribute("aria-hidden", String(k !== i)));
     };
     const st = ScrollTrigger.create({
@@ -497,9 +431,9 @@
       start: () => `top top+=${navH() + 16}`,
       end: () => `bottom top+=${navH() + 16 + stage.offsetHeight}`,
       animation: tl,
-      scrub: 0.7,
+      scrub: 0.6,
       // Snap to the nearest step, not to where a flick would carry: no screen is skipped unseen.
-      snap: { snapTo: labels.map(pos), inertia: false, duration: { min: 0.25, max: 0.7 }, delay: 0.12, ease: "power2.inOut" },
+      snap: { snapTo: labels.map(pos), inertia: false, duration: { min: 0.2, max: 0.6 }, delay: 0.1, ease: "power2.inOut" },
       invalidateOnRefresh: true,
       onUpdate(self) {
         bar.style.transform = `scaleX(${self.progress})`;
@@ -510,8 +444,8 @@
       },
     });
     mark(0);
-    // Each tween reads its start values (getComputedStyle) the first time it renders. Do that once, while the reader is
-    // still above the scene and the browser is idle, rather than in the frames of the first scroll through it.
+    // Each tween reads its start values the first time it renders: do that once while the reader is still above the
+    // scene and the browser is idle, not in the frames of the first scroll through it.
     if (st.progress === 0) (window.requestIdleCallback || setTimeout)(() => {
       if (st.progress === 0 && !st.isActive) { tl.progress(1, true); tl.progress(0, true); }
     });
@@ -685,8 +619,8 @@
   // The answer's height runs on a grid row (0fr to 1fr), a transition, so a second click reverses it from where it is.
   // [open] is set at once on opening (so the content exists to grow into) and removed only once closing has finished.
   // Keyboard (Enter, Space on the summary) goes through the same click; find-in-page opening an answer is followed.
+  // Closing waits as long as the CSS says (under reduced motion: the words' fade, then the room closes in one step).
   {
-    const still = matchMedia("(prefers-reduced-motion: reduce)");
     for (const d of $$(".faq details")) {
       const s = $("summary", d), a = $(".a", d);
       if (!s || !a) continue;
@@ -700,7 +634,7 @@
           d.classList.add("is-open");
         } else {
           d.classList.remove("is-open");
-          const dur = still.matches ? 0 : parseFloat(getComputedStyle(a).transitionDuration) * 1000 || 0;
+          const dur = parseFloat(getComputedStyle(a).transitionDuration) * 1000 || 0;
           t = setTimeout(() => { if (!d.classList.contains("is-open")) d.open = false; }, dur);
         }
       });
@@ -717,8 +651,8 @@
   // leaves it. Its place is fixed: a sixth of the way in, on the second row (the hero and the closing band share it).
   const EYE = [255, 255, 255], CHEEK = [246, 188, 159]; // the mark's own white and peach
   const INK = "#1A1B1E"; // --ink
-  const DOT = .26, PILL_W = .44, PILL_H = .154; // in cells; the pill is the mark's cheek (.59 of an eye high), a little longer
-  const SPEED = 9, BAND = 2.2, GAP = 3.4; // cells a second; cells over which one cell changes; seconds between ripples
+  const DOT = .17, PILL_W = .29, PILL_H = .1; // in cells; the pill is the mark's cheek (.59 of an eye high), a little longer
+  const SPEED = 9, BAND = 2.2, GAP = 5; // cells a second; cells over which one cell changes; seconds between ripples
   const part = (c, r, s) => ((c + 2 * r + s) % 3 === 2 ? 1 : 0); // 0 an eye, 1 a cheek
   const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
   const pill = (p, x, y, pw, ph) => { // into a path or a context; a dot when pw = ph
@@ -771,7 +705,7 @@
     function draw() {
       ctx.clearRect(0, 0, w, h);
       const front = at === null ? -1 : at * SPEED;
-      // As the ripple reaches a cell, the cell swells a little and settles (k: 0 before, 1 after) while it changes part.
+      // As the ripple reaches a cell, the cell swells slightly and settles (k: 0 before, 1 after) while it changes part.
       // Cells in one colour go into one path; only the few between colours are filled one by one.
       const still = [new Path2D(), new Path2D()];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -779,7 +713,7 @@
         if (c === oc && r === or) continue; // you: drawn last, in Ink
         const a = part(c, r, shift), b = part(c, r, shift + 1);
         const k = front < 0 ? 0 : Math.min(1, Math.max(0, (front - Math.hypot(c - oc, r - or)) / BAND));
-        const t = a + (b - a) * smooth(k), s = cell * (1 + .32 * Math.sin(Math.PI * k));
+        const t = a + (b - a) * smooth(k), s = cell * (1 + .12 * Math.sin(Math.PI * k));
         const x = (c + .5) * cell, y = (r + .5) * cell;
         const pw = s * (DOT + (PILL_W - DOT) * t), ph = s * (DOT + (PILL_H - DOT) * t);
         if (t === 0 || t === 1) { pill(still[t], x, y, pw, ph); continue; }
@@ -790,7 +724,7 @@
       }
       ctx.fillStyle = "#FFFFFF"; ctx.fill(still[0]);
       ctx.fillStyle = "#F6BC9F"; ctx.fill(still[1]);
-      const k0 = front < 0 ? 0 : Math.min(1, front / BAND), s0 = cell * DOT * (1 + .32 * Math.sin(Math.PI * k0));
+      const k0 = front < 0 ? 0 : Math.min(1, front / BAND), s0 = cell * DOT * (1 + .12 * Math.sin(Math.PI * k0));
       ctx.beginPath(); pill(ctx, (oc + .5) * cell, (or + .5) * cell, s0, s0);
       ctx.fillStyle = INK; ctx.fill();
     }

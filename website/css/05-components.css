@@ -14,16 +14,11 @@
 .c-ui { color: var(--brand-deep); }
 /* ---------- Reducto's details: mono tags ---------- */
 .mtag { position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px 0 6px; border-radius: 4px; background: #fff;
-  box-shadow: inset 0 0 0 1px #D3D3D6; font-family: var(--mono); font-size: 11.5px; color: var(--ink); white-space: nowrap; z-index: 2; }
+  border: 1px solid #D3D3D6; font-family: var(--mono); font-size: 11.5px; color: var(--ink); white-space: nowrap; z-index: 2; }
 .mtag i { width: 8px; height: 8px; border-radius: 1.5px; box-shadow: inset 0 0 0 1.2px var(--graphite); }
 .mtag.on-vis { left: auto; right: 16px; top: 16px; bottom: auto; }
 @media (max-width: 640px) {
   .mtag.on-vis { right: 10px; top: 10px; font-size: 10.5px; }
-}
-/* The open Duo fills its card's height on phones and tablets, so its tag would sit on the bezel: the Duo gives up a
-   top band and stands below the tag, whole and uncovered. */
-@media (max-width: 899px) {
-  .fpanel .vis > .mtag.on-vis ~ .duo { width: min(100%, calc((var(--vis-h) - 64px) / .93)); margin-top: 24px; }
 }
 
 /* =====================================================================================================================
@@ -251,22 +246,17 @@
 .mk-sb { position: absolute; left: 0; right: 0; top: 0; height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 6px 32px 0 50px; z-index: 3;
   font: 600 17px/1 -apple-system, "SF Pro Text", "Inter", sans-serif; color: var(--tx); }
 .mk-sb .ic { display: flex; align-items: center; gap: 6px; }
-.mk-sb .sig { width: 18px; height: 12px; background: linear-gradient(90deg, currentColor 3px, transparent 0 5px, currentColor 0 8px, transparent 0 10px, currentColor 0 13px, transparent 0 15px, currentColor 0);
+:is(.mk-sb, .dst) .sig { width: 18px; height: 12px; background: linear-gradient(90deg, currentColor 3px, transparent 0 5px, currentColor 0 8px, transparent 0 10px, currentColor 0 13px, transparent 0 15px, currentColor 0);
   -webkit-mask: linear-gradient(to top left, #000 50%, transparent 50%); mask: linear-gradient(to top left, #000 50%, transparent 50%); }
-.mk-sb .wifi { width: 17px; height: 12px; background: currentColor;
+:is(.mk-sb, .dst) .wifi { width: 17px; height: 12px; background: currentColor;
   -webkit-mask: radial-gradient(circle at 50% 100%, #000 2.6px, transparent 2.7px 5.4px, #000 5.5px 8px, transparent 8.1px 10.6px, #000 10.7px 13.2px, transparent 13.3px) 0 0 / 100% 100%;
   mask: radial-gradient(circle at 50% 100%, #000 2.6px, transparent 2.7px 5.4px, #000 5.5px 8px, transparent 8.1px 10.6px, #000 10.7px 13.2px, transparent 13.3px) 0 0 / 100% 100%; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-.mk-sb .bat { position: relative; width: 25px; height: 12px; border-radius: 3.5px; box-shadow: inset 0 0 0 1px rgb(36 39 43 / .4); }
-.mk-sb .bat::before { content: ""; position: absolute; inset: 2px 4px 2px 2px; border-radius: 1.5px; background: currentColor; }
-.mk-sb .bat::after { content: ""; position: absolute; right: -3px; top: 4px; width: 1.5px; height: 4px; border-radius: 0 1px 1px 0; background: rgb(36 39 43 / .4); }
+:is(.mk-sb, .dst) .bat { position: relative; width: 25px; height: 12px; border-radius: 3.5px; box-shadow: inset 0 0 0 1px rgb(36 39 43 / .4); }
+:is(.mk-sb, .dst) .bat::before { content: ""; position: absolute; inset: 2px 4px 2px 2px; border-radius: 1.5px; background: currentColor; }
+:is(.mk-sb, .dst) .bat::after { content: ""; position: absolute; right: -3px; top: 4px; width: 1.5px; height: 4px; border-radius: 0 1px 1px 0; background: rgb(36 39 43 / .4); }
 .mk-phone.droid .mk-sb { height: 46px; padding: 4px 26px 0 30px; font: 500 15px/1 "Inter", "Roboto", sans-serif; }
 
-/* Phone home: large title bar, search pill, 66-tall rows, the floating glass bar with the orange centre. */
-.mk-mtop { flex: none; display: flex; align-items: center; gap: 12px; padding: 62px 16px 8px; height: 104px; background: rgb(245 243 239 / .7); box-shadow: inset 0 -.5px 0 var(--ln); }
-.mk-mtop > .mk-i { --s: 24px; margin: 0 4px 0 8px; }
-.mk-mtop > b { font-size: 28px; line-height: 34px; letter-spacing: -.4px; font-weight: 600; margin-left: 10px; }
-.mk-mtop > .mk-i.chevd { --s: 16px; margin: 4px 0 0 -6px; color: var(--mu); }
-.mk-mtop > .mk-i.filter { margin-left: auto; }
+/* Phone lists (the Duo's sidebar has touch's sizes): the search pill, the day, 66-tall rows. */
 .mk-search { flex: none; display: flex; align-items: center; gap: 8px; height: 38px; margin: 8px 16px 0; padding: 0 14px; border-radius: 19px; background: rgb(36 39 43 / .06); font-size: 15px; color: var(--mu); }
 .mk-search > .mk-i { --s: 18px; }
 .mk-mday { padding: 14px 20px 6px; font-size: 15px; font-weight: 600; line-height: 22px; }
@@ -282,21 +272,8 @@
 .mk-mrow .mk-face { --s: 22px; }
 .mk-mrow .mk-aside > .mk-face + .mk-face { box-shadow: 0 0 0 1.5px var(--cv); margin-left: -8px; }
 .mk-mrow .mk-aside > .mk-face:has(+ .mk-face) { box-shadow: 0 0 0 2px var(--cv), 0 0 0 3.2px var(--tx); }
-.mk-mbar { position: absolute; left: 22px; right: 22px; bottom: 22px; height: 56px; z-index: 2; display: flex; align-items: center; justify-content: space-around; color: var(--mu); }
-.mk-mbar::before { content: ""; position: absolute; inset: 0; border-radius: 28px; background: rgb(255 255 255 / .78);
-  box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .35), 0 6px 18px -6px rgb(55 53 45 / .18);
-  -webkit-mask: radial-gradient(circle 37px at 50% -4px, transparent 36px, #000 37px); mask: radial-gradient(circle 37px at 50% -4px, transparent 36px, #000 37px); }
-.mk-mbar > .mk-i { --s: 28px; position: absolute; top: 14px; margin-left: -14px; }
-.mk-mbar > .mk-i:nth-child(2) { left: 28px; } .mk-mbar > .mk-i:nth-child(3) { left: 111px; }
-.mk-mbar > .mk-i:nth-child(6) { right: 97px; } .mk-mbar > .mk-i:nth-child(7) { right: 14px; }
-.mk-mbar > .gap { display: none; }
-.mk-mbar > .ball { position: absolute; left: -6px; top: -6px; width: 68px; height: 68px; border-radius: 50%; background: rgb(255 255 255 / .9); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .5), 0 1px 8px rgb(55 53 45 / .2); }
-.mk-mbar > .ling { position: absolute; left: 50%; top: -32px; width: 56px; height: 56px; margin-left: -28px; border-radius: 50%; display: grid; place-items: center;
-  background: rgb(204 90 52 / .92); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .4), inset 1.5px 1.5px 1px -1px rgb(255 255 255 / .75); color: #fff; }
-.mk-mbar > .ling > .mk-i { --s: 40px; }
-.mk-mbar > .mk-i.on { color: var(--tx); }
 /* Phone chat: frosted top bar with the accent back chevron, inline heads, the composer capsule. */
-.mk-mchat-top { flex: none; display: flex; align-items: center; gap: 8px; padding: 59px 16px 5px 4px; background: rgb(245 243 239 / .7); box-shadow: inset 0 -.5px 0 var(--ln); }
+.mk-mchat-top { flex: none; display: flex; align-items: center; gap: 8px; padding: 59px 16px 5px 4px; background: rgb(245 243 239 / .7); }
 .mk-mchat-top > .back { display: grid; place-items: center; width: 40px; height: 40px; color: var(--ac); }
 .mk-mchat-top > .back > .mk-i { --s: 22px; }
 .mk-mchat-top > h4 { margin: 0; font-size: 16px; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -338,69 +315,101 @@
 .mk-phone.droid .notif { top: 52px; border-radius: 28px; background: rgb(250 249 247 / .97); padding: 14px 16px; }
 .mk-phone.droid .notif > img { width: 32px; height: 32px; border-radius: 50%; }
 .mk-phone.droid .notif .app { display: block; font-size: 12.5px; color: #6B6E73; margin-bottom: 2px; }
-/* A notification lands from the top edge, the way the phone shows one, a beat after its picture appears (the
-   overview's third pane, the Android tab). The scroll scene moves its own. */
+/* Android's notification shade, pulled down over the app (dimmed under it): the share's ongoing notification, as
+   AdbShare.java builds it (small icon, app · time, title, text, its one action in the accent). Its small icon sits in
+   the status bar after the time (.ni: the mark's silhouette). */
+.mk-phone .shade { position: absolute; inset: 56px 10px 10px; z-index: 5; border-radius: 0 0 38px 38px; overflow: hidden;
+  background: rgb(226 222 214 / .42); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.mk-phone .shade > .notif { top: 4px; left: 8px; right: 8px; background: #FCFBF9; box-shadow: 0 1px 2px rgb(0 0 0 / .06), 0 10px 26px -14px rgb(0 0 0 / .28); }
+.mk-phone.droid .notif .acts { display: flex; gap: 20px; margin-top: 10px; font: 500 14px/20px "Inter", "Roboto", "PingFang SC", sans-serif; color: #CC5A34; }
+.mk-sb .ni { display: inline-block; width: 13px; height: 13px; margin-left: 8px; vertical-align: -1px; border-radius: 4px; background: currentColor; position: relative; }
+.mk-sb .ni::before { content: ""; position: absolute; left: 3px; top: 4px; width: 7px; height: 3px;
+  background: radial-gradient(circle, var(--cv) 1.4px, transparent 1.6px) 0 0 / 3.5px 3px repeat-x; }
+/* The notification comes down a beat after its picture appears (the Android card on screen). */
 @keyframes notif-in { from { opacity: 0; translate: 0 -14px; } }
-:is(.stage .pane, .fpanel) .notif { animation: notif-in 420ms var(--ease-out) 360ms backwards; }
+@keyframes shade-in { from { opacity: 0; } }
+.fpanel .shade { animation: shade-in 300ms var(--ease-out) 360ms backwards; }
+.fpanel .shade > .notif { animation: notif-in 420ms var(--ease-out) 360ms backwards; }
 
-/* ---- iPhone Duo: open, it is the desktop structure in the phone theme, the sidebar's edge on the fold ---- */
-.duo { position: relative; display: flex; width: min(100%, 470px); aspect-ratio: 1 / .93; min-height: 0; /* WebKit: the ratio, not the content, sets the height */ padding: 8px; border-radius: 30px; background: #101113;
-  box-shadow: inset 0 0 0 1px #3A3B3F, 0 30px 60px -30px rgb(42 11 2 / .5); container: duo / inline-size; }
-.duo::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 50%; width: 2px; transform: translateX(-1px); z-index: 3; pointer-events: none;
-  background: linear-gradient(to bottom, rgb(0 0 0 / .05), rgb(0 0 0 / .14), rgb(0 0 0 / .05)); }
-.duo > .scr { position: relative; flex: 1; min-width: 0; overflow: hidden; }
-.duo > .scr:first-child { border-radius: 23px 3px 3px 23px; }
-.duo > .scr:last-child { border-radius: 3px 23px 23px 3px; }
-.duo > .scr > .mk { width: 100%; height: 100%; zoom: .72; display: flex; flex-direction: column; background: var(--cv); }
-@container duo (width < 440px) { .duo > .scr > .mk { zoom: .64; } }
-@container duo (width < 380px) { .duo > .scr > .mk { zoom: .5; } }
-.duo > .scr:first-child > .mk { flex-direction: row; background: var(--sb); }
-.duo .mk-rail { padding-top: 40px; }
-.duo .mk-side { flex: 1; width: auto; padding-right: 8px; }
-.duo .mk-nav { margin-top: 32px; }
-.duo .mk-sbd { position: absolute; top: 0; height: 30px; display: flex; align-items: center; font: 600 14px/1 -apple-system, "Inter", sans-serif; color: var(--tx); z-index: 2; }
-.duo .scr:first-child .mk-sbd { left: 30px; }
-.duo .scr:last-child .mk-sbd { right: 24px; gap: 5px; }
-.duo .mk-sbd .bat { transform: scale(.85); }
-.duo .mk-page { flex: 1; background: var(--cv); }
-.duo .mk-bar { margin-top: 26px; padding-left: 16px; }
-.duo .mk-msgs { padding: 14px 18px 12px 46px; gap: 22px; overflow: hidden; } /* a long thread ends at the composer, never under it */
-.duo .mk-composer { width: calc(100% - 20px); margin-bottom: 14px; background: rgb(255 255 255 / .8); box-shadow: 0 4px 14px -6px rgb(55 53 45 / .2); }
-/* Folded, the cover screen is the right half; its status bar runs down its right edge (the scroll scene's first stop). */
-.duo .mk-sbv { position: absolute; right: 0; top: 0; bottom: 0; width: 26px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 30px 0 34px;
-  font: 600 13px/1 -apple-system, "Inter", sans-serif; color: var(--tx); z-index: 2; opacity: 0; transition: opacity var(--dur-ui) var(--ease-out); }
-.duo .mk-sbv > span { writing-mode: vertical-rl; }
-.duo .mk-sbv .bat { transform: rotate(90deg) scale(.85); }
-.d-duo .duo:has(> .scr:first-child[style*="hidden"]) .mk-sbv { opacity: 1; }
-.d-duo .duo:has(> .scr:first-child[style*="hidden"]) > .scr:last-child .mk-sbd { opacity: 0; }
-.d-duo .duo:has(> .scr:first-child[style*="hidden"]) > .scr:last-child .mk-page { padding-right: 22px; }
+/* ---- iPhone Duo, opened as a book: its inner screen at 1:1 (890 × 626 points) in its bezel, scaled whole ----
+   The desktop's structure in touch's sizes: the sidebar and the page as cards on the screen's ground, 4 apart and 4 in
+   from its edges, their outer corners concentric with the screen's; the sidebar ends on the fold. No rail: iOS 27.1
+   draws the places, the chat's actions, the bell and the new chat in its own glass down the trailing edge, with the
+   status bar at the column's top; the composer stands level with the round new-chat button at its foot. */
+.duo { position: relative; flex: none; width: 906px; height: 642px; padding: 8px; border-radius: 36px; background: #101113;
+  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 40px 80px -40px rgb(42 11 2 / .55); }
+.duo::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 453px; width: 2px; margin-left: -1px; pointer-events: none;
+  background: linear-gradient(to bottom, rgb(0 0 0 / .06), rgb(0 0 0 / .2), rgb(0 0 0 / .06)); }
+.duo-scr { display: flex; gap: 4px; height: 100%; padding: 4px; border-radius: 28px; overflow: hidden; background: #DFDBD2; }
+.duo .dc { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.duo .dc.side { flex: none; width: 437px; padding: 10px 8px 0; border-radius: 24px 10px 10px 24px; background: var(--sb); }
+.duo .dc.page { flex: 1; border-radius: 10px; background: var(--cv); }
+.dws { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 2px; }
+.dws > .mk-i.filter { --s: 22px; margin-left: auto; color: var(--tx); }
+.duo .gl { display: inline-flex; align-items: center; justify-content: center; gap: 2px; border-radius: 999px; color: var(--tx);
+  background: rgb(255 255 255 / .66); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .8), 0 2px 10px -4px rgb(55 53 45 / .28); }
+.duo .gl.ws { height: 40px; gap: 8px; padding: 0 12px 0 6px; font-size: 15px; font-weight: 600; }
+.duo .gl.ws > .b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--se); font-size: 14px; }
+.duo .gl.ws > .mk-i { --s: 14px; color: var(--mu); }
+.duo .mk-search { margin: 8px 2px 0; }
+.duo .mk-mday { padding-left: 14px; }
+.duo .mk-mrow { padding: 0 12px 0 14px; border-radius: 16px; }
+.duo .mk-mrow.on { background: var(--se); }
+.duo .mk-mrow.on .mk-aside > .mk-face + .mk-face { box-shadow: 0 0 0 1.5px var(--se); }
+.duo .mk-mrow.on .mk-aside > .mk-face:has(+ .mk-face) { box-shadow: 0 0 0 2px var(--se), 0 0 0 3.2px var(--tx); }
+.dbar { flex: none; display: flex; align-items: center; gap: 8px; height: 56px; padding: 6px 16px 0; }
+.dbar > h4 { margin: 0; min-width: 0; font-size: 16px; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dbar .mk-faces .mk-face { --s: 22px; }
+.dbar .mk-faces .mk-face + .mk-face { margin-left: -6px; }
+.dbar .mk-pill { height: 30px; border-radius: 10px; font-size: 15px; }
+.dbar .mk-pill > .lg { width: 30px; height: 30px; }
+.dbar .mk-pill > .lg > .mk-lg { --s: 16px; }
+.dbar .mk-pill > span:last-child { padding-right: 9px; }
+.dbar .mk-pill::after { width: 9px; height: 9px; right: -4px; bottom: -3px; box-shadow: 0 0 0 2px var(--cv); }
+.duo .mk-mmsgs { padding: 12px 16px 0; }
+.duo .mk-mmsg .bd.md { line-height: 1.6; }
+.duo .mk-mmsg .bd p { margin: 0; }
+.duo .mk-mcomp { left: 8px; right: 8px; bottom: 8px; height: 56px; border-radius: 28px; }
+.dcol { flex: none; width: 80px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0 4px; }
+.dst { display: grid; justify-items: center; gap: 7px; margin-bottom: 8px; font: 600 15px/1 -apple-system, "SF Pro Text", "Inter", sans-serif; color: var(--tx); }
+.dst > span { display: flex; align-items: center; gap: 5px; }
+.dst .wifi { transform: scale(.85); }
+.dst .bat { transform: scale(.85); margin-right: -2px; }
+.dcol .gl > .mk-i { --s: 22px; }
+.dcol .gl.two { flex-direction: column; width: 50px; padding: 4px 0; gap: 0; }
+.dcol .gl.two > .mk-i { margin: 10px 0; }
+.dcol .gl.one { width: 50px; height: 50px; margin-top: auto; }
+.dcol .gl.tabs { flex-direction: column; width: 62px; padding: 5px; gap: 2px; }
+.dcol .gl.tabs > span { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 26px; }
+.dcol .gl.tabs > span > .mk-i { --s: 24px; }
+.dcol .gl.tabs > .on { color: var(--ac); background: rgb(204 90 52 / .13); }
+.dcol .new { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; color: #fff;
+  background: rgb(204 90 52 / .94); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .4), inset 1.5px 1.5px 1px -1px rgb(255 255 255 / .75), 0 4px 14px -6px rgb(120 40 10 / .45); }
+.dcol .new > .mk-i { --s: 34px; }
 
-/* ---- Placement in the overview's third pane: the phone over the window's right margin ---- */
-.compose-2 > .mk-phone { position: absolute; right: 0; top: 50%; transform: translateY(-50%); --z: .47; }
-.compose-2 > .mk-phone > .notif { font-size: 15px; }
-.compose-2 .mk-msgs { padding-right: 96px; }
-@media (max-width: 640px) {
-  .compose-2 > .mk-phone { --z: .34; }
-  .compose-2 .mk-msgs { padding-right: 70px; }
-}
-/* The device tabs: each picture fills its side of the panel. */
+/* ---- The device cards (the swiper): each picture its whole self in its side of the panel ---- */
 .fpanel .vis > .mk-fit { position: relative; z-index: 1; }
 .fpanel .vis > .mk-phone { --z: .6; }
-.fpanel .vis > .duo { width: min(100%, 520px); }
 @media (max-width: 640px) {
   .fpanel .vis > .mk-phone { --z: .5; }
 }
-/* The scroll scene's devices, at the scene's fixed scale (60-devices.css places them). */
-.dv-scene .d-laptop .mk-win { --h: 520px; zoom: .7; width: 857px; }
-.dv-scene .d-android .mk-phone { --z: .486; }
-.dv-scene .d-duo .duo { width: 440px; }
-.mk-stack { display: grid; height: 100%; }
-.mk-stack > * { grid-area: 1 / 1; min-height: 0; }
-/* The web bar sits over the window's top edge, under its rounded corners; the scene unrolls it (main.js: .t-url). */
-.dv-scene .d-laptop .mk-win { overflow: visible; background: none; }
-.dv-scene .d-laptop .mk-stack { position: relative; z-index: 1; border-radius: 12px; overflow: hidden; background: var(--cv); }
-.dv-scene .d-laptop .t-url { position: absolute; left: 0; right: 0; top: -40px; height: 52px; margin: 0 !important; padding: 0 14px 12px; border-radius: 12px 12px 0 0;
-  background: #EEEDEB; font-size: inherit; color: #6B6E73; opacity: 0; box-shadow: 0 0 0 .5px rgb(0 0 0 / .22); }
+/* The Duo at a zoom by the room it gets (906 × 642 at 1:1; the panel's picture is a container): about its width,
+   and on a card whose picture is a band (640-899) by its height too, below the tag. */
+.fpanel .vis:has(> .duo) { container: dvis / inline-size; }
+.fpanel .vis > .duo { zoom: var(--dz, .23); }
+@container dvis (width >= 230px) { .fpanel .vis > .duo { --dz: .25; } }
+@container dvis (width >= 255px) { .fpanel .vis > .duo { --dz: .28; } }
+@container dvis (width >= 272px) { .fpanel .vis > .duo { --dz: .3; } }
+@container dvis (width >= 310px) { .fpanel .vis > .duo { --dz: .34; } }
+@container dvis (width >= 345px) { .fpanel .vis > .duo { --dz: .38; } }
+@container dvis (width >= 380px) { .fpanel .vis > .duo { --dz: .42; } }
+@container dvis (width >= 417px) { .fpanel .vis > .duo { --dz: .46; } }
+@container dvis (width >= 453px) { .fpanel .vis > .duo { --dz: .5; } }
+@container dvis (width >= 498px) { .fpanel .vis > .duo { --dz: .55; } }
+@container dvis (width >= 544px) { .fpanel .vis > .duo { --dz: .6; } }
+@container dvis (width >= 598px) { .fpanel .vis > .duo { --dz: .66; } }
+@media (max-width: 899px) { .fpanel .vis > .mtag.on-vis ~ .duo { margin-top: 24px; } }
+@media (min-width: 640px) and (max-width: 899px) { .fpanel .vis > .duo { zoom: .5; } } /* a 400-high band */
 .mk-i.bell { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3V5 M6.5 17V11Q6.5 5 12 5Q17.5 5 17.5 11V17 M4.5 17H19.5 M10 20.5H14'/></svg>"); }
 .mk-i.chats { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M8 5V4.5Q8 3 10 3H17Q20.5 3 20.5 6.5V11Q20.5 13 18.5 13.5 M7 8H12.5Q16 8 16 11.5V15Q16 18.5 12.5 18.5H9L4 21V17.5Q3 16.5 3 15V12Q3 8 7 8Z'/></svg>"); }
 .mk-i.folder { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 7.5Q3.5 4.5 6.5 4.5H9.5L12 7H17.5Q20.5 7 20.5 10V16.5Q20.5 19.5 17.5 19.5H6.5Q3.5 19.5 3.5 16.5Z'/></svg>"); }

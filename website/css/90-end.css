@@ -12,7 +12,7 @@
   background-size: var(--cell) var(--cell); background-position: center top;
   -webkit-mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent); mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent);
 }
-.band.end h2 { font-size: var(--t-display); line-height: var(--lh-display); letter-spacing: var(--tr-display); max-width: 13ch; margin-inline: auto; }
+.band.end h2 { max-width: 13ch; margin-inline: auto; }
 /* The comma the line break replaces, for screen readers only. */
 .band.end .lead { color: var(--brand-ink); margin: clamp(16px, 1.6vw, 24px) auto 0; text-wrap: balance; }
 .band.end .actions { justify-content: center; margin-top: clamp(28px, 2.6vw, 40px); }

@@ -17,9 +17,9 @@
    cap height, not the line box: a hair lower than centre, so a mark and a capital share a middle. */
 .names .lg { width: 1.05em; height: 1.05em; flex: none; color: var(--ink); transform: translateY(.02em); }
 .names .lg.ico { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Too narrow for the agents on one line: a grid of four, so both rows fill and the names stand in columns. */
+/* Too narrow for the agents on one line: a grid of three, so both rows fill and the names stand in columns. */
 @media (max-width: 1179px) {
-  .names.agents { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 14px var(--gap); }
+  .names.agents { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 14px var(--gap); }
 }
 @media (max-width: 640px) {
   .names { --name: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 14px 12px; }

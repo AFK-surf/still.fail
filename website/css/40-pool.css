@@ -3,10 +3,9 @@
    The picture is three isometric plates: new chats, the pool's six accounts, four stations. Each chat drops onto the
    account it is given (lit), and a dotted line runs down to the station it runs on (ringed). The tags are HTML, so
    they keep a readable size however small the plates are drawn. */
-.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 12fr) minmax(0, 5fr); align-items: center; }
+.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 12fr); gap: var(--gap); align-items: center; }
 .callouts { display: flex; flex-direction: column; gap: clamp(32px, 3.4vw, 56px); }
-.callout h3 { display: flex; align-items: center; gap: 10px; font-size: clamp(17px, 1.3vw, 20px); line-height: 1.3; }
-.callout h3 svg { width: 20px; height: 20px; color: var(--brand-deep); flex: none; }
+.callout h3 { display: flex; align-items: center; gap: 10px; font-size: 16px; line-height: 1.3; }
 .callout p { color: var(--graphite); margin-top: 8px; font-size: var(--t-small); line-height: 1.62; text-wrap: pretty; }
 
 /* The figure: the svg box plus room for the tags on both sides. */
@@ -23,13 +22,6 @@
 .pool-fig .pt-l::after { left: auto; right: calc(-1 * var(--lead) - 3px); }
 
 /* The key under the picture. */
-.pool-key { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; margin-top: clamp(20px, 2vw, 28px); font-size: 13px; line-height: 1.4; color: var(--graphite); }
-.pool-key > span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.pool-key i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
-.k-pick i { background: #FFE1D4; box-shadow: inset 0 0 0 1.5px var(--brand); }
-.k-ok i { background: #2F8F5B; }
-.k-low i { background: #E6A23C; }
-.k-out i { outline: 1px dashed var(--silver); outline-offset: -1px; }
 
 /* ---------- Motion: an explanation, so it takes its time (7.2 s a round), but only while on screen ----------
    At rest (before it plays, and under reduced motion) the picture shows the outcome: every chat on its account,
@@ -78,21 +70,12 @@
   .pool-fig [data-n] { animation: none !important; }
 }
 
-/* ---------- The figures ---------- */
-.formula { margin-top: clamp(48px, 5.6vw, 88px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
-.formula > div { border-top: 1px solid var(--hair); padding-top: 16px; }
-.formula b { display: block; font-size: clamp(30px, 2.6vw, 44px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; font-feature-settings: "tnum"; }
-.formula > div > span { display: block; color: var(--graphite); font-size: var(--t-small); line-height: 1.55; margin-top: 8px; max-width: 22em; text-wrap: pretty; }
-
-/* ---------- Narrower: the picture on its own row, the callouts in two columns under it ---------- */
+/* ---------- Narrower: the picture on its own row, the notes under it ---------- */
 @media (max-width: 1180px) {
   .pool { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap); row-gap: clamp(40px, 5vw, 56px); align-items: start; }
   .pool-fig { grid-column: 1 / -1; order: -1; }
   .iso-box { width: min(380px, calc(100% - 2 * var(--tagw)), 50svh); }
   .callouts { gap: clamp(28px, 4vw, 40px); }
-}
-@media (max-width: 960px) {
-  .formula { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 32px; }
 }
 
 /* ---------- Phones: the plates to the left, every tag on the right; callouts as a list ---------- */
@@ -104,24 +87,11 @@
   .pool-fig .pt-l { left: calc(var(--xm) + var(--lead)); right: auto; }
   .pool-fig .pt-l::before { left: auto; right: 100%; }
   .pool-fig .pt-l::after { right: auto; left: calc(-1 * var(--lead) - 3px); }
-  .pool-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; justify-content: stretch; margin-top: 24px; font-size: 13px; }
-  .pool-key > span { white-space: normal; } /* a label longer than its column wraps instead of running off the screen */
   .callouts { gap: 0; }
-  .pool > .callouts:last-child { margin-top: -36px; }
   .callout:last-child { border-bottom: 1px solid var(--hair); }
   .pool > .callouts:first-child .callout:last-child { border-bottom: 0; }
   .callout { padding-block: 20px; border-top: 1px solid var(--hair); }
-  .callout h3 { font-size: 17px; }
+  .callout h3 { font-size: 16px; }
   .callout p { font-size: 15px; margin-top: 6px; }
-  .formula { margin-top: 48px; gap: 28px 16px; }
-  .formula b { font-size: 30px; }
-  .formula > div > span { font-size: 14px; }
 }
 
-/* The headline breaks where its comma was; the comma stays for screen readers only. */
-
-/* ---------- The narrowest phones (iPhone SE): one figure per row, so the captions don't wrap to a word a line ---------- */
-@media (max-width: 374px) {
-  .formula { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .formula > div > span { max-width: none; }
-}
