@@ -84,7 +84,7 @@ export type SessionStore = {
   setToldNotes(key: string, n: number): void;
   startTurnFor(id: string, key: string, kind: string, by: TurnFor): void;
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, wait: number | null): void;
-  declareTurn(id: string, declared: string, wait: number | null): void;
+  declareTurn(id: string, declared: string | null, wait: number | null): void;
   setRunning(key: string, running: boolean): void;
   setSessionContextBefore(key: string, before: number | null): void;
   setRuntimeSessionId(key: string, id: string | null): void;
@@ -466,6 +466,13 @@ export class SessionActor {
       this.turn.declared = state;
       this.deps.store.declareTurn(this.turn.id, state.kind, state.kind === "waiting" ? state.seconds : null);
     });
+  }
+
+  private undeclare() {
+    if (!this.turn?.declared) return;
+    log.info("session", "a message read after the turn said its state: the state no longer stands", { session: this.key, was: this.turn.declared.kind });
+    this.turn.declared = null;
+    this.deps.store.declareTurn(this.turn.id, null, null);
   }
 
   /// What its wait is for, and whether that is its watch keeping on (`watch`).
@@ -1364,7 +1371,11 @@ export class SessionActor {
         break;
       case "live":
         // Asking its model: what was given to the turn so far goes with the request.
-        if (event.event.kind === "phase" && event.event.phase === "requesting") this.unread = [];
+        if (event.event.kind === "phase" && event.event.phase === "requesting") {
+          // What it said of the turn it said without seeing them: it says where it stands again.
+          if (this.unread.length > 0) void this.enqueue(async () => this.undeclare());
+          this.unread = [];
+        }
         this.deps.live?.event(this.key, event.event);
         if (this.isCurrent(generation)) this.heard(event.event);
         this.onLive(event.event);

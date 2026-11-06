@@ -2364,7 +2364,7 @@ export class Store {
 
   /// What a running turn says it ends in (`declared`, `waitSeconds` as `endTurn` takes them), on record as it is said: a
   /// station that dies before the turn ends (killed while handing over) leaves it for the next one to end the turn in.
-  declareTurn(id: string, declared: string, waitSeconds: number | null): void {
+  declareTurn(id: string, declared: string | null, waitSeconds: number | null): void {
     this.#run("UPDATE turns SET declared = ?, wait_seconds = ? WHERE id = ? AND ended_at IS NULL", declared, waitSeconds, id);
   }
 
