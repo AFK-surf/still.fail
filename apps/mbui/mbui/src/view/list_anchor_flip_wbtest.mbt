@@ -409,3 +409,143 @@ test "scrolls_anchored flung hard to its foot, its rows not as tall as counted, 
     assert_true(wrong.is_empty(), msg="swap \{swap}: " + wrong.iter().take(6).collect().join("; "))
   }
 }
+
+///|
+/// The list flung to its foot from up 900 and changed `after` ms after the finger is let go, as an event of that moment
+/// (`which`: its last row gone, row 196 gone, row 196 60 taller, a row more at its top), frames
+/// every 16 ms or none but at the moments compared (`frames`): at each (100 and 400 ms after the change, and at rest),
+/// where its rows are drawn, the row a press finds, and when it is to rest.
+fn changed_run(which : Int, after : Double, frames : Bool) -> (Double?, Array[(Array[(Int, Double)], Int?, Double?)]) raise {
+  let tall = fn(k : Int) { if k < 0 { 47.0 } else if k % 7 == 0 { 131.0 } else if k % 3 == 0 { 23.0 } else { 47.0 } }
+  let keys = @signals.signal(Array::makei(200, fn(i) { i }))
+  // (every row's height a signal from the start: the one changed is there in either history)
+  let heights : Map[Int, @signals.Signal[Double]] = {}
+  for k in -1..<200 {
+    heights[k] = @signals.signal(tall(k))
+  }
+  let made : Map[Int, View] = {}
+  let scroll = Scroll::list()
+  let tree = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(300.0))).height(Is(Some(100.0)))
+      .scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead=0.0, fn(row, k) {
+        made[k] = row
+        let h = match heights.get(k) {
+          Some(h) => h
+          None => {
+            let h = @signals.signal(tall(k))
+            heights[k] = h
+            h
+          }
+        }
+        row.owns(fn() { made.remove(k) }).height(By(fn() { Some(h.get()) })).on_press(fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.lists_feel(fn() { (ListFeel::Android, 3.0) })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  tree.wheel_at(150.0, 30.0, 0.0, -900.0, 0, 10.0) |> ignore
+  let mut t = 26.0
+  while t < 1500.0 {
+    tree.frame(300.0, 100.0, now=t) |> ignore
+    t = t + 16.0
+  }
+  guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -60.0) is Some(id) else { fail("not taken") }
+  guard tree.drag_at(id, Down, 150.0, 90.0, 1500.0) &&
+    tree.drag_at(id, Moved, 150.0, 60.0, 1505.0) &&
+    tree.drag_at(id, Moved, 150.0, 30.0, 1510.0) &&
+    tree.drag_at(id, Up, 150.0, 30.0, 1510.0) else {
+    fail("an event not taken")
+  }
+  let at = Ref(1510.0)
+  let run_to = fn(till : Double) {
+    if frames {
+      while at.val + 16.0 < till {
+        at.val = at.val + 16.0
+        tree.frame(300.0, 100.0, now=at.val) |> ignore
+      }
+    }
+    at.val = till
+    tree.frame(300.0, 100.0, now=till) |> ignore
+  }
+  let seen = []
+  let missed : Array[String] = []
+  let look = fn() {
+    let rows = made.keys().map(fn(k) { (k, made[k].rect().1) }).collect()
+    rows.sort()
+    let hit = match tree.target_at(150.0, 30.0) {
+      Pressed(id) => made.keys().find_first(fn(k) { made[k].id() == id })
+      _ => None
+    }
+    // (a row there to press, and the one a press finds the one drawn there)
+    let drawn_on = made.keys().find_first(fn(k) { made[k].rect().1 <= 30.0 && 30.0 < made[k].rect().1 + made[k].rect().3 })
+    if hit is None || hit != drawn_on {
+      missed.push("a press at (150, 30) finds \{hit}, the row drawn there \{drawn_on}")
+    }
+    seen.push((rows, hit, scroll.glides_till()))
+  }
+  let change_at = 1510.0 + after
+  run_to(change_at - 1.0)
+  // (the same row in either history, by its key: one near its foot)
+  let in_window = 196
+  // (still flung as it changes: what it was planned to)
+  let flung_then = scroll.glides_till()
+  tree.event(change_at, fn() {
+    match which {
+      0 => keys.set(keys.get()[0:keys.get().length() - 1].to_array())
+      1 => keys.set(keys.get().filter(fn(k) { k != in_window }))
+      2 => heights[in_window].set(tall(in_window) + 60.0)
+      _ => {
+        let ks = [-1]
+        ks.append(keys.get())
+        keys.set(ks)
+      }
+    }
+  })
+  at.val = change_at
+  for d in [100.0, 400.0, 6000.0] {
+    run_to(change_at + d)
+    look()
+  }
+  // (at rest at the last: none planned)
+  if scroll.glides_till() is Some(_) {
+    missed.push("not at rest at the last")
+  }
+  // (row 196 changed as said, where it was to be: its height then)
+  if which == 2 && heights[in_window].get() != tall(in_window) + 60.0 {
+    missed.push("row 196 not taller")
+  }
+  tree.dispose()
+  guard missed.is_empty() else { fail("change \{which} \{after} ms in, frames \{frames}: \{missed}") }
+  (flung_then, seen)
+}
+
+///|
+test "scrolls_anchored flung to its foot and changed on the way, as an event of its moment (a row gone, a row taller, a row more): what is drawn, what a press finds and when it rests, the same with frames between or none" {
+  let wrong = []
+  for which in [0, 1, 2, 3] {
+    for after in [30.0, 120.0, 250.0] {
+      let (flung_a, with_frames) = changed_run(which, after, true)
+      let (flung_b, without) = changed_run(which, after, false)
+      if flung_a is None || flung_b is None {
+        wrong.push("change \{which} \{after} ms in: not flung as it changed (\{flung_a}, \{flung_b})")
+      }
+      // (where its rows are drawn and what a press finds at each moment; when it is to rest, at rest only: while it
+      // moves, the moment it is planned to meet its foot may differ by the frames drawn, the foot it is planned to as
+      // counted from frame to frame (2026-11-06, not fixed here))
+      for i, w in with_frames {
+        let rest = i == with_frames.length() - 1
+        if without[i].0 != w.0 || without[i].1 != w.1 || rest && without[i].2 != w.2 {
+          wrong.push("change \{which} \{after} ms in, moment \{i}: rows the same \{without[i].0 == w.0}, frames between \{w.1} \{w.2}, none \{without[i].1} \{without[i].2}")
+        }
+        // (moving still 100 ms after the change, in either)
+        if i == 0 && (w.2 is None || without[i].2 is None) {
+          wrong.push("change \{which} \{after} ms in, moment \{i}: not moving (\{w.2}, \{without[i].2})")
+        }
+      }
+    }
+  }
+  assert_true(wrong.is_empty(), msg="\{wrong.length()}:\n" + wrong.iter().take(6).collect().join("\n"))
+}

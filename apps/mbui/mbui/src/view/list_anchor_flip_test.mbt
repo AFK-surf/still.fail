@@ -170,9 +170,11 @@ fn flip_run(step : Double, up : Double, speed : Double, ahead? : Double = 0.0, t
     }
   }
   let seen : Array[(Int, Double?)] = []
+  // (when it is planned to rest, as it moves: said, not compared)
+  let planned : Array[Double?] = []
   // (and at each: the row a finger at (150, 50) is on, by where the rows are put, and when what it is on by itself ends)
   let ends : Array[(Int?, Double?)] = []
-  let look = fn() {
+  let look = fn(moving : Bool) {
     for k in c.made() {
       seen.push((k, c.top(k)))
     }
@@ -193,7 +195,13 @@ fn flip_run(step : Double, up : Double, speed : Double, ahead? : Double = 0.0, t
     if hit != on {
       missed.push("at \{at.val}: a press at (150, 50) finds \{hit}, the row drawn there \{on}")
     }
-    ends.push((on, c.scroll.glides_till()))
+    // (when it is to rest: compared at rest; while it moves, said but not compared: the moment it is planned to meet
+    // its foot may differ by the frames drawn (4 ms at 144 against 60 a second, 2026-11-06), the foot it is planned to
+    // as counted from frame to frame, not fixed here)
+    ends.push((on, if moving { None } else { c.scroll.glides_till() }))
+    if moving {
+      planned.push(c.scroll.glides_till())
+    }
   }
   // (40 ms after a finger is let go: moving still, where it is, what a press finds, and when it is to rest, said)
   let moving = fn(t : Double) {
@@ -201,26 +209,27 @@ fn flip_run(step : Double, up : Double, speed : Double, ahead? : Double = 0.0, t
     if c.scroll.glides_till() is None {
       missed.push("at \{t + 50.0}: flung, not moving")
     }
-    look()
+    look(true)
   }
   c.tree.wheel_at(150.0, 50.0, 0.0, -up, 0, 10.0) |> ignore
   fling(-speed, 1500.0)
   moving(1500.0)
   run_to(3500.0)
-  look()
+  look(false)
   fling(-speed, 6000.0)
   run_to(8000.0)
-  look()
+  look(false)
   fling(speed, 9000.0)
   moving(9000.0)
   run_to(11000.0)
-  look()
+  look(false)
   run_to(20000.0)
-  look()
+  look(false)
   c.tree.dispose()
   @view.faults_stop.val = true
   @view.fault_told.val = None
   guard missed.is_empty() else { fail("step \{step} up \{up} speed \{speed}: \{missed}") }
+  println("PLANNED step \{step} up \{up} speed \{speed} ahead \{ahead}: \{planned}")
   (seen, ends, told.iter().any(fn(s) { s.contains("layout passes in one") }))
 }
 
@@ -231,6 +240,8 @@ test "scrolls_anchored flung to its foot and back, its rows not as tall as count
     let (at60, end60, ran60) = flip_run(1000.0 / 60.0, up, speed)
     let (at144, end144, ran144) = flip_run(1000.0 / 144.0, up, speed)
     let (at30, end30, ran30) = flip_run(1000.0 / 30.0, up, speed)
+    // (said before anything is asserted: each history's ends, the row a finger is on and when it is to rest)
+    println("ENDS up \{up} speed \{speed}: 60 \{end60} | 144 \{end144} | 30 \{end30} | ran to the most \{(ran60, ran144, ran30)}")
     assert_eq((ran60, ran144, ran30), (false, false, false), msg="up \{up} speed \{speed}: a frame's layout ran to the most")
     assert_eq(at144, at60, msg="up \{up} speed \{speed}: 144 against 60")
     assert_eq(at30, at60, msg="up \{up} speed \{speed}: 30 against 60")
@@ -247,9 +258,10 @@ test "scrolls_anchored flung to its foot and back, its rows not as tall as count
   // as a fling toward it sets out; the same, whatever frames are drawn between)
   for cs in [(6000.0, 40.0), (3000.0, 20.0)] {
     let (up, speed) = cs
-    let (at60, end60, _) = flip_run(1000.0 / 60.0, up, speed, tall_tail=true)
-    let (at0, end0, _) = flip_run(1.0e9, up, speed, tall_tail=true)
-    let (at_ahead, end_ahead, _) = flip_run(1000.0 / 60.0, up, speed, ahead=16.0, tall_tail=true)
+    let (at60, end60, ran60) = flip_run(1000.0 / 60.0, up, speed, tall_tail=true)
+    let (at0, end0, ran0) = flip_run(1.0e9, up, speed, tall_tail=true)
+    let (at_ahead, end_ahead, ran_ahead) = flip_run(1000.0 / 60.0, up, speed, ahead=16.0, tall_tail=true)
+    assert_eq((ran60, ran0, ran_ahead), (false, false, false), msg="tall tail, up \{up} speed \{speed}: a frame's layout ran to the most")
     assert_eq((at0, end0), (at60, end60), msg="tall tail, up \{up} speed \{speed}: no frames between against 60")
     assert_eq((at_ahead, end_ahead), (at60, end60), msg="tall tail, up \{up} speed \{speed}: drawn 16 ms ahead against 60")
   }
