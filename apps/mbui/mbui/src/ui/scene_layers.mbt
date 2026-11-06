@@ -1176,6 +1176,10 @@ fn Ctx::scene_copied(
   // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
   // shown, asked again. Put elsewhere (scrolled, slid, its page moved), its block moved by how far, where that is all
   // moving it changes (Ctx::scene_offset_ok); put where it was put but drawn elsewhere, what it holds moved with it)
+  // (placed otherwise than moved: turned, faded, its ground drawn off otherwise, drawn anew)
+  guard !scene.moved_layers.contains(id) || scene_own_place_same(p.tree, l) else {
+    return copy_not(id, "placed otherwise")
+  }
   if held != now {
     guard scene_still(l) && self.scene_offset_ok(l, held) else { return copy_not(id, if scene_still(l) { "placed otherwise, not moved by an offset" } else { "placed otherwise, holding what changed" }) }
     self.scene_emitted(p, l, moved=(held.0 - now.0, held.1 - now.1))
@@ -2246,7 +2250,7 @@ fn scene_kept_but_place(l : SceneLayer) -> Bool {
 /// its block moved so comes to it (Ctx::scene_offset_ok), what it holds still; the place of it `l`'s drawing keeps
 /// told where it is now. None: drawn anew.
 fn Ctx::scene_moved_by(self : Ctx, tree : @view.Tree, l : SceneLayer, c : SceneLayer) -> (Double, Double)? {
-  guard scene_kept_but_place(c) && scene_still(c) && l.shown == (0.0, 0.0) else { return None }
+  guard scene_kept_but_place(c) && scene_still(c) && l.shown == (0.0, 0.0) && scene_own_place_same(tree, c) else { return None }
   let (ox, oy, oa, os, oux, ouy) = l.held
   guard tree.placed_in(c.id, l.id.at, oa, os) is Some((x, y, a, s, ux, uy)) else { return None }
   let place = (ox + x, oy + y, a, s, oux + ux, ouy + uy)
@@ -2478,4 +2482,25 @@ pub fn scene_copy_nots() -> Map[String, Int] {
 fn copy_not_count(why : String) -> Unit {
   let key = why.iter().filter(fn(c) { !(c >= '0' && c <= '9') }).collect() |> String::from_array
   copy_nots[key] = copy_nots.get_or_default(key, 0) + 1
+}
+
+///|
+/// Whether what layer `l`'s own node's place draws of it is as it was drawn but where it is (how it is turned, its
+/// ground drawn off, how what it holds fades and is stretched, its glyphs' looks: SceneEntry::read): placed otherwise
+/// than moved, it is drawn anew.
+fn scene_own_place_same(tree : @view.Tree, l : SceneLayer) -> Bool {
+  guard scene.reach.get(l.id) is Some(e) else { return false }
+  let id = l.id
+  let (turn, about) = tree.turn_of(id)
+  let (start, top, end, foot) = match tree.cut_soft_of(id) {
+    Some((over_top, over_foot, h)) => (0.0, cut_soft(over_top, h / 2.0), 0.0, cut_soft(over_foot, h / 2.0))
+    None => tree.fades_of(id)
+  }
+  turn == e.turn &&
+  about == e.turn_drawn &&
+  tree.ground_drawn_of(id) == (e.ground_x, e.ground_y, e.ground_w, e.ground_h) &&
+  (start, top, end, foot) == (e.fade_start, e.fade_top, e.fade_end, e.fade_foot) &&
+  tree.stretch_of(id) == e.stretch &&
+  tree.over_scrim_of(id) == e.over_scrim &&
+  tree.glyphs_of(id) is None == e.glyphs is None
 }
