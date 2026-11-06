@@ -415,7 +415,7 @@ test "settings' 共享调试: a grant the phone does not lend keeps its title wh
   assert_eq(back.length(), 1)
   assert_true(said[0].1 + said[0].3 <= back[0].1, msg="\{said} \{back}")
   // the card's link rows' words on the same line as its other rows' (the switch's)
-  let other = t.rect_of("开启后一直保持").unwrap()
+  let other = t.rect_of("重启手机、更新 app 后也保持开启").unwrap()
   assert_eq(title.0, other.0)
   assert_eq(t.rect_of("默认最长授权").unwrap().0, other.0)
   assert_true(t.room_faults().is_empty(), msg="\{t.room_faults()}")
@@ -426,7 +426,7 @@ test "settings' 共享调试: off the person's own lock, the page is the lock's 
   let t = settings_tester("adb:", shows="settings-adb-gate-none", platform=2)
   assert_true(t.find("共享调试要先开启个人锁") is Some(_))
   // nothing that does anything without it: the switch, the stations, how long grants last
-  assert_true(t.find("开启后一直保持") is None)
+  assert_true(t.find("重启手机、更新 app 后也保持开启") is None)
   assert_true(t.find("共享给的 station") is None)
   assert_true(t.find("默认最长授权") is None)
 }

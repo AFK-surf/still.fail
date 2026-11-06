@@ -712,7 +712,8 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
       blocks.push(fn() {
         list_card(c, fn() {
           let on = flag(view, "on")
-          // (the switch in the row's middle, off its corners, as settings' switches are)
+          // (the switch in the row's middle, off its corners, as settings' switches are; what it is for one short line
+          // beside it, 2026-11-06 左子健: 字有点太多了, 还是字小一点简洁一点放下边吧)
           if list_row(c, key="adb-on", fn() {
               c.box(style=fill_words, fn() { row_lines(c, tr("android-misc.adb.title"), tr("android-misc.adb.on.note"), wrap_sub=true) })
               |> ignore
@@ -771,7 +772,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
             blocks.push(fn() {
               card(c, foot=if step.act != "" { UiCapsule } else { Words }, fn() {
                 c.box(style=@ui.css("w=Full gap=S3_5"), fn() {
-                  @sf.card_lines(c, step.title, words=step.sub, note=later.join("  ·  "), title_after=fn() {
+                  @sf.card_lines(c, step.title, note=(if step.sub == "" { later } else { [step.sub, ..later] }).join("  ·  "), title_after=fn() {
                     @sf.pill(c, tr("web-main.attention.entry"), tone=Amber)
                   })
                   if step.act != "" {
@@ -854,7 +855,10 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
             ago
           }
           let busy = is_doing(core, ["adb.revoke"], [("request", request)])
-          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, value=when, note=text(g, "reason"), note_cut=true, face=true, goes=station != "" && session != "", control=fn() {
+          // (narrow, 收回 by its title alone, the line under it as wide as the row: when it was used, and why it was asked;
+          // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压. Wide, the row has the room for both beside
+          // it, 收回 in the row's middle: a wide row's first line is too low for a press's room)
+          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, face=@sf.look() is Wide, goes=station != "" && session != "", control=fn() {
               if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
                 act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
               }

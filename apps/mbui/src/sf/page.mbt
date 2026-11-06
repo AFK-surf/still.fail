@@ -1457,8 +1457,11 @@ pub fn link_row(
                     after()
                   })
                   |> ignore
+                } else if note_cut || title_cut {
+                  // (cut short, in a box that takes the line's room: what is at its end stays at the row's end)
+                  c.box(style=pg_row_words, fn() { c.text(title, style=titled.then(cut_words), color?=ink) |> ignore }) |> ignore
                 } else {
-                  c.text(title, style=if note_cut || title_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
+                  c.text(title, style=titled, color?=ink) |> ignore
                 }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
