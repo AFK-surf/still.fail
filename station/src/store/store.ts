@@ -40,7 +40,7 @@ import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, installActiveWatches } from "./watch-jobs.ts";
-import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, AWAKE_JOBS_BEFORE_UPGRADE, REMOTE_QUEUE_BEFORE_UPGRADE, RUNNING_LIMIT_BEFORE_UPGRADE, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, UP_JOBS_BEFORE_UPGRADE, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_JOB_SESSIONS, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, AWAKE_JOBS_BEFORE_UPGRADE, REMOTE_QUEUE_BEFORE_UPGRADE, RUNNING_LIMIT_BEFORE_UPGRADE, RUNNING_JOB_SESSIONS_BEFORE_UPGRADE, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, UP_JOBS_BEFORE_UPGRADE, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
 import { activeRemoteJobsAvailable, REMOTE_QUEUE_PREPARED } from "./active-jobs-upgrade.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
@@ -2646,6 +2646,12 @@ export class Store {
   /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
   runningJobsAtLeast(session: string, limit: number): boolean {
     return limit <= 0 || this.#active(RUNNING_LIMIT, RUNNING_LIMIT_BEFORE_UPGRADE, session, limit - 1).length !== 0;
+  }
+
+  /// Of these sessions, those with at least one running job. Once prepared, the lookup does not read their history.
+  runningJobSessions(sessions: string[]): Set<string> {
+    if (sessions.length === 0) return new Set();
+    return new Set(this.#active(RUNNING_JOB_SESSIONS, RUNNING_JOB_SESSIONS_BEFORE_UPGRADE, JSON.stringify(sessions)).map((r) => r.session as string));
   }
 
   /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
