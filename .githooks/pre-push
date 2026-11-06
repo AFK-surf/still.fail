@@ -7,16 +7,17 @@ status=0
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue
   if [ "$remote_sha" = "$zero" ]; then
-    # A new branch: against where it left main.
-    base=$(git merge-base "$local_sha" origin/main 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)
+    # A new branch: against where it left main, or arch/next when it left
+    # that branch later. Its inherited changes have already been pushed.
+    base=$(sh "$root/scripts/branch-base.sh" "$local_sha" "$remote_ref")
   else
     base=$remote_sha
   fi
   echo "checking $local_ref ($(git rev-list --count "$base..$local_sha") commits)"
   sh "$root/scripts/check.sh" push "$base..$local_sha" || status=1
-  # Nothing merged into main undone, against where it left main (a branch pushed again after a rebase too).
+  # Nothing already on the branch's base undone (also after a rebase).
   if [ -z "${STILLFAIL_SKIP_CHECKS:-${EMBER_SKIP_CHECKS:-}}" ]; then
-    left=$(git merge-base "$local_sha" origin/main 2>/dev/null || echo "$base")
+    left=$(sh "$root/scripts/branch-base.sh" "$local_sha" "$remote_ref")
     sh "$root/scripts/undone.sh" "$left" "$local_sha" || status=1
   fi
 done
