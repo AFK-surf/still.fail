@@ -142,13 +142,20 @@ pub fn[T] ListRows::in_node_indexed(
     let c = self.causes
     let watching = watching && given.val
     let mut moved = false
+    // Only rows that left the source or finished leaving can have become forgettable in this change.
+    // A whole replacement, or an expired removal log, is the exceptional case requiring the old full check.
+    let forget : Array[String] = []
+    let mut check_all = false
     // the rows' way over: what went out at its end, what made it forgotten
     if c.end >= 0.0 && now >= c.end - 0.001 {
       moved = moved || !goings.is_empty() || !c.by.is_empty()
       for g in goings {
         gone(g.key)
+        forget.push(g.key)
       }
       goings.clear()
+      // A removed row can still have been protected by a change without a leaving transition.
+      for k in c.by.keys() { forget.push(k) }
       c.by.clear()
       c.start = -1.0
       c.end = -1.0
@@ -198,6 +205,8 @@ pub fn[T] ListRows::in_node_indexed(
             // (come and gone in it: never among them)
             came_now.remove(k)
             c.by.remove(k) |> ignore
+            // It may have protected an earlier removed row, even though this brief arrival left no removal record.
+            forget.push(k)
           } else if watching {
             let at = from(k).unwrap_or(now)
             let after = after.unwrap_or("")
@@ -208,6 +217,7 @@ pub fn[T] ListRows::in_node_indexed(
             began = true
           } else {
             gone(k)
+            forget.push(k)
           }
         Set(k) =>
           if watching {
@@ -221,6 +231,7 @@ pub fn[T] ListRows::in_node_indexed(
             }
           }
         Whole => {
+          check_all = true
           for g in goings {
             gone(g.key)
           }
@@ -233,8 +244,10 @@ pub fn[T] ListRows::in_node_indexed(
     if !watching && (!goings.is_empty() || !c.by.is_empty()) {
       for g in goings {
         gone(g.key)
+        forget.push(g.key)
       }
       goings.clear()
+      for k in c.by.keys() { forget.push(k) }
       c.by.clear()
       moved = true
     }
@@ -279,15 +292,22 @@ pub fn[T] ListRows::in_node_indexed(
       match (rows.removed_since)(rows_seen.val) {
         Some(out) =>
           for k in out {
-            if going_at(k) is None && !(rows.contains)(k) { gone(k) }
+            if going_at(k) is None && !(rows.contains)(k) {
+              gone(k)
+              forget.push(k)
+            }
           }
-        None => gone_from.val = revision.val + 1
+        None => {
+          gone_from.val = revision.val + 1
+          check_all = true
+        }
       }
     }
     rows_seen.val = rows_now
     placed()
     if c.by.is_empty() { sizes.clear() }
-    for k in shown.keys().collect() {
+    let candidates = if check_all { shown.keys().collect() } else { forget }
+    for k in candidates {
       if !c.by.contains(k) && going_at(k) is None && !(rows.contains)(k) {
         shown.remove(k)
         sizes.remove(k)
