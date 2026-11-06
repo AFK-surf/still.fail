@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdits, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
@@ -62,6 +62,7 @@ import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, 
 import { hasLegacySaid, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK } from "./legacy-login-cards.ts";
+import { legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -330,6 +331,8 @@ export class Store {
   readonly #legacySaid: boolean;
   readonly #legacyAgent: boolean;
   readonly #legacyLoginCards: boolean;
+  readonly #legacyEdits: boolean;
+  readonly #legacyEditsOldIndex: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -358,6 +361,8 @@ export class Store {
     this.#legacySaid = hasLegacySaid(db);
     this.#legacyAgent = hasLegacyAgent(db);
     this.#legacyLoginCards = hasLegacyLoginCards(db);
+    this.#legacyEdits = usesLegacyEdits(db);
+    this.#legacyEditsOldIndex = this.#legacyEdits && legacyEditsUseOldIndex(db);
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -399,6 +404,7 @@ export class Store {
         }
       }
       db.exec(SCHEMA);
+      addEditIndex(db);
       addArchiveColumns(db);
       addRuntimeSessionRuntime(db);
       addThreadIndexes(db);
@@ -2234,8 +2240,10 @@ export class Store {
       const r = this.#one("SELECT card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
       const message = r === undefined ? null : this.#messageAt(thread, ts);
       if (r === undefined || message === null) return false;
-      // The latest restated card, else the post's.
-      const last = this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, message.n);
+      // The latest restated card, else the post's. Older stores use the same prepared target lookup as merged.
+      const last = this.#legacyEdits
+        ? this.#one(`SELECT x.card FROM entries x WHERE x.thread=?1 AND x.n=(${legacyEditLatest("?1","?2","x.kind='edit' AND x.card IS NOT NULL",this.#legacyEditsOldIndex)})`,thread,message.n)
+        : this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1",thread,message.n);
       this.#append(
         {
           agentIdentity: undefined, thread, n: 0, kind: "edit", target: message.n, ts: null,
