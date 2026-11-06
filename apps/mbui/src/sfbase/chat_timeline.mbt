@@ -89,7 +89,7 @@ pub fn chat_timeline(
     if showing {
       match em.current {
         Some(t) => {
-          let at = dmax(t.clock.end(), em.held_until)
+          let at = dmax(turn_end(t), em.held_until)
           // An unknown sent row's landing is supplied by its geometry input,
           // not by polling an expired phase with another frame.
           if at > now { next = dmin(next, at) }

@@ -181,6 +181,52 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
 }
 
 ///|
+test "a send during a folding answer hands it over at a fractional landing with or without frames" {
+  for hz in [0, 60, 120] {
+    let clock = Ref(0.0)
+    let t = emit_core(clock)
+    t.tap_text("发消息")
+    t.type_text("再看一下按钮")
+    fix_clock_set(clock, clock.val + fix_answer_ms)
+    t.draw()
+    let rk = "ws1/st1\u{1}s-c1"
+    let em = emits_of(rk)
+    assert_true(em.current is Some(first) && first.pose == Fold)
+    let fold_end = t.time() + Pose::Fold.ms()
+    // The send starts 69.75 ms before this Fold ends, leaving a fractional Float until the sent words land.
+    t.run_for_exact(100.25)
+    tap_send(t)
+    t.frame_at(fold_end)
+    guard send_flight.get() is Some(sent) else { fail("the sent message is not flying") }
+    let landing = sent.way.ends()
+    guard em.current is Some(turn) && turn.pose == Float && turn.warp is Some(_) else {
+      fail("the answer was not extended while the sent words fly")
+    }
+    assert_true((turn.span - turn.span.round()).abs() > 0.001, msg="the extended duration must be fractional")
+    let origin = t.time()
+    if hz > 0 {
+      let period = 1000.0 / hz.to_double()
+      let mut n = 1
+      while origin + n.to_double() * period < landing - 0.01 {
+        t.frame_at(origin + n.to_double() * period)
+        n += 1
+      }
+    }
+    t.frame_at(landing - 0.01)
+    assert_true(em.current is Some(p) && p.pose == Float, msg="\{hz} Hz: still flying before landing")
+    let before = emit_flight(t.ctx(), rk, em, [turn.agent]).unwrap()
+    t.frame_at(landing)
+    assert_true(em.current is Some(p) && p.pose == Spit, msg="\{hz} Hz: the reply comes out at the sent landing")
+    let at = emit_flight(t.ctx(), rk, em, [turn.agent]).unwrap()
+    assert_true((before.0 - at.0).abs() < 0.01 && (before.1 - at.1).abs() < 0.01,
+      msg="\{hz} Hz: avatar moved at landing from \{before} to \{at}")
+    t.frame_at(landing + 0.01)
+    assert_true(em.current is Some(p) && p.pose == Spit, msg="\{hz} Hz: the reply remains out after landing")
+    emit_restore()
+  }
+}
+
+///|
 test "words sent are seen every frame from the field to their bubble: not gone the frame their row is laid out" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

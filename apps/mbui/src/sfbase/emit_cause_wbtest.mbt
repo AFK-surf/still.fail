@@ -148,14 +148,6 @@ fn fractional_flight_history(hz : Int, fraction : Double, warped : Bool) -> Unit
   tester.draw()
   let start = tester.time()
   let at = start + 50.0 + fraction
-  if hz > 0 {
-    let period = 1000.0 / hz.to_double()
-    let mut n = 1
-    while start + n.to_double() * period < at {
-      tester.frame_at(start + n.to_double() * period)
-      n += 1
-    }
-  }
   let em = emits_of(key)
   em.watched = true
   let place = fn(k : String) -> (Double, Double, Double, Double)? {
@@ -178,6 +170,16 @@ fn fractional_flight_history(hz : Int, fraction : Double, warped : Bool) -> Unit
   assert_true((actual.1 - expected_y).abs() < 0.000001, msg="\{hz} Hz, \{fraction}: fractional flight \{actual.1}, expected \{expected_y}")
 
   em.current = Some({ ..turn, pose: Float, warp: if warped { Some((0.1, 0.85, 0.75)) } else { None } })
+  let period = if hz > 0 { 1000.0 / hz.to_double() } else { 0.0 }
+  let mut n = 1
+  if hz > 0 {
+    while start + n.to_double() * period < at {
+      let frame = start + n.to_double() * period
+      tester.frame_at(frame)
+      assert_true(emit_flight_by(key, em, ["agent"], place, frame) is Some(_))
+      n += 1
+    }
+  }
   let epsilon = 0.001
   let before = emit_flight_by(key, em, ["agent"], place, at).unwrap().1
   let earlier = emit_flight_by(key, em, ["agent"], place, at - epsilon).unwrap().1
@@ -188,6 +190,28 @@ fn fractional_flight_history(hz : Int, fraction : Double, warped : Bool) -> Unit
   let speed_before = (before - earlier) / epsilon
   let speed_after = (later - after) / epsilon
   assert_true((speed_before - speed_after).abs() < 0.001, msg="\{hz} Hz, \{fraction}, warped \{warped}: extension changed speed from \{speed_before} to \{speed_after}")
+  let landing = start + 350.75
+  if hz > 0 {
+    while start + n.to_double() * period < landing - epsilon {
+      let frame = start + n.to_double() * period
+      tester.frame_at(frame)
+      assert_true(emit_flight_by(key, em, ["agent"], place, frame) is Some(_))
+      n += 1
+    }
+  }
+  emit_step(tester.ctx(), key, em, ["agent"], turns_of(key), landing, place~, one_phase=true, at=landing - epsilon)
+  assert_true(em.current is Some(t) && t.pose == Float, msg="the answer is still flying before the sent words land")
+  let approaching = emit_flight_by(key, em, ["agent"], place, landing - epsilon).unwrap().1
+  emit_step(tester.ctx(), key, em, ["agent"], turns_of(key), landing, place~, one_phase=true, at=landing)
+  guard em.current is Some(landed) && landed.pose == Spit else {
+    fail("\{hz} Hz, \{fraction}, warped \{warped}: at sent landing \{landing}, phase \{em.current.map(fn(t) { t.pose })}")
+  }
+  assert_true((landed.clock.starts_at() - landing).abs() < 0.000001, msg="the answer's Spit begins at the sent landing")
+  let at_landing = emit_flight_by(key, em, ["agent"], place, landing).unwrap().1
+  assert_true((at_landing - 3.0).abs() < 0.000001 && (approaching - at_landing).abs() < 0.01)
+  emit_step(tester.ctx(), key, em, ["agent"], turns_of(key), landing, place~, one_phase=true, at=landing + epsilon)
+  assert_true(em.current is Some(t) && t.pose == Spit)
+  assert_true((emit_flight_by(key, em, ["agent"], place, landing + epsilon).unwrap().1 - at_landing).abs() < 0.000001)
   emits.remove(key) |> ignore
   turns_by.remove(key) |> ignore
 }

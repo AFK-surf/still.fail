@@ -49,6 +49,8 @@ jobs:
         run: bash scripts/logwait_test.sh
       - name: Simulator termination exits on failure and leaves no client after a deadline
         run: bash scripts/ios-terminate-test.sh
+      - name: Cache pruning refuses incomplete or malformed inputs before deleting
+        run: sh scripts/cache_prune_test.sh
       - name: A partial repaint check cannot reuse a missing frame from its preceding run
         run: bash scripts/render_paint_damage_test.sh
       - name: Android rendering entry points accept only a verified emulator before writing to a device

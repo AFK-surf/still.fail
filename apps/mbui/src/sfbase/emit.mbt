@@ -62,6 +62,14 @@ pub(all) struct Turn {
 }
 
 ///|
+/// The phase's declared deadline, including a fractional extension to a sent message's landing. A Way's generic
+/// end is rounded to its whole-ms sampling contract; this timeline hands over at the exact cause it was given.
+fn turn_end(t : Turn) -> Double {
+  let start = t.clock.starts_at()
+  if start < 0.0 || t.span <= 0.0 { t.clock.end() } else { start + t.span }
+}
+
+///|
 /// A chat's messages coming out of avatars.
 pub(all) struct Emits {
   decided : Map[String, Bool]
@@ -363,7 +371,7 @@ fn emit_next_placed(
 ) -> Unit {
   let at = at.unwrap_or(emit_moment(c))
   match e.current {
-    Some(t) => e.ended[t.agent] = t.clock.end()
+    Some(t) => e.ended[t.agent] = turn_end(t)
     None => ()
   }
   e.aimed = None
@@ -404,7 +412,7 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
   match self.current {
-    Some(t) => dmax(t.clock.end(), self.held_until)
+    Some(t) => dmax(turn_end(t), self.held_until)
     None => -1.0
   }
 }
@@ -433,7 +441,8 @@ fn emit_start_float(
   place : (String) -> (Double, Double, Double, Double)?,
   now : Double,
 ) -> Turn {
-  let start = t.clock.end() - t.span
+  let started = t.clock.starts_at()
+  let start = if started < 0.0 { t.clock.end() } else { started }
   let span = if now <= start {
     let from = match t.from {
       Some(k) => match place(k) {
@@ -548,7 +557,7 @@ pub fn emit_step(
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
-      Float if sending >= 0.0 && sending > t.clock.end() && sending != e.held_until && now < t.clock.end() => {
+      Float if sending >= 0.0 && sending > turn_end(t) && sending != e.held_until && now < turn_end(t) => {
         // (its clock is linear: how far it is says when now is on it) going on from where it is at the speed it has,
         // to come down at its own end speed when they land: no step in its speed (Turn's warp)
         let u = emit_clock_at(t, now)
@@ -567,11 +576,11 @@ pub fn emit_step(
       _ => t
     }
     // (a pose goes on till the end it declared as it set out)
-    if now < t.clock.end() {
+    if now < turn_end(t) {
       break
     }
     // the next from where this one was declared to end, whichever frame sees it
-    let at = t.clock.end()
+    let at = turn_end(t)
     match t.pose {
       Fold => {
         let next = { ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None, timed: false }
@@ -675,8 +684,8 @@ pub fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
 }
 
 ///|
-/// A flight's linear share at its exact picture or cause moment. The pose's Way owns its deadline; unlike a
-/// general Way's whole-ms motion sample, the flight's geometry and its interrupted velocity use fractional ms.
+/// A flight's linear share at its exact picture or cause moment. Unlike a general Way's whole-ms motion sample,
+/// the flight's geometry and its interrupted velocity use fractional ms.
 fn turn_share_at(t : Turn, at : Double) -> Double {
   let start = t.clock.starts_at()
   if t.span <= 0.0 || start < 0.0 {
