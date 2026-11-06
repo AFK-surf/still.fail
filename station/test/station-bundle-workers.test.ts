@@ -9,6 +9,7 @@ import { Store } from "../src/store/store.ts";
 import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { keyPart, sandboxName } from "../src/agents/sandbox-name.ts";
 import { installLegacySaid } from "../src/store/legacy-said-build.ts";
+import { installLegacyAgent } from "../src/store/legacy-agent-build.ts";
 
 // The release's main.js loads and answers: a module importing createRequire as the bundle's banner did declared it
 // twice, and every station updated to 0.1.7119 kept its old one (the new one exited with 1 before it was ready).
@@ -62,6 +63,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
     installLegacySaid(store.db);
+    installLegacyAgent(store.db);
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/workspace-activity-worker.js", { kind: "recovery" }],
@@ -70,6 +72,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["sessions/workspace-activity-worker.js", { kind: "chat-share" }],
       ["sessions/workspace-activity-worker.js", { kind: "process-jobs" }],
       ["sessions/workspace-activity-worker.js", { kind: "legacy-said" }],
+      ["sessions/workspace-activity-worker.js", { kind: "legacy-agent" }],
       ["sessions/session-count-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
@@ -110,6 +113,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT workspace FROM chat_share_targets WHERE session=?").get("old-share")?.workspace, "other");
     assert.equal(store.db.prepare("SELECT job FROM process_job_rows WHERE job=?").get("old-job")?.job, "old-job");
     assert.equal(store.db.prepare("SELECT scanned FROM legacy_said_meta WHERE id=1").get()?.scanned, 1);
+    assert.equal(store.db.prepare("SELECT scanned FROM legacy_agent_meta WHERE id=1").get()?.scanned, 1);
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
     assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");
