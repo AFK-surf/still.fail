@@ -29,11 +29,12 @@ fn quota_node_rig(small : Bool, compact : Bool, marked : Bool, custom : Bool) ->
     @ui.set_tree_theme(ui_theme_now)
     let tips = TipLayer::new(fn() { layer.val })
     root.box(fn(row) {
-      row.width(Is(Some(200.0))).height(Is(Some(80.0))).padding(Is((20.0, 20.0, 0.0, 0.0)))
+      row.row(Is(true)).lines_up(Is(Some(Start)))
+      .width(Is(Some(200.0))).height(Is(Some(80.0))).padding(Is((20.0, 20.0, 0.0, 0.0)))
       .presses(Is(true)).focusable(Is(true)).says(Is(Some(@view.said(Button, label="Row"))))
       .on_press(fn() { presses.val += 1 }) |> ignore
       row.show(fn() { there.get() }, fn(b) {
-        let w = fn() { Some(windows[at.get()]) }
+        let w = fn() { if at.get() == windows.length() { None } else { Some(windows[at.get()]) } }
         if custom {
           quota_chip_node(b, w, small~, compact~, marked~, said=fn() { spoken.get() }, tips~) |> ignore
         } else {
@@ -84,6 +85,10 @@ test "a quota window node follows its mark, clamped figure and level, and can om
   q.t.draw()
   assert_true(quota_words().contains("0%"))
   assert_true(!@ui.view_tree().unwrap().drawn().any(fn(d) { d.ground == alpha(level_color("red"), chip_fill_share) }))
+  q.at.set(q.windows.length())
+  q.t.draw()
+  assert_true(quota_words().contains("0%"))
+  assert_true(!quota_words().contains("D"))
   let plain = quota_node_rig(true, true, false, false)
   assert_true(quota_words().contains("62%"))
   assert_true(!quota_words().contains("5H"))
@@ -111,10 +116,40 @@ test "small and compact quota windows have their established height and padding"
 }
 
 ///|
+test "a quota window changes its level tint with the theme after it is made" {
+  set_dark(Some(false))
+  let q = quota_node_rig(true, false, true, false)
+  q.at.set(1)
+  q.t.draw()
+  let light = alpha(level_color("amber"), chip_fill_share)
+  let has_light = @ui.view_tree().unwrap().drawn().any(fn(d) { d.ground == light })
+  set_dark(Some(true))
+  q.t.draw()
+  let dark = alpha(level_color("amber"), chip_fill_share)
+  let has_dark = @ui.view_tree().unwrap().drawn().any(fn(d) { d.ground == dark })
+  set_dark(None)
+  assert_true(light != dark, msg="the themes have different amber fills")
+  assert_true(has_light && has_dark, msg="the node follows the theme")
+}
+
+///|
+test "a standalone quota window's mark and figure are read as text" {
+  let w = Json::object({ "mark": "W", "left": 15.0, "level": "amber" })
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=400.0, h=100.0, platform=0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    quota_chip_node(root, fn() { Some(w) }, small=true) |> ignore
+  })
+  t.draw()
+  assert_true(t.semantics().any(fn(s) { s.role == Text && s.label == "W" && !s.hidden }))
+  assert_true(t.semantics().any(fn(s) { s.role == Text && s.label == "15%" && !s.hidden }))
+}
+
+///|
 test "a quota window's tip follows its data, the row keeps its press, and the tip is let go with the chip" {
   let q = quota_node_rig(true, false, true, false)
   quota_pointer(q.t, "5H")
-  q.t.run_for(tip_delay_ms + tip_settled_ms)
+  q.t.run_for(tip_delay_ms + @kit.pop_out_ms * 2.0)
   assert_true(quota_tip_shown(q.t, quota_said(Some(q.windows[0]))))
   q.at.set(1)
   q.t.draw()
@@ -124,6 +159,9 @@ test "a quota window's tip follows its data, the row keeps its press, and the ti
   q.t.touch(0, x, y)
   q.t.touch(2, x, y)
   assert_eq(q.presses.val, 1, msg="the row takes a click on its chip")
+  q.t.act(Button, Focus, label="Row")
+  q.t.enter()
+  assert_eq(q.presses.val, 2, msg="the row remains keyboard accessible")
   q.there.set(false)
   q.t.draw()
   assert_eq(q.layer.val.unwrap().kids().length(), 0, msg="the tip's holder is let go with the chip")
@@ -133,7 +171,7 @@ test "a quota window's tip follows its data, the row keeps its press, and the ti
 test "a quota window's supplied tip follows its own words" {
   let q = quota_node_rig(false, false, true, true)
   quota_pointer(q.t, "5H")
-  q.t.run_for(tip_delay_ms + tip_settled_ms)
+  q.t.run_for(tip_delay_ms + @kit.pop_out_ms * 2.0)
   assert_true(quota_tip_shown(q.t, "First detail"))
   q.spoken.set("Another detail")
   q.t.draw()

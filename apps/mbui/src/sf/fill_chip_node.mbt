@@ -109,17 +109,7 @@ pub fn quota_chips_node(
     // (each window by its mark)
     row.each(windows, fn(w) { chip_str(Some(w), "mark") }, fn(chip, one) {
       let w = fn() { Some(one.get()) }
-      fill_chip_node(
-        chip,
-        fn() { chip_left(w()) },
-        fn() { chip_str(w(), "level") },
-        fn() { if marked { chip_str(w(), "mark") } else { "" } },
-        fn() { chip_left(w()).to_string() + "%" },
-        small~,
-        said=fn() { quota_said(w()) },
-        tips?,
-      )
-      |> ignore
+      quota_chip_node(chip, w, small~, marked~, tips?) |> ignore
     })
   })
 }
