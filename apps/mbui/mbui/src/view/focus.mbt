@@ -353,8 +353,8 @@ pub fn Tree::can_focus(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
-/// An editor's existing focus kept for text input under a layer that leaves typing. Its presses and keys still
-/// belong to the layer; leaving, disabling or releasing the editor drops that focus as usual.
+/// An editor's existing focus kept under a layer that leaves typing. An old-only layer keeps a retained editor's focus
+/// without sending text to it. Its presses and keys belong to the layer; leaving or disabling it drops focus as usual.
 fn Tree::typing_kept(self : Tree, id : NodeId) -> Bool {
   self.alive_id(id) && self.nodes[id.at].focusable && self.nodes[id.at].focus_typing &&
     self.typing_left_under() && !self.pressless_own_at(id.at)

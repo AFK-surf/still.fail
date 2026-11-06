@@ -266,6 +266,57 @@ let made_placed : Array[(Int, Node)] = []
 let made_presses : Map[Int, () -> Unit] = {}
 
 ///|
+/// A callback said by an old build, as opposed to one held by a Made node. Its owner and last build let it go when
+/// the old view no longer says it, including when a kept part is put back without running its build.
+priv struct CtxPress {
+  take : () -> Unit
+  owner : @view.NodeId?
+  mut build : Int
+}
+
+///|
+let ctx_presses : Map[Int, CtxPress] = {}
+
+///|
+// Drag callbacks have the same build, kept-part and island lifetime as press callbacks.
+let ctx_drag_inputs : Map[Int, CtxDragInput] = {}
+
+///|
+fn ctx_press_mark(p : CtxPress) -> Unit {
+  p.build = g().build_no
+}
+
+///|
+fn ctx_press_remove(id : Int) -> Unit {
+  match ctx_presses.get(id) {
+    Some(p) => {
+      match made_presses.get(id) {
+        Some(f) if physical_equal(f, p.take) => made_presses.remove(id)
+        _ => ()
+      }
+      ctx_presses.remove(id)
+    }
+    None => ()
+  }
+}
+
+///|
+fn ctx_presses_built() -> Unit {
+  let gone = ctx_presses.iter().filter(fn(e) { e.1.build < builds_made.val }).map(fn(e) { e.0 }).collect()
+  for id in gone { ctx_press_remove(id) }
+  let gone_drags = ctx_drag_inputs.iter().filter(fn(e) { e.1.build < builds_made.val }).map(fn(e) { e.0 }).collect()
+  for id in gone_drags { ctx_drag_inputs.remove(id) }
+}
+
+///|
+fn ctx_presses_owner_gone(owner : @view.NodeId) -> Unit {
+  let gone = ctx_presses.iter().filter(fn(e) { e.1.owner == Some(owner) }).map(fn(e) { e.0 }).collect()
+  for id in gone { ctx_press_remove(id) }
+  let gone_drags = ctx_drag_inputs.iter().filter(fn(e) { e.1.owner == Some(owner) }).map(fn(e) { e.0 }).collect()
+  for id in gone_drags { ctx_drag_inputs.remove(id) }
+}
+
+///|
 /// A run begins: nothing made is kept.
 fn made_forget() -> Unit {
   for _, m in made_roots {
@@ -274,6 +325,8 @@ fn made_forget() -> Unit {
   made_roots.clear()
   made_placed.clear()
   made_presses.clear()
+  ctx_presses.clear()
+  ctx_drag_inputs.clear()
   keys_taken.clear()
 }
 
@@ -346,7 +399,10 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
     made_placed.push((slot, n))
   }
   match m.on_press {
-    Some(f) if n.id != 0 => made_presses[n.id] = f
+    Some(f) if n.id != 0 => {
+      ctx_presses.remove(n.id)
+      made_presses[n.id] = f
+    }
     _ => ()
   }
   let kids = match m.kids {
@@ -412,16 +468,42 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 }
 
 ///|
-/// A press on target `id` (a tap, a click, Enter or Space where it takes the focus), let go on it, does `f`: then, as it
-/// is let go, outside any build, not read as the next frame is built (docs/retained.md, the model's 5: acting is a
-/// callback). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
-/// hand over it). What a frame read of the press (Ctx::clicked) it reads as before.
+/// A press on target `id` (a tap, a click, Enter, Space or a screen reader's Activate outside a build) does `f` then,
+/// outside any build, not read as the next frame is built (docs/retained.md, the model's 5: acting is a callback).
+/// Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's hand over it).
+/// What a frame read of the press (Ctx::clicked) it reads as before.
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   if id == 0 {
     return
   }
   self.takes_presses(id)
+  let p : CtxPress = { take: f, owner: island_building.val, build: self.build_no }
+  ctx_press_mark(p)
+  ctx_presses[id] = p
   made_presses[id] = f
+  built_used(fn() {
+    match ctx_presses.get(id) {
+      Some(now) if physical_equal(now, p) => ctx_press_mark(p)
+      _ => ()
+    }
+  })
+}
+
+///|
+/// Forward a source control's press to another control. Focus and a callback-backed Activate run at the source's
+/// input; older controls that read Activate in their build receive it at the source's normal clicked frame. A
+/// forwarded input is remembered until that click is taken so it cannot also be queued by the build.
+pub fn Ctx::forward_press(self : Ctx, source : Int, target : Int, action : Action, clicked : Bool) -> Unit {
+  if source == 0 || target == 0 || source == target { return }
+  self.on_press(source, fn() {
+    if action == Focus || (action == Activate && (made_presses.contains(target) || tree_said_ids.contains(target))) {
+      self.forwarded_presses.push(source)
+      self.ask_action(target, action)
+    }
+  })
+  if clicked && !self.forwarded_presses.contains(source) {
+    self.ask_action(target, action)
+  }
 }
 
 ///|

@@ -514,6 +514,17 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
 let generation : Ref[Int] = { val: 0 }
 
 ///|
+// Nested sizing restores this as it returns, like the room on each node. A child can be laid out while an ancestor is
+// only being probed, so it counts as an actual layout only when every enclosing sizing operation does too.
+let performing : Ref[Bool] = Ref(true)
+
+///|
+/// Whether the current sizing operation and its enclosing operations lay out their nodes, rather than probing them.
+pub fn performing_layout() -> Bool {
+  performing.val
+}
+
+///|
 /// Work done so far: sizes computed, sizes found in the cache, leaves
 /// measured. For benchmarks.
 pub let counters : FixedArray[Int] = FixedArray::make(3, 0)
@@ -575,8 +586,9 @@ fn size_node(
   // room_now)
   let room_w = if known(kw) { kw } else { aw }
   let room_h = if known(kh) { kh } else { ah }
-  let (was_in, was_w, was_h) = (node.sizing, node.sizing_w, node.sizing_h)
+  let (was_in, was_perform, was_w, was_h) = (node.sizing, performing.val, node.sizing_w, node.sizing_h)
   node.sizing = true
+  performing.val = was_perform && perform
   node.sizing_w = room_w
   node.sizing_h = room_h
   if perform {
@@ -586,6 +598,7 @@ fn size_node(
   }
   let size = size_node_in(node, kw, kh, aw, ah, cb_w, cb_h, perform, room_w, room_h)
   node.sizing = was_in
+  performing.val = was_perform
   node.sizing_w = was_w
   node.sizing_h = was_h
   size

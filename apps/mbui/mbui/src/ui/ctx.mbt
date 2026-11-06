@@ -389,6 +389,8 @@ pub struct Ctx {
   mut active : Int
   mut focus : Int
   clicked : Array[Int]
+  /// Source presses already forwarded to an immediate callback, kept until the build takes those clicks.
+  forwarded_presses : Array[Int]
   /// what was clicked twice since the last frame, the second within double_click_ms of the first and where it was
   /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
   double_clicked : Array[Int]
@@ -493,6 +495,7 @@ pub struct Ctx {
   /// their rects as last laid out
   laid_reads : Map[Int, ((Double, Double, Double, Double)?, SourceLoc)]
   size_reads : Map[Int, ((Double, Double)?, SourceLoc)]
+  asked_reads : Map[Int, ((Double, Double)?, SourceLoc)]
   place_reads : Map[Int, (String, (Int, Double, Double)?)]
   /// lists' places read as the view built (Ctx::list_info, list_info_as): each list's key, and whether what was made
   /// of its place is not what it makes of it now
@@ -509,11 +512,13 @@ pub struct Ctx {
   /// the boxes some words in which showed cut short as last laid out (Ctx::shows_cut), by id
   cut_ids : Map[Int, Bool]
   laid_watch : Map[Int, Int]
+  asked_watch : Map[Int, Int]
   /// the boxes built `tallest` (Ctx::box), by id: the tallest each has been laid out since it was first built so
   tallest_h : Map[Int, Double]
   /// whether one was built so since the layout last looked at them
   mut tallest_new : Bool
   laid_rects : Map[Int, (Double, Double, Double, Double)]
+  asked_sizes : Map[Int, (Double, Double)]
   /// the boxes whose parts shown across are asked (Ctx::shown_across): when last, and the name of the boxes whose parts
   /// are left out; what the last layout showed across in each
   shown_watch : Map[Int, (Int, String)]
@@ -759,6 +764,7 @@ fn Ctx::new() -> Ctx {
     active: 0,
     focus: 0,
     clicked: [],
+    forwarded_presses: [],
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
     click_at: None,
@@ -817,6 +823,7 @@ fn Ctx::new() -> Ctx {
     read_back_whole: false,
     laid_reads: Map::new(),
     size_reads: Map::new(),
+    asked_reads: Map::new(),
     place_reads: Map::new(),
     info_reads: [],
     row_reads: Map::new(),
@@ -826,9 +833,11 @@ fn Ctx::new() -> Ctx {
     left_reads: Map::new(),
     cut_ids: Map::new(),
     laid_watch: Map::new(),
+    asked_watch: Map::new(),
     tallest_h: Map::new(),
     tallest_new: false,
     laid_rects: Map::new(),
+    asked_sizes: Map::new(),
     shown_watch: Map::new(),
     shown_spans: Map::new(),
     nav_rest: -1.0,
@@ -1000,6 +1009,8 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.press_on.shrink_to_fit()
   self.clicked.clear()
   self.clicked.shrink_to_fit()
+  self.forwarded_presses.clear()
+  self.forwarded_presses.shrink_to_fit()
   self.double_clicked.clear()
   self.double_clicked.shrink_to_fit()
   self.press_chain.clear()
@@ -1015,6 +1026,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.periodic.shrink_to_fit()
   self.laid_reads.clear()
   self.size_reads.clear()
+  self.asked_reads.clear()
   self.place_reads.clear()
   self.info_reads.clear()
   self.info_reads.shrink_to_fit()
@@ -1025,8 +1037,10 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.left_reads.clear()
   self.cut_ids.clear()
   self.laid_watch.clear()
+  self.asked_watch.clear()
   self.tallest_h.clear()
   self.laid_rects.clear()
+  self.asked_sizes.clear()
   self.shown_watch.clear()
   self.shown_spans.clear()
   self.covers.clear()

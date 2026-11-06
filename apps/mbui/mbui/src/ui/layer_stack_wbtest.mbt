@@ -210,6 +210,87 @@ test "old 甲 at 1 with its menu open in it, the tree's 乙 at 2: 乙 over 甲's
 }
 
 ///|
+test "a tree press only dismisses old layers at or above the target's stack" {
+  for (close_on_down, old_above) in [(false, false), (true, false), (false, true)] {
+    let shown = @signals.signal(true)
+    let pressed = Ref(0)
+    let dismissed : Array[String] = []
+    let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+    t.check_looks(false)
+    set_view_app(fn(root) {
+      old(root, fn(c) {
+        c.stacked(1, fn() {
+          c.with_dismissed(fn(_) { dismissed.push("lower") }, fn() {
+            c.overlay("lower", modal=true, fn() {
+              c.box(w=Px(80.0), h=Px(80.0), fn() {  }) |> ignore
+            }) |> ignore
+          })
+        })
+        if old_above {
+          c.stacked(3, fn() {
+            c.with_dismissed(fn(_) { dismissed.push("upper") }, fn() {
+              c.overlay("upper", fn() {
+                c.box(w=Px(80.0), h=Px(80.0), fn() {  }) |> ignore
+              }) |> ignore
+            })
+          })
+        }
+      }).grow(Is(1.0)) |> ignore
+      root.show(fn() { shown.get() }, fn(n) {
+        n.over(Is(true)).stacked(Is(2)).offset(Is((240.0, 200.0)))
+        .width(Is(Some(100.0))).height(Is(Some(70.0))).presses(Is(true)) |> ignore
+        if close_on_down {
+          n.on_drag(fn(d) { if d.kind == Down { shown.set(false) } }) |> ignore
+        } else {
+          n.on_press(fn() { pressed.val += 1 }) |> ignore
+        }
+      })
+    })
+    t.draw()
+    t.draw()
+    t.touch_raw(0, 1, 290.0, 230.0, t.time())
+    assert_eq(dismissed, if old_above { ["upper"] } else { [] },
+      msg="outside dismissals at Down, close=\{close_on_down} old_above=\{old_above}")
+    t.touch_raw(2, 1, 290.0, 230.0, t.time())
+    assert_eq(pressed.val, if close_on_down { 0 } else { 1 })
+    t.draw()
+    assert_false(dismissed.contains("lower"))
+  }
+}
+
+///|
+test "a window-down reaction removing the tree target does not pass the press to lower layers" {
+  let shown = @signals.signal(true)
+  let dismissed = Ref(0)
+  let pressed = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      c.stacked(1, fn() {
+        c.with_dismissed(fn(_) { dismissed.val += 1 }, fn() {
+          c.overlay("menu", fn() { c.box(w=Px(80.0), h=Px(80.0), fn() {  }) |> ignore }) |> ignore
+        })
+      })
+    }).grow(Is(1.0)) |> ignore
+    root.box(fn(n) {
+      n.over(Is(true)).stacked(Is(0)).offset(Is((240.0, 200.0)))
+      .width(Is(Some(100.0))).height(Is(Some(70.0))).on_press(fn() { pressed.val += 1 }) |> ignore
+    }) |> ignore
+    root.show(fn() { shown.get() }, fn(n) {
+      n.over(Is(true)).stacked(Is(2)).offset(Is((240.0, 200.0)))
+      .width(Is(Some(100.0))).height(Is(Some(70.0))).on_press(fn() {  }) |> ignore
+      n.reacts(fn() { n.window_downs() }, fn(count) { if count > 0 { shown.set(false) } })
+    })
+  })
+  t.draw()
+  t.draw()
+  t.touch_raw(0, 1, 290.0, 230.0, t.time())
+  t.touch_raw(2, 1, 290.0, 230.0, t.time())
+  assert_eq((shown.get(), dismissed.val, pressed.val), (false, 0, 0))
+}
+
+///|
 test "drawn in the stack's order: old 甲 at 1, the tree's 乙 at 2, old 丙 at 3; the tree's 甲 at 1, old 乙 at 2" {
   let colours = fn(layers : Array[(String, Int, Bool)]) {
     let (t, _) = stack_tester(layers)

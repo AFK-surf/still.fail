@@ -17,8 +17,8 @@ pub fn label(
   let t = c.theme()
   let id = if for_id == 0 { 0 } else { c.id("\u{2}label/" + text) }
   let r = c.interact(id, focusable=false)
-  if r.clicked && for_id != 0 {
-    c.ask_action(for_id, if field { Focus } else { Activate })
+  if for_id != 0 {
+    c.forward_press(id, for_id, if field { Focus } else { Activate }, r.clicked)
   }
   c.box(id~, fn() {
     c.text(text, size=size.unwrap_or(t.font), weight~, color=color.unwrap_or(t.fg), wrap=false) |> ignore

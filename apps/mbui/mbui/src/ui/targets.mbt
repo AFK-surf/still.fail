@@ -246,6 +246,37 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
 }
 
 ///|
+/// An input can arrive after a projection changed but before a frame. Find the old frame's targets at the new places,
+/// including newly visible and clipped targets, and publish them before routing that input. No view is rebuilt.
+fn Ctx::projected_input(self : Ctx, tree : @view.Tree) -> Unit {
+  self.moved_projections(tree)
+  if !projection_hits_dirty.val { return }
+  self.next_hit_ids.clear()
+  self.next_hit_rects.clear()
+  self.next_hit_clips.clear()
+  self.next_hit_ends.clear()
+  self.next_hit_marks.clear()
+  self.next_points.clear()
+  self.next_passes.clear()
+  self.next_point_hits.clear()
+  self.next_scroll_ids.clear()
+  self.next_scroll_rects.clear()
+  self.next_bars.clear()
+  self.across_seen.clear()
+  self.passing = 0
+  let said = dr.targets_said
+  dr.targets_said = false
+  self.targets_found(paint_base.root, tree) |> ignore
+  dr.targets_said = said
+  self.publish_targets()
+  yields_published(self)
+  anchors_published(self)
+  self.sync_ime()
+  // The frame's own target watch and cached arrays describe the last paint, not this event's targets.
+  targets_kept.found = false
+}
+
+///|
 /// What scrolls or stops the wheel in `n` (cut to the clip cx0 cy0 cx1 cy1, where it is laid out): what the wheel and a
 /// finger find there (the frame's scroll targets).
 fn Ctx::scroll_target(self : Ctx, n : Node, cx0 : Double, cy0 : Double, cx1 : Double, cy1 : Double) -> Unit {

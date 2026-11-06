@@ -1623,7 +1623,9 @@ fn scene_alone_due() -> Array[@view.NodeId] {
 fn scene_alone_may() -> Bool {
   // (what was let go drawn in a layer kept: that one drawn again without it, marked; one drawn in none, the old frame
   // paints the frame)
-  scene.alone_why = if scene.removed_unkept > 0 {
+  scene.alone_why = if projection_paint_dirty.val {
+    "an old surface follows a retained projection"
+  } else if scene.removed_unkept > 0 {
     "\{scene.removed_unkept} let go of what no layer kept"
   } else if old_placed_said() != old_painted_at.val {
     // (an old view laid out elsewhere than the old frame last painted it (what grew above it in the tree moved it):

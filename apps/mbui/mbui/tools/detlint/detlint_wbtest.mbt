@@ -1293,6 +1293,35 @@ test "build-effect: inputs it knows by shape" {
 }
 
 ///|
+test "build-effect: old input callbacks, forwarding and tracked work" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      "fn forwarded(c : @ui.Ctx, go : () -> Unit) -> Unit { c.on_press(1, go) }\n" +
+      "fn mixed(c : @ui.Ctx, go : () -> Unit) -> Unit { c.on_press(1, go); go() }\n" +
+      "fn view(c : @ui.Ctx, v : @view.View, fake : @other.Ctx, src : Source) -> Unit {\n" +
+      "  c.on_press(1, fn() { (src.call)(\"direct\") })\n" +
+      "  forwarded(c, fn() { (src.call)(\"forwarded\") })\n" +
+      "  mixed(c, fn() { (src.call)(\"mixed\") })\n" +
+      "  c.on_press(2, fn() { v.width(By(fn() { (src.call)(\"binding\"); None })) })\n" +
+      "  c.on_press(3, fn() { v.layout_box(Is(()), fn(_, _) { (src.call)(\"layout\") }) })\n" +
+      "  c.on_press(4, fn() { v.reacts(fn() { (src.call)(\"read\"); 0 }, fn(_) { () }) })\n" +
+      "  c.on_press(6, fn() { fake.layout_box(Is(()), fn(_, _) { (src.call)(\"unknown layout\") }) })\n" +
+      "  fake.on_press(5, fn() { (src.call)(\"fake\") })\n" +
+      "  c.box(fn() { (src.call)(\"build\") })\n" +
+      "}\n" +
+      "fn shadow(c : @ui.Ctx, fake : @other.Ctx, src : Source) -> Unit {\n" +
+      "  let c = fake\n" +
+      "  c.on_press(1, fn() { (src.call)(\"shadow\") })\n" +
+      "}\n",
+    ),
+  ]
+  // A direct Ctx handler and one handed to it whole run on input. A helper that also calls it during build, tracked
+  // work made by an input, an unrelated same-named method, a build and a shadowed receiver remain findings.
+  assert_eq(lines(found(files, "build-effect", 8)), [6, 7, 8, 9, 10, 11, 12, 16])
+}
+
+///|
 test "build-effect: what a presenter keeps runs later, and so does what is handed on to one" {
   let files = [
     (
@@ -1913,6 +1942,18 @@ test "follow-layout" {
 }
 
 ///|
+test "follow-layout counts an unconstrained old layout measurement" {
+  let fs = found(
+    [("src/app/sheet.mbt", "fn sheet(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n" +
+      "  let h = c.laid_asked_size(1).unwrap().1\n" +
+      "  a.follow(h, @motion.tween(260.0))\n}\n")],
+    "follow-layout",
+    1,
+  )
+  assert_eq(lines(fs), [3])
+}
+
+///|
 test "motion-spring" {
   // the app's own springs, by @motion's and a Ctx's; its presets, a test's and the framework's not counted
   let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))
@@ -2034,4 +2075,56 @@ test "layout-read-back" {
     cfg~,
   )
   assert_eq(lines(fs), [2, 3, 4, 6, 7, 8])
+}
+
+///|
+test "layout-read-back counts an unconstrained old layout measurement" {
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      ("src/app/sheet.mbt", "fn sheet(c : @ui.Ctx) -> Unit {\n  c.laid_asked_size(1) |> ignore\n}\n"),
+      ("src/app/sheet_wbtest.mbt", "test \"t\" {\n  t.ctx().laid_asked_size(1) |> ignore\n}\n"),
+      ("src/ui/sheet.mbt", "fn sheet(c : Ctx) -> Unit {\n  c.laid_asked_size(1) |> ignore\n}\n"),
+    ],
+    "layout-read-back",
+    1,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2])
+}
+
+///|
+test "layout-read-back allows an event's size, but not a binding made by an event" {
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/sheet.mbt",
+        "fn sheet(v : @view.View, c : @ui.Ctx, fake : @other.View) -> Unit {\n" +
+        "  v.on_press(fn() { let h = v.laid_size().1 })\n" +
+        "  v.show(open, leave_by=fn(_) { v.laid_size().1 }, fn(_) { () })\n" +
+        "  v.on_drag(fn(_) { v.laid_size() |> ignore })\n" +
+        "  v.event_action(fn() { v.laid_size() |> ignore })\n" +
+        "  v.on_press(fn() { v.height(By(fn() { Some(v.laid_size().1) })) })\n" +
+        "  v.event_action(fn() { v.height(By(fn() { Some(v.laid_size().1) })) })\n" +
+        "  v.height(By(fn() { v.event_action(fn() { v.laid_size() |> ignore }); None }))\n" +
+        "  v.layout_box(Is(()), fn(_, _) { v.event_action(fn() { v.laid_size() |> ignore }) })\n" +
+        "  v.layout_box(Is(()), fn(_, _) { v.owns(fn() { v.event_action(fn() { v.laid_size() |> ignore }) }) })\n" +
+        "  @signals.deliver_input(fn() { () })\n" +
+        "  v.on_press(fn() { v.reacts(fn() { v.owed_laid_size() }, fn(_) { () }) })\n" +
+        "  v.reacts(fn() { v.owed_laid_size() }, fn(_) { () })\n" +
+        "  v.on_press(fn() { c.laid_size(id) |> ignore })\n" +
+        "  fake.on_press(fn() { fake.laid_size() |> ignore })\n" +
+        "  fake.event_action(fn() { fake.laid_size() |> ignore })\n" +
+        "  v.after_event_action(fn() { v.laid_size() |> ignore })\n" +
+        "  v.height(By(fn() { v.after_event_action(fn() { v.laid_size() |> ignore }); None }))\n" +
+        "  v.host_offset(tree) |> ignore\n" +
+        "}\n",
+      ),
+    ],
+    "layout-read-back",
+    12,
+    cfg~,
+  )
+  assert_eq(lines(fs), [6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 18, 19])
 }

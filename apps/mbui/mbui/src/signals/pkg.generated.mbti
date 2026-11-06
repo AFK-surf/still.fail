@@ -34,6 +34,8 @@ pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
 
 pub fn count_changes(Bool) -> Unit
 
+pub fn deliver_input(() -> Unit) -> Unit
+
 #callsite(autofill(loc))
 pub fn effect(() -> Unit, loc~ : SourceLoc) -> () -> Unit
 
@@ -77,6 +79,8 @@ pub fn[T] signal(T, same? : (T, T) -> Bool) -> Signal[T]
 pub fn start_batch() -> Unit
 
 pub fn trigger(() -> Unit) -> Unit
+
+pub fn tracking_underway() -> Bool
 
 pub fn[T] untracked(() -> T) -> T
 

@@ -123,6 +123,8 @@ pub fn reset_globals() -> Unit {
   run.batch_depth = 0
   run.batch_changed = false
   run.active_sub = None
+  run.hidden_readers = 0
+  run.input_readers = None
   run.owner = None
   run.asked_for = None
   run.flushing = 0

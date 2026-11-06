@@ -131,6 +131,96 @@ fn last_name(name : String) -> String {
 }
 
 ///|
+/// Whether the simple receiver is explicitly typed as the requested package's type. Unknown or shadowed receivers
+/// stay counted: event exceptions must not be guessed from a method or a type's short name.
+fn typed_receiver(f : MbtFile, c : Call, pkg : String, typ : String) -> Bool {
+  let toks = f.toks
+  let receiver = c.at - 2
+  if c.kind != "method" || receiver < 0 || toks[receiver].kind != "ident" {
+    return false
+  }
+  let name = toks[receiver].text
+  let lo = if c.item >= 0 { f.items[c.item].start } else { 0 }
+  for j = receiver - 1; j >= lo; j = j - 1 {
+    if toks[j].kind == "ident" && toks[j].text == name && j + 4 < toks.length() &&
+      toks[j + 1].text == ":" && (j == 0 || toks[j - 1].text != ".") {
+      return toks[j + 2].text == pkg && toks[j + 3].text == "." && toks[j + 4].text == typ
+    }
+    if toks[j].kind == "ident" && toks[j].text == name && j > 0 &&
+      (toks[j - 1].text == "let" || toks[j - 1].text == "mut") &&
+      j + 1 < toks.length() && toks[j + 1].text == "=" {
+      return false
+    }
+    // An inferred parameter of a nested closure shadows a typed outer variable. Do not attribute its methods to
+    // the outer type merely because both names are spelled alike.
+    if toks[j].kind == "ident" && toks[j].text == name && j > 0 &&
+      (toks[j - 1].text == "(" || toks[j - 1].text == ",") {
+      for p = j - 1; p >= lo; p = p - 1 {
+        if toks[p].text == "(" && toks[p].end >= j && p > 0 && toks[p - 1].text == "fn" {
+          return false
+        }
+      }
+    }
+  }
+  false
+}
+
+///|
+fn event_view_receiver(f : MbtFile, c : Call) -> Bool {
+  typed_receiver(f, c, "@view", "View")
+}
+
+///|
+/// A one-time size read directly in an input or leaving handler is at that event's moment, not a layout binding.
+/// Inspect the innermost closure: an event handler can itself create a binding which must still be counted.
+fn event_layout_read(f : MbtFile, c : Call) -> Bool {
+  if c.name != "laid_size" || !event_view_receiver(f, c) {
+    return false
+  }
+  let toks = f.toks
+  let mut closure = -1
+  for o = c.at - 1; o >= 0; o = o - 1 {
+    if toks[o].kind != "op" || toks[o].text != "{" || toks[o].end < c.at || o == 0 || toks[o - 1].text != ")" {
+      continue
+    }
+    let params = f.open_of(o - 1)
+    if params > 0 && toks[params - 1].text == "fn" {
+      closure = params - 1
+      break
+    }
+  }
+  if closure < 0 {
+    return false
+  }
+  f.calls.iter().any(fn(outer) {
+    if outer.is_def || !event_view_receiver(f, outer) {
+      return false
+    }
+    // Starting an event action from a binding or a layout is still feedback. An actual handler registered in that
+    // binding/layout runs later and is safe (notably a layout child's `owns` cleanup).
+    if (outer.name == "event_action" || outer.name == "after_event_action") && f.calls.iter().any(fn(binding) {
+      (binding.name == "By" || binding.name == "layout_box") &&
+      binding.args.iter().any(fn(arg) { arg.1.contains(outer.at) }) &&
+      !f.calls.iter().any(fn(handler) {
+        handler.at > binding.at && handler.at < outer.at &&
+        (handler.name == "owns" || handler.name == "on_press" || handler.name == "on_drag" ||
+          handler.name == "on_key" || handler.name == "takes_back") &&
+        handler.args.iter().any(fn(arg) { arg.1.contains(outer.at) })
+      })
+    }) {
+      return false
+    }
+    outer.args.iter().any(fn(arg) {
+      let direct = arg.1.length() > 0 && arg.1[0] == closure && arg.1.contains(c.at)
+      direct &&
+      (outer.name == "on_press" || outer.name == "on_drag" || outer.name == "on_key" ||
+        outer.name == "takes_back" || outer.name == "event_action" || outer.name == "after_event_action" ||
+        (outer.name == "show" && arg.0 == Some("leave_by")))
+    })
+  })
+}
+
+///|
 fn lint_mbt(
   f : MbtFile,
   cfg : Config,
@@ -332,7 +422,11 @@ fn lint_mbt(
     }
     // where or how large something was laid out, read back by what builds (a first frame has none, a change lays the
     // frame out twice): said as layout instead; the framework's own not counted
-    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t {
+    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t && !event_layout_read(f, c) {
+      add("layout-read-back", c.at, f.line_text(c.at))
+    }
+    // Only the UI framework delivers a real old-frame input with the enclosing frame watch masked.
+    if c.name == "deliver_input" && c.kind == "pkg" && c.qual == "@signals" && app && !in_t {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
@@ -990,7 +1084,7 @@ fn moving_listed(f : MbtFile, k : Int) -> Bool {
 ///|
 /// What the layout measures, as read by a view: a node's size or place, the window's, the keyboard's.
 let layout_reads : Array[String] = [
-  "measured", "measured_rect", "laid_size", "laid_rect", "laid_out", "rect_of", "node_rect", "drawn_rect",
+  "measured", "measured_rect", "laid_size", "laid_asked_size", "laid_rect", "laid_out", "rect_of", "node_rect", "drawn_rect",
   "drawn_at", "window_size", "ime_inset", "list_place", "list_row_height", "row_height",
 ]
 

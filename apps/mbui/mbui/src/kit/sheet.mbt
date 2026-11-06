@@ -72,6 +72,70 @@ priv struct SheetKept {
   mut shown : Bool
   mut asked : Double
   mut opened : Int
+  /// A drag decided at its input, to report once when the next real frame builds.
+  mut input_dragged : SheetDrag?
+  /// The height selected before a claimed drag, in case the gesture is cancelled.
+  mut drag_start : Double?
+}
+
+///|
+/// Move and settle the old sheet at the drag's actual input time. The callback closes its owner and returns the
+/// stack's raised and sinking distances after that close; no frame's layout is read back into the stack.
+fn sheet_drag_input(
+  c : @ui.Ctx,
+  key : String,
+  s : SheetKept,
+  d : @ui.Drag,
+  input : @ui.DragInput,
+  at : Double,
+  total : Double,
+  target : Double,
+  detents : Array[Double],
+  close_below : Double,
+  close : () -> (Double, Double),
+) -> Unit {
+  if !s.shown || !s.was_open { return }
+  if input is DragCancelled {
+    d.take_move() |> ignore
+    d.take_end() |> ignore
+    s.held = -1.0
+    s.h.go(at, s.drag_start.unwrap_or(target))
+    s.drag_start = None
+    return
+  }
+  let draggable = !detents.is_empty()
+  let (_, dy) = d.take_move()
+  if dy != 0.0 {
+    if s.held < 0.0 { s.drag_start = Some(s.h.target()) }
+    let from = if s.held >= 0.0 { s.held } else { s.h.value(at) }
+    let top = if draggable { total * detents.fold(init=0.0, fn(a, b) { dmax(a, b) }) } else { target }
+    let least = if draggable { sheet_least_h } else { 0.0 }
+    let to = dmax(from - dy, least)
+    if from <= top && to > top { felt_tick(c, key + "/top") }
+    s.held = to
+    s.h.put(stretched(to, top, total - top))
+  }
+  if input != DragEnded || !d.take_end() { return }
+  let h = s.h.value(at)
+  let v = -d.vy * 1000.0
+  s.held = -1.0
+  s.drag_start = None
+  let closes = if draggable { h / total < close_below } else { target - h > 80.0 }
+  if closes {
+    let (raised, sinks) = close()
+    s.h.put(h)
+    s.below.go(at, dmax(h + raised, sinks))
+    s.fade.animate(0.0, scrim_fade(), start_at=at)
+    s.was_open = false
+    s.input_dragged = Some(DraggedClosed)
+  } else if draggable {
+    let f = nearest(detents, h / total)
+    s.h.go(at, f * total, v~)
+    s.input_dragged = Some(DraggedTo(f))
+  } else {
+    s.h.go(at, target, v~)
+    s.input_dragged = Some(DraggedBack)
+  }
 }
 
 ///|
@@ -81,7 +145,9 @@ priv struct SheetKept {
 /// closing it. `raised`: how far over its place it is drawn (up out of the way of another over it); closed so, it
 /// sinks from there, as far as takes it out of sight. `sinks`: closed, how far it sinks at least (with others closing
 /// at once over it, as far as they all do, sinking as one with them). Whether it is open now, whether it is drawn,
-/// what a drag came to.
+/// what a drag came to. `surface` configures the old surface box alone, not its modal scrim: a presenter can have it
+/// follow a retained projection with `Ctx::moved_with_node`. `on_drag_close` opts into deciding moves, detents and
+/// closing at the actual drag input; it closes the owner and returns the stack's `(raised, sinks)` after closing.
 pub fn sheet(
   c : @ui.Ctx,
   key : String,
@@ -98,6 +164,8 @@ pub fn sheet(
   on_escape? : () -> Bool,
   raised? : Double = 0.0,
   sinks? : Double = 0.0,
+  surface? : (@ui.Ctx, Int) -> Unit,
+  on_drag_close? : () -> (Double, Double),
 ) -> Sheet {
   install()
   let th = c.theme()
@@ -117,13 +185,16 @@ pub fn sheet(
         shown: false,
         asked: -1.0,
         opened: -1,
+        input_dragged: None,
+        drag_start: None,
       }
       kit.val.sheets[id] = s
       s
     }
   }
   let mut now = open
-  let mut dragged : SheetDrag? = None
+  let mut dragged : SheetDrag? = s.input_dragged
+  s.input_dragged = None
   // opened: from below at its height; asked another height while open (what it holds laid out another height, the
   // window another): that height at once, as it is laid out (placed by its size, not chased to it)
   if open && !s.was_open {
@@ -248,10 +319,22 @@ pub fn sheet(
         if now && raised <= 0.0 {
           c.presses_to(top_id)
         }
-        c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
+        c.layer(fn() {
+          c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore
+          match on_drag_close {
+            Some(close) => c.on_drag_input(top_id, fn(d, input, at) {
+              sheet_drag_input(c, key, s, d, input, at, total, target, detents, close_below, close)
+            })
+            None => ()
+          }
+        }) |> ignore
         body()
       })
     })
+    match surface {
+      Some(f) => f(c, i)
+      None => ()
+    }
     c.semantics(i, Dialog, label~, modal=true)
     // (where it stands, for what is to stay clear of it: sheet_top)
     @motion.measure(c, i, sheet_measured)

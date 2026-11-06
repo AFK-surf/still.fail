@@ -237,9 +237,11 @@ fn Tree::back_lost_in(self : Tree, at : Int) -> Unit {
 /// A modal layer that leaves what is typed to the field under it that has the focus (a menu a finger
 /// opens beside a field, its input method left in place: kit's dropdown_menu's): the text typed that field's still;
 /// every key, the wheel and every press the layer's and what it holds, as a modal layer's are, none of them the
-/// field's or anything else's under it.
-pub fn View::leaves_typing(self : View) -> View {
+/// field's or anything else's under it. `old_only` keeps the focus under the layer but leaves text only to an old
+/// editor; it matches an old sheet over a retained field, where text cannot reach that field until the sheet closes.
+pub fn View::leaves_typing(self : View, old_only? : Bool = false) -> View {
   guard self.live() is Some(n) else { return self }
   n.leaves_typing = true
+  n.leaves_typing_old_only = old_only
   self
 }

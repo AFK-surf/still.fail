@@ -879,7 +879,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         cn.place is Some(_) ||
         cn.tx != cn.otx ||
         cn.ty != cn.oty ||
-        cn.moved_by is Some(_) {
+        cn.moved_by is Some(_) ||
+        cn.moved_with_node is Some(_) {
         up = 2
       }
       if j < kids.length() {
@@ -1133,8 +1134,22 @@ fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
 /// out (Ctx::moved_place, frame_watch.mbt). `f` gives the same for the same state and time, however often asked.
 pub fn Ctx::moved_by(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
   self.nodes[i].moved_by = Some(f)
+  self.nodes[i].moved_with_node = None
   // (a motion, whatever said it before: Ctx::moved_carries)
   self.nodes[i].moved_carries = false
+}
+
+///|
+/// Carry this old box and its contents by the own offset of `projection`, a node of this window's retained tree.
+/// Its offset can be `Painted` from this layout's geometry. It is resolved after layout for drawing and at each input
+/// before hit testing, not as an old-layout input. A dead or other-window projection leaves the last offset in place.
+pub fn Ctx::moved_with_node(self : Ctx, i : Int, projection : @view.View) -> Unit {
+  let n = self.nodes[i]
+  n.moved_by = None
+  n.moved_with_node = Some(projection)
+  n.moved_carries = false
+  projection_build.val = -1
+  projection_present.val = true
 }
 
 ///|
@@ -1144,6 +1159,7 @@ pub fn Ctx::moved_by(self : Ctx, i : Int, f : (Double, Double) -> (Double, Doubl
 /// for its place, as it took the box placed there, not as a thing on its way.
 fn Ctx::moved_carries(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
   self.nodes[i].moved_by = Some(f)
+  self.nodes[i].moved_with_node = None
   self.nodes[i].moved_carries = true
 }
 
@@ -1200,6 +1216,74 @@ fn Ctx::moved_place(self : Ctx) -> Unit {
           self.moved_shift(i, mx - n.moved_x, my - n.moved_y)
           n.moved_x = mx
           n.moved_y = my
+        }
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+// kept across runs: reset with the window's tree (projection_forget)
+let projection_build : Ref[Int] = Ref(-1)
+
+///|
+// kept across runs: reset with the window's tree (projection_forget)
+let projection_present : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: indices in the current old build (projection_forget)
+let projection_nodes : Array[Int] = []
+
+///|
+// kept across runs: reset after the old frame paints (projection_forget)
+let projection_paint_dirty : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: reset as the targets are published (projection_forget)
+let projection_hits_dirty : Ref[Bool] = Ref(false)
+
+///|
+fn projection_forget() -> Unit {
+  projection_build.val = -1
+  projection_present.val = false
+  projection_nodes.clear()
+  projection_paint_dirty.val = false
+  projection_hits_dirty.val = false
+}
+
+///|
+/// The old subtrees with retained projections, collected once for each build, including kept parts.
+fn Ctx::projection_nodes(self : Ctx) -> Array[Int] {
+  if projection_build.val != self.build_no {
+    projection_nodes.clear()
+    for i in 0..<self.count {
+      if self.nodes[i].moved_with_node is Some(_) { projection_nodes.push(i) }
+    }
+    projection_build.val = self.build_no
+    projection_present.val = !projection_nodes.is_empty()
+  }
+  projection_nodes
+}
+
+///|
+/// Place the old surface subtrees from the retained tree after its layout. Its scrim is not in those subtrees.
+fn Ctx::moved_projections(self : Ctx, tree : @view.Tree) -> Unit {
+  if !projection_present.val { return }
+  for i in self.projection_nodes() {
+    if i >= self.count { continue }
+    let n = self.nodes[i]
+    match n.moved_with_node.bind(fn(v) { v.host_offset(tree) }) {
+      Some((x, y)) => {
+        let mx = self.moved_on_pixels(n, x)
+        let my = self.moved_on_pixels(n, y)
+        if mx != n.moved_x || my != n.moved_y {
+          self.moved_shift(i, mx - n.moved_x, my - n.moved_y)
+          n.moved_x = mx
+          n.moved_y = my
+          scene.old_due = true
+          projection_paint_dirty.val = true
+          projection_hits_dirty.val = true
         }
       }
       None => ()

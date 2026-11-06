@@ -17,6 +17,14 @@ pub(all) enum DragAxis {
 }
 
 ///|
+/// A claimed old drag moved, ended, or was cancelled at the input boundary.
+pub(all) enum DragInput {
+  DragMoved
+  DragEnded
+  DragCancelled
+} derive(Eq, Show, Debug)
+
+///|
 fn DragAxis::same(self : DragAxis, other : DragAxis) -> Bool {
   match (self, other) {
     (Hold, Hold) | (Vertical, Vertical) | (Horizontal, Horizontal) | (Free, Free) => true
@@ -92,6 +100,49 @@ pub fn Ctx::drag_on(
       }
       self.own(id)
     }
+  }
+}
+
+///|
+priv struct CtxDragInput {
+  take : (Drag, DragInput, Double) -> Unit
+  owner : @view.NodeId?
+  mut build : Int
+}
+
+///|
+fn ctx_drag_input_mark(p : CtxDragInput) -> Unit {
+  p.build = g().build_no
+}
+
+///|
+/// Deliver a drag area's claimed moves, release and cancellation at their input time. The callback has the lifetime
+/// of the old build or kept part that says it. As with `on_press`, a build that no longer says the callback lets it go.
+pub fn Ctx::on_drag_input(self : Ctx, id : Int, f : (Drag, DragInput, Double) -> Unit) -> Unit {
+  if id == 0 { return }
+  let p : CtxDragInput = { take: f, owner: island_building.val, build: self.build_no }
+  ctx_drag_input_mark(p)
+  ctx_drag_inputs[id] = p
+  built_used(fn() {
+    match ctx_drag_inputs.get(id) {
+      Some(now) if physical_equal(now, p) => ctx_drag_input_mark(p)
+      _ => ()
+    }
+  })
+}
+
+///|
+fn drag_input(id : Int, input : DragInput) -> Unit {
+  // An old build can cancel another gesture while reconstructing its claim chain. That is not a new input and must
+  // not run an event callback from inside a tracked build or layout.
+  if building.val || laying.val || @signals.tracking_underway() { return }
+  match (ctx_drag_inputs.get(id), drags.get(id)) {
+    (Some(p), Some(d)) => {
+      @signals.start_batch()
+      @signals.untracked(fn() { (p.take)(d, input, view_moment()) })
+      @signals.end_batch()
+    }
+    _ => ()
   }
 }
 
@@ -240,10 +291,12 @@ fn drag_down(id : Int, x : Double, y : Double) -> Bool {
 fn drag_cancel(id : Int) -> Unit {
   match drags.get(id) {
     Some(d) if d.down => {
+      let moving = d.moving
       d.down = false
       d.moving = false
       d.tapped = false
       d.ended = false
+      if moving { drag_input(id, DragCancelled) }
     }
     _ => ()
   }
@@ -271,6 +324,7 @@ fn drag_move(id : Int, x : Double, y : Double) -> Bool {
       }
       d.x = x
       d.y = y
+      if d.moving { drag_input(id, DragMoved) }
       d.moving
     }
     _ => false
@@ -293,6 +347,7 @@ fn drag_up(id : Int, x : Double, y : Double, vx : Double, vy : Double, cancel : 
         d.tapped = !cancel
       }
       d.moving = false
+      if d.ended { drag_input(id, if cancel { DragCancelled } else { DragEnded }) }
     }
     _ => ()
   }

@@ -215,13 +215,24 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 }
 
 ///|
-/// `action` asked of widget `id` by a test or the host's accessibility. Activate runs its press callback in this
-/// event, as a pointer release does; a widget still reading actions in its build sees those in the next frame.
+/// `action` asked of widget `id` by a test or the host's accessibility. An allowed Activate runs a registered press
+/// callback at its input; a widget reading actions in its build sees those in the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
+  self.ask_action_as(id, action, false)
+}
+
+///|
+/// A request from the host's accessibility channel, including one delivered at the start of an old frame.
+fn Ctx::ask_host_action(self : Ctx, id : Int, action : Action) -> Unit {
+  self.ask_action_as(id, action, true)
+}
+
+///|
+fn Ctx::ask_action_as(self : Ctx, id : Int, action : Action, host : Bool) -> Unit {
   // A legacy label may ask for a field built after it. The build's indices are incomplete until published;
   // finish this forward request when this build publishes its complete declaration, before another input can run.
-  // Host requests outside a build still act now and never gain this deferred path.
-  if building.val && action == Focus {
+  // A request from the system accessibility channel is an input even when handed on during a frame.
+  if !host && building.val && action == Focus {
     self.asked_actions.push((id, action))
     return
   }
@@ -233,12 +244,12 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
       // (view_event_said, hand_turns.mbt); inside another's, that one says it as it ends)
       let alone = tree.moment() is None
       let at = view_moment()
-      tree.event(at, fn() { self.asked(id, action) })
+      tree.event(at, fn() { self.asked(id, action, host) })
       if alone {
         turns_said(self, at)
       }
     }
-    None => self.asked(id, action)
+    None => self.asked(id, action, host)
   }
 }
 
@@ -261,7 +272,13 @@ fn Ctx::focus_built(self : Ctx) -> Unit {
 
 ///|
 /// `action` asked of `id`, as things are now (Ctx::ask_action).
-fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
+fn Ctx::asked(self : Ctx, id : Int, action : Action, host : Bool) -> Unit {
+  // A build can synthesize actions from state, so it cannot borrow an input boundary. The host accessibility
+  // channel is a real input even when delivered at the start of a frame under its watch.
+  let input = host || (!frame_running.val && !building.val && !@signals.tracking_underway())
+  // Retained actions execute their callback immediately. A request made by an old build must not run that callback
+  // as an input; in particular, it must not turn a tracked computation into an event-time geometry read.
+  if !input && tree_said_ids.contains(id) { return }
   // The layer that allows this action is the one at the input's moment, including layout omission and return.
   old_input_brought()
   // (a node of the window's tree's: its own, as a press on it is)
@@ -273,17 +290,22 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   if !old_said_allowed(self, id) {
     return
   }
-  // The retained declaration and its current host/layer state are the authority, as for the window tree. A
-  // remembered id alone cannot take focus or revive a hidden, disabled or no longer built control's callback.
-  if (action == Focus || (action == Activate && made_presses.contains(id))) &&
+  // The retained declaration and its current host/layer state are the authority for an immediate callback or focus.
+  // A synthetic build action keeps the legacy asked-action path, including a forward request for a control that has
+  // yet to be declared in this build; it cannot invoke the callback as though it came from an input.
+  if (action == Focus || (input && action == Activate && made_presses.contains(id))) &&
     !self.said_action_allowed(id, action) {
     return
+  }
+  if input {
+    inputs_taken.val = true
+    if host && frame_running.val { frame_inputs_taken.val = true }
   }
   if action == Focus {
     self.focus_moved(id)
     return
   }
-  if action == Activate && made_presses.contains(id) {
+  if input && action == Activate && made_presses.contains(id) {
     self.clicked.push(id)
     made_pressed(id)
     hand_event()

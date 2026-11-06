@@ -1198,6 +1198,7 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
         self.springs.remove(id)
         pagers.remove(id)
         drags.remove(id)
+        ctx_drag_inputs.remove(id)
         code_fields.remove(id)
         if self.focus == id {
           self.focus_moved(0)

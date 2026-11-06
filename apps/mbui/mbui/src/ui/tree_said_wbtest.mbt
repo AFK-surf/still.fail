@@ -507,3 +507,52 @@ fn unnamed_said(how : Int) -> String? {
 test "a dialog called nothing read out by what it holds, built by the old frame, as the tree's nodes or as an old view the tree's dialog hosts: its words, what calls itself by that alone, nothing of what is kept from what is read out" {
   assert_eq((unnamed_said(0), unnamed_said(1), unnamed_said(2)), (Some("甲 乙"), Some("甲 乙"), Some("甲 乙")))
 }
+
+///|
+test "a retained modal layer tells the host which dialog is modal and restores the page as it leaves" {
+  let open = @signals.signal(true)
+  let modal = @signals.signal(true)
+  let inner_modal = @signals.signal(false)
+  let t = Tester::new(fn(_) {  }, w=400.0, h=300.0)
+  t.set_a11y(true)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.says(Is(Some(@view.said(Button, label="Page")))).on_press(fn() {  }) |> ignore
+    }) |> ignore
+    root.show(fn() { open.get() }, leave=200.0, fn(layer) {
+      layer.over(Is(true)).modal(By(fn() { modal.get() })).hides(By(fn() { layer.leaving() })) |> ignore
+      layer.box(fn(wrapper) {
+        wrapper.box(fn(dialog) {
+          dialog.says(Is(Some(@view.said(Dialog, label="Outer")))) |> ignore
+          dialog.box(fn(inner) {
+            inner.modal(By(fn() { inner_modal.get() })).says(Is(Some(@view.said(Dialog, label="Inner")))) |> ignore
+          }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    })
+  })
+  t.draw()
+  assert_true(t.get(Dialog, label="Outer").modal)
+  assert_false(t.get(Dialog, label="Inner").modal)
+  assert_true(t.semantics().iter().find_first(fn(s) { s.label == "Page" }).unwrap().hidden)
+  let host_dialog = t.a11y_said().split("\n").map(fn(line) { line.split("\u{1F}").map(fn(v) { v.to_string() }).to_array() })
+    .find_first(fn(fields) { fields.length() == 16 && fields[3] == "Dialog" && fields[9] == "Outer" })
+  assert_true(host_dialog.unwrap()[4].contains("m"))
+  inner_modal.set(true)
+  t.draw()
+  assert_true(t.get(Dialog, label="Inner").modal)
+  inner_modal.set(false)
+  t.draw()
+  assert_true(t.get(Dialog, label="Outer").modal)
+  modal.set(false)
+  t.draw()
+  assert_false(t.get(Dialog, label="Outer").modal)
+  assert_false(t.get(Button, label="Page").hidden)
+  modal.set(true)
+  t.draw()
+  assert_true(t.get(Dialog, label="Outer").modal)
+  open.set(false)
+  t.draw()
+  assert_false(t.get(Button, label="Page").hidden)
+  assert_true(t.query(Dialog, label="Outer") is None)
+}

@@ -23,6 +23,26 @@
 let view_app : Ref[@view.Tree?] = Ref(None)
 
 ///|
+/// Tree editors covered by a sheet that closed by a state change keep the last old-frame routing until the next
+/// actual frame. Each entry is the sheet's node and its place in the window's stack, as it closed.
+let sheet_typing_before_frame : Array[(@view.NodeId, Int)] = []
+
+///|
+/// Keep (`hold=true`) or retire a sheet's last-frame text barrier until the next actual frame. It only applies to a
+/// retained field under the sheet: old editors and fields above it keep their own routing. A sheet uses this when its
+/// opening was last built in a frame and closes by state, matching an old sheet's last-frame input routing.
+pub fn sheet_typing_until_frame(v : @view.View, hold : Bool) -> Unit {
+  let id = v.id()
+  sheet_typing_before_frame.retain(fn(entry) { entry.0 != id })
+  if hold {
+    match view_app.val {
+      Some(tree) if tree.lives(id) => sheet_typing_before_frame.push((id, tree.stack_of(id)))
+      _ => ()
+    }
+  }
+}
+
+///|
 /// An old view in a node of the tree (`old`): the node, the name its subtree is kept by among the old frame's, what
 /// builds it, and what it is made once as there (made.mbt's made_island: its own watch, built again only as what it read
 /// changes).
@@ -39,6 +59,9 @@ priv struct OldIsland {
   /// its part among the old frame's kept parts (Ctx::part_nodes: what it read, its nodes as last built), by id, once
   /// built (-1: not yet)
   mut part : Int
+  /// A deferred island has no old-frame contents to retain until its build actually runs.
+  built : Ref[Bool]
+  defer_unbuilt_on_exit : Bool
   /// how big its node is placed, as the old frame builds it: its room (Ctx::width, height, what it is built for) and
   /// part of its key (built again for another)
   room : Ref[(Double, Double)]
@@ -74,6 +97,19 @@ let old_islands : Array[OldIsland] = []
 ///|
 // kept across runs: put back as a run begins (view_forget)
 let old_made : Ref[Int] = Ref(0)
+
+///|
+/// Old views under a transient layer can defer their first build while it leaves. Lenders are let go with their nodes.
+// kept across runs: lenders belong to their nodes and are released with them
+let old_defer_unbuilt : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// An old view held by `v` that has not yet been built is not built for the first time while it or a holder leaves.
+/// One built before leaving keeps its contents during the exit. If it comes back before that first build, it builds
+/// normally. Use for a transient layer whose old content should have the old presenter's first-frame lifetime.
+pub fn old_defer_unbuilt_on_exit(v : @view.View) -> @view.View {
+  v.lends(old_defer_unbuilt, true)
+}
 
 ///|
 /// Where each old view was placed as the frame began: its node, where it is drawn (x, y: Tree::projected's, what moves
@@ -367,10 +403,12 @@ pub fn view_painted() -> ViewPaintWork {
 fn view_forget() -> Unit {
   // A replacement tree can change who may type even if the numeric focus stays the same during an event.
   view_modals_version.val += 1
+  sheet_typing_before_frame.clear()
   view_read_tells.clear()
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
+  projection_forget()
   // (each field of the tree's its editor no longer: tree_field_gone, as its node is let go)
   for id in tree_fields.keys().collect() {
     tree_field_gone(id)
@@ -701,6 +739,7 @@ fn view_brought(tree : @view.Tree) -> Unit {
   // (a press's room at least, by how the app is pointed at: what is drawn smaller reached from round it)
   tree.set_press_least(room_least())
   @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
+  g().moved_projections(tree)
   view_changes_taken(tree)
   old_place(tree)
 }
@@ -762,7 +801,8 @@ fn old_place(tree : @view.Tree) -> Unit {
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
   // (the old views alone, each found where the scene has it: the tree not gone through for them, Tree::drawn_each)
-  for d in tree.drawn_each(old_islands.map(fn(o) { o.id })) {
+  let ready = old_islands.filter(fn(o) { !o.defer_unbuilt_on_exit || o.built.val || !tree.leaving(o.id) })
+  for d in tree.drawn_each(ready.map(fn(o) { o.id })) {
     let (c, x, y, a, s, ux, uy) = d
     if c.hosted {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
@@ -984,6 +1024,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if tree.told_since() && !scene_checking() {
     view_brought(tree)
   }
+  self.moved_projections(tree)
   // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
   // drawn (Ctx::view_targets); what a still pointer is over told as they say, the tree brought so: drawn as it is now)
   let layers_from = self.view_targets(root, tree)
@@ -2643,12 +2684,19 @@ fn Ctx::focus_allowed(self : Ctx) -> Int {
 /// the topmost modal layer of the tree's leaves what is typed to (View::leaves_typing: a menu a finger
 /// opened beside it), its keys none the less the layer's (view_key).
 fn Ctx::typing_allowed(self : Ctx) -> Int {
+  match (tree_said_ids.get(self.focus), view_app.val) {
+    (Some(id), Some(tree)) if self.editors.contains(self.focus) &&
+      sheet_typing_before_frame.iter().any(fn(entry) {
+        tree.stack_of(id) <= entry.1 && !tree.holds(entry.0, id)
+      }) => return 0
+    _ => ()
+  }
   let focus = self.focus_allowed()
   if focus != 0 || !self.editors.contains(self.focus) {
     return focus
   }
   match view_app.val {
-    Some(tree) if @signals.untracked(fn() { tree.typing_left_under() }) => self.focus
+    Some(tree) if @signals.untracked(fn() { tree.typing_left_under(retained=tree_said_ids.contains(self.focus)) }) => self.focus
     _ => 0
   }
 }
@@ -2675,6 +2723,7 @@ fn view_wheel(
   }
   let at = view_moment()
   tree.bring_to(at)
+  g().projected_input(tree)
   old_hits_place(g(), Some(tree))
   if old_root_hit(g(), x, y, pressed=false) {
     return false
@@ -2777,18 +2826,21 @@ fn view_old_moved(x : Double, y : Double) -> Unit {
 /// node that does something when pressed, it is that node's (held till it is let go, and let go on it with the primary
 /// button, pressed; called off, nothing); down where the old view is, the old view's (held so, its own to call off);
 /// down elsewhere, nothing's. A move with nothing held goes to the old view where it is over it. True where the old
-/// view is to see none of it.
-fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
+/// view is to see none of it, with the Down target's stack as it was before the event was delivered (-2 if not Down).
+fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> (Bool, Int) {
   let tree = match view_app.val {
     Some(t) => t
-    None => return false
+    None => return (false, -2)
   }
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
   tree.bring_to(at)
   let held_tip = passive_hold_before(kind, x, y)
+  g().projected_input(tree)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
+  // Keep the target's stack before delivering Down: its handler can close or replace the layer that took it.
+  let down_stack = if kind == 0 { tree.stack_takes(x, y) } else { -2 }
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
     // Resolve its logical owner before outside-press reactions can close a panel and its hosted portals.
@@ -3148,7 +3200,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       select_none()
     }
   }
-  took
+  (took, down_stack)
 }
 
 ///|
@@ -3254,6 +3306,8 @@ pub fn old(
     old_made.val = old_made.val + 1
     let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
     let fit_probe = Ref(true)
+    let built = Ref(false)
+    let defer_unbuilt_on_exit = n.lent(old_defer_unbuilt).unwrap_or(false)
     let id = n.id()
     // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
@@ -3278,6 +3332,7 @@ pub fn old(
     n.faults_to(fn(said) { faulted.set(Some(said)) }) |> ignore
     // (what it builds marked with it, for what takes input to ask whether it may: island_allows)
     let held_build = fn(c : Ctx) {
+      built.val = true
       let was = island_building.val
       island_building.val = Some(id)
       match faulted.get() {
@@ -3306,6 +3361,8 @@ pub fn old(
       owner: owner.val,
       watch: watch.val.unwrap(),
       part: -1,
+      built,
+      defer_unbuilt_on_exit,
       room,
       natural: natural_h,
       gives: natural && gives,
@@ -3321,6 +3378,7 @@ pub fn old(
       held_box: -1,
     })
     n.owns(fn() {
+      ctx_presses_owner_gone(id)
       // (its fields let go with it, at this moment: island_fields_let_go)
       island_fields_let_go(id)
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -4113,6 +4171,7 @@ fn old_input_brought() -> Unit {
         Some(_) => tree.laid_as_now()
         None => tree.bring_to(view_moment())
       }
+      g().projected_input(tree)
       old_hits_place(g(), Some(tree))
     }
     None => ()
@@ -4979,7 +5038,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
           selected: s.selected,
           pressed: s.pressed,
           disabled: sn.disabled,
-          modal: false,
+          modal: sn.modal,
           range: s.range,
           actions,
           rect: sn.rect,
@@ -5216,6 +5275,7 @@ fn old_content_overflows(c : Ctx, root : Int, x : Double, y : Double, w : Double
 /// What it holds is built again only as what it read changes, never for its height (made_island's key: its width).
 fn old_natural_after_layout(c : Ctx) -> Unit {
   for o in old_islands {
+    let mut host_size_changed = false
     match o.natural {
       Some(s) if o.held_box >= 0 && o.held_box < c.count => {
         // (one that gives way: as tall as what it holds is laid out with no bound on its height, not the height it was
@@ -5223,6 +5283,7 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
         if @signals.untracked(fn() { s.get() }) != Some(h) {
           s.set(Some(h))
+          host_size_changed = true
           c.read_changed("an old view's height, what it holds laid out")
         }
         match o.fits {
@@ -5234,6 +5295,7 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
               let w = c.nodes[o.held_box].fw
               if @signals.untracked(fn() { f.get() }) != Some(w) {
                 f.set(Some(w))
+                host_size_changed = true
                 c.read_changed("an old view's width, what it holds laid out")
               }
               if o.fit_probe.val {
@@ -5247,6 +5309,9 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
       }
       _ => ()
     }
+    // The host is still placed at its previous size in this pass. The next readback pass places it with the new
+    // natural size; deciding its clip against the old size would publish a temporary overflow and build twice more.
+    if host_size_changed { continue }
     // (the host clips only when the content, as laid out, exceeds it; shadows may extend without being cut)
     let overflow = match (old_boxes.get(o.id), old_placed.iter().find_first(fn(p) { p.0 == o.id })) {
       (Some(box), Some((_, _, _, w, h, _, _, _, _))) if box >= 0 && box < c.count => {

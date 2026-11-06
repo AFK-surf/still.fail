@@ -411,6 +411,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
     c.clicked.clear()
+    c.forwarded_presses.clear()
     c.double_clicked.clear()
     c.click_at = None
     c.tapped = None
@@ -502,6 +503,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   paint_clock_at.val = ""
   // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
   c.moved_place()
+  if projection_paint_dirty.val { scene.old_due = true }
   c.ninst = 0
   match fake.val {
     Some(f) => f.frame_failed_images.clear()
@@ -530,6 +532,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
   c.view_paint(root)
+  projection_paint_dirty.val = false
   let tree_end = c.ninst
   // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
   // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
@@ -580,9 +583,45 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
   c.back_told_host()
-  let hi = c.hit_ids
   // (the targets as this frame drew them: what a layer dismissed since the last drew is out of them as it was let go)
   layer_retired_ids.clear()
+  c.publish_targets()
+  // (what said its presses are another's, under a Tester: that one takes them there)
+  c.check_press_owners()
+  // (its targets published whole: what nodes yield to of them told, view_host.mbt)
+  yields_published(c)
+  // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
+  anchors_published(c)
+  // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
+  // alone, it stands)
+  if !alone {
+    c.layers_frame_end()
+    c.focus_frame_end()
+  }
+  c.desk_frame_end()
+  // (the hand as this frame left it, what it drew published, at its clock: hand_turns.mbt)
+  turns_said(c, c.clock, frame=true)
+  // (what takes a field's keys the frame no longer said so of, let go: Ctx::on_key)
+  keys_taken_built()
+  // (and old-build press callbacks no longer said or kept: Ctx::on_press)
+  ctx_presses_built()
+  c.bars_frame_end()
+  // A sheet closed as this frame was built also releases the last-frame typing barrier in this frame.
+  sheet_typing_before_frame.clear()
+  c.sync_ime()
+  c.sync_text_menu()
+  c.sync_edit_can()
+  match frame_hook.val {
+    Some(f) if !looks_rebuilt.val => f()
+    _ => ()
+  }
+  paint_phase.val = 2
+}
+
+///|
+/// Publish the targets just found, whether by a frame or by a projection brought to an input.
+fn Ctx::publish_targets(c : Ctx) -> Unit {
+  let hi = c.hit_ids
   c.hit_ids = c.next_hit_ids
   c.next_hit_ids = hi
   let hr = c.hit_rects
@@ -614,32 +653,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_bars = bs
   // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
   old_hits_framed(c)
-  // (what said its presses are another's, under a Tester: that one takes them there)
-  c.check_press_owners()
-  // (its targets published whole: what nodes yield to of them told, view_host.mbt)
-  yields_published(c)
-  // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
-  anchors_published(c)
-  // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
-  // alone, it stands)
-  if !alone {
-    c.layers_frame_end()
-    c.focus_frame_end()
-  }
-  c.desk_frame_end()
-  // (the hand as this frame left it, what it drew published, at its clock: hand_turns.mbt)
-  turns_said(c, c.clock, frame=true)
-  // (what takes a field's keys the frame no longer said so of, let go: Ctx::on_key)
-  keys_taken_built()
-  c.bars_frame_end()
-  c.sync_ime()
-  c.sync_text_menu()
-  c.sync_edit_can()
-  match frame_hook.val {
-    Some(f) if !looks_rebuilt.val => f()
-    _ => ()
-  }
-  paint_phase.val = 2
+  projection_hits_dirty.val = false
 }
 
 ///|
@@ -891,17 +905,21 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   view_point_said(kind, x, y)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
-  if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
+  let (tree_took, down_stack) = if kind <= 3 || view_holds() {
+    view_pointer(kind, x, y, button)
+  } else {
+    (false, -2)
+  }
+  if tree_took {
     view_pointed()
     input_taped("pointer", h_event_time(), args)
     host_tree_input("pointer", h_event_time(), args)
-    // (a press the window's tree took is outside every layer of the old frame's: what it dismisses so, at its moment,
-    // as one the old frame takes is: overlay.mbt)
+    // A tree press is outside old layers above or at its target's stack, but not layers under it.
     if kind == 0 {
       let c = g()
       c.press_down = Some((x, y))
       c.press_down_tree = true
-      c.layer_keys_now()
+      c.layer_keys_now(tree_stack=down_stack)
     }
   } else {
     // (what it changes, as it is taken, its own, till the event it came as is over: frame_watch.mbt's

@@ -49,6 +49,24 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
 }
 
 ///|
+/// Box `id`'s laid-out width and the height it asks for at that width without a height constraint. Like `laid_size`,
+/// this is read back as a build input; a changed answer rebuilds before drawing. Unlike `laid_size`, a child that
+/// gives way to the height it is given is measured at the height it asks for. This does not change the placed layout.
+#callsite(autofill(loc))
+pub fn Ctx::laid_asked_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double)? {
+  let v = self.asked_sizes.get(id)
+  if building.val {
+    layout_read("laid_asked_size at \{loc}")
+    self.asked_watch[id] = self.frame_no
+    if !self.asked_reads.contains(id) {
+      self.asked_reads[id] = (v, loc)
+    }
+    row_read_laid(AskedSize(id, v, loc))
+  }
+  v
+}
+
+///|
 /// Whether box `id` was left out of its row as this frame lays it out (Ctx::box `drop`: the row had not the room for
 /// it), for the row's ⋯ to offer what it left out: read back, laid out otherwise this frame, the frame is built again.
 /// False before it is first laid out, and for one no row may leave out.
@@ -231,6 +249,20 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       }
     }
   }
+  if !self.asked_watch.is_empty() {
+    let gone = []
+    self.asked_watch.each(fn(id, at) { if at < self.frame_no { gone.push(id) } })
+    for id in gone {
+      self.asked_watch.remove(id)
+      self.asked_sizes.remove(id)
+    }
+    for i in 0..<self.count {
+      let n = self.nodes[i]
+      if n.id != 0 && self.asked_watch.contains(n.id) {
+        self.asked_sizes[n.id] = (n.fw, self.asked_height(i))
+      }
+    }
+  }
   // what the boxes asked show across (Ctx::shown_across), those no frame before this asked let go
   if !self.shown_watch.is_empty() {
     let gone = []
@@ -279,6 +311,11 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       moved.push("laid_size of box \{id}, read at \{r.1}")
     }
   })
+  self.asked_reads.each(fn(id, r) {
+    if self.asked_sizes.get(id) != r.0 {
+      moved.push("laid_asked_size of box \{id}, read at \{r.1}")
+    }
+  })
   self.place_reads.each(fn(id, r) {
     if self.list_place_of(id) != r.1 {
       moved.push("list_place \"\{r.0}\"")
@@ -306,6 +343,7 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
   })
   self.laid_reads.clear()
   self.size_reads.clear()
+  self.asked_reads.clear()
   self.place_reads.clear()
   self.info_reads.clear()
   self.row_reads.clear()

@@ -695,6 +695,8 @@ struct Node {
   /// told as either starts or ends
   mut left_at : Double
   mut span : Double
+  /// A later end requested for a leaving node without changing the progress of its original way.
+  mut keep_until : Double
   mut back_at : Double
   mut back_from : Double
   mut going : @signals.Signal[Int]?
@@ -710,6 +712,8 @@ struct Node {
   /// as a modal layer, what is typed still the field of an old view under it that has the focus as it comes over it
   /// (View::leaves_typing)
   mut leaves_typing : Bool
+  /// it leaves text to an old editor alone, while keeping a retained editor's focus without sending it text
+  mut leaves_typing_old_only : Bool
   /// it, and what it holds, are over all else of the window while this holds (View::over_all)
   mut over_all : Bool
   /// drawn, with what it holds, over the scrim of a modal layer of the old frame's up (View::over_scrim)
@@ -845,6 +849,8 @@ pub struct Tree {
   mut boxes_deferred : BoxesBatch?
   /// Flex may call back into the tree. Removals in that call must update its child lists immediately.
   mut layouts_active : Int
+  /// A node's own cleanup is running. It may ask for its owner's event after a layout finishes.
+  mut cleanups_active : Int
   mut layout_due : Bool
   /// the node whose own layout (View::layout_box) is running now, building and measuring its children (-1 none)
   mut layout_owner : Int
@@ -1182,6 +1188,7 @@ pub fn Tree::new(
     pulls_marked: [],
     boxes_deferred: None,
     layouts_active: 0,
+    cleanups_active: 0,
     timeline: [],
     told: 0,
     advancing: false,
@@ -1481,6 +1488,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.content = None
       n.left_at = -1.0
       n.span = 0.0
+      n.keep_until = -1.0
       n.back_at = -1.0
       n.back_from = 0.0
       n.going = None
@@ -1489,6 +1497,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.modal = false
       n.back_goes_on = false
       n.leaves_typing = false
+      n.leaves_typing_old_only = false
       n.over_all = false
       n.over_scrim = false
       n.stack = -1
@@ -1611,6 +1620,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         content: None,
         left_at: -1.0,
         span: 0.0,
+        keep_until: -1.0,
         back_at: -1.0,
         back_from: 0.0,
         going: None,
@@ -1619,6 +1629,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         modal: false,
         back_goes_on: false,
         leaves_typing: false,
+        leaves_typing_old_only: false,
         over_all: false,
         over_scrim: false,
         stack: -1,
@@ -1986,6 +1997,15 @@ pub fn View::alive(self : View) -> Bool {
 /// Who it is.
 pub fn View::id(self : View) -> NodeId {
   { at: self.at, gen: self.gen }
+}
+
+///|
+/// This node's own placed offset for the old-view host, after the tree is brought to a frame or input. None if it is
+/// not in that tree, has gone, or is laid out nowhere. The host uses it to carry one old surface with a `Painted`
+/// projection; it is not a layout input.
+pub fn View::host_offset(self : View, tree : Tree) -> (Double, Double)? {
+  guard physical_equal(self.tree, tree) && self.live() is Some(n) && !tree.out_at(self.at) else { return None }
+  Some((n.lx - n.flex.left, n.ly - n.flex.top))
 }
 
 ///|
@@ -4239,13 +4259,23 @@ fn Tree::modals_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Whether the topmost modal layer now leaves what is typed to the field under it that has the focus
-/// (View::leaves_typing).
-pub fn Tree::typing_left_under(self : Tree) -> Bool {
-  match self.modal_top() {
-    Some(m) => self.nodes[m.at].leaves_typing
-    None => false
+/// Whether the topmost modal layer leaves what is typed to a focused field under it (View::leaves_typing). `retained`
+/// asks whether it leaves text to a field of this tree rather than an old editor.
+pub fn Tree::typing_left_under(self : Tree, retained? : Bool = false) -> Bool {
+  guard self.modal_top() is Some(top) && self.nodes[top.at].leaves_typing else { return false }
+  if retained {
+    guard self.focused is Some(focus) && self.alive_id(focus) else { return false }
+    // A menu over a sheet may leave typing, but it cannot send text through the sheet into a covered field. A field
+    // inside that sheet is not covered by the sheet itself, and may still take the menu's typing.
+    for at in self.modals {
+      let n = self.nodes[at]
+      if n.live && n.modal && n.leaves_typing_old_only && !self.leaving_at(at) &&
+        self.stack_at(focus.at) <= self.stack_at(at) && !self.holds({ at, gen: n.gen }, focus) {
+        return false
+      }
+    }
   }
+  true
 }
 
 ///|
@@ -5817,6 +5847,34 @@ fn Tree::before_removing(self : Tree, root : View) -> Unit {
 }
 
 ///|
+/// An action at the current cause, committed as one event. This is for a programmatic action which, like a press,
+/// needs a one-time layout measurement for its motion (for example, closing a stack of sheets). It cannot run in a
+/// tracked computation or a layout. If a node's `owns` cleanup asks during a layout, it runs after that layout at
+/// the same cause, while the rest of the window still exists. A callback queued by a disposed tree is dropped.
+pub fn View::event_action(self : View, f : () -> Unit) -> Unit {
+  let tree = self.tree
+  let at = if tree.cause_at >= 0.0 { tree.cause_at } else { tree.time_now() }
+  if tree.layouts_active > 0 {
+    guard tree.cleanups_active > 0 && tree.removing_callbacks == 0 else {
+      abort("an event action cannot be started by layout or a before-removal callback in layout")
+    }
+    @signals.after_flush(fn() {
+      if !tree.gone {
+        guard tree.layouts_active == 0 && !@signals.tracking_underway() else {
+          abort("an event action cannot be started by a tracked computation or layout")
+        }
+        tree.event(at, f)
+      }
+    })
+  } else {
+    guard !@signals.tracking_underway() else {
+      abort("an event action cannot be started by a tracked computation or layout")
+    }
+    if tree.gone { @signals.untracked(f) } else { tree.event(at, f) }
+  }
+}
+
+///|
 /// Capture event-time state before a window resize, while the old window's constraints still apply.
 fn View::capture_before_resize(self : View, f : () -> Unit, finish : () -> Unit, position : Bool) -> Unit {
   guard self.alive() else { return }
@@ -5848,6 +5906,33 @@ fn Tree::has_before_removal(self : Tree, root : View) -> Bool {
     }
   }
   false
+}
+
+///|
+/// An action at this cause after its signal changes and structure changes have all been committed. This is for an
+/// opening action that needs to measure a node the same event just made. It does not wait for a frame. Like
+/// `event_action`, it cannot be started by a tracked computation or layout; an owner's cleanup during layout may ask
+/// for it after layout. A disposed tree does not run the action.
+pub fn View::after_event_action(self : View, f : () -> Unit) -> Unit {
+  let tree = self.tree
+  let at = if tree.cause_at >= 0.0 { tree.cause_at } else { tree.time_now() }
+  if tree.layouts_active > 0 {
+    guard tree.cleanups_active > 0 && tree.removing_callbacks == 0 else {
+      abort("an event action cannot be started by layout or a before-removal callback in layout")
+    }
+  } else {
+    guard !@signals.tracking_underway() else {
+      abort("an event action cannot be started by a tracked computation or layout")
+    }
+  }
+  @signals.after_all_flushed(fn() {
+    if !tree.gone {
+      guard tree.layouts_active == 0 && !@signals.tracking_underway() else {
+        abort("an event action cannot be started by a tracked computation or layout")
+      }
+      tree.event(at, f)
+    }
+  })
 }
 
 ///|
@@ -5919,9 +6004,11 @@ fn View::let_go(self : View) -> Unit {
   }
   let drops = n.drops.values().collect()
   n.drops.clear()
+  self.tree.cleanups_active += 1
   for f in drops {
     f()
   }
+  self.tree.cleanups_active -= 1
   n.on_press = None
   n.on_action = None
   n.top_row = false
@@ -6193,14 +6280,18 @@ fn Tree::kids_marked_at(self : Tree, at : Int, kids_of : Int) -> Unit {
 
 ///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
-pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0) -> Unit {
+/// `leave_by`, when given, says how long it leaves at the cause that closes it, from the node as it is then. For a
+/// way whose length depends on its size (a sheet); `leave` is for one whose length is fixed.
+pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0, leave_by? : (View) -> Double) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot()
   let had : Ref[View?] = Ref(None)
   // (the one leaving, shown again as it leaves: the same node, come back)
   let gone : Ref[View?] = Ref(None)
+  let change = Ref(0)
   let stop = slot.tree.structured(when, fn(on) {
     guard slot.alive() else { return }
+    change.val += 1
     match (on, had.val) {
       (true, None) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
@@ -6215,9 +6306,29 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
       }
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
-        slot.leave(v, leave)
-        had.val = None
-        gone.val = if leave > 0.0 { Some(v) } else { None }
+        let leave_now = fn() {
+          let duration = match leave_by {
+            Some(f) => f(v)
+            None => leave
+          }
+          slot.leave(v, duration)
+          had.val = None
+          gone.val = if duration > 0.0 { Some(v) } else { None }
+        }
+        if slot.tree.layouts_active > 0 && leave_by is Some(_) {
+          // A node can own a presenter while being removed by a layout. Its cleanup closes the presenter during
+          // that same compute, before the rest of the tree has its new sizes. Wait for this layout to finish, then
+          // take the close at the original cause's moment; a later change or removal cancels this pending close.
+          let at = slot.tree.cause_now()
+          let version = change.val
+          @signals.after_flush(fn() {
+            if slot.alive() && v.alive() && change.val == version {
+              slot.tree.event(at, leave_now)
+            }
+          })
+        } else {
+          leave_now()
+        }
       }
       _ => ()
     }
@@ -6421,6 +6532,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   let p = gone_at(n, now)
   n.span = ms
   n.left_at = now - p * ms
+  n.keep_until = -1.0
   n.back_at = -1.0
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
@@ -6441,6 +6553,7 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_from = gone_at(n, now)
   n.back_at = now
   n.left_at = -1.0
+  n.keep_until = -1.0
   told_going(n)
   // (beside its anchor again, where that is now: View::beside)
   if n.beside is Some(_) {
@@ -6481,6 +6594,19 @@ pub fn View::leaves_at(self : View) -> Double {
   } else {
     -1.0
   }
+}
+
+///|
+/// Keep this node, already leaving, until at least `at` on the tree's timeline. A way may be sent further after it
+/// began (a sheet sinking with another); its owner extends its own leaving as it tells that new way.
+pub fn View::leaves_no_earlier_than(self : View, at : Double) -> View {
+  guard self.live() is Some(n) && n.left_at >= 0.0 else { return self }
+  if at > leave_ends(n) {
+    n.keep_until = at
+    self.tree.due_leaving(self.id())
+    self.tree.marked()
+  }
+  self
 }
 
 ///|
@@ -6570,7 +6696,7 @@ fn Tree::leaving_at(self : Tree, at : Int) -> Bool {
 /// When node `n`'s leaving or coming back ends (-1: neither).
 fn leave_ends(n : Node) -> Double {
   if n.left_at >= 0.0 {
-    n.left_at + n.span
+    dmax(n.left_at + n.span, n.keep_until)
   } else if n.back_at >= 0.0 {
     n.back_at + n.back_from * n.span
   } else {

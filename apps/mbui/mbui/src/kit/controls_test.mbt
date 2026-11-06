@@ -426,6 +426,170 @@ test "label: a tap on it turns its control, or gives its field the focus" {
 }
 
 ///|
+test "a field label gives its field the next input before a frame and does not steal a newer focus" {
+  let first = @ui.Field::new()
+  let second = @ui.Field::new()
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=8.0, fn() {
+      label(c, "First label", for_id=c.id("first"), field=true) |> ignore
+      c.editor("first", field=first, placeholder="First field") |> ignore
+      label(c, "Second label", for_id=c.id("second"), field=true) |> ignore
+      c.editor("second", field=second, placeholder="Second field") |> ignore
+    }) |> ignore
+  })
+  t.ctx().focus_field(first, ask_later=false)
+  t.draw()
+  let (x, y, w, h) = t.rect_of("Second label").unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.text_told("B", t.time())
+  assert_eq((first.text(), second.text()), ("", "B"), msg="the next input uses the label's field")
+  t.ctx().focus_field(first, ask_later=false)
+  t.draw()
+  assert_eq(t.ctx().focused_id(), t.ctx().id("first"), msg="the label does not replay focus over a newer request")
+}
+
+///|
+test "a field label does not focus a disabled or hidden target, even if it becomes available before the next frame" {
+  for hidden in [false, true] {
+    let unavailable = @signals.signal(true)
+    let first = @ui.Field::new()
+    let t = @ui.Tester::new(fn(c) {
+      c.column(gap=8.0, fn() {
+        c.editor("first", field=first, placeholder="First field") |> ignore
+        let id = c.id("blocked")
+        label(c, "Blocked label", for_id=id, field=true) |> ignore
+        let target = fn() {
+          c.focusable(id)
+          let n = c.box(id~, w=Px(100.0), h=Px(40.0), fn() {  })
+          c.semantics(n, TextField, id~, label="Blocked field", disabled=!hidden && unavailable.get(), actions=[Focus])
+        }
+        if hidden && unavailable.get() { c.hidden_from_semantics(target) } else { target() }
+      }) |> ignore
+    })
+    t.ctx().focus_field(first, ask_later=false)
+    t.draw()
+    let (x, y, w, h) = t.rect_of("Blocked label").unwrap()
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+    assert_eq(t.ctx().focused_id(), t.ctx().id("first"))
+    unavailable.set(false)
+    t.draw()
+    assert_eq(t.ctx().focused_id(), t.ctx().id("first"), msg="no later focus, hidden=\{hidden}")
+  }
+}
+
+///|
+test "an old field label gives a retained field the next input before a frame" {
+  let target = @signals.signal(0)
+  let first = @ui.Field::new()
+  let second = @ui.Field::new()
+  let t = @ui.Tester::new(fn(_) {  })
+  @ui.set_view_app(fn(root) {
+    @ui.old(root, fn(c) {
+      c.column(gap=8.0, fn() {
+        c.editor("first", field=first, placeholder="First field") |> ignore
+        label(c, "Retained field label", for_id=target.get(), field=true) |> ignore
+      }) |> ignore
+    }).height(Is(Some(80.0))) |> ignore
+    root.box(fn(holder) { @ui.field(holder, second, placeholder="Retained field") |> ignore }) |> ignore
+  })
+  t.draw()
+  target.set(t.get(TextField, label="Retained field").id)
+  t.draw()
+  t.ctx().focus_field(first, ask_later=false)
+  let (x, y, w, h) = t.rect_of("Retained field label").unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.text_told("N", t.time())
+  assert_eq((first.text(), second.text()), ("", "N"))
+  t.ctx().focus_field(first, ask_later=false)
+  t.draw()
+  assert_eq(t.ctx().focused_id(), t.ctx().id("first"))
+}
+
+///|
+test "label forwards a tap to an old input callback once" {
+  let presses = Ref(0)
+  let clicked = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let id = c.id("target")
+    if label(c, "Choose target", for_id=id).clicked { clicked.val = true }
+    c.on_press(id, fn() { presses.val += 1 })
+    let node = c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  })
+    c.semantics(node, Button, id~, label="Target", actions=[Activate])
+  })
+  t.draw()
+  let (x, y, w, h) = t.rect_of("Choose target").unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_eq(presses.val, 1, msg="the target runs at the tap, before a frame")
+  t.draw()
+  assert_eq(presses.val, 1, msg="the next build does not repeat the action")
+  assert_true(clicked.val, msg="the label still reports its clicked response to old callers")
+}
+
+///|
+test "label does not activate a disabled old input callback" {
+  let presses = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    let id = c.id("disabled target")
+    label(c, "Disabled target", for_id=id) |> ignore
+    c.on_press(id, fn() { presses.val += 1 })
+    let node = c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  })
+    c.semantics(node, Button, id~, label="Target", disabled=true, actions=[Activate])
+  })
+  t.tap_text("Disabled target")
+  assert_eq(presses.val, 0)
+}
+
+///|
+test "a label does not queue an action after its callback removes the target" {
+  let showing = @signals.signal(true)
+  let presses = Ref(0)
+  let queued = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let id = c.id("removable target")
+    label(c, "Remove target", for_id=id) |> ignore
+    if c.action_asked(id, Activate) { queued.val = true }
+    if showing.get() {
+      c.on_press(id, fn() { presses.val += 1; showing.set(false) })
+      let node = c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  })
+      c.semantics(node, Button, id~, label="Target", actions=[Activate])
+    }
+  })
+  t.tap_text("Remove target")
+  t.draw()
+  assert_eq(presses.val, 1)
+  assert_false(queued.val)
+}
+
+///|
+test "an old label forwards its tap to a retained input callback" {
+  let target = @signals.signal(0)
+  let presses = Ref(0)
+  let t = @ui.Tester::new(fn(_) {  })
+  @ui.set_view_app(fn(root) {
+    @ui.old(root, fn(c) { label(c, "Choose retained", for_id=target.get()) |> ignore })
+    .height(Is(Some(40.0))) |> ignore
+    root.box(fn(button) {
+      button.height(Is(Some(40.0)))
+      .says(Is(Some(@view.said(Button, label="Retained target", actions=[Activate]))))
+      .on_press(fn() { presses.val += 1 }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  target.set(t.get(Button, label="Retained target").id)
+  t.draw()
+  let (x, y, w, h) = t.rect_of("Choose retained").unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_eq(presses.val, 1)
+  t.draw()
+  assert_eq(presses.val, 1)
+}
+
+///|
 test "separator, aspect ratio, accessible icon, visually hidden: what the tree says, and the shape kept" {
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {

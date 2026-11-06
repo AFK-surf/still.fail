@@ -2190,11 +2190,10 @@ let sheet_long_pick : Double = 0.66
 /// at 28%) closing it when tapped, back, Escape, its top dragged down. Whether it is open, and whether it is drawn.
 fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let (_, wh) = c.window_size()
-  // what it holds, as tall as this frame lays it out (read back: laid out another height, the frame is built again),
-  // so the sheet is as tall as that in the frame it shows, and with it as it changes: placed by its size, not chased
-  // to the size the frame before measured (docs/motion.md)
+  // What it holds asks to be without a height constraint. Reading its constrained height feeds the sheet's own height
+  // back into a shrinking inner list, adding the header on every pass instead of finding the content's natural size.
   let fit = c.id("sf-present/fit/\{p.serial}")
-  let natural = match c.laid_size(fit) {
+  let natural = match c.laid_asked_size(fit) {
     Some((_, h)) => Some(h)
     None => None
   }
