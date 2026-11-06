@@ -158,6 +158,8 @@ pub fn code_field_node(
         if ready { complete(digits) }
       }
     })
-    input_field.focus()
+    // The tree may still be being made, before it is installed in the window. Ask its focus manager to give the
+    // editor the focus when this node opens, including on the first frame of a new tree.
+    room.focus_opens(input) |> ignore
   })
 }
