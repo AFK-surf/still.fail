@@ -1185,7 +1185,9 @@ fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   match p {
     Chat(r) => chat_answered(src, r)
     History(r, key, _) => chat_answered(src, r) && answered((src.topic)("history", history_params(r, key)))
-    Home => list_ready(src, w) && answered((src.topic)("changelog", Map::new()))
+    Home =>
+      @settings.lock_waiting(settings_core(src, w), w.id) ||
+      (list_ready(src, w) && answered((src.topic)("changelog", Map::new())))
     _ => true
   }
 }
@@ -1223,7 +1225,10 @@ let first_has : Ref[Int] = Ref(0)
 /// the page on top (page_ready), in the wide frame the sidebar's list and the page in the pane (pane_ready), the chat
 /// the pane lands on once it has (@sfdesk.landing: not the empty pane before it).
 fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
-  if @sfdesk.is_wide(c) {
+  if @settings.lock_waiting(settings_core(src, w), w.id) {
+    // The waiting page needs neither the chats' list nor a chat to land on.
+    true
+  } else if @sfdesk.is_wide(c) {
     list_ready(src, w) && !@sfdesk.landing(w) && pane_ready(src, app.nav.top())
   } else {
     page_ready(src, w, app.nav.top())

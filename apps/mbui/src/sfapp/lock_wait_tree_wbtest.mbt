@@ -58,8 +58,10 @@ test "the lock waiting page follows its pair state on each screen and with eithe
     t.frame()
     assert_true(t.find("等待批准此设备") is Some(_), msg=at)
     assert_true(t.find("发送批准请求") is Some(_), msg=at)
-    t.tap_text("发送批准请求")
-    assert_eq(calls.length(), 1, msg=at)
+    let (request_x, request_y) = t.find("发送批准请求").unwrap()
+    let target = t.press_target_at(request_x, request_y).map(fn(s) { s.label })
+    t.tap(request_x, request_y)
+    assert_eq(calls.length(), 1, msg="\{at}, press at \{(request_x, request_y)} targeted \{target}, calls \{calls.length()}")
     assert_eq(text(Some(calls[0].1), "workspace"), "ws1", msg=at)
 
     state.set("finding")
@@ -165,7 +167,9 @@ test "the lock waiting page leaves the workspace switcher and settings reachable
   let src = fixture("lock-waiting")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.frame()
-  t.tap_text("星火工作室")
+  // The waiting lead also contains the workspace name: use the switcher's own press room.
+  let (x, y, w, h) = t.query(Button, label="星火工作室").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())
   t.tap_text("个人")
@@ -205,12 +209,36 @@ test "resizing a waiting workspace across the three screens neither loses the pa
   for w in [690.0, 1280.0, 390.0] {
     t.resize(w, 844.0)
     t.frame()
-    assert_true(t.find("等待批准此设备") is Some(_), msg=w.to_string())
+    assert_true(t.find("等待批准此设备") is Some(_), msg="\{w}, Home on top: \{app.nav.top() is Home}, depth: \{app.nav.depth()}")
     assert_true(t.find("发送批准请求") is Some(_), msg=w.to_string())
     assert_eq(named(calls, "lock.pair").length(), 0, msg=w.to_string())
   }
   t.tap_text("发送批准请求")
   assert_eq(named(calls, "lock.pair").length(), 1)
+}
+
+///|
+test "a wide workspace lands on its chat once the device is approved" {
+  let waiting = @signals.signal(true)
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="lock-waiting", wrap=fn(base) {
+    {
+      ..base,
+      topic: fn(name, params) {
+        let topic = (base.topic)(name, params)
+        if name == "lock" {
+          { ..topic, value: Some({ "me": { "waiting": Json::boolean(waiting.get()) } }), version: topic.version + 1 }
+        } else {
+          topic
+        }
+      },
+    }
+  })
+  assert_true(app.nav.top() is Home)
+  assert_true(t.find("等待批准此设备") is Some(_))
+  waiting.set(false)
+  t.frame()
+  assert_true(app.nav.top() is NewChat)
 }
 
 ///|

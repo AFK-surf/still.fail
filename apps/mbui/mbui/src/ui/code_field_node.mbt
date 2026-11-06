@@ -62,62 +62,58 @@ pub fn code_field_node(
       .lines_up(Is(Some(Middle)))
       |> ignore
       for group in 0..<2 {
-        groups.box(fn(held) {
-          held
-          .width(Roomed(room, fn(w, _) { Some(142.0 * scale(w)) }))
-          .height(Roomed(room, fn(w, _) { Some(52.0 * scale(w)) }))
+        groups.box(fn(row) {
+          row
+          .row(Is(true))
+          .gap(Roomed(room, fn(w, _) { 8.0 * scale(w) }))
           |> ignore
-          held.box(fn(row) {
-            row
-            .width(Is(Some(142.0)))
-            .height(Is(Some(52.0)))
-            .row(Is(true))
-            .gap(Is(8.0))
-            .scale(Painted(fn(laid) {
-              match laid.size(room) {
-                Some((w, _)) => scale(w)
-                None => 1.0
-              }
-            }), about=At(0.0, 0.0))
-            |> ignore
-            for j in 0..<3 {
-              let index = group * 3 + j
-              row.box(fn(box) {
-                box
-                .width(Is(Some(42.0)))
-                .height(Is(Some(52.0)))
-                .radius(Is(12.0))
-                .lines_up(Is(Some(Middle)))
-                .lies_along(Is(Middle))
-                .edge(By(fn() {
+          for j in 0..<3 {
+            let index = group * 3 + j
+            row.box(fn(box) {
+              box
+              .width(Roomed(room, fn(w, _) { Some(42.0 * scale(w)) }))
+              .height(Roomed(room, fn(w, _) { Some(52.0 * scale(w)) }))
+              .radius(Painted(fn(laid) {
+                match laid.size(room) {
+                  Some((w, _)) => 12.0 * scale(w)
+                  None => 12.0
+                }
+              }))
+              .lines_up(Is(Some(Middle)))
+              .lies_along(Is(Middle))
+              .edge(By(fn() {
+                let digits = input_field.text().to_array()
+                let next = if digits.length() < 5 { digits.length() } else { 5 }
+                let ink = if wrong() && digits.length() == 0 {
+                  wrong_edge()
+                } else if enabled() && focused.get() && index == next {
+                  next_edge()
+                } else {
+                  edge()
+                }
+                (1.0, ink)
+              }))
+              |> ignore
+              box.box(fn(digit) {
+                digit
+                .words_runs(By(fn() {
                   let digits = input_field.text().to_array()
-                  let next = if digits.length() < 5 { digits.length() } else { 5 }
-                  let ink = if wrong() && digits.length() == 0 {
-                    wrong_edge()
-                  } else if enabled() && focused.get() && index == next {
-                    next_edge()
-                  } else {
-                    edge()
-                  }
-                  (1.0, ink)
+                  if index < digits.length() { [span(digits[index].to_string(), mono=true)] } else { [] }
                 }))
-                |> ignore
-                box.box(fn(digit) {
-                  digit
-                  .words_runs(By(fn() {
-                    let digits = input_field.text().to_array()
-                    if index < digits.length() { [span(digits[index].to_string(), mono=true)] } else { [] }
-                  }))
-                  .words_look(Is({ ..@view.words_plain, size: 24.0, weight: 600, wrap: false }))
-                  .ink(By(fn() { if enabled() { color() } else { disabled_color() } }))
-                  |> ignore
-                })
+                .words_look(Is({ ..@view.words_plain, size: 24.0, weight: 600, wrap: false }))
+                .ink(By(fn() { if enabled() { color() } else { disabled_color() } }))
+                .scale(Painted(fn(laid) {
+                  match laid.size(room) {
+                    Some((w, _)) => scale(w)
+                    None => 1.0
+                  }
+                }))
                 |> ignore
               })
               |> ignore
-            }
-          })
-          |> ignore
+            })
+            |> ignore
+          }
         })
         |> ignore
       }
