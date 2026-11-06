@@ -1798,6 +1798,8 @@ pub let row_key_box : @ui.Style
 
 pub fn row_keys_room(Int32) -> Double
 
+pub fn row_lead_mark(@ui.Ctx, String, color? : Int64) -> Unit
+
 pub fn row_least() -> Double
 
 pub fn row_least_h() -> @ui.Style
