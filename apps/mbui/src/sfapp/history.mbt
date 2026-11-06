@@ -253,10 +253,9 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
       agent_tiles(c, card, 14.0)
       agent_notes(c, card, 10.0)
       c.box(h=Px(6.0), fn() {  }) |> ignore
-      // changing how it runs is a page of its own (RunSettingsScreen)
+      // How it runs is picked in the same panel as elsewhere in the app.
       if run_row(c, a) {
-        @sfbase.history_push()
-        app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
+        @sfpages.open_triple_panel(src, r.station, "session:" + key, Of(c.id("history-run-row")), saved=@sf.t("web-pages.chat.pickSaved"))
       }
       c.box(w=Fill(1.0), pt=12.0, pb=10.0, gap=8.0, fn() {
         detail(tr("android-chat.history.detail.runtime"), text(s, "runtimeText"), false)
@@ -318,7 +317,7 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
 
 ///|
 /// How it runs, in one line (History.kt RunRow): the model (never cut short), how hard it thinks, the account; a
-/// hairline round it. True on the frame after a tap (the run settings page opened).
+/// hairline round it. True on the frame after a tap (the model picker opened).
 fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
   let t = @sf.theme()
   let s = field(a, "session")
