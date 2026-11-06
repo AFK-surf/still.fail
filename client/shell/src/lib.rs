@@ -29,6 +29,20 @@ mod adb;
 const MDNS_SERVICE: &str = "stillfail";
 const FORMER_MDNS_SERVICE: &str = "ember";
 
+/// The nodes a DHT starts from: n0-mainline's defaults, with ours (cloud/dht-node, on the relays' machines) in place of relay.pkarr.org.
+fn dht() -> n0_mainline::DhtBuilder {
+    let mut dht = n0_mainline::DhtBuilder::default();
+    dht.bootstrap(&[
+        "router.bittorrent.com:6881",
+        "dht.transmissionbt.com:6881",
+        "dht.libtorrent.org:25401",
+        "39.105.157.122:6881",
+        "47.79.40.84:6881",
+        "120.24.233.158:6881",
+    ]);
+    dht
+}
+
 /// `complete(ctx, id, json, json_len, error, error_len, bytes, bytes_len, has_bytes)`: an operation's answer, its JSON
 /// (when it succeeded) or its error, and its bytes if it has any. Called on any thread.
 pub type Complete = extern "C" fn(*mut c_void, u64, *const u8, usize, *const u8, usize, *const u8, usize, u8);
@@ -1141,7 +1155,7 @@ impl Inner {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
+                .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish());
         }
         let endpoint = builder.bind().await.map_err(err)?;
         Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Accepted::default())) })))
