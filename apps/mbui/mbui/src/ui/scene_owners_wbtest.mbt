@@ -86,3 +86,41 @@ test "words held seen whole asked for after nobody's was kept: the next frame dr
   assert_true(frame_drawn_as.val != Looks, msg="\{frame_drawn_as.val}")
   assert_true(g().seen_whole_faults("hello") is Some(_), msg="the fill over the words not found")
 }
+
+///|
+/// A frame of a list wheeled, its frames exported from the start or from the last frame on (`from_start`): the last
+/// frame as Tester::frame_export says it.
+fn exported_run(from_start : Bool) -> Array[String] {
+  let t = Tester::new(fn(_) {  }, w=400.0, h=600.0)
+  inst_owners.track = false
+  if from_start {
+    t.export_frames()
+  }
+  set_view_app(fn(root) {
+    root
+    .width(Is(Some(400.0)))
+    .height(Is(Some(600.0)))
+    .scrolls_window(@view.Scroll::list(), fn() { Array::makei(300, fn(i) { i }) }, est=48.0, fn(row, k) {
+      row.height(Is(Some(48.0))).ground(Is(if k % 2 == 0 { 0xF2F2F2FFL } else { 0xFFFFFFFFL })) |> ignore
+      row.box(fn(w) { w.words(Is("message \{k}")) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  for _ in 0..<4 {
+    t.wheel(200.0, 300.0, 37.0)
+    t.clock_frame()
+  }
+  // (exported from here on, nothing else changed: the next frame's say who drew each thing)
+  t.export_frames()
+  t.clock_frame()
+  t.frame_export()
+}
+
+///|
+test "frames exported from a frame on, after nobody's was kept, say who drew each thing as if exported all along" {
+  let all_along = exported_run(true)
+  let from_now = exported_run(false)
+  inst_owners.track = true
+  assert_eq(from_now, all_along)
+}
