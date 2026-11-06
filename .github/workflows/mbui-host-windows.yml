@@ -41,7 +41,7 @@ on:
       target:
         description: Scratch desktop experiment
         type: choice
-        options: [windows, mac-availability]
+        options: [windows, mac-availability, finder]
         default: windows
 
 
@@ -133,6 +133,50 @@ jobs:
         with:
           name: mac-desktop-probe
           path: ${{ runner.temp }}/finder-desktop.png
+          if-no-files-found: ignore
+
+  finder-build:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'finder' }}
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Build retained-node probe for Finder
+        working-directory: apps/mbui/mbui
+        run: APP=drop_probe bash scripts/mac.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: finder-drop-exe
+          path: apps/mbui/mbui/_build/native/release/build/drop_probe/drop_probe.exe
+          if-no-files-found: error
+
+  finder-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'finder' }}
+    needs: finder-build
+    runs-on: macos-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: finder-drop-exe
+          path: apps/mbui/mbui/out/finder-bin
+      - name: Drag from Finder into the app
+        run: |
+          mkdir -p out/host/finder/source
+          chmod +x out/finder-bin/drop_probe.exe
+          printf 'hello from Finder\n' > out/host/finder/source/finder-source.txt
+          clang -fobjc-arc -framework Cocoa -framework ApplicationServices test/host/finder-drop-probe.m -o out/host/finder/driver
+          out/host/finder/driver "$PWD/out/finder-bin/drop_probe.exe" "$PWD/out/host/finder/source/finder-source.txt" "$PWD/out/host/finder/probe.log" "$PWD/out/host/finder/hover.png"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: finder-drop-probe
+          path: apps/mbui/mbui/out/host/finder/
           if-no-files-found: ignore
 
   contracts:
