@@ -62,17 +62,45 @@ fn record_text(text : String) -> Unit {
       let reply : Json = { "m": Json::array(args.copy()), "r": numbers(metrics, 6) }
       say("TEXTREC " + reply.stringify())
     }
-    args.push(Json::string(words))
-    if keyed {
-      let key = @hostapi.text_key(words, size, weight, style)
-      let reply : Json = { "k": Json::array(args), "r": Json::number(key.to_double()) }
+    let record_key = fn(part : String) {
+      let key = @hostapi.text_key(part, size, weight, style)
+      let keyed_args = args.copy()
+      keyed_args.push(Json::string(part))
+      let reply : Json = { "k": Json::array(keyed_args), "r": Json::number(key.to_double()) }
       say("TEXTREC " + reply.stringify())
       record_glyph(key)
+    }
+    if keyed {
+      record_key(words)
     } else {
+      let shaped_args = args.copy()
+      shaped_args.push(Json::string(words))
       let n = @hostapi.shape(words, size, weight, style, shaped)
-      let reply : Json = { "s": Json::array(args), "r": numbers(shaped, n * 4) }
+      let reply : Json = { "s": Json::array(shaped_args), "r": numbers(shaped, n * 4) }
       say("TEXTREC " + reply.stringify())
       for i in 0..<n { record_glyph(shaped[i * 4 + 3].to_int()) }
+      // Android can leave a ligature's continuation as -2. ui/text.mbt then asks for the joined piece by text_key;
+      // record that real reply too, so the Tester can make the same request after reading the raw shape reply.
+      let mut i = 0
+      while i < n {
+        if shaped[i * 4 + 3].to_int() != -2 {
+          i = i + 1
+          continue
+        }
+        let mut end = i + 1
+        while end < n && shaped[end * 4 + 3].to_int() == -2 { end = end + 1 }
+        if i == 0 || shaped[(i - 1) * 4 + 3] < 0.0 {
+          for k in i..<end {
+            let start = shaped[k * 4].to_int()
+            record_key(words.unsafe_substring(start~, end=start + shaped[k * 4 + 1].to_int()))
+          }
+        } else {
+          let last = (end - 1) * 4
+          record_key(words.unsafe_substring(start=shaped[(i - 1) * 4].to_int(),
+            end=shaped[last].to_int() + shaped[last + 1].to_int()))
+        }
+        i = end
+      }
     }
   })
   say("mbui-render: text recorded")
