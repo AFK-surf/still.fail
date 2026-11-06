@@ -1,16 +1,20 @@
 // One file placed twice in a message's words: two images in its row, each its own showing. Pressed, the preview flies
 // out of the one pressed (it alone hidden meanwhile) and back into it; so too when, the preview open, the message
-// shows it once more, or tells its file kept at another path.
+// shows it once more, or tells its file kept at another path. The message field typed in first, the preview shut by
+// the system's back: what typing does after (the viewer took the focus as it opened).
 
 ///|
 /// A chat whose last message places one picture twice in a row; the one at `which` (0 the first) pressed; once the
 /// preview is in, `during` ("third": the message places it a third time; "moved": its file told kept at another path;
 /// "fewer": placed three times, the message places it twice, the showing pressed gone if it was the third; "again":
-/// as "fewer", then three times again, a showing come anew in the third's place; "": nothing); then the
+/// as "fewer", then three times again, a showing come anew in the third's place; "now": shut at once, the finger's
+/// up and the system's back with no frame between; "": nothing); `typing`: the message field tapped and "ab" typed
+/// first, shut by the system's back, then "c" typed and the field tapped and "d" typed (what has the focus after: the
+/// viewer took it as it opened, given back to none); then the
 /// preview closed: what the ones beside it were asked by, where the preview flies from and back
 /// to (by the showing whose rect it is, in the order they are drawn), and which showings are drawn halfway out,
 /// halfway back and after.
-fn twice_pressed(which : Int, during? : String = "") -> String raise {
+fn twice_pressed(which : Int, during? : String = "", typing? : Bool = false) -> String raise {
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
   // (0 as it was; 1 placed twice (three times for "fewer" and "again"); 2 and 3 as `during` says)
@@ -85,9 +89,45 @@ fn twice_pressed(which : Int, during? : String = "") -> String raise {
       None => "none"
     }
   }
+  // (typing: the message field tapped and typed in first; after, what typing does and the field tapped again)
+  let field = fn() { t.query(TextField, label="发消息") }
+  let field_said = fn() {
+    let f = t.focused().map(fn(s) { "\{s.role}" }).unwrap_or("none")
+    "field \{field().map(fn(s) { s.value })}, focused \{f}, ime \{t.ime().0}"
+  }
+  let tap_field = fn() raise {
+    guard field() is Some(s) else { fail("no message field") }
+    t.tap(s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
+    t.run_for(@ui.move_most_ms)
+  }
+  let mut typed = ""
+  if typing {
+    tap_field()
+    t.type_text("ab")
+    t.run_for(@ui.move_most_ms)
+    typed = " typed: \{field_said()};"
+  }
   @sfbase.near_asked.clear()
   let pressed = rects()[which]
-  t.tap(pressed.0 + pressed.2 / 2.0, pressed.1 + pressed.3 / 2.0)
+  let (px, py) = (pressed.0 + pressed.2 / 2.0, pressed.1 + pressed.3 / 2.0)
+  if during == "now" {
+    // (the finger down and up, then the system's back, as the host hands them on: no frame drawn between)
+    t.touch(0, px, py)
+    t.touch(2, px, py)
+    let opened = viewer.get() is Some(_)
+    t.back_told(t.time())
+    t.run_for(@ui.move_most_ms * 2.0)
+    let shut = field_said()
+    t.type_text("c")
+    t.run_for(@ui.move_most_ms)
+    let after_c = field_said()
+    tap_field()
+    t.type_text("d")
+    t.run_for(@ui.move_most_ms)
+    @sf.markdown_read.val = None
+    return "pressed \{which}:\{typed} now: opened \{opened}, back, open after \{viewer.get() is Some(_)}; shut \{shut}; c typed \{after_c}; tapped, d typed \{field_said()}"
+  }
+  t.tap(px, py)
   guard viewer.get() is Some(v) else { fail("pressed, nothing opened") }
   t.frame()
   // (the ones beside it asked as the core counts its message's files: the file once, whichever showing)
@@ -113,15 +153,32 @@ fn twice_pressed(which : Int, during? : String = "") -> String raise {
     changed = " \{during}: open on \{viewer.get().map(fn(v) { v.file.path })}, drawn \{drawn()};"
   }
   let v = viewer.get().unwrap()
-  v.shut(t.ctx())
+  // (typing: shut by the system's back, as a person does; else as the viewer's own close)
+  if typing {
+    t.back()
+  } else {
+    v.shut(t.ctx())
+  }
   t.run_for(@ui.move_most_ms / 2.0)
   let back_half = drawn()
   let back_to = from_to(v)
   t.run_for(@ui.move_most_ms * 1.5)
   let after = drawn()
-  viewer.set(None)
+  if !typing {
+    viewer.set(None)
+  }
+  if typing {
+    let shut = field_said()
+    t.type_text("c")
+    t.run_for(@ui.move_most_ms)
+    let after_c = field_said()
+    tap_field()
+    t.type_text("d")
+    t.run_for(@ui.move_most_ms)
+    typed = typed + " shut \{shut}; c typed \{after_c}; tapped, d typed \{field_said()};"
+  }
   @sf.markdown_read.val = None
-  "pressed \{which}: asked beside \{asked}, flies from \{from}, halfway out drawn \{out_half};\{changed} back to \{back_to}, halfway back drawn \{back_half}; then \{after}"
+  "pressed \{which}:\{typed} asked beside \{asked}, flies from \{from}, halfway out drawn \{out_half};\{changed} back to \{back_to}, halfway back drawn \{back_half}; then \{after}"
 }
 
 ///|
@@ -159,5 +216,21 @@ test "one picture placed three times, the preview open on the third: placed twic
   inspect(
     twice_pressed(2, during="again"),
     content="pressed 2: asked beside [/f], flies from 2, halfway out drawn [true, true, false]; again: open on Some(work/s-c1/row-a.png), drawn [true, true, true]; back to 0, halfway back drawn [false, true, true]; then [true, true, true]",
+  )
+}
+
+///|
+test "the message field typed in, one picture's showing pressed: shut with no frame between, or after the message shows it fewer times and it flew back: what typing does after, and after the field is tapped" {
+  inspect(
+    [
+      twice_pressed(1, during="now", typing=true),
+      twice_pressed(2, during="fewer", typing=true),
+      twice_pressed(2, during="again", typing=true),
+    ].join("\n"),
+    content=(
+      #|pressed 1: typed: field Some(ab), focused TextField, ime true; now: opened true, back, open after false; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false; tapped, d typed field Some(abd), focused TextField, ime true
+      #|pressed 2: typed: field Some(ab), focused TextField, ime true; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false; tapped, d typed field Some(abd), focused TextField, ime true; asked beside [/f], flies from 2, halfway out drawn [true, true, false]; fewer: open on Some(work/s-c1/row-a.png), drawn [true, true]; back to 0, halfway back drawn [false, true]; then [true, true]
+      #|pressed 2: typed: field Some(ab), focused TextField, ime true; shut field Some(ab), focused none, ime false; c typed field Some(ab), focused none, ime false; tapped, d typed field Some(abd), focused TextField, ime true; asked beside [/f], flies from 2, halfway out drawn [true, true, false]; again: open on Some(work/s-c1/row-a.png), drawn [true, true, true]; back to 0, halfway back drawn [false, true, true]; then [true, true, true]
+    ),
   )
 }
