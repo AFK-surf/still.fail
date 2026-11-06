@@ -47,6 +47,98 @@ pub fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 }
 
 ///|
+/// This device's permissions as retained nodes. The system's notification permission and the action it offers are
+/// read from the core as they change, so returning from system settings updates the existing page.
+pub fn permissions_node(
+  v : @view.View,
+  core : Core,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let state = fn() {
+    let notify = (core.topic)("notify", Map::new()).value
+    match text(notify, "permission") {
+      "granted" | "denied" | "default" => text(notify, "permission")
+      _ => "unknown"
+    }
+  }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.settings.nav.permissions") },
+    fn() { ["notify"] },
+    fn(b, _) {
+      @sf.page_card_node(b, fn(card) {
+        card.box(fn(row) {
+          row.row(Is(true)).width_share(Is(1.0)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
+          row.box(fn(mark) {
+            mark
+            .width(Is(Some(36.0)))
+            .height(Is(Some(36.0)))
+            .radius(Is(18.0))
+            .lines_up(Is(Some(Middle)))
+            .lies_along(Is(Middle))
+            .ground(By(fn() { @sf.theme().p.bg }))
+            |> ignore
+            @sf.icon_node(mark, "bell", permission_glyph, By(fn() { @sf.theme().p.text })) |> ignore
+          })
+          |> ignore
+          @sf.page_card_heading_node(row, fn() { @sf.t("web-pages.permissions.notify.name") }, fn() {
+            @sf.t("web-pages.permissions.notify.purpose")
+          })
+          |> ignore
+          row.box(fn(status) {
+            status.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))) |> ignore
+            status.show(fn() { state() == "granted" }, fn(check) {
+              @sf.icon_node(check, "check", permission_check, By(fn() { @sf.theme().p.green_ink })) |> ignore
+            })
+            @sf.words_node(status, fn() { @sf.t("web-pages.permissions.state." + state()) }, fn() {
+              match state() {
+                "granted" => permission_state_given
+                "denied" => permission_state_refused
+                _ => permission_state_words
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+        card.show(fn() { state() == "default" || state() == "denied" }, fn(row) {
+          @sf.page_card_action_node(
+            row,
+            fn() { @sf.t("web-pages.permissions.notify.without") },
+            fn() {
+              @sf.t(
+                if @ui.platform() == 0 { "web-pages.permissions.where.mac" } else { "web-pages.permissions.where.windows" },
+                args=[("name", "still.fail")],
+              )
+            },
+            fn() { state() == "denied" },
+            fn(action) {
+              action.show(fn() { state() == "default" }, fn(button) {
+                let control = @sf.button_node(button, fn() { @sf.t("web-pages.permissions.allow") }, fn() { (core.notify_ask)() }, tone=Primary)
+                @sf.page_focus_node(control, "permissions/notify/allow") |> ignore
+              })
+              action.show(fn() { state() == "denied" }, fn(button) {
+                let control = @sf.button_node(button, fn() { @sf.t("web-pages.permissions.open") }, fn() { @ui.notice_settings() |> ignore })
+                @sf.page_focus_node(control, "permissions/notify/open") |> ignore
+              })
+            },
+          )
+        })
+      })
+    },
+    on_back~,
+    frame~,
+    lead=fn() { @sf.t("web-pages.permissions.lead", args=[("name", "still.fail")]) },
+    said?,
+    width?,
+  )
+}
+
+///|
 /// One permission (PermissionRow): a card, its round mark, what it is for and whether it is given (given in green, refused
 /// in red); not given, what goes without it, where the system keeps it when refused, and the way to give it.
 fn permission_row(

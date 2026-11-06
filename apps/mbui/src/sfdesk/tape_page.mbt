@@ -310,6 +310,7 @@ fn tape_made(
       (
         kind,
         fn(v : @view.View, _page : () -> Page, _under : Page?, stint : () -> Int, k : Int) {
+          @sfbase.page_focus_entry(v, k)
           let told = fn(s : @sf.PageSaid) { tape_bar_of(k).page_said.set(Some(s)) }
           v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             // (what the page made in `p` does in the bar, its own while `p` is: given as it is made, let go with `p`
@@ -388,7 +389,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | Permissions | AutoCompletion) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -410,6 +411,11 @@ fn tape_made(
       made("notifications", fn(p, core, here, stint, told, _acts) {
         context_node(p)
         @sfpages.notify_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
+      })
+    Setting(Permissions) if pane_makes.val =>
+      made("permissions", fn(p, core, _here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.permissions_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
     Setting(AutoCompletion) if pane_makes.val =>
       made("auto-completion", fn(p, core, here, _stint, told, acts) {

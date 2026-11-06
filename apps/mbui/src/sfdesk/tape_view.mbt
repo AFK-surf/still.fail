@@ -626,8 +626,13 @@ fn tape_settle(chat : String, open : String, known : Bool, at : Double) -> Unit 
 /// The tape in node `v` (the signed-in shell's, filling the window: sfapp's taped_shell), in the workspace in view (its
 /// file's head): the page brought over once `ready` says the core has given what it shows of the page put on it, `most`
 /// ms after it was put there at the latest.
-pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double) -> Unit {
+pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double, focus_page? : Bool = false) -> Unit {
   wide.tape = true
+  // A focused page carried over from another shell is already in use, rather than a preview beside the sidebar.
+  if focus_page {
+    wide.tape_at.set(Page)
+    wide.tape_ask.set(None)
+  }
   tape_goes.node = Some(v)
   tape_goes.ready = ready
   tape_goes.most = most

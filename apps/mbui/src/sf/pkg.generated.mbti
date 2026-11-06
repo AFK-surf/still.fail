@@ -682,6 +682,8 @@ pub fn file_tile(@ui.Ctx, String, dir? : Bool, progress? : Double?, error? : Boo
 
 pub fn file_tile_fill(Double, Double, Int64) -> @paint.Shape
 
+pub fn file_tile_node(@view.View, () -> String, dir? : () -> Bool, progress? : () -> Double?, error? : () -> Bool) -> @view.View
+
 pub let files_gap : @ui.Space
 
 pub let files_row_end : @ui.Space
@@ -1268,7 +1270,11 @@ pub let meta : @ui.TextStyle
 
 pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, drop? : Int32, keep? : Bool, key? : String) -> Unit
 
+pub fn meter_chip_node(@view.View, () -> @json.Json?, brief? : Bool, tips? : TipLayer) -> @view.View
+
 pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
+
+pub fn meter_chips_node(@view.View, () -> Array[@json.Json], brief? : Bool, tips? : TipLayer) -> Unit
 
 pub fn mix(Int64, Double, Int64) -> Int64
 
@@ -1335,6 +1341,10 @@ pub fn nav_apart(@ui.Ctx, Bool, () -> Unit) -> Unit
 pub fn nav_back(@ui.Ctx, String, String, max_w? : Double) -> Bool
 
 pub fn nav_bar(@ui.Ctx, String, String, String, sub? : () -> Unit, trailing? : () -> Unit, back_max? : Double, bg? : Int64, top? : Double) -> Bool
+
+pub fn nav_bar_node(@view.View, () -> String, () -> String, () -> Unit, sub? : (@view.View) -> Unit, trailing? : (@view.View) -> Unit, back_max? : () -> Double, bg? : () -> Int64, top? : () -> Double) -> @view.View
+
+pub fn nav_bar_subtitle_node(@view.View, () -> String) -> @view.View
 
 pub let nav_button_side : @ui.Len
 
@@ -1445,6 +1455,10 @@ pub fn page_bleed() -> @ui.Style
 pub fn page_block(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn page_card(@ui.Ctx, () -> Unit, footed? : Bool) -> Unit
+
+pub fn page_card_action_node(@view.View, () -> String, () -> String, () -> Bool, (@view.View) -> Unit) -> Unit
+
+pub fn page_card_heading_node(@view.View, () -> String, () -> String) -> @view.View
 
 pub fn page_card_node(@view.View, (@view.View) -> Unit, footed? : Bool, layered? : Bool) -> Unit
 
