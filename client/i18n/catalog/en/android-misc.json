@@ -647,6 +647,8 @@
   "android-misc.updates.waitWifi": "Downloads by itself on Wi‑Fi · {size}",
   "android-misc.adb.manage": "Manage in Settings",
   "android-misc.fault.shown": "This part couldn't be shown",
+  "android-misc.adb.lock.open": "Sharing debugging needs your personal lock",
+  "android-misc.adb.lock.join": "Add this device to your personal lock first",
   "android-misc.personal.heading": "Personal lock",
   "android-misc.personal.back": "Security",
   "android-misc.personal.about": "Which of your devices can sign as you. Allowing phone debugging takes the personal key on a device, and the phone checks it itself, so a stolen login alone can't allow it.",

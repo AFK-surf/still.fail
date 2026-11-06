@@ -1743,6 +1743,8 @@ let zh : Map[String, String] = {
   "android-misc.personal.confirm": "确认",
   "android-misc.personal.finding": "正在找你的其它设备，请打开其中一台的 still.fail app",
   "android-misc.personal.forget": "是我新建的，改用新的",
+  "android-misc.adb.lock.join": "先把这台设备加入个人锁",
+  "android-misc.adb.lock.open": "共享调试要先开启个人锁",
   "android-misc.personal.heading": "个人锁",
   "android-misc.personal.me": "这台设备",
   "android-misc.personal.none.found": "没找到可以批准的设备。打开另一台设备的 still.fail app 后再试一次",

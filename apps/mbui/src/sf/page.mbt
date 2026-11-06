@@ -2983,10 +2983,15 @@ let rows_held_now : Ref[Bool] = Ref(false)
 
 ///|
 /// `body`'s rows made on a card that holds them the ladder's inset from its top and foot (rows_held_now).
+/// They are on a card (in_card) as a group's are: their words a row's padding in from their grounds, which round in
+/// the card's corners (2026-11-06: a settings card's link rows 4 nearer its edge than its other rows' words, their
+/// grounds square).
 pub fn rows_held(body : () -> Unit) -> Unit {
   let was = rows_held_now.val
   rows_held_now.val = true
+  in_card.val += 1
   body()
+  in_card.val -= 1
   rows_held_now.val = was
 }
 

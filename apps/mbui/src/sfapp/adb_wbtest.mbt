@@ -424,3 +424,67 @@ test "a device without the person's own lock is not let allow: its way to turn i
     assert_true(t.find("默认最长授权") is None)
   }
 }
+
+///|
+test "settings' 共享调试: a grant the phone does not lend keeps its title whole, what it says clear of 收回" {
+  let t = settings_tester("adb:", shows="settings-adb-unsigned", platform=2)
+  let title = t.rect_of("定时 · 每 15 分钟审 mbui 三条线").unwrap()
+  assert_true(title.2 > 200.0, msg="\{title}")
+  let said = t.words().filter(fn(w) { w.0 == "待确认" })
+  let back = t.words().filter(fn(w) { w.0 == "收回" })
+  assert_eq(said.length(), 1)
+  assert_eq(back.length(), 1)
+  assert_true(said[0].1 + said[0].3 <= back[0].1, msg="\{said} \{back}")
+  // the card's link rows' words on the same line as its other rows' (the switch's)
+  let other = t.rect_of("开启后一直保持").unwrap()
+  assert_eq(title.0, other.0)
+  assert_eq(t.rect_of("默认最长授权").unwrap().0, other.0)
+  assert_true(t.room_faults().is_empty(), msg="\{t.room_faults()}")
+}
+
+///|
+test "settings' 共享调试: off the person's own lock, the page is the lock's step alone" {
+  let t = settings_tester("adb:", shows="settings-adb-gate-none", platform=2)
+  assert_true(t.find("共享调试要先开启个人锁") is Some(_))
+  // nothing that does anything without it: the switch, the stations, how long grants last
+  assert_true(t.find("开启后一直保持") is None)
+  assert_true(t.find("共享给的 station") is None)
+  assert_true(t.find("默认最长授权") is None)
+}
+
+///|
+test "settings' 共享调试: 开启个人锁 there turns the lock on, and a device joining types the code in the page" {
+  for mode in ["settings-adb-gate-none", "settings-adb-gate-code"] {
+    new_run()
+    @settings.fixture_page(mode) |> ignore
+    let base = fixture("settings")
+    let calls : Array[(String, Json)] = []
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        calls.push((name, params))
+        (base.call)(name, params, done)
+      },
+    }
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+    open_setting("adb:")
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    if mode == "settings-adb-gate-none" {
+      // the button, not the title over it that names it too
+      let button = t.words().filter(fn(w) { w.0 == "开启个人锁" })
+      assert_eq(button.length(), 1)
+      t.tap(button[0].1 + button[0].3 / 2.0, button[0].2 + button[0].4 / 2.0)
+      t.draw()
+      assert_true(calls.iter().any(fn(call) { call.0 == "adb.personalOpen" && call.1 == { "sub": "s" } }), msg="\{calls.map(fn(call) { call.0 })}")
+    } else {
+      assert_true(t.find("先把这台设备加入个人锁") is Some(_))
+      assert_true(t.find("14:05 前有效") is Some(_))
+      t.tap_text("MacBook Pro")
+      t.type_text("123456")
+      let typed = calls.filter(fn(call) { call.0 == "adb.personalCode" })
+      assert_eq(typed.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+      assert_eq(typed[0].1, { "code": "123456" })
+    }
+  }
+}

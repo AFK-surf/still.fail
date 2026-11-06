@@ -270,6 +270,50 @@ fn adb_do(core : Core, what : String, station? : String = "") -> Unit {
 }
 
 ///|
+/// 共享调试 before this device is on the person's own lock `p` (of `adbShare`'s `personal`): a page of its own, as a
+/// device waiting for a workspace's lock has (@sf.waiting_page, the shield), with the one step this device takes there:
+/// turn it on (none yet), join it (a code another device on it shows, typed in here: personal_join), or say whether a
+/// lock the cloud has in the place of the one pinned here is theirs. The lock's own page (安全 › 个人锁) takes the same.
+fn adb_lock_first(c : @ui.Ctx, core : Core, p : Json?) -> Unit {
+  let sub = text(p, "sub")
+  let said = obj([("sub", str(sub))])
+  let doing = is_doing(core, ["adb.personalOpen", "adb.personalJoin", "adb.personalCode", "adb.personalForget", "adb.personalRestart"], [])
+  let primary = fn(key : String, words : String, call : String) {
+    if @sf.button(c, words, key~, tone=Primary, busy=doing, disabled=doing) {
+      act(core, words, call, said)
+    }
+  }
+  match text(p, "standing") {
+    "outside" => {
+      let state = text(field(p, "pair"), "state")
+      @sf.waiting_page(c, "shield-check", tr("android-misc.adb.lock.join"), tr("android-misc.personal.outside.note"), fn() {
+        if state != "" && state != "done" {
+          personal_join(c, core, p, "adb/" + sub, centred=true)
+        }
+        if state == "" || state == "none" || state == "failed" || state == "done" {
+          primary("adb-lock-join", tr("android-misc.personal.open"), "adb.personalJoin")
+        }
+        // (no device of theirs to be found: only then)
+        if state == "none" || state == "failed" {
+          if @sf.button(c, tr("android-misc.personal.restart"), key="adb-lock-restart", tone=Ghost, disabled=doing) {
+            act(core, tr("android-misc.personal.restart"), "adb.personalRestart", said)
+          }
+          c.text(tr("android-misc.personal.restart.note"), style=@sf.ask_note) |> ignore
+        }
+      })
+    }
+    "replaced" =>
+      @sf.waiting_page(c, "shield-check", tr("android-misc.personal.replaced"), tr("android-misc.personal.replaced.note"), fn() {
+        primary("adb-lock-forget", tr("android-misc.personal.forget"), "adb.personalForget")
+      })
+    _ =>
+      @sf.waiting_page(c, "shield-check", tr("android-misc.adb.lock.open"), tr("android-misc.personal.open.note"), fn() {
+        primary("adb-lock-open", tr("android-misc.personal.open"), "adb.personalOpen")
+      })
+  }
+}
+
+///|
 /// Lent to the agents of the station at `address` (`name`, its notification's): the notifications allowed first (the
 /// pairing code is typed into one), Wireless debugging turned on by the app where it may and it is off; the lending
 /// itself the host's (adb.start: the core's, as it has it).
@@ -651,6 +695,14 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   c.box(style=adb_whole, fn() {
     // (what it is, in the title's ⓘ: not a card of words over the page)
     nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"), about=tr("android-misc.adb.chats.about"))
+    // (2026-11-06, 左子健: 如果这个共享调试之后必须用个人锁，那就整个页面只显示个人锁，开了才有后面的; 用专门的 UI) Off
+    // the person's own lock nothing else here does anything (the phone lends only on grants a device on it signed):
+    // the page is the lock's step alone, until this device is on one
+    let locks = items(view, "personal")
+    if !locks.is_empty() && !locks.iter().any(fn(l) { text(Some(l), "standing") == "member" }) {
+      adb_lock_first(c, core, Some(locks[0]))
+      return
+    }
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
     let keys = ["head"]
     // the phone's switch: only a phone lends

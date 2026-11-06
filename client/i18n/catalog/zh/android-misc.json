@@ -621,6 +621,8 @@
   "android-misc.adb.manage": "在设置里管理",
   "android-misc.fault.shown": "这部分显示出错了",
   "android-misc.personal.heading": "个人锁",
+  "android-misc.adb.lock.open": "共享调试要先开启个人锁",
+  "android-misc.adb.lock.join": "先把这台设备加入个人锁",
   "android-misc.personal.back": "安全",
   "android-misc.personal.about": "你的哪些设备能以你的名义签名。批准手机调试要用设备上的个人钥匙，手机自己验证，只拿到登录状态批不了。",
   "android-misc.personal.note": "哪些设备能以你的名义批准，比如手机调试",

@@ -1775,6 +1775,8 @@ let en : Map[String, String] = {
   "android-misc.personal.confirm": "Confirm",
   "android-misc.personal.finding": "Looking for your other devices. Open still.fail on one of them",
   "android-misc.personal.forget": "I started it: use the new one",
+  "android-misc.adb.lock.join": "Add this device to your personal lock first",
+  "android-misc.adb.lock.open": "Sharing debugging needs your personal lock",
   "android-misc.personal.heading": "Personal lock",
   "android-misc.personal.me": "This device",
   "android-misc.personal.none.found": "No device that can approve was found. Open still.fail on another device and try again",
