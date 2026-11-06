@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
 import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
-import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS, personalBegin, personalPairState } from "../src/views/pair.ts";
+import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS, personalBegin, personalPairState, personalProve } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
 /// The owner's phone and computer, apps that sign: the devices that may approve this one.
@@ -336,6 +336,27 @@ test("a personal lock's code disappears during the search: another device can st
   assert.equal(personalPairState(w.core.inner, "s1").state, "code");
   w.peers[PHONE_APP]!.close();
   await w.host.time.pass(1_000);
+  assert.equal(personalPairState(w.core.inner, "s1").state, "finding");
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal(personalPairState(w.core.inner, "s1").state, "code");
+  assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [1, 2]);
+});
+
+test("a personal lock's code disappears while it is checked: another device can still show one", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-on-proof", [LAPTOP_APP]: "away" });
+  w.core.inner.adb.personal = () => ({
+    makeKey: () => Effect.succeed(`ed25519:${"11".repeat(32)}`),
+    approvers: () => [{ id: PHONE_APP, label: "phone" }, { id: LAPTOP_APP, label: "laptop" }],
+  }) as never;
+  await Effect.runPromise(personalBegin(w.core.inner, ["s1"]));
+  await w.host.time.pass(1_000);
+  assert.equal(personalPairState(w.core.inner, "s1").state, "code");
+  const proving = Effect.runPromise(Effect.result(personalProve(w.core.inner, "123456")));
+  await w.host.time.pass(1_000);
+  const result = await proving;
+  assert.equal(result._tag, "Failure");
+  if (result._tag === "Failure") assert.equal(result.failure.code, "pair_ended");
   assert.equal(personalPairState(w.core.inner, "s1").state, "finding");
   w.ways[LAPTOP_APP] = "code";
   await w.host.time.pass(PAIR_REDIAL_MS);
