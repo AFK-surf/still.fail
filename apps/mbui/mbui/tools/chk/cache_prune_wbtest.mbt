@@ -39,6 +39,17 @@ test "a time of GitHub's in seconds" {
 }
 
 ///|
+test "cache sizes are non-negative integers without overflow or rounding" {
+  assert_eq(cache_size("0"), Some(0L))
+  assert_eq(cache_size("2000000"), Some(2000000L))
+  assert_eq(cache_size("9007199254740993"), Some(9007199254740993L))
+  assert_eq(cache_size("9223372036854775807"), Some(9223372036854775807L))
+  for s in ["", "-1", "+1", "1.5", "1x", "9223372036854775808"] {
+    assert_eq(cache_size(s), None, msg=s)
+  }
+}
+
+///|
 test "only old caches of deleted branches are removed" {
   let heads : Map[String, Bool] = { "refs/heads/main": true, "refs/heads/live": true }
   let cache : Cache = {

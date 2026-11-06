@@ -46,6 +46,23 @@ fn is_digits(s : String) -> Bool {
 }
 
 ///|
+/// GitHub's cache sizes are non-negative whole bytes. Reject overflow rather than rounding through a Double.
+fn cache_size(s : String) -> Int64? {
+  if !is_digits(s) {
+    return None
+  }
+  let mut n = 0L
+  for c in s.to_array() {
+    let d = (c.to_int() - '0'.to_int()).to_int64()
+    if n > (9223372036854775807L - d) / 10L {
+      return None
+    }
+    n = n * 10L + d
+  }
+  Some(n)
+}
+
+///|
 /// setup-gradle's part of a home: gradle-<name>-v1-<32 hex digits>
 fn is_gradle_part(key : String) -> Bool {
   if !key.has_prefix("gradle-") || key.has_prefix("gradle-home-") {
@@ -261,10 +278,23 @@ fn cache_prune(args : Array[String]) -> Int {
     }
   }
   let caches : Array[Cache] = []
+  let mut total = 0L
   for l in lines {
     let f = l.split("\t").map(fn(p) { p.to_owned() }).to_array()
-    if f.length() < 6 {
+    if f.length() != 6 {
       @sys.eprintln("chk cache-prune: incomplete cache record; nothing deleted")
+      return 1
+    }
+    let size = match cache_size(f[3]) {
+      Some(n) if n <= 9223372036854775807L - total => n
+      _ => {
+        @sys.eprintln("chk cache-prune: invalid cache record; nothing deleted")
+        return 1
+      }
+    }
+    if !is_digits(f[0]) || f[1] == "" || f[2] == "" {
+      // The id is interpolated into a shell command; never pass untrusted non-digits to it.
+      @sys.eprintln("chk cache-prune: invalid cache record; nothing deleted")
       return 1
     }
     let created = iso_s(f[4])
@@ -278,10 +308,11 @@ fn cache_prune(args : Array[String]) -> Int {
       id: f[0],
       key: f[1],
       ref_: f[2],
-      size: num_of(f[3]).to_int64(),
+      size,
       created,
       accessed,
     })
+    total += size
   }
   caches.sort_by(fn(a, b) { b.created.compare(a.created) })
   // the homes kept (each job's newest) on each ref, and the earliest of their last reads: a part one of them names is
@@ -374,7 +405,6 @@ fn cache_prune(args : Array[String]) -> Int {
     }
     freed += c.size
   }
-  let total = caches.fold(init=0L, fn(a, c) { a + c.size })
   say(
     "\{gone.length()} of \{caches.length()} caches, \{freed / 1000000L} MB of \{total / 1000000L} MB",
   )
