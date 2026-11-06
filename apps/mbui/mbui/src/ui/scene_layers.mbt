@@ -1796,9 +1796,21 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
           }
         }
       }
+      // (and each of the first few that differ, how: its kind and the numbers that differ, kept/anew)
+      let each : Array[String] = []
+      for q in firsts {
+        let ds = []
+        for j in 0..<inst_size {
+          let (a, b) = (kept[q * inst_size + j], self.inst[q * inst_size + j])
+          if a != b && !(a != a && b != b) {
+            ds.push("\{j}: \{a}/\{b}")
+          }
+        }
+        each.push("at \{q} kind \{self.inst[q * inst_size + 5]} \{ds}")
+      }
       let kind = if at < self.ninst { self.inst[at * inst_size + 5] } else { -1.0 }
       Some(
-        "\{differing} of \{least} instances differ (first at \{firsts}); \{n} instances kept, \{self.ninst} drawn anew; instance \{at} (kind \{kind}) the first to differ, in the layer of node \{who}: \{slots.join(", ")}; the frame \{if tree_alone_drawn.val { "of the tree alone" } else { "the old frame painted" }}",
+        "\{differing} of \{least} instances differ (each, kept/anew: \{each}); \{n} instances kept, \{self.ninst} drawn anew; instance \{at} (kind \{kind}) the first to differ, in the layer of node \{who}: \{slots.join(", ")}; the frame \{if tree_alone_drawn.val { "of the tree alone" } else { "the old frame painted" }}",
       )
     }
   }
