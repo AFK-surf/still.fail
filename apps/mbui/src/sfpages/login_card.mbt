@@ -197,7 +197,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
   let pressed = logins_here.pressed.get(id).unwrap_or(false)
   let code = text(l, "code")
   // the same step in the station's own browser, for the ⋯ beside the step's button
-  let elsewhere = match login_station_way(c, core, station, l) {
+  let elsewhere = match login_station_way(core, station, l) {
     Some(way) => [way]
     None => []
   }
@@ -211,9 +211,11 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       // one press: the code copied first, then its page; the code stays on show for a clipboard that refused it
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=login_page_ways(page, elsewhere)) {
-        logins_here.pressed[id] = true
-        c.copy_text(code)
-        login_open(core, page)
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+          logins_here.pressed[id] = true
+          @ui.current().copy_text(code)
+          login_open(core, page)
+        })
       }
     }
     // this device cannot take the browser's callback (a web page), or its port was taken just now: the station's
@@ -228,7 +230,9 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.browser"], [("station", station), ("id", id)])
       let again = if relay {
-        [(@sf.t("web-main.logins.signIn"), fn() { login_relay(c, core, station, id, text(l, "title")) })]
+        [(@sf.t("web-main.logins.signIn"), fn() {
+          @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
+        })]
       } else {
         []
       }
@@ -257,7 +261,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
       if login_step(c, "login-main/" + id, label, !opened, busy~, more=elsewhere) {
-        login_relay(c, core, station, id, text(l, "title"))
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
       }
     }
     "open" if url != "" => {
@@ -265,8 +269,10 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
         login_said(c, domain)
       }
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=login_page_ways(url, elsewhere)) {
-        logins_here.pressed[id] = true
-        login_open(core, url)
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+          logins_here.pressed[id] = true
+          login_open(core, url)
+        })
       }
     }
     _ => login_said(c, text(l, "statusText"), busy=true, last=true)
@@ -278,7 +284,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
 /// 浏览器中打开, or 回到 … 的浏览器 while its tab is open) and what does it: its page opened in a tab there (the one open,
 /// if it is), whose view opens here and goes back by itself once the login ends; a loopback's callback comes back to the
 /// command there, nothing relayed or pasted.
-fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
+fn login_station_way(core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
   if !flag(l, "browser") || text(l, "browserText") == "" {
     return None
   }
@@ -288,9 +294,11 @@ fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (
     (
       label,
       fn() {
-        c.tell("login-station/" + id, fn() {
-          @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
-            (core.open_screen)(station, text(Some(v), "screen"))
+        @settings.confirm_claude_auth(text(l, "name") == "claude" && text(l, "screen") == "", fn() {
+          @ui.current().tell("login-station/" + id, fn() {
+            @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
+              (core.open_screen)(station, text(Some(v), "screen"))
+            })
           })
         })
       },
@@ -393,13 +401,15 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
       d => @sf.t("web-main.logins.pasteLead", args=[("domain", d)])
     }
   })
-  let elsewhere = match login_station_way(c, core, station, l) {
+  let elsewhere = match login_station_way(core, station, l) {
     Some(way) => [way]
     None => []
   }
   if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=login_page_ways(text(l, "url"), elsewhere), last=false) {
-    logins_here.pressed[id] = true
-    login_open(core, text(l, "url"))
+    @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+      logins_here.pressed[id] = true
+      login_open(core, text(l, "url"))
+    })
   }
   // sent, nothing is left to type: the keyboard goes (the code stays in the field as it is checked)
   let send = fn(code : String) {

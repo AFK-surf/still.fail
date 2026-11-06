@@ -699,6 +699,9 @@ common.legal.terms
 common.link.copied
 common.link.copy
 common.link.open
+common.login.confirmClaudeAction
+common.login.confirmClaudeBody
+common.login.confirmClaudeTitle
 common.more
 common.noMatch
 common.opening

@@ -21,6 +21,66 @@ test "a profile's page, wide: who it is and whether it works, then its allowance
 }
 
 ///|
+test "checking a Claude account does not ask for confirmation" {
+  for (w, platform) in page_cases {
+    let calls : Array[String] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          if name == "profile.check" || name == "profile.quota" { calls.push(name) }
+          (s.call)(name, params, done)
+        } }
+    })
+    t.click(Button, label="重新检查")
+    t.frame()
+    assert_eq(calls, ["profile.check", "profile.quota"])
+    assert_false(@sf.presenting())
+  }
+}
+
+///|
+test "returning to a Claude account's open login page does not ask again" {
+  for (w, platform) in page_cases {
+    let calls : Array[String] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, mode="settings-profile-login-station", over=fn(s) {
+      fn with_open_screen(v : Json) -> Json {
+        match v {
+          Object(o) => {
+            let copy = o.copy()
+            for key, value in o { copy[key] = with_open_screen(value) }
+            if text(Some(v), "state") == "needs_code" && flag(Some(v), "browser") {
+              copy["screen"] = "browser:T1"
+            }
+            Json::object(copy)
+          }
+          Array(a) => Json::array(a.map(with_open_screen))
+          _ => v
+        }
+      }
+      { ..s,
+        topic: fn(name, params) {
+          let r = (s.topic)(name, params)
+          { ..r, value: r.value.map(with_open_screen) }
+        },
+        call: fn(name, params, done) {
+          if name == "profile.loginBrowser" {
+            calls.push(name)
+            done(Ok({ "screen": "browser:T1" }))
+          } else {
+            (s.call)(name, params, done)
+          }
+        },
+      }
+    })
+    t.click(Button, label="其他方式")
+    presented_in(t)
+    t.tap_text("回到 Willow 的浏览器")
+    t.run_for(@kit.presence_out_ms)
+    assert_eq(calls, ["profile.loginBrowser"])
+    assert_false(@sf.presenting())
+  }
+}
+
+///|
 test "a shared subscription's main switch and its station details remain usable at each width" {
   for case in page_cases {
     let (w, platform) = case

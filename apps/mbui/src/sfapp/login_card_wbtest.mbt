@@ -90,6 +90,21 @@ test "a login whose page gives a code to paste back: 打开登录页, then the c
 }
 
 ///|
+test "a Claude login card asks before opening the authorization page" {
+  let calls : Array[Made] = []
+  let page = "https://claude.ai/oauth/authorize"
+  let t = with_logins(login_core(calls, login_of([
+    ("name", "claude"), ("step", "open"), ("paste", true), ("url", Json::string(page)),
+  ])))
+  t.tap_text("打开登录页")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty())
+  t.tap_text("继续打开")
+  assert_eq(t.opened(), [page])
+}
+
+///|
 test "a login's page copied from the ⋯ beside its button, its address on the clipboard and said so" {
   for login in [
     login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]),
@@ -147,6 +162,24 @@ test "a login the station's own browser can do: seldom used, in the ⋯ by the s
     Screen(at) => assert_eq((at.station, at.screen, at.until_gone), ("ws1/st1", "browser:T1", true))
     _ => assert_true(false, msg="its tab's view opened")
   }
+}
+
+///|
+test "returning to an already open Claude login in the station's browser needs no confirmation" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(
+    calls,
+    login_of([
+      ("name", "claude"), ("step", "loopback"), ("url", "https://claude.ai/oauth/authorize"),
+      ("browser", true), ("browserText", "回到 Willow 的浏览器"), ("screen", "browser:T1"),
+    ]),
+    answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } },
+    relay=false,
+  ))
+  t.tap_text("回到 Willow 的浏览器")
+  t.frame()
+  assert_eq(named(calls, "machineLogin.browser").length(), 1)
+  assert_false(@sf.presenting())
 }
 
 ///|

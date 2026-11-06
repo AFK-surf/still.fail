@@ -773,6 +773,22 @@ test "a subscription signing in: its page's address copied from the ⋯ beside �
 }
 
 ///|
+test "adding an Anthropic subscription asks before opening its authorization page" {
+  let t = settings_tester("new-profile:ws1/st1", shows="settings-new-profile-login", platform=2)
+  t.tap_text("打开授权页面")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty(), msg="nothing opened before confirmation")
+  t.back()
+  sheet_rested(t, "sf-present")
+  assert_true(t.opened().is_empty(), msg="cancelling leaves the page closed")
+  t.tap_text("打开授权页面")
+  sheet_rested(t, "sf-present")
+  t.tap_text("继续打开")
+  assert_eq(t.opened().length(), 1)
+}
+
+///|
 test "本机缓存: the drives' files kept, counted with the chats', let go when asked" {
   let t = settings_tester("kept")
   // (what is kept asked of the core as the page is first built: drawn with its answer)
