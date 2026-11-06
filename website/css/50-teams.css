@@ -7,9 +7,8 @@
 /* Three cells on the page's grid: dashed rules across the page above and below them, dashed rules between them (the
    page's guides are their outer edges). */
 .rails { position: relative; }
-.rails::before, .rails::after { content: ""; position: absolute; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
-.rails::before { top: 0; }
-.rails::after { bottom: 0; }
+/* One rule over the cells; the next band's own rule closes them (a second one here would leave an empty row). */
+.rails::before { content: ""; position: absolute; top: 0; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
 .rails > .cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .cell { padding: clamp(16px, 1.7vw, 24px) clamp(16px, 1.7vw, 24px) clamp(24px, 2.4vw, 36px); display: flex; flex-direction: column; min-width: 0; }
 .cell + .cell { background: var(--dash-y); background-position: left top; }
@@ -73,9 +72,15 @@ img.sl-av { background: none; }
 .sl-at { color: #1264A3; background: rgb(29 155 209 / .1); border-radius: 3px; padding: 0 2px; }
 .sl-slot { display: grid; }
 .sl-slot > * { grid-area: 1 / 1; }
-/* Slack's own line while an agent works: the app's icon, its name, what it is doing. */
-.sl-st { display: flex; align-items: center; gap: 6px; height: 20px; padding-left: 38px; font-size: 12px; font-style: italic; color: #616061; white-space: nowrap; }
-.sl-st img { width: 14px; height: 14px; border-radius: 4px; }
+/* Slack's own line while an agent works: the app's name and the status the station sets, a fixed category
+   (station/src/slack/status.ts: Running command…, Thinking…), never the task itself. */
+.sl-st { display: flex; align-items: center; height: 20px; padding-left: 38px; font-size: 12px; font-style: italic; color: #616061; white-space: nowrap; }
+.sl-st b { font-weight: 700; }
+/* The grey context line the bot adds under its last message when the turn ends (cards.ts standsBlock), removed when work
+   starts again. */
+.sl-m .sl-ctx { max-height: 20px; margin-top: 4px; overflow: hidden; font-size: 12px; line-height: 18px; color: #616061; white-space: nowrap; text-overflow: ellipsis; }
+.sl-m .sl-ctx:not(.is-in) { max-height: 0; margin-top: 0; }
+.sl-ctx, .sl-ctx.is-in { transition: opacity 200ms var(--ease-out), max-height 320ms var(--ease-in-out), margin-top 320ms var(--ease-in-out); }
 .cell.play .sl-st.is-in > span { animation: sl-breathe 1.6s ease-in-out infinite; }
 @keyframes sl-breathe { 50% { opacity: .55; } }
 
@@ -95,9 +100,8 @@ img.sl-av { background: none; }
 
 /* ---- 3 · Stations hand off work: a test goes from Willow to the server, runs there, and the results come back ---- */
 .tp.tp-st { display: grid; align-content: center; gap: 0; padding: 14px; background: var(--sb); }
-.tp-st .mk-row { gap: 4px; padding: 10px 12px; border-radius: 14px; }
 .tp-st .mk-row.on { background: var(--se); }
-.st-lane { position: relative; height: 48px; margin-left: 21px; }
+.st-lane { position: relative; height: 48px; margin-left: 18px; }
 .st-lane::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; border-left: 1.5px dotted #B9B7B1; }
 .st-lane .pk { position: absolute; left: -4px; top: 0; width: 9.5px; height: 9.5px; border-radius: 2.5px; background: var(--ink); }
 .st-lane .pk.up { background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); }
@@ -117,7 +121,8 @@ img.sl-av { background: none; }
 .st-swap > .b, .cell[data-step="2"] .st-swap > .a { opacity: 0; }
 .cell[data-step="2"] .st-swap > .b { opacity: 1; }
 .tp-st .meter.cpu > i { transform-origin: left; transition: transform 700ms var(--ease-in-out); }
-.cell[data-step="2"] .tp-st .meter.cpu > i { transform: scaleX(2.05); }
+/* 76% used: the meter turns amber (StationCards: amber from 75% used). */
+.cell[data-step="2"] .tp-st .meter.cpu > i { transform: scaleX(2.05); background: rgb(110 72 2 / .28); }
 
 
 /* ---- Phones and small tablets: a swiper of cards, full bleed, snapping to the gutter; the next card peeks in (three
@@ -126,7 +131,7 @@ img.sl-av { background: none; }
 .tm-nav { display: none; }
 @media (max-width: 899px) {
   .rails { margin-inline: calc(-1 * var(--gl)) calc(-1 * var(--gr)); }
-  .rails::before, .rails::after { display: none; }
+  .rails::before { display: none; }
   .rails > .cells { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(calc(100vw - var(--gl) - var(--gr) - 28px), 380px); gap: 12px;
     margin: 0; padding: 2px var(--gr) 4px var(--gl); scroll-padding-inline: var(--gl); overflow-x: auto; overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory; touch-action: pan-x pan-y; scrollbar-width: none; align-items: start; }

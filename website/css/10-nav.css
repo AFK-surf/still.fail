@@ -71,6 +71,9 @@
 @media (pointer: coarse) {
   .icon-link, .menu-btn { width: 44px; height: 44px; margin-inline: -4px; }
   .icon-link::after, .menu-btn::after { content: none; }
+  /* The bar's call to action keeps its 36 px drawing; its hit area reaches 44 px. */
+  .nav-tools > .btn { position: relative; }
+  .nav-tools > .btn::after { content: ""; position: absolute; inset: -5px -1px; } /* from inside its 1 px border */
 }
 @media (prefers-reduced-motion: no-preference) { .icon-link:active, .menu-btn:not(:disabled):active { scale: .96; } }
 .icon-link svg { width: 20px; height: 20px; }
@@ -103,9 +106,9 @@
   }
   .nav[data-open] .nav-list { visibility: visible; transform: none; transition: transform 380ms var(--ease-drawer), visibility 0s; }
   .nav-list { justify-content: flex-start; }
-  .nav-list a { min-height: 52px; font-size: 15px; color: var(--ink); background: var(--dash-x); background-position: left bottom; }
+  .nav-list a { flex: none; min-height: 52px; font-size: 15px; color: var(--ink); background: var(--dash-x); background-position: left bottom; }
   .nav-list a[aria-current=true]::after { content: ""; width: 6px; height: 6px; margin-left: 10px; border-radius: 1px; background: var(--brand-deep); }
-  .nav-list .nav-cta { display: inline-flex; align-self: stretch; margin-top: 20px; min-height: 0; font-family: var(--font); font-size: 15px; color: #fff; background: var(--ink); }
+  .nav-list .nav-cta { display: inline-flex; align-self: stretch; margin-top: 20px; flex: none; min-height: 44px; font-family: var(--font); font-size: 15px; color: #fff; background: var(--ink); }
   .nav[data-open]::before { background: var(--paper); }
   .nav-scrim {
     display: block; position: fixed; inset: 0; z-index: -3; background: rgba(28,27,26,.28);

@@ -78,14 +78,19 @@
   color-scheme: light;
 }
 /* One page per language (<html lang>): Suisse Intl for Latin, then the system's fonts for the script (Apple's, then
-   Noto as Android and Linux name it, then Windows'). */
+   Noto as Android and Linux name it, then Windows'). The mono labels name the script's sans too: CJK has no mono of its
+   own, and the generic monospace would fall to a SimSun-family face on Windows. */
 :root:lang(zh-CN) { --font: "Suisse Intl", "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", monospace;
   --serif: "Newsreader", "Songti SC", "STSong", "Noto Serif SC", "Noto Serif CJK SC", "Source Han Serif SC", "PingFang SC", "Microsoft YaHei", sans-serif; }
 :root:lang(zh-TW) { --font: "Suisse Intl", "Inter", "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Source Han Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Microsoft JhengHei", monospace;
   --serif: "Newsreader", "Songti TC", "Noto Serif TC", "Noto Serif CJK TC", "Source Han Serif TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
 :root:lang(ja) { --font: "Suisse Intl", "Inter", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", "Source Han Sans JP", "Yu Gothic", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic", monospace;
   --serif: "Newsreader", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "Noto Serif CJK JP", "Source Han Serif JP", "Hiragino Sans", "Yu Gothic", sans-serif; }
 :root:lang(ko) { --font: "Suisse Intl", "Inter", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "Source Han Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "Malgun Gothic", monospace;
   --serif: "Newsreader", "AppleMyungjo", "Noto Serif KR", "Noto Serif CJK KR", "Source Han Serif KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
 /* Two tones: paper everywhere, and the one dark band (the closing call and the footer). */
 [data-tone=paper] { --bg: var(--paper); --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --g: var(--guide); --hit: var(--ink); --ring: var(--brand-deep); }
@@ -154,6 +159,14 @@ h3 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: 600; le
    Korean is spaced like Latin: its lines break at the spaces, never inside a word (break-word only as a last resort). */
 :root:lang(ja) { line-break: strict; }
 :root:lang(ko) body { word-break: keep-all; overflow-wrap: break-word; }
+/* Sub-heads and labels too: Latin tracking (tight Suisse sub-heads, open mono overlines) is not for square glyphs. */
+:root:is(:lang(zh), :lang(ja), :lang(ko)) :is(h3, .eyebrow, .tag, .strip > p, .foot-grid .fh, .dl b, .btn, .foot-tag, .sec-notes p, .language-trigger) { letter-spacing: 0; }
+/* Short CJK paragraphs (wider than a phone): balanced lines, so none ends on two or three glyphs; Japanese breaks
+   between phrases where the browser can (otherwise a verb splits: 使|います). */
+@media (min-width: 641px) {
+  :root:is(:lang(zh), :lang(ja), :lang(ko)) :is(.lead, .cell > p, .callout p, .fpanel .txt p, .dv-step p, .sec-notes p) { text-wrap: balance; }
+  @supports (word-break: auto-phrase) { :root:lang(ja) :is(.lead, .cell > p, .callout p, .fpanel .txt p, .dv-step p, .sec-notes p) { word-break: auto-phrase; } }
+}
 /* Square glyphs fill the em, so lines need more air than Latin at the same size. */
 :root:is(:lang(zh), :lang(ja), :lang(ko)) { --lh-display: 1.08; --lh-title: 1.14; --lh-lead: 1.62; --lh-small: 1.7; }
 .lead { font-size: 16px; line-height: var(--lh-lead); letter-spacing: 0; color: var(--mut); max-width: 36em; text-wrap: pretty; }
@@ -175,7 +188,8 @@ h3 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: 600; le
 .sec { padding-block: clamp(72px, 8.4vw, 128px); }
 /* A panel behind a product picture: warm grey with a faint dot grid. */
 .dots { background: var(--dots), var(--panel); }
-section[id] { scroll-margin-top: var(--nav); }
+/* Anchor jumps and focus moves clear the sticky bar (and keep a little air at the foot). */
+html { scroll-padding-top: calc(var(--nav) + 16px); scroll-padding-bottom: 16px; }
 /* Bands below the first screen are laid out and painted only as they come near. */
 .sec { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
 .head { display: flex; flex-direction: column; gap: clamp(12px, 1.2vw, 18px); margin-bottom: clamp(36px, 4.4vw, 72px); max-width: 1180px; }
@@ -214,8 +228,9 @@ section[id] { scroll-margin-top: var(--nav); }
   .btn:hover .arr { transform: translateX(3px); }
 }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
-:root:is(:lang(zh), :lang(ja), :lang(ko)) .hero h1 { max-width: 12ch; }
-:root:is(:lang(zh), :lang(ja), :lang(ko)) .end h2 { max-width: 12ch; }
+/* CJK headlines' measure in em (ch is Newsreader's "0", half a CJK glyph); the <br> sets the break. */
+:root:is(:lang(zh), :lang(ja), :lang(ko)) .hero h1 { max-width: 12em; }
+:root:is(:lang(zh), :lang(ja), :lang(ko)) .end h2 { max-width: 12em; }
 /* ---------- Reveal on scroll ----------
    Only what starts below the fold waits (.rv-wait, set by main.js after the first paint, so nothing on the first
    screen ever blinks). It rises 12 px and fades in on a strong ease-out. A group (.split-head, .head, or any .rv with

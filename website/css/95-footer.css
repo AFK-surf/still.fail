@@ -30,7 +30,7 @@
 /* Language: a pill (globe, the language, a chevron) opening a menu of the pages in other languages, above it (below
    when there is no room), drawn from the trigger's corner. Positioned by CSS anchor positioning; where that is missing,
    main.js places it (data-placed). */
-.footer-prefs { display: flex; align-items: center; margin-right: -6px; }
+.footer-prefs { display: flex; align-items: center; }
 .language-trigger {
   position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 7px 0 9px; border: 1px solid var(--hair); border-radius: 6px;
   background: transparent; color: var(--fg); cursor: pointer;

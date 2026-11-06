@@ -61,9 +61,11 @@ YaHei; `zh-TW` PingFang TC / Noto Sans TC / Noto Sans CJK TC / Source Han Sans T
 Sans / Hiragino Kaku Gothic ProN / Noto Sans JP / Noto Sans CJK JP / Source Han Sans JP / Yu Gothic; `ko` Apple SD Gothic
 Neo / Noto Sans KR / Noto Sans CJK KR / Source Han Sans KR / Malgun Gothic: Apple's, then Noto as Android and Linux name
 it, then Windows'). Language-specific rules key on `:lang()`: CJK is
-`:root:is(:lang(zh), :lang(ja), :lang(ko))` (more leading, headline tracking −1%, the hero and closing headlines
-narrower), Latin the rest; Chinese and Japanese headlines use half-width punctuation (`halt`), Chinese and Korean keep
-words whole (`keep-all`), Japanese breaks between phrases (`auto-phrase`) where the browser can. A headline's text is
+`:root:is(:lang(zh), :lang(ja), :lang(ko))` (more leading; no tracking on headlines, sub-heads or labels, since Latin
+tracking is not for square glyphs; the hero and closing headlines held to 12 em, so each breaks only at its `<br>`;
+short paragraphs balanced from 641 px, so none ends on a few glyphs), Latin the rest; Chinese and Japanese headlines use
+half-width punctuation (`halt`), Chinese and Korean headlines, card titles and FAQ questions keep words whole
+(`keep-all`), Japanese breaks between phrases (`auto-phrase`) where the browser can, its short paragraphs too. A headline's text is
 one `<span>` (its translation), which those rules select.
 
 **The brand line is translated.** "One devices" (the hero's `<h1>`, `hero.one-devices.*`, and the `<title>` /
@@ -165,7 +167,8 @@ Yu Gothic; ko AppleMyungjo / Noto Serif KR …, then Apple SD Gothic Neo / Malgu
 takes a face's Medium where it has one and its Regular otherwise. Suisse Intl sets everything else: Regular (400) for
 running text (15–16 px, Graphite), Book (500) for UI and labels, Medium (600) for sub-heads and the wordmark. The nav,
 small captions, tags, overlines (uppercase, tracked) and numerals use the system's monospace (`--mono`); on Chinese,
-Japanese and Korean pages the nav's labels are in the sans. Size, leading and tracking move as a set (`--t-*`, `--lh-*`,
+Japanese and Korean pages the nav's labels are in the sans, and `--mono` names the script's sans before the generic
+`monospace` (CJK has no mono; the generic would fall to a SimSun-family face on Windows). Size, leading and tracking move as a set (`--t-*`, `--lh-*`,
 `--tr-*` in 00-base.css): section titles 32 px, the hero 36–52 px, the closing headline 30–40 px. Newsreader's Latin
 subset (22 KB, 400 only, preloaded) is `assets/fonts/newsreader-400.woff2`, under the SIL Open Font License
 (`Newsreader-OFL.txt`, Production Type); Suisse Intl's three Latin subsets (about 21 KB each) are under the team's
@@ -240,17 +243,21 @@ claims the product and its docs make. The hero has no label row: the headline, t
 
 ## Performance
 
-- One request before the first paint once built (CSS and JS inlined): about 295–303 KB, 65–68 KB gzipped, per language, plus Suisse Intl's
-  Newsreader (22 KB) and Suisse Intl's Regular and Medium (21 KB each), preloaded; Book follows as the sheet needs it; Inter (48 KB) only as product
+- One request before the first paint once built (CSS and JS inlined): about 239–246 KB, 55–58 KB gzipped, per language, plus
+  Newsreader (22 KB) and Suisse Intl's Regular and Book (21 KB each: the first screen's text, buttons and the lead's bold
+  phrases), preloaded; Medium (the wordmark and sub-heads) follows as the sheet needs it; Inter (48 KB) only as product
   pictures need it. Chinese, Japanese and Korean use the system's fonts. No new external requests; no images on the page but small SVGs.
 - Bands below the first screen use `content-visibility: auto`, and so do the overview's cards on a phone, so the first
   layout covers little more than the first screen.
 - The script reads no layout while the page parses: first states are taken in the first frame or by `ResizeObserver`.
+- The devices scene is cloned from its template only as it comes near (or 2.5 s after `load`), not in the frames after
+  the first paint. A swiper card's picture is laid out only when it is the card in view or next to it (`[data-near]`,
+  set by main.js), so the four pictures never land in one frame.
 - The devices scene's tweens read their start values once, at an idle moment while the reader is still above it, not
   in the frames of the first scroll through it.
 - Lighthouse 12.6.1, the built page. Served compressed, as a host does (gzip, `_headers` cache lifetimes): mobile
-  (simulated slow 4G) Performance 100, Accessibility 100, Best practices 100, SEO 100; FCP 1.2 s, LCP 1.7 s, TBT
-  0–60 ms, CLS 0–0.001. Desktop 100 / 100 / 100 / 100. On a plain `python3 -m http.server` (no compression) mobile
+  (simulated slow 4G, en and ja, three runs each) Performance 98; FCP 1.5 s, LCP 2.3 s (the hero's lead), TBT
+  0–80 ms, CLS 0. Desktop: Performance, Accessibility, Best practices and SEO 100; FCP 0.4 s, LCP 0.5 s. On a plain `python3 -m http.server` (no compression) mobile
   Performance is 92 (FCP 2.4 s: the page uncompressed); compression comes from the host.
 
 ## Numbers that go stale

@@ -51,6 +51,8 @@
 :root:not(:lang(zh), :lang(ja), :lang(ko)) :is(.faq summary .q, .faq .a p) { text-wrap: pretty; }
 /* CJK questions: the serif's Regular a step up where the face has one. */
 :root:is(:lang(zh), :lang(ja), :lang(ko)) .faq summary { font-weight: 500; font-size: 17px; letter-spacing: 0; }
+/* Chinese and Korean questions keep words whole (不|同 never splits), as the headlines do. */
+:root:is(:lang(zh), :lang(ko)) .faq summary .q { word-break: keep-all; }
 /* The mark: plus while closed, minus while open, cross-fading in one place (both stay in the DOM, so a second click
    turns it back from where it is). */
 .faq summary .pm {

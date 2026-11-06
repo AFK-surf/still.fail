@@ -86,9 +86,8 @@
 /* ---------- Changelog: the latest nightly release, its cover a pixel mosaic on a panel ----------
    Between dashed rules across the page; the page's guides are its sides. */
 .posts { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); }
-.posts::before, .posts::after { content: ""; position: absolute; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
-.posts::before { top: 0; }
-.posts::after { bottom: 0; }
+/* One rule over the posts; the next band's own rule closes them. */
+.posts::before { content: ""; position: absolute; top: 0; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
 .post { padding: clamp(20px, 2.4vw, 40px) 0; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .post.feature { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 3vw, 56px); align-items: start; }
 .post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; }

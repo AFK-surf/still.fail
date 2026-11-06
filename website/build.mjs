@@ -429,10 +429,12 @@ function main(argv) {
   writeFileSync(out + "sitemap.xml", sitemap(cfg));
   writeFileSync(out + "robots.txt", existsSync(here("robots.txt")) ? readFileSync(here("robots.txt"), "utf8")
     : `User-agent: *\nAllow: /\n\nSitemap: ${cfg.origin}/sitemap.xml\n`);
-  // Cloudflare / Netlify style headers: the font and icons are named for good; the pages are asked for each time.
+  // Cloudflare / Netlify style headers: the fonts are named for good; the other assets for a day; the pages are asked
+  // for each time. Those hosts apply every rule that matches and join a header set twice, so no two rules here set
+  // Cache-Control for the same path ("*" spans slashes: /assets/*.png covers the og images too).
   writeFileSync(out + "_headers", [
     "/assets/fonts/*", "  Cache-Control: public, max-age=31536000, immutable",
-    "/assets/*", "  Cache-Control: public, max-age=86400",
+    ...["/assets/*.svg", "/assets/*.png", "/assets/vendor/*"].flatMap((p) => [p, "  Cache-Control: public, max-age=86400"]),
     "/*", "  X-Content-Type-Options: nosniff", "",
   ].join("\n"));
   for (const f of faces) console.log(`${f.padEnd(36)}${kb(statSync(out + `assets/fonts/${f}.woff2`).size)}`);

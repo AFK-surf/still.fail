@@ -132,6 +132,21 @@
   // way at once, lets the bands near the target settle, then glides the last stretch, and checks where it landed.
   const targetY = (t) => t.id === "top" ? 0 : t.getBoundingClientRect().top + scrollY - (parseFloat(getComputedStyle(t).scrollMarginTop) || 0);
   const frames = (n) => new Promise((ok) => { const f = () => (n-- ? requestAnimationFrame(f) : ok()); f(); });
+  // Tab into a band not yet laid out (content-visibility) scrolls to its placeholder's place; as the bands above get
+  // their real heights the control can end up off screen. For half a second (while they settle), a focused control
+  // that leaves the view is brought back.
+  document.addEventListener("focusin", (e) => {
+    const el = e.target;
+    if (!(el instanceof Element) || el.matches('body, :where(section, main)[tabindex="-1"]')) return;
+    const until = performance.now() + 600;
+    const check = () => {
+      if (document.activeElement !== el) return;
+      const r = el.getBoundingClientRect(), top = $("#nav")?.offsetHeight || 0;
+      if (r.bottom <= top || r.top >= innerHeight) el.scrollIntoView({ block: "center", behavior: "instant" });
+      if (performance.now() < until) requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
   const settle = () => new Promise((ok) => {
     let done = false;
     const end = () => { if (!done) { done = true; removeEventListener("scrollend", end); ok(); } };
@@ -171,20 +186,23 @@
   // A thin stripe across the middle of the screen decides; a band with no link (the hero, the overview) clears it.
   const links = new Map($$('a[href^="#"]', sheet).map((a) => [a.hash.slice(1), a]));
   let current = null;
-  function placeInd(slide) {
-    if (!current || !current.offsetWidth) { ind.removeAttribute("data-on"); return; }
+  // box: the link's place, read before mark() writes (so the scroll spy forces no style recalc); else read here.
+  function placeInd(slide, box) {
+    const w = box ? box.w : current?.offsetWidth;
+    if (!current || !w) { ind.removeAttribute("data-on"); return; }
     // Coming from nowhere, it appears in place; from another link, it slides.
     ind.toggleAttribute("data-jump", !slide || !ind.hasAttribute("data-on"));
-    ind.style.setProperty("--x", current.offsetLeft + "px");
-    ind.style.setProperty("--w", current.offsetWidth);
+    ind.style.setProperty("--x", (box ? box.x : current.offsetLeft) + "px");
+    ind.style.setProperty("--w", w);
     ind.setAttribute("data-on", "");
   }
   function mark(a) {
     if (a === current) return;
+    const box = a ? { x: a.offsetLeft, w: a.offsetWidth } : null;
     current?.removeAttribute("aria-current");
     current = a || null;
     current?.setAttribute("aria-current", "true");
-    placeInd(true);
+    placeInd(true, box);
   }
   const seen = new Map();
   const spy = new IntersectionObserver((entries) => {
@@ -330,7 +348,7 @@
     const swipe = $(".dv-swipe"), track = $("#dv-track"), cards = $$(".fpanel", track);
     const dots = $$(".dv-dots button", swipe), pill = $(".dv-pill", swipe), count = $(".dv-count b", swipe);
     const [prev, next] = $$(".dv-arrows button", swipe);
-    let on = -1, frame = 0;
+    let on = -1, frame = 0, nearT = 0;
     const left = (card) => card.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).scrollPaddingLeft || 0);
     const go = (i) => track.scrollTo({ left: left(cards[Math.max(0, Math.min(cards.length - 1, i))]), behavior: reduce ? "auto" : "smooth" });
     const follow = () => {
@@ -343,6 +361,13 @@
       if (i === on) return;
       on = i;
       cards.forEach((c, k) => c.toggleAttribute("data-on", k === i));
+      // Only the card in view has its picture laid out at once (the first time, a frame after the section itself);
+      // its neighbours follow a moment later, so the four pictures never land in one frame (60-devices.css: [data-near]).
+      const first = !nearT;
+      clearTimeout(nearT);
+      const near = () => cards[on].setAttribute("data-near", "");
+      if (first) setTimeout(near, 50); else near();
+      nearT = setTimeout(() => cards.forEach((c, k) => { if (Math.abs(k - on) <= 1) c.setAttribute("data-near", ""); }), 300);
       dots.forEach((d, k) => d.toggleAttribute("aria-current", k === i));
       count.textContent = String(i + 1).padStart(2, "0");
       prev.disabled = i === 0;
@@ -415,7 +440,11 @@
       if (i === current) return;
       current = i;
       no.textContent = String(i + 1).padStart(2, "0");
-      rail.forEach((li, k) => li.toggleAttribute("data-on", k === i));
+      rail.forEach((li, k) => {
+        li.toggleAttribute("data-on", k === i);
+        const b = $("button", li);
+        if (k === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      });
       steps.forEach((s, k) => s.setAttribute("aria-hidden", String(k !== i)));
     };
     const st = ScrollTrigger.create({
@@ -441,19 +470,29 @@
     if (st.progress === 0) (window.requestIdleCallback || setTimeout)(() => {
       if (st.progress === 0 && !st.isActive) { tl.progress(1, true); tl.progress(0, true); }
     });
+    // The bands above the scene are laid out only as they come near (content-visibility), so their real heights can
+    // arrive after the trigger measured its start (a jump past them, a deep link): measure again once they settle.
+    let refreshT;
+    const settle = new ResizeObserver(() => { clearTimeout(refreshT); refreshT = setTimeout(() => ScrollTrigger.refresh(), 150); });
+    for (const s of $$("main > section")) if (s.compareDocumentPosition(show) & Node.DOCUMENT_POSITION_FOLLOWING) for (const c of s.children) settle.observe(c);
+    // A window made smaller than the scene's screen shows the swiper instead (60-devices.css): the trigger rests.
+    sceneMQ.addEventListener("change", (e) => { if (e.matches) { st.enable(); ScrollTrigger.refresh(); } else st.disable(false); });
     // The rail scrolls to its device.
     rail.forEach((li) => $("button", li).addEventListener("click", () => {
       const i = Number(li.dataset.i);
       scrollTo({ top: st.start + (st.end - st.start) * pos(labels[i]), behavior: "smooth" });
     }));
   }
+  // The same screen as the head script's test (and 60-devices.css), watched for a window that is resized.
+  const sceneMQ = matchMedia("(min-width: 1024px) and (min-height: 760px)");
   if (root.classList.contains("scrolly")) {
-    // The scene, from its template, into its placeholder (which already has its height: nothing moves).
-    $(".dv-show").append($("#dv-stage").content.cloneNode(true));
     let started = false;
     const start = () => {
       if (started) return;
       started = true;
+      // The scene, from its template, into its placeholder (which already has its height: nothing moves). Not before:
+      // its four devices would be styled and laid out in the frames after the first paint, screens before they show.
+      $(".dv-show").append($("#dv-stage").content.cloneNode(true));
       loadScript("assets/vendor/gsap.min.js")
         .then(() => loadScript("assets/vendor/ScrollTrigger.min.js"))
         .then(initScrolly)

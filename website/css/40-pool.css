@@ -3,8 +3,9 @@
    The picture is three isometric plates: new chats, the pool's six accounts, four stations. Each chat drops onto the
    account it is given (lit), and a dotted line runs down to the station it runs on (ringed). The tags are HTML, so
    they keep a readable size however small the plates are drawn. */
-.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 12fr); gap: var(--gap); align-items: center; }
-.callouts { display: flex; flex-direction: column; }
+.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 12fr); gap: var(--gap); align-items: start; }
+/* The notes start level with the picture's own top padding, under the section's lead. */
+.callouts { display: flex; flex-direction: column; padding-top: clamp(28px, 3.4vw, 56px); }
 .callout { padding-block: clamp(20px, 2vw, 28px); }
 .callout + .callout { background: var(--dash-x); background-position: left top; }
 .callout h3 { display: flex; align-items: center; gap: 10px; font-size: 16px; line-height: 1.3; }
@@ -78,7 +79,9 @@
   .pool { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap); row-gap: clamp(40px, 5vw, 56px); align-items: start; }
   .pool-fig { grid-column: 1 / -1; order: -1; }
   .iso-box { width: min(380px, calc(100% - 2 * var(--tagw)), 50svh); }
-  .callouts { gap: clamp(28px, 4vw, 40px); }
+  /* The two notes side by side across the row, split by a vertical dashed rule. */
+  .callouts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap); padding-top: 0; }
+  .callout + .callout { background: var(--dash-y); background-position: left top; padding-left: var(--gap); }
 }
 
 /* ---------- Phones: the plates to the left, every tag on the right; callouts as a list ---------- */
@@ -90,6 +93,8 @@
   .pool-fig .pt-l { left: calc(var(--xm) + var(--lead)); right: auto; }
   .pool-fig .pt-l::before { left: auto; right: 100%; }
   .pool-fig .pt-l::after { right: auto; left: calc(-1 * var(--lead) - 3px); }
+  .callouts { display: flex; flex-direction: column; }
+  .callout + .callout { background: var(--dash-x); background-position: left top; padding-left: 0; }
   .callout { padding-block: 20px; }
   .callout h3 { font-size: 16px; }
   .callout p { font-size: 15px; margin-top: 6px; }
