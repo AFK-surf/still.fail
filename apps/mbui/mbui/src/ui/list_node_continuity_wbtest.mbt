@@ -35,6 +35,31 @@ test "retained rows show a first reading and another source at once, then animat
 }
 
 ///|
+test "retained rows open in a top-aligned following window with a separate ground" {
+  let items = @signals.signal(["a"])
+  let t = Tester::new(fn(_) { }, w=200.0, h=150.0)
+  set_view_app(fn(root) {
+    let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(k) { k }, fn(_) { "" })
+    root.height(Is(Some(150.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 },
+      from_end=true, align_end=false, rooms=rows.room_now, room_transforms=false, fn(row, k) {
+        (rows.lend)(row, k)
+        row.height(Is(Some(60.0))) |> ignore
+        row.box(fn(g) { g.over(Is(true)).ground(Is(0xFFFFFFFFL)).list_room_ground() |> ignore }) |> ignore
+        row.box(fn(body) { body.height(Is(Some(60.0))).list_room_content() |> ignore }) |> ignore
+      }) |> ignore
+  })
+  t.draw()
+  assert_eq(t.row(0).map(fn(r) { r.1 }), Some(0.0))
+  items.set(["a", "b"])
+  t.draw()
+  t.run_for(row_size_ms / 2.0)
+  let open = t.row(1).map(fn(r) { r.3 }).unwrap_or(-1.0)
+  assert_true(open > 0.0 && open < 60.0, msg="the new room opens: \{open}")
+  t.run_for(row_size_ms)
+  assert_eq(t.row(1).map(fn(r) { r.3 }), Some(60.0))
+}
+
+///|
 test "retained rows keep successive departures in their old order and keep their old values" {
   let items = @signals.signal([("a", "A"), ("b", "B"), ("c", "C"), ("d", "D")])
   let out : Ref[NodeRows[(String, String)]?] = Ref(None)

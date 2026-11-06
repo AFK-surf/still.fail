@@ -260,6 +260,7 @@ fn Scroll::past_held(self : Scroll, t : Double) -> Unit {
 /// applyToScroll; iOS's rubber band), the rest moves it; what of that goes past an end pulls it there (Android: in its
 /// heights, no further than one; iOS: on the rubber band), as an old view's list's (ui's Ctx::feed, Ctx::pull).
 fn Scroll::dragged(self : Scroll, v : View, t : Double, d : Double) -> Unit {
+  if d != 0.0 { (self.on_hand_attempt)() }
   (self.rebase)()
   let x = self.stopped(t)
   let (feel, density) = (v.tree.list_feel)()
@@ -495,6 +496,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
 /// before carrying on into it from where it is and as fast as it moves then, as an old view's list's (ui's
 /// Ctx::ease_list); whether it moves it (under way already, or not at its end that way: ListState::wheel_moves).
 fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
+  if d != 0.0 { (self.on_hand_attempt)() }
   (self.rebase)()
   let (x0, total, v0) = match @signals.untracked(fn() { self.notch.get() }) {
     Some(n) => {

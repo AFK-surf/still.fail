@@ -68,6 +68,8 @@ pub struct Scroll {
   priv mut on_scrolled : (Double) -> Unit
   /// The hand's requested distance, before it moves or any new layout measures what it brings into sight.
   priv mut on_hand : (Double) -> Unit
+  /// A hand tries to scroll, including against an end where the content does not move.
+  priv mut on_hand_attempt : () -> Unit
   /// which column it is, of all made (what hosts the tree tells its glides by: Tree::on_glides)
   priv serial : Int
   /// it moves as a page's list does on the platform it is on (Scroll::list): what shows past its ends, pulled there or
@@ -165,6 +167,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     moved_at_once: 0,
     on_scrolled: fn(_) {  },
     on_hand: fn(_) { },
+    on_hand_attempt: fn() { },
     serial: {
       scrolls_made.val += 1
       scrolls_made.val
@@ -484,6 +487,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 ///|
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
+  if d != 0.0 { (self.on_hand_attempt)() }
   (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(was + d, 0.0, self.most())
@@ -1065,4 +1069,3 @@ pub fn Scroll::end_below_told(self : Scroll) -> Double {
 pub fn Scroll::to_end_told(self : Scroll) -> Bool {
   self.to_end.get()
 }
-

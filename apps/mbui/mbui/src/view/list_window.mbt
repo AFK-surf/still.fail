@@ -79,7 +79,8 @@ pub fn View::list_room_ground(self : View) -> View {
 /// `from_end` (a chat's, an old view's list's `from_end` and `stick_end`): shorter than the column, its blocks at its
 /// foot; first shown at its end; at its end, kept there as what it holds grows or what shows is laid out taller,
 /// no longer once it is scrolled from there, again once it is back. `follows` says, followed, whether it is kept at its
-/// end so. `shown` is told the keys of the blocks in sight, in order, as they change (what is read, how far from its
+/// end so. With `align_end=false`, a shorter list starts at its top while retaining end-following; the option has no
+/// effect without `from_end`. `shown` is told the keys of the blocks in sight, in order, as they change (what is read, how far from its
 /// end). `put`, said, puts it at once where that block's top is that far under its top (it follows its end no more),
 /// and is said none again. A block come at its end while it follows that `fresh` says is new to it is glided after, not
 /// there at once; one come that is taller than what shows under `cover` (what lies over its top: a bar) is glided to
@@ -103,6 +104,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   slop? : Double,
   bar? : ScrollBar,
   from_end? : Bool = false,
+  align_end? : Bool = true,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
@@ -118,7 +120,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
 ) -> View {
   // (only what shows: nothing made ahead of it; each never laid out counted as `est`, not as the mean of those laid out)
   self.scrolls_anchored_impl(
-    s, keys, make, est~, from_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown, put?=put, rooms?=rooms, room_transforms~,
+    s, keys, make, est~, from_end~, align_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
+    put?=put, rooms?=rooms, room_transforms~,
     fresh~, read_from_top~, cover~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
     seen?=seen,
   )

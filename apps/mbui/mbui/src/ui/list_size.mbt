@@ -187,7 +187,13 @@ fn RowCauses::height(
   }
   // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
   let own = c.own.contains(key)
+  let first_from_rest = c.way_at != c.start && sizes.is_empty()
   c.way_begun(frame)
+  // A row may first be measured after its cause, without a frame in between (a virtual row scrolled into view).
+  // With no earlier row on a way there is no inherited velocity to collect, so sample the way from rest now.
+  if first_from_rest && now > c.start + 0.001 {
+    c.way_speed = Some(0.0)
+  }
   let r = match sizes.get(key) {
     Some(r) => r
     None => {

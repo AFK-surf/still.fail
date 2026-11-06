@@ -701,8 +701,17 @@ struct Node {
 }
 
 ///|
+priv struct BeforeRemoval {
+  id : NodeId
+  run : () -> Unit
+  mut live : Bool
+}
+
+///|
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
+  /// Callbacks for the few nodes that need to read their subtree before any of it is removed.
+  before_removal : Array[BeforeRemoval]
   /// which node a row made anew for its key is now, by the name it is known by (View::row_known_as: one of
   /// Tree::row_name's, never a node's own)
   rows_known : Map[NodeId, Int]
@@ -1047,6 +1056,7 @@ pub fn Tree::new(
     None => 0.0
   }
   let t : Tree = {
+    before_removal: [],
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     glyph_looks: {},
@@ -1785,12 +1795,18 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   // A child's cleanup may change state read by its parent or siblings. Publish those changes only once
   // every scope in this tree has stopped, as one removal; no observer may rebuild a half-disposed tree.
   @signals.start_batch()
+  if self.nodes.length() > 0 && self.nodes[0].live {
+    self.before_removing(self.root())
+  }
   // (what follows the pointer held by nothing of the tree's nodes: let go with it, told nothing more)
   self.point_stopped()
   if self.nodes.length() > 0 && self.nodes[0].live {
     self.root().let_go()
   }
+  self.before_removal.clear()
   self.drawn_marks.clear()
+  // A checkpoint can lay out rows without painting them. A disposed tree must not later report those rows as drawn.
+  self.after_paint.clear()
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
@@ -5457,6 +5473,62 @@ pub fn View::owns(self : View, f : () -> Unit) -> View {
 }
 
 ///|
+/// Run once immediately before this node or any ancestor begins being removed, while its entire subtree still lives.
+/// The callback can read its current layout, including changes since the last painted frame. It also runs before the
+/// whole tree is disposed. Signal writes are told after removal, with any enclosing structural change. The callback
+/// must not itself remove or rebuild this subtree. A callback registered on an already removed node is not kept.
+pub fn View::before_removed(self : View, f : () -> Unit) -> View {
+  guard self.alive() else { return self }
+  let tree = self.tree
+  let entry : BeforeRemoval = { id: self.id(), run: f, live: true }
+  tree.before_removal.push(entry)
+  self.owns(fn() {
+    entry.live = false
+    let mut i = 0
+    while i < tree.before_removal.length() {
+      if physical_equal(tree.before_removal[i], entry) {
+        tree.before_removal.remove(i) |> ignore
+        break
+      }
+      i += 1
+    }
+  }) |> ignore
+  self
+}
+
+///|
+/// Notify registered descendants before anything in the subtree is detached. Only registered nodes are visited, so
+/// removing ordinary rows does not walk the whole subtree. A callback is disarmed before it runs, including if it
+/// causes another removal.
+fn Tree::before_removing(self : Tree, root : View) -> Unit {
+  if !root.alive() || self.before_removal.is_empty() { return }
+  let entries = self.before_removal.copy()
+  for entry in entries {
+    if entry.live && self.alive_id(entry.id) {
+      let mut i = entry.id.at
+      while i >= 0 && i != root.at { i = self.nodes[i].parent }
+      if i == root.at {
+        entry.live = false
+        @signals.untracked(entry.run)
+      }
+    }
+  }
+}
+
+///|
+fn Tree::has_before_removal(self : Tree, root : View) -> Bool {
+  if !root.alive() { return false }
+  for entry in self.before_removal {
+    if entry.live && self.alive_id(entry.id) {
+      let mut i = entry.id.at
+      while i >= 0 && i != root.at { i = self.nodes[i].parent }
+      if i == root.at { return true }
+    }
+  }
+  false
+}
+
+///|
 /// `stop` kept as one it lets go of as it goes (View::owns), and what lets go of that keeping again: for what ends
 /// before it does (a moment's work done or called off), nothing of it kept by it after.
 fn View::owns_while(self : View, stop : () -> Unit) -> () -> Unit {
@@ -5755,13 +5827,32 @@ fn Tree::ordered_at(self : Tree, at : Int) -> Unit {
 ///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
+  if !self.tree.has_before_removal(v) {
+    v.let_go()
+    guard self.live() is Some(n) else { return }
+    match n.kids.search(v.at) {
+      Some(i) => n.kids.remove(i) |> ignore
+      None => ()
+    }
+    self.boxes_removed()
+    return
+  }
+  // Checkpoints may update state read by the tree. Tell those changes only after the removed subtree is gone, as one
+  // removal (or with the surrounding structured change when there is one).
+  @signals.start_batch()
+  self.tree.before_removing(v)
   v.let_go()
-  guard self.live() is Some(n) else { return }
-  match n.kids.search(v.at) {
-    Some(i) => n.kids.remove(i) |> ignore
+  match self.live() {
+    Some(n) => {
+      match n.kids.search(v.at) {
+        Some(i) => n.kids.remove(i) |> ignore
+        None => ()
+      }
+      self.boxes_removed()
+    }
     None => ()
   }
-  self.boxes_removed()
+  @signals.end_batch()
 }
 
 ///|
