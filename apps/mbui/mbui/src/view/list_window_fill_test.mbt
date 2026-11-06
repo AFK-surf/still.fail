@@ -27,9 +27,8 @@ fn fill_case(
     })
     |> ignore
   })
-  for _ in 0..<3 {
-    tree.frame(390.0, 844.0) |> ignore
-  }
+  // (its first frame: laid out once, what shows made, measured and placed in that one layout)
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
   (tree, made)
 }
 
@@ -84,11 +83,9 @@ test "scrolls_window from its end: scrolled far up and back down past its end, a
   }
   let first = (foot(), fill_shown(made))
   tree.wheel_at(150.0, 50.0, 0.0, -1500.0, 0, 20.0) |> ignore
-  tree.frame(390.0, 844.0) |> ignore
+  tree.frame(390.0, 844.0, now=32.0) |> ignore
   let up = made.contains(49)
   tree.wheel_at(150.0, 50.0, 0.0, 3000.0, 0, 40.0) |> ignore
-  for _ in 0..<2 {
-    tree.frame(390.0, 844.0) |> ignore
-  }
+  tree.frame(390.0, 844.0, now=48.0) |> ignore
   assert_eq((first, up, foot(), fill_shown(made)), ((100.0, [47, 48, 49]), false, 100.0, [47, 48, 49]))
 }
