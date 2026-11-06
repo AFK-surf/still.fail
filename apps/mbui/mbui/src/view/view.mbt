@@ -2360,6 +2360,9 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
+  if was < 0.0 {
+    self.afters_done()
+  }
   self.cause_at = was
   if changed {
     self.marked()
@@ -6576,16 +6579,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
-  // (what waits for it committed whole, each a change of its own of this moment, in order)
-  while self.afters.length() > 0 {
-    let next = self.afters.remove(0)
-    self.committing += 1
-    @signals.start_batch()
-    @signals.untracked(next)
-    @signals.end_batch()
-    self.committing -= 1
-    self.modals_settled()
-  }
+  self.afters_done()
   self.cause_at = was
   // (where things stand once it is told whole, for the next change: Tree::settle_after_change)
   if was < 0.0 {
@@ -6744,6 +6738,21 @@ fn View::laid_before_due(self : View, moves : (Double) -> Bool) -> Unit {
 ///|
 /// `f` done once the event being taken now is committed whole (what it told brought about: nodes shown, gone, made anew,
 /// a modal layer opened), as a change of its own of that moment; taken in none, now.
+fn Tree::afters_done(self : Tree) -> Unit {
+  // (what waits for the change under way committed whole, each a change of its own of its moment, in order: an
+  // event's, a moment's come on the timeline, a signal's change: whichever change it was said in, as that one ends)
+  while self.afters.length() > 0 {
+    let next = self.afters.remove(0)
+    self.committing += 1
+    @signals.start_batch()
+    @signals.untracked(next)
+    @signals.end_batch()
+    self.committing -= 1
+    self.modals_settled()
+  }
+}
+
+///|
 fn Tree::after_event(self : Tree, f : () -> Unit) -> Unit {
   if self.cause_at >= 0.0 {
     self.afters.push(f)
@@ -6954,6 +6963,9 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     }
     self.committing -= 1
     self.modals_settled()
+    if was < 0.0 {
+      self.afters_done()
+    }
     self.cause_at = was
     // (where things stand once it is told whole, as of its moment, for the next change: Tree::settle_after_change)
     if was < 0.0 {
