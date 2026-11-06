@@ -15,3 +15,24 @@ test "modifier changes are followed between frames and cleared when the window l
   t.app_state(true, true)
   assert_eq(mods_held(), 0)
 }
+
+///|
+test "a modifier change redraws a stationary target without a pointer event" {
+  let t = Tester::new(fn(_) { }, w=100.0, h=100.0)
+  set_view_app(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(40.0))).height(Is(Some(40.0)))
+      .ground(By(fn() { if (mods_held() & mod_alt) != 0 { 0xFF0000FFL } else { 0x00FF00FFL } })) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x00FF00FFL }))
+  t.fake.wants = false
+  t.hold_mods(mod_alt)
+  assert_true(t.fake.wants, msg="the changed modifier owes a frame")
+  t.frames_owed()
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0xFF0000FFL }))
+  t.hold_mods(0)
+  t.frames_owed()
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x00FF00FFL }))
+}

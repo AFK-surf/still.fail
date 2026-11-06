@@ -214,7 +214,9 @@ fn drive_node_over_old(x : Double, y : Double) -> Bool {
 /// where a chat owns the island: its old folder must take the item before the chat's draft can take it.
 fn drive_node_watch_old(src : Source, ws : String) -> Unit {
   guard drive_node_window.val && @ui.old_building_view() is Some(v) else { return }
-  match drive_node_old_views.get(v.id()) {
+  // This is registration bookkeeping, not a dependency of the old view's build. Subscribing it to the map and
+  // then adding its own entry would invalidate the island while its frame is still being built.
+  match @signals.untracked(fn() { drive_node_old_views.get(v.id()) }) {
     Some(old) => { old.ws = ws; return }
     None => ()
   }
