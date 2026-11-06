@@ -165,9 +165,12 @@ fn new_station_node(
     }
   }
   let capsule = new_capsule_node(slot, fn() { text(station(), "name") }, going, open, fn(b) {
-    @sf.station_mark_node(b, fn() { text(station(), "emoji") }, fn() { text(station(), "icon") }, new_mark, fn() {
-      @sf.theme().p.text
-    }, fn() { 0 })
+    // (none of its own: nothing, no room for it, as station_mark draws none)
+    b.show(fn() { text(station(), "emoji") != "" || text(station(), "icon") != "" }, fn(m) {
+      @sf.station_mark_node(m, fn() { text(station(), "emoji") }, fn() { text(station(), "icon") }, new_mark, fn() {
+        @sf.theme().p.text
+      }, fn() { 0 })
+    })
     // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
     capsule_words_node(b, fn() { text(station(), "name") }).max_width(Is(Some(128.0))).drops(Is(new_drop_station_name))
     |> ignore

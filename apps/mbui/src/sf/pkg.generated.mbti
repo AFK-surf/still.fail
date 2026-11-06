@@ -702,6 +702,8 @@ pub let first_most : @ui.Len
 
 pub fn first_one(@ui.Ctx, String, () -> Unit, art? : () -> Unit, lead? : String) -> Unit
 
+pub fn first_one_node(@view.View, () -> String, (@view.View) -> Unit, art? : (@view.View) -> Unit, lead? : () -> String) -> Unit
+
 pub fn fixed_anchor(@view.View, (Double, Double, Double, Double)) -> @view.View
 
 pub let floating : Raised
