@@ -122,6 +122,7 @@ fn streams_reset() -> Unit {
   stream_nodes.clear()
   stream_tickets.val = 0
   pointers_told.clear()
+  tree_stream_nodes.clear()
   stream_pointer_pictures.clear()
   stream_pointer_overlays.clear()
   stream_pointer_epoch.val = 0L

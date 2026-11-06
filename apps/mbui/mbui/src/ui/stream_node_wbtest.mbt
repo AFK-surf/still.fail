@@ -244,6 +244,41 @@ test "tree stream switches between its system layer and texture as its ancestor 
 }
 
 ///|
+test "tree stream restores from a transparent ancestor in the first frame" {
+  let t = Tester::new(fn(_) {  }, w=300.0, h=200.0, h264=true)
+  t.set_stream_layers(true)
+  let alpha = @signals.signal(0.0)
+  let s = Stream::new(shown=fn(_) {  }, broken=fn() {  }, layer=true)
+  set_view_app(fn(root) {
+    root.box(fn(holder) {
+      holder.over(Is(true)).width(Is(Some(200.0))).height(Is(Some(100.0))).alpha(By(fn() { alpha.get() })) |> ignore
+      holder.box(fn(n) {
+        n.over(Is(true)).width(Is(Some(200.0))).height(Is(Some(100.0))) |> ignore
+        stream_in(n, fn() { Some(s) }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  s.h264(wb_avcc, 400, 200)
+  s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  t.stream_shows(s.id(), 1.0, 400, 200)
+  t.draw()
+  assert_false(s.layer_visible())
+  alpha.set(1.0)
+  t.frame()
+  assert_true(s.layer_visible())
+  assert_true(t.drawn_instances().iter().any(fn(i) { i[5] == 9.0 }))
+  alpha.set(0.0)
+  t.frame()
+  assert_false(s.layer_visible())
+  alpha.set(0.5)
+  t.frame()
+  assert_false(s.layer_visible())
+  assert_eq(tree_stream_instances().length(), 1)
+  assert_eq(tree_stream_instances()[0][11], 0.5)
+  s.close()
+}
+
+///|
 test "tree stream leaves its system layer when its next frame switches to jpeg" {
   let t = Tester::new(fn(_) {  }, w=300.0, h=200.0, h264=true)
   t.set_stream_layers(true)

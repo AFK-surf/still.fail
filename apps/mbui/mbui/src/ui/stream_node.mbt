@@ -1,6 +1,11 @@
 // A decoded stream as the content of a retained tree node. The stream and its decoder are owned by the caller.
 
 ///|
+// A transparent ancestor is not walked into, so remember stream nodes even before their first frame. A layer holding
+// one must go through the host when it becomes visible again.
+let tree_stream_nodes : Map[@view.NodeId, Bool] = {}
+
+///|
 /// Draw `stream` in `node` as it changes. The node decides its own size and position, including a cropped or moved
 /// picture; its opacity and those of its holders apply to the picture. `layer` allows the system's video layer when
 /// the picture can be shown there as it is. If the stream can be replaced, `stream` must read a signal that changes on
@@ -12,6 +17,9 @@ pub fn stream_in(
   fit? : () -> Fit = fn() { FitFill },
   pointer? : StreamPointer? = None,
 ) -> @view.View {
+  let id = node.id()
+  tree_stream_nodes[id] = true
+  node.owns(fn() { tree_stream_nodes.remove(id) })
   match pointer {
     Some(p) => stream_pointer_picture(node, p)
     None => ()

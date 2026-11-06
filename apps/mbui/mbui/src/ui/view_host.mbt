@@ -1540,6 +1540,18 @@ fn Ctx::tree_draw_node(
     return
   }
   if a <= 0.002 {
+    // The walk stops at a transparent ancestor. Remember a stream below it so a later visible frame cannot reuse the
+    // scene without placing its system layer (or drawing its texture) in that same frame.
+    if tree_stream_nodes.contains(c.id) {
+      scene_own_only()
+    } else {
+      for id in tree_stream_nodes.keys() {
+        if tree.holds(c.id, id) {
+          scene_own_only()
+          break
+        }
+      }
+    }
     self.tree_unseen(c, s)
     return
   }

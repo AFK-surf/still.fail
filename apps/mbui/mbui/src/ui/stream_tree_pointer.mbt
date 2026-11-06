@@ -87,7 +87,7 @@ pub fn StreamPointer::image(
   self.image = Some({ key, png: data, w, h, hx, hy })
   add_image(key, data)
   let c = g()
-  c.image_want(key, dmax(w, h) * c.scale)
+  @signals.untracked(fn() { c.image_want(key, dmax(w, h) * c.scale) })
   if self.system {
     self.tell_native()
   } else {
@@ -167,13 +167,18 @@ fn stream_pointer_picture(node : @view.View, pointer : StreamPointer) -> Unit {
   node.owns(fn() {
     stream_pointer_pictures.remove(id)
     match pointer.pictures.get(id) {
-      Some(p) => match p.stream { Some(s) => s.pointer_at(None); None => () }
+      Some(p) =>
+        match p.stream {
+          Some(s) => {
+            s.pointer_at(None)
+            pointer.native.retain(fn(other) { !physical_equal(other, s) })
+          }
+          None => ()
+        }
       None => ()
     }
     pointer.pictures.remove(id)
     pointer.order.retain(fn(other) { other != id })
-    pointer.system = false
-    pointer.hide_native()
     pointer.changed()
   })
 }
