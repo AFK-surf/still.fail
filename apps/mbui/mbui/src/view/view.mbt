@@ -949,9 +949,10 @@ pub struct Tree {
   /// what follows whether what is drawn is drawn at or past a moment (View::drawn_past): its node, the moment, and
   /// what is told as that comes to be so or not
   drawn_marks : Array[(NodeId, Double, @signals.Signal[Bool])]
-  // (the moment drawn, while the clock is set for a look at another (View::drawn_now): what is drawn told nothing of
-  // the look, Tree::settled_at)
-  mut marks_held : Double?
+  // (while the clock is set for a look at another moment than the one drawn (View::drawn_now, Tree::settled_at): the
+  // structures' bindings it told, told again once it is set back, nothing of the look left for them)
+  mut looking : Bool
+  look_told : Array[() -> Unit]
   /// a column's bar said anew to come out or not (View::bar_near): which the pointer is along to be told anew
   mut bars_due : Bool
   /// the node with the keyboard's focus, and whether it shows (it came by the keyboard): its cells told as it comes or
@@ -1226,7 +1227,8 @@ pub fn Tree::new(
     scrolls_at: {},
     bar_cols: [],
     drawn_marks: [],
-    marks_held: None,
+    looking: false,
+    look_told: [],
     bars_due: false,
     backing: None,
     back_said_at: [],
@@ -1844,7 +1846,7 @@ fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
   // (the moment and whether it is past each followed, told as one: no reader sees the one without the other)
   @signals.start_batch()
   self.clock.set(ms)
-  if self.drawn_marks.length() > 0 && self.marks_held is None {
+  if self.drawn_marks.length() > 0 {
     let keep = []
     for m in self.drawn_marks {
       if self.alive_id(m.0) && m.2.watched() {
@@ -1871,10 +1873,7 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
   let cell = match self.tree.drawn_marks.iter().find_first(fn(m) { m.0 == id && m.1 == t }) {
     Some(m) => m.2
     None => {
-      let now = match self.tree.marks_held {
-        Some(shown) => shown
-        None => @signals.untracked(fn() { self.tree.clock.get() })
-      }
+      let now = @signals.untracked(fn() { self.tree.clock.get() })
       let c = @signals.signal(now >= t, same=fn(a, b) { a == b })
       self.tree.drawn_marks.push((id, t, c))
       c
@@ -2340,8 +2339,16 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   let last : Ref[T?] = Ref(None)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
-  let w = @signals.watch(fn() {
+  let told : Ref[() -> Unit] = Ref(fn() {  })
+  let w = @signals.watch(fn() { (told.val)() })
+  told.val = fn() {
     guard live.val && watch.val is Some(w) else { return }
+    // (in a look at another moment: told again as it is set back, what it reads as it was then, nothing done of the
+    // look's; what it read followed till then)
+    if self.looking {
+      self.look_told.push(fn() { (told.val)() })
+      return
+    }
     // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
     // of the same moment the change is committed at)
     self.at_cause(fn() {
@@ -2358,7 +2365,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
         false
       }
     })
-  })
+  }
   watch.val = Some(w)
   let v = w.read(read)
   last.val = Some(v)
@@ -6768,13 +6775,12 @@ fn Tree::settled_at(self : Tree, at : Double, look? : Bool = false) -> Bool {
   }
   self.standing = true
   self.work.settles = self.work.settles + 1
-  // (placed at `at` to be looked at (View::drawn_now): the clock set there and back, what is drawn told nothing of it
-  // (View::drawn_past, a reaction to it: of the frame's own moment, whatever the logic's is), what was due settled at
-  // `at` all the same. A settle of what a change told (Tree::settle_now): of that moment, what follows it told so)
-  let held = self.marks_held
-  if held is None && shown != at && look {
-    self.marks_held = Some(shown)
-  }
+  // (placed at `at` to be looked at (View::drawn_now): laid out and placed as of `at`, what is read there (View::drawn_past)
+  // read as of `at`, the clock set there and back; what a structure's binding is told of it (a reaction to the drawing's
+  // moment) told again once set back, nothing of the look done. A settle of what a change told (Tree::settle_now): of
+  // that moment, what follows it told so)
+  let was_looking = self.looking
+  self.looking = was_looking || (look && shown != at)
   // A due change settles at its own moment, before the outer advance reaches its destination. Its looks must
   // see that same logical moment when they decide whether a finished way still needs the drawing clock.
   let cause = self.cause_at
@@ -6792,8 +6798,15 @@ fn Tree::settled_at(self : Tree, at : Double, look? : Bool = false) -> Bool {
       self.beat.set(shown)
     })
   }
-  self.marks_held = held
+  self.looking = was_looking
   self.standing = false
+  if !self.looking && self.look_told.length() > 0 {
+    let again = self.look_told.copy()
+    self.look_told.clear()
+    for f in again {
+      f()
+    }
+  }
   self.withins_restored()
   // (what a change worked out in it waits for (a followed point's, Tree::follow_point), where no change round it takes
   // it: done once it is over, out of its standing, at its moment)
