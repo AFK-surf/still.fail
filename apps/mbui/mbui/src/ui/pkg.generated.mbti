@@ -1225,7 +1225,7 @@ pub fn Ctx::finger_reads(Self) -> (Double, Double)?
 pub fn Ctx::fitting_width(Self, Double, Array[Double]) -> Double
 pub fn Ctx::floats_over(Self, Int32) -> Unit
 pub fn Ctx::focus_editor(Self, String) -> Unit
-pub fn Ctx::focus_field(Self, Field) -> Unit
+pub fn Ctx::focus_field(Self, Field, ask_later? : Bool) -> Unit
 pub fn Ctx::focus_gained(Self, Int32) -> Bool
 pub fn Ctx::focus_on(Self, Int32, visible? : Bool) -> Unit
 pub fn Ctx::focus_roved_to(Self, Int32) -> Bool
