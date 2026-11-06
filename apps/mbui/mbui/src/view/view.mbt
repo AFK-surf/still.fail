@@ -879,6 +879,9 @@ pub struct Tree {
   /// Work completing a published change, before the next timeline moment or input is taken (Tree::after_change).
   changes : Array[(Double, () -> Unit)]
   mut changes_running : Bool
+  /// Structural readers of one unowned signal publication, committed together after its flush.
+  structures : Array[() -> Bool]
+  mut structures_asked : Bool
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
@@ -1169,6 +1172,8 @@ pub fn Tree::new(
     afters: [],
     changes: [],
     changes_running: false,
+    structures: [],
+    structures_asked: false,
     modals_due: false,
     held: None,
     gesture_tapped: false,
@@ -1911,6 +1916,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.laid_waits.clear()
   self.afters.clear()
   self.changes.clear()
+  self.structures.clear()
   self.held_tracks.clear()
   self.thumbs.clear()
   @signals.end_batch()
@@ -2226,44 +2232,33 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   let last : Ref[T?] = Ref(None)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
+  let told = Ref(0)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
+    told.val += 1
+    let turn = told.val
     let changed = fn() {
-      self.at_cause(fn() {
-        // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
-        guard live.val else { return false }
-        let v = w.read(read)
-        if last.val != Some(v) {
-          last.val = Some(v)
-          if live.val {
-            @signals.untracked(fn() { then(v) })
-          }
-          true
-        } else {
-          false
+      // A deadline may already have delivered a newer notification, or let this node go. Neither makes the
+      // earlier pending notification read again. In particular, a withdrawn parent's children read nothing.
+      guard live.val && turn == told.val else { return false }
+      let v = w.read(read)
+      if last.val != Some(v) {
+        last.val = Some(v)
+        if live.val {
+          @signals.untracked(fn() { then(v) })
         }
-      })
+        true
+      } else {
+        false
+      }
     }
     if self.cause_at < 0.0 && !self.standing && @signals.is_flushing() {
-      // A raw signal publication has no tree event around it. Enter its timed change after that publication,
-      // still before the set/batch returns. Re-arm the watch now: a preceding deadline may change this very
-      // structure, and must be able to publish its phase before the following deadline reads its geometry.
-      // This read is only a dependency read; no structure is applied until the timed entry below.
-      w.read(read) |> ignore
-      let at = self.time_now()
-      @signals.after_flush(fn() {
-        if live.val {
-          let was = self.bringing_at
-          self.bringing_at = at
-          defer { self.bringing_at = was }
-          changed()
-        }
-      })
+      self.structure_told(changed)
     } else {
       // A tree event or deadline already owns the publication. Its structural changes stay synchronous.
-      changed()
+      self.at_cause(changed)
     }
-  })
+  }, repeated=true)
   watch.val = Some(w)
   let v = w.read(read)
   last.val = Some(v)
@@ -2279,6 +2274,33 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
     watch.val = None
     w.stop()
   }
+}
+
+///|
+/// Publish all structural readers of the same raw change together. Do not read them early to re-arm a watch:
+/// a parent can withdraw a child, and an earlier deadline can dispose either. Timed producers still enter
+/// Tree::event before writing; this compatibility path cannot restore signal values already changed by raw writes.
+fn Tree::structure_told(self : Tree, f : () -> Bool) -> Unit {
+  self.structures.push(f)
+  if self.structures_asked { return }
+  self.structures_asked = true
+  let at = self.time_now()
+  @signals.after_notify(fn() {
+    self.structures_asked = false
+    if self.gone { self.structures.clear(); return }
+    let pending = self.structures.copy()
+    self.structures.clear()
+    let was = self.bringing_at
+    self.bringing_at = at
+    defer { self.bringing_at = was }
+    self.at_cause(fn() {
+      let mut changed = false
+      for read in pending {
+        if read() { changed = true }
+      }
+      changed
+    })
+  })
 }
 
 ///|
@@ -6799,7 +6821,7 @@ pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
 ///|
 /// What was due before a new change, committed before that change reads or writes anything. The drawing clock is
 /// told separately so a structure can tell it together with its own change (Tree::at_cause).
-fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
+fn Tree::advance_logic(self : Tree, upto : Double, loc~ : SourceLoc = _) -> Unit {
   // (one thing due at a time, all it does committed before the next is chosen: asked again while one is being done (a
   // structure it changed committing), the loop doing it goes on from where it is once that one is done)
   if self.advancing {
@@ -6812,7 +6834,7 @@ fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
   }
   if (@signals.batch_depth() > 0 || @signals.is_flushing()) &&
     (upto > self.logic || self.wake() is Some(at) && at <= upto) {
-    abort("view: finish the raw signal change and its notifications before advancing the timeline; use Tree::event to batch a timed change")
+    abort("view: finish the raw signal change and its notifications before advancing the timeline; use Tree::event to batch a timed change (from \{loc}, logic \{self.logic}, upto \{upto}, committing \{self.committing}, laying \{self.laying}; signal set at \{@signals.last_set_at()})")
   }
   self.advancing = true
   self.advance_loop(upto)

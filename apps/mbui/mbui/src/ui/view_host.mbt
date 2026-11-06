@@ -642,29 +642,41 @@ fn view_frame_started() -> Unit {
 /// The tree's frame of the window `w` by `h` at `t` (what was marked done: src/view), the instances it changed to be
 /// made again, where each old view is placed now.
 fn view_frame(w : Double, h : Double, scale : Double, t : Double, said : () -> Unit) -> Unit {
-  let tree = match view_app.val {
-    Some(tree) => tree
-    None => {
-      said()
-      old_whole.val = true
-      return
-    }
-  }
-  // (drawn as at `t`, when the frame is to be shown; its logic advanced only to what the host has come to: no step
-  // or ending taken ahead of an input still to come before `t`)
-  @signals.untracked(fn() { tree.at(t) })
   view_window.val = (w, h)
-  // (the theme for this width, as this frame will pick it, not the one the last frame was built in: what its nodes are
-  // drawn in where the app tells its tree none; the window's corner as of now: what linked corners are worked out
-  // from, with the ranges of the theme its nodes are drawn in, corner_of)
-  view_brought(tree, said=fn() {
+  // Host facts belong to the window, even if a deadline disposes or replaces its tree. Publish them once, in the
+  // surviving tree's frame entry; with no live tree left, the old frame still takes them before it draws.
+  let published = Ref(false)
+  let publish = fn() {
+    if published.val { return }
+    published.val = true
     said()
     tree_theme_said.set(Some(g().theme_for(w)))
     tree_window_corner.set(window_corner())
     tree_inset_said.set(Some(window_inset()))
-    // (a page's list's rows on the pixels as this frame draws them, before it is laid out)
-    tree.set_rows_grid(g().rows_grid_of(scale))
-  })
+  }
+  while true {
+    let tree = match view_app.val {
+      Some(tree) if tree.alive() > 0 => tree
+      _ => {
+        publish()
+        // Publishing can itself install the window's first tree.
+        match view_app.val {
+          Some(tree) if tree.alive() > 0 => continue
+          _ => { old_whole.val = true; return }
+        }
+      }
+    }
+    // (drawn as at `t`, when the frame is to be shown; its logic advanced only to the host's captured moment)
+    @signals.untracked(fn() { tree.at(t) })
+    view_brought(tree, said=fn() {
+      publish()
+      tree.set_rows_grid(g().rows_grid_of(scale))
+    })
+    match view_app.val {
+      Some(current) if physical_equal(current, tree) && tree.alive() > 0 => break
+      _ => () // a replacement takes this same frame's room and drawing sample before anything is painted
+    }
+  }
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
   view_pointed_again()
@@ -711,6 +723,9 @@ fn view_brought(tree : @view.Tree, said? : () -> Unit = fn() { }) -> Unit {
       tree.set_press_least(room_least())
     }) |> ignore
   })
+  // A deadline or a fact's observer may replace the window. Its new bookkeeping must not be cleared or placed
+  // from the disposed tree's ids; view_frame brings the replacement before drawing it.
+  guard view_app.val is Some(current) && physical_equal(current, tree) && tree.alive() > 0 else { return }
   view_changes_taken(tree)
   old_place(tree)
 }

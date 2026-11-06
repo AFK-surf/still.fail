@@ -36,6 +36,9 @@ priv struct Run {
   /// how deep in flushes, and what is to be done once the outermost is over (after_flush): not this library's
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
+  /// Structural publications deferred by a watcher: finish them before observers registered with after_flush.
+  commits : Array[() -> Unit]
+  commits_by : Array[ReactiveNode?]
   afters : Array[() -> Unit]
   /// what asked for each of `afters` (asker: what was reading, running or owning then): a run stopped before it was done keeps it
   /// for its owner while that owner is kept (reset_globals, run_told)
@@ -70,6 +73,8 @@ let run : Run = {
   asked_for: None,
   queued: [],
   flushing: 0,
+  commits: [],
+  commits_by: [],
   afters: [],
   afters_by: [],
   lasts: [],
@@ -654,10 +659,14 @@ fn afters_drained() -> Unit {
     // (taken by where each queue is up to, not removed from its head: removing the first shifted all the rest down
     // each time, a change that asked 10⁴s of them (a long page's buttons each going together) held the desktop app's
     // main thread 3.2 s, 0.1.7302, 2026-11-05)
+    let mut c = 0
     let mut a = 0
     let mut l = 0
-    while a < run.afters.length() || l < run.lasts.length() {
-      let f = if a < run.afters.length() {
+    while c < run.commits.length() || a < run.afters.length() || l < run.lasts.length() {
+      let f = if c < run.commits.length() {
+        c += 1
+        run.commits[c - 1]
+      } else if a < run.afters.length() {
         a += 1
         run.afters[a - 1]
       } else {
@@ -666,11 +675,26 @@ fn afters_drained() -> Unit {
       }
       f()
     }
+    run.commits.clear()
+    run.commits_by.clear()
     run.afters.clear()
     run.afters_by.clear()
     run.lasts.clear()
     run.lasts_by.clear()
     run.draining = false
+  }
+}
+
+///|
+/// Complete a watcher's structural publication after all notifications, before post-change observers (after_flush).
+/// This is part of committing the change, not another input: a deferred reader may withdraw another queued reader.
+/// A batch or layout still holds it back, just as it holds back the observers of that completed change.
+pub fn after_notify(f : () -> Unit) -> Unit {
+  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
+    run.commits.push(f)
+    run.commits_by.push(asker())
+  } else {
+    f()
   }
 }
 
@@ -1017,12 +1041,13 @@ let watch_reading : WatchReading = { depth: 0, sets: [] }
 
 ///|
 /// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
-/// till the next read.
-pub fn watch(changed : () -> Unit, loc~ : SourceLoc = _) -> Watch {
+/// till the next read. With `repeated`, each committed notification is delivered even while a prior read is pending:
+/// an owner that defers reading can still handle a later cause synchronously. Marking remains batched as usual.
+pub fn watch(changed : () -> Unit, repeated? : Bool = false, loc~ : SourceLoc = _) -> Watch {
   let stale = Ref(true)
   // (told once till it reads anew: what changes again meanwhile adds nothing to its being stale)
   let told : () -> Unit = fn() {
-    if !stale.val {
+    if repeated || !stale.val {
       stale.val = true
       changed()
     }
