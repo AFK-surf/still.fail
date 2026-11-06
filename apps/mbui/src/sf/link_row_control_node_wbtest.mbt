@@ -388,6 +388,71 @@ test "link row: a narrow face row gives its words room and keeps its independent
 }
 
 ///|
+test "link row: narrow account controls leave names readable and stay independent of adjacent rows" {
+  for look in [Narrow, Wide] {
+    for finger in [false, true] {
+      for with_note in [false, true] {
+        let title = if with_note { "Alexandra Chen" } else { "jamie.long@example.org" }
+        let opened = Ref(0)
+        let signed_out = Ref(0)
+        let next_opened = Ref(0)
+        let t = @ui.Tester::new(fn(_c) {  }, w=650.0, h=1000.0, platform=if finger { 2 } else { 0 })
+        t.host_says_finger(Some(finger))
+        @ui.set_view_app(fn(root) {
+          root.padding(Is((48.0, 0.0, 48.0, 0.0))) |> ignore
+          root.box(fn(b) {
+            look_lent(b, look)
+            group_node(b, fn(g) {
+              link_row_node(
+                g, fn() { title }, fn() { opened.val += 1 }, goes=with_note,
+                note=fn() { if with_note { "alexandra.chen@example.org · Google" } else { "" } },
+                lead=LeadMade(fn(l) { avatar_node(l, fn() { "alexandra@example.org" }, fn() { title }, fn() { "" }, identity_mark) }),
+                control=fn(e) { button_node(e, fn() { "Sign out" }, fn() { signed_out.val += 1 }, tone=Ghost) |> ignore },
+              )
+              link_row_node(g, fn() { "Next row" }, fn() { next_opened.val += 1 })
+            })
+          }) |> ignore
+        })
+        t.set_font_scale(2.0)
+        t.draw()
+        t.act(Button, Focus, label="Sign out")
+        let button_id = t.get(Button, label="Sign out").id
+        t.resize(320.0, 1000.0)
+        t.draw()
+        let words = controlled_word(title)
+        let (bx, by, bw, bh) = t.get(Button, label="Sign out").rect
+        let (nx, ny, _, nh) = t.get(Link, label="Next row").rect
+        assert_true(words.w >= @ui.current().sp(@ui.tree_theme().text_size(Body).0 * 3.5), msg="\{look} \{with_note}: title width \{words.w}")
+        assert_true(by >= words.y + words.h - 0.01 && by + bh <= ny + 0.01, msg="\{look} \{with_note}: button \{(bx, by, bw, bh)}, title \{(words.x, words.y, words.w, words.h)}, next \{ny}")
+        if with_note {
+          let note = controlled_word("alexandra.chen@example.org · Google")
+          assert_true(by >= note.y + note.h - 0.01)
+        } else {
+          assert_true(t.query(Link, label=title) is None)
+        }
+        assert_eq((t.get(Button, label="Sign out").id, t.focused().map(fn(s) { s.label })), (button_id, Some("Sign out")))
+        for y in (if finger { [by - 3.0, by + bh + 3.0] } else { [by + 1.0, by + bh - 1.0] }) {
+          assert_eq(t.press_target_at(bx + bw / 2.0, y).map(fn(s) { s.label }), Some("Sign out"))
+          t.tap(bx + bw / 2.0, y)
+        }
+        t.tap(nx + 2.0, ny + nh / 2.0)
+        assert_eq((opened.val, signed_out.val, next_opened.val), (0, 2, 1))
+        t.act(Button, Focus, label="Sign out")
+        t.resize(650.0, 1000.0)
+        t.draw()
+        assert_eq((t.get(Button, label="Sign out").id, t.focused().map(fn(s) { s.label })), (button_id, Some("Sign out")))
+        t.enter()
+        t.resize(320.0, 1000.0)
+        t.draw()
+        assert_eq((t.get(Button, label="Sign out").id, t.focused().map(fn(s) { s.label })), (button_id, Some("Sign out")))
+        t.act(Button, Activate, label="Sign out")
+        assert_eq((opened.val, signed_out.val, next_opened.val), (0, 4, 1))
+      }
+    }
+  }
+}
+
+///|
 test "link row: an open part below keeps its node and focus as its face or control changes" {
   for look in [Narrow, Wide] {
     let face = @signals.signal(false)

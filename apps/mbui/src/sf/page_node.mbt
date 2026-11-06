@@ -1367,12 +1367,12 @@ pub fn link_row_node(
           first.show(ends, fn(end) { icon_node(end, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore })
         }
       }
-      let end = fn(first : @view.View) { row_control_node(first, control, control_shown, fn() { under() && !face() }, false) }
+      let end = fn(first : @view.View) { row_control_node(first, control, control_shown) }
       let more = fn(u : @view.View) {
         row_under_node(u, note, trouble, below, below_open, lacks, note_style, cut_note, false)
       }
       if control is Some(_) {
-        row_controlled_content_node(words, line, follow, end, more, face_body, under_visible, false)
+        row_controlled_content_node(words, line, follow, end, more, face_body, under_visible, fn() { under() && !face() }, false)
       } else {
         words.box(fn(first) {
           first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
@@ -1390,8 +1390,8 @@ pub fn link_row_node(
 ///|
 /// A controlled row's first line, its tail, its control and the lines under it, each kept as its place changes. A face
 /// puts the control beside the whole text column; the tail stays on the first line. Otherwise the lines under the first
-/// can use the row's full width. If a face and its control leave too little text room, the control moves below the
-/// words. Keeping each part in one node preserves its state and focus when the available room or `face` changes.
+/// can use the row's full width. If the control leaves too little text room, it moves below the words. Keeping each
+/// part in one node preserves its state and focus when the available room or `face` changes.
 fn row_controlled_content_node(
   words : @view.View,
   line : (@view.View) -> Unit,
@@ -1400,13 +1400,16 @@ fn row_controlled_content_node(
   under : (@view.View) -> Unit,
   face : () -> Bool,
   under_visible : () -> Bool,
+  on_line : () -> Bool,
   wide : Bool,
 ) -> Unit {
   words.layout_box(By(fn() {
     words.words_redone() |> ignore
-    (face(), under_visible(), @ui.current().sp(@ui.tree_theme().text_size(Body).0 * 7.0))
+    let th = @ui.tree_theme()
+    let line_h = if wide { th.leading(L6).unwrap_or(th.text_size(Ui).1) } else { th.text_size(Body).1 }
+    (face(), under_visible(), on_line(), @ui.current().sp(th.text_size(Body).0 * 7.0), @ui.current().sp(line_h))
   }), sized=true, fn(l, state) {
-    let (face_now, visible_now, readable_w) = state
+    let (face_now, visible_now, on_line_now, readable_w, line_height) = state
     let first = l.child("line", line)
     let tail = l.child("tail", fn(e) {
       e.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
@@ -1419,7 +1422,7 @@ fn row_controlled_content_node(
     let (beside_tail_w, _) = l.fit(tail, beside_w)
     let beside_line_w = dmax(0.0, beside_w - beside_tail_w - (if beside_tail_w > 0.0 { 12.0 } else { 0.0 }))
     // Seven body ems leave room for a recognisable name or a short status at the current text scale.
-    let compact = face_now && end_w > 0.0 && beside_line_w < readable_w
+    let compact = end_w > 0.0 && beside_line_w < readable_w
     let text_w = if compact { l.width } else { beside_w }
     let (tail_w, tail_h) = l.fit(tail, text_w)
     let line_w = dmax(0.0, text_w - tail_w - (if tail_w > 0.0 { 12.0 } else { 0.0 }))
@@ -1444,7 +1447,9 @@ fn row_controlled_content_node(
       l.place(more, 0.0, top + first_h + under_gap)
       l.size_to(total_h)
     } else {
-      let head_h = dmax(first_h, end_h)
+      // A control beside the first line can extend past it; when moved below, its full height counts instead.
+      let end_line_h = if on_line_now && end_h > 0.0 { line_height } else { end_h }
+      let head_h = dmax(first_h, end_line_h)
       l.place(first, 0.0, (head_h - line_h) / 2.0)
       l.place(tail, text_w - tail_w, (head_h - tail_h) / 2.0)
       l.place(last, l.width - end_w, (head_h - end_h) / 2.0)
@@ -1489,28 +1494,17 @@ fn row_under_node(
 let row_end_node : @view.Lent[Bool] = @view.Lent::new()
 
 ///|
-/// A control on the first line takes only that line's height while its own press room extends above and below it.
+/// The control's full size is measured even where it is centred on the first line.
 fn row_control_node(
   parent : @view.View,
   control : ((@view.View) -> Unit)?,
   shown : () -> Bool,
-  on_line : () -> Bool,
-  wide : Bool,
 ) -> Unit {
   match control {
     Some(make) => parent.show(shown, fn(end) {
       end
       .row(Is(true))
       .lines_up(Is(Some(Middle)))
-      .height(By(fn() {
-        if on_line() {
-          end.words_redone() |> ignore
-          let th = @ui.tree_theme()
-          Some(@ui.current().sp(if wide { th.leading(L6).unwrap_or(th.text_size(Ui).1) } else { th.text_size(Body).1 }))
-        } else {
-          None
-        }
-      }))
       .lends(row_end_node, true)
       |> ignore
       make(end)

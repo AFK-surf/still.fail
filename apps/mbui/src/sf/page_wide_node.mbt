@@ -583,12 +583,12 @@ fn wide_link_row_node(
           first.show(ends, fn(end) { icon_node(end, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore })
         }
       }
-      let end = fn(first : @view.View) { row_control_node(first, control, control_shown, fn() { under() && !face() }, true) }
+      let end = fn(first : @view.View) { row_control_node(first, control, control_shown) }
       let more = fn(u : @view.View) {
         row_under_node(u, note, trouble, below, below_open, lacks, note_style, cut_note, true)
       }
       if control is Some(_) {
-        row_controlled_content_node(words, first_line, follow, end, more, face_body, under_visible, true)
+        row_controlled_content_node(words, first_line, follow, end, more, face_body, under_visible, fn() { under() && !face() }, true)
       } else {
         words.box(fn(first) {
           first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
