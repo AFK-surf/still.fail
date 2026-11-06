@@ -102,7 +102,11 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       await new Promise<void>((resolve, reject) => {
         let failure: Error | null = null;
         let complete = false;
-        worker.on("message", (answer: { complete?: boolean }) => { complete ||= answer.complete === true; });
+        worker.on("message", (answer: { complete?: boolean; filled?: boolean }) => {
+          complete ||= answer.complete === true;
+          // The days before the statistics began have just come in: pages open now read them again.
+          if (answer.filled) store.usageChanged([], undefined, true);
+        });
         worker.once("error", (error) => { failure = error; });
         worker.once("exit", (code) => {
           releaseStoppedBackfill(store.backfillPriority, owner);

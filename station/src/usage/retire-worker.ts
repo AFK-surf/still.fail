@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { giveBackfill, takeBackfill } from "../store/backfill.ts";
+import { fillUsageStep } from "../store/usage-fill.ts";
 import { dropUsageIndexStep } from "../store/usage-retire.ts";
 
 const db = new DatabaseSync(workerData.path as string);
@@ -23,5 +24,7 @@ async function step<T>(run: () => T): Promise<T> {
 }
 try {
   while (!await step(() => dropUsageIndexStep(db))) await pause();
-  parentPort!.postMessage({ complete: true });
+  let filled = false;
+  while (!await step(() => fillUsageStep(db))) { filled = true; await pause(); }
+  parentPort!.postMessage({ complete: true, filled });
 } finally { db.close(); parentPort!.close(); }
