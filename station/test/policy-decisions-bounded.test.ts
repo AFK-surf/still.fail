@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { LATEST_DECISIONS, LATEST_DECISIONS_SCOPED, Store } from "../src/store/store.ts";
 
-test("a small workspace does not group every other workspace's recent decisions", () => {
+test("a small workspace does not scan every other workspace's recent decisions", () => {
   const visits: { grouped: number; recent: number; own: number }[] = [];
   for (const otherChecks of [100, 1000]) {
     const store = Store.open(":memory:");
@@ -33,7 +33,7 @@ test("a small workspace does not group every other workspace's recent decisions"
       Object.defineProperty(store, "db", { configurable: true, value: new Proxy(db, {
         get(target, property) {
           if (property === "prepare") return (sql: string) => {
-            const group = "MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1";
+            const group = "MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1";
             if (sql.includes(group)) {
               instrumented = true;
               sql = sql.replace(group, group.replace("MAX(id)", "MAX(visit_policy_check(id))"));
@@ -56,9 +56,19 @@ test("a small workspace does not group every other workspace's recent decisions"
       assert.ok(probed, "the test must count the recent-check probe");
       assert.ok(own > 0, "the test must count the selected session's checks");
       visits.push({ grouped, recent, own });
-      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${LATEST_DECISIONS_SCOPED}`).all(50, "mine", 0) as { detail: string }[]).map((r) => r.detail);
-      assert.ok(plan.some((p) => p.includes("sessions_by_connect") && p.includes("connect=?") && p.includes("ws=?")), plan.join(" | "));
-      assert.ok(plan.some((p) => p.includes("decision_checks_session") && p.includes("session=?")), plan.join(" | "));
+      const plan = db.prepare(`EXPLAIN QUERY PLAN ${LATEST_DECISIONS_SCOPED}`).all(50, "mine", 0) as { id: number; parent: number; detail: string }[];
+      const details = plan.map((r) => r.detail).join(" | ");
+      assert.ok(plan.some((p) => p.detail.includes("sessions_by_connect") && p.detail.includes("connect=?") && p.detail.includes("ws=?")), details);
+      assert.ok(plan.some((p) => p.detail.includes("decision_checks_session") && p.detail.includes("session=?")), details);
+      // The disabled global branch must test its mode before entering the recent-index loop. Counting only
+      // grouped rows misses a scan whose mode predicate rejects each row before it reaches MAX().
+      const latest = plan.find((p) => p.detail === "MATERIALIZE latest");
+      const compound = plan.find((p) => p.parent === latest?.id && p.detail === "COMPOUND QUERY");
+      const global = plan.find((p) => p.parent === compound?.id && p.detail === "LEFT-MOST SUBQUERY");
+      const sources = plan.filter((p) => p.parent === global?.id).map((p) => p.detail);
+      const mode = sources.findIndex((p) => p === "SCAN mode");
+      const checks = sources.findIndex((p) => p.startsWith("SEARCH decision_checks "));
+      assert.ok(mode >= 0 && checks > mode, `the global branch must check its mode before reading checks: ${details}`);
     } finally { store.close(); }
   }
   assert.ok(visits.every((n) => n.grouped <= 65 && n.recent <= 65 && n.own <= 65),
@@ -97,8 +107,8 @@ for (const scenario of [
     Object.defineProperty(store, "db", { configurable: true, value: new Proxy(db, {
       get(target, property) {
         if (property === "prepare") return (sql: string) => target.prepare(sql.replace(
-          "MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1",
-          "MAX(visit_policy_fallback(id)) AS id, session FROM decision_checks WHERE created_at >= ?1"));
+          "MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1",
+          "MAX(visit_policy_fallback(id)) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1"));
         const value = Reflect.get(target, property, target);
         return typeof value === "function" ? value.bind(target) : value;
       },

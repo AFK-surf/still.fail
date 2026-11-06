@@ -225,6 +225,7 @@ ORDER BY d.created_at, d.id`;
 // With a small non-home workspace, seek its sessions by connect and inspect only the last few checks of each. If a
 // check has an out-of-order time beyond that bound, or the workspace is large, retain the exact recent-index grouping.
 // Home also uses the grouping because it includes checks for sessions no longer in the sessions table.
+// The fallback's CROSS JOIN puts mode outside the index loop, so a disabled fallback does not traverse recent checks.
 const DECISION_SCOPE_BATCH = 64;
 export const LATEST_DECISIONS_SCOPED = `WITH RECURSIVE
 recent AS MATERIALIZED (
@@ -257,7 +258,7 @@ mode AS MATERIALIZED (
     ) AS use_global
 ),
 latest AS MATERIALIZED (
-  SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 AND (SELECT use_global FROM mode) GROUP BY +session
+  SELECT MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1 GROUP BY +session
   UNION ALL
   SELECT id, key AS session FROM lookups WHERE id IS NOT NULL AND NOT (SELECT use_global FROM mode)
 )
