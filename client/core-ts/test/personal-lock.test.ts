@@ -3,15 +3,17 @@
 // a signature for something else, a key off the lock, one past its time, or one taken back here.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect } from "effect";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { Deferred, Effect } from "effect";
 import { Adb } from "../src/adb.ts";
 import { CoreError, HostError } from "../src/error.ts";
-import { entryHash, type Entry } from "../src/lock.ts";
+import { entryHash, signedBytes, type Entry } from "../src/lock.ts";
 import type { Mesh } from "../src/mesh.ts";
 import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
+import { hex } from "../src/util.ts";
 import { personalStub } from "./adb-personal-stub.ts";
 
 const SUB = "s1";
@@ -165,14 +167,18 @@ test("a lock the cloud says began anew is not followed by itself", async () => {
 
 test("a long pinned lock restores to an empty cloud within its request limit, including after an interruption", async () => {
   const c = cloud();
-  let sent = 0, interruptAfter: number | null = null, oldCloud = false;
+  let sent = 0, restoreCalls = 0, interruptAfter: number | null = null, oldCloud = false, rateLimitNext = false, rateLimited = 0;
   let replacement: Entry[] | null = null;
   const limited = {
     ...c,
     call: (sub: string, method: string, path: string, value: unknown) => {
       if (method === "POST") {
         if (oldCloud && path.endsWith("/append")) return Effect.fail(new CoreError("not_found", "cloud has no guarded restore"));
-        if (new TextEncoder().encode(JSON.stringify(value)).length > 8192) return Effect.fail(new CoreError("too_large", "cloud request is too large"));
+        if (new TextEncoder().encode(JSON.stringify(value)).length > (path.endsWith("/append") ? 256 * 1024 : 8192)) return Effect.fail(new CoreError("too_large", "cloud request is too large"));
+        if (path.endsWith("/append")) {
+          restoreCalls++;
+          if (rateLimitNext) { rateLimitNext = false; rateLimited++; return Effect.fail(new CoreError("rate_limited", "rate limited", 429)); }
+        }
         if (replacement !== null) { c.kept.entries = replacement; replacement = null; }
         const expected = (value as { expect?: { length: number; head: string | null } }).expect;
         if (expected) assert.equal(path, "/v1/me/personal-lock/append");
@@ -186,11 +192,15 @@ test("a long pinned lock restores to an empty cloud within its request limit, in
   try {
     await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
     const key = await a.runner.run(a.lock.makeKey());
-    for (let i = 0; i < 24; i++) {
-      await a.runner.run(a.lock.addDevice(SUB, { key, id: "61".repeat(32), label: `设备${i}${"长".repeat(70)}` }, "why"));
-    }
+    const seed = await a.runner.run(a.host.secureGet!("personal-signer", { user: true }));
+    assert.ok(seed);
     const pinned = [...c.kept.entries];
-    assert.ok(new TextEncoder().encode(JSON.stringify({ entries: pinned })).length > 8192);
+    for (let i = 0; i < 90; i++) {
+      const unsigned = { v: 1 as const, ws: `person:${SUB}`, seq: pinned.length, prev: entryHash(pinned.at(-1)!), at: 1, kind: "device", body: { key, id: "61".repeat(32), label: `设备${i}${"长".repeat(3000)}` } };
+      pinned.push({ ...unsigned, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(unsigned)), seed)) } });
+    }
+    await a.runner.run(a.lock.joined(SUB, pinned));
+    assert.ok(new TextEncoder().encode(JSON.stringify({ entries: pinned })).length > 256 * 1024);
     c.kept.entries = [];
     oldCloud = true;
     await assert.rejects(a.runner.run(a.lock.refresh(SUB)), /guarded restore/);
@@ -198,6 +208,16 @@ test("a long pinned lock restores to an empty cloud within its request limit, in
     oldCloud = false;
     await a.runner.run(a.lock.refresh(SUB));
     assert.deepEqual(c.kept.entries, pinned, "the entire verified chain was restored");
+    assert.ok(restoreCalls < 120, "restoring a long chain does not exhaust the cloud's per-minute account quota");
+
+    c.kept.entries = [];
+    rateLimitNext = true;
+    const retry = a.runner.run(a.lock.refresh(SUB));
+    for (let i = 0; i < 100 && rateLimited === 0; i++) await a.host.time.pass(10);
+    assert.equal(rateLimited, 1);
+    await a.host.time.pass(60_000, 1000);
+    await retry;
+    assert.deepEqual(c.kept.entries, pinned, "a quota response is retried after the cloud's wait");
 
     c.kept.entries = [];
     sent = 0;
@@ -221,6 +241,34 @@ test("a long pinned lock restores to an empty cloud within its request limit, in
   } finally {
     a.runner.shutdown();
   }
+});
+
+test("a late local read cannot replace a newer personal lock loaded in parallel", async () => {
+  const c = cloud(), a = device(c, "a");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const storageKey = [...a.host.storage.keys()].find((key) => key.startsWith("personal-lock-"))!;
+    const old = a.host.storage.get(storageKey)!;
+    const ownKey = await a.runner.run(a.lock.makeKey());
+    await a.runner.run(a.lock.addDevice(SUB, { key: ownKey, id: "61".repeat(32), label: "new" }, "why"));
+    const expected = entryHash(c.kept.entries.at(-1)!);
+    const ready = Deferred.makeUnsafe<void>(), read = a.host.storageGet.bind(a.host);
+    let first = true;
+    a.host.storageGet = (key) => {
+      if (key !== storageKey || !first) return read(key);
+      first = false;
+      return Effect.andThen(Deferred.await(ready), Effect.succeed(old));
+    };
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    let finished = false;
+    a.runner.fork(Effect.andThen(cold.load(SUB), Effect.sync(() => { finished = true; })));
+    await a.host.time.pass(10);
+    await a.runner.run(cold.load(SUB));
+    Deferred.doneUnsafe(ready, Effect.void);
+    await a.host.time.pass(10);
+    assert.equal(finished, true);
+    assert.equal(cold.chain(SUB)?.hash, expected, "the late old read did not roll the device back");
+  } finally { a.runner.shutdown(); }
 });
 
 /// A phone's Adb over a station that says what it is told.

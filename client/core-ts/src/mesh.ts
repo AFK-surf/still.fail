@@ -314,6 +314,8 @@ function closeMessage(reason: CloseReason): string {
 /// Reads lines off a stream, keeping what followed.
 export class Lines {
   readonly #stream: IrohStream;
+  #parts: Uint8Array[] = [];
+  #size = 0;
   carry: Uint8Array = new Uint8Array();
 
   constructor(stream: IrohStream) {
@@ -321,25 +323,47 @@ export class Lines {
   }
 
   /// One newline-terminated line; null at the stream's end.
-  next(): Effect.Effect<string | null, CoreError> {
+  next(maxBytes = MAX_HEAD): Effect.Effect<string | null, CoreError> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
         const at = this.carry.indexOf(10);
+        const size = this.#size + (at < 0 ? this.carry.length : at);
+        if (size > maxBytes) {
+          this.#parts = [];
+          this.#size = 0;
+          this.carry = new Uint8Array();
+          return yield* Effect.fail(meshError(t("core-logic.mesh.head_too_long")));
+        }
         if (at >= 0) {
-          const line = fromUtf8(this.carry.subarray(0, at));
+          let bytes = this.carry.subarray(0, at);
+          if (this.#parts.length > 0) {
+            bytes = new Uint8Array(size);
+            let offset = 0;
+            for (const part of this.#parts) {
+              bytes.set(part, offset);
+              offset += part.length;
+            }
+            bytes.set(this.carry.subarray(0, at), offset);
+          }
+          const line = fromUtf8(bytes);
+          this.#parts = [];
+          this.#size = 0;
           this.carry = this.carry.slice(at + 1);
           return line;
         }
-        if (this.carry.length > MAX_HEAD) return yield* Effect.fail(meshError(t("core-logic.mesh.head_too_long")));
+        // Keep partial reads on this object: an interrupted read may be resumed, and copying once per part avoids
+        // repeatedly copying an entire long personal-lock approval as its stream arrives in small chunks.
+        if (this.carry.length > 0) {
+          this.#parts.push(this.carry.slice());
+          this.#size += this.carry.length;
+          this.carry = new Uint8Array();
+        }
         const chunk = yield* Effect.mapError(this.#stream.read(), cut);
         if (chunk === null) {
-          if (this.carry.length === 0) return null;
+          if (this.#size === 0) return null;
           return yield* Effect.fail(meshError(t("core-logic.mesh.reply_cut")));
         }
-        const next = new Uint8Array(this.carry.length + chunk.length);
-        next.set(this.carry, 0);
-        next.set(chunk, this.carry.length);
-        this.carry = next;
+        this.carry = chunk;
       }
     });
   }

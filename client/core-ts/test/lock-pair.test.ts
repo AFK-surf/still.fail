@@ -11,8 +11,9 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Queue } from "effect";
 import { HostError } from "../src/error.ts";
+import type { IrohStream } from "../src/iroh.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
@@ -796,4 +797,95 @@ test("a device not on the lock shows no code for it, and someone else's lock is 
   inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
   const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "x", sign_key: null, personal: { subs: ["s1"], key: `ed25519:${"11".repeat(32)}` } }), phone.next()));
   assert.deepEqual(said, { ok: { t: "no", error: "not_here" } });
+});
+
+test("a trusted device loading its personal lock waits before refusing a pairing", async () => {
+  const m = await met(), inner = m.core.inner;
+  const kept: { entries: Entry[] } = { entries: [] };
+  const env = {
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s: string, method: string, _p: string, body: unknown) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      const adding = (body as { entries: Entry[] }).entries;
+      kept.entries = adding[0]!.seq === 0 ? adding : [...kept.entries, ...adding];
+      return { entries: kept.entries };
+    }),
+  };
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (key, value) => Effect.sync(() => void sealed.set(key, value));
+  const secureGet = m.host.secureGet!;
+  m.host.secureGet = (key, opts) => opts.user ? Effect.succeed(sealed.get(key) ?? null) : secureGet.call(m.host, key, opts);
+  const first = new PersonalLock(env);
+  await m.run(first.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  const ready = Deferred.makeUnsafe<void>(), read = m.host.storageGet.bind(m.host);
+  m.host.storageGet = (key) => key.startsWith("personal-lock-") ? Effect.andThen(Deferred.await(ready), read(key)) : read(key);
+  const restarting = new PersonalLock(env);
+  inner.adb.personal = () => restarting;
+  inner.runner.fork(Effect.ignore(restarting.refresh("s1")));
+  const [trusted, phone] = await pipe();
+  inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
+  const answers: unknown[] = [];
+  inner.runner.fork(Effect.ignore(Effect.andThen(
+    phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: null, personal: { subs: ["s1"], key: `ed25519:${"11".repeat(32)}` } }),
+    Effect.map(phone.next(), (answer) => { answers.push(answer); }),
+  )));
+  await m.host.time.pass(500);
+  const before = [...answers];
+  Deferred.doneUnsafe(ready, Effect.void);
+  await m.host.time.pass(500);
+  assert.deepEqual(before, [], "loading its own lock is not a refusal");
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["person:s1"] }]);
+  const shown = (await m.prompts()).pairing.find((p: { device: string }) => p.device === PHONE);
+  const result = await m.run(tryOne(inner, { id: ME, d: phone, workspaces: ["person:s1"] }, PHONE, shown.code));
+  assert.ok("ok" in result && "approved" in result.ok, "the first message after the wait still reaches the pairing");
+  assert.equal(restarting.chain("s1")?.devices.has(`ed25519:${"11".repeat(32)}`), true);
+});
+
+test("a long personal lock reaches the joining device over fragmented pairing reads", async () => {
+  const m = await met(), inner = m.core.inner;
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      const adding = (body as { entries: Entry[] }).entries;
+      kept.entries = adding[0]!.seq === 0 ? adding : [...kept.entries, ...adding];
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (key, value) => Effect.sync(() => void sealed.set(key, value));
+  const secureGet = m.host.secureGet!;
+  m.host.secureGet = (key, opts) => opts.user ? Effect.succeed(sealed.get(key) ?? null) : secureGet.call(m.host, key, opts);
+  inner.adb.personal = () => personal;
+  await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  const ownKey = await m.run(personal.makeKey());
+  assert.ok("ok" in ownKey);
+  for (let i = 0; i < 70; i++) {
+    const added = await m.run(personal.addDevice("s1", { key: ownKey.ok, id: ME, label: `${i}${"x".repeat(1000)}` }, "why"));
+    assert.ok("ok" in added);
+  }
+  assert.ok(utf8(JSON.stringify(kept.entries)).length > 64 * 1024);
+  const a = Effect.runSync(Queue.unbounded<Uint8Array | null>()), b = Effect.runSync(Queue.unbounded<Uint8Array | null>());
+  const end = (mine: typeof a, theirs: typeof b) => {
+    const stream: IrohStream = {
+      read: () => Queue.take(mine),
+      write: (bytes) => Effect.sync(() => { for (let i = 0; i < bytes.length; i += 8192) Queue.offerUnsafe(theirs, bytes.slice(i, i + 8192)); }),
+      finish: () => Effect.void,
+      stopped: () => Effect.succeed(null),
+      reset: () => {},
+    };
+    return streamDuplex(stream, () => void Queue.offerUnsafe(theirs, null));
+  };
+  const trusted = end(a, b), phone = end(b, a);
+  inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
+  const hello = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: null, personal: { subs: ["s1"], key: `ed25519:${"11".repeat(32)}` } }), phone.next()));
+  assert.deepEqual(hello, { ok: { t: "code", workspaces: ["person:s1"] } });
+  const shown = (await m.prompts()).pairing.find((p: { device: string }) => p.device === PHONE);
+  const attempt = trying(inner, ["person:s1"]);
+  const reached = keep(inner, attempt, ME, phone, ["person:s1"]);
+  attempt.state = "checking";
+  const result = await m.run(tryOne(inner, reached, PHONE, shown.code));
+  assert.ok("ok" in result && "approved" in result.ok, JSON.stringify(result));
+  assert.equal(checkChain(result.ok.approved.chains.s1, "s1")?.devices.has(`ed25519:${"11".repeat(32)}`), true);
 });

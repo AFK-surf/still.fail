@@ -102,8 +102,10 @@ const PATH = "/v1/me/personal-lock";
 // Older clouds ignore an unknown `expect` field on PATH. This distinct route guarantees a guarded restore is never
 // treated as an unconditional reset during a rolling cloud update.
 const RESTORE_PATH = `${PATH}/append`;
-/// The cloud reads at most this many UTF-8 bytes in one request (cloud/src/auth.ts).
-const POST_BYTES = 8192;
+/// The guarded restore route's UTF-8 request limit (cloud/src/api.ts).
+const POST_BYTES = 256 * 1024;
+/// The cloud's account quota reports Retry-After: 60 seconds; a later refresh can resume if it remains busy.
+const RATE_RETRY_MS = 60_000;
 
 export class PersonalLock {
   readonly #env: PersonalEnv;
@@ -122,19 +124,32 @@ export class PersonalLock {
     return checkChain(this.#pinned.get(sub) ?? [], sub);
   }
 
-  /// Read from the device once, then from the cloud: what extends the pinned one is taken, anything else only noted.
-  refresh(sub: string): Effect.Effect<void, CoreError> {
+  /// Load the pinned chain and public key without waiting for the cloud, including when pairing arrives at startup.
+  loaded(sub: string): boolean { return this.#loaded.has(sub); }
+
+  load(sub: string): Effect.Effect<void> {
     const env = this.#env;
     return Effect.gen({ self: this }, function* () {
       if (!this.#loaded.has(sub)) {
         const kept = yield* Effect.orElseSucceed(env.host.storageGet(keptAs(sub)), () => null);
         const said = kept === null ? null : (parseJson(kept) as Entry[] | null);
-        if (Array.isArray(said) && checkChain(said, sub) !== null) this.#pinned.set(sub, said);
         const id = yield* Effect.orElseSucceed(env.host.storageGet(KEY_ID), () => null);
-        if (id !== null) this.#myKey = fromUtf8(id);
-        this.#loaded.add(sub);
-        env.changed();
+        // Another load may have completed and subsequently extended the chain while these reads were pending.
+        if (!this.#loaded.has(sub)) {
+          if (Array.isArray(said) && checkChain(said, sub) !== null) this.#pinned.set(sub, said);
+          if (id !== null && this.#myKey === null) this.#myKey = fromUtf8(id);
+          this.#loaded.add(sub);
+          env.changed();
+        }
       }
+    });
+  }
+
+  /// Read from the device once, then from the cloud: what extends the pinned one is taken, anything else only noted.
+  refresh(sub: string): Effect.Effect<void, CoreError> {
+    const env = this.#env;
+    return Effect.gen({ self: this }, function* () {
+      yield* this.load(sub);
       const said = (yield* env.cloud(sub, "GET", PATH, null)) as { entries?: Entry[] } | null;
       yield* this.#heard(sub, Array.isArray(said?.entries) ? said.entries : []);
     });
@@ -153,21 +168,36 @@ export class PersonalLock {
         let batch: Entry[] = [];
         let start = entries.length;
         const payload = (part: Entry[]) => ({ entries: part, expect: { length: start, head: start === 0 ? null : entryHash(pinned[start - 1]!) } });
+        let bytes = toJsonBytes(payload([])).length;
         for (const entry of pinned.slice(entries.length)) {
-          const together = [...batch, entry];
-          if (toJsonBytes(payload(together)).length > POST_BYTES) {
+          const size = toJsonBytes(entry).length;
+          if (bytes + (batch.length > 0 ? 1 : 0) + size > POST_BYTES) {
             if (batch.length === 0) return yield* Effect.fail(new CoreError("personal_entry_too_large", "a personal lock entry is too large to restore"));
-            yield* this.#env.cloud(sub, "POST", RESTORE_PATH, payload(batch));
+            yield* this.#restoreBatch(sub, payload(batch));
             start += batch.length;
-            batch = [entry];
-            if (toJsonBytes(payload(batch)).length > POST_BYTES) return yield* Effect.fail(new CoreError("personal_entry_too_large", "a personal lock entry is too large to restore"));
-          } else batch = together;
+            batch = [];
+            bytes = toJsonBytes(payload([])).length;
+          }
+          if (bytes + size > POST_BYTES) return yield* Effect.fail(new CoreError("personal_entry_too_large", "a personal lock entry is too large to restore"));
+          bytes += (batch.length > 0 ? 1 : 0) + size;
+          batch.push(entry);
         }
-        if (batch.length > 0) yield* this.#env.cloud(sub, "POST", RESTORE_PATH, payload(batch));
+        if (batch.length > 0) yield* this.#restoreBatch(sub, payload(batch));
         this.#seen.delete(sub);
       } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
       else this.#seen.delete(sub);
       this.#env.changed();
+    });
+  }
+
+  #restoreBatch(sub: string, body: { entries: Entry[]; expect: { length: number; head: string | null } }): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      for (let attempt = 0; ; attempt++) {
+        const result = yield* Effect.result(this.#env.cloud(sub, "POST", RESTORE_PATH, body));
+        if (result._tag === "Success") return;
+        if (result.failure.status !== 429 || attempt >= 2) return yield* Effect.fail(result.failure);
+        yield* Effect.sleep(RATE_RETRY_MS);
+      }
     });
   }
 

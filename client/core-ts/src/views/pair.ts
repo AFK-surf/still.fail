@@ -76,13 +76,13 @@ const ISSUERS = ["stillfail-cloud"];
 const TYPES = ["stillfail-member+jwt"];
 
 /// One way of a line of JSON at a time, on a stream.
-export type Duplex = { send(message: J): Effect.Effect<void, CoreError>; next(): Effect.Effect<J | null, CoreError>; close(): void };
+export type Duplex = { send(message: J): Effect.Effect<void, CoreError>; next(maxBytes?: number): Effect.Effect<J | null, CoreError>; close(): void };
 
 export function streamDuplex(stream: IrohStream, close: () => void): Duplex {
   const lines = new Lines(stream);
   return {
     send: (m) => Effect.mapError(stream.write(utf8(`${JSON.stringify(m)}\n`)), (e) => CoreError.plainly("pair", e)),
-    next: () => Effect.map(lines.next(), (l) => (l === null ? null : (parseJson(l) ?? null))),
+    next: (maxBytes) => Effect.map(lines.next(maxBytes), (l) => (l === null ? null : (parseJson(l) ?? null))),
     close,
   };
 }
@@ -146,20 +146,28 @@ export function served(inner: Inner, connection: IrohConnection): void {
   );
 }
 
-/// The workspaces of `hello` this device approves the new one (`peer`) in, as it sees itself (`me`, its base key).
-/// Who asks to join their own locks, those of the accounts asked that this device is on: its key, and whose.
-function personalAsked(inner: Inner, hello: J): { key: string; subs: string[]; who: { sub: string; email: string; name: string } } | null {
+/// An eligible personal request, limited to accounts on this device.
+function personalRequest(inner: Inner, hello: J): { key: string; subs: string[] } | null {
   const asked = get(hello, "personal");
   const key = str(get(asked, "key"));
   const subs = arr(get(asked, "subs")).filter((s): s is string => typeof s === "string");
   const one = str(get(asked, "sub"));
   if (one !== null && !subs.includes(one)) subs.push(one);
   if (key === null || !key.startsWith("ed25519:") || !inner.host.appKeys) return null;
-  const mine = subs.filter((sub) => inner.adb.personal().standing(sub) === "member" && inner.accounts.list().some((a) => a.sub === sub));
-  const account = inner.accounts.list().find((a) => a.sub === mine[0]);
-  return account === undefined ? null : { key, subs: mine, who: { sub: account.sub, email: account.email, name: account.name ?? "" } };
+  const requested = new Set(subs);
+  return { key, subs: inner.accounts.list().map((a) => a.sub).filter((sub) => requested.has(sub)) };
 }
 
+/// Who asks to join their own locks, those of the accounts asked that this device is on: its key, and whose.
+function personalAsked(inner: Inner, hello: J): { key: string; subs: string[]; who: { sub: string; email: string; name: string } } | null {
+  const request = personalRequest(inner, hello);
+  if (request === null) return null;
+  const mine = request.subs.filter((sub) => inner.adb.personal().standing(sub) === "member");
+  const account = inner.accounts.list().find((a) => a.sub === mine[0]);
+  return account === undefined ? null : { key: request.key, subs: mine, who: { sub: account.sub, email: account.email, name: account.name ?? "" } };
+}
+
+/// The workspaces of `hello` this device approves the new one (`peer`) in, as it sees itself (`me`, its base key).
 function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: Asking["places"]; who: { sub: string; email: string; name: string } | null } {
   const signer = signerOf(inner);
   const now = Math.floor(inner.host.nowMs() / 1000);
@@ -278,6 +286,21 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     }
     asked ??= placesFor(inner, hello.value, peer, me);
     const { places } = asked;
+    const personalRead = places.length === 0 ? personalRequest(inner, hello.value) : null;
+    if (personalRead?.subs.some((sub) => !inner.adb.personal().loaded(sub))) {
+      // As for a workspace key, keep the first incoming read alive while local personal locks load.
+      const previous = receive;
+      const pending = yield* Effect.forkChild(Effect.orElseSucceed(previous(), () => null));
+      const ready = Effect.forEach(personalRead.subs, (sub) => inner.adb.personal().load(sub), { concurrency: "unbounded", discard: true });
+      const stillHere = yield* Effect.raceFirst(Effect.as(ready, true), Effect.as(Fiber.join(pending), false));
+      if (!stillHere) return;
+      let first = true;
+      receive = () => {
+        if (!first) return previous();
+        first = false;
+        return Fiber.join(pending);
+      };
+    }
     // Personal pairing has no workspace credentials; it uses the person's own checked lock instead.
     const personal = places.length === 0 ? personalAsked(inner, hello.value) : null;
     const who = personal !== null ? personal.who : asked.who;
@@ -685,6 +708,11 @@ export function trying(inner: Inner, workspaces: string[]): Trying {
 /// it here at once. If another device is still being sought, keep looking; otherwise the last one ended says why
 /// (`endedText`), so the page asks again. What it answers a code typed is `tryOne`'s.
 export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspaces: string[]): Met {
+  // A personal approval carries the complete signed chains. The cloud accepts at most 1024 entries of 4096 JSON
+  // characters each; each UTF-16 character occupies at most three UTF-8 bytes. Bound the larger read by the personal
+  // accounts this device actually asked for, not by an account the other endpoint claims to approve.
+  const personalCount = new Set(workspaces.filter((w) => isPerson(w) && y.workspaces.includes(w))).size;
+  const limit = personalCount === 0 ? undefined : 64 * 1024 + personalCount * 1024 * (4096 * 3 + 1);
   const heard = Effect.runSync(Queue.unbounded<J | null>());
   const closed = Deferred.makeUnsafe<void>();
   const d: Duplex = {
@@ -722,7 +750,7 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
     Effect.gen(function* () {
       for (;;) {
         const next = yield* Effect.raceFirst(
-          Effect.map(Effect.orElseSucceed(raw.next(), () => null), (msg) => ({ msg }) as const),
+          Effect.map(Effect.orElseSucceed(raw.next(limit), () => null), (msg) => ({ msg }) as const),
           Effect.as(Deferred.await(closed), { closed: true } as const),
         );
         if ("closed" in next) return;
