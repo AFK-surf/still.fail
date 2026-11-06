@@ -37,6 +37,12 @@ on:
     branches: [main]
     paths: *paths
   workflow_dispatch:
+    inputs:
+      target:
+        description: Scratch desktop experiment
+        type: choice
+        options: [windows, mac-availability]
+        default: windows
 
 
 jobs:
@@ -65,7 +71,7 @@ jobs:
           grep -q 'after the stall' out/logs/stderr.txt
 
   explorer-probe:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'windows' }}
     runs-on: windows-latest
     timeout-minutes: 5
     permissions:
@@ -105,6 +111,28 @@ jobs:
         with:
           name: explorer-drop-exe
           path: apps/mbui/mbui/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe
+          if-no-files-found: ignore
+
+  mac-availability:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'mac-availability' }}
+    runs-on: macos-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect the isolated macOS desktop
+        run: |
+          id
+          uname -m
+          stat -f 'console owner=%Su' /dev/console
+          ps -axo user,pid,comm | grep -E '[W]indowServer|[/]Finder' || :
+          launchctl print gui/$(id -u) | head -8 || :
+          osascript -l JavaScript -e 'ObjC.import("ApplicationServices"); $.AXIsProcessTrusted()' || :
+          screencapture -x "${RUNNER_TEMP}/finder-desktop.png" || :
+          ls -lh "${RUNNER_TEMP}/finder-desktop.png" || :
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-desktop-probe
+          path: ${{ runner.temp }}/finder-desktop.png
           if-no-files-found: ignore
 
   contracts:

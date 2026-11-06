@@ -23,6 +23,10 @@ public static class ExplorerDropProbe {
   [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
+  [DllImport("gdi32.dll")] static extern uint GetPixel(IntPtr dc, int x, int y);
+  [DllImport("dwmapi.dll")] static extern int DwmFlush();
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint process);
   [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
   delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
@@ -104,6 +108,17 @@ public static class ExplorerDropProbe {
     int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
     using (var b = new Bitmap(w, h))
     using (var g = Graphics.FromImage(b)) { g.CopyFromScreen(0, 0, 0, 0, b.Size); b.Save(path); }
+  }
+  static void WaitHoverPixel(Point target, DateTime deadline) {
+    IntPtr dc = GetDC(IntPtr.Zero);
+    if (dc == IntPtr.Zero) throw new Exception("cannot read the desktop");
+    try {
+      // HOVER is told as the signal changes; the compositor can show the previous frame until its next present.
+      while (GetPixel(dc, target.x, target.y) != 0x006EC13B) {
+        if (DateTime.UtcNow >= deadline) throw new Exception("the hovered target was not presented");
+        if (DwmFlush() != 0) throw new Exception("cannot wait for desktop composition");
+      }
+    } finally { ReleaseDC(IntPtr.Zero, dc); }
   }
   public static int Run(Process app, string file, string log, string shot, int seconds) {
     DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
@@ -192,6 +207,7 @@ public static class ExplorerDropProbe {
             Shot(shot + ".start.png");
             if (!SetCursorPos(target.x, target.y)) throw new Exception("cannot drag to the probe");
             output.WaitFor("HOVER folder", deadline);
+            WaitHoverPixel(target, deadline);
           }
           Shot(shot);
           mouse_event(MouseUp, 0, 0, 0, UIntPtr.Zero);
