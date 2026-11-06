@@ -65,6 +65,14 @@ priv struct SceneLayer {
   /// (scene_entries_kept)
   mut entries : Array[SceneEntry]?
   mut entries_as : (Double, Double)
+  /// all it drew as it was last drawn, what it holds with it: its instances, its shapes' pieces (and the number of the
+  /// first of them then), who drew each where that is kept. What it is copied from where it is kept: its own, never
+  /// where another frame had it
+  mut block : FixedArray[Double]
+  mut block_n : Int
+  mut block_segs : Array[Double]
+  mut block_seg_base : Int
+  mut block_owners : OwnersRun?
 }
 
 ///|
@@ -1135,13 +1143,10 @@ fn Ctx::scene_copied(
   guard !scene.fresh else { return copy_not(id, "nothing kept") }
   guard !forced else { return copy_not(id, "what holds it drawn whole") }
   guard scene.layers.get(id) is Some(l) else { return copy_not(id, "not kept") }
-  guard l.seen == scene.src_seen else { return copy_not(id, "seen \{l.seen}, kept of \{scene.src_seen}") }
-  guard l.start >= 0 && l.start + l.count <= scene.src_n else {
-    return copy_not(id, "at \{l.start} for \{l.count} of \{scene.src_n}")
-  }
+  guard l.seen >= 0 && l.seen >= scene.frame - 1 else { return copy_not(id, "seen \{l.seen}, of \{scene.frame}") }
   guard !l.own_only else { return copy_not(id, "own only") }
   guard !l.each else { return copy_not(id, "drawn each frame") }
-  guard !inst_owners_kept() || scene.owners is Some(_) else {
+  guard !inst_owners_kept() || l.block_owners is Some(_) else {
     return copy_not(id, "who drew it not kept")
   }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked, told \{l.told}") }
@@ -1152,34 +1157,25 @@ fn Ctx::scene_copied(
   guard !scene.moved_layers.contains(id) else { return copy_not(id, "placed otherwise") }
   // (what it was drawn in, as it is drawn in now: its key; another, drawn anew)
   guard scene_began_same(l, held, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
-  let n = l.count
+  // (from its own block: all it drew as it was last drawn, what it holds with it)
+  let n = l.block_n
   while (self.ninst + n + 1) * inst_size > self.inst.length() {
     self.grow()
   }
   let at = self.ninst
-  scene.src.blit_to(self.inst, len=n * inst_size, src_offset=l.start * inst_size, dst_offset=at * inst_size)
+  l.block.blit_to(self.inst, len=n * inst_size, dst_offset=at * inst_size)
   let seg0 = self.segs.length() / 4
-  for q in (l.seg_from * 4)..<((l.seg_from + l.seg_count) * 4) {
-    self.segs.push(scene.src_segs[q])
+  for v in l.block_segs {
+    self.segs.push(v)
   }
-  let dseg = (seg0 - l.seg_from).to_double()
+  let dseg = (seg0 - l.block_seg_base).to_double()
   for b in l.bands {
     let o = (at + b) * inst_size
     self.inst[o + 12] = self.inst[o + 12] + dseg
   }
   self.ninst = at + n
-  match scene.owners {
-    Some(o) if inst_owners_kept() =>
-      owners_put(
-        {
-          owner: o.owner[l.start:l.start + n].to_owned(),
-          cell: o.cell[l.start:l.start + n].to_owned(),
-          tree: o.tree[l.start:l.start + n].to_owned(),
-          mark: o.mark[l.start:l.start + n].to_owned(),
-          bone: o.bone[l.start:l.start + n].to_owned(),
-        },
-        at,
-      )
+  match l.block_owners {
+    Some(o) if inst_owners_kept() => owners_put(o, at)
     _ => ()
   }
   scene_moved_to(l, at, seg0)
@@ -1355,6 +1351,11 @@ fn Ctx::scene_drawn(
         seen: -1,
         entries: None,
         entries_as: (1.0, 1.0),
+        block: FixedArray::make(0, 0.0),
+        block_n: 0,
+        block_segs: [],
+        block_seg_base: 0,
+        block_owners: None,
       }
       scene.layers[id] = l
       l
@@ -1542,6 +1543,8 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
   l.seg_from = s0
   l.seg_count = self.segs.length() / 4 - s0
   l.seen = scene.frame
+  // (all it drew kept as its own, what it is copied from where it is kept)
+  self.scene_block_kept(l, k0, s0)
   // (the host's controls it drew, each by its instance from its first: where it is put, the same)
   for i, a in l.anchors {
     l.anchors[i] = (a.0, a.1 - k0)
@@ -2470,4 +2473,22 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
     seg_end = seg_from + seg_count
   }
   None
+}
+
+///|
+/// What layer `l` drew now (its instances from `k0`, its shapes' pieces from `s0`, who drew each where that is kept)
+/// kept as its own block: what it is copied from where it is kept (Ctx::scene_copied), never another frame's instances.
+fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit {
+  let n = self.ninst - k0
+  if l.block.length() < n * inst_size {
+    l.block = FixedArray::make(n * inst_size * 2, 0.0)
+  }
+  self.inst.blit_to(l.block, len=n * inst_size, src_offset=k0 * inst_size)
+  l.block_n = n
+  l.block_segs.clear()
+  for q in (s0 * 4)..<self.segs.length() {
+    l.block_segs.push(self.segs[q])
+  }
+  l.block_seg_base = s0
+  l.block_owners = if inst_owners_kept() { Some(owners_run(k0, self.ninst)) } else { None }
 }
