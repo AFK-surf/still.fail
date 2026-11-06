@@ -185,6 +185,43 @@ fn scene_arg(name : String) -> String {
     _ => abort("picture: unsupported scene option \{name}")
   }
 }
+
+///|
+// Temporary visual evidence fixture: the same panel groups made by the old view or the retained tree.
+fn panel_group_demo(root : @view.View, old : Bool, width : Double) -> Unit {
+  root.box(fn(panel) {
+    panel.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(width)))
+    .padding(Is((12.0, 12.0, 12.0, 12.0))).gap(Is(16.0))
+    .ground(By(fn() { @sf.panel_ground() })).radius(Is(12.0)) |> ignore
+    if old {
+      @ui.old(panel, natural=true, fn(c) {
+        c.box(style=@ui.css("w=Full gap=S4"), fn() {
+          @sf.panel_group(c, label="Connection and remote screen quality", lead=fn(c) {
+            c.box(style=@ui.style(w=Fixed(12.0), h=Fixed(12.0), bg=Data(0x7B67D5FFL)), fn() { }) |> ignore
+          }, fn() {
+            c.text("Automatic", style=@sf.paragraph) |> ignore
+            c.text("High quality", style=@sf.paragraph) |> ignore
+          })
+          @sf.panel_group(c, fn() {
+            c.text("Audio on", style=@sf.paragraph) |> ignore
+            c.text("Send files", style=@sf.paragraph) |> ignore
+          })
+        }) |> ignore
+      }) |> ignore
+    } else {
+      @sf.panel_group_node(panel, label=fn() { "Connection and remote screen quality" }, lead=fn(line) {
+        line.box(fn(mark) { mark.width(Is(Some(12.0))).height(Is(Some(12.0))).ground(Is(0x7B67D5FFL)) |> ignore }) |> ignore
+      }, fn(group) {
+        @sf.words_node(group, fn() { "Automatic" }, fn() { @sf.paragraph }) |> ignore
+        @sf.words_node(group, fn() { "High quality" }, fn() { @sf.paragraph }) |> ignore
+      }) |> ignore
+      @sf.panel_group_node(panel, fn(group) {
+        @sf.words_node(group, fn() { "Audio on" }, fn() { @sf.paragraph }) |> ignore
+        @sf.words_node(group, fn() { "Send files" }, fn() { @sf.paragraph }) |> ignore
+      }) |> ignore
+    }
+  }) |> ignore
+}
 ///|
 pub fn draw() -> Int {
   // (the app as it runs on a host: what faults shown by its boundary, as there, and said on the log)
@@ -192,7 +229,14 @@ pub fn draw() -> Int {
   @view.fault_told.val = Some(fn(said) { println("fault: " + said) })
   let source = @sffilmscene.source(scene_arg)
   let view = fn(c : @ui.Ctx) { @sfapp.view(c, source()) }
-  let t = @ui.Tester::new(view, tree=fn(root : @view.View) { @sfapp.app_tree(source())(root) },
+  let t = @ui.Tester::new(view, tree=fn(root : @view.View) {
+    @sfapp.app_tree(source())(root)
+    let mode = option(0)
+    if mode == "panel-group-old" || mode == "panel-group-new" {
+      let width = if option_number(0) < 360.0 { option_number(0) - 40.0 } else { 320.0 }
+      panel_group_demo(root, mode == "panel-group-old", width)
+    }
+  },
     w=option_number(0), h=option_number(1), scale=option_number(2),
     platform=option_number(3).to_int(), dark=option_number(4) == 1.0,
     pointing?=match option(5) { "finger" => Some(@ui.Pointing::Finger); "mouse" => Some(@ui.Pointing::Mouse); _ => None },

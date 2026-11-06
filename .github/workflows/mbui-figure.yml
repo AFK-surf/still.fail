@@ -92,6 +92,31 @@ jobs:
           MBUI_MEDIA_RUNTIME="$renderer" bash scripts/media-test.sh
           MBUI_MEDIA_RUNTIME="$renderer" bash scripts/media-prebuilt-test.sh
           MBUI_MEDIA_RUNTIME="$wasm_renderer" bash scripts/media-wasm-test.sh
+      - name: Capture panel group comparison
+        if: github.ref == 'refs/heads/codex/panel-group-evidence'
+        run: |
+          set -eu
+          wasm_renderer=$(node scripts/native.ts file mbui-film-wasm darwin-arm64)
+          cd apps/mbui
+          mkdir -p out/panel-group-evidence
+          printf 'exit\n' > out/panel-group-evidence/drive
+          for width in 200 360; do
+            for theme in light dark; do
+              dark=''
+              if [ "$theme" = dark ]; then dark=1; fi
+              for side in old new; do
+                MBUI_MEDIA_RUNTIME="$wasm_renderer" MBUI_FIXTURE="panel-group-$side" MBUI_WIN="${width}x400" MBUI_DARK="$dark" MBUI_FILM_SCALE=2 \
+                  bash scripts/media.sh picture "out/panel-group-evidence/${width}-${theme}-${side}.png" out/panel-group-evidence/drive
+              done
+            done
+          done
+      - name: Upload panel group comparison
+        if: github.ref == 'refs/heads/codex/panel-group-evidence'
+        uses: actions/upload-artifact@v4
+        with:
+          name: panel-group-evidence
+          path: apps/mbui/out/panel-group-evidence/*.png*
+          if-no-files-found: error
       - name: Publish the tested renderer
         if: github.ref == 'refs/heads/main'
         env:

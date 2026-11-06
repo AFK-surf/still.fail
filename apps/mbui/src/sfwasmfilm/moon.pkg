@@ -2,6 +2,7 @@ import {
   "mbui/ui",
   "mbui/hostapi",
   "stillfail/sfapp",
+  "stillfail/sf",
   "stillfail/sffilmscene",
   "mbui/view",
   "mbui/film",
