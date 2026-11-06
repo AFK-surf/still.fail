@@ -209,6 +209,7 @@ fn md_table_body_node(
   on_link : (String) -> Unit,
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
   files? : (String) -> PlacedNode? = fn(_) { None },
+  md? : MdNode,
 ) -> Unit {
     outer.margin(bleed.live(fn(b) { (-b, 0.0, -b, 0.0) })) |> ignore
     // (each cell's extent, as Md::table works them out: table_widths's, the head's row first)
@@ -344,17 +345,29 @@ fn md_table_body_node(
                   {
                     size,
                     weight: if head { 500 } else { 400 },
-                    line: (Float::from_double(size) * (1.65 : Float)).to_double(),
+                    line: match md {
+                      Some(style) => md_line(style, size)
+                      None => (Float::from_double(size) * (1.65 : Float)).to_double()
+                    },
                     wrap: true,
                     tracking: @view.letters_own,
                     balance: false,
                   }
                 }
-                let runs = fn() { table_cell_runs(words()) }
+                let runs = fn() {
+                  let plain = table_cell_runs(words())
+                  match md {
+                    Some(style) => {
+                      md_node_faces(style, found_weight(plain, (style.found)()))
+                    }
+                    None => plain
+                  }
+                }
                 w
-                .words_runs(By(runs), look=look())
+                .words_runs(By(runs))
+                .words_look(By(look))
                 .runs_look(By(table_runs_look))
-                .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
+                .ink(By(fn() { if head { web().muted } else { match md { Some(style) => (style.ink)(); None => theme().p.text } } }))
                 |> ignore
                 @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
               })
@@ -369,7 +382,7 @@ fn md_table_body_node(
               let room = given.unwrap_or(beside.rect().2 + hang_laid.val - key_w)
               table_widths(extents_of(t), room, false, fn(x) { c.sp(x) })
             }
-            let key_node = fn(k : @view.View) { table_key_node(beside, k, key, fn() { table() }, widths_for) }
+            let key_node = fn(k : @view.View) { table_key_node(beside, k, key, fn() { table() }, widths_for, md) }
             beside.layout_box(
               // (what it is laid out by but its room: its rows and columns, each cell's extent, at the system's size of
               // words; taken before the layout, followed)
@@ -459,6 +472,7 @@ fn table_key_node(
   key : String,
   table : () -> MdTable?,
   widths_for : (MdTable) -> (Array[Double], Double),
+  md : MdNode?,
 ) -> Unit {
   let copied = @signals.signal(false)
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
@@ -535,7 +549,7 @@ fn table_key_node(
                     key + "/picture",
                     total + 2.0 * table_shot_in,
                     fn(c) {
-                      c.box(style=table_shot_paper, fn() { table_md(c).table_frame(rows, ws, total, key + "/picture-head") })
+                      c.box(style=table_shot_paper, fn() { table_md(c, md).table_frame(rows, ws, total, key + "/picture-head") })
                       |> ignore
                     },
                     fn(png) { if (picture_out_by.val)(@ui.current(), png, !album) && !album { said() } },
@@ -565,11 +579,11 @@ fn table_key_node(
 }
 
 ///|
-/// What draws a table's picture (table_frame, as its copy key takes it): a message's Markdown as @sf.markdown sets it,
+/// What draws a table's picture (table_frame, as its copy key takes it), with the current Markdown's reader settings;
 /// its links taken nowhere, its tables copied by none.
-fn table_md(c : @ui.Ctx) -> Md {
+fn table_md(c : @ui.Ctx, md : MdNode?) -> Md {
   let t = theme()
-  {
+  let base : Md = {
     c,
     size: t.t.body,
     ink: t.p.text,
@@ -592,6 +606,19 @@ fn table_md(c : @ui.Ctx) -> Md {
     copy: false,
     fit_tables: false,
   }
+  match md {
+    Some(style) => {
+      ..base,
+      size: (style.size)(),
+      ink: (style.ink)(),
+      line: (style.line)(),
+      serif: (style.serif)(),
+      found: (style.found)(),
+      text_face: (style.text_face)(),
+      code_face: (style.code_face)(),
+    }
+    None => base
+  }
 }
 
 ///|
@@ -611,7 +638,6 @@ fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Ar
   }
   Some(out)
 }
-
 
 ///|
 /// How far past its room either side a table scrolls across: said (`Bleed`), or worked out from how wide a node holding
