@@ -27,3 +27,24 @@ test "a time of GitHub's in seconds" {
   assert_eq(iso_s("1970-01-01T00:00:00Z"), 0.0)
   assert_eq(iso_s("2026-10-22T05:37:59.731503Z"), 1792647479.0)
 }
+
+///|
+test "only old caches of deleted branches are removed" {
+  let heads : Map[String, Bool] = { "refs/heads/main": true, "refs/heads/live": true }
+  let cache : Cache = {
+    id: "1", key: "any-key", ref_: "refs/heads/gone", size: 10L, created: 1000.0, accessed: 1000.0,
+  }
+  assert_true(deleted_head_cache(cache, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, ref_: "refs/heads/live" }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, ref_: "refs/pull/123/merge" }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, ref_: "refs/tags/old" }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, created: 1001.0 }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, accessed: 1001.0 }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, created: 0.0 }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, accessed: 0.0 }, heads, 2800.0))
+}
+
+///|
+test "a branch name is one shell argument" {
+  assert_eq(shell_arg("can't;$(echo bad)"), "'can'\\''t;$(echo bad)'")
+}
