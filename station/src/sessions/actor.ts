@@ -10,7 +10,7 @@ import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -187,13 +187,15 @@ export type SessionDeps = {
   places?: Places;
   /// Its runtime was not found on PATH as it started.
   runtimeMissing?(runtime: RuntimeKind): void;
+  /// Updates the local Codex installation and waits until it can serve new turns.
+  updateOldCodex?(runningVersion: string | null): Promise<void>;
   nextTs(): string;
   /// Its time (the hub's).
   clock: Clock.Clock;
 };
 
 /// `lostRetried`: started again once already after the connection to its sandbox was lost (agents/sandbox.ts).
-type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; lostRetried?: boolean; by: TurnFor };
+type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; lostRetried?: boolean; codexRetried?: boolean; by: TurnFor };
 
 /// Where a session stands: no runtime session; one starting up; a turn running; the agent waiting on work it started;
 /// or the actor closed (its station stopping or handing over).
@@ -204,7 +206,7 @@ export type Snapshot = {
   key: string;
   runtime: RuntimeKind;
   agent: unknown | null;
-  turn: { id: string; authRetried: boolean; lostRetried?: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
+  turn: { id: string; authRetried: boolean; lostRetried?: boolean; codexRetried?: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
   workingFor: Working[];
   notices: string[];
   waitingMs: number | null;
@@ -273,6 +275,8 @@ export class SessionActor {
   private generation = 0;
   private phase: Phase = "idle";
   private turn: Turn | null = null;
+  /// A failed turn waiting for the machine's shared Codex update; messages wait without blocking the actor's queue.
+  private codexUpdate: { by: TurnFor; finished: boolean } | null = null;
   private nudges = 0;
   /// The chats it was asked to name as a turn ended with them untitled: asked once each.
   private askedToName = new Set<string>();
@@ -389,7 +393,7 @@ export class SessionActor {
 
   /// running: a turn is in progress; warm: a runtime process waits for input; cold: none.
   processState(): "running" | "warm" | "cold" {
-    if (this.turn || this.agent?.session.busy()) return "running";
+    if (this.turn || this.codexUpdate || this.agent?.session.busy()) return "running";
     return this.agent ? "warm" : "cold";
   }
 
@@ -401,7 +405,7 @@ export class SessionActor {
   }
 
   holdsState(): boolean {
-    return this.notices.length > 0 || this.waiting !== null || this.refill !== null;
+    return this.codexUpdate !== null || this.notices.length > 0 || this.waiting !== null || this.refill !== null;
   }
 
   /// Delivers any pending messages.
@@ -422,6 +426,10 @@ export class SessionActor {
   putAway(): Promise<void> {
     return this.enqueue(async () => {
       this.notices = [];
+      if (this.codexUpdate) {
+        this.codexUpdate = null;
+        this.deps.store.setRunning(this.key, false);
+      }
       if (!this.turn && !this.agent?.session.busy()) await this.letGo();
     });
   }
@@ -498,6 +506,13 @@ export class SessionActor {
   stop(): Promise<void> {
     this.formatAbort?.abort();
     return this.enqueue(async () => {
+      if (this.codexUpdate) {
+        this.codexUpdate = null;
+        this.deps.store.setRunning(this.key, false);
+        await this.notice(t("station.notice.stopped"));
+        this.deps.live?.turnEnded(this.key);
+        return;
+      }
       if (this.agent?.session.busy()) {
         this.stopRequested = true;
         try {
@@ -567,7 +582,7 @@ export class SessionActor {
   /// and it was changed since: it goes on where it stopped.
   goOn(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.codexUpdate || this.agent?.session.busy()) return;
       this.refill = null;
       if (this.deps.store.hasPending(this.key)) return this.pump();
       const last = this.deps.store.lastTurn(this.key);
@@ -641,7 +656,7 @@ export class SessionActor {
   /// Starts the runtime process ahead of a message, so its start-up overlaps the typing.
   warm(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.agent || this.deps.held(this.key)) return;
+      if (this.agent || this.codexUpdate || this.deps.held(this.key)) return;
       log.info("session", "warming session process", { session: this.key });
       await this.ensureAgent();
       this.idleSince = this.now();
@@ -698,7 +713,7 @@ export class SessionActor {
   private async compactingToCap(): Promise<boolean> {
     const store = this.deps.store;
     if (store.getSession(this.key)?.contextBefore == null) return false;
-    if (this.turn || this.compacting || this.waiting !== null || this.agent?.session.busy() || this.deps.held(this.key) || this.archived()) return false;
+    if (this.turn || this.codexUpdate || this.compacting || this.waiting !== null || this.agent?.session.busy() || this.deps.held(this.key) || this.archived()) return false;
     const refused = await this.beginCompacting();
     if (refused === null) return true;
     log.info("session", "could not compact down to its most context", { session: this.key, why: refused });
@@ -708,7 +723,7 @@ export class SessionActor {
   }
 
   private async beginCompacting(): Promise<string | null> {
-    if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
+    if (this.turn || this.codexUpdate || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     if (this.deps.held(this.key)) return t("station.context.held");
     const row = this.deps.store.getSession(this.key);
     if (!row?.runtimeSessionId) return t("station.context.empty");
@@ -786,7 +801,7 @@ export class SessionActor {
   /// a message or notice starts it afresh by itself: the turn that comes is what its wait was for, and its watches keep
   /// watching (stopped with it, a watch would end without a word, the fresh agent not knowing it had one).
   private async clearNow(readBack: boolean, said = readBack ? "station.notice.afresh" : "station.notice.cleared", by = "by hand", keepJobs = false): Promise<string | null> {
-    if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
+    if (this.turn || this.codexUpdate || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row?.runtimeSessionId) return t("station.context.empty");
@@ -855,6 +870,7 @@ export class SessionActor {
         id: this.turn.id,
         authRetried: this.turn.authRetried,
         lostRetried: this.turn.lostRetried === true,
+        codexRetried: this.turn.codexRetried === true,
         by: this.turn.by,
         declared: this.turn.declared?.kind ?? null,
         wait: this.turn.declared?.kind === "waiting" ? this.turn.declared.seconds : null,
@@ -889,6 +905,7 @@ export class SessionActor {
       id: snap.turn.id,
       authRetried: snap.turn.authRetried,
       lostRetried: snap.turn.lostRetried === true,
+      codexRetried: snap.turn.codexRetried === true,
       by: snap.turn.by,
       declared: snap.turn.declared ? parseDeclared(snap.turn.declared, snap.turn.wait ?? 0) : null,
     };
@@ -945,7 +962,7 @@ export class SessionActor {
   }
 
   private async giveNotices() {
-    if (this.deps.held(this.key) || this.compacting) return;
+    if (this.deps.held(this.key) || this.compacting || this.codexUpdate) return;
     if (this.archived()) {
       this.notices = [];
       return;
@@ -965,6 +982,10 @@ export class SessionActor {
 
   private async pump() {
     if (this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
+    if (this.codexUpdate) {
+      if (this.codexUpdate.finished) await this.continueAfterCodexUpdate(this.codexUpdate);
+      return;
+    }
     const store = this.deps.store;
     if (!store.hasPending(this.key) || (await this.compactingToCap())) return;
     const pending = store.pendingMessages(this.key);
@@ -1220,7 +1241,7 @@ export class SessionActor {
       this.posted = false;
     }
     const id = crypto.randomUUID();
-    this.turn = { id, declared: null, authRetried: kind === "auth_retry", lostRetried: kind === "sandbox_retry", by };
+    this.turn = { id, declared: null, authRetried: kind === "auth_retry", lostRetried: kind === "sandbox_retry", codexRetried: kind === "codex_retry", by };
     this.phase = "running";
     this.waiting = null;
     this.deps.store.startTurnFor(id, this.key, kind, { ...by, profile: this.profile });
@@ -1453,6 +1474,41 @@ export class SessionActor {
       store.notify(this.key);
     }
     if (turn?.declared) this.toolsRestarts = 0;
+    // This refusal is about the local Codex binary, not the account or the model. Do not replay the input: a turn may
+    // have done work before it asked the model, so resume the transcript after the shared update instead.
+    if (this.runtime === "codex" && outcome.kind === "failed" && codexTooOld(outcome.message) && !stopRequested && !this.deps.held(this.key) && turn && !turn.codexRetried && !turn.declared && this.deps.updateOldCodex) {
+      const agent = this.agent;
+      const version = agent?.session.runtimeVersion?.() ?? null;
+      const update = { by: turn.by, finished: false };
+      this.codexUpdate = update;
+      this.agent = null;
+      this.nudges = 0;
+      await this.notice(t("station.notice.codexUpdating"), null, null, (where) => { store.setAbout(turn.id, where); store.notify(this.key); });
+      await this.endProcess(agent);
+      store.setRunning(this.key, true);
+      // Do not hold the session queue during an install: stop and new messages must still be accepted.
+      void Promise.resolve().then(async () => {
+        if (agent?.session.runtimeUpdateMatchesStation && !(await agent.session.runtimeUpdateMatchesStation())) throw new Error(t("station.notice.codexDifferentPath"));
+        await this.deps.updateOldCodex!(version);
+      }).then(
+        () => this.enqueue(async () => {
+          if (this.codexUpdate !== update) return;
+          update.finished = true;
+          await this.continueAfterCodexUpdate(update);
+        }),
+        (error) => this.enqueue(async () => {
+          if (this.codexUpdate !== update) return;
+          this.codexUpdate = null;
+          store.setRunning(this.key, false);
+          const why = (error as Error)?.message || String(error);
+          await this.notice(`⚠️ ${t("station.notice.codexUpdateFailed", { why })}`, null, null, (where) => { store.setAbout(turn.id, where); store.notify(this.key); });
+          this.deps.settled?.(this.key, "failed", why);
+          this.deps.idle(this.key);
+          if (store.hasPending(this.key)) await this.pump();
+        }),
+      );
+      return;
+    }
     // Every Codex authentication refusal updates account health, including the retry's refusal.
     if (this.runtime === "codex" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && this.profile !== null) {
       await this.deps.recheck?.(this.profile);
@@ -1467,7 +1523,9 @@ export class SessionActor {
       // Its account checked first: one whose login is over is left, and the turn goes on on another (`runOn`).
       if (this.runtime === "claude" && this.profile !== null) await this.deps.recheck?.(this.profile);
       log.info("session", "authentication failed; reopening and continuing once", { session: this.key, runtime: this.runtime });
-      return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
+      await this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
+      if (this.turn && turn.codexRetried) (this.turn as Turn).codexRetried = true;
+      return;
     }
     // Its process ran in a sandbox and the connection to it was lost (not the program ending): started again there once,
     // going on from its transcript as after an authentication error.
@@ -1477,7 +1535,9 @@ export class SessionActor {
       this.agent = null;
       await this.endProcess(agent);
       log.info("session", "the connection to its sandbox was lost; starting again and continuing once", { session: this.key });
-      return this.startTurn("sandbox_retry", GO_ON_AFTER_LOST, turn.by);
+      await this.startTurn("sandbox_retry", GO_ON_AFTER_LOST, turn.by);
+      if (this.turn && turn.codexRetried) (this.turn as Turn).codexRetried = true;
+      return;
     }
     const spent = outcome.kind === "failed" && outcome.reason === "rate_limit";
     if (!spent) this.refill = null;
@@ -1528,7 +1588,9 @@ export class SessionActor {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
       // notice points there.
-      await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
+      const said = this.runtime === "codex" && turn?.codexRetried && codexTooOld(outcome.message)
+        ? `⚠️ ${withSaid(t("station.notice.codexStillOld"), outcome.message)}` : failureNotice(outcome);
+      await this.notice(said, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
     } else if (outcome.kind === "aborted") {
       this.nudges = 0;
       if (stopRequested) {
@@ -1610,6 +1672,17 @@ export class SessionActor {
     }
     this.nudges = 0;
     await this.giveUp(turn?.id ?? null);
+  }
+
+  /// A completed install resumes only this failed turn; stopping, archiving or a newer update invalidates it.
+  private async continueAfterCodexUpdate(update: { by: TurnFor; finished: boolean }) {
+    if (this.codexUpdate !== update || !update.finished || this.deps.held(this.key)) return;
+    this.codexUpdate = null;
+    this.deps.store.setRunning(this.key, false);
+    if (this.archived()) return;
+    await this.startTurn("codex_retry", GO_ON_AFTER_CODEX_UPDATE, update.by);
+    if (this.deps.store.hasPending(this.key)) await this.pump();
+    else if (this.notices.length > 0) await this.giveNotices();
   }
 
   /// No turn ended in a state, and no more are asked for: the thread is told so, with the agent's last words when it
@@ -1829,6 +1902,9 @@ const SPENT_BEFORE = ["⚠️ 已达到额度或速率限制", "⚠️ Hit a usa
 
 /// That the provider had no room for it: its words, about no account, are of no use to people.
 const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;
+
+/// Codex relays the provider's exact refusal inside its error message, sometimes wrapped in a JSON response.
+const codexTooOld = (message: string) => /\bmodel requires a newer version of Codex\.\s*Please upgrade to the latest app or CLI and try again\./i.test(message);
 
 /// A failed turn as its chat is told it: what it means and what to do, by its reason, on its first line (what a
 /// notice shows closed, and a push says); what the runtime said after it, as it said it (`withSaid`). A reason the
