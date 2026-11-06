@@ -93,8 +93,8 @@ let told_held : Array[ReactiveNode] = []
 ///|
 /// What a run stopped half way leaves here put back (a run beginning: a Tester's): a phase's guard, a batch, a flush, a
 /// read or an effect under way are each put back as they end, but a run stopped in one (a test that aborts there, as it
-/// should) leaves it, and every run after it reads under a guard it never set, or holds back what it tells. What was
-/// being done as a change was told whole (after_flush), stopped part way, is let go, which of it was done not known.
+/// should) leaves it, and every run after it reads under a guard it never set, or holds back what it tells. What waited
+/// for the stopped run's change told whole (after_flush, after_all_flushed) is let go with it, never done.
 /// What the stopped run told and had yet to run is held apart, for its owner to let go what of it is the stopped run's
 /// own (a Tester's tree, its watches stopped) before it runs (run_told). Nothing it made is let go here: its signals and
 /// effects are kept, and the one an abort stopped in its own run stays as it stopped.
@@ -102,7 +102,6 @@ pub fn reset_globals() -> Unit {
   access_guard.val = None
   build_guard.val = None
   layout_guard.val = None
-  let draining = run.draining
   run.run_depth = 0
   run.batch_depth = 0
   run.batch_changed = false
@@ -119,10 +118,12 @@ pub fn reset_globals() -> Unit {
   watch_reading.depth = 0
   watch_reading.sets.clear()
   setting.val = None
-  if draining {
-    run.afters.clear()
-    run.lasts.clear()
-  }
+  // (what waited for a change of the stopped run's told whole, by after_flush or after_all_flushed, there in a batch, a
+  // flush or a layout holding them back, or being done: what the stopped run would have done once its change was
+  // told, its own, let go with it; done now, after its tree let go (run_told), it would act on what is no more. What
+  // the new run tells, and what the effects kept from it set going as they run in it, wait anew)
+  run.afters.clear()
+  run.lasts.clear()
   // (what was told and not yet run held apart: the first set as the run begins flushes the queue, and would run it
   // there, before what of it is the stopped run's own is let go)
   for i in run.notify_index..<run.queued_length {
