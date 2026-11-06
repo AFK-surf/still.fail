@@ -76,6 +76,8 @@ of the station's browser) or `simulator` (an iOS Simulator booted on a Mac stati
 do not queue behind a slow link. The Mac and Windows desktop sources capture and encode on demand; Linux's X11 source
 keeps its newest raw picture for H.264 or its newest JPEG. Each source picks its codec among those the client accepts:
 the desktop uses H.265 or H.264 on macOS and Windows, H.264 or JPEG on Linux, and a browser tab uses JPEG (CDP screencast).
+A preview (`peek`, below) gets JPEG from a source that has it, whatever else it asks (`codecFor`): a card asks JPEG and
+H.264, so a simulator's card stays JPEG and an Android device's (H.264 alone) gets H.264.
 
 The station's own users of a screen (the agents' computer-use tool) open views in the process with
 `ScreenHub.openAs(id, options, {name, control})` (station/src/screens/hub.ts): the view is the source's, with no member
@@ -124,7 +126,8 @@ JPEG frames are all key frames and their config has no `description`.
   false) asks none. Other sources and older stations ignore it.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
-  `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
+  `peek` (a tab of the browser, a simulator, an Android device: the desktop's view wakes its display), else 501. A
+  preview's codec is JPEG where the source has it and the codecs include it, else the source's own choice.
   With `"fit": {width, height, scale}` (a phone's or a tablet's stage, in its CSS pixels, 200..2000 a side, and their
   scale, 1..4; only with `control`) a tab of the browser is laid out for it while the view is open, as that device's own
   browser would lay it out: Chrome's device emulation on the view's own CDP session (`Emulation.setDeviceMetricsOverride`
@@ -511,9 +514,15 @@ power; Escape is back). The apps' `debug`, `poses` are not said of it yet.
 A view is a run of scrcpy's server on the device (`stillfail-scrcpy-<id>.jar` in /data/local/tmp, removed once it runs,
 over an `adb forward` of its own): H.264 only, its protocol pinned to the file's version (scrcpy keeps no compatibility
 between releases: the version goes up only with the file). Its encoder takes no new size or rate while running, so a
-view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side; a slow link drops
-what it could not fetch up to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on,
-a view does; with the screen off no frame comes. Measured on 2026-11-03 at 1280 on the long side: first frame 180-240 ms,
+view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side, and its rate goes by
+that side (`bitrateOf`): 1 Mbit/s at 480, 1.5 at 720, 2.5 at 1080, 3.5 at 1440, 4 above, while the picture moves (a still
+screen sends nothing). The pace's opening rate (`ViewOptions.bitrate`, 1.5 Mbit/s) is not taken: the encoder cannot
+climb from it, and at 1280 and up it left a phone's text soft. A client asks the size its picture shows at, in device
+pixels (web: `viewSize`), so the page does not scale a larger picture down. A slow link drops what it could not fetch up
+to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on, a view does; with the
+screen off no frame comes. A preview runs at the size its card asks (640), 2 frames a second and 300 kbit/s; at most two
+previews of the station's devices run at once beside the views (`PEEKS_MOST`), one more refused with 503 (its card asks
+again later). Every USB phone on the station's adb is listed, as are emulators and phones connected by address. Measured on 2026-11-03 at 1280 on the long side: first frame 180-240 ms,
 a finger to the picture changing 66-103 ms on an emulator on the same Mac, 88 ms once on a phone through its member link.
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
@@ -763,9 +772,13 @@ the link in their screen viewer (web: a page; Android: a full-screen activity; i
 
 In a message the link alone on its line is the screen's card (the core's `screenCard` topic: its title and line from
 the list, `gone` once the list has it no more); within a sentence, its title. A screen the list says `peek` shows live
-in its card: a preview view (JPEG, about the card's width in device pixels) while the card is on the screen and the
-app shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until
-the first comes. In the app, a browser's preview has a fixed 16:10 shape: its changing viewport does not resize the
+in its card: a preview view (about the card's width in device pixels) while the card is on the screen and the app
+shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until the
+first comes. A card asks JPEG, and H.264 where the client decodes it (web: WebCodecs; the app: its Stream, where the
+host decodes H.264): sources that have JPEG send it (a tab, a simulator), an Android device sends H.264, its frames
+acknowledged as each is shown (the station already sends them 2 a second). A client decodes
+at most two previews as a video at once (a phone has few hardware decoders): one more is let go and its mark stays. A
+preview refused (the station runs as many as it can) or ended asks again 5 s on while its card is on the screen. In the app, a browser's preview has a fixed 16:10 shape: its changing viewport does not resize the
 message or move the rest of the list. A simulator's preview follows the screen's size within bounds. The picture fills
 its preview, cropped from the top when it is taller than the preview.
 

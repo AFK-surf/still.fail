@@ -33,6 +33,30 @@ export async function decodable(only264 = false): Promise<Codec[]> {
   return [...(h265 ? ["h265" as const] : []), ...(h264 ? ["h264" as const] : []), "jpeg"];
 }
 
+/** Places for what only so many of may run at once (a page's previews decoded as a video): taken and given back. */
+export class Slots {
+  #used = 0;
+  readonly most: number;
+  constructor(most: number) { this.most = most; }
+  /** One more taken, unless all are. */
+  take(): boolean {
+    if (this.#used >= this.most) return false;
+    this.#used++;
+    return true;
+  }
+  free(): void { this.#used = Math.max(0, this.#used - 1); }
+  get used(): number { return this.#used; }
+}
+
+/**
+ * When a preview's acknowledgement of a frame shown at `now` goes, the one before having gone at `last`: a video's
+ * (H.264, H.265) at once, its station pacing it itself (an Android preview's 2 frames a second) and its frames not to be
+ * held back; a JPEG's `gap` after the one before, the station sending the next only once it comes.
+ */
+export function peekAckAt(codec: string | undefined, now: number, last: number, gap: number): number {
+  return codec === "h264" || codec === "h265" ? now : Math.max(now, last + gap);
+}
+
 /** The codec string of an avcC (its profile, compatibility and level bytes): `avc1.PPCCLL`. */
 export function avcCodec(avcc: Uint8Array | undefined): string {
   if (!avcc || avcc.length < 4) return "avc1.42E01F";
