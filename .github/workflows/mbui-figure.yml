@@ -220,6 +220,10 @@ jobs:
               tail -n 50 "$RUNNER_TEMP/chat-moon-test.log"
               exit 1
             fi
+            if grep -aF "kept-answers-ask {" "$RUNNER_TEMP/chat-moon-test.log"; then
+              echo "::error::a core answer was not kept for this test"
+              exit 1
+            fi
             tail -n 5 "$RUNNER_TEMP/chat-moon-test.log"
           done <<< "$TEST_FILTERS"
       - name: Exercise the selected retained-view cases
@@ -234,6 +238,10 @@ jobs:
             if ! moon test --target wasm-gc --release -p mbui/view -f "$filter" > "$RUNNER_TEMP/chat-moon-view-test.log" 2>&1; then
               awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-view-test.log"
               tail -n 50 "$RUNNER_TEMP/chat-moon-view-test.log"
+              exit 1
+            fi
+            if grep -aF "kept-answers-ask {" "$RUNNER_TEMP/chat-moon-view-test.log"; then
+              echo "::error::a core answer was not kept for this test"
               exit 1
             fi
             tail -n 5 "$RUNNER_TEMP/chat-moon-view-test.log"
