@@ -207,3 +207,142 @@ test "an empty laid out list has geometry but no position, and neither survives 
   assert_true(position.get() is None)
   assert_true(position.geometry() is None)
 }
+
+///|
+test "a resize checkpoint keeps an unpainted scroll in the old window" {
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let saved : Ref[@view.AnchoredGeometry[Int]?] = Ref(None)
+  let painted = Ref(0)
+  let tree = @view.Tree::new(fn(root) {
+    root.pick(fn() { root.window().0 < 500.0 }, fn(shell, small) {
+      if small {
+        shell.box(fn(list) {
+          list.width(By(fn() { Some(root.window().0) })).height(By(fn() { Some(root.window().1) })) |> ignore
+          list.before_removed(fn() { saved.val = position.geometry() }) |> ignore
+          list.scrolls_anchored(@view.Scroll::list(), fn() { Array::makei(100, fn(i) { i }) },
+            from_end=false, est=40.0, ahead=0.0, position~, sighted=fn(_) { painted.val += 1 },
+            fn(row, _) { row.height(Is(Some(40.0))) |> ignore }) |> ignore
+        }) |> ignore
+      }
+    })
+  })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  for f in tree.take_after_paint() { f() }
+  assert_eq(painted.val, 1)
+  tree.wheel_at(150.0, 50.0, 0.0, 65.0, 0, 10.0) |> ignore
+  tree.frame(700.0, 160.0, now=10.0) |> ignore
+  let g = saved.val.unwrap()
+  assert_eq((g.height, g.rows[0], g.follows), (100.0, (1, -25.0, 40.0), false))
+  for f in tree.take_after_paint() { f() }
+  assert_eq(painted.val, 1, msg="the old window was not painted again")
+  tree.dispose()
+}
+
+///|
+test "an unlaid fractional jump survives a resize that replaces its list" {
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let put : @signals.Signal[(Int, Double, Double)?] = @signals.signal(None)
+  let saved : Ref[(Int, Double)?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.pick(fn() { root.window().0 < 500.0 }, fn(shell, small) {
+      if small {
+        shell.box(fn(list) {
+          list.width(By(fn() { Some(root.window().0) })).height(By(fn() { Some(root.window().1) })) |> ignore
+          list.before_removed(fn() { saved.val = position.get() }) |> ignore
+          list.scrolls_anchored(@view.Scroll::list(), fn() { Array::makei(100, fn(i) { i }) },
+            from_end=false, est=40.0, ahead=0.0, put_fraction=put, position~,
+            fn(row, _) { row.height(Is(Some(40.0))) |> ignore }) |> ignore
+        }) |> ignore
+      }
+    })
+  })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  put.set(Some((50, 0.5, 120.0)))
+  tree.frame(700.0, 160.0, now=10.0) |> ignore
+  assert_eq(saved.val, Some((50, 0.5)))
+  tree.dispose()
+}
+
+///|
+test "a resize checkpoint does not report its unpainted old layout when the list stays" {
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let sightings : Array[@view.Sighted[Int]] = []
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(list) {
+      list.width(By(fn() { Some(root.window().0) })).height(By(fn() { Some(root.window().1) })) |> ignore
+      list.before_removed(fn() { position.get() |> ignore }) |> ignore
+      list.scrolls_anchored(@view.Scroll::list(), fn() { Array::makei(100, fn(i) { i }) },
+        from_end=false, est=40.0, ahead=0.0, position~, sighted=fn(s) { sightings.push(s) },
+        fn(row, _) { row.height(Is(Some(40.0))) |> ignore }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  for f in tree.take_after_paint() { f() }
+  tree.wheel_at(150.0, 50.0, 0.0, 65.0, 0, 10.0) |> ignore
+  tree.frame(400.0, 160.0, now=10.0) |> ignore
+  for f in tree.take_after_paint() { f() }
+  assert_eq(sightings.length(), 2)
+  assert_eq((sightings[1].height, sightings[1].rows[0]), (160.0, (1, -25.0, 40.0)))
+  let computes = tree.work().computes
+  tree.frame(410.0, 160.0, now=20.0) |> ignore
+  assert_eq(tree.work().computes - computes, 1, msg="an ordinary resize lays out once")
+  tree.dispose()
+}
+
+///|
+test "a surviving fixed-size list reports its scroll even if resize does not lay it out again" {
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let sightings : Array[@view.Sighted[Int]] = []
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(list) {
+      list.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      list.before_removed(fn() { position.get() |> ignore }) |> ignore
+      list.scrolls_anchored(@view.Scroll::list(), fn() { Array::makei(100, fn(i) { i }) },
+        from_end=false, est=40.0, ahead=0.0, position~, sighted=fn(s) { sightings.push(s) },
+        fn(row, _) { row.height(Is(Some(40.0))) |> ignore }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  for f in tree.take_after_paint() { f() }
+  tree.wheel_at(150.0, 50.0, 0.0, 65.0, 0, 10.0) |> ignore
+  tree.frame(400.0, 160.0, now=10.0) |> ignore
+  for f in tree.take_after_paint() { f() }
+  assert_eq(sightings.length(), 2)
+  assert_eq((sightings[1].height, sightings[1].rows[0]), (100.0, (1, -25.0, 40.0)))
+  tree.dispose()
+}
+
+///|
+fn resize_coasting_case() -> (@view.Tree, @view.AnchoredPosition[Int], Ref[@view.AnchoredGeometry[Int]?]) {
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let saved : Ref[@view.AnchoredGeometry[Int]?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.pick(fn() { root.window().0 < 500.0 }, fn(shell, small) {
+      if small {
+        shell.box(fn(list) {
+          list.width(By(fn() { Some(root.window().0) })).height(By(fn() { Some(root.window().1) })) |> ignore
+          list.before_removed(fn() { saved.val = position.geometry() }) |> ignore
+          list.scrolls_anchored(@view.Scroll::list(), fn() { Array::makei(100, fn(i) { i }) },
+            from_end=false, est=40.0, ahead=0.0, position~,
+            fn(row, _) { row.height(Is(Some(40.0))) |> ignore }) |> ignore
+        }) |> ignore
+      }
+    })
+  })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  tree.wheel_at(150.0, 50.0, 0.0, 80.0, @view.wheel_notch, 10.0) |> ignore
+  (tree, position, saved)
+}
+
+///|
+test "a resize checkpoints a coast at its event time in the old window" {
+  let (reference, position, _) = resize_coasting_case()
+  let (resized, _, saved) = resize_coasting_case()
+  reference.bring_to(50.0)
+  let expected = position.geometry().unwrap()
+  resized.frame(700.0, 160.0, now=50.0) |> ignore
+  let actual = saved.val.unwrap()
+  assert_eq((actual.height, actual.rows, actual.follows), (expected.height, expected.rows, expected.follows))
+  reference.dispose()
+  resized.dispose()
+}

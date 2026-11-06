@@ -95,3 +95,29 @@ test "end-following with top alignment adapts when the viewport fills and is con
   assert_eq((c.top(0), c.top(1), c.follows.get()), (-20.0, 20.0, true))
   c.tree.dispose()
 }
+
+///|
+test "a restore reports the final window's follow state, not a larger measurement probe" {
+  let follows = @signals.signal(false, same=fn(a, b) { a == b })
+  let put : @signals.Signal[(Int, Double)?] = @signals.signal(Some((20, 0.0)))
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let tree = @view.Tree::new(fn(root) {
+    root.layout_box(Is(()), fn(l, _) {
+      let list = l.child("list", fn(list) {
+        list.scrolls_window(@view.Scroll::list(), fn() { Array::makei(40, fn(i) { i }) },
+          est=40.0, follows~, put~, position~, fn(row, _) {
+            row.height(Is(Some(40.0))) |> ignore
+          }) |> ignore
+      })
+      l.measure(list, l.width, height=2000.0) |> ignore
+      l.measure(list, l.width, height=l.height) |> ignore
+      l.place(list, 0.0, 0.0)
+    }) |> ignore
+  })
+  tree.frame(300.0, 200.0, now=0.0) |> ignore
+  let g = position.geometry().unwrap()
+  assert_eq(g.rows[0], (20, 0.0, 40.0))
+  assert_false(g.follows)
+  assert_false(follows.get())
+  tree.dispose()
+}

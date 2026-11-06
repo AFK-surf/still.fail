@@ -713,10 +713,22 @@ priv struct BeforeRemoval {
 }
 
 ///|
+/// A live list position to capture before a window-size change can remove its owner.
+priv struct ResizeCapture {
+  id : NodeId
+  run : () -> Unit
+  finish : () -> Unit
+}
+
+///|
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
   /// Callbacks for the few nodes that need to read their subtree before any of it is removed.
   priv before_removal : Array[BeforeRemoval]
+  priv resize_captures : Array[ResizeCapture]
+  priv mut preparing_resize_capture : Bool
+  priv mut using_resize_capture : Bool
+  priv mut removing_callbacks : Int
   /// which node a row made anew for its key is now, by the name it is known by (View::row_known_as: one of
   /// Tree::row_name's, never a node's own)
   rows_known : Map[NodeId, Int]
@@ -1062,6 +1074,10 @@ pub fn Tree::new(
   }
   let t : Tree = {
     before_removal: [],
+    resize_captures: [],
+    preparing_resize_capture: false,
+    using_resize_capture: false,
+    removing_callbacks: 0,
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     glyph_looks: {},
@@ -1809,6 +1825,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
     self.root().let_go()
   }
   self.before_removal.clear()
+  self.resize_captures.clear()
   self.drawn_marks.clear()
   // A checkpoint can lay out rows without painting them. A disposed tree must not later report those rows as drawn.
   self.after_paint.clear()
@@ -5515,10 +5532,31 @@ fn Tree::before_removing(self : Tree, root : View) -> Unit {
       while i >= 0 && i != root.at { i = self.nodes[i].parent }
       if i == root.at {
         entry.live = false
+        self.removing_callbacks += 1
         @signals.untracked(entry.run)
+        self.removing_callbacks -= 1
       }
     }
   }
+}
+
+///|
+/// Capture event-time state before a window resize, while the old window's constraints still apply.
+fn View::capture_before_resize(self : View, f : () -> Unit, finish : () -> Unit) -> Unit {
+  guard self.alive() else { return }
+  let tree = self.tree
+  let entry : ResizeCapture = { id: self.id(), run: f, finish }
+  tree.resize_captures.push(entry)
+  self.owns(fn() {
+    let mut i = 0
+    while i < tree.resize_captures.length() {
+      if physical_equal(tree.resize_captures[i], entry) {
+        tree.resize_captures.remove(i) |> ignore
+        break
+      }
+      i += 1
+    }
+  }) |> ignore
 }
 
 ///|
@@ -6812,7 +6850,24 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
-  if w != self.last_w || h != self.last_h {
+  let resized = w != self.last_w || h != self.last_h
+  let was_using_resize_capture = self.using_resize_capture
+  let captured : Array[ResizeCapture] = []
+  if resized {
+    // A shell can replace a list as soon as room is told below. Capture its event-time position with the old
+    // window constraints first, including a scroll since the last painted frame. Nothing is captured on a first
+    // frame, or where no live removal callback can need it.
+    let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && !self.resize_captures.is_empty()
+    if capture {
+      self.preparing_resize_capture = true
+      self.advance(upto)
+      captured.append(self.resize_captures.copy())
+      for entry in captured {
+        if self.alive_id(entry.id) { @signals.untracked(entry.run) }
+      }
+      self.preparing_resize_capture = false
+    }
+    self.using_resize_capture = capture
     self.last_w = w
     self.last_h = h
     let s = self.nodes[0].flex.style
@@ -6823,6 +6878,10 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     self.room.set((w, h))
   }
   self.brought(upto)
+  if resized { self.using_resize_capture = was_using_resize_capture }
+  for entry in captured {
+    if self.alive_id(entry.id) { @signals.untracked(entry.finish) }
+  }
   self.first_drawn_now()
   let drawn = self.drawn_due
   self.drawn_due = false
