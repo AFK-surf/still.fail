@@ -209,6 +209,52 @@ test "scrolls_anchored: a node kept in sight clear of what covers its foot, in t
 }
 
 ///|
+test "scrolls_anchored: a kept field that moves releases an earlier fractional placement" {
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
+  let cover = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let keeping = @signals.signal(false, same=fn(a, b) { a == b })
+  let fraction : @signals.Signal[(Int, Double, Double)?] = @signals.signal(Some((50, 0.0, 220.0)))
+  let fields : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page
+      .width(Is(Some(300.0)))
+      .height(Is(Some(300.0)))
+      .layout_box(By(fn() { cover.get() }), fn(l, cover) {
+        let list = l.child("list", fn(o) {
+          o.scrolls_anchored(scroll, fn() { keys.get() }, est=40.0, ahead=0.0, put_fraction=fraction, fn(b, k) {
+            b.height(Is(Some(40.0))) |> ignore
+            b.box(fn(f) {
+              f.height(Is(Some(20.0))) |> ignore
+              fields[k] = f
+            }) |> ignore
+          }, keep=fn() {
+            if keeping.get() { fields.get(50).map(fn(f) { (f.id(), None, 16.0) }) } else { None }
+          }) |> ignore
+        })
+        l.measure(list, l.width, height=l.height, foot=(0.0, cover)) |> ignore
+        l.place(list, 0.0, 0.0)
+      }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  let field_y = fn() { fields[50].rect().1 }
+  assert_eq(field_y(), 220.0, msg="fractional placement")
+  keeping.set(true)
+  cover.set(100.0)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_eq(field_y(), 164.0, msg="kept clear of the larger cover")
+  cover.set(20.0)
+  tree.frame(390.0, 844.0, now=32.0) |> ignore
+  assert_eq(field_y(), 164.0, msg="shrinking the cover does not restore the old fraction")
+  keeping.set(false)
+  tree.frame(390.0, 844.0, now=48.0) |> ignore
+  assert_eq(field_y(), 164.0, msg="losing focus does not restore the old fraction")
+  tree.dispose()
+}
+
+///|
 test "scrolls_anchored from its start: a node kept in sight clear of what covers its foot, in the layout that cover grows in; not moved back as it shrinks" {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
