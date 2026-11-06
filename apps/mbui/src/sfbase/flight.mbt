@@ -54,9 +54,8 @@ pub(all) struct SendFlight {
   field_y : Double
   field_w : Double
   field_h : Double
-  /// the composer's room when sent (held a quarter of the way: `hold`, the composer's own, told how long), and whether
-  /// it is the desktop's (the web's flight: desk)
-  room : Double
+  /// how the composer is held as tall as when sent (a quarter of the way: `hold`, the composer's own, told how long),
+  /// and whether it is the desktop's (the web's flight: desk)
   mut hold : (Double) -> Unit
   desk : Bool
   /// the field's words as it laid them out (where each line starts, where each offset stood) and where the words sent
@@ -171,7 +170,6 @@ pub fn flight_start(
   turns : String,
   key : String,
   words : String,
-  room : Double,
   files : Array[FlyingFile],
   field~ : String,
   hold~ : (Double) -> Unit,
@@ -179,7 +177,7 @@ pub fn flight_start(
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
-  flight_start_from(c, chat, turns, key, words, room, files, c.field_lines(field), hold~, desk~, marks~, runs~)
+  flight_start_from(c, chat, turns, key, words, files, c.field_lines(field), hold~, desk~, marks~, runs~)
 }
 
 ///|
@@ -191,7 +189,6 @@ pub fn flight_start_from(
   turns : String,
   key : String,
   words : String,
-  room : Double,
   files : Array[FlyingFile],
   source : @ui.FieldLines?,
   hold~ : (Double) -> Unit,
@@ -219,7 +216,6 @@ pub fn flight_start_from(
         field_y: ry,
         field_w: w,
         field_h: h,
-        room,
         hold,
         desk,
         lines,
@@ -314,7 +310,6 @@ pub fn flight_carry_start_from(
         field_y: ry,
         field_w: w,
         field_h: h,
-        room: 0.0,
         hold,
         desk,
         // (carried with the list as its chat comes up: as one block)

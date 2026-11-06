@@ -213,3 +213,61 @@ test "a layout box given no height of its own nor a share is as tall as nothing,
   assert_eq(t.nodes[boxed.val.unwrap().at].flex.height, 0.0)
   t.dispose()
 }
+
+///|
+test "a foot given marks the boxes that read it in their last layout alone: one let go and its place made again elsewhere not marked, none kept past its reading" {
+  let foot = @signals.signal(10.0, same=fn(a, b) { a == b })
+  let a_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let b_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let other_on = @signals.signal(false, same=fn(a, b) { a == b })
+  let runs : Map[String, Int] = {}
+  let ran = fn(k : String) { runs[k] = runs.get(k).unwrap_or(0) + 1 }
+  let holder : Ref[View?] = Ref(None)
+  let reader = fn(v : View, k : String) {
+    v.layout_box(Is(0), fn(l, _) {
+      ran(k)
+      l.size_to(l.given_foot().map(fn(g) { g.1 }).unwrap_or(0.0))
+    }, sized=true)
+    |> ignore
+  }
+  let t = Tree::new(fn(root) {
+    let h = root.box(fn(h) {
+      holder.val = Some(h)
+      h.show(fn() { a_on.get() }, fn(a) { reader(a, "a") })
+      h.show(fn() { b_on.get() }, fn(b) { reader(b, "b") })
+    })
+    // (elsewhere, not under the foot: made as a reader under it is let go, in its place)
+    let o = root.box(fn(o) { o.show(fn() { other_on.get() }, fn(x) { reader(x, "other") }) })
+    root.layout_box(By(fn() { foot.get() }), fn(l, f) {
+      l.measure(h, l.width, height=l.height / 2.0, foot=(0.0, f)) |> ignore
+      l.measure(o, l.width, height=l.height / 2.0) |> ignore
+      l.place(h, 0.0, 0.0)
+      l.place(o, 0.0, l.height / 2.0)
+    }) |> ignore
+  })
+  t.frame(200.0, 300.0, now=0.0) |> ignore
+  let h = holder.val.unwrap()
+  assert_true(runs.get("a") is Some(_) && runs.get("b") is Some(_))
+  assert_eq(t.foot_readers.get(h.at).map(fn(rs) { rs.length() }), Some(2))
+  // b let go, and the other box made in what was its place
+  b_on.set(false)
+  other_on.set(true)
+  t.frame(200.0, 300.0, now=10.0) |> ignore
+  let other_runs = runs.get("other").unwrap_or(0)
+  let a_runs = runs.get("a").unwrap_or(0)
+  assert_eq(t.foot_readers.get(h.at).map(fn(rs) { rs.length() }), Some(1))
+  // the foot changes: a laid out again for it, the other (no reader of it) not
+  foot.set(30.0)
+  t.frame(200.0, 300.0, now=20.0) |> ignore
+  assert_true(runs.get("a").unwrap_or(0) > a_runs)
+  assert_eq(runs.get("other").unwrap_or(0), other_runs)
+  // made again and let go again: those reading it now kept, none past
+  b_on.set(true)
+  t.frame(200.0, 300.0, now=30.0) |> ignore
+  assert_eq(t.foot_readers.get(h.at).map(fn(rs) { rs.length() }), Some(2))
+  b_on.set(false)
+  t.frame(200.0, 300.0, now=40.0) |> ignore
+  assert_eq(t.foot_readers.get(h.at).map(fn(rs) { rs.length() }), Some(1))
+  assert_eq(t.foot_read.length(), 1, msg="feet read kept")
+  t.dispose()
+}

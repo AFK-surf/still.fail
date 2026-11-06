@@ -416,7 +416,7 @@ pub fn flight_placed(@ui.Ctx, @sfbase.SendFlight) -> Unit
 
 pub fn flight_settled_of(@ui.Ctx, @sfbase.SendFlight) -> Double
 
-pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_start(@ui.Ctx, String, String, String, String, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
 pub fn flight_takes(String, String) -> Bool
 

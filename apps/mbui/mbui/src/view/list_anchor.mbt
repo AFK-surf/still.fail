@@ -46,6 +46,8 @@ priv struct AnchoredIn[K] {
   tucked : K?
   /// the row last asked to be brought into sight, and how often one was
   reveal : (K?, Int)
+  /// a node of a row to be kept in sight, what part of it and how far clear of what covers its top and its foot
+  keep : (NodeId, (Double, Double)?, Double)?
   /// the row last asked to have a part of it it reports brought to the window's middle (`put_passage`): which, the
   /// name it reports the part by, how far down the window it may be before it is, and how often one was
   passage : (K, String, Double)?
@@ -76,6 +78,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.foot_cover == b.foot_cover &&
   a.tucked == b.tucked &&
   a.reveal == b.reveal &&
+  a.keep == b.keep &&
   a.passage_n == b.passage_n &&
   a.to_end == b.to_end &&
   a.grid == b.grid
@@ -169,6 +172,11 @@ pub fn[K] AnchoredPosition::get(self : AnchoredPosition[K]) -> (K, Double)? {
 /// between were many or one (what asks for a row's pictures asks by it, never by the row being made); nothing once it
 /// is let go before the frame is painted. `position` reads the row and fraction at the window's top on demand,
 /// including between painted frames.
+/// `keep` a node in
+/// one of its rows kept in sight (a card's field with the focus, the keyboard up), that part of it, that far clear of
+/// what covers its top (`cover`) and its foot (`foot_cover`, or what is given it): in each layout, moved as little as
+/// brings it between them, its top first where it does not fit; nothing moved where it is between them (as they
+/// shrink); let go as it says none, as the node goes, and as the hand scrolls it, till it says another.
 pub fn[K : Hash + Eq] View::scrolls_anchored(
   self : View,
   s : Scroll,
@@ -198,11 +206,12 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   indexed? : AnchoredSource[K],
   sighted? : (Sighted[K]) -> Unit,
   position? : AnchoredPosition[K],
+  keep? : () -> (NodeId, (Double, Double)?, Double)? = fn() { None },
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
     put?=put, put_fraction?=put_fraction, put_fraction_lead_within_row~, put_passage?=put_passage, rooms?=rooms, room_transforms~, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
-    bar_clear~, foot_room~, foot_cover~, indexed?=indexed, sighted?=sighted, position?=position,
+    bar_clear~, foot_room~, foot_cover~, indexed?=indexed, sighted?=sighted, position?=position, keep~,
   )
 }
 
@@ -243,6 +252,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   sighted? : (Sighted[K]) -> Unit,
   seen? : (Array[K]) -> Unit,
   position? : AnchoredPosition[K],
+  keep? : () -> (NodeId, (Double, Double)?, Double)? = fn() { None },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
@@ -345,6 +355,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let laid : Ref[ListLaid[K]?] = Ref(None)
   // A parent can measure the list more than once before publishing a layout. Only the last result is current.
   let laid_version = Ref(0)
+  let keep_moved = Ref(false)
   // (the rows it ended with as last laid out)
   let was_tail : Ref[Array[K]] = Ref([])
   let tuck_done = Ref(false)
@@ -360,6 +371,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let revealed = Ref(0)
   // (the node in it to be brought into sight, and what part of it)
   let reveal_of : Ref[(NodeId, (Double, Double)?)?] = Ref(None)
+  // (the node kept in sight as it was last laid out; whether the hand has scrolled it since: let go till another is
+  // kept)
+  let kept_as : Ref[NodeId?] = Ref(None)
+  let keep_handed = Ref(false)
   // (each key's name among its layout's children, as long as it is in it)
   let names : Map[K, String] = Map([])
   let named = Ref(0)
@@ -437,6 +452,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       short_due.val = fn() { }
       reading.val = None
       pinned.val = None
+      keep_handed.val = true
       // (a part asked to the middle not yet laid out: the hand has it now)
       passage_laid.val = @signals.untracked(fn() { passage_n.get() })
     }
@@ -520,22 +536,29 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
     }
   }
   // (one of its rows' nodes to be brought into sight: that row, laid out in sight as it is laid out next)
-  s.reveal = fn(id, part) {
+  // (the row one of its nodes is in)
+  let row_holding = fn(id : NodeId) -> K? {
     let mut i = id.at
     while i >= 0 {
       match slot_keys.get(i) {
-        Some(k) => {
-          let (_, n) = @signals.untracked(fn() { reveal_said.get() })
-          reveal_of.val = Some((id, part))
-          reveal_said.set((Some(k), n + 1))
-          return
-        }
+        Some(k) => return Some(k)
         None => ()
       }
       i = self.tree.nodes[i].parent
       if i == self.at {
-        return
+        return None
       }
+    }
+    None
+  }
+  s.reveal = fn(id, part) {
+    match row_holding(id) {
+      Some(k) => {
+        let (_, n) = @signals.untracked(fn() { reveal_said.get() })
+        reveal_of.val = Some((id, part))
+        reveal_said.set((Some(k), n + 1))
+      }
+      None => ()
     }
   }
   self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reveal = fn(_, _) { }; s.reads_free = false }) |> ignore
@@ -607,6 +630,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           foot_cover: foot_cover(),
           tucked: tucked(),
           reveal: reveal_said.get(),
+          keep: keep(),
           to_end: s.to_end.get(),
           grid: if on_grid { self.tree.rows_grid_said.get() } else { 0.0 },
         }
@@ -917,6 +941,20 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         }
         let from = anchor.val
         let mut r = lay(from, by)
+        // (the part of node `id` in row `k` (all of it where `within` says none), where its row is laid out now: its top
+        // and its foot from the row's; the row's own where it is not in it)
+        let part_of = fn(k : K, id : NodeId, within : (Double, Double)?, row_h : Double) -> (Double, Double) {
+          guard self.tree.alive_id(id) else { return (0.0, row_h) }
+          let mut off = 0.0
+          let mut j = id.at
+          let slot_at = slots.get(k).map(fn(v) { v.at }).unwrap_or(-1)
+          while j >= 0 && j != slot_at {
+            off = off + self.tree.nodes[j].flex.top
+            j = self.tree.nodes[j].parent
+          }
+          let (a, b) = within.unwrap_or((0.0, self.tree.nodes[id.at].flex.height))
+          if j == slot_at { (off + a, off + b) } else { (0.0, row_h) }
+        }
         // (a row asked to be brought into sight since it was last laid out: where it is laid out now, measured as it is,
         // moved as little as brings the part asked of it in (as shows has a column do), laid out again so; one not
         // laid out now in sight or near it: its top at the window's top, or its foot at its foot)
@@ -927,18 +965,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             // (the part asked of it within its row, where its row is laid out now: its top and its foot from the row's)
             let part_in = fn(row_h : Double) -> (Double, Double) {
               match reveal_of.val {
-                Some((id, within)) if self.tree.alive_id(id) => {
-                  let mut off = 0.0
-                  let mut j = id.at
-                  let slot_at = slots.get(k).map(fn(v) { v.at }).unwrap_or(-1)
-                  while j >= 0 && j != slot_at {
-                    off = off + self.tree.nodes[j].flex.top
-                    j = self.tree.nodes[j].parent
-                  }
-                  let (a, b) = within.unwrap_or((0.0, self.tree.nodes[id.at].flex.height))
-                  if j == slot_at { (off + a, off + b) } else { (0.0, row_h) }
-                }
-                _ => (0.0, row_h)
+                Some((id, within)) => part_of(k, id, within, row_h)
+                None => (0.0, row_h)
               }
             }
             let mut q = -1
@@ -1022,6 +1050,48 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                 }
             }
           _ => if glide is Some(_) || read_held.val { pinned.val = None }
+        }
+        // (a node kept in sight, in each layout: its part between what covers the window's top and its foot (from the
+        // window's foot, the room under its rows or not), `room` clear of each, moved as little as brings it there, its
+        // top first where it does not fit; what was put or held to be read let go as it is; none moved as the hand has
+        // it)
+        match c.keep {
+          Some((id, within, room)) if self.tree.alive_id(id) => {
+            if kept_as.val != Some(id) {
+              kept_as.val = Some(id)
+              keep_handed.val = false
+            }
+            if !keep_handed.val {
+              match row_holding(id) {
+                Some(k) =>
+                  for q in 0..<r.keys.length() {
+                    if r.keys[q] == k {
+                      let (pa, pb) = part_of(k, id, within, r.heights[q])
+                      let (top, foot) = (r.tops[q] + pa, r.tops[q] + pb)
+                      let (lo, hi) = (c.cover + room, l.height - foot_covered - room)
+                      let down = if top < lo { lo - top } else if foot > hi { -dmin(foot - hi, top - lo) } else { 0.0 }
+                      if down != 0.0 {
+                        match find(k, r.first + q) {
+                          Some(i) => {
+                            let top = r.tops[q] + down
+                            r = lay(Some({ key: k, under: if from_end { top + r.heights[q] - h } else { -top }, near: i }), 0.0)
+                            keep_moved.val = true
+                            pinned.val = None
+                            fraction_pinned.val = None
+                            reading.val = None
+                          }
+                          // (a row laid out now is among its rows)
+                          None => abort("scrolls_anchored: a row laid out not found among its rows")
+                        }
+                      }
+                      break
+                    }
+                  }
+                None => ()
+              }
+            }
+          }
+          _ => kept_as.val = None
         }
         // (a part of a row asked to the window's middle (`put_passage`): the row in sight first where it is not, its top at
         // the window's top; then where the part it reports by that name (Layout::report_span) is as it is laid out now:
@@ -1520,9 +1590,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             // Reaching an end because this placement was clamped is a report, not a new request to follow it.
             if fraction_pinned.val is Some(_) || pinned.val is Some(_) { was_follows.val = true }
             follows.set(true)
-          } else if from_end && !at_end && (fraction_pinned.val is Some(_) || pinned.val is Some(_)) && @signals.untracked(fn() { follows.get() }) {
+          } else if from_end && !at_end && (keep_moved.val || fraction_pinned.val is Some(_) || pinned.val is Some(_)) && @signals.untracked(fn() { follows.get() }) {
             follows.set(false)
           }
+          keep_moved.val = false
           match (glide, came_top) {
             (Some((_, from_top)), Some(top)) if short_move > 0.0 => {
               let to_end = short_move + most
