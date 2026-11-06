@@ -6707,7 +6707,7 @@ fn Tree::laid_out_now(
 /// How many layout passes one may take (each what the one before told marking more: opening a long chat, 19; a quoted
 /// picture's card flown to its message, its rows placed a few points on in each, more than 32): a guard against passes
 /// that never stop, not a budget.
-pub let laid_passes_most : Int = 64
+pub let laid_passes_most : Int = 1
 
 ///|
 /// Each layout pass's sizes told otherwise said (a switch for finding why passes go on: what was told, from what to
