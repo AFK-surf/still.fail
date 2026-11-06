@@ -269,6 +269,8 @@ priv struct Picked {
   mut dragging : Bool
   mut list : Int
   mut layer : SelLayer
+  /// The floating box a selection started in, if any; what is behind it is a different selection surface.
+  mut float_scope : Array[Int]?
   mut made : Int
   /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
   /// old view it was picked in (an old view's words: Node's `island`), the only one whose words it picks
@@ -293,6 +295,7 @@ let picked : Picked = {
   dragging: false,
   list: 0,
   layer: OldLayer(0),
+  float_scope: None,
   made: 0,
   finger: false,
   slid: false,
@@ -859,6 +862,7 @@ fn select_none() -> Unit {
   picked.spans.clear()
   picked.dragging = false
   picked.layer = OldLayer(0)
+  picked.float_scope = None
   picked.finger = false
   picked.island = None
   finger_let_go()
@@ -1146,8 +1150,14 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   let y = y + picked.grab_y
   // the paragraphs laid out: their words and where they stand in the page, now (a finger's: of the old view it picked
   // in, as a dialog's selection stays in it)
-  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
-    t.layer == picked.layer && (!picked.finger || t.island == picked.island)
+  let shown = self.sel_laid() + tree_sels()
+  // A bar's place can change while the pointer is down (a sibling was inserted before it). Follow the paragraph
+  // the selection began in as long as it is laid out, rather than keeping the bar's old page place.
+  self.selection_scope_follow(shown)
+  let laid = shown.filter(fn(t) {
+    t.layer == picked.layer &&
+    (!picked.finger || t.island == picked.island) &&
+    self.in_selection_scope(t)
   })
   let drawn : Map[SelKey, SelSpan] = {}
   for t in laid {
@@ -1303,15 +1313,97 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
     return None
   }
   let layer = self.layer_at(x, y)
+  // (a bar floating over what scrolls: its own words may be picked there, never the words behind it)
+  let over = self.float_at(layer, x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if t.layer == OldLayer(layer) && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 && old_owner_open(t.island) {
+    if t.layer == OldLayer(layer) &&
+      x >= t.x0 &&
+      x < t.x1 &&
+      y >= t.y0 &&
+      y < t.y1 &&
+      old_owner_open(t.island) &&
+      (over is None || over.map(fn(o) { has_prefix(t.at, o) }) == Some(true)) {
       return Some(t)
     }
     k = k - 1
   }
   None
+}
+
+///|
+/// The topmost box floating over what scrolls in `layer` at (x, y), by its place in the old page.
+fn Ctx::float_at(self : Ctx, layer : Int, x : Double, y : Double) -> Array[Int]? {
+  let mut k = self.floating.length() - 1
+  while k >= 0 {
+    let i = self.floating[k]
+    if i < self.count {
+      let n = self.nodes[i]
+      if x >= n.x && x < n.x + n.fw && y >= n.y && y < n.y + n.fh && self.layer_of(i) == layer {
+        return Some(self.page_order(i))
+      }
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// The innermost floating box a paragraph belongs to, in the layer it is in.
+fn Ctx::target_float(self : Ctx, t : SelTarget) -> Array[Int]? {
+  guard t.layer is OldLayer(layer) else { return None }
+  let mut k = self.floating.length() - 1
+  while k >= 0 {
+    let i = self.floating[k]
+    if i < self.count && self.layer_of(i) == layer {
+      let at = self.page_order(i)
+      if has_prefix(t.at, at) {
+        return Some(at)
+      }
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// The page and each floating box select their own words.
+fn Ctx::in_selection_scope(self : Ctx, t : SelTarget) -> Bool {
+  match picked.float_scope {
+    Some(p) => has_prefix(t.at, p)
+    None => self.target_float(t) is None
+  }
+}
+
+///|
+fn Ctx::selection_scope_follow(self : Ctx, shown : Array[SelTarget]) -> Unit {
+  if picked.float_scope is None {
+    return
+  }
+  for t in shown {
+    if t.base == picked.from.base {
+      match self.target_float(t) {
+        Some(p) => picked.float_scope = Some(p)
+        None => ()
+      }
+      return
+    }
+  }
+}
+
+///|
+/// Whether the page place `at` is `p` or within it.
+fn has_prefix(at : Array[Int], p : Array[Int]) -> Bool {
+  if at.length() < p.length() {
+    return false
+  }
+  for i, v in p {
+    if at[i] != v {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -1350,6 +1442,7 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
       picked.spans[target.base] = { a: s, b: e, text, at }
       picked.dragging = clicks <= 1
       picked.layer = target.layer
+      picked.float_scope = self.target_float(target)
       // (the list it lies in: sideways boxes in it scroll it no way the pointer goes up or down)
       picked.list = if picked.dragging { outer_scroll(self, x, y) } else { 0 }
       // (a paragraph of the window's tree's: the column it is in, the same way)

@@ -67,6 +67,7 @@ fn Ctx::sel_finger_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
     return None
   }
   let layer = self.layer_at(x, y)
+  let over = self.float_at(layer, x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
@@ -75,7 +76,8 @@ fn Ctx::sel_finger_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
       x < t.x1 &&
       y >= t.y0 &&
       y < t.y1 &&
-      old_owner_open(t.island) {
+      old_owner_open(t.island) &&
+      (over is None || over.map(fn(o) { has_prefix(t.at, o) }) == Some(true)) {
       return Some(t)
     }
     k = k - 1
@@ -145,6 +147,7 @@ fn Ctx::finger_pick(self : Ctx, t : SelTarget, x : Double, y : Double) -> Unit {
   picked.dragging = true
   picked.finger = true
   picked.layer = t.layer
+  picked.float_scope = self.target_float(t)
   picked.island = t.island
   picked.word = Some((ws, we))
   picked.list = outer_scroll(self, x, y)
@@ -213,8 +216,10 @@ fn finger_menu() -> (Double, Double, Double, Double, Int)? {
 ///|
 /// All the words of the old view and layer a finger picked in, as laid out (those scrolled away kept as they were).
 fn Ctx::finger_select_all(self : Ctx, within? : (SelTarget) -> Bool = fn(_) { true }) -> Unit {
-  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
-    t.layer == picked.layer && t.island == picked.island && within(t)
+  let shown = self.sel_laid() + tree_sels()
+  self.selection_scope_follow(shown)
+  let laid = shown.filter(fn(t) {
+    t.layer == picked.layer && t.island == picked.island && self.in_selection_scope(t) && within(t)
   })
   if laid.is_empty() {
     return
