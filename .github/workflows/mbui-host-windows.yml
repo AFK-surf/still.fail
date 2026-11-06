@@ -41,7 +41,7 @@ on:
       target:
         description: Scratch desktop experiment
         type: choice
-        options: [windows, mac-availability, finder]
+        options: [windows, mac-availability, finder-build, finder]
         default: windows
 
 
@@ -136,7 +136,7 @@ jobs:
           if-no-files-found: ignore
 
   finder-build:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'finder' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'finder-build' }}
     runs-on: macos-latest
     timeout-minutes: 5
     steps:
@@ -153,9 +153,11 @@ jobs:
 
   finder-probe:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'finder' }}
-    needs: finder-build
     runs-on: macos-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -164,6 +166,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: finder-drop-exe
+          run-id: 42262295383
+          github-token: ${{ github.token }}
           path: apps/mbui/mbui/out/finder-bin
       - name: Drag from Finder into the app
         run: |

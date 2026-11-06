@@ -38,11 +38,18 @@ static AXObserverRef observe(AXUIElementRef app, pid_t pid) {
   return observer;
 }
 
-static AXUIElementRef firstWindow(AXUIElementRef app, CFAbsoluteTime deadline) {
+static AXUIElementRef firstWindow(AXUIElementRef app, NSTask *process, CFAbsoluteTime deadline) {
   while (CFAbsoluteTimeGetCurrent() < deadline) {
     NSArray *windows = attribute(app, kAXWindowsAttribute);
     if (windows.count) return CFRetain((__bridge AXUIElementRef)windows[0]);
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, deadline - CFAbsoluteTimeGetCurrent(), true);
+    if (process && !process.isRunning) {
+      fprintf(stderr, "FINDER probe exited before its window, status=%d reason=%ld\n", process.terminationStatus,
+              (long)process.terminationReason);
+      return NULL;
+    }
+    // An AX observer can refuse registration while the launched process has yet to start its accessibility server.
+    // Service notifications while rechecking window readiness; the deadline is only a failure bound.
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, fmin(0.25, deadline - CFAbsoluteTimeGetCurrent()), true);
   }
   return NULL;
 }
@@ -125,11 +132,14 @@ int main(int argc, const char **argv) {
     AXUIElementRef appAX = AXUIElementCreateApplication(probe.processIdentifier);
     AXObserverRef appObserver = observe(appAX, probe.processIdentifier);
     CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 45.0;
-    AXUIElementRef appWindow = firstWindow(appAX, deadline), finderWindow = firstWindow(finderAX, deadline);
+    AXUIElementRef appWindow = firstWindow(appAX, probe, deadline), finderWindow = firstWindow(finderAX, nil, deadline);
     BOOL held = NO, ok = NO;
     CGPoint target = CGPointZero;
     do {
-      if (!appWindow || !finderWindow) { fprintf(stderr, "FINDER window unavailable app=%p finder=%p\n", appWindow, finderWindow); break; }
+      if (!appWindow || !finderWindow) {
+        fprintf(stderr, "FINDER window unavailable app=%p finder=%p running=%d\n", appWindow, finderWindow, probe.isRunning);
+        screenshot(shot); break;
+      }
       place(finderWindow, CGPointMake(5, 30), CGSizeMake(455, 620));
       place(appWindow, CGPointMake(470, 30), CGSizeMake(540, 500));
       CGRect appRect;
