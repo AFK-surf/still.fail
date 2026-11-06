@@ -17,10 +17,11 @@ import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
-import { existingRunners, listening, type RunnerInfo } from "./runner.ts";
+import { liveRunners, listening, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import { Said, stationLang, tr } from "../ops/i18n.ts";
-import { run } from "../updates/runtimes.ts";
+import { findCommand, run } from "../updates/runtimes.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { versionIn } from "../updates/versions.ts";
 import { findMissingCodexHost } from "../updates/codex-repair.ts";
 
@@ -537,6 +538,15 @@ export class CodexDriver implements AgentDriver {
     return "codex";
   }
 
+  async updateMatchesStation(profile: Profile): Promise<boolean> {
+    if (this.command !== "codex") return false;
+    const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(profile, "codex"), profile.id) };
+    const [agentEnv, stationEnv] = await Promise.all([withShellCommand(this.command, env), withShellCommand(this.command, this.env)]);
+    const agent = findCommand(this.command, agentEnv);
+    const station = findCommand(this.command, stationEnv);
+    return agent !== null && station !== null && agent.onPath === station.onPath && agent.real === station.real;
+  }
+
   /// Has the app-server running on a profile renew its login now (its login is not renewed from outside meanwhile: it
   /// holds the refresh token); false: none runs on it.
   async renewLogin(profileId: string): Promise<boolean> {
@@ -611,13 +621,25 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// Codex installed or updated (from the station's pages): app-servers of the old one are replaced once idle.
-  async runtimeChanged(replaced = false) {
+  async runtimeChanged(replaced = false, drainBusy = false) {
     // Mark the old hosts before probing the new version, so a concurrent turn cannot join one during the probe.
     if (replaced) await this.serial(async () => { for (const host of this.hosts.values()) host.runtimeStale = true; });
     const installed = await this.installedVersion(true);
+    const draining: Host[] = [];
     await this.serial(async () => {
-      for (const id of [...this.hosts.keys()]) await this.retireStale(id, installed);
+      // Do not let new turns join a known older host while its existing turns are still finishing.
+      if (installed !== null) for (const host of this.hosts.values()) if (host.version !== null && host.version !== installed) host.runtimeStale = true;
+      for (const [id, host] of [...this.hosts]) {
+        if (drainBusy && host.runtimeStale && host.turns.size > 0) {
+          // As with an outgrown host, its running turns finish there; new ones can start on the updated executable.
+          host.draining = true;
+          this.hosts.delete(id);
+          this.draining.add(host);
+          draining.push(host);
+        } else await this.retireStale(id, installed);
+      }
     });
+    for (const host of draining) void this.drain(host).catch((error) => log.warn("agents::codex", "a codex app-server being replaced not let go of", { profile: host.profile, error: String(error) }));
   }
 
   /// A new sign-in must be loaded by every app-server of this profile, without interrupting its turns.
@@ -686,7 +708,7 @@ export class CodexDriver implements AgentDriver {
     // One left by the station before that no session handed over is on (`sweepLeft`, later) is one of them already: the
     // sessions are all taken up by now (`host` waits for that).
     await this.serial(async () => {
-      for (const info of this.leftRunners(key)) if (info.id !== on.proc.info.id) this.keepDraining(this.holdLeft(profile, info, key));
+      for (const info of await this.leftRunners(key)) if (info.id !== on.proc.info.id) this.keepDraining(this.holdLeft(profile, info, key));
     });
     for (const host of [...this.draining]) {
       if (host === on || host.key !== key || !host.alive()) continue;
@@ -712,17 +734,18 @@ export class CodexDriver implements AgentDriver {
 
   /// The runners of a host key an earlier station left, the oldest first: its own (`runnerId`) and those of app-servers
   /// started while one was being replaced (`<id>.<n>`); none this driver holds.
-  private leftRunners(key: string): RunnerInfo[] {
+  private async leftRunners(key: string): Promise<RunnerInfo[]> {
     const base = runnerId("codex", key);
+    const runners = await liveRunners(this.data, { strict: true });
     const held = new Set([...this.hosts.values(), ...this.draining].map((h) => h.proc.info.id));
-    return existingRunners(this.data)
+    return runners
       .filter((r) => (r.id === base || r.id.startsWith(`${base}.`)) && !held.has(r.id) && listening(r))
       .sort((a, b) => a.startedAt - b.startedAt);
   }
 
   /// What an earlier station left of a host key taken up: the newest as its app-server, any older as being replaced.
   private async takeUpLeft(profile: Profile, key: string): Promise<Host | null> {
-    const left = this.leftRunners(key);
+    const left = await this.leftRunners(key);
     const newest = left.pop();
     if (newest === undefined) return null;
     for (const older of left) this.keepDraining(await this.takeUp(profile, older, key));
@@ -734,7 +757,7 @@ export class CodexDriver implements AgentDriver {
   private sweepLeft(profile: Profile, key: string) {
     wall.after(ORPHANS_MS, () => {
       void this.serial(async () => {
-        for (const info of this.leftRunners(key)) this.keepDraining(this.holdLeft(profile, info, key));
+        for (const info of await this.leftRunners(key)) this.keepDraining(this.holdLeft(profile, info, key));
       }).catch((error) => log.warn("agents::codex", "a codex app-server left being replaced not taken up", { key, error: String(error) }));
     });
   }
@@ -1209,6 +1232,14 @@ export class CodexSession implements AgentSession {
 
   id() {
     return this.threadId;
+  }
+
+  runtimeVersion() {
+    return this.host.version;
+  }
+
+  runtimeUpdateMatchesStation() {
+    return this.driver.updateMatchesStation(this.profile);
   }
 
   rememberTranscript(path: unknown) {

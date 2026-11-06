@@ -74,6 +74,34 @@ test "who is on a screen: each view's device and mode; a member lets one go or a
 }
 
 ///|
+test "a failed software update shows its reason without a hover" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let src = @sffixture.fixture("settings")
+    let reason = "文件可能已加密或损坏，请检查文件加密软件"
+    let update : Json = {
+      "id": "station", "name": "Station", "installed": true, "updatable": true,
+      "state": "failed", "shownText": "0.1.6814", "failedText": "更新失败", "message": Json::string(reason),
+    }
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        let core = @sfbase.settings_core(src, rig_workspace)
+        software_row(c, core, "ws1/st1", Some(update), true, false, false)
+      })
+    }, w~, h=300.0, platform~)
+    t.draw()
+    assert_true(t.find(reason) is Some(_), msg="\{w} platform \{platform}")
+    assert_true(t.query(Button, label="重试") is Some(_))
+  }
+}
+
+///|
 test "an incomplete Codex offers its manager an explicit npm repair" {
   for (w, platform) in page_cases {
     @sfbase.reset()

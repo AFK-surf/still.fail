@@ -237,7 +237,7 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
       let from = self.next_hit_ids.length()
       self.paint(ch, 1.0)
       // (where it is in the window's stack of layers, each target of it: old_layer_stack)
-      next_layer_hits.push((from, self.next_hit_ids.length(), self.old_layer_stack(root, ch)))
+      next_layer_hits.push((from, self.next_hit_ids.length(), self.old_layer_stack(root, ch), n.portal_id))
     }
     ch = n.next
   }

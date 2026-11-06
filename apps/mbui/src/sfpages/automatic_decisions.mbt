@@ -52,7 +52,9 @@ pub fn decisions_node(
 ///|
 /// The completion rule's page (AutomaticDecisionCompletion, the narrow app's AutomaticDecisionCompletionScreen) made
 /// once as nodes (page_node, laid out by the `width` its frame gives it, narrow where none is given): a section a
-/// station, its rule where it can be set (completion_station_node), else why not (offline, older, connecting); while
+/// station, its rule where it can be set (completion_station_node, its draft the page's: asked for once its section came
+/// in sight and it may be set, dropped as the page is let go; one the core could not open said so, and asked for again
+/// as its section next comes in sight or it may next be set), else why not (offline, older, connecting); while
 /// the stations are read the first time, their sections in their bones, what could not be read said instead; 重新发现模型
 /// at its title's end (where a frame's bar names it, in that bar: `bar_actions`). All as the core says it. What it
 /// says of itself told `said`; what is said of what the pointer rests on, in `tips`.
@@ -68,30 +70,83 @@ pub fn completion_node(
   bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
 ) -> Unit {
   let topic = fn() { @settings.stations_of(core, here()) }
-  // (the stations' drafts the page's own, as the old frame kept them by station: each opened as its rows first come,
-  // kept while the station goes offline and comes back, all dropped as the page is let go)
-  let forms : Map[String, String] = {}
-  let form_of = fn(station : String) -> String {
-    match forms.get(station) {
-      Some(f) => f
-      None => {
-        let f = @settings.decision_form_open(core, station)
-        forms[station] = f
-        f
-      }
-    }
-  }
-  v.owns(fn() {
-    for station, form in forms {
-      @settings.decision_form_drop(core, station, form)
-    }
-    forms.clear()
-  })
-  |> ignore
   let stations = fn() {
     match topic().value {
       Some(Array(a)) => a
       _ => []
+    }
+  }
+  // (the stations' drafts the page's own, by station, as the old frame kept them: each asked of the core once its
+  // section has come in sight (page_node's `seen`: in sight as the page was laid out, or gone across as it went on by
+  // itself; not one a jump went past, made only to be measured) and its rule may be changed here, whichever comes
+  // later; held by its name from the moment it is asked, its section reading it by that name from then on, kept while
+  // the station goes offline and comes back, in sight or not; each held dropped as the page is let go (the core takes
+  // them in the order asked: one let go before its opening was answered is opened, then dropped). One the core could
+  // not open is not held: its section says why, and it is asked again as its section next comes in sight or its rule
+  // may next be changed here. Never by a section being made)
+  let seen : Set[String] = Set::new()
+  let drafts : @signals.Signal[Map[String, Draft]] = @signals.signal({})
+  let put = fn(station : String, d : Draft) {
+    let now = @signals.untracked(fn() { drafts.get() }).copy()
+    now[station] = d
+    drafts.set(now)
+  }
+  let ask = fn(station : String) {
+    if @signals.untracked(fn() { drafts.get() }).get(station) is Some(Held(_)) {
+      return
+    }
+    let form = @settings.decision_form_name()
+    put(station, Held(form))
+    @settings.decision_form_open(core, station, form, failed=fn(why) {
+      // (of the one asked now: what was asked before it is long over)
+      if @signals.untracked(fn() { drafts.get() }).get(station) == Some(Held(form)) {
+        put(station, Failed(why))
+      }
+    })
+  }
+  // (the stations whose rules may be changed here: online, read, their managers')
+  let settable = fn() {
+    stations().filter_map(fn(st) {
+      let s = Some(st)
+      let rule = field(field(s, "overview"), "automaticDecisions")
+      if flag(s, "online") && rule is Some(Object(_)) && flag(rule, "canEdit") {
+        Some(text(s, "station"))
+      } else {
+        None
+      }
+    })
+  }
+  // (one whose section came in sight before its rule could be changed here: asked as it can be)
+  let could : Set[String] = Set::new()
+  v.reacts(settable, fn(now) {
+    for station in now {
+      if !could.contains(station) && seen.contains(station) {
+        ask(station)
+      }
+    }
+    could.clear()
+    for station in now {
+      could.add(station)
+    }
+  })
+  v.owns(fn() {
+    for station, d in @signals.untracked(fn() { drafts.get() }) {
+      if d is Held(form) {
+        @settings.decision_form_drop(core, station, form)
+      }
+    }
+  })
+  |> ignore
+  let saw = fn(keys : Array[String]) {
+    let can = @signals.untracked(settable)
+    for k in keys {
+      if k.has_prefix("station/") {
+        let station = k.unsafe_substring(start=8, end=k.length())
+        seen.add(station)
+        if can.contains(station) {
+          ask(station)
+        }
+      }
     }
   }
   // 重新发现模型: every online station's models read again
@@ -177,7 +232,7 @@ pub fn completion_node(
               },
               fn(p, why) {
                 if why == "" {
-                  completion_station_node(p, core, station, form_of, view, tips?)
+                  completion_station_node(p, core, station, fn() { drafts.get().get(station) }, view, tips?)
                 } else {
                   @sf.page_note_node(p, fn() { @sf.t(why) })
                 }
@@ -194,27 +249,53 @@ pub fn completion_node(
     said?,
     width?,
     tips?,
+    seen=saw,
   )
 }
 
 ///|
+/// A station's draft as the completion page holds it (completion_node): asked of the core by its name, and opened
+/// unless the core says it could not be (`Held`); not opened, why (`Failed`: nothing of it held).
+priv enum Draft {
+  Held(String)
+  Failed(Json)
+} derive(Eq)
+
+///|
 /// A station's rule (AutomaticDecisionPanel, the narrow app's DecisionPanel) as nodes: only its managers' (else said
-/// so); its draft (`decisionForm`, the page's: `form_of` opens it the first time it is asked for) read as the core says
-/// it (its rows in their bones while it is read the first time, what could not be read said instead).
+/// so); its draft (`decisionForm`, the page's: `draft` what the page holds of it) read as the core says it by its name
+/// (its rows in their bones while it is read the first time, and before the page has asked for it; what could not be
+/// opened or read said instead). It opens nothing: made only to be measured, it reads what it would show.
 fn completion_station_node(
   v : @view.View,
   core : Core,
   station : String,
-  form_of : (String) -> String,
+  draft : () -> Draft?,
   view : () -> Json?,
   tips? : @sf.TipLayer,
 ) -> Unit {
-  v.pick(fn() { flag(view(), "canEdit") }, fn(p, can) {
-    if !can {
-      @sf.page_note_node(p, fn() { @sf.t("web-pages.automaticDecisions.adminOnly") })
-      return
+  v.pick(fn() { (flag(view(), "canEdit"), draft()) }, fn(p, now) {
+    let form = match now {
+      (false, _) => {
+        @sf.page_note_node(p, fn() { @sf.t("web-pages.automaticDecisions.adminOnly") })
+        return
+      }
+      (true, Some(Held(f))) => f
+      // (the core could not open it: why, in red, as when it cannot be read; asked again by what asks for it next)
+      (true, Some(Failed(why))) => {
+        @sf.page_note_node(p, fn() { error_text(why) }, bad=fn() { true })
+        return
+      }
+      // (its managers', its draft not asked for by the page yet: as while it is read)
+      (true, None) => {
+        @sf.waiting_node(
+          p,
+          fn(s) { form_rows_node(s, core.quiet(), station, "", view, fn() { Some({ "enabled": true }) }) },
+          note=fn() { { reading: true, text: @sf.t("web-pages.automaticDecisions.readingConfig"), failing: [] } },
+        )
+        return
+      }
     }
-    let form = form_of(station)
     let topic = fn() { (core.topic)("decisionForm", { "station": str(station), "form": str(form) }) }
     p.pick(
       fn() {

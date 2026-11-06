@@ -402,6 +402,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.layers_focus()
     // (and into the first of what a layer of the window's tree holds that takes it, as this pass built it: view_host.mbt)
     view_layers_first(c)
+    // A label may name a field built after it. Resolve that request from the complete declarations of this pass,
+    // before leaving the build for callbacks or later host input, with the same visibility and modal checks.
+    c.focus_built()
     hand_focus_said(c)
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
@@ -1295,9 +1298,12 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       return
     }
     if c.down {
-      track_x.add(t, x)
-      track_y.add(t, y)
+      track_x.up(t, x)
+      track_y.up(t, y)
     }
+    // how fast as it was let go (Tracker::velocity_at): none where it was held still first
+    let lift_x = dclamp(track_x.velocity_at(t), -max_fling, max_fling)
+    let lift_y = dclamp(track_y.velocity_at(t), -max_fling, max_fling)
     if c.edge == 2 {
       c.back_gesture(2, x, t) |> ignore
     }
@@ -1339,28 +1345,19 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         c.drag_scroll,
         x,
         y,
-        dclamp(track_x.velocity(), -max_fling, max_fling),
-        dclamp(track_y.velocity(), -max_fling, max_fling),
+        lift_x,
+        lift_y,
         c.taken_at == c.press_at,
       )
     }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
-        Some(st) =>
-          c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling), t)
+        Some(st) => c.release(st, -lift_y, t)
         None => ()
       }
-      sideways_up(
-        c,
-        c.drag_scroll,
-        dclamp(track_x.velocity(), -max_fling, max_fling),
-        dclamp(track_y.velocity(), -max_fling, max_fling),
-      )
+      sideways_up(c, c.drag_scroll, lift_x, lift_y)
       if pagers.contains(c.drag_scroll) {
-        c.pager_release(
-          c.drag_scroll,
-          dclamp(track_x.velocity(), -max_fling, max_fling),
-        )
+        c.pager_release(c.drag_scroll, lift_x)
       }
     }
     // a tap on a field (Android's): the focus and the caret where it was tapped, its handle under the caret
@@ -1929,11 +1926,17 @@ fn window_key_taken(code : Int, mods : Int) -> Bool {
 
 ///|
 fn on_key_now(code : Int, mods : Int) -> Unit {
+  // Focus and modal ownership are read at this input's layout, as for a pointer or an accessibility action.
+  old_input_brought()
   // what the part over the field with the focus said it takes of its keys, at their moment, before the field, the
   // tree's Tab or the frame (Ctx::on_key): the one place a key is handed it or not
   if keys_taken_now(g().focus_allowed(), code, mods) {
     took_input("key", h_now(), [code.to_double(), mods.to_double()])
     hand_event()
+    h_request_frame()
+    return
+  }
+  if g().focus_key_now(code, mods) {
     h_request_frame()
     return
   }

@@ -320,6 +320,8 @@ read ok < '${approved.path}'
     assert.match(ready, /The person's browser step is ready: chat_post with card \{"type": "login", "login": "/);
     assert.ok(ready.includes("<code>") && ready.includes("<link>"), ready);
     assert.ok(!ready.includes("1A2B-C3D4") && !ready.includes("github.com/login/device"), "neither the code nor the page");
+    // the card with a sentence, never the login's link beside it (it only shows its raw address); the link Slack's and Feishu's alone
+    assert.match(ready, /why, without the link \(the card opens the page\); end need_human\. In Slack or Feishu, post the link https:\/\/still\.fail\/w\/w1\/s\/st\/login\/\S+ alone\./);
     assert.equal(m.logins.get(id)!.chatTitle, "部署");
     await approved.approve();
     await m.until(id, (l) => l.state === "done", "done");

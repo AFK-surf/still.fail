@@ -23,6 +23,7 @@
 #include <dwmapi.h>
 #include "post.h"
 #include "done_watch.h"
+#include "win_input.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -927,8 +928,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     MSG m;
     while (PeekMessageW(&m, NULL, 0, 0, PM_REMOVE)) {
       if (m.message == WM_QUIT) exit(0);
-      TranslateMessage(&m);
-      DispatchMessageW(&m);
+      mb_win_input_dispatch(&m, hwnd, ime_active);
     }
     double now = mb_now_ms();
     if (wake_at >= 0 && now >= wake_at) {

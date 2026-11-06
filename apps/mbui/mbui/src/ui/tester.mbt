@@ -89,6 +89,9 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
+  // (what a run stopped half way left of signals put back first, what is let go here let go under none of it; what it
+  // told and had yet to run left told: run once all of it is let go, below)
+  @signals.reset_globals()
   // (every frame checked till the test says otherwise: Tester::scene_checks_every)
   checks_every.val = 1
   checks_frame.val = 0
@@ -97,6 +100,7 @@ fn reset_globals() -> Unit {
   anchors_reset()
   window_zoom_reset()
   run_let_go()
+  view_modals_version.val = 0
   the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
@@ -150,6 +154,8 @@ fn reset_globals() -> Unit {
   fake_passkey.val = None
   fake_passkey_asks.clear()
   image_cache.clear()
+  image_by_id.clear()
+  image_bytes.val = 0.0
   images_said.clear()
   views_told_text.clear()
   views_told_info.clear()
@@ -205,6 +211,9 @@ fn reset_globals() -> Unit {
   text_said.clear()
   timers_reset()
   reset_drawing()
+  // (what the stopped run told and had yet to run, run now that what it made is let go: what is its own (the tree's
+  // watches, stopped above) runs no more; what was made before it and kept runs as the batch's end would have run it)
+  @signals.run_told()
   let left = leaked_state()
   if left.length() > 0 {
     abort("state kept from an earlier test: " + left.join(", "))
@@ -367,6 +376,7 @@ pub fn Tester::new(
     image_loads: [],
     image_srcs: {},
     images: {},
+    image_ids: 0,
     frame_failed_images: [],
     bold: 0.0,
     ui_face: 0.0,
@@ -2870,6 +2880,8 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 /// What a press at (x, y) targets, as named in the semantics tree, with the same press reach and layer order as input.
 /// None for a target that says no semantics. A control's press room may extend beyond the box it draws.
 pub fn Tester::press_target_at(self : Tester, x : Double, y : Double) -> SemNode? {
+  // The same preparation as the host's pointer path; a query must not read the preceding frame's layout.
+  old_input_brought()
   let c = self.ctx()
   let old = fn() { hit_in(c.hit_ids, c.hit_rects, x, y) }
   let id = match view_tree() {

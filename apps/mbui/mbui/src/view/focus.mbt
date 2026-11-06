@@ -165,6 +165,11 @@ pub fn Tree::focus_to(self : Tree, id : NodeId?, visible? : Bool = false) -> Boo
   if !ok {
     return false
   }
+  // (an explicit request for none is still a new decision when the focus was already let go of: an old hosted view
+  // may have taken it, or the hand may have left it with nothing; a return captured before that cannot take it back)
+  if id is None {
+    self.focus_epoch += 1L
+  }
   self.focus_set(id, visible && id is Some(_))
   true
 }
@@ -173,6 +178,66 @@ pub fn Tree::focus_to(self : Tree, id : NodeId?, visible? : Bool = false) -> Boo
 /// The node with the focus now (Tree::focus_to), and whether it shows.
 pub fn Tree::focused_now(self : Tree) -> (NodeId?, Bool) {
   (self.focused, self.focus_visible)
+}
+
+///|
+/// A chance to return one control's focus to its replacement. It belongs to its original tree and expires as soon as
+/// any later focus request succeeds, even if that request gives the focus to nothing or to a hosted old view.
+pub struct FocusReturn {
+  tree : Tree
+  source : NodeId
+  epoch : Int64
+  visible : Bool
+}
+
+///|
+/// Capture the focus on this node for a structural replacement. Nothing is captured if it does not have focus or was
+/// outside the window or a clip in the last layout. That layout's window is used even if a resize has already arrived.
+/// Losing the node itself does not expire the return; any later focus request does. A replacement may use
+/// FocusReturn::give once the new node is made.
+pub fn View::focus_return(self : View) -> FocusReturn? {
+  guard self.live() is Some(_) && self.tree.focused == Some(self.id()) && self.focus_in_sight() else { return None }
+  Some({ tree: self.tree, source: self.id(), epoch: self.tree.focus_epoch, visible: self.tree.focus_visible })
+}
+
+///|
+/// Whether this chance is still current. While its original node has focus, it must still be visible; after that node
+/// is removed it remains current until a later focus decision. This can be read while a replacement is not yet made.
+pub fn FocusReturn::valid(self : FocusReturn) -> Bool {
+  guard self.tree.focus_epoch == self.epoch else { return false }
+  match self.tree.focused {
+    None => true
+    Some(id) if id == self.source =>
+      match self.tree.view_of(id) {
+        Some(node) => node.focus_in_sight()
+        None => false
+      }
+    Some(_) => false
+  }
+}
+
+///|
+/// Return the captured focus to `node`, if it belongs to the same tree, the captured request is still current and no
+/// node has taken focus. Once laid out, the node must still be in sight and able to take input. A successful return
+/// consumes this chance; a node that cannot take it leaves the chance for another copy of that control.
+pub fn FocusReturn::give(self : FocusReturn, node : View) -> Bool {
+  guard physical_equal(self.tree, node.tree) && self.tree.focus_epoch == self.epoch && self.tree.focused is None &&
+    node.focus_in_sight() else {
+    return false
+  }
+  node.ask_focus(visible=self.visible)
+}
+
+///|
+/// Whether any of this node remains inside the window and every clip holding it, as just laid out. A focus return
+/// does not scroll to a control that disappeared from sight in its replacement.
+fn View::focus_in_sight(self : View) -> Bool {
+  guard self.live() is Some(_) && !self.tree.out_at(self.at) else { return false }
+  let (x, y, w, h) = self.rect()
+  let (rx, ry, rw, rh) = self.tree.handle(0).rect()
+  let (left, top, right, bottom) = self.tree.seen_bounds(self.id())
+  w > 0.0 && h > 0.0 && x + w > dmax(rx, left) && x < dmin(rx + rw, right) &&
+    y + h > dmax(ry, top) && y < dmin(ry + rh, bottom)
 }
 
 ///|
@@ -188,7 +253,7 @@ pub fn Tree::focus_keys_of(self : Tree, id : NodeId) -> Int {
 ///|
 /// The focus let go of where the node with it is `at` or in it (0: wherever it is, as a modal layer over it says it
 /// takes no input), at the moment of what did it: what had it told, and what hosts the tree (Tree::on_focus_lost).
-fn Tree::focus_lost_in(self : Tree, at : Int) -> Unit {
+fn Tree::focus_lost_in(self : Tree, at : Int, replacement? : Bool = false) -> Unit {
   guard self.focused is Some(f) else { return }
   let mut i = f.at
   let mut under = false
@@ -201,6 +266,11 @@ fn Tree::focus_lost_in(self : Tree, at : Int) -> Unit {
   }
   if !under {
     return
+  }
+  // A node going away can be replaced by the same control. Losing input for another reason is a new decision and
+  // must permanently expire a captured return, even if the control is enabled or uncovered again later.
+  if !replacement {
+    self.focus_epoch += 1L
   }
   self.focus_set(None, false)
   (self.on_focus_lost)(f)
@@ -238,6 +308,7 @@ pub fn View::ask_focus(self : View, visible? : Bool = false) -> Bool {
 fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
   // (come to another: what waited for its node no longer does)
   if id is Some(_) {
+    self.focus_epoch += 1L
     self.focus_parked = None
   }
   let was = self.focused

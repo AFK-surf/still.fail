@@ -10,6 +10,19 @@ inputs:
   pnpm:
     description: pnpm and its store (false for a job that installs no packages, as mbui's Apple jobs when the core's bytecode is kept)
     default: 'true'
+  pnpm-cache-scope:
+    description: all lockfiles, or core for a job that installs only the root and core packages
+    default: 'all'
+  pnpm-cache-save:
+    description: save the pnpm store in the post action; false lets the caller save it after its installs
+    default: 'true'
+outputs:
+  pnpm-cache-key:
+    description: The store's primary key, for a caller saving it after its installs
+    value: ${{ steps.pnpm-key.outputs.key }}
+  pnpm-cache-hit:
+    description: Whether the restore-only store matched its primary key
+    value: ${{ steps.pnpm-restore.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -114,11 +127,24 @@ runs:
     # in the background from before this step, and hashFiles failed on a file it removed, 39538551764). A new
     # lockfile is added here. (Not for a job without pnpm: mbui's mac job spent 6-22 s restoring its ~58 MB for packages
     # it did not install, 2026-10-24, 40076678382.)
-    - if: inputs.pnpm == 'true'
+    - id: pnpm-key
+      if: inputs.pnpm == 'true'
+      shell: bash
+      env:
+        PNPM_CACHE_KEY: pnpm-${{ runner.os }}-${{ inputs.pnpm-cache-scope == 'core' && format('core-{0}', hashFiles('pnpm-lock.yaml', 'client/core-ts/pnpm-lock.yaml')) || hashFiles('pnpm-lock.yaml', 'client/core-ts/pnpm-lock.yaml', 'cloud/pnpm-lock.yaml', 'media/core/pnpm-lock.yaml', 'media/test/pnpm-lock.yaml', 'station/pnpm-lock.yaml') }}
+      run: echo "key=$PNPM_CACHE_KEY" >> "$GITHUB_OUTPUT"
+    - if: inputs.pnpm == 'true' && inputs.pnpm-cache-save == 'true'
       uses: actions/cache@v4
       with:
         path: ${{ env.PNPM_STORE }}
-        key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'client/core-ts/pnpm-lock.yaml', 'cloud/pnpm-lock.yaml', 'media/core/pnpm-lock.yaml', 'media/test/pnpm-lock.yaml', 'station/pnpm-lock.yaml') }}
+        key: ${{ steps.pnpm-key.outputs.key }}
+        restore-keys: pnpm-${{ runner.os }}-
+    - id: pnpm-restore
+      if: inputs.pnpm == 'true' && inputs.pnpm-cache-save == 'false'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ env.PNPM_STORE }}
+        key: ${{ steps.pnpm-key.outputs.key }}
         restore-keys: pnpm-${{ runner.os }}-
     - if: inputs.native == 'true'
       shell: bash

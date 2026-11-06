@@ -89,6 +89,12 @@ pub(all) struct Node {
   mut measure : ((Double, MeasureMode, Double, MeasureMode) -> (Double, Double))?
   mut layout_children : ((Double, Double, Double, Double) -> Double)?
   mut sized_by_children : Bool
+  mut room_said : Bool
+  mut room_w : Double
+  mut room_h : Double
+  mut sizing : Bool
+  mut sizing_w : Double
+  mut sizing_h : Double
   mut left : Double
   mut top : Double
   mut width : Double
@@ -119,6 +125,7 @@ pub fn Node::laid_out(Self) -> Bool
 pub fn Node::laid_out_at(Self) -> Int32
 pub fn Node::left_out(Self) -> Bool
 pub fn Node::new() -> Self
+pub fn Node::room_now(Self) -> (Double, Double)?
 
 #derive(Eq)
 pub(all) enum Overflow {

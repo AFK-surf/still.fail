@@ -1,7 +1,7 @@
 // The hub's parts that compute (ported with their Rust tests): splitting for Slack, commands, image sizes, local file
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
@@ -903,6 +903,12 @@ test("the station's own skills are written and kept as the station has them; the
   writeBuiltinSkills(home, false);
   assert.ok(readFileSync(path, "utf8").includes("job_start"), "the station's own, as it has it");
   assert.equal(readFileSync(join(home, "skills", "team-skill", "SKILL.md"), "utf8"), "ours", "the team's stay");
+  const script = join(home, "skills", "stillfail-github-ci", "ci-wait.sh");
+  assert.equal(readFileSync(script, "utf8"), readFileSync(new URL("../src/skills/stillfail-github-ci/ci-wait.sh", import.meta.url), "utf8"), "the scripts a skill brings, beside it");
+  assert.ok(statSync(script).mode & 0o100, "runnable");
+  writeFileSync(script, "edited by hand");
+  writeBuiltinSkills(home, false);
+  assert.ok(readFileSync(script, "utf8").includes("gh pr checks"), "the station's script, as it has it");
   const feedback = join(home, "skills", "stillfail-feedback", "SKILL.md");
   writeBuiltinSkills(home, true);
   assert.ok(readFileSync(feedback, "utf8").includes("feedback_send"));

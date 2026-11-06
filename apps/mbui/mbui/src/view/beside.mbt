@@ -339,7 +339,14 @@ pub fn View::lives_with(self : View, owner : View) -> View {
     guard self.live() is Some(_) else { return }
     match self.parent() {
       Some(p) => p.drop(self)
-      None => self.let_go()
+      None => {
+        // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
+        // any state written by the checkpoint only after the node has been let go.
+        @signals.start_batch()
+        self.tree.before_removing(self)
+        self.let_go()
+        @signals.end_batch()
+      }
     }
   })
   |> ignore
@@ -403,10 +410,11 @@ pub fn View::drawn_scale(self : View) -> Double {
 ///|
 /// A finger or a button went down in the window at `at`, wherever it lands (the host's, before it goes to
 /// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
-pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0) -> Unit {
+/// `owner` is its logical target, including the host of a portal drawn outside its box.
+pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0, owner? : NodeId) -> Unit {
   self.event(at, fn() {
-    let (count, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
-    self.pressed_anywhere.set((count + 1, x, y))
+    let (count, _, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
+    self.pressed_anywhere.set((count + 1, x, y, owner))
   })
 }
 
@@ -420,7 +428,7 @@ pub fn View::window_downs(self : View) -> Int {
 ///|
 /// Where the most recent window press went down, in window coordinates, as the host told it.
 pub fn View::window_down_point(self : View) -> (Double, Double) {
-  let (_, x, y) = self.tree.pressed_anywhere.get()
+  let (_, x, y, _) = self.tree.pressed_anywhere.get()
   (x, y)
 }
 
@@ -429,11 +437,21 @@ pub fn View::window_down_point(self : View) -> (Double, Double) {
 /// position too. Read as window_downs changes to dismiss a popup only when that press is outside it.
 pub fn View::window_down_here(self : View) -> (Double, Double)? {
   guard self.alive() && self.tree.last_w > 0.0 else { return None }
-  let (count, px, py) = self.tree.pressed_anywhere.get()
+  let (count, px, py, _) = self.tree.pressed_anywhere.get()
   guard count > 0 else { return None }
   let (x, y, s) = self.tree.placed(self.at)
   let scale = if s > 0.0 { s } else { 1.0 }
   Some(((px - x) / scale, (py - y) / scale))
+}
+
+///|
+/// Whether the latest window press belongs to this node or what it holds. A hosted portal belongs to its host
+/// even when drawn outside the host's box; an outside-press handler need not treat that portal as outside.
+pub fn View::window_down_within(self : View) -> Bool {
+  match self.tree.pressed_anywhere.get().3 {
+    Some(owner) => self.tree.holds(self.id(), owner)
+    None => false
+  }
 }
 
 ///|
@@ -471,10 +489,17 @@ pub fn View::window_taps(self : View) -> Int {
 
 ///|
 /// Whether what a finger or a button at (`x`, `y`) of the window is for, as the tree is now, is this node (Tree::target_at:
-/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's.
+/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's. A
+/// gesture begun on its drawing is on it only while in that drawing; one begun in its press room may end there too.
 pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
   match self.tree.target_at(x, y) {
-    Pressed(id) | Dragged(id) => id == self.id()
+    Pressed(id) | Dragged(id) => {
+      if id != self.id() { return false }
+      match self.live() {
+        Some(n) if n.gesture_from_room == Some(false) => self.tree.under(x, y).contains(id)
+        _ => true
+      }
+    }
     _ => false
   }
 }

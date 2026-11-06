@@ -67,8 +67,8 @@ pub(all) enum Action {
 ///|
 /// What a node of the window's tree says it is (View::says): its role, its label (none: the words it holds), what
 /// describes it more, its value as words (and as a number in a range: a progress bar's, a slider's), its state, what can
-/// be done to it (Activate where it is pressed: its on_press,
-/// as a press there runs it). Whether it is disabled is what its presses say (View::presses), not said here.
+/// be done to it (View::on_action; Activate where it is pressed: its on_press, as a press there runs it).
+/// Whether it is disabled is what its presses say (View::presses), not said here.
 pub(all) struct Said {
   role : Role
   label : String
@@ -123,6 +123,62 @@ pub(all) struct SaidNode {
 pub fn View::says(self : View, said : Live[Said?]) -> View {
   self.bind(Says, said, Said, fn(s) { self.tree.nodes[self.at].said = s })
   self
+}
+
+///|
+/// What a declared accessibility action does, at the moment it is asked, outside tracking and as one change.
+/// The node must still say it takes that action and be read out, enabled and able to take input. Activate, Focus and
+/// a field's SetText use their usual handlers first. Saying this again replaces the callback; it goes with the node.
+pub fn View::on_action(self : View, f : (Action) -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_action = Some(f)
+  self
+}
+
+///|
+/// Whether `action` is among those declared: SetText's declaration carries no words, the request carries the words.
+fn action_declared(actions : Array[Action], action : Action) -> Bool {
+  for declared in actions {
+    if declared == action || (declared is SetText(_) && action is SetText(_)) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Whether a node itself may be acted on by a screen reader now, with its bindings pulled in: it must say what it is,
+/// be read out, take presses and not be turned off or leaving.
+pub fn Tree::said_takes_action(self : Tree, id : NodeId) -> Bool {
+  self.acts_on(id) && self.said_now(id.at) && !self.nodes[id.at].turned_off
+}
+
+///|
+/// Whether an old view's declarations hosted here can take accessibility actions, as said_order exposes them.
+/// The host need not have a declaration of its own; hiding or disabling it still hides or disables those inside.
+pub fn Tree::hosted_takes_action(self : Tree, id : NodeId) -> Bool {
+  self.acts_on(id) && self.nodes[id.at].hosted && !self.nodes[id.at].turned_off
+}
+
+///|
+/// Ask a node to do one of its declared accessibility actions at `at`. What changed by then is taken first; a node
+/// gone, hidden, disabled, leaving, under a modal, or no longer declaring the action does nothing. Whether it ran.
+pub fn Tree::said_action_at(self : Tree, id : NodeId, action : Action, at : Double) -> Bool {
+  let ran = Ref(false)
+  self.event(at, fn() {
+    if !self.said_takes_action(id) {
+      return
+    }
+    guard self.nodes[id.at].said is Some(s) && action_declared(s.actions, action) else { return }
+    match self.nodes[id.at].on_action {
+      Some(f) => {
+        ran.val = true
+        f(action)
+      }
+      None => ()
+    }
+  })
+  ran.val
 }
 
 ///|

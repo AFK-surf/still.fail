@@ -85,7 +85,8 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
 /// is now, followed (in place of `placeholder`). `line_by`, `max_lines_by`, `enter_by` and `paste_limit_by`: those
-/// options as they change, keeping the same editor, selection and undo. `max_lines_in`: the most lines it shows worked
+/// options as they change, keeping the same editor, selection and undo. `label_by` names the editor to a screen reader
+/// when its visible label is separate from its placeholder; absent, the placeholder names it. `max_lines_in`: the most lines it shows worked
 /// out by how big `holder` (what holds it) is laid out, as that is laid out (a Roomed rule: nothing of it read back),
 /// in place of `max_lines`; such a field wraps. `files_when`: whether it takes files at the paste's moment (else its
 /// words, like a field without `files`). The node made.
@@ -122,6 +123,7 @@ pub fn field(
   colors_by? : () -> (Int64, Int64, Int64),
   placeholder_by? : () -> String,
   keys? : (Int, Int) -> Bool,
+  label_by? : () -> String,
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
@@ -250,7 +252,8 @@ pub fn field(
     // (its words read out, a secret's none: as an old view's editor says them)
     .says(By(fn() {
       let value = field.composed_said()
-      Some(@view.said(TextField, label=hint(), value=if secret { "" } else { value }, actions=[SetText("")]))
+      let label = match label_by { Some(read) => read(); None => hint() }
+      Some(@view.said(TextField, label~, value=if secret { "" } else { value }, actions=[SetText("")]))
     }))
     // (a press on it: taken as it goes down where the field takes it so, else a tap's as it is let go: tree_field_down)
     .on_press(fn() { tree_field_tapped(id) })
@@ -339,8 +342,8 @@ pub fn Field::lines(self : Field) -> FieldLines? {
 /// The keyboard's focus given field `field` by what holds it now: a field of the window's tree, at once (where it can
 /// take it); an old view's editor drawn now, that one (where the old view it is in takes input); none, asked of the one
 /// that comes to hold it, given as it does (a field of the tree's as it is made; an old view's editor as it is built),
-/// the focus where it is till then.
-pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
+/// the focus where it is till then. With `ask_later=false`, an absent field does not keep a request for later.
+pub fn Ctx::focus_field(self : Ctx, field : Field, ask_later? : Bool = true) -> Unit {
   let st = field.st
   // (held by a field of the window's tree: its)
   match st.tree_node {
@@ -365,7 +368,7 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
     }
   }
   // (held by none now: asked of whichever comes to hold it, taken as it does (field(), Ctx::editor), nothing moved before)
-  st.focus_asked = true
+  if ask_later { st.focus_asked = true }
 }
 ///|
 /// Field node `id` given the keyboard's focus where it can take it now (the tree's: under no modal layer that does not
@@ -631,9 +634,10 @@ fn tree_field_let_go(id : @view.NodeId, x : Double, y : Double, up : Bool) -> Un
   // (its words scrolled by a finger, let go: flung on at its speed, as an old view's field's are, sideways_up)
   if tf.scrolling {
     if up {
-      tf.track.add(view_moment(), y)
+      tf.track.up(view_moment(), y)
     }
-    sideways_up(c, tree_said_id(id), 0.0, if up { dclamp(tf.track.velocity(), -max_fling, max_fling) } else { 0.0 })
+    let v = if up { dclamp(tf.track.velocity_at(view_moment()), -max_fling, max_fling) } else { 0.0 }
+    sideways_up(c, tree_said_id(id), 0.0, v)
   }
   if tf.handle != 0 {
     c.handle_drag = 0

@@ -1041,6 +1041,25 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
 }
 
 ///|
+test "on the tape a chat taking a waiting file keeps the search tucked beneath the band" {
+  new_run()
+  let src = fixture("chat")
+  let draft = "ws1/st1:s-c1"
+  @sfbase.files_into(draft, row_dragged("waiting.md"))
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=750.0, h=830.0, platform=2)
+  say_room(t, "medium", "medium")
+  t.run_for(@ui.move_most_ms)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  let (_, bar_y, _, bar_h) = said_at(t, "新建对话").unwrap()
+  let (_, search_y, _, search_h) = said_at(t, "搜索全部内容").unwrap()
+  assert_true(search_y + search_h <= bar_y + bar_h + 2.0, msg="the search stays under the band")
+  let w = @sfbase.writings.get(draft).unwrap()
+  assert_eq(w.files.get().filter(fn(f) { text(Some(f), "name") == "waiting.md" }).length(), 1, msg="the waiting file is taken once")
+}
+
+///|
 test "on the tape a passage held in the page beside the sidebar brings the page over, and its 引用 quotes it" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // (the page beside kept as it was drawn while nothing changes it, as on a device: held, built)
