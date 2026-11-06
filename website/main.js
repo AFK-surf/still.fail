@@ -224,7 +224,11 @@
   addEventListener("scroll", () => { tone(); clearTimeout(toneT); toneT = setTimeout(tone, 120); }, { passive: true });
   // The bar's height is read when its row is laid out (WebKit can run this before the imported sheets have styled it).
   new ResizeObserver(() => { barH = nav.offsetHeight; tone(); }).observe($(".w", nav));
-  new ResizeObserver(() => tone()).observe($("main"));
+  // The bands are watched one level in, not <main> itself: WebKit keeps a band's remembered size (contain-intrinsic-size:
+  // auto) with an observer of its own at the band's depth, and a shallower one that changes in that frame is left
+  // undelivered (a "ResizeObserver loop" error).
+  const bandsRO = new ResizeObserver(() => tone());
+  for (const s of $$("main > section")) for (const c of s.children) bandsRO.observe(c);
   requestAnimationFrame(tone);
   new ResizeObserver(() => placeInd(false)).observe(sheet);
   document.fonts?.ready.then(() => placeInd(false));

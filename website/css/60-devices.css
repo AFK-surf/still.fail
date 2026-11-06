@@ -24,6 +24,8 @@
 .fpanel .vis > .duo { width: min(100%, calc((var(--vis-h) - 40px) / .93)); } /* the whole Duo, never cropped */
 .fpanel .vis > .slack { font-size: 13px; }
 .fpanel .vis:has(> .slack) { place-items: start center; padding-top: 52px; } /* the thread starts below its tag */
+/* Narrow portrait: the picture grows to the whole thread (it wraps to more lines there), never cut through a message. */
+@media (max-width: 639px) and (min-height: 501px) { .fpanel .vis:has(> .slack) { height: auto; min-height: var(--vis-h); } }
 .fpanel .txt { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 24px; }
 .fpanel .txt .eyebrow { font-family: var(--mono); font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--graphite); }
 .fpanel .txt h3 { font-size: 22px; line-height: 1.22; letter-spacing: -.016em; font-weight: 600; text-wrap: balance; }
@@ -133,10 +135,13 @@
   display: grid; grid-template-columns: max(calc(7 * var(--u)), 340px) minmax(0, 1fr); color: var(--dv-fg, var(--ink));
   background: radial-gradient(circle, rgba(255,255,255,.26) 1.1px, transparent 1.6px) 0 0 / 12px 12px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); }
 .dv-ink { position: absolute; inset: 0; z-index: -1; opacity: 0; background: radial-gradient(circle, rgba(255,255,255,.08) 1.1px, transparent 1.6px) 0 0 / 12px 12px, var(--ink); }
+/* The inks step 5 tweens to white start as real values: a timeline first rendered past step 5 (a reader who lands
+   below the scene) then scrubs back to ink, not to transparent. */
+.dv-stage { --dv-fg: var(--ink); --dv-mut: var(--brand-ink); }
 .dv-copy { position: relative; display: flex; flex-direction: column; padding: clamp(32px, 3.6vw, 64px); padding-right: 16px; min-width: 0; }
 .dv-no { font-family: var(--mono); font-size: 14px; color: var(--dv-mut, var(--brand-ink)); }
 .dv-no b { font-weight: 500; color: var(--dv-fg, var(--ink)); font-size: 15px; }
-.dv-steps { display: grid; margin-top: clamp(24px, 4vh, 56px); }
+.dv-steps { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: clamp(24px, 4vh, 56px); }
 .dv-step { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 14px; }
 .dv-step:not([data-i="0"]) { opacity: 0; visibility: hidden; }
 .dv-step .eyebrow { color: var(--dv-fg, var(--ink)); font-family: var(--mono); font-weight: 400; font-size: 13px; }
