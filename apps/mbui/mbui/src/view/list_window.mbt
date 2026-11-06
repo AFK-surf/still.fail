@@ -33,6 +33,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let heights : Map[K, Double] = Map([])
   let told : @signals.Signal[Int] = @signals.signal(0)
   let tell = fn() { told.set(@signals.untracked(fn() { told.get() }) + 1) }
+  // (the same, each block's own, by its key, while it is made: what its height reads, not all of them read again as
+  // one is told, n for each told)
+  let tall : Map[K, @signals.Signal[Double?]] = Map([])
   // (those that show now: laid out again as they are, each told anew where it comes out otherwise; the rest forgotten)
   let showing : Map[K, Bool] = Map([])
   self.reacts(fn() { (self.laid_size_told().map(fn(z) { z.0 }), self.words_redone()) }, fn(_) {
@@ -40,6 +43,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if gone.length() > 0 {
       for k in gone {
         heights.remove(k)
+        if tall.get(k) is Some(c) {
+          c.set(None)
+        }
       }
       tell()
     }
@@ -107,17 +113,47 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       None => None
     }
   })
+  // (whether each shows, by its key: told only to those that come to show or stop, not each block reading the window,
+  // all of them run again each time the column is scrolled)
+  let shown : Map[K, @signals.Signal[Bool]] = Map([])
+  let was : Ref[Array[K]] = Ref([])
+  self.reacts(fn() { window.get() }, fn(now) {
+    let on : Map[K, Bool] = Map([])
+    for k in now {
+      on[k] = true
+    }
+    @signals.start_batch()
+    for k in was.val {
+      if !on.contains(k) {
+        if shown.get(k) is Some(c) {
+          c.set(false)
+        }
+      }
+    }
+    for k in now {
+      if shown.get(k) is Some(c) {
+        c.set(true)
+      }
+    }
+    @signals.end_batch()
+    was.val = now
+  })
   self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room()) })) |> ignore
     held.each(keys, fn(k) { k }, fn(slot, item) {
       let k = @signals.untracked(fn() { item.get() })
-      let shows = fn() { window.get().contains(k) }
+      let cell = @signals.signal(@signals.untracked(fn() { window.get().contains(k) }), same=fn(a, b) { a == b })
+      shown[k] = cell
+      slot.owns(fn() { if shown.get(k) is Some(c) && physical_equal(c, cell) { shown.remove(k) } }) |> ignore
+      let shows = fn() { cell.get() }
+      let my_tall = @signals.signal(heights.get(k), same=fn(a, b) { a == b })
+      tall[k] = my_tall
+      slot.owns(fn() { if tall.get(k) is Some(c) && physical_equal(c, my_tall) { tall.remove(k) } }) |> ignore
       // (as tall as it is counted, showing or not: as what it holds was told laid out, est before; never as tall as
       // what it holds is while that is still to be laid out, the column's end gone up and back in one frame)
       slot
       .height(By(fn() {
-        let all = laid.get()
-        all.search_by(fn(b) { b.0 == k }).map(fn(i) { all[i].2 })
+        Some(self.tree.rows_slot(my_tall.get().unwrap_or(est)))
       }))
       .shrink(Is(0.0))
       |> ignore
@@ -131,6 +167,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           match z {
             Some((_, h)) if heights.get(k) != Some(h) => {
               heights[k] = h
+              if tall.get(k) is Some(c) {
+                c.set(Some(h))
+              }
               tell()
             }
             _ => ()
