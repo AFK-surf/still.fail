@@ -5,6 +5,8 @@
 /// pane; on a wide page as given (the page's column already has its room). Call once for each row, including its head,
 /// empty state and foot: the list still makes and lets go each row separately. The page's look and pane are lent to the
 /// node, so rows made later as they scroll into view receive the same room as the rest of the page.
+/// `parent` is in the list's outer room: a narrow `page_node` block already has `page_block` around it, so its contents
+/// do not need this room again.
 pub fn rows_room_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
   match look_node(parent) {
     Narrow => page_block(parent, make)
