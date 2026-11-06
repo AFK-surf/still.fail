@@ -602,6 +602,25 @@ describe("updates", { concurrency: true }, () => {
     });
   });
 
+  test("version refusals share the software page's update of the existing Codex installation", { skip: WINDOWS && "Homebrew is macOS's" }, async (t) => {
+    const [registry, server] = await serve((path) => path === "/@openai/codex/latest" ? { body: JSON.stringify({ version: "0.47.0" }) } : null);
+    t.after(() => server.close());
+    const dir = temp(), bin = join(dir, "bin"), codex = join(dir, "Cellar/codex/0.46.0/bin/codex"), calls = join(dir, "brew-calls");
+    mkdirSync(bin);
+    script(codex, "#!/bin/sh\necho 'codex-cli 0.46.0'\n");
+    symlinkSync(codex, join(bin, "codex"));
+    script(join(bin, "brew"), `#!/bin/sh\necho "$*" >> "${calls}"\nprintf '#!/bin/sh\\necho "codex-cli 0.47.0"\\n' > "${codex}.sh"\n`);
+    const updates = installed(dir, "1300", null, { registry, env: { PATH: withSystem(bin), HOME: dir }, codexHostProbe: async () => null });
+    t.after(() => updates.close());
+    await Promise.all([updates.updateOldCodex("0.46.0", "zh"), updates.updateOldCodex("0.46.0", "zh")]);
+    assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), ["upgrade codex"]);
+    assert.equal(updates.get("zh").find((item) => item.id === "codex")!.version, "0.47.0");
+    // A stale app-server whose binary is already newer does not run a second install.
+    await updates.updateOldCodex("0.46.0", "zh");
+    assert.equal(readFileSync(calls, "utf8").trim(), "upgrade codex");
+    await assert.rejects(updates.updateOldCodex("0.47.0", "zh"), /没有可用的更新版本/);
+  });
+
   for (const complete of [true, false]) {
     test(`repairing an incomplete Codex ${complete ? "switches to npm and keeps the old entry" : "keeps the old entry when npm is incomplete"}`, { skip: !machine.codexStandalone }, async (t) => {
       const target = npmPlatform();

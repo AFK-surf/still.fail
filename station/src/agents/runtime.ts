@@ -86,6 +86,10 @@ export type OpenOptions = {
 export interface AgentSession {
   /// Runtime-native id: claude session id, codex thread id, dsh, grok or Devin session id, Cursor's agent id. Persist it to resume.
   id(): string;
+  /// The version of the runtime serving this session, when it reports one (it may predate the installed binary).
+  runtimeVersion?(): string | null;
+  /// Whether the software page updates the executable serving this session.
+  runtimeUpdateMatchesStation?(): Promise<boolean>;
   busy(): boolean;
   /// Starts a turn. Fails when a turn is already running (or the runtime cannot take one as it is).
   prompt(text: string): Promise<void>;

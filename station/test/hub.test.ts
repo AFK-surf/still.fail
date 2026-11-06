@@ -724,6 +724,77 @@ test("a sign-in that failed has its account checked again first: one whose login
   await r.close();
 });
 
+test("an outdated Codex is updated before the failed conversation continues, only once", async () => {
+  const r = new Rig();
+  let finish!: () => void;
+  let calls = 0;
+  const updating = new Promise<void>((resolve) => { finish = resolve; });
+  Object.assign(r.hub.deps, { updateOldCodex: async () => { calls++; await updating; } });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  const first = r.codex.last();
+  const error = `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again."}}`;
+  first.end({ kind: "failed", reason: "model", message: error });
+  await settle();
+  assert.equal(calls, 1);
+  assert.equal(r.gptChat.lastText(), "Codex 版本过旧，正在更新，更新后将重试");
+  assert.equal(r.codex.count(), 1, "the conversation waits for the update");
+  await r.accept(reply(m, "9999.2", "also check the tests", { addressed: true }), "gpt");
+  await settle();
+  assert.equal(r.codex.count(), 1, "a message during the update waits for the new executable");
+  finish();
+  await settle();
+  const retry = r.codex.last();
+  assert.equal(r.codex.count(), 2);
+  assert.equal(retry.options.resume, first.sessionId);
+  assert.ok(retry.prompts[0]!.includes("Continue the unfinished work"));
+  assert.ok(retry.steers.some((text) => text.includes("also check the tests")), "the new message reaches the resumed turn");
+  retry.end({ kind: "failed", reason: "model", message: error });
+  await settle();
+  assert.equal(calls, 1, "a persistent version refusal must not loop");
+  assert.equal(r.codex.count(), 2);
+  await r.close();
+});
+
+test("an update failure explains the cause; unrelated model errors never install software", async () => {
+  const r = new Rig();
+  let calls = 0;
+  Object.assign(r.hub.deps, { updateOldCodex: async () => { calls++; throw new Error("npm: permission denied"); } });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  const error = "The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.";
+  r.codex.last().end({ kind: "failed", reason: "model", message: error });
+  await settle();
+  assert.equal(calls, 1);
+  assert.equal(r.gptChat.lastText(), "⚠️ Codex 更新失败：npm: permission denied");
+  assert.equal(r.codex.count(), 1);
+  await r.accept(reply(m, "9999.2", "try another model", { addressed: true }), "gpt");
+  await settle();
+  r.codex.last().end({ kind: "failed", reason: "model", message: "model not supported" });
+  await settle();
+  assert.equal(calls, 1);
+  await r.close();
+});
+
+test("stopping while Codex updates prevents the failed conversation from restarting", async () => {
+  const r = new Rig();
+  let finish!: () => void;
+  const updating = new Promise<void>((resolve) => { finish = resolve; });
+  Object.assign(r.hub.deps, { updateOldCodex: async () => updating });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  r.codex.last().end({ kind: "failed", reason: "model", message: "The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again." });
+  await settle();
+  await r.hub.stop(sessionKey("gpt", m.channel, m.threadTs));
+  finish();
+  await settle();
+  assert.equal(r.codex.count(), 1);
+  await r.close();
+});
+
 test("Codex authentication failure moves an automatic session and continues once", async () => {
   const r = new Rig();
   r.edit((raw) => {
