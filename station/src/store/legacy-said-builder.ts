@@ -6,9 +6,10 @@ import { hasLegacySaid, legacySaidMaintenanceStep, legacySaidNeedsWork } from ".
 import { hasLegacyAgent, legacyAgentMaintenanceStep, legacyAgentNeedsWork } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsNeedsWork } from "./legacy-login-cards.ts";
 import { hasLegacyEdits, legacyEditsMaintenanceStep, legacyEditsNeedsWork } from "./legacy-edits-build.ts";
+import { archivePolicyIndexNeedsWork, archivePolicyIndexStep, hasLegacyArchivePolicy } from "./archive-policy-index.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
@@ -26,24 +27,28 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     needsWork: () => legacyLoginCardsNeedsWork(store.db), step: () => legacyLoginCardsMaintenanceStep(store.db) });
   if (kinds.includes("legacy-edits") && hasLegacyEdits(store.db)) lookups.push({ kind: "legacy-edits",
     needsWork: () => legacyEditsNeedsWork(store.db), step: () => legacyEditsMaintenanceStep(store.db) });
+  if (kinds.includes("legacy-policy") && hasLegacyArchivePolicy(store.db) && archivePolicyIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-policy",
+    needsWork: () => archivePolicyIndexNeedsWork(store.db), step: () => archivePolicyIndexStep(store.db) });
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
   let worker: Worker | null = null;
   let retryCancel: (() => void) | null = null, memoryCancel: (() => void) | null = null;
   let allowed = false, closed = false, requested = false, retryMs = 250, next = 0;
   let off: () => void = () => {}, periodicCancel: () => void = () => {};
-  // Unlike the other lookups, the login keys are kept current by their triggers and have no later reconciliation queue.
-  // Once published, this scan cannot become unfinished again; stop probing it on each message and periodic wake.
-  const retireLogin = () => {
-    const index = lookups.findIndex((lookup) => lookup.kind === "legacy-login");
-    if (index < 0 || lookups[index].needsWork()) return;
-    lookups.splice(index,1);
-    if (index < next) next--;
+  // Login and policy keys are kept current by their triggers and have no later reconciliation queue. Once published,
+  // these scans cannot become unfinished again; stop probing them on each message and periodic wake.
+  const retireComplete = () => {
+    for (let index = lookups.length - 1; index >= 0; index--) {
+      const lookup = lookups[index]!;
+      if ((lookup.kind !== "legacy-login" && lookup.kind !== "legacy-policy") || lookup.needsWork()) continue;
+      lookups.splice(index,1);
+      if (index < next) next--;
+    }
     if (next >= lookups.length) next = 0;
     if (lookups.length === 0) { off(); off = () => {}; periodicCancel(); }
   };
   const nextLookup = (): Lookup | null => {
-    retireLogin();
+    retireComplete();
     for (let i=0;i<lookups.length;i++) {
       const index = (next+i)%lookups.length, lookup = lookups[index];
       if (lookup.needsWork()) { next = (index+1)%lookups.length; return lookup; }
@@ -73,7 +78,7 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
   const start = () => {
     if (lookups.length === 0 || !allowed || closed || worker !== null || retryCancel !== null || memoryCancel !== null) return;
     try {
-      retireLogin();
+      retireComplete();
       if (!lookups.some((lookup) => lookup.needsWork())) { requested = false; retryMs = 250; resolve(true); return; }
     } catch (error) {
       log.warn("store", "the old message lookup could not be checked", { error: (error as Error).message });
@@ -136,7 +141,7 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     periodicCancel = work.every(5_000, () => {
       if (!allowed || closed || worker !== null) return;
       try {
-        retireLogin();
+        retireComplete();
         if (lookups.length === 0) { requested = false; resolve(true); }
         else if (lookups.some((lookup) => lookup.needsWork())) wake();
       }
@@ -165,7 +170,7 @@ export function buildLegacySaid(store: Store, previous: Promise<void>, workerFil
   return buildLookups(store,previous,["legacy-said"],workerFile);
 }
 
-/// Prepare all entry lookups a store needs after the old station has handed over.
+/// Prepare the old lookups a store needs after the old station has handed over.
 export function buildLegacyEntryLookups(store: Store, previous: Promise<void>, workerFile?: URL): ReturnType<typeof buildLookups> {
-  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits"],workerFile);
+  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy"],workerFile);
 }
