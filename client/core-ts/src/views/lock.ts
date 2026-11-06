@@ -147,7 +147,7 @@ function recover(inner: Inner, id: string): void {
 const readAt = new WeakMap<Inner, Map<string, string>>();
 
 /// What is folded from the entries, unchecked (the stations check them): who and what is in the lock.
-export type Folded = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number> };
+export type Folded = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number>; persons: Map<string, string> };
 
 /// A device of the lock as it stands at `at` (unix seconds): none once its approval ran out (a web page's, after
 /// WEB_DEVICE_SECS). The stations let it in nowhere then (station/src/cloud/lock.ts `admit`): it waits and is approved
@@ -157,7 +157,7 @@ export function live<D extends { exp?: unknown }>(d: D | undefined, at: number):
 }
 
 export function fold(entries: Entry[]): Folded {
-  const f: Folded = { members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map() };
+  const f: Folded = { members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map(), persons: new Map() };
   for (const e of entries) {
     const b = (e.body ?? {}) as J;
     switch (e.kind) {
@@ -172,6 +172,10 @@ export function fold(entries: Entry[]): Folded {
       case "member.remove":
         f.members.delete(b.sub);
         for (const [k, d] of f.devices) if (d.sub === b.sub) f.devices.delete(k);
+        f.persons.delete(b.sub);
+        break;
+      case "person":
+        f.persons.set(b.sub, b.person);
         break;
       case "device":
         if (!f.devices.has(b.id)) f.added.set(b.id, e.at);
@@ -273,6 +277,7 @@ export function install(inner: Inner): void {
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;
   inner.cloudSync.carry = (ws) => carried(inner, ws);
+  inner.cloudSync.carryPerson = (ws) => carriedPerson(inner, ws);
   handlers.lock = (core, call, _progress, _at, ctx) => run(core, call as Of, ctx);
   handlers.lockPrompt = (core, call, _progress, _at, ctx) => runPrompt(core, (call as Extract<Call, { kind: "lockPrompt" }>).name, (call as Extract<Call, { kind: "lockPrompt" }>).params, ctx);
   // The signing key, once (it is the device's).
@@ -332,6 +337,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
+    inner.runner.fork(bindPerson(inner, ws));
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
     lockSeen(inner).touch(`lock ${ws}`, `draft ${ws}`, "prompts");
     inner.views?.vaultChanged(ws);
@@ -425,6 +431,75 @@ function carried(inner: Inner, ws: string): Entry[] | null {
   }
   const tail = h.entries.slice(at);
   return JSON.stringify(tail).length <= CARRY_BYTES ? tail : null;
+}
+
+/// Whether this device is let in here by its person's own lock: it is on the one its member bound in this workspace's.
+export function onBoundPerson(inner: Inner, ws: string): boolean {
+  const sub = inner.workspaces.owner(ws);
+  const h = held(inner, ws);
+  if (sub === null || !h?.head) return false;
+  const personal = inner.adb.personal();
+  return personal.standing(sub) === "member" && personal.root(sub) === fold(h.entries).persons.get(sub);
+}
+
+/// What a hello brings of the person's own lock: its chain, where it is what lets this device in here (not a device of
+/// the workspace's lock itself).
+function carriedPerson(inner: Inner, ws: string): Entry[] | null {
+  const sub = inner.workspaces.owner(ws);
+  const h = held(inner, ws);
+  const base = part(inner, ws).base ?? bases.get(inner) ?? null;
+  if (sub === null || !h?.head || base === null || live(fold(h.entries).devices.get(base), now(inner)) !== undefined || !onBoundPerson(inner, ws)) return null;
+  const chain = inner.adb.personal().entries(sub);
+  return JSON.stringify(chain).length <= CARRY_BYTES ? chain : null;
+}
+
+/// This device, one of the workspace's lock that signs for its person, says which lock of their own is theirs, once
+/// every station of the lock has said it knows such an entry: one that does not would refuse it, and every entry after.
+/// Nothing here asks the person: it writes with the lock's own key. Tried again whenever the lock is read or the person's
+/// own lock is: no timer of its own.
+const binding = new WeakMap<Inner, Set<string>>();
+export function bindPerson(inner: Inner, ws: string): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const sub = inner.workspaces.owner(ws);
+    const h = held(inner, ws);
+    const signer = signerOf(inner);
+    if (sub === null || !h?.head || signer === null || !inner.host.appKeys) return;
+    const personal = inner.adb.personal();
+    const root = personal.root(sub);
+    const f = fold(h.entries);
+    if (root === null || personal.standing(sub) !== "member" || f.disabled || f.persons.get(sub) === root) return;
+    const base = part(inner, ws).base ?? bases.get(inner) ?? null;
+    const me = base === null ? undefined : live(f.devices.get(base), now(inner));
+    if (me === undefined || me.sub !== sub || me.sign_key !== signer) return;
+    // Once at a time.
+    let tried = binding.get(inner);
+    if (tried === undefined) binding.set(inner, (tried = new Set()));
+    const at = `${ws}/${h.head.hash}/${root}`;
+    if (tried.has(at)) return;
+    tried.add(at);
+    yield* Effect.ensuring(
+      Effect.gen(function* () {
+        for (const id of f.stations.keys()) {
+          const r = yield* Effect.result(inner.stations.requests.call(new StationAddr(ws, id), "GET", "/lock?after=999999999", null, { quiet: true }));
+          if (r._tag !== "Success" || !arr(get(r.success, "takes")).includes("person")) return;
+        }
+        yield* new Lock(inner, ws, sub, null).append("person", { sub, person: root });
+      }),
+      Effect.sync(() => tried.delete(at)),
+    );
+  }).pipe(Effect.ignore);
+}
+
+/// A person's own lock moved on (a device taken off): each station where it is bound told as it stands.
+export function tellStations(inner: Inner, sub: string, chain: Entry[]): void {
+  for (const [ws, owner] of inner.workspaces.owned()) {
+    const h = held(inner, ws);
+    if (owner !== sub || !h?.head) continue;
+    const f = fold(h.entries);
+    if (!f.persons.has(sub)) continue;
+    for (const id of f.stations.keys())
+      inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, id), "POST", "/lock", { person: chain }, { quiet: true }), { log: "Unhandled", message: "personal lock told" }));
+  }
 }
 
 /// What a control plane that keeps no lock shows.
@@ -522,7 +597,7 @@ export function lockView(inner: Inner, ws: string): J {
   const at = now(inner);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
-  const mine = base ? live(f.devices.get(base), at) : undefined;
+  const mine = base ? (live(f.devices.get(base), at) ?? (onBoundPerson(inner, ws) ? { id: base, sub: inner.workspaces.owner(ws), kind: "app" } : undefined)) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
   const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;

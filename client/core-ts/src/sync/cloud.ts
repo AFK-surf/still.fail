@@ -55,6 +55,8 @@ export class CloudSync {
   onRelayLoad: (sub: string) => void = () => {};
   /// The lock entries a hello to a station of the workspace brings (views/lock.ts `carried`): none, null.
   carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
+  /// The chain of the person's own lock a hello brings to a station (views/lock.ts `carriedPerson`).
+  carryPerson: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
   readonly #admins = new Set<string>();
   /// An operator's lists that failed to come (the network, still.fail cloud's 5xx): the wait before they are asked
@@ -443,7 +445,8 @@ export class CloudSync {
   /// (it lists the devices for a lock's owner to check) and to the station with the credential.
   credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null = null): Effect.Effect<Credential, CoreError> {
     const entries = claim === null ? null : (this.carry?.(workspace) ?? null);
-    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: entries ? { ...claim, entries } : claim });
+    const person = claim === null ? null : (this.carryPerson?.(workspace) ?? null);
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
     return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
   }
 

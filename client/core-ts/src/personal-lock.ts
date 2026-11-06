@@ -107,6 +107,8 @@ export type PersonalEnv = {
   device: () => Effect.Effect<string, CoreError>;
   label: () => string;
   changed: () => void;
+  /// A device taken off: the stations where this lock is bound told, so an older chain brought there counts for nothing.
+  told?: (sub: string, chain: Entry[]) => void;
 };
 
 const PATH = "/v1/me/personal-lock";
@@ -294,6 +296,7 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       yield* this.#append(sub, yield* this.#unseal(reason), "device.remove", { key });
+      this.#env.told?.(sub, this.#pinned.get(sub) ?? []);
       return null;
     });
   }
@@ -335,6 +338,15 @@ export class PersonalLock {
   approvers(sub: string): Device[] {
     const entries = this.#seen.get(sub) ?? this.#pinned.get(sub) ?? [];
     return [...(checkChain(entries, sub)?.devices.values() ?? [])].filter((d) => d.key !== this.#myKey);
+  }
+
+  /// The chain pinned here, and the hash its lock goes by (what a `person` entry names): none without one.
+  entries(sub: string): Entry[] {
+    return this.#pinned.get(sub) ?? [];
+  }
+  root(sub: string): string | null {
+    const first = this.#pinned.get(sub)?.[0];
+    return first === undefined ? null : entryHash(first);
   }
 
   /// What `adbShare` says of it.

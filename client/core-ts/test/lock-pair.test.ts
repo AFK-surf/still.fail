@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
-import { HostError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
@@ -20,7 +20,7 @@ import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
-import { pairs } from "../src/views/lock.ts";
+import { bindPerson, fold, held, onBoundPerson, pairs, read } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
@@ -796,4 +796,93 @@ test("a device not on the lock shows no code for it, and someone else's lock is 
   inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
   const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "x", sign_key: null, personal: { subs: ["s1"], key: `ed25519:${"11".repeat(32)}` } }), phone.next()));
   assert.deepEqual(said, { ok: { t: "no", error: "not_here" } });
+});
+
+test("a device on its person's own lock binds it in the workspace's once every station there knows such an entry", async () => {
+  const m = await met();
+  const inner = m.core.inner;
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  const root = personal.root("s1")!;
+  const persons = () => fold(held(inner, "ws")!.entries).persons.get("s1");
+  // No stations in this lock answer otherwise than the rig does: written, as nothing refuses it.
+  await m.run(read(inner, "ws"));
+  await m.run(bindPerson(inner, "ws"));
+  await m.run(read(inner, "ws"));
+  assert.equal(persons(), root);
+  assert.equal(onBoundPerson(inner, "ws"), true);
+  // Bound: not written again.
+  const length = held(inner, "ws")!.entries.length;
+  await m.run(bindPerson(inner, "ws"));
+  await m.run(read(inner, "ws"));
+  assert.equal(held(inner, "ws")!.entries.length, length);
+});
+
+test("a station of the lock that does not say it knows the entry, or does not answer, keeps the person's lock from being bound", async () => {
+  const g = grant();
+  const A = "aa".repeat(32), B = "bb".repeat(32);
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: A, name: "a" }, { key: B, name: "b" }], g.keys, ME, []) }));
+  const inner = r.core.inner;
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const run = async <X>(e: Effect.Effect<X, any>) => {
+    let done = false;
+    let out: X | undefined;
+    inner.runner.fork(Effect.map(e, (x) => { out = x; done = true; }));
+    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    assert.ok(done, "no answer");
+    return out as X;
+  };
+  const sealed = new Map<string, Uint8Array>();
+  r.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = r.host.secureGet;
+  r.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(r.host, k, o));
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: r.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "POST") kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  inner.adb.personal = () => personal;
+  await run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  const said = new Map<string, Effect.Effect<unknown, any>>();
+  const original = inner.stations.requests.call.bind(inner.stations.requests);
+  inner.stations.requests.call = ((addr: { station?: string; toString(): string }, method: string, path: string, ...rest: unknown[]) => {
+    const id = addr.toString().split("/")[1]!;
+    if (path.startsWith("/lock?after") && said.has(id)) return said.get(id);
+    return (original as (...a: unknown[]) => unknown)(addr, method, path, ...rest);
+  }) as typeof inner.stations.requests.call;
+  const persons = () => fold(held(inner, "ws")!.entries).persons.get("s1");
+  await run(read(inner, "ws"));
+  const knows = Effect.succeed({ head: null, takes: ["person"] });
+  // An older station: it would refuse the entry, and every one after it.
+  said.set(A, knows);
+  said.set(B, Effect.succeed({ head: null }));
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.equal(persons(), undefined);
+  // One that does not answer.
+  said.set(B, Effect.fail(new CoreError("offline", "offline")));
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.equal(persons(), undefined);
+  // All of them know it.
+  said.set(B, knows);
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.equal(persons(), personal.root("s1"));
 });
