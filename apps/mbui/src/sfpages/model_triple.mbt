@@ -13,14 +13,14 @@
 /// are asked open in it too (a screen's fixture), and the borrowing it asks to confirm ("" none). Each panel keeps its
 /// own contents and filter while it is shown.
 priv struct Triple {
-  mut open : String
+  open : @signals.Signal[String]
   mut shown : Int
-  mut asked : String
+  asked : @signals.Signal[String]
   mut accounts_asked : Bool
 }
 
 ///|
-let triple : Triple = { open: "", shown: 0, asked: "", accounts_asked: false }
+let triple : Triple = { open: @signals.signal(""), shown: 0, asked: @signals.signal(""), accounts_asked: false }
 
 ///|
 /// One panel's filter, what it shows and its pick: whether all the models are shown (past those used most and
@@ -56,9 +56,9 @@ fn TriplePanel::pick_now(self : TriplePanel, src : Source, station : String, of 
 
 ///|
 fn triple_reset() -> Unit {
-  triple.open = ""
+  triple.open.set("")
   triple.shown = 0
-  triple.asked = ""
+  triple.asked.set("")
   triple.accounts_asked = false
 }
 
@@ -128,11 +128,11 @@ pub fn open_triple_panel(
   page? : Json? = None,
 ) -> Unit {
   let me = station + "\u{1}" + of
-  if triple.open == me {
+  if triple.open.get() == me {
     @sf.close_presented_of(triple.shown)
     return
   }
-  triple.open = me
+  triple.open.set(me)
   let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false, shown: "" }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
@@ -146,7 +146,7 @@ pub fn open_triple_panel(
     // (beside what opened it, its title over its models' column, its search beside it, how hard it thinks titled over
     // its own: triple_body's; 2026-11-02 用户「搜索在左边区域，思考深度和模型在同一个层级」)
     heads_itself=true,
-    gone=fn() { triple.open = "" },
+    gone=fn() { if triple.shown == contents.serial { triple.open.set("") } },
     focus=false,
     // (the models scroll by themselves, what goes with the one picked beside them in view)
     lists=true,
@@ -192,9 +192,9 @@ pub fn model_triple(
   let saving = doing(dkey)
   let id = c.id("triple/" + me)
   let can = options.length() > 0 && !saving
-  let open = triple.open == me
-  if can && !open && (c.clicked(id) || triple.asked == me) {
-    triple.asked = ""
+  let open = triple.open.get() == me
+  if can && !open && (c.clicked(id) || triple.asked.get() == me) {
+    triple.asked.set("")
     open_triple_panel(src, station, of, Of(id), saved~, page~)
   }
   let runtime = text(value, "runtime")
@@ -954,7 +954,7 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
   |> ignore
   if borrow is Some(Object(_)) &&
     @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed")) {
-    triple.open = ""
+    triple.open.set("")
     close()
     borrow_ask(src, station, of)
   }
@@ -1081,7 +1081,7 @@ fn triple_model_row(
       pick_draft(src, station, of, { "model": Json::string(model) })
     } else {
       // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
-      triple.open = ""
+      triple.open.set("")
       close()
       if !picked || text(field(v, "value"), "model") != model {
         let p : Map[String, Json] = { "model": Json::string(model) }
@@ -1761,12 +1761,12 @@ pub let triple_muted_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted,
 ///|
 /// The control of the pick `of` on `station` with its panel open (a screen's fixture).
 pub fn open_triple(station : String, of : String) -> Unit {
-  triple.asked = station + "\u{1}" + of
+  triple.asked.set(station + "\u{1}" + of)
 }
 
 ///|
 /// The same with its accounts open over it (a screen's fixture).
 pub fn open_triple_accounts(station : String, of : String) -> Unit {
-  open_triple(station, of)
   triple.accounts_asked = true
+  open_triple(station, of)
 }
