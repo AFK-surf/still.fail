@@ -675,6 +675,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   v.reacts(fn() { (panel_own.leaving.get(), (tape_goes.panel_of)() is None) }, fn(_) { tape_left() })
   // the chats' place landed on its chat, the sidebar kept as it is left: at their causes (wide_keeps)
   wide_keeps(v, src)
+  let looks = rail_looks(v, src)
   // another place's sidebar at its own width (side_take: as it was left): the tape moved to it from where it is then, as
   // the sidebar is (brand.tsx moveSidebar, 380 ms); not the width the edge drags, which is followed at once
   let side_took = Ref(false)
@@ -770,7 +771,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_swipes(side, Side)
       // (cut to its column, as the old view was in a box of its own: its panel's shadow stops at the column's edge, not
       // on into the gap and under the page's panel)
-      @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)).clips(Is(true)) |> ignore
+      @ui.old(side, fn(c) { tape_side_built(c, src, looks) }, key=tape_island_key).over(Is(true)).clips(Is(true)) |> ignore
       // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
       // the panel is behind the one in use: tape_behind's)
       side.box(fn(sides) {
@@ -1097,7 +1098,7 @@ fn tape_covered(p : TapePane) -> Bool {
 ///|
 /// The rail and the sidebar's column on the tape (its island, as wide as the tree lays it out: the sidebar's width where
 /// its move has got): the block apart from the page, in the workspace in view.
-fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
+fn tape_side_built(c : @ui.Ctx, src : Source, looks : Map[String, RailLook]) -> Unit {
   let (now, all, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
   let r = tape_room_now()
@@ -1108,6 +1109,7 @@ fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
       src,
       w,
       all,
+      looks,
       false,
       false,
       s,
