@@ -65,10 +65,8 @@ Reducto's site (on Mobbin) for the section structure, the details and the illust
 | Success / Warning / Error | `#079455` `#F79009` `#D92D20` | status only |
 
 **Type.** Suisse Intl, as in the VI: Regular (400) for running text, Book (500) for UI and labels, Medium (600) for
-headlines; −3% tracking on display sizes. The font is licensed, so its three Latin subsets (about 21 KB each) are
-**not committed** (`website/.gitignore`): put `suisse-intl-regular.woff2`, `-book.woff2` and `-medium.woff2` in
-`assets/fonts/` before building or deploying. Without them the build drops their preloads and the page falls back to
-Inter; an installed copy is used first either way. Chinese is set in PingFang SC / Microsoft YaHei, so nothing is downloaded for it. Inter
+headlines; −3% tracking on display sizes. Its three Latin subsets (about 21 KB each) are in
+`assets/fonts/`, under the team's license; an installed copy is used first. Chinese is set in PingFang SC / Microsoft YaHei, so nothing is downloaded for it. Inter
 (OFL) is declared only as a fallback for glyphs outside Suisse's subset. Mono tags use the system's monospace.
 
 **From the VI:** one colour leads each band (Paper, Mist, Base, Ink); the 24-unit grid (1U = width / 24, 1U margins);
