@@ -1,7 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
-import { chatShareIndexReady, chatShareIndexStep, hasChatShareIndex, installChatShareIndex, SHARE_MANY } from "../store/chat-share-index.ts";
+import { chatShareIndexReady, chatShareIndexStep, hasChatShareIndex, installChatShareIndex, refreshChatShareIndex, SHARE_MANY } from "../store/chat-share-index.ts";
 import type { Store } from "../store/store.ts";
 
 /// Sharing continues to answer the old way while the preceding station is up or a worker prepares its old grants.
@@ -79,6 +79,10 @@ export class ChatShareIndexBuilder {
       worker.once("exit", (code) => {
         releaseStoppedBackfill(this.store.backfillPriority, owner);
         if (this.worker === worker) this.worker = null;
+        if (done) {
+          try { done = refreshChatShareIndex(this.store.db); }
+          catch (error) { done = false; log.warn("xshare", "the prepared share lookup could not be found", { error: (error as Error).message }); }
+        }
         if (!done && !this.stopped) log.warn("xshare", "the share worker stopped before finishing", { code });
         resolve(done);
       });

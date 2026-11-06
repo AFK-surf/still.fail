@@ -11,6 +11,7 @@ const SHARE_TARGET_LIMIT = 16;
 // Store reads are frequent; compiling the readiness and lookup statements on each one would penalize stations with
 // few shares even before an index is needed. A connection keeps only these fixed statements for its own lifetime.
 const statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+const presence = new WeakMap<DatabaseSync, boolean>();
 function statement(db: DatabaseSync, sql: string): StatementSync {
   let cached = statements.get(db);
   if (cached === undefined) { cached = new Map(); statements.set(db, cached); }
@@ -46,17 +47,29 @@ export const SHARE_NEXT_TIME = `SELECT t.used FROM chat_share_targets t INDEXED 
 export const SHARE_LAPSED_WORKSPACE = `SELECT 1 FROM chat_share_targets t INDEXED BY chat_share_target_workspace
   WHERE t.workspace = ? AND t.used <= ? AND ${CLEAN} LIMIT 1`;
 
-export const hasChatShareIndex = (db: DatabaseSync) => statement(db, EXISTS).get() !== undefined;
+export function hasChatShareIndex(db: DatabaseSync): boolean {
+  const known = presence.get(db);
+  if (known !== undefined) return known;
+  const found = statement(db, EXISTS).get() !== undefined;
+  presence.set(db, found);
+  return found;
+}
+
+/// The worker installs the schema on another connection; refresh the cached absence once it has finished.
+export function refreshChatShareIndex(db: DatabaseSync): boolean {
+  presence.delete(db);
+  return hasChatShareIndex(db);
+}
 
 export function installChatShareIndex(db: DatabaseSync): void {
-  if (hasChatShareIndex(db)) {
+  if (refreshChatShareIndex(db)) {
     const meta = db.prepare("SELECT version FROM chat_share_index_meta WHERE id = 1").get() as { version: number } | undefined;
     if (meta?.version !== VERSION) throw new Error(`chat share index version ${meta?.version ?? "missing"} is incompatible with ${VERSION}`);
     return;
   }
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!hasChatShareIndex(db)) db.exec(`
+    if (!refreshChatShareIndex(db)) db.exec(`
       CREATE TABLE chat_share_index_meta (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL,
         phase INTEGER NOT NULL, cursor TEXT, end_session TEXT) WITHOUT ROWID;
       INSERT INTO chat_share_index_meta VALUES (1, ${VERSION}, 0, NULL,
@@ -78,6 +91,7 @@ export function installChatShareIndex(db: DatabaseSync): void {
       if (meta?.version !== VERSION) throw new Error(`chat share index version ${meta?.version ?? "missing"} is incompatible with ${VERSION}`);
     }
     db.exec("COMMIT");
+    presence.set(db, true);
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
 

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { chatShareIndexReady, chatShareIndexStep, dueChatShareRows, installChatShareIndex, lapsedChatShareWorkspaces, liveChatShareRows } from "../src/store/chat-share-index.ts";
 import { XSHARE_IDLE_MS, liveShare, shareLive, toChatShare } from "../src/store/rows.ts";
 import { Store } from "../src/store/store.ts";
@@ -162,6 +163,25 @@ test("an old share store is prepared on a worker after the previous station leav
     assert.equal(store.chatShares().size, 41);
     assert.equal(store.chatShares().has("later"), true);
   } finally { previous.resolve(); await builder.close(); old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a later share read retries a stopped preparation worker", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "share-worker-retry-")), path = join(dir, "store.db"), worker = join(dir, "worker.mjs");
+  const store = Store.open(path), builder = new ChatShareIndexBuilder(store, Promise.resolve(), pathToFileURL(worker));
+  try {
+    const put = store.db.prepare(add), now = store.now();
+    for (let i = 0; i < 40; i++) put.run(`share-${i}`, share({ workspace: "one", used: now }), now);
+    writeFileSync(worker, "process.exit(1);\n");
+    builder.request();
+    await builder.settled();
+    assert.equal(chatShareIndexReady(store.db), false);
+    const actual = new URL("../src/sessions/workspace-activity-worker.ts", import.meta.url).href;
+    writeFileSync(worker, `import ${JSON.stringify(actual)};\n`);
+    builder.request();
+    await builder.settled();
+    assert.equal(chatShareIndexReady(store.db), true);
+    assert.equal(store.chatShares().size, 40);
+  } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a failed share batch rolls its index entries and cursor back together", () => {
