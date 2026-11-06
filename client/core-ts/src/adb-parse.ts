@@ -20,6 +20,14 @@ export type AdbCall =
   | { kind: "revoke"; station: string; request: string }
   /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
   | { kind: "lasts"; lasts: "hour" | "chat" }
+  /// The person's own lock (docs/personal-lock.md): this device asks to join it, types the code shown on one on it, stops
+  /// asking; a device taken off; the lock pinned here left, and one begun anew.
+  | { kind: "personalJoin" }
+  | { kind: "personalCode"; code: string }
+  | { kind: "personalCancel" }
+  | { kind: "personalRemove"; key: string }
+  | { kind: "personalForget" }
+  | { kind: "personalRestart" }
   /// This phone's 共享调试 switch: off, lent to no chat; on, until turned off (kept on the device).
   | { kind: "on"; on: boolean };
 
@@ -60,6 +68,18 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
       return { kind: "on", on };
     }
+    case "adb.personalJoin":
+      return { kind: "personalJoin" };
+    case "adb.personalCode":
+      return { kind: "personalCode", code: text("code") };
+    case "adb.personalCancel":
+      return { kind: "personalCancel" };
+    case "adb.personalRemove":
+      return { kind: "personalRemove", key: text("key") };
+    case "adb.personalForget":
+      return { kind: "personalForget" };
+    case "adb.personalRestart":
+      return { kind: "personalRestart" };
     case "adb.ports":
       return { kind: "ports", ports: { connect: port("connect"), pair: port("pair"), device: text("device"), android: text("android"), package: text("package") } };
     case "adb.decide":

@@ -35,6 +35,8 @@ import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
 import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
 import { Lines } from "../mesh.ts";
+import { type Entry } from "../lock.ts";
+import { isPerson, personOf } from "../personal-lock.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../pair.ts";
 import * as format from "../format.ts";
 import * as prefs from "../prefs.ts";
@@ -102,7 +104,8 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 
 /// A new device showing this one's code: who, where it asks, the code, how to turn it away.
 /// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
-type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
+/// `personal`: it asks into this person's own lock, not a workspace (docs/personal-lock.md); `places` is empty then.
+type Asking = { personal?: { sub: string; key: string }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -136,6 +139,16 @@ export function served(inner: Inner, connection: IrohConnection): void {
 }
 
 /// The workspaces of `hello` this device approves the new one (`peer`) in, as it sees itself (`me`, its base key).
+/// Who asks to join which of this device's people's own locks, where this device can let them in.
+function personalAsked(inner: Inner, hello: J): { key: string; who: { sub: string; email: string; name: string } } | null {
+  const asked = get(hello, "personal");
+  const sub = str(get(asked, "sub"));
+  const key = str(get(asked, "key"));
+  if (sub === null || key === null || !key.startsWith("ed25519:") || !inner.host.appKeys || inner.adb.personal().standing(sub) !== "member") return null;
+  const account = inner.accounts.list().find((a) => a.sub === sub);
+  return account === undefined ? null : { key, who: { sub, email: account.email, name: account.name ?? "" } };
+}
+
 function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: Asking["places"]; who: { sub: string; email: string; name: string } | null } {
   const signer = signerOf(inner);
   const now = Math.floor(inner.host.nowMs() / 1000);
@@ -179,8 +192,12 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
   return Effect.gen(function* () {
     const hello = yield* Effect.timeoutOption(d.next(), "30 seconds");
     if (hello._tag === "None" || !isObject(hello.value) || hello.value.t !== "hello") return;
-    const { places, who } = placesFor(inner, hello.value, peer, me);
-    if (places.length === 0 || who === null) return yield* d.send({ t: "no", error: "not_here" });
+    const asked = placesFor(inner, hello.value, peer, me);
+    const { places } = asked;
+    // Into the person's own lock, where this device is on it (it signs it in with its own key, the person asked).
+    const personal = places.length === 0 ? personalAsked(inner, hello.value) : null;
+    const who = personal !== null ? personal.who : asked.who;
+    if ((places.length === 0 && personal === null) || who === null) return yield* d.send({ t: "no", error: "not_here" });
     const all = askingsOf(inner);
     const before = all.get(peer);
     if (before) Deferred.doneUnsafe(before.away, Effect.void);
@@ -189,13 +206,15 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
       device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
       at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
+      ...(personal !== null ? { personal: { sub: who.sub, key: personal.key } } : {}),
     };
     all.set(peer, asking);
     told(inner);
-    const session = pairSession(peer, me, places.map((p) => p.ws));
+    const where = personal !== null ? [personOf(who.sub)] : places.map((p) => p.ws);
+    const session = pairSession(peer, me, where);
     yield* Effect.ensuring(
       Effect.gen(function* () {
-        yield* d.send({ t: "code", workspaces: places.map((p) => p.ws) });
+        yield* d.send({ t: "code", workspaces: where });
         let tries = 0;
         let expect: Uint8Array | null = null;
         const wrong = Effect.suspend(() => (tries >= PAIR_TRIES ? d.send({ t: "no", error: "tries" }) : d.send({ t: "wrong", left: PAIR_TRIES - tries })));
@@ -238,6 +257,13 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
 /// WEB_DEVICE_SECS.
 function approve(inner: Inner, a: Asking): Effect.Effect<J> {
   return Effect.gen(function* () {
+    if (a.personal) {
+      const { sub, key } = a.personal;
+      const added = yield* Effect.result(inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label }, t("core-misc.personal.reason.add")));
+      return added._tag === "Success"
+        ? { t: "approved", workspaces: [personOf(sub)], failed: [], chain: added.success }
+        : { t: "approved", workspaces: [], failed: [{ ws: personOf(sub), error: added.failure.message }] };
+    }
     const done: string[] = [];
     const failed: { ws: string; error: string }[] = [];
     for (const p of a.places) {
@@ -320,7 +346,7 @@ function mine(inner: Inner, ws: string): J | null {
   };
 }
 
-const changed = (inner: Inner, y: Trying) => inner.store.invalidateAll((t) => (t.topic === "lock" && y.workspaces.includes(String(t.workspace))) || t.topic === "lockPrompts");
+const changed = (inner: Inner, y: Trying) => inner.store.invalidateAll((t) => t.topic === "adbShare" || (t.topic === "lock" && y.workspaces.includes(String(t.workspace))) || t.topic === "lockPrompts");
 
 function drop(y: Trying): void {
   for (const m of y.met.values()) m.d.close();
@@ -546,7 +572,7 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     if (approved === null && ends.length > 0) {
       const now = Math.floor(inner.host.nowMs() / 1000);
       const inNow: string[] = [];
-      for (const ws of y.workspaces) {
+      for (const ws of y.workspaces.filter((w) => !isPerson(w))) {
         yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
         if (live(fold(held(inner, ws)?.entries ?? []).devices.get(base), now) !== undefined) inNow.push(ws);
       }
@@ -556,7 +582,8 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
       drop(y);
       y.state = "done";
       y.approvedIn = arr(get(approved, "workspaces")).filter((w): w is string => typeof w === "string");
-      for (const ws of y.approvedIn) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      for (const place of y.approvedIn.filter(isPerson)) yield* inner.adb.personal().joined(place.slice("person:".length), arr(get(approved, "chain")) as Entry[]);
+      for (const ws of y.approvedIn.filter((w) => !isPerson(w))) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
     } else if (y.met.size > 0) {
       y.state = "wrong";
       y.left = left;
@@ -620,6 +647,33 @@ export function tryOne(inner: Inner, m: Met, base: string, code: string): Effect
     return yield* Effect.fail(ended(w));
   });
 }
+
+/// `adb.personalJoin`: this device asks the devices on its person's own lock to show a code.
+export function personalBegin(inner: Inner, sub: string): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    const personal = inner.adb.personal();
+    const key = yield* personal.makeKey(t("core-misc.personal.reason.join"));
+    const before = tryings.get(inner);
+    if (before) drop(before);
+    const y = trying(inner, [personOf(sub)]);
+    const trusted = personal.approvers(sub).map((d) => d.id);
+    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: null, personal: { sub, key } };
+    inner.runner.fork(
+      Effect.gen(function* () {
+        yield* Effect.forEach(trusted, (id) => seek(inner, y, id, inner.cloudSync.relays ?? [], hello), { concurrency: "unbounded", discard: true });
+        if (tryings.get(inner) !== y || y.state !== "finding") return;
+        y.state = y.met.size > 0 ? "code" : "none";
+        changed(inner, y);
+      }),
+    );
+    return null;
+  });
+}
+
+export const personalProve = (inner: Inner, typed: string): Effect.Effect<unknown, CoreError> => prove(inner, typed);
+export const personalCancel = (inner: Inner): void => cancel(inner);
+/// How far this device's try to join the person's own lock got (`adbShare`'s `personal.pair`).
+export const personalPairState = (inner: Inner, sub: string): J => mine(inner, personOf(sub));
 
 function cancel(inner: Inner): void {
   const y = tryings.get(inner);

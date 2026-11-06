@@ -270,6 +270,75 @@ fn adb_do(core : Core, what : String, station? : String = "") -> Unit {
 }
 
 ///|
+/// The person's own lock as this device has it: the devices on it, or how this one joins it. What joins is proved by the
+/// code another device on it shows.
+fn adb_personal(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
+  let doing = is_doing(core, ["adb.personalJoin", "adb.personalCode", "adb.personalRemove", "adb.personalForget", "adb.personalRestart"], [])
+  let say_row = fn(title : String, note : String) {
+    list_row(c, fn() { c.box(style=fill_words, fn() { row_lines(c, title, note, wrap_sub=true) }) |> ignore }) |> ignore
+  }
+  let ask_restart = fn() {
+    if @sf.link_row(c, "adb-personal-restart", tr("android-misc.adb.personal.restart"), note=tr("android-misc.adb.personal.restart.note"), lacks=false) && !doing {
+      act(core, tr("android-misc.adb.personal.restart"), "adb.personalRestart", obj([]))
+    }
+  }
+  list_card(c, fn() {
+    match text(view, "standing") {
+      "member" =>
+        for d in items(view, "devices") {
+          let d = Some(d)
+          let key = text(d, "key")
+          let me = flag(d, "me")
+          let name = text(d, "label")
+          list_row(c, key="adb-personal/" + key, fn() {
+            c.box(style=fill_words, fn() {
+              row_lines(c, if name == "" { tr("android-misc.adb.personal.me") } else { name }, if me { tr("android-misc.adb.personal.me") } else { "" }, wrap_sub=true)
+            })
+            |> ignore
+            if !me && @sf.button(c, tr("android-misc.adb.personal.remove"), key="adb-personal-remove/" + key, tone=Ghost, busy=doing, disabled=doing) {
+              act(core, tr("android-misc.adb.personal.remove"), "adb.personalRemove", obj([("key", str(key))]))
+            }
+          })
+          |> ignore
+        }
+      "outside" => {
+        let pair = field(view, "pair")
+        let state = text(pair, "state")
+        match state {
+          "finding" | "checking" => say_row(tr("android-misc.adb.personal.outside"), tr("android-misc.adb.personal.finding"))
+          "code" | "wrong" => {
+            say_row(tr("android-misc.adb.personal.outside"), if state == "wrong" { text(pair, "error") } else { tr("android-misc.adb.personal.code") })
+            if @sf.link_row(c, "adb-personal-code", tr("android-misc.adb.personal.code"), note=text(pair, "untilText"), lacks=true) {
+              ask(tr("android-misc.adb.personal.code"), "", "000000", tr("android-misc.adb.personal.join"), fn(code) {
+                act(core, tr("android-misc.adb.personal.code"), "adb.personalCode", obj([("code", str(code))]))
+              })
+            }
+          }
+          _ => {
+            let note = match state {
+              "none" => tr("android-misc.adb.personal.none.found")
+              "failed" => text(pair, "error")
+              _ => tr("android-misc.adb.personal.outside.note")
+            }
+            if @sf.link_row(c, "adb-personal-join", tr("android-misc.adb.personal.join"), note~, lacks=true) && !doing {
+              act(core, tr("android-misc.adb.personal.join"), "adb.personalJoin", obj([]))
+            }
+            ask_restart()
+          }
+        }
+      }
+      "replaced" => {
+        say_row(tr("android-misc.adb.personal.replaced"), tr("android-misc.adb.personal.replaced.note"))
+        if @sf.link_row(c, "adb-personal-forget", tr("android-misc.adb.personal.forget"), lacks=false) && !doing {
+          act(core, tr("android-misc.adb.personal.forget"), "adb.personalForget", obj([]))
+        }
+      }
+      _ => say_row(tr("android-misc.adb.personal.heading"), tr("android-misc.adb.personal.none"))
+    }
+  })
+}
+
+///|
 /// Lent to the agents of the station at `address` (`name`, its notification's): the notifications allowed first (the
 /// pairing code is typed into one), Wireless debugging turned on by the app where it may and it is off; the lending
 /// itself the host's (adb.start: the core's, as it has it).
@@ -796,6 +865,11 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         })
       }
     }
+    // the person's own lock: who may allow a chat this phone (docs/personal-lock.md)
+    keys.push("personal-heading")
+    blocks.push(fn() { section_header(c, tr("android-misc.adb.personal.heading"), start=S6) })
+    keys.push("personal")
+    blocks.push(fn() { adb_personal(c, core, field(view, "personal")) })
     // the chats it is lent to now, each taken back here
     keys.push("live-heading")
     blocks.push(fn() { section_header(c, tr("android-misc.adb.chats.live"), start=S6) })
@@ -815,7 +889,14 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           let session = text(g, "session")
           let title = text(g, "chatTitle")
           let ago = stamp(g, "lastUsedAt", "ago")
-          let when = if ago == "" { tr("android-misc.adb.chats.noUsage") } else { ago }
+          // (on the phone itself: granted, and not signed by a device on the person's own lock: it lends nothing on it)
+          let when = if flag(phone, "supported") && field(g, "held") == Some(Json::boolean(false)) {
+            tr("android-misc.adb.personal.unsigned")
+          } else if ago == "" {
+            tr("android-misc.adb.chats.noUsage")
+          } else {
+            ago
+          }
           let busy = is_doing(core, ["adb.revoke"], [("request", request)])
           if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, value=when, note=text(g, "reason"), note_cut=true, face=true, goes=station != "" && session != "", control=fn() {
               if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {

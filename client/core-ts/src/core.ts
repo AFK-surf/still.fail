@@ -60,6 +60,8 @@ import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
+import { PersonalLock } from "./personal-lock.ts";
+import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
 import * as memberships from "./views/memberships.ts";
@@ -289,6 +291,22 @@ export class Core {
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
         off: (workspace) => inner.cloudSync.workspaceOff(workspace),
         lends: () => inner.host.tcp !== undefined && (inner.data.shared({ topic: "prefs" }) as { device?: { app?: unknown } } | undefined)?.device?.app === "android",
+        personal: new PersonalLock({
+          host: inner.host,
+          runner: inner.runner,
+          cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
+          device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
+          label: () => prefs.deviceName(inner.data) ?? "",
+          changed: () => inner.store.invalidate({ topic: "adbShare" }),
+        }),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        sub: () => inner.accounts.list()[0]?.sub ?? null,
+        pair: {
+          begin: (sub) => personalBegin(inner, sub),
+          code: (typed) => personalProve(inner, typed),
+          cancel: () => personalCancel(inner),
+          state: (sub) => personalPairState(inner, sub),
+        },
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
       // This person's chats' grants of their phone, as each station says them (docs/adb-share.md).
@@ -363,12 +381,14 @@ export class Core {
         );
       };
       inner.shownAccounts = inner.accounts.list();
+      inner.adb.accountsKnown();
       inner.tracer.setExport((body) => {
         const account = inner.accounts.list()[0];
         return account ? Effect.ignore(inner.provider.traces(account.sub, body)) : Effect.void;
       });
       // An account signed in has its database opened; one signed out, removed (before what it reached is let go).
       inner.accounts.onChange(() => {
+        inner.adb.accountsKnown();
         inner.runner.fork(Effect.andThen(inner.data.accounts(inner.accounts.list().map((a) => a.sub)), Effect.sync(() => inner.cloudSync.accountsChanged())));
       });
       // From now on the core keeps what it holds current, whatever the UI shows.
