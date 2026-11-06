@@ -119,6 +119,7 @@ export const NOTES: [number, string][] = [
   [112, "The Antigravity CLI (agy) also runs on a Google account signed in to (its plan: Google AI Pro / Ultra), each profile its own sign-in."],
   [113, "Station notices now arrive as via=\"station\" from=\"station\" (before: ember), and new still.fail chats have addresses CHAT/… and session keys chat:c-…; chats made before keep EMBER/… and chat:c-…, and both work everywhere."],
   [114, "The old names from before the rename are gone: `ember-job` (use `stillfail-job`), the EMBER_* variables (STILLFAIL_* only), and in inline HTML a widget's API is `window.openai` and its theme event `viz:theme` (window.ember and ember-viz:theme still work in widgets made before)."],
+  [115, "If station_task prepare fails or is interrupted, start refuses that key until a prepare succeeds: retry the intended prepare, or use a new key for different work. A failed re-prepare cannot silently start the previous command."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

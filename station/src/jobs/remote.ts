@@ -970,7 +970,13 @@ export class Remote {
         continue;
       }
       await mkdir(this.preparedDir(session), { recursive: true }).catch(() => undefined);
-      await rename(file, join(this.preparedDir(session), name)).catch(() => undefined);
+      // A newer prepare may have written there since this old record was read. Never replace it with the old one.
+      try {
+        await link(file, join(this.preparedDir(session), name));
+        await rm(file, { force: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") await rm(file, { force: true }).catch(() => undefined);
+      }
     }
   }
 
@@ -2099,6 +2105,11 @@ export class Remote {
       const preparedName = `${hash([workspace, session, station, key])}.json`;
       const prepared = join(this.preparedDir(session), preparedName);
       if (action === "prepare") {
+        // Fence off any earlier spec before validation or a network request. If this attempt fails or the station
+        // restarts, start must not quietly use the task the target kept from an earlier successful prepare.
+        mkdirSync(this.preparedDir(session), { recursive: true });
+        const attempt = randomBytes(16).toString("hex");
+        writeJson(prepared, { workspace, session, station, key, preparing: attempt });
         const dir = field(args, "dir");
         const back = field(args, "back");
         const small = field(args, "small") === true;
@@ -2128,10 +2139,9 @@ export class Remote {
           request.spec.back = back;
         }
         const answer = await this.ask(station, request);
-        if (dir !== null || back !== null) {
-          mkdirSync(this.preparedDir(session), { recursive: true });
-          writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
-        }
+        // A concurrent prepare may have begun while this one was away. Its result alone can release its fence.
+        if (text(readJson(prepared), "preparing") !== attempt) throw new Error("a newer prepare superseded this one; prepare again before starting");
+        writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
         return answer;
       }
       let synced: Synced | null = null;
@@ -2144,6 +2154,7 @@ export class Remote {
           // Not moved into its session's directory yet (movePrepared), or moved meanwhile.
           local = await readJsonSoon(join(this.root, "prepared", preparedName)).catch(() => readJsonSoon(prepared)).catch(() => null);
         }
+        if (typeof local?.preparing === "string") throw new Error("the last prepare failed or is still in progress; prepare again before starting this key");
         if (typeof local?.dir === "string") {
           const dir: string = local.dir;
           const id = hash([workspace, session, station, dir]);
@@ -2172,6 +2183,9 @@ export class Remote {
             throw new Error(`${local.dir} was not synced to ${station}, so nothing was started: ${message}`);
           }
         }
+        // A re-prepare may have failed while the directory sync was in flight.
+        const latest = await readJsonSoon(prepared).catch(() => null);
+        if (typeof latest?.preparing === "string") throw new Error("the last prepare failed or is still in progress; prepare again before starting this key");
         // Persist before sending: an uncertain start is still followed after a process restart.
         const path = this.outgoing(workspace, session, station, key);
         let refused = false;

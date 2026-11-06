@@ -632,6 +632,53 @@ describe("remote", { concurrency: true }, () => {
     return { a, b, home, clock, use, asked, back };
   }
 
+  test("a failed re-prepare cannot start the command from the previous prepare", async () => {
+    const { b, use } = pair();
+    const task = { station: "B", key: "same" };
+    const original = { ...task, action: "prepare", command: "echo original > output" };
+    await use("station_task", original);
+    await assert.rejects(use("station_task", { ...original, command: "echo replacement > output" }), /different inputs/);
+    await assert.rejects(use("station_task", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.deepEqual((await use("station_task", { ...task, action: "get" })).job, null, "the old command was not started");
+
+    // An explicit, successful re-prepare makes the intended command usable again, including start retries.
+    await use("station_task", original);
+    const started = (await use("station_task", { ...task, action: "start" })).job;
+    await until("the intended command ends", () => b.store.getJob(started.id)!.state !== "running");
+    assert.equal(readFileSync(join(started.cwd, "output"), "utf8"), "original\n");
+    assert.equal((await use("station_task", { ...task, action: "start" })).job.id, started.id);
+  });
+
+  test("a locally rejected re-prepare also prevents the old command from starting", async () => {
+    const { use } = pair();
+    const task = { station: "B", key: "same-local" };
+    await use("station_task", { ...task, action: "prepare", command: "true" });
+    await assert.rejects(use("station_task", { ...task, action: "prepare", command: "true", dir: "relative" }), /absolute path/);
+    await assert.rejects(use("station_task", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.deepEqual((await use("station_task", { ...task, action: "get" })).job, null);
+  });
+
+  test("a failed prepare stays fenced after migration of an older record and a restart", async () => {
+    const { a, b, clock, use } = pair();
+    const task = { station: "B", key: "restart" };
+    await use("station_task", { ...task, action: "prepare", command: "true" });
+    await assert.rejects(use("station_task", { ...task, action: "prepare", command: "different" }), /different inputs/);
+    // A pre-migration record found after the failure must not replace the newer fence.
+    const name = `${hash(["ws", "s1", "B", "restart"])}.json`;
+    writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
+    await a.remote["movePrepared"]();
+    await a.remote.close();
+    const next = station({ dir: a.dir, store: a.store, jobs: a.jobs, clock });
+    next.remote.attach(async (target, workspace, request) => {
+      if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
+      const answer = await answerPeer(b.remote, workspace ?? "ws", "A", overWire(request));
+      if ("error" in answer) throw new Refused(answer.error);
+      return answer.result;
+    });
+    await assert.rejects(next.remote.tool("station_task", "s1", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.equal((await next.remote.tool("station_task", "s1", { ...task, action: "get" })).job, null);
+  });
+
   test("a small offscreen task reaches the target's small slot", async () => {
     const { b, use, asked } = pair();
     await use("station_task", { station: "B", key: "build", action: "prepare", command: FOREVER });
