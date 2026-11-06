@@ -26,7 +26,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
-import type { AgentDriver, AgentSession, RuntimeKind } from "../agents/runtime.ts";
+import { RUNTIME_KINDS, type AgentDriver, type AgentSession, type RuntimeKind } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
 import { allLeft, liveRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
@@ -53,6 +53,10 @@ import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { untitledChat } from "./titles.ts";
 import { shownFacts } from "./image-size.ts";
+import { sandboxIndexEnabled } from "../store/sandbox-index.ts";
+import { SandboxNameBuilder } from "./sandbox-name-builder.ts";
+import { SessionDirectoryBuilder } from "./session-directory-builder.ts";
+import { ProcessJobsBuilder } from "../jobs/process-jobs-builder.ts";
 
 type Json = any;
 
@@ -126,6 +130,8 @@ export type HubOptions = {
   machineRoots?: () => Roots;
   /// Detached cleanup begun by the hub, for an owner of its environment to await before removing that environment.
   background?: (work: Promise<void>) => void;
+  /// The previous station has released its foreground writes.
+  previous?: Promise<void>;
 };
 
 /// The handover file, in the data directory.
@@ -180,6 +186,9 @@ export class Hub {
   /// The sessions whose latest conversation must be ready before an asynchronous operation can continue.
   prepareLatestThreads: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
+  private sandboxNames: SandboxNameBuilder | null = null;
+  private sessionDirectories: SessionDirectoryBuilder | null = null;
+  private processJobs: ProcessJobsBuilder | null = null;
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
   /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
@@ -430,7 +439,12 @@ export class Hub {
     // A shared Codex host can only have a session to recover when that session was marked running. Without a
     // session-owned runner there is no reason to load the station's idle and archived sessions.
     const ownRunners = [...runners].some((id) => !id.startsWith("codex-"));
-    const candidates = ownRunners ? this.store.listSessions() : this.store.runningSessions();
+    const parts = [...runners].flatMap((id) => {
+      const kind = RUNTIME_KINDS.find((k) => k !== "codex" && id.startsWith(`${k}-`));
+      return kind === undefined ? [] : [id.slice(kind.length + 1)];
+    });
+    const found = ownRunners ? this.sandboxNameLookup().takeUp(parts) : null;
+    const candidates = !ownRunners ? this.store.runningSessions() : found === "fallback" ? this.store.listSessions() : found!;
     for (const row of candidates) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
@@ -800,15 +814,49 @@ export class Hub {
     if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
   }
 
+  /// The same session-name lookup serves idle sandboxes and runners, whose ids use the same session-key part.
+  private sandboxNameLookup(): SandboxNameBuilder {
+    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
+      () => sandboxIdleMs(this.config().dataDir) !== null);
+  }
+
+  runnerNameSessions(runners: readonly { id: string; part: string }[]): Map<string, string> | "fallback" {
+    return runners.length === 0 && this.sandboxNames === null ? new Map() : this.sandboxNameLookup().runners(runners);
+  }
+
+  sessionInDirectory(dir: string) {
+    return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).find(dir);
+  }
+
+  sessionsInArguments(lines: readonly string[], home: string) {
+    return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).findArguments(lines, home);
+  }
+
+  processJobLookup(): ProcessJobsBuilder {
+    return this.processJobs ??= new ProcessJobsBuilder(this.store, this.options?.previous ?? Promise.resolve());
+  }
+
   /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
   /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
   /// station runs things in sandboxes (agents.ts).
   async sweepSandboxes() {
     const data = this.config().dataDir;
-    if (sandboxIdleMs(data) === null) return;
+    if (sandboxIdleMs(data) === null) {
+      if (sandboxIndexEnabled(this.store.db)) {
+        await this.sandboxNameLookup().disable();
+      }
+      return;
+    }
     const idle = await idleSandboxes(data);
-    if (idle.length === 0) return;
-    const sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
+    // Once the lookup exists, keep its journal caught up even when no sandbox is idle. A station that has never
+    // needed it does no preparation at all until an idle sandbox is seen.
+    if (idle.length === 0 && !sandboxIndexEnabled(this.store.db)) return;
+    const lookup = this.sandboxNameLookup();
+    let sessions = await lookup.sessions(idle);
+    // Keep the previous immediate sweep while a handover or a failed preparation keeps the lookup unavailable.
+    if (sessions === "fallback" && idle.length > 0)
+      sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
+    if (sessions === null || sessions === "fallback") return;
     for (const name of idle) {
       const key = sessions.get(name);
       if (key === undefined) continue;
@@ -996,6 +1044,9 @@ export class Hub {
     this.stopTimers();
     this.unlistenRunning();
     this.live.close();
+    await this.sandboxNames?.close();
+    await this.sessionDirectories?.close();
+    await this.processJobs?.close();
     await Promise.all([...this.actors.values()].map((a) => a.dispose()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
   }
