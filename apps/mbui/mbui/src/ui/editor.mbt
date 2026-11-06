@@ -1314,10 +1314,12 @@ fn Ctx::paint_float_caret(
   fb : FieldBox,
   alpha : Double,
 ) -> Bool {
+  // (sliding back: the clock followed till it lands, painted again each frame of its way)
   let k = if f.let_go < 0.0 {
     0.0
   } else {
-    Ease::Out.at(dmin(1.0, dmax(0.0, (self.clock - f.let_go) / float_caret_back_ms)))
+    let now = self.now_before(f.let_go + float_caret_back_ms)
+    Ease::Out.at(dmin(1.0, dmax(0.0, (now - f.let_go) / float_caret_back_ms)))
   }
   if k >= 1.0 {
     return false

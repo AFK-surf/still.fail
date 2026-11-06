@@ -309,8 +309,9 @@ priv struct Scene {
   scratch : Array[FixedArray[Double]]
   /// the parts the last frame presented was drawn again in (h_present), for a test or a bench to read
   mut told_parts : Array[(Double, Double, Double, Double)]
-  /// the moments a layer's drawing asked to be woken at, each the layer's: drawn again then
-  wakes : Array[(Double, @view.NodeId)]
+  /// the soonest moment each layer's drawing asked to be woken at, by the layer: drawn again then (asking again
+  /// what it asks as it is drawn, so its later ones needed no keeping)
+  wakes : Map[@view.NodeId, Double]
   /// a layer drawn this frame read the clock: the next frame asked for as the clock goes
   mut clock_read : Bool
   /// what an old view's paint read changed (an old view's layer's watch told): the old frame painted again
@@ -368,7 +369,7 @@ let scene : Scene = {
   alone_reach: (1.0e18, 1.0e18, -1.0e18, -1.0e18),
   scratch: [],
   told_parts: [],
-  wakes: [],
+  wakes: {},
   clock_read: false,
   old_told: false,
   cycled: [],
@@ -427,9 +428,15 @@ pub fn scene_done() -> SceneWork {
 fn scene_unrecorded(f : () -> Unit) -> Unit {
   let was = { ..scene_work }
   let moved = scene_moved_insts.val
+  // (the moments the frame's layers wait for as they were: a check's drawing asks and lets go of none of them)
+  let wakes = scene.wakes.copy()
   let parts = scene.parts.work()
   f()
   scene_moved_insts.val = moved
+  scene.wakes.clear()
+  for id, at in wakes {
+    scene.wakes[id] = at
+  }
   scene_work.layers = was.layers
   scene_work.recorded = was.recorded
   scene_work.copied = was.copied
@@ -1365,6 +1372,7 @@ fn Ctx::scene_drawn(
   l.plots.clear()
   let k0 = self.ninst
   let s0 = self.segs.length() / 4
+  scene_wakes_drop(l)
   let was = scene.drawing
   scene.drawing = Some(l)
   if watched {
@@ -1424,7 +1432,10 @@ fn Ctx::scene_replayed(
   scene_blocks_held.val = !own
   let entries = l.entries
   match l.watch {
-    Some(w) if own || each => w.read(fn() { self.tree_walk(p, l.id.at, place, depth, entries) |> ignore })
+    Some(w) if own || each => {
+      scene_wakes_drop(l)
+      w.read(fn() { self.tree_walk(p, l.id.at, place, depth, entries) |> ignore })
+    }
     Some(_) => {
       let was_sub = @signals.set_active_sub(None)
       self.tree_walk(p, l.id.at, place, depth, entries) |> ignore
@@ -1641,7 +1652,10 @@ fn scene_clock_read_now() -> Unit {
 fn scene_wake_said(t : Double) -> Bool {
   match scene.drawing {
     Some(l) if l.watch is Some(_) => {
-      scene.wakes.push((t, l.id))
+      match scene.wakes.get(l.id) {
+        Some(w) if w <= t => ()
+        _ => scene.wakes[l.id] = t
+      }
       true
     }
     _ => false
@@ -1649,30 +1663,37 @@ fn scene_wake_said(t : Double) -> Bool {
 }
 
 ///|
+/// Layer `l` drawn anew, what it draws asked again as it is drawn: the moments its drawing asked for before let go (a
+/// caret's next blink asked before it slid, none now), as a frame built whole asks only what it asks (looks_apply).
+fn scene_wakes_drop(l : SceneLayer) -> Unit {
+  scene.wakes.remove(l.id)
+}
+
+///|
 /// As a frame at `t` begins: the layers whose moments came by then drawn again; the soonest still to come woken for
 /// (`c.wake_at`) as the frame ends.
 fn Ctx::scene_wakes(self : Ctx, t : Double) -> Unit {
-  let left = []
-  for w in scene.wakes {
-    if w.0 <= t {
-      if scene.layers.contains(w.1) {
-        scene_mark(w.1)
-      }
-    } else {
-      left.push(w)
+  let come = []
+  for id, at in scene.wakes {
+    if at <= t {
+      come.push(id)
     }
   }
-  scene.wakes.clear()
-  scene.wakes.append(left)
+  for id in come {
+    scene.wakes.remove(id)
+    if scene.layers.contains(id) {
+      scene_mark(id)
+    }
+  }
   ignore(self)
 }
 
 ///|
 /// The soonest moment a layer's drawing waits for, put into what the frame wakes for (on_frame, as it ends).
 fn Ctx::scene_wake_into(self : Ctx) -> Unit {
-  for w in scene.wakes {
-    if self.wake_at <= 0.0 || w.0 < self.wake_at {
-      self.wake_at = w.0
+  for _, at in scene.wakes {
+    if self.wake_at <= 0.0 || at < self.wake_at {
+      self.wake_at = at
     }
   }
   if scene.clock_read {

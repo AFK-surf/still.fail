@@ -62,6 +62,7 @@ pub fn clipboard_set(String, label? : String) -> Unit
 
 pub fn clipboard_set_png(Bytes, label? : String) -> Unit
 
+
 pub fn code(String) -> @text.Run
 
 pub fn concentric(Double, Double) -> Double
@@ -2682,7 +2683,7 @@ pub fn Tester::finish_all(Self) -> Unit
 pub fn Tester::finished_order(Self) -> Array[(Int32, Int32)]
 pub fn Tester::focused(Self) -> SemNode?
 pub fn Tester::frame(Self, ms? : Double) -> Unit
-pub fn Tester::frame_at(Self, Double) -> Unit
+
 pub fn Tester::frame_hash(Self) -> Int64
 pub fn Tester::frame_late(Self, Double) -> Unit
 pub fn Tester::frame_perf(Self) -> FramePerf
@@ -2854,6 +2855,8 @@ pub fn Tester::site_too_slow(Self, Int32, Int32) -> Unit
 pub fn Tester::size(Self) -> (Double, Double)
 pub fn Tester::squeeze_faults(Self) -> Array[String]
 pub fn Tester::start_tape(Self) -> Unit
+pub fn Tester::stepped(Self) -> Unit
+
 pub fn Tester::stream_broken(Self, Int32) -> Unit
 pub fn Tester::stream_codec_said(Self, Int32, String) -> Unit
 pub fn Tester::stream_drops(Self, Int32, Double) -> Unit

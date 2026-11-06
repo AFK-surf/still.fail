@@ -79,9 +79,9 @@ pub fn open_screen_fixture(mode : String) -> Unit {
         u.held.mods = mod_meta
       }
     }
-    "screen-full" => u.full = true
+    "screen-full" => u.full.set(true)
     "screen-full-tools" => {
-      u.full = true
+      u.full.set(true)
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"

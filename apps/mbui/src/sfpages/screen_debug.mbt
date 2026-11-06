@@ -355,7 +355,7 @@ fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Uni
 /// The picture's own corners, square, cut off in the page's ground where what is round it leaves them showing: it lies on the
 /// system's video layer, under all this, where a box can round nothing.
 fn device_corners(c : @ui.Ctx, u : ScreenUi, shown : SRect, tl : Double, tr : Double, br : Double, bl : Double) -> Unit {
-  let ground = c.color(if u.full { Theater } else { Bg })
+  let ground = c.color(if u.full.get() { Theater } else { Bg })
   let e = corner_cut_over
   let cuts = [
     (e, e, 1.0, 1.0, tl),

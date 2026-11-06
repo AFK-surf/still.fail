@@ -102,12 +102,12 @@ test "what a row left out is said as it is built (Ctx::left_out), in the same fr
 
 ///|
 test "the boxes words show cut short in are said so (Ctx::shows_cut), and not where they show whole" {
-  let width = Ref(100.0)
+  let width = @signals.signal(100.0)
   let said : Ref[(Bool, Bool, Bool)] = Ref((false, false, false))
   let t = Tester::new(
     fn(c) {
       let (x, y, z) = (c.id("x"), c.id("y"), c.id("z"))
-      c.box(dir=Column, w=Px(width.val), fn() {
+      c.box(dir=Column, w=Px(width.get()), fn() {
         // one line, cut with an ellipsis where it has not the room
         c.box(dir=Row, id=x, taps=false, fn() {
           c.text("words longer than the row has room for", w=Cut, wrap=false) |> ignore
@@ -128,7 +128,7 @@ test "the boxes words show cut short in are said so (Ctx::shows_cut), and not wh
   t.frame()
   assert_eq(said.val, (true, false, true))
   // with the room for all of it, nothing is cut
-  width.val = 700.0
+  width.set(700.0)
   t.frame()
   t.frame()
   assert_eq(said.val, (false, false, false))
@@ -177,14 +177,14 @@ test "squeeze_faults: what a box that takes its room squeezes lies over what is 
 
 ///|
 test "squeeze_faults: words in a page drawn small in a box that clips it (a picture of itself) are not cut by it; laid as large unscaled, they are" {
-  let small = Ref(true)
+  let small = @signals.signal(true)
   let t = Tester::new(
     fn(c) {
       c.box(w=Px(60.0), h=Px(80.0), clip=true, fn() {
         let at = c.box(w=Px(300.0), left=0.0, top=0.0, taps=false, fn() {
           c.text("still.fail shared a picture", size=14.0) |> ignore
         })
-        if small.val {
+        if small.get() {
           c.look(at, look(scale=0.2, ox=0.0, oy=0.0))
         }
       })
@@ -195,7 +195,7 @@ test "squeeze_faults: words in a page drawn small in a box that clips it (a pict
   )
   t.draw()
   assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
-  small.val = false
+  small.set(false)
   t.frame()
   let faults = t.squeeze_faults()
   assert_eq(faults.length(), 1, msg=faults.join("\n"))
@@ -204,9 +204,9 @@ test "squeeze_faults: words in a page drawn small in a box that clips it (a pict
 
 ///|
 test "squeeze_faults: words wrapped narrower than a word of them (broken inside it) are squeezed; wrapped between words they are not" {
-  let narrow = Ref(30.0)
+  let narrow = @signals.signal(30.0)
   let t = Tester::new(
-    fn(c) { c.box(w=Px(narrow.val), fn() { c.text("Studio settings", size=14.0) |> ignore }) |> ignore },
+    fn(c) { c.box(w=Px(narrow.get()), fn() { c.text("Studio settings", size=14.0) |> ignore }) |> ignore },
     w=400.0,
     h=200.0,
   )
@@ -214,7 +214,7 @@ test "squeeze_faults: words wrapped narrower than a word of them (broken inside 
   let faults = t.squeeze_faults()
   assert_eq(faults.length(), 1, msg=faults.join("\n"))
   assert_true(faults[0].contains("wrapped"), msg=faults[0])
-  narrow.val = 80.0
+  narrow.set(80.0)
   t.frame()
   assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
 }
@@ -222,13 +222,13 @@ test "squeeze_faults: words wrapped narrower than a word of them (broken inside 
 ///|
 test "beside_faults: words that go on in lines beside words that give way too, whatever their lengths; not beside what keeps" {
   // (a station's name, then what its machine is: usa-dk broken onto two lines beside a CPU's long name, 2026-11-02)
-  let after = Ref("· Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz")
-  let name_wraps = Ref(true)
+  let after = @signals.signal("· Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz")
+  let name_wraps = @signals.signal(true)
   let t = Tester::new(
     fn(c) {
       c.box(dir=Row, w=Px(200.0), clip=true, fn() {
-        c.text("usa-dk", size=14.0, wrap=name_wraps.val) |> ignore
-        c.text(after.val, size=14.0, wrap=false, w=Cut) |> ignore
+        c.text("usa-dk", size=14.0, wrap=name_wraps.get()) |> ignore
+        c.text(after.get(), size=14.0, wrap=false, w=Cut) |> ignore
       })
       |> ignore
     },
@@ -240,12 +240,12 @@ test "beside_faults: words that go on in lines beside words that give way too, w
   assert_eq(faults.length(), 1, msg=faults.join("\n"))
   assert_true(faults[0].contains("may go on in lines"), msg=faults[0])
   // (short words after it, nothing broken yet: the same row, the same fault)
-  after.val = "· i5"
+  after.set("· i5")
   t.frame()
   assert_eq(t.beside_faults().length(), 1, msg=t.beside_faults().join("\n"))
   // (the name kept on one line: what is after it gives, the name whole)
-  name_wraps.val = false
-  after.val = "· Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz"
+  name_wraps.set(false)
+  after.set("· Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz")
   t.frame()
   assert_true(t.beside_faults().is_empty(), msg=t.beside_faults().join("\n"))
 }
@@ -543,10 +543,10 @@ fn shown_len(tl : TextLayout?) -> Int {
 test "words on one line said a shorter way: the longest that fits whole, in a row needing no more than the shortest" {
   let long = "the longest way of saying it"
   let shorter = ["a shorter way", "short way"]
-  let width = Ref(400.0)
+  let width = @signals.signal(400.0)
   let t = Tester::new(
     fn(c) {
-      c.box(dir=Row, w=Px(width.val), h=Px(20.0), fn() {
+      c.box(dir=Row, w=Px(width.get()), h=Px(20.0), fn() {
         c.text(long, size=10.0, wrap=false, shorter~) |> ignore
         c.box(w=Px(40.0), h=Px(20.0), fn() {  }) |> ignore
       })
@@ -559,17 +559,17 @@ test "words on one line said a shorter way: the longest that fits whole, in a ro
   let n = laid_words(long)
   assert_eq(shown_len(n.tl), long.length())
   // (less room than all of them take: the longest shorter way that fits there, whole)
-  width.val = 40.0 + n.worded(shorter[0]).w + 1.0
+  width.set(40.0 + n.worded(shorter[0]).w + 1.0)
   t.frame()
   assert_eq(shown_len(laid_words(long).tl), shorter[0].length())
-  width.val = 40.0 + n.worded(shorter[1]).w + 1.0
+  width.set(40.0 + n.worded(shorter[1]).w + 1.0)
   t.frame()
   assert_eq(shown_len(laid_words(long).tl), shorter[1].length())
   assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
   // (what they need at least, the box beside them squeezed by nothing: the shortest whole)
   assert_eq(laid_words(long).least, n.worded(shorter[1]).w)
   // (less room than the shortest takes: that cut with an ellipsis, as a last resort)
-  width.val = 40.0 + n.worded(shorter[1]).w - 8.0
+  width.set(40.0 + n.worded(shorter[1]).w - 8.0)
   t.frame()
   let cut = laid_words(long).tl.unwrap()
   assert_true(cut.w <= laid_words(long).fw + 0.5)
@@ -596,11 +596,11 @@ fn hint_now() -> TextLayout {
 test "a field's placeholder is said the longest way that fits it, whole, the shortest cut where none does; never cut by its edge" {
   let long = "the longest way of saying it"
   let shorter = ["a shorter way", "short way"]
-  let width = Ref(400.0)
+  let width = @signals.signal(400.0)
   let wide = fn(s : String) { layout_text(s, 10.0, 400, 1.0e9, false).w }
   let t = Tester::new(
     fn(c) {
-      c.box(w=Px(width.val), h=Px(20.0), fn() {
+      c.box(w=Px(width.get()), h=Px(20.0), fn() {
         c.editor("field", placeholder=long, shorter~, font_size=10.0, max_lines=1, plain=true) |> ignore
       })
       |> ignore
@@ -610,19 +610,19 @@ test "a field's placeholder is said the longest way that fits it, whole, the sho
   )
   t.draw()
   assert_eq(hint_now().shaped.len, long.length())
-  width.val = wide(shorter[0]) + 1.0
+  width.set(wide(shorter[0]) + 1.0)
   t.frame()
   assert_eq(hint_now().shaped.len, shorter[0].length())
   assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
   // (less room than its shortest way: that cut with an ellipsis in the field, as words on one line are)
-  width.val = wide(shorter[1]) - 1.0
+  width.set(wide(shorter[1]) - 1.0)
   t.frame()
   let cut = hint_now()
-  assert_true(cut.w <= width.val + 0.5, msg="\{cut.w} in \{width.val}")
+  assert_true(cut.w <= width.get() + 0.5, msg="\{cut.w} in \{width.get()}")
   assert_eq(cut.shaped.cu[cut.shaped.cu.length() - 1], '…'.to_int())
   assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
   // (cut down to nothing: squeezed)
-  width.val = wide("…") + 1.0
+  width.set(wide("…") + 1.0)
   t.frame()
   let faults = t.squeeze_faults()
   assert_eq(faults.length(), 1, msg=faults.join("\n"))

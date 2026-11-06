@@ -31,6 +31,8 @@ test "checkbox: a click checks it; Space with the focus unchecks it; neither (mi
   t.key(@ui.key_space)
   assert_eq(v.val, @ui.Check::Off)
   v.val = @ui.Check::Mixed
+  // (what the test holds set from outside, as an app's logic would: no signal, said so)
+  t.stepped()
   t.frame()
   t.click(@ui.Role::Checkbox, label="Terms")
   assert_eq(v.val, @ui.Check::On)

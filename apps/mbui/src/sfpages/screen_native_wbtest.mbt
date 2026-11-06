@@ -23,7 +23,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   }
   @sf.native_over_clear()
   r.t.run_for(@ui.move_most_ms)
-  assert_true(r.ui().full)
+  assert_true(r.ui().full.get())
   assert_true(@sf.native_over.up)
   assert_eq(@sf.native_over.title, "")
   assert_eq(@sf.native_over.acts.length(), 0)
@@ -46,7 +46,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   r.tap_label(tr("android-misc.screen.unfull"))
   @sf.native_over_clear()
   r.t.run_for(@ui.move_most_ms)
-  assert_false(r.ui().full)
+  assert_false(r.ui().full.get())
   assert_true(@sf.native_over.acts.iter().any(fn(a) { a.0 == "lead/over/screen-close" }))
 }
 

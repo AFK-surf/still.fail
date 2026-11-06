@@ -292,7 +292,7 @@ test "interrupting the fiber that awaits an animation stops it where it is" {
 
 ///|
 test "presence: enter as it comes; hidden, its exit runs in its scope's finalizer while it is still drawn, then it is gone" {
-  let shown = Ref(false)
+  let shown = @signals.signal(false)
   let built : Array[Bool] = []
   let alpha = Ref(@motion.Value::new(0.0))
   let t = @ui.Tester::new(fn(c) {
@@ -301,7 +301,7 @@ test "presence: enter as it comes; hidden, its exit runs in its scope's finalize
     let b = @motion.animate_presence(
       c,
       "sheet",
-      shown.val,
+      shown.get(),
       enter=async fn() { ignore(o.animate(1.0, @motion.tween_to(duration=64.0, ease=@motion.linear))) },
       exit=async fn() { ignore(o.animate(0.0, @motion.tween_to(duration=64.0, ease=@motion.linear))) },
       fn() { c.text("sheet") |> ignore },
@@ -309,14 +309,14 @@ test "presence: enter as it comes; hidden, its exit runs in its scope's finalize
     built.push(b)
   })
   assert_eq(t.find("sheet"), None)
-  shown.val = true
-  // a change made outside the view asks for no frame by itself: the frames it causes drawn (the enter forked, then
-  // run), then the enter to its own end
+  shown.set(true)
+  // what the view reads changed: the frames it causes drawn (the enter forked, then run), then the enter to its own
+  // end
   t.draw()
   t.run_for(alpha.val.ends_at() - t.time())
   assert_eq(alpha.val.get(), 1.0)
   assert_true(t.find("sheet") is Some(_))
-  shown.val = false
+  shown.set(false)
   t.frame()
   // the frame it was hidden it is still built; the exit runs from the next
   t.frame()
@@ -474,4 +474,90 @@ test "layout: a node moved by what holds it, its cause the same, is in its new p
   t.frame()
   assert_true(same(t.drawn_of("card").unwrap().1, y0 + 200.0))
   t.assert_idle()
+}
+
+///|
+/// How long the presence of `presence_left` fades in and out.
+let presence_fade_ms : Double = 64.0
+
+///|
+/// A presence come in, then hidden: whether it is drawn and its value halfway through its fade out and once that is
+/// long done, its frames `step` ms apart on the way (0: none between, each moment's frame alone, Tester::frame_at), and
+/// the moments of the frames drawn on the way.
+fn presence_left(step : Double) -> ((Bool, Double), (Bool, Double), Array[Double]) {
+  let shown = @signals.signal(false)
+  let alpha = Ref(@motion.Value::new(0.0))
+  let t = @ui.Tester::new(fn(c) {
+    let o = @motion.value(c, "o", 0.0)
+    alpha.val = o
+    @motion.animate_presence(
+      c,
+      "sheet",
+      shown.get(),
+      enter=async fn() { ignore(o.animate(1.0, @motion.tween_to(duration=presence_fade_ms, ease=@motion.linear))) },
+      exit=async fn() { ignore(o.animate(0.0, @motion.tween_to(duration=presence_fade_ms, ease=@motion.linear))) },
+      fn() { c.text("sheet") |> ignore },
+    )
+    |> ignore
+  })
+  shown.set(true)
+  t.draw()
+  t.run_for(presence_fade_ms * 2.0)
+  shown.set(false)
+  t.draw()
+  let hidden = t.time()
+  let drawn = []
+  let seen = fn(at : Double) {
+    if step > 0.0 {
+      while t.time() + step < at {
+        t.frame(ms=step)
+        drawn.push(t.time())
+      }
+    }
+    t.frame_at(at)
+    drawn.push(t.time())
+    (t.find("sheet") is Some(_), alpha.val.get())
+  }
+  let mid = seen(hidden + presence_fade_ms / 2.0)
+  let end = seen(hidden + presence_fade_ms * 2.0)
+  (mid, end, drawn)
+}
+
+///|
+test "presence: hidden, its exit and its going the same at each moment whatever frames came between" {
+  let jump = presence_left(0.0)
+  // (each moment's frame alone: none between)
+  assert_eq(jump.2.length(), 2)
+  for step in [1000.0 / 60.0, 1000.0 / 120.0] {
+    let (mid, end, drawn) = presence_left(step)
+    // (the same two moments looked at, exactly)
+    assert_eq((drawn[drawn.length() - 1], drawn.filter(fn(a) { a == jump.2[0] }).length()), (jump.2[1], 1))
+    assert_eq((mid, end), (jump.0, jump.1), msg="frames at \{drawn}")
+  }
+  assert_eq(jump.1, (false, 0.0))
+}
+
+///|
+test "presence: once its exit is done and it is gone, no frame is asked for" {
+  let shown = @signals.signal(true)
+  let t = @ui.Tester::new(fn(c) {
+    let o = @motion.value(c, "o", 1.0)
+    @motion.animate_presence(
+      c,
+      "sheet",
+      shown.get(),
+      exit=async fn() { ignore(o.animate(0.0, @motion.tween_to(duration=64.0, ease=@motion.linear))) },
+      fn() { c.text("sheet") |> ignore },
+    )
+    |> ignore
+  })
+  t.draw()
+  shown.set(false)
+  t.draw()
+  let hidden = t.time()
+  t.record_host()
+  t.run_as_host(400.0)
+  let after = t.host_frames().filter(fn(f) { f.at > hidden + 64.0 + 1000.0 / 30.0 })
+  assert_eq(t.find("sheet"), None)
+  assert_true(after.length() > 2 && after.all(fn(f) { !f.asked && !f.changed }), msg="\{after}")
 }

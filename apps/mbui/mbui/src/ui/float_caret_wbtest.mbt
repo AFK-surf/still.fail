@@ -115,3 +115,86 @@ test "the keyboard's trackpad let go: the caret it drew slides to where the care
   // landed where the field's caret was drawn grey as it was let go
   assert_eq((c[0], c[1], c[3]), (grey[0][0], grey[0][1], grey[0][3]))
 }
+
+///|
+/// The trackpad's caret let go (as the test above), then looked at half way back and just after it lands, its frames
+/// `step` ms apart on the way (0: none between, each moment's frame alone, Tester::frame_at): the carets drawn at
+/// each, and the moments of the frames drawn on the way.
+fn slid_back(step : Double) -> (Array[Array[Double]], Array[Array[Double]], Array[Double]) {
+  let field = Field::new()
+  field.set("hello brave world\nnext one")
+  let t = float_tester(field)
+  float_at(text_float_begin, 100.0, 300.0)
+  t.draw()
+  float_at(text_float_move, 200.5, 320.0)
+  t.draw()
+  float_at(text_float_end, 0.0, 0.0)
+  t.draw()
+  let went = t.time()
+  let drawn = []
+  let seen = fn(at : Double) {
+    if step > 0.0 {
+      while t.time() + step < at {
+        t.frame(ms=step)
+        drawn.push(t.time())
+      }
+    }
+    t.frame_at(at)
+    drawn.push(t.time())
+    carets_drawn()
+  }
+  let mid = seen(went + float_caret_back_ms / 2.0)
+  let end = seen(went + float_caret_back_ms + 1.0)
+  (mid, end, drawn)
+}
+
+///|
+test "the keyboard's trackpad let go: its caret's way back the same at each moment whatever frames came between" {
+  let jump = slid_back(0.0)
+  // (each moment's frame alone: none between)
+  assert_eq(jump.2.length(), 2)
+  for step in [1000.0 / 60.0, 1000.0 / 120.0] {
+    let (mid, end, drawn) = slid_back(step)
+    // (the same two moments looked at, exactly)
+    assert_eq((drawn[drawn.length() - 1], drawn.filter(fn(a) { a == jump.2[0] }).length()), (jump.2[1], 1))
+    assert_eq((mid, end), (jump.0, jump.1), msg="frames at \{drawn}")
+  }
+  // (on its way half way back, then the caret at rest)
+  assert_true(jump.0[0] != jump.1[0])
+}
+
+///|
+test "the keyboard's trackpad let go: each frame of its caret's way back asked for, and none once it landed till the caret first blinks but the one its tap had asked" {
+  let field = Field::new()
+  field.set("hello brave world\nnext one")
+  let t = float_tester(field)
+  // (the caret put there by the tap, now: its first blink asked for)
+  let tapped = t.time()
+  float_at(text_float_begin, 100.0, 300.0)
+  t.draw()
+  float_at(text_float_move, 200.5, 320.0)
+  t.draw()
+  // (let go between frames: at the moment it is told, the clock's then, Ctx::set_out)
+  let went = t.time()
+  float_at(text_float_end, 0.0, 0.0)
+  t.draw()
+  t.record_host()
+  let landing = went + float_caret_back_ms
+  // (to the display's first frame at or past the caret's first blink: the last drawn)
+  t.run_as_host(landing + caret_blink_ms - t.time())
+  let frames = t.host_frames()
+  let on_way = frames.filter(fn(f) { f.at < landing })
+  // (the caret blinking from where it landed: hidden first at caret_blink_ms after)
+  let landed = frames.filter(fn(f) { f.at > landing + 1000.0 / 60.0 && f.at < landing + caret_blink_ms })
+  let blinked = frames.filter(fn(f) { f.at >= landing + caret_blink_ms })
+  assert_true(on_way.length() > 2, msg="\{on_way.length()} frames on its way")
+  assert_true(on_way.all(fn(f) { f.asked && f.changed }), msg="\{on_way}")
+  // (none but the frame the tap's blink asked for before the trackpad took the caret: a wake once asked kept till its
+  // frame, as the fake host keeps it and macOS's and iOS's do, mac_app.m and ios_app.m wake_for; nothing in it changed)
+  let tap_wake = frames.filter(fn(f) { f.at >= tapped + caret_blink_ms })[0].at
+  assert_true(landed.length() > 2, msg="\{landed}")
+  assert_eq(landed.filter(fn(f) { f.asked || f.changed }).map(fn(f) { (f.at, f.asked, f.changed) }), [(tap_wake, true, false)], msg="tapped at \{tapped}, let go at \{went}")
+  // (its first blink's frame, the last, asked for, and no caret drawn in it)
+  assert_true(blinked.length() == 1 && blinked[0].asked, msg="landed at \{landing}: \{blinked}")
+  assert_eq(carets_drawn(), [], msg="at \{t.time()}")
+}

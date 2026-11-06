@@ -22,6 +22,21 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
+/// The moment of the frames' clock the time of day is (or was) `ms`: where a count of the time of day since `ms` starts
+/// on that clock (Ctx::every's `from`), so that the frame its next unit is due at is the one that reads it come.
+/// (Counted as `elapsed=wall_ms() - ms` instead, two numbers of some 1.8e12 ms apart, the next unit's moment is a
+/// hair off what the time of day reads at that frame: the frame due then drawn without it.) A Tester's alone for now:
+/// a host's time of day and its frames' clock are read apart, at two moments, and the clock stops while the machine
+/// sleeps; the time of day at the clock's 0 kept by the host, taken again only as it tells it changed, is to come first.
+fn clock_at_wall(ms : Double) -> Double {
+  // (read as a view is built: what reads it reads the time of day, as wall_ms)
+  if @signals.active_sub() is Some(_) {
+    wall_read.val = true
+  }
+  h_clock_at_wall(ms)
+}
+
+///|
 /// How far the local time of day is ahead of UTC at `at_ms` (ms since 1970), in minutes (the machine's zone and its
 /// summer time then): to show a date or a time of day. A Tester's is UTC's, 0.
 pub fn utc_offset_min(at_ms : Double) -> Int {

@@ -14,19 +14,19 @@ fn button_ground_w(t : @ui.Tester) -> Double {
 
 ///|
 test "a button whose words change: its ground from the width it had to the new one, not at once" {
-  let label = Ref::new("复制图片")
+  let label = @signals.signal("复制图片")
   let t = @ui.Tester::new(fn(c) {
     begin(c) |> ignore
     c.with_theme(ui_theme(), fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, align=AStart, fn() {
-        button(c, label.val, key="copy", tone=Primary) |> ignore
+        button(c, label.get(), key="copy", tone=Primary) |> ignore
       })
       |> ignore
     })
   })
   t.run_for(@ui.move_most_ms)
   let long = button_ground_w(t)
-  label.val = "已复制"
+  label.set("已复制")
   t.frame()
   // as the move sets out, the width it had; half way, between; at its end, the new one
   assert_eq(button_ground_w(t), long)
