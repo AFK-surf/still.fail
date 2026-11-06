@@ -44,10 +44,12 @@ moved() {
 # mode it changed, whatever its lines: where the base has that commit's still (main changed it since: not this one's).
 objects_back() {
   git diff --numstat --no-renames "$1^" "$1" -- $files > "$work/num" || return 1
+  touched=$(awk '{ print $3 }' "$work/num") || return 1
+  [ -n "$touched" ] || { echo 0; return; }
   # Read each tree once, rather than starting four git processes for every file in every main commit. Keep tree
   # entries (-t) as well as files: a branch can replace a file with a directory, or the other way around.
-  git ls-tree -r -t "$1^" -- $files > "$work/was" || return 1
-  git ls-tree -r -t "$1" -- $files > "$work/then" || return 1
+  git ls-tree -r -t "$1^" -- $touched > "$work/was" || return 1
+  git ls-tree -r -t "$1" -- $touched > "$work/then" || return 1
   [ -f "$work/in-base" ] || git ls-tree -r -t "$base" -- $files > "$work/in-base" || return 1
   [ -f "$work/now" ] || git ls-tree -r -t "$tree" -- $files > "$work/now" || return 1
   awk -v was_file="$work/was" -v then_file="$work/then" -v base_file="$work/in-base" \
