@@ -131,10 +131,35 @@ fn last_name(name : String) -> String {
 }
 
 ///|
+/// Whether the simple receiver is explicitly typed as the retained tree's View, not another package's View. Unknown
+/// receivers stay counted: this is an exception for a known event API, not a guess from a method or type's short name.
+fn event_view_receiver(f : MbtFile, c : Call) -> Bool {
+  let toks = f.toks
+  let receiver = c.at - 2
+  if c.kind != "method" || receiver < 0 || toks[receiver].kind != "ident" {
+    return false
+  }
+  let name = toks[receiver].text
+  let lo = if c.item >= 0 { f.items[c.item].start } else { 0 }
+  for j = receiver - 1; j >= lo; j = j - 1 {
+    if toks[j].kind == "ident" && toks[j].text == name && j + 4 < toks.length() &&
+      toks[j + 1].text == ":" && (j == 0 || toks[j - 1].text != ".") {
+      return toks[j + 2].text == "@view" && toks[j + 3].text == "." && toks[j + 4].text == "View"
+    }
+    if toks[j].kind == "ident" && toks[j].text == name && j > 0 &&
+      (toks[j - 1].text == "let" || toks[j - 1].text == "mut") &&
+      j + 1 < toks.length() && toks[j + 1].text == "=" {
+      return false
+    }
+  }
+  false
+}
+
+///|
 /// A one-time size read directly in an input or leaving handler is at that event's moment, not a layout binding.
 /// Inspect the innermost closure: an event handler can itself create a binding which must still be counted.
-fn event_layout_read(f : MbtFile, c : Call, returns : Map[String, String]) -> Bool {
-  if c.name != "laid_size" || c.kind != "method" || f.recv_type(c.at, returns) != Some("View") {
+fn event_layout_read(f : MbtFile, c : Call) -> Bool {
+  if c.name != "laid_size" || !event_view_receiver(f, c) {
     return false
   }
   let toks = f.toks
@@ -153,7 +178,7 @@ fn event_layout_read(f : MbtFile, c : Call, returns : Map[String, String]) -> Bo
     return false
   }
   f.calls.iter().any(fn(outer) {
-    if outer.kind != "method" || outer.is_def || f.recv_type(outer.at, returns) != Some("View") {
+    if outer.is_def || !event_view_receiver(f, outer) {
       return false
     }
     outer.args.iter().any(fn(arg) {
@@ -367,7 +392,7 @@ fn lint_mbt(
     }
     // where or how large something was laid out, read back by what builds (a first frame has none, a change lays the
     // frame out twice): said as layout instead; the framework's own not counted
-    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t && !event_layout_read(f, c, returns) {
+    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t && !event_layout_read(f, c) {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was

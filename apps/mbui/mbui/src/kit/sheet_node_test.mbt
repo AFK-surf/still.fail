@@ -416,13 +416,15 @@ test "old and tree sheets leave the existing editor focused by default and retur
     let t = if legacy {
       @ui.Tester::new(fn(c) {
         c.editor("page-field", placeholder="Page field", field~) |> ignore
-        @kit.sheet(c, "focus-sheet", open.get(), h=200.0, fn() {  }) |> ignore
+        @kit.sheet(c, "focus-sheet", open.get(), h=200.0, fn() { @kit.button(c, "Inside") |> ignore }) |> ignore
       })
     } else {
       @ui.Tester::new(fn(_) {  }, tree=fn(root : @view.View) {
         @ui.field(root, field, placeholder="Page field") |> ignore
         @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
-          s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+          s.box(fn(v) {
+            v.height(Is(Some(200.0))).focusable(Is(true)).says(Is(Some(@view.said(Button, label="Inside")))) |> ignore
+          }) |> ignore
         })
       })
     }
@@ -435,6 +437,8 @@ test "old and tree sheets leave the existing editor focused by default and retur
     assert_eq(t.ctx().focused_id(), before, msg="legacy=\{legacy}: focus while open")
     t.type_text("x")
     assert_eq(field.text(), "x", msg="legacy=\{legacy}: typing while open")
+    t.tab()
+    assert_eq(t.focused().unwrap().label, "Inside", msg="legacy=\{legacy}: Tab enters sheet")
     open.set(false)
     t.draw()
     assert_eq(t.ctx().focused_id(), before, msg="legacy=\{legacy}: focus after close")
