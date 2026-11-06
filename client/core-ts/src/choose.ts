@@ -536,8 +536,10 @@ export class Choose implements Owner {
         const connect = arr(get(ov, "connects")).find((c) => c.id === o.id);
         if (connect === undefined) throw new CoreError("http_404", t("core-logic.choose.error.no_connect"), 404);
         const bind = connect.bind;
-        const options = models(ov, now).filter((m) => arr(m.runtimes).some((r) => equal(r, get(bind, "runtime"))));
-        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, true, false, 0];
+        // (a station from before keeps a connect on the runtime it was made with)
+        const switchable = get(ov, "connectRuntimeChange") === true;
+        const options = models(ov, now).filter((m) => switchable || arr(m.runtimes).some((r) => equal(r, get(bind, "runtime"))));
+        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, !switchable, false, 0];
       }
       case "session": {
         const agent = this.#env.agent(station, o.key);
@@ -913,7 +915,9 @@ export class Choose implements Owner {
         break;
       }
       case "connect": {
-        const op = ops.request("connect.put", { station, id: o.id, input: { bind: { model: next.model, effort: textOf("effort"), profile: next.profile } } });
+        const bind: J = { model: next.model, effort: textOf("effort"), profile: next.profile };
+        if (next.runtime !== v.value.runtime) bind.runtime = next.runtime;
+        const op = ops.request("connect.put", { station, id: o.id, input: { bind } });
         if (op === null) throw CoreError.invalid("connect.put");
         saved = { op };
         break;

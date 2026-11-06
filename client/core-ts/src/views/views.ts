@@ -1914,7 +1914,7 @@ export class Views implements Owner {
         if (mine && !isMine(me, creator)) continue;
         const shown = present.connect(connect);
         if (shown.createdBy !== undefined) shown.createdBy = present.person(shown.createdBy, me, members_);
-        items.push({ station: s.address, stationName: s.name, connect: shown, ...connectSessions(connect, connects, sessions, threads, this.#clock()) });
+        items.push({ station: s.address, stationName: s.name, connect: shown, runtimeChanges: get(v.ok, "connectRuntimeChange") === true, ...connectSessions(connect, connects, sessions, threads, this.#clock()) });
       }
     }
     return { ok: { me, items, wait: looks.waitNote(waiting, failing, items.length === 0) } };

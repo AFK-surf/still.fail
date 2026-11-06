@@ -3727,6 +3727,7 @@ export const SHAPES: Record<string, Shape> = {
     ["station", "String"],
     ["stationName", "String", { said: true }],
     ["connect", "Connect"],
+    ["runtimeChanges", "bool", { default: true, doc: "Its station lets its runtime change (one from before keeps it on the runtime it was made with)." }],
     ["sessions", vec("Session"), { doc: "Its latest dozen; the one it delivers into; those it could deliver into instead." }],
     ["bound", opt("Session")],
     ["candidates", vec("Session")],

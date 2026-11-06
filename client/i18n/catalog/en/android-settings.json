@@ -211,7 +211,7 @@
   "android-settings.flow.removeTokenText": "{app} stops using it to build and edit apps in this Slack workspace. Existing apps and connects aren't affected; you can add it again later.",
   "android-settings.flow.removeTokenTitle": "Remove config token for “{name}”?",
   "android-settings.flow.removeTokenWhat": "remove the config token",
-  "android-settings.flow.runtime": "Runtime (can't change later)",
+  "android-settings.flow.runtime": "Runtime",
   "android-settings.flow.team": "workspace",
   "android-settings.flow.title": "Add connect",
   "android-settings.flow.tokenNote": "With a Slack config token, {app} creates the app for you: set its name, icon and permissions here instead of in Slack's admin pages. Only you can use the token.",

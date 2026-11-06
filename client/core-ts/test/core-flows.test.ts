@@ -960,6 +960,8 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
     "GET /overview": {
       ...overview,
       sessionRuntimeChange: switchRuntime,
+      connectRuntimeChange: switchRuntime,
+      connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
         profile("p2", "claude", ["claude-opus-5-5"], true, 80),
@@ -971,6 +973,7 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
     "GET /machine-sessions": { sessions: [{ runtime: "codex", id: "m1", cwd: "/Users/bob/src/x", updatedAt: 0 }] },
     "POST /profiles/p1/check": { state: "ok", detail: "", checkedAt: 2 },
     "POST /sessions/k1/settings": { ok: true },
+    "PUT /connects/c1": { ok: true },
   });
 }
 
@@ -1214,6 +1217,36 @@ test("a chat can switch runtime through its model control when its station suppo
   assert.equal(v(values, 1).draft.runtime, "codex");
   await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
   assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ runtime: "codex", model: "gpt-6-astra", effort: null, profile: null }]);
+  core.close();
+});
+
+test("a connect can switch runtime through its model control when its station supports it", async () => {
+  const { host, core } = await choosing(false, false, null, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  subscribe(core, ui, 2, { topic: "connects", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, false);
+  assert.ok(v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"), "the other runtime's models are offered");
+  assert.equal(v(values, 2).items[0].runtimeChanges, true);
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect:c1", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect:c1" });
+  const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
+  assert.deepEqual(put, [{ bind: { model: "gpt-6-astra", effort: "", profile: null, runtime: "codex" } }]);
+  core.close();
+});
+
+test("a connect stays on its runtime on a station from before", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, true);
+  assert.ok(!v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"));
   core.close();
 });
 

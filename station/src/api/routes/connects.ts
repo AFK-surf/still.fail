@@ -10,7 +10,7 @@ import type { Viewer } from "../../mesh/credential.ts";
 import type { ConfigFile } from "../../ops/config.ts";
 import { type Lang, tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
-import { hubConfig, runs } from "../../sessions/config.ts";
+import { hubConfig, runs, runtimeTitle } from "../../sessions/config.ts";
 import type { Hub } from "../../sessions/hub.ts";
 import type { SessionChange } from "../../sessions/accounts.ts";
 import { bindSingle, configure } from "../../sessions/lifecycle.ts";
@@ -98,9 +98,9 @@ export function connectEdits(deps: ConnectEditDeps) {
     return id;
   };
 
-  /// A connect added or edited (edits.rs `put_connect`): its kind's part as `deps.entry` makes it, its runtime as it
-  /// was made. Another model, effort or profile reaches a single-session connect's session too, from its next turn on,
-  /// as a chat's own change of model does (lifecycle.ts `configure`).
+  /// A connect added or edited (edits.rs `put_connect`): its kind's part as `deps.entry` makes it. Another runtime, model,
+  /// effort or profile is what its new sessions start on, and reaches a single-session connect's session too, from its
+  /// next turn on, as a chat's own change does (lifecycle.ts `configure`).
   const putConnect = async (r: Request, id: string, i: Input) => {
     const hub = deps.hub();
     const follow: { session?: string; run?: SessionChange } = {};
@@ -111,22 +111,29 @@ export function connectEdits(deps: ConnectEditDeps) {
       if (existing !== undefined && !ofViewer(r, existing)) throw new Refused(404, `unknown connect ${id}`);
       const bind = i.bind;
       const oldBind: Json = existing && isObject(existing.bind) ? existing.bind : null;
+      const given = get(bind, "runtime");
+      const was = oldBind === null ? null : (runtimeKind(oldBind.runtime) ?? "claude");
+      let runtime: RuntimeKind;
+      if (given !== undefined) {
+        const named = runtimeKind(given);
+        if (named === undefined) throw new Error(`unknown runtime ${typeof given === "string" ? given : JSON.stringify(given)}`);
+        runtime = named;
+      } else if (was !== null) runtime = was;
+      else throw new Error("runtime is required");
+      const moved = was !== null && runtime !== was;
+      // (what went with the old runtime is not kept on another)
       const kept = (key: string) => {
         const [given, value] = field(bind, key);
-        return given ? value : typeof oldBind?.[key] === "string" ? (oldBind[key] as string) : null;
+        return given ? value : !moved && typeof oldBind?.[key] === "string" ? (oldBind[key] as string) : null;
       };
       const model = kept("model");
       const effort = kept("effort");
       const profile = kept("profile");
-      // A connect's runtime is chosen when it is made: its sessions and their history belong to it.
-      const given = get(bind, "runtime");
-      let runtime: RuntimeKind;
-      if (oldBind !== null) runtime = runtimeKind(oldBind.runtime) ?? "claude";
-      else if (given !== undefined) {
-        const named = runtimeKind(given);
-        if (named === undefined) throw new Error(`unknown runtime ${typeof given === "string" ? given : JSON.stringify(given)}`);
-        runtime = named;
-      } else throw new Error("runtime is required");
+      if (moved) {
+        const profiles = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.filter((p) => p.runtimes.includes(runtime));
+        if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
+        if (model !== null && !profiles.some((p) => runs(p, model))) throw new Error(tr(lang, "station.session.noProfileForModel", { model, runtime: runtimeTitle(runtime) }));
+      }
       // The profile its sessions keep to (null: the pool's pick), one that runs its runtime and model.
       if (profile !== null) {
         // (as the hub has it: running what its check found too)
@@ -134,7 +141,7 @@ export function connectEdits(deps: ConnectEditDeps) {
         if (!p || !p.runtimes.includes(runtime)) throw new Error(tr(lang, "station.profile.cannotRun", { profile, runtime }));
         if (model !== null && !runs(p, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: p.name, model }));
       }
-      if (effort !== null && ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined)) {
+      if (effort !== null && (moved || ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined))) {
         const allowed = deps.hub()?.accounts.modelEfforts(runtime, model, profile);
         if (allowed !== undefined && !allowed.includes(effort)) {
           throw new Error(tr(lang, "station.profile.efforts", { runtime, efforts: allowed.join(tr(lang, "station.list.separator")) }));
@@ -163,8 +170,8 @@ export function connectEdits(deps: ConnectEditDeps) {
       // (checked before it is saved: a model its session cannot run is refused for both)
       const bound = hub !== undefined && oldBind !== null && next.mode === "single-session" ? hub.store.binding(id) : null;
       if (hub !== undefined && bound !== null) {
-        const run: SessionChange = {};
-        const differs = (key: string) => (oldBind[key] ?? null) !== (b[key] ?? null);
+        const run: SessionChange = moved ? { runtime, model, effort, profile } : {};
+        const differs = (key: string) => !moved && (oldBind[key] ?? null) !== (b[key] ?? null);
         if (differs("model")) run.model = model;
         if (differs("model") || differs("effort")) run.effort = effort;
         if (differs("profile")) run.profile = profile;
