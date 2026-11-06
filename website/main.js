@@ -14,20 +14,90 @@
   const sheet = $("#nav-list", nav);
   const ind = $(".nav-ind", nav);
 
-  // ---- Language: both are in the page, one is shown ----
-  // Labels read by screen readers follow too: an element keeps its Chinese label in aria-label and its English one in
-  // data-aria-en.
-  for (const el of $$("[data-aria-en]")) el.dataset.ariaZh = el.getAttribute("aria-label") || "";
-  function setLang(l, remember) {
-    root.dataset.lang = l;
-    root.lang = l === "en" ? "en" : "zh-CN";
-    for (const b of $$("[data-set-lang]")) b.setAttribute("aria-pressed", String(b.dataset.setLang === l));
-    for (const a of $$("[data-legal]")) a.href = (l === "en" ? "/en" : "") + new URL(a.href).pathname.replace(/^\/en/, "");
-    for (const el of $$("[data-aria-en]")) el.setAttribute("aria-label", l === "en" ? el.dataset.ariaEn : el.dataset.ariaZh);
-    if (remember) store.set("monoid.site.lang", l);
-    placeInd(false); // the labels changed width
+  // ---- Words this script writes into the page: from #i18n-js, translated with the rest of the page ----
+  const say = (id) => $("#i18n-js")?.content.querySelector(`[data-js="${id}"]`)?.innerHTML ?? "";
+
+  // ---- Language: one page per language, chosen in the footer's menu ----
+  // A choice is remembered (the head script sends the reader back to it next time) and the reader taken to that page,
+  // at the same place (hash). The menu is a popover (light dismiss, Escape); arrows, Home and End move between the
+  // options, Enter or Space picks one, Tab closes it and moves on; a click with a modifier (or the middle button) opens
+  // the page in a new tab as the browser would, the choice still remembered. Where CSS anchor positioning is missing,
+  // it is placed here beside the button.
+  {
+    const trigger = $(".language-trigger"), menu = $("#languages");
+    const items = menu ? $$(".language-option", menu) : [];
+    const popover = menu && typeof menu.showPopover === "function";
+    const anchored = window.CSS?.supports?.("anchor-name: --x");
+    const isOpen = () => (popover ? menu.matches(":popover-open") : !menu.hidden);
+    const place = () => {
+      // Its layout size (offset*), not its box, which the entering scale shrinks.
+      const gap = 8;
+      menu.style.maxHeight = `${innerHeight - 2 * gap}px`;
+      const r = trigger.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+      let top = r.top - gap - h;
+      if (top < gap) top = Math.min(r.bottom + gap, innerHeight - h - gap);
+      menu.style.top = `${Math.max(gap, top)}px`;
+      menu.style.left = `${Math.max(gap, Math.min(r.right - w, innerWidth - w - gap))}px`;
+      menu.dataset.placed = "";
+    };
+    const opened = (open) => {
+      trigger.setAttribute("aria-expanded", String(open));
+      if (!anchored) {
+        if (open) { place(); addEventListener("resize", place); addEventListener("scroll", place, { passive: true }); }
+        else { delete menu.dataset.placed; removeEventListener("resize", place); removeEventListener("scroll", place); }
+      }
+      if (open) {
+        // The links carry the place on the page too, so a new tab opens there as well.
+        for (const a of items) a.href = a.dataset.base + location.hash;
+        (items.find((a) => a.getAttribute("aria-checked") === "true") || items[0]).focus({ preventScroll: true });
+      }
+    };
+    const show = (open) => {
+      if (open === isOpen()) return;
+      if (popover) { if (open) menu.showPopover(); else menu.hidePopover(); }
+      else { menu.hidden = !open; opened(open); }
+    };
+    // Where Tab goes from the menu: the next stop after the button (Shift+Tab: the button, just before the menu).
+    const after = () => {
+      const stops = $$("a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])")
+        .filter((el) => !menu.contains(el) && el.getClientRects().length && !el.closest("[inert], [hidden]"));
+      return stops[stops.indexOf(trigger) + 1] || trigger;
+    };
+    if (trigger && menu) {
+      for (const a of items) a.dataset.base = a.getAttribute("href");
+      if (popover) menu.addEventListener("toggle", (e) => opened(e.newState === "open"));
+      else {
+        // No popover (Safari before 17): a plain toggle, closed by a click elsewhere.
+        menu.hidden = true;
+        Object.assign(menu.style, { position: "fixed", zIndex: 100 });
+        trigger.addEventListener("click", () => show(menu.hidden));
+        document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target) && !trigger.contains(e.target)) show(false); });
+      }
+      trigger.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); show(true); }
+      });
+      menu.addEventListener("keydown", (e) => {
+        const i = items.indexOf(document.activeElement), n = items.length;
+        const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: n - 1 }[e.key];
+        if (to !== undefined) { e.preventDefault(); items[(to + n) % n].focus(); }
+        else if (e.key === " " && i >= 0) { e.preventDefault(); items[i].click(); }
+        else if (e.key === "Escape") { e.preventDefault(); show(false); trigger.focus(); }
+        else if (e.key === "Tab") { e.preventDefault(); const next = e.shiftKey ? trigger : after(); show(false); next.focus(); }
+      });
+      const remember = (a) => store.set("monoid.site.locale", a.dataset.locale);
+      for (const a of items) {
+        a.addEventListener("click", (e) => {
+          remember(a);
+          // Ctrl/Cmd/Shift/Alt-click: the browser's own (a new tab or window); this tab stays as it is.
+          if (e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          if (a.getAttribute("aria-checked") === "true") { show(false); trigger.focus(); return; }
+          location.href = a.dataset.base + location.hash;
+        });
+        a.addEventListener("auxclick", (e) => { if (e.button === 1) remember(a); });
+      }
+    }
   }
-  for (const b of $$("[data-set-lang]")) b.addEventListener("click", () => setLang(b.dataset.setLang, true));
 
   // ---- The bar: its lower edge fades the page out only once something has scrolled under it ----
   let under = false;
@@ -158,7 +228,7 @@
   tone();
   new ResizeObserver(() => placeInd(false)).observe(sheet);
   document.fonts?.ready.then(() => placeInd(false));
-  setLang(root.dataset.lang === "en" ? "en" : "zh", false);
+  placeInd(false);
 
   // ---- Tabs (the product overview and the devices) ----
   // data-tabs: panels are shown and hidden ([hidden]). data-tabs="stack" (the overview): the panels sit on top of one
@@ -566,14 +636,13 @@
     const term = b.closest(".term"), live = term && $(".copy-live", term);
     let t = 0;
     b.addEventListener("click", async () => {
-      const en = root.dataset.lang === "en";
       let ok = true;
       try { await navigator.clipboard.writeText(b.dataset.copy); } catch { ok = false; }
       if (!ok) {
         const code = term && $("code", term);
         if (code) { const r = document.createRange(); r.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(r); }
       }
-      if (live) live.textContent = ok ? (en ? "Command copied" : "命令已复制") : (en ? "Command selected; copy it with your keyboard" : "命令已选中，用键盘复制");
+      if (live) live.innerHTML = say(ok ? "copied" : "selected");
       b.classList.toggle("is-copied", ok);
       clearTimeout(t);
       t = setTimeout(() => { b.classList.remove("is-copied"); if (live) live.textContent = ""; }, 1800);
@@ -590,7 +659,7 @@
     mine.classList.add("primary");
     mine.parentElement.prepend(mine);
     const tags = $(".tags", mine);
-    if (tags) tags.insertAdjacentHTML("afterbegin", '<span class="tag mine"><span class="zh">这台设备</span><span class="en">This device</span></span>');
+    if (tags) tags.insertAdjacentHTML("afterbegin", `<span class="tag mine"><span>${say("this-device")}</span></span>`);
   }
 
   // ---- FAQ: details that open and close smoothly, and can be turned around mid-way ----

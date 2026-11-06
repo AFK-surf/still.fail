@@ -20,3 +20,7 @@
   .names { --name: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; }
   .names.agents { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
 }
+/* The narrowest phones: a name wider than its column (DeepSeek Harness at 320) takes two lines, not the screen's edge. */
+@media (max-width: 359px) {
+  .names li { white-space: normal; }
+}

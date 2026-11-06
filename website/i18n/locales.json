@@ -1,0 +1,11 @@
+{
+  "origin": "https://monoid.build",
+  "default": "en",
+  "locales": [
+    { "code": "en",    "prefix": "/",       "label": "English",  "ogLocale": "en_US", "htmlLang": "en",    "legal": "/en" },
+    { "code": "zh-CN", "prefix": "/zh/",    "label": "简体中文", "ogLocale": "zh_CN", "htmlLang": "zh-CN", "legal": "" },
+    { "code": "zh-TW", "prefix": "/zh-tw/", "label": "繁體中文", "ogLocale": "zh_TW", "htmlLang": "zh-TW", "legal": "" },
+    { "code": "ja",    "prefix": "/ja/",    "label": "日本語",   "ogLocale": "ja_JP", "htmlLang": "ja",    "legal": "/en" },
+    { "code": "ko",    "prefix": "/ko/",    "label": "한국어",   "ogLocale": "ko_KR", "htmlLang": "ko",    "legal": "/en" }
+  ]
+}

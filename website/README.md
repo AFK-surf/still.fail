@@ -5,24 +5,105 @@ static page: HTML, one stylesheet and one script, with no framework and no depen
 
 ```
 website/
-  index.html     the page, in Chinese and English (both in the markup, one shown: .zh / .en)
+  index.html     the page: the template, in English, every translatable piece keyed (data-t, data-t-aria …)
+  i18n/          locales.json (the list of languages) and one <locale>.json of translations each
   styles.css     the visual system (tokens on :root) and every section
-  main.js        language, tabs, reveal on scroll, the 168 Week canvas, downloads for this device
-  en/            /en/ → /?lang=en
+  main.js        the language menu, tabs, reveal on scroll, the 168 Week canvas, downloads for this device
+  en/            the old English address: /en/ → /
   assets/        icons, the Android QR code (app.monoid.build), Suisse Intl (Latin subsets), Inter (OFL, fallback)
                  vendor/: GSAP and ScrollTrigger (loaded on demand)
-  build.mjs      inlines and trims everything into dist/website for deploy
+                 og/: the share card per language (screenshots of the built hero at 1200 × 630, the bar and buttons
+                 hidden, the wordmark top left; take them again when the hero changes)
+  build.mjs      one page per language into dist/website, everything inlined and trimmed; checks the translations
 ```
 
 ## Run and build
 
 ```sh
-python3 -m http.server -d website 4173      # or any static server: the folder works unbuilt
-node website/build.mjs                      # → dist/website: one HTML file + assets + _headers
+python3 -m http.server -d website 4173      # or any static server: the folder works unbuilt, in English
+node website/build.mjs                      # → dist/website: a page per language + assets + sitemap.xml, robots.txt, _headers
+node website/build.mjs --check              # translations: missing, extra, stale, markup, glyphs (exit 1 on any)
 ```
 
-The language is chosen by `?lang=en|zh`, then `#en|#zh`, then the visitor's earlier choice (`localStorage`
-`monoid.site.lang`), then the browser's language.
+## Languages
+
+One static page per language, the way comma.surf does it: English at `/`, then `/zh/` (简体中文), `/zh-tw/`
+(繁體中文), `/ja/` (日本語), `/ko/` (한국어). Each has its `<html lang>`, its canonical URL, every `hreflang` alternate
+(and `x-default` → `/`), `og:url`, `og:locale` and its alternates, its share card (`assets/og/<code>.png`, 1200 × 630,
+the page's own hero; the English one where a language has none) and its own descriptions; `sitemap.xml`
+lists all five with their alternates. The list lives in one place, `i18n/locales.json` (code, prefix, label, ogLocale,
+htmlLang, and `legal`: Chinese pages link still.fail's `/terms`, `/privacy`, `/trademark`, the others `/en/…`, both
+served from `web/public`); the build, the head script and the language menu are written from it.
+
+**Who goes where.** Nobody is moved on a first visit (no browser-language guess, so crawlers and shared links get
+the page they asked for). The language menu in the footer stores the choice (`localStorage` `monoid.site.locale`) and
+opens that page at the same place (hash kept); from then on the head script, before the first paint, sends the reader
+from any other language's page to the same path under their language. The old site's `?lang=zh|en` and `#zh|#en`
+count as a choice (stored, then dropped from the address), and its stored `monoid.site.lang` becomes
+`monoid.site.locale`. `/en/` redirects to `/`. Unbuilt, the folder is English only and never redirects.
+
+**The menu** (`.footer-prefs` in the footer's bottom row): a pill button (globe, the language's own name, chevron)
+with `popovertarget`, and a `popover` `role=menu` of `menuitemradio` links, each label in its own `lang`, the current one
+checked. It sits above the button by CSS anchor positioning (flipping below or to the other side when there is no
+room); where that is missing, main.js places it beside the button and keeps it there on scroll. Arrow keys, Home and
+End move between the languages, Enter or Space picks one; Escape closes it and returns to the button, Tab closes it
+and moves on, a click elsewhere closes it. A click with a modifier or the middle button opens that language in a new
+tab (the choice is still remembered). On a screen too short to fit it above or below the button, it is pinned to the
+top and scrolls inside.
+It fades and scales in from the button's corner and leaves faster; still under reduced motion.
+
+**Type.** Suisse Intl draws the Latin on every page; the rest comes from the system's fonts, per page
+(`:root:lang(zh-CN)` PingFang SC / Hiragino Sans GB / Noto Sans SC / Microsoft YaHei; `zh-TW` PingFang TC / Noto Sans TC
+/ Microsoft JhengHei; `ja` Hiragino Sans / Hiragino Kaku Gothic ProN / Noto Sans JP / Yu Gothic; `ko` Apple SD Gothic
+Neo / Noto Sans KR / Malgun Gothic). Language-specific rules key on `:lang()`: CJK is
+`:root:is(:lang(zh), :lang(ja), :lang(ko))` (more leading, headline tracking −1%, the hero and closing headlines
+narrower), Latin the rest; Chinese and Japanese headlines use half-width punctuation (`halt`), Chinese and Korean keep
+words whole (`keep-all`), Japanese breaks between phrases (`auto-phrase`) where the browser can. A headline's text is
+one `<span>` (its translation), which those rules select.
+
+**The brand line stays English.** "One devices" (the hero's `<h1>`, the `<title>` and `og:title`, the share cards)
+is the product's line, written in English on every page, as the bilingual page had it in Chinese too; it has no
+`data-t` in the hero, and each language's `meta.monoid-one-devices.*` is the English on purpose. To translate the title,
+change those entries; to translate the headline, give it a `data-t` and `--rekey`.
+
+### Changing the copy
+
+`index.html` holds the English. Each piece someone translates is one element whose content is the piece:
+`<span data-t="teams.one-person-asks-the.baa8">One person asks, the whole team carries on</span>` (in SVG a
+`<tspan data-t>`; in the head `<title data-t>`), and attributes take `data-t-<attribute>`: `data-t-aria` for
+`aria-label`, `data-t-content` for a `<meta>`'s `content`, `data-t-aria-roledescription`. main.js's own words (the copy
+button's status line, the "This device" tag) are spans in `<template id="i18n-js">`, read by their `data-js`.
+
+A key is `<section>.<first four English words>.<4 hex of the English's SHA-1>`; the section is the nearest
+`<section id>` or `============ Name ============` comment above it, or a `data-i18n-section` around it (the devices
+scene's template is `devices-stage`; a mockup that repeats some English with different Chinese got its own,
+`product-2`).
+
+- **Edit English:** change the text, then `node website/build.mjs --rekey`. The key's hash changes, so the old
+  translations stop applying (the page shows English there) and `--check` lists the piece as missing in every
+  language, until it is translated again. That is the staleness check: a translation can never silently describe
+  English that changed. (Until you run `--rekey`, the build warns and uses English for that piece.)
+- **Add a piece:** wrap it as above with `data-t=""` (or `data-t-aria=""`), then `--rekey`.
+- **Markup inside a piece** (`<b>`, `<a href>`, `<code>`) must come through translation: the build fails if a
+  translation's tags (and every link's `href`) are not the English's. `<br>`, `<wbr>`, `<span class="nb">` (keep
+  together) and `<span class="vh">` (visually hidden) are free: each language uses its own.
+- `node website/build.mjs --extract [file]` writes `{ key: English }` for translators (default
+  `dist/i18n/en-source.json`).
+
+### Adding a language
+
+Add it to `i18n/locales.json`, add `i18n/<code>.json` (start from `{}`; the page falls back to English, with a warning,
+and `--strict` fails instead), give it a font stack in `css/00-base.css` if its script needs one, and fill it from
+`--extract`. `--check <code>` reports missing and extra keys, markup that differs from the English, and characters
+outside Suisse Intl's `unicode-range` that are not CJK, kana, Hangul or full-width (which the system's fonts draw).
+
+### How it got here
+
+Until November 2026 the page held Chinese and English side by side (`<span class="zh">…</span><span class="en">…</span>`,
+`aria-label` + `data-aria-en`, a 中/EN toggle in the bar). A one-time script turned it into the English template and
+`i18n/zh-CN.json`; it can be run again on a newer copy of the bilingual page and merges into the existing translations
+(keeps those whose keys still exist, lists the new ones). The built `/` and `/zh/` matched the old page in English and
+Chinese pixel for pixel (1440 × 900 and 390 × 844, full page, with motion reduced).
 
 ## Structure
 
@@ -70,7 +151,7 @@ Reducto's site (on Mobbin) for the section structure, the details and the illust
 
 **Type.** Suisse Intl, as in the VI: Regular (400) for running text, Book (500) for UI and labels, Medium (600) for
 headlines; −3% tracking on display sizes. Its three Latin subsets (about 21 KB each) are in
-`assets/fonts/`, under the team's license; an installed copy is used first. Chinese is set in PingFang SC / Microsoft YaHei, so nothing is downloaded for it. Inter
+`assets/fonts/`, under the team's license; an installed copy is used first. Chinese, Japanese and Korean use the system's fonts (see Languages), so nothing is downloaded for them. Inter
 (OFL) is declared only as a fallback for glyphs outside Suisse's subset. Mono tags use the system's monospace.
 
 **From the VI:** one colour leads each band (Paper, Mist, Base, Ink); the 24-unit grid (1U = width / 24, 1U margins);
@@ -94,7 +175,7 @@ scattered pixels.
 
 ## Performance
 
-- One request before the first paint once built (CSS and JS inlined): about 37 KB gzipped, plus Suisse Intl's Medium and
+- One request before the first paint once built (CSS and JS inlined): about 64 KB gzipped per language, plus Suisse Intl's Medium and
   Regular (21 KB each), preloaded; Book follows as the sheet needs it. Chinese uses the system's fonts.
 - No images on the page but small SVGs; the product pictures are HTML.
 - Bands below the first screen use `content-visibility: auto`.

@@ -14,7 +14,7 @@
 .hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px var(--u); align-items: end;
   padding-block: clamp(20px, calc(var(--u) * .7), 52px) clamp(24px, calc(var(--u) * .7), 52px); }
 .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 28em); color: var(--brand-ink); text-wrap: pretty; } /* zh: two lines, the break after 订阅， */
-:root[data-lang=en] .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 30em); }
+:root:not(:lang(zh), :lang(ja), :lang(ko)) .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 30em); }
 .hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
 .hero .lead .nb { white-space: nowrap; } /* no lone 干。 on the last line (WebKit has no text-wrap: pretty yet) */
 .hero .actions { justify-content: flex-end; }

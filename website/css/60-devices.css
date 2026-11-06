@@ -27,7 +27,7 @@
 .fpanel .txt { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 24px; }
 .fpanel .txt .eyebrow { font-family: var(--mono); font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--graphite); }
 .fpanel .txt h3 { font-size: 22px; line-height: 1.22; letter-spacing: -.016em; font-weight: 600; text-wrap: balance; }
-.fpanel .txt h3 .zh { font-feature-settings: "halt"; }
+:root:is(:lang(zh), :lang(ja)) .fpanel .txt h3 > span { font-feature-settings: "halt"; }
 .fpanel .txt p { color: var(--graphite); font-size: 15.5px; line-height: 1.55; text-wrap: pretty; }
 .fpanel .txt .actions { margin-top: auto; padding-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 @media (max-width: 359px) {
@@ -110,13 +110,14 @@
 .slack { width: min(100%, 520px); background: #fff; border-radius: 16px; overflow: hidden; color: var(--ink); font-size: 14px; }
 .slack .hd { padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
 .slack .hd small { font-weight: 400; color: var(--graphite); font-size: 12px; }
-.slack .msg { display: grid; grid-template-columns: 32px 1fr; gap: 10px; padding: 12px 16px 4px; }
+.slack .msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; padding: 12px 16px 4px; } /* the text column never outgrows the window */
 .slack .msg .av { width: 32px; height: 32px; border-radius: 8px; font-size: 13px; }
 .slack .msg b { font-weight: 600; font-size: 13.5px; }
 .slack .msg b em { font-style: normal; font-weight: 400; color: var(--graphite); font-size: 12px; margin-left: 6px; }
 .slack .msg p { font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
 .slack .msg .mention { color: var(--brand-deep); background: #FDECE5; border-radius: 4px; padding: 0 3px; font-weight: 500; }
 .slack .msg .att { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.slack .msg .att .cap > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .slack .reply { padding: 8px 16px 16px; }
 /* ---------- Every device, as one scene played by scrolling (html.scrolly: large screens, motion allowed) ---------- */
 .dv-show { display: none; }
@@ -138,7 +139,7 @@
 .dv-step:not([data-i="0"]) { opacity: 0; visibility: hidden; }
 .dv-step .eyebrow { color: var(--dv-fg, var(--ink)); font-family: var(--mono); font-weight: 400; font-size: 13px; }
 .dv-step h3 { font-size: clamp(30px, 2.8vw, 46px); line-height: 1.08; letter-spacing: -.025em; text-wrap: balance; }
-.dv-step h3 .zh { font-feature-settings: "halt"; }
+:root:is(:lang(zh), :lang(ja)) .dv-step h3 > span { font-feature-settings: "halt"; }
 .dv-step p { color: var(--dv-mut, var(--brand-ink)); font-size: var(--t-body); max-width: 26em; text-wrap: pretty; }
 .dv-rail { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
 .dv-rail button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 0; font-size: 15px; font-weight: 500; cursor: pointer;

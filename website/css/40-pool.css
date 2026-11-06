@@ -107,6 +107,7 @@
   .pool-fig .pt-l::before { left: auto; right: 100%; }
   .pool-fig .pt-l::after { right: auto; left: calc(-1 * var(--lead) - 3px); }
   .pool-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; justify-content: stretch; margin-top: 24px; font-size: 13px; }
+  .pool-key > span { white-space: normal; } /* a label longer than its column wraps instead of running off the screen */
   .callouts { gap: 0; }
   .pool > .callouts:last-child { margin-top: -36px; }
   .callout:last-child { border-bottom: 1px solid var(--hair); }

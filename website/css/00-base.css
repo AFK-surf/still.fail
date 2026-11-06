@@ -2,8 +2,8 @@
    Visual system: monoid's brand colour Base, #EF6334, and its roles. One
    colour leads each band; no warm colours; emphasis by lightness. Layout runs on the 24-unit grid: 1U = page width / 24 (80 px at 1920), margins are 1U. */
 /* Suisse Intl, the brand face: Regular for running text, Book for UI and labels, Medium for headlines (CSS 400 / 500 / 600,
-   as in the VI). Latin only: Chinese is set in the system's PingFang SC / Microsoft YaHei, nothing downloaded for it.
-   An installed copy is used first. Inter stands in only for a glyph Suisse's subset lacks. */
+   as in the VI). Latin only: Chinese, Japanese and Korean are set in the system's fonts (per page, below), nothing
+   downloaded for them. An installed copy is used first. Inter stands in only for a glyph Suisse's subset lacks. */
 @font-face { font-family: "Suisse Intl"; font-style: normal; font-weight: 400; font-display: swap; src: local("Suisse Intl"), local("SuisseIntl-Regular"), url(../assets/fonts/suisse-intl-regular.woff2) format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215; }
 @font-face { font-family: "Suisse Intl"; font-style: normal; font-weight: 500; font-display: swap; src: local("Suisse Intl Book"), local("SuisseIntl-Book"), url(../assets/fonts/suisse-intl-book.woff2) format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215; }
 @font-face { font-family: "Suisse Intl"; font-style: normal; font-weight: 600; font-display: swap; src: local("Suisse Intl Medium"), local("SuisseIntl-Medium"), url(../assets/fonts/suisse-intl-medium.woff2) format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215; }
@@ -67,6 +67,11 @@
   --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep); --ring: var(--brand-deep);
   color-scheme: light;
 }
+/* One page per language (<html lang>): Suisse Intl for Latin, then the system's fonts for the script. */
+:root:lang(zh-CN) { --font: "Suisse Intl", "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
+:root:lang(zh-TW) { --font: "Suisse Intl", "Inter", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+:root:lang(ja) { --font: "Suisse Intl", "Inter", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; }
+:root:lang(ko) { --font: "Suisse Intl", "Inter", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif; }
 [data-tone=paper] { --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep); --ring: var(--brand-deep); }
 [data-tone=mist] { --bg: var(--mist); --fg: var(--ink); --mut: var(--graphite); --hair: #D9D9DB; --hit: var(--brand-deep); --ring: var(--brand-deep); }
 [data-tone=brand] { --bg: var(--brand); --fg: var(--ink); --mut: var(--brand-ink); --hair: rgba(74,22,6,.22); --hit: #fff; --ring: var(--ink); }
@@ -105,19 +110,27 @@ img, svg, video, canvas { display: block; max-width: 100%; }
 @media (hover: hover) and (pointer: fine) {
   .link:hover, :where(p, li, dd) > a:not([class]):hover { text-decoration-color: currentColor; }
 }
-/* Language: both are in the page, one is shown. Default Chinese. */
-.en { display: none !important; }
-:root[data-lang=en] .en { display: revert !important; }
-:root[data-lang=en] .zh { display: none !important; }
 .nb { white-space: nowrap; }
 /* ---------- Type ---------- */
 h1, h2, .display { font-weight: 600; text-wrap: balance; }
 h1, .display { font-size: var(--t-display); line-height: var(--lh-display); letter-spacing: var(--tr-display); }
 h2 { font-size: var(--t-title); line-height: var(--lh-title); letter-spacing: var(--tr-title); }
 h3 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: 600; letter-spacing: var(--tr-head); }
-h1 .zh, h2 .zh, .display .zh { font-feature-settings: "halt"; word-break: keep-all; letter-spacing: -.01em; }
-/* Chinese: square glyphs fill the em, so lines need more air than Latin at the same size. */
-:root:not([data-lang=en]) { --lh-display: 1.08; --lh-title: 1.14; --lh-lead: 1.62; --lh-small: 1.7; }
+/* Chinese, Japanese, Korean (CJK below; Latin = the rest). Headlines: square glyphs need no tight tracking; half-width
+   punctuation ("halt") in Chinese and Japanese; lines break between words (Chinese and Korean keep words whole,
+   Japanese breaks between phrases where the browser can). Each headline's text is one <span> (its translation). */
+:root:is(:lang(zh), :lang(ja), :lang(ko)) :is(h1, h2, .display) > span { letter-spacing: -.01em; }
+:root:is(:lang(zh), :lang(ja)) :is(h1, h2, .display) > span { font-feature-settings: "halt"; }
+:root:is(:lang(zh), :lang(ko)) :is(h1, h2, .display) > span { word-break: keep-all; }
+@supports (word-break: auto-phrase) { :root:lang(ja) :is(h1, h2, .display) > span { word-break: auto-phrase; } }
+/* Japanese sub-heads (h3, FAQ questions) too: otherwise a katakana word splits (メンショ|ン). */
+@supports (word-break: auto-phrase) { :root:lang(ja) :is(h3, .faq .q) { word-break: auto-phrase; } }
+/* Running text. Japanese: strict kinsoku, so no line starts with the long-vowel mark ー or a small kana (コンピュータ|ー).
+   Korean is spaced like Latin: its lines break at the spaces, never inside a word (break-word only as a last resort). */
+:root:lang(ja) { line-break: strict; }
+:root:lang(ko) body { word-break: keep-all; overflow-wrap: break-word; }
+/* Square glyphs fill the em, so lines need more air than Latin at the same size. */
+:root:is(:lang(zh), :lang(ja), :lang(ko)) { --lh-display: 1.08; --lh-title: 1.14; --lh-lead: 1.62; --lh-small: 1.7; }
 /* The band's accent colour, for a word or a mark that leads; at most once per band. */
 .hit { color: var(--hit); }
 .lead { font-size: clamp(18px, 1.55vw, 24px); line-height: var(--lh-lead); letter-spacing: -.004em; color: var(--mut); max-width: 36em; text-wrap: pretty; }
@@ -167,8 +180,8 @@ section[id] { scroll-margin-top: var(--nav); }
   .btn:hover .arr { transform: translateX(3px); }
 }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
-:root[data-lang=zh] .hero h1, :root:not([data-lang]) .hero h1 { max-width: 12ch; }
-:root:not([data-lang=en]) .end h2 { max-width: 11ch; }
+:root:is(:lang(zh), :lang(ja), :lang(ko)) .hero h1 { max-width: 12ch; }
+:root:is(:lang(zh), :lang(ja), :lang(ko)) .end h2 { max-width: 11ch; }
 /* ---------- Reveal on scroll ----------
    Only what starts below the fold waits (.rv-wait, set by main.js after the first paint, so nothing on the first
    screen ever blinks). It rises 12 px and fades in on a strong ease-out. A group (.split-head, .head, or any .rv with
@@ -193,9 +206,9 @@ section[id] { scroll-margin-top: var(--nav); }
 }
 @media (max-width: 640px) {
   :root { --nav: 56px; --tr-display: -.028em; --tr-title: -.02em; --lh-title: 1.1; --lh-display: 1.04; }
-  h1 .zh, h2 .zh, .display .zh { overflow-wrap: anywhere; }
-  /* Chinese leads fill the line on phones: WebKit's "pretty" ends every CJK line well short of a narrow column. */
-  :root:not([data-lang=en]) .lead { text-wrap: wrap; }
+  :root:is(:lang(zh), :lang(ja), :lang(ko)) :is(h1, h2, .display) > span { overflow-wrap: anywhere; }
+  /* CJK leads fill the line on phones: WebKit's "pretty" ends every CJK line well short of a narrow column. */
+  :root:is(:lang(zh), :lang(ja), :lang(ko)) .lead { text-wrap: wrap; }
 }
 /* Phone on its side: a short bar, so the headings keep the little height there is. */
 @media (max-height: 500px) and (orientation: landscape) {

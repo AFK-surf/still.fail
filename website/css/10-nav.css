@@ -8,13 +8,13 @@
 .nav {
   position: sticky; top: 0; z-index: 30; isolation: isolate;
   --n-mat: rgba(255,255,255,.86); --n-edge: rgba(255,255,255,.72);
-  --n-fg: var(--ink); --n-mut: var(--graphite); --n-thumb: var(--ink); --n-on-thumb: #fff;
+  --n-fg: var(--ink); --n-mut: var(--graphite);
   --n-line: var(--line); --n-hover: var(--mist); --n-cta: var(--ink); --n-on-cta: #fff; --n-cta-hover: #000;
 }
 .nav[data-under=brand] { --n-mat: rgba(255,255,255,.94); }
 .nav[data-under=ink]:not([data-open]) {
   --n-mat: rgba(26,27,30,.78); --n-edge: rgba(26,27,30,.6);
-  --n-fg: #fff; --n-mut: #C9CACD; --n-thumb: #fff; --n-on-thumb: var(--ink);
+  --n-fg: #fff; --n-mut: #C9CACD;
   --n-line: rgba(255,255,255,.2); --n-hover: rgba(255,255,255,.1); --n-cta: #fff; --n-on-cta: var(--ink); --n-cta-hover: #E6E6E8;
   --ring: var(--brand);
 }
@@ -65,25 +65,8 @@
 .nav-list .nav-cta { display: none; }
 
 .nav-tools { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
-/* Language: a segmented control whose thumb slides to the chosen side. */
-.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 34px; padding: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--n-line); transition: box-shadow var(--dur-ui) ease; }
-.seg::before {
-  content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: 34px; border-radius: 999px; background: var(--n-thumb);
-  transition: transform var(--dur-ui) var(--ease-out), background-color var(--dur-ui) ease;
-}
-:root[data-lang=en] .seg::before { transform: translateX(100%); }
-.seg button {
-  position: relative; border: 0; background: transparent; height: 32px; padding: 0; border-radius: 999px;
-  font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer; color: var(--n-mut);
-  -webkit-user-select: none; user-select: none; touch-action: manipulation;
-  transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
-}
-.seg button[aria-pressed=true] { color: var(--n-on-thumb); }
-/* Hit areas reach past the drawing (to 44 px tall on touch), so the row keeps its size. The two halves already touch,
-   so they grow only up and down; the round buttons grow on every side. */
-.seg button::after, .icon-link::after, .menu-btn::after { content: ""; position: absolute; inset: -6px -4px; }
-.seg button::after { inset: -6px 0; }
-.seg button:active { transform: scale(.92); }
+/* Hit areas reach past the drawing (to 44 px on touch), so the row keeps its size. */
+.icon-link::after, .menu-btn::after { content: ""; position: absolute; inset: -6px -4px; }
 .icon-link, .menu-btn {
   position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--n-fg); border: 0; background: transparent;
   -webkit-user-select: none; user-select: none; touch-action: manipulation;
@@ -92,8 +75,6 @@
 .nav-tools > .btn-ink { background: var(--n-cta); color: var(--n-on-cta); }
 /* Touch: the controls themselves are 44 px; the round ones give back 4 px each side, so the row is no wider. */
 @media (pointer: coarse) {
-  .seg button { height: 36px; }
-  .seg button::after { inset: -4px 0; }
   .icon-link, .menu-btn { width: 44px; height: 44px; margin-inline: -4px; }
   .icon-link::after, .menu-btn::after { content: none; }
 }
@@ -109,7 +90,6 @@
 .nav-scrim { display: none; }
 @media (hover: hover) and (pointer: fine) {
   .nav-list a:hover { color: var(--n-fg); }
-  .seg button[aria-pressed=false]:hover { color: var(--n-fg); }
   .icon-link:hover, .menu-btn:hover { background: var(--n-hover); }
   .nav-tools > .btn-ink:hover { background: var(--n-cta-hover); }
 }

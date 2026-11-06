@@ -22,9 +22,69 @@
   .foot-grid li a:hover { color: var(--brand-deep); }
 }
 .foot-base {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 8px 24px; flex-wrap: wrap;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap;
   margin-top: clamp(56px, 5.6vw, 96px); padding-top: 20px; border-top: 1px solid var(--line);
   font-size: 13px; line-height: 18px; letter-spacing: .01em; color: var(--graphite);
+}
+/* Language: a pill (globe, the language, a chevron) opening a menu of the pages in other languages, above it (below
+   when there is no room), drawn from the trigger's corner. Positioned by CSS anchor positioning; where that is missing,
+   main.js places it (data-placed). */
+.footer-prefs { display: flex; align-items: center; margin-right: -6px; }
+.language-trigger {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 10px; border: 0; border-radius: 999px;
+  background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); cursor: pointer;
+  font-size: 13px; font-weight: 500; line-height: 1; letter-spacing: .01em; white-space: nowrap;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation; anchor-name: --language;
+  transition: background-color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.language-trigger::after { content: ""; position: absolute; inset: -6px -2px; } /* a 44 px hit area */
+.language-trigger .ico { width: 16px; height: 16px; flex: none; color: var(--graphite); }
+.language-trigger .chev { width: 14px; height: 14px; transition: transform var(--dur-ui) var(--ease-out); }
+.language-trigger[aria-expanded=true] { box-shadow: inset 0 0 0 1px #C9CACD; background: var(--mist); }
+.language-trigger[aria-expanded=true] .chev { transform: rotate(180deg); }
+.language-trigger:active { transform: scale(.97); }
+.language-menu {
+  inset: auto; margin: 0; padding: 6px; min-width: 196px; border: 0; border-radius: 14px;
+  background: #fff; color: var(--ink); font-family: var(--font);
+  box-shadow: 0 0 0 1px rgba(26,27,30,.08), 0 18px 40px -14px rgba(26,27,30,.3), 0 4px 12px -4px rgba(26,27,30,.1);
+  position-anchor: --language; bottom: anchor(top); right: anchor(right); margin-bottom: 8px;
+  /* Above, else below, else the other side; on a screen too short for either, pinned 8px from the top over the button
+     (scrolling inside if it must). */
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --language-fit, --language-fit-left;
+  max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain;
+  transform-origin: 100% 100%;
+  /* Out: quicker than in. */
+  opacity: 0; transform: translateY(4px) scale(.97);
+  transition: opacity 120ms ease, transform 120ms ease, overlay 120ms allow-discrete, display 120ms allow-discrete;
+}
+.language-menu:popover-open {
+  opacity: 1; transform: none;
+  transition: opacity 160ms ease, transform 240ms var(--ease-out), overlay 240ms allow-discrete, display 240ms allow-discrete;
+}
+@position-try --language-fit { top: 8px; bottom: auto; right: anchor(right); left: auto; margin: 0; }
+@position-try --language-fit-left { top: 8px; bottom: auto; left: anchor(left); right: auto; margin: 0; }
+@starting-style { .language-menu:popover-open { opacity: 0; transform: translateY(4px) scale(.97); } }
+@supports not (anchor-name: --x) {
+  .language-menu { margin: 0; }
+  .language-menu:not([data-placed]) { visibility: hidden; }
+}
+.language-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 38px; padding: 0 10px 0 12px;
+  border-radius: 9px; color: var(--ink); text-decoration: none; font-size: 15px; line-height: 1.3; outline-offset: -2px;
+  transition: background-color 120ms ease, transform var(--dur-press) var(--ease-out);
+}
+.language-option .ico { width: 16px; height: 16px; flex: none; color: var(--brand-deep); visibility: hidden; }
+.language-option[aria-checked=true] { font-weight: 500; }
+.language-option[aria-checked=true] .ico { visibility: visible; }
+.language-option:focus-visible { background: var(--mist); outline: 2px solid var(--ring); }
+.language-option:active { transform: scale(.98); background: var(--mist); }
+@media (hover: hover) and (pointer: fine) {
+  .language-trigger:hover { background: var(--mist); }
+  .language-option:hover { background: var(--mist); }
+}
+@media (pointer: coarse) {
+  .language-trigger { height: 40px; padding: 0 12px 0 14px; }
+  .language-option { min-height: 44px; }
 }
 @media (max-width: 1120px) {
   .foot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: var(--gap); }
