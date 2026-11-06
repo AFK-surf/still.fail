@@ -596,7 +596,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
     })) |> ignore
     held.layout_box(
       By(fn() {
-        let x = s.drawn(self.tree)
+        // (where it is scrolled at the logic's moment: a frame shown later draws the way on, held.drawn_off)
+        let x = s.where_at(if s.goes_on() { self.tree.clock.get() } else { 0.0 })
         // (telling what came in sight as it goes on by itself: the logic's moment, taken anew as it is asked to be laid
         // out at one (View::laid_before_due), and where it is then)
         let gliding = seen is Some(_) && s.goes_on()
@@ -647,6 +648,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         }
       }),
       fn(l, c) {
+        // (laid out again by the layout of a frame shown later: counted, its state not kept apart yet, Tree::shadow_shown)
+        if self.tree.look_laying {
+          self.tree.shadow_lists += 1
+        }
         let all = c.keys.v
         let n = c.indexed.map(fn(s) { s.1 }).unwrap_or(all.length())
         let mut reset_fixed = false

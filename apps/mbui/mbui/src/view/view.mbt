@@ -781,6 +781,15 @@ pub struct Tree {
   sample_restores : Array[() -> Unit]
   // (a frame under way, Tree::frame: what samples at the moment shown)
   mut framing : Bool
+  // (the layout of a frame shown later under way, sampled: nothing it does told, Tree::shadow_shown)
+  mut look_laying : Bool
+  // (what that layout wrote, kept to be put back; how many children it made first)
+  mut shadow_saved : ShadowSaved?
+  mut shadow_made : Int
+  // (what lays out by the time being sampled for that layout, Tree::shadow_shown)
+  mut shadow_sampling : Bool
+  // (how many times that layout laid an anchored list out: its own state written, not yet kept apart)
+  mut shadow_lists : Int
   // The layout pass under way in one (Tree::laid_out), 0 outside one; what it told otherwise, where noted
   // (Tree::told_noted)
   mut laid_passes : Int
@@ -1159,6 +1168,11 @@ pub fn Tree::new(
     sample: None,
     sample_restores: [],
     framing: false,
+    look_laying: false,
+    shadow_saved: None,
+    shadow_made: 0,
+    shadow_sampling: false,
+    shadow_lists: 0,
     laid_passes: 0,
     owed_passes: {},
     moment_passes: 0,
@@ -2622,6 +2636,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       },
       sample?=match phase {
         Paint | Place => Some(fn(v) { tree.shown_set(at, gen, v, last, apply, marked) })
+        // (what lays out by the time: for the layout of a frame shown later alone, Tree::shadow_shown)
+        Layout | Both => Some(fn(v) { if tree.shadow_sampling { tree.shown_set(at, gen, v, last, apply, marked) } })
         _ => None
       },
     )
@@ -7266,6 +7282,8 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     self.room.set((w, h))
   }
   self.brought(upto)
+  // (shown later than its logic: its layout of then, sampled and let go, what it draws)
+  self.shadow_shown(upto)
   if resized { self.using_resize_capture = was_using_resize_capture }
   for entry in captured {
     if self.alive_id(entry.id) { @signals.untracked(entry.finish) }
@@ -7447,19 +7465,19 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   self.due = false
   // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
   // same pass: one result, the frame drawing all of it)
-  if self.outs_changed {
+  if self.outs_changed && !self.look_laying {
     self.outs_told()
     if self.due {
       return (placing, ordered, "rows left out told")
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
+  if self.sized.length() > 0 && !self.look_laying && self.sizes_told() && self.due {
     return (placing, ordered, "sizes told (owed_laid_size, owed_laid_window, owed_drawn_window, owed_went)")
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
-  if self.laid_waits.length() > 0 {
+  if self.laid_waits.length() > 0 && !self.look_laying {
     let waits = self.laid_waits.copy()
     self.laid_waits.clear()
     for f in waits {
@@ -7471,7 +7489,7 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   }
   // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
   // this same pass)
-  if self.shows_due.length() > 0 {
+  if self.shows_due.length() > 0 && !self.look_laying {
     self.shown_now()
     if self.due {
       return (placing, ordered, "brought into sight")
@@ -9930,6 +9948,10 @@ pub fn View::shown_size(self : View) -> (Double, Double)? {
 ///|
 /// `f` told once the frame being made is painted (Tree::take_after_paint).
 fn Tree::said_after_paint(self : Tree, f : () -> Unit) -> Unit {
+  // (said by the layout of a frame shown later, sampled (Tree::shadow_shown): told by the logic's own)
+  if self.look_laying {
+    return
+  }
   self.after_paint.push(f)
 }
 
@@ -9951,6 +9973,10 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
 /// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
+  // (said by the layout of a frame shown later, sampled: told by the logic's own)
+  if self.look_laying {
+    return
+  }
   self.after_laid.push(f)
 }
 
@@ -9959,7 +9985,7 @@ fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
 /// a telling lays out at once (an event reading where things are) said after those said before it and told in its
 /// turn, never within another's telling: so how deep it goes is not how many follow one another.
 fn Tree::tell_laid(self : Tree) -> Unit {
-  if self.telling_laid {
+  if self.telling_laid || self.look_laying {
     return
   }
   self.telling_laid = true

@@ -52,6 +52,10 @@ pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View
   let child = match self.keyed.get(key) {
     Some(v) if v.alive() => v
     _ => {
+      // (a child made first by the layout of a frame shown later, sampled: what it was made for given up, Tree::shadow_shown)
+      if self.owner.tree.look_laying {
+        self.owner.tree.shadow_made += 1
+      }
       let guard_before = @signals.set_access_guard(@signals.phase_guard(Build))
       let v = self.owner.box(make)
       @signals.set_access_guard(guard_before) |> ignore

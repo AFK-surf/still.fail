@@ -97,6 +97,11 @@ pub fn film(
   // The application's clock must advance at the film's rate too. Merely giving the encoder a higher rate would
   // duplicate frames of a run still drawn at the Tester's default 60 Hz.
   t.set_frame_period(1000.0 / fps.to_double())
+  // (probe: each frame drawn for a moment that far after the host's now, as a device's are)
+  match number(arg("MBUI_FILM_AHEAD_MS")) {
+    Some(ms) => t.frames_shown_ahead(ms)
+    None => ()
+  }
   if prepare != "" {
     let setup = t.drive(prepare, max~)
     if !drive_passed(setup) {
