@@ -501,6 +501,11 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   )
   // the block moved for what it is moved for, at that moment: from where it is then; else what it goes to changed by
   // what is no cause of a move, put there at once
+  // Its retained sidebar participates through the declared closing end, regardless of a picture's sampled clip.
+  // Publish this with the fold's trajectory, never from a separate observer of half of that change.
+  let side_shown = @signals.signal(false, same=fn(a, b) { a == b })
+  let side_due = Ref(fn() { })
+  v.owns(fn() { (side_due.val)() }) |> ignore
   let first = Ref(true)
   v.reacts(
     fn() {
@@ -515,13 +520,15 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
             side: w.id + "\n" + group,
             native: @sf.native_on(),
           }
-          Some((cause, fold_look_of(r, fold_goes.shift)))
+          Some((cause, fold_look_of(r, fold_goes.shift), r.s > 0.0))
         }
         None => None
       }
     },
     fn(said) {
-      guard said is Some((cause, look)) else { return }
+      (side_due.val)()
+      side_due.val = fn() { }
+      guard said is Some((cause, look, has_side)) else { side_shown.set(false); return }
       let at = v.cause_at()
       let was = fold_goes.was
       fold_goes.was = Some(cause)
@@ -546,6 +553,13 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         }
         (None, Some(t)) if made && cause.bare => fold_moves_from(at, look, was_look=t)
         _ => fold_put(look, at)
+      }
+      let open = has_side && look.showing > 0.0
+      let closing = has_side && !open && fold_goes.way.goes_at(at) &&
+        fold_goes.from.map(fn(f) { f.showing > 0.0 }).unwrap_or(false)
+      side_shown.set(open || closing)
+      if closing {
+        side_due.val = v.at_moment(fold_goes.way.ends_at(), fn() { side_shown.set(false) })
       }
     },
   )
@@ -598,7 +612,7 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   let block = @ui.old(v, fn(c) { pane_block_built(c, src, looks) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
   // the sidebar made once, the tree's, over the block where it lays its sidebar out (side_node)
   v.box(fn(sides) {
-    sides.over(Is(true)) |> ignore
+    sides.over(Is(true)).shown(fn() { side_shown.get() }) |> ignore
     side_node(sides, src, tips, fn() { pane_side_at(src, sides) })
   })
   |> ignore

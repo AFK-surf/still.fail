@@ -780,7 +780,8 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
       // the panel is behind the one in use: tape_behind's)
       side.box(fn(sides) {
-        sides.over(Is(true)).hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
+        sides.over(Is(true)).shown(fn() { tape_room_now().s > 0.0 })
+          .hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
         side_node(sides, src, @sf.TipLayer::new(fn() { tape_goes.node }), fn() { tape_side_at(side) })
       })
       |> ignore
