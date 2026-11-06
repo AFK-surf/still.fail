@@ -110,8 +110,26 @@ fn chat_talk_node(
   let geometry = fn() { @sfpages.composer_geometry(width(), radii()) }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
-  let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
-  let room_now = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
+  // (its composer while made: what its page's layout and its picks read of the room it takes)
+  let made_now : @signals.Signal[@sfpages.ChatComposerNode?] = @signals.signal(None, same=fn(a, b) {
+    match (a, b) {
+      (Some(x), Some(y)) => physical_equal(x.root, y.root)
+      (None, None) => true
+      _ => false
+    }
+  })
+  // (the room it takes under the list as this frame laid it out, read as it is painted)
+  let room_laid = fn(laid : @view.Laid) {
+    match made_now.get() {
+      Some(m) =>
+        @sfpages.composer_room_in(
+          laid.size(m.root).map(fn(z) { z.1 }).unwrap_or(0.0),
+          laid.size(m.composer.cap).map(fn(z) { z.1 }).unwrap_or(0.0),
+          (m.room_of)(),
+        )
+      None => 0.0
+    }
+  }
   // (its view not read yet: its messages to come in their bones, the first where the list's first row will be, or why
   // it cannot be read. A chat just made from a new chat already has fresh_view's view, so it shows no sample.)
   talk.show(fn() { view() is None }, fn(b) {
@@ -120,42 +138,58 @@ fn chat_talk_node(
     |> ignore
     @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
   })
-  talk.box(fn(l) {
-    l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w),
-      foot_gap=list_foot_gap, composer_across=fn() { geometry().0 })
-    latest.val = list.to_latest
-    landing.val = list.landing_of
-  })
-  |> ignore
-  talk.box(fn(f) {
-    f
-    .over(Is(true))
-    .lies_along(Is(End))
-    |> ignore
+  // (its list over all of it and its composer at its foot, laid out by its room: the composer measured first, the room
+  // it takes (what of it is laid out, its capsule's as that reports it, composer_room_in) given the list as what
+  // covers its foot, its own lift with it (Layout::measure's `foot`: its last row that tall), in the same layout:
+  // nothing of the composer read back)
+  talk.box(fn(body) {
+    body.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    let lift : Ref[() -> Double] = Ref(fn() { 0.0 })
+    let l = body.box(fn(l) {
+      l.min_height(Is(Some(0.0))) |> ignore
+      let list = @sfpages.chat_list_node(l, src, r, view, fn() { chat_bar_room() + list_head_gap }, settings_core(src, w),
+        foot_gap=list_foot_gap, composer_across=fn(pane) { @sfpages.composer_geometry(pane, radii()).0 })
+      latest.val = list.to_latest
+      landing.val = list.landing_of
+      lift.val = list.lift
+    })
     // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
     // waits): the draft's field is one editor's, and the same chat may be under it (its history asked as a page, a
     // service beside it))
-    @sfpages.composer_on_page(f, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
-    let made = @sfpages.chat_composer_node(
-      f,
-      src,
-      r,
-      view,
-      fn() { @sfpages.composer_side_in(radii()) },
-      // (its lines as many as the talk's height gives them)
-      (talk, fn(_, h) { h }),
-      fn(pane) { @sfpages.composer_geometry(pane, radii()).1 },
-      fn() { geometry().2 },
-      fn(_key) { (latest.val)() },
-      active=fn() { app.nav.drawn_stay().0 == k },
-      drops=talk,
-      // (its shape as the talk it stands in is laid out, in the same layout: composer_box_node's)
-      place_in=fn(pane) { @sfpages.composer_geometry(pane, radii()).2 },
-    )
-    room.set(Some(made.room))
-    f.owns(fn() { room.set(None) }) |> ignore
+    let f = body.box(fn(f) {
+      @sfpages.composer_on_page(f, src, r.station + ":" + r.session, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
+        let made = @sfpages.chat_composer_node(
+          f,
+          src,
+          r,
+          view,
+          fn() { @sfpages.composer_side_in(radii()) },
+          // (its lines as many as the talk's height gives them)
+          (talk, fn(_, h) { h }),
+          fn(pane) { @sfpages.composer_geometry(pane, radii()).1 },
+          fn() { geometry().2 },
+          fn(_key) { (latest.val)() },
+          active=fn() { app.nav.drawn_stay().0 == k },
+          drops=talk,
+          // (its shape as the talk it stands in is laid out, in the same layout: composer_box_node's)
+          place_in=fn(pane) { @sfpages.composer_geometry(pane, radii()).2 },
+        )
+        made_now.set(Some(made))
+        f.owns(fn() { made_now.set(None) }) |> ignore
+      })
     })
+    body.layout_box(By(fn() { (made_now.get().map(fn(m) { (m.room_of)() }), (lift.val)()) }), fn(lay, k) {
+      let (of, lift) = k
+      let (_, ch) = lay.measure(f, lay.width)
+      let room = match of {
+        Some(o) => @sfpages.composer_room_in(lay.reported(f, "composer").unwrap_or(ch), lay.reported(f, "cap").unwrap_or(0.0), o)
+        None => 0.0
+      }
+      lay.measure(l, lay.width, height=lay.height, foot=(0.0, room + lift)) |> ignore
+      lay.place(l, 0.0, 0.0)
+      lay.place(f, 0.0, lay.height - ch)
+    })
+    |> ignore
   })
   |> ignore
   talk.box(fn(fl) {
@@ -177,7 +211,7 @@ fn chat_talk_node(
     pl
     .over(Is(true))
     |> ignore
-    @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { chat_bar_room() }, room_now)
+    @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { chat_bar_room() }, room_laid)
   })
   |> ignore
   // (the chat's keys, done while it takes input; what it needs of the viewer felt as that comes; ⌘F's bar let go as

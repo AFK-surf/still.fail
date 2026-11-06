@@ -284,3 +284,99 @@ fn done_at(t : @ui.Tester) -> (Double, Double)? {
     (w.1 + w.3 / 2.0, w.2 + w.4 / 2.0)
   })
 }
+
+///|
+/// A login card's field with the focus and the keyboard up, its chat's draft's words then said as `grown` (another device
+/// typed them: the composer grows) at `t0`, between the display's frames, then as `shrunk` at `t0 + 600`; frames drawn
+/// at `t0 +` each of `frames` and at 400 and 1000, each of them checked: the field drawn under the bar and over the
+/// composer as that frame draws it. Where the field is at 400 and at 1000.
+fn card_field_through(frames : Array[Double], grown : String, shrunk : String) -> (Double, Double) raise {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]), pointing=Finger))
+  t.tap_text("粘贴登录码")
+  t.frame()
+  // (by touch: a field kept in view with the keyboard up is touch's)
+  assert_true(t.ctx().field_focused() && !@sf.pointer_rests())
+  keyboard_rises(t, 560.0)
+  let t0 = t.time()
+  let field_y = fn(at : Double) raise {
+    guard t.focused() is Some({ rect: (_, y, _, h), .. }) else { fail("\{at}: the field let go of the focus") }
+    // (the composer's glass as drawn: its top)
+    let (cap, _) = composer_ground_node()
+    let top = cap.tree.drawn_of(cap.id()).unwrap().y - cap.tree.ground_drawn_of(cap.id()).3
+    assert_true(y >= @sfpages.bar_foot && y + h <= top + 0.5, msg="\{at}: field at \{y}..\{y + h}, composer from \{top}")
+    y
+  }
+  let frame_at = fn(at : Double) { t.frame_at(at) }
+  field_y(t0) |> ignore
+  let draft = @sfbase.writings.get("ws1/st1:s-c1").unwrap().field
+  t.advance(between_frames_ms)
+  draft.set(grown)
+  for f in frames {
+    if f < 400.0 {
+      frame_at(t0 + f)
+      field_y(t0 + f) |> ignore
+    }
+  }
+  frame_at(t0 + 400.0)
+  let at_grown = field_y(t0 + 400.0)
+  for f in frames {
+    if f > 400.0 && f < 600.0 {
+      frame_at(t0 + f)
+      field_y(t0 + f) |> ignore
+    }
+  }
+  t.advance(t0 + 600.0 - t.time())
+  draft.set(shrunk)
+  for f in frames {
+    if f > 600.0 && f < 1000.0 {
+      frame_at(t0 + f)
+      field_y(t0 + f) |> ignore
+    }
+  }
+  frame_at(t0 + 1000.0)
+  (at_grown, field_y(t0 + 1000.0))
+}
+
+///|
+test "a login card's field kept clear of the composer as it grows (its draft's words come in lines), each frame as it is drawn; the same at 60 Hz, 120 Hz or in one jump, and as it shrinks" {
+  let hz = fn(period : Double) { Array::makei((1000.0 / period).to_int(), fn(i) { (i + 1).to_double() * period }) }
+  let one = card_field_through([], "第一行\n第二行\n第三行\n第四行", "")
+  let at60 = card_field_through(hz(1000.0 / 60.0), "第一行\n第二行\n第三行\n第四行", "")
+  let at120 = card_field_through(hz(1000.0 / 120.0), "第一行\n第二行\n第三行\n第四行", "")
+  assert_eq((at60, at120), (one, one))
+}
+
+///|
+test "a login card's field with the keyboard up, then the composer taking the focus under the same keyboard: the card let go, its field no longer kept, the list's rows going with the composer as it grows with what is typed in it" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]), pointing=Finger))
+  t.tap_text("粘贴登录码")
+  t.frame()
+  keyboard_rises(t, 560.0)
+  guard t.focused() is Some(card) else { fail("the card's field has no focus") }
+  let card_y = fn() {
+    t.semantics().iter().find_first(fn(s) { s.id == card.id }).map(fn(s) { s.rect.1 }).unwrap()
+  }
+  let composer_top = fn() {
+    let (cap, _) = composer_ground_node()
+    cap.tree.drawn_of(cap.id()).unwrap().y - cap.tree.ground_drawn_of(cap.id()).3
+  }
+  // (the composer's field tapped, the keyboard as it was)
+  let (x, y) = t.find("发消息").unwrap()
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  guard t.focused() is Some(now) && now.id != card.id else { fail("the composer did not take the focus") }
+  let (y0, top0) = (card_y(), composer_top())
+  t.type_text("第一行")
+  t.enter()
+  t.type_text("第二行")
+  t.enter()
+  t.type_text("第三行")
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_eq(@sfbase.writings.get("ws1/st1:s-c1").unwrap().field.text(), "第一行\n第二行\n第三行")
+  // (the rows gone up with the composer's top as far as it rose: the card's field, under the bar now, not held clear)
+  let (y1, top1) = (card_y(), composer_top())
+  assert_true(top1 < top0 - 20.0, msg="the composer grew: \{top0} -> \{top1}")
+  assert_true(((y1 - y0) - (top1 - top0)).abs() < 0.5, msg="the card's field \{y0} -> \{y1}, the composer's top \{top0} -> \{top1}")
+}
