@@ -16,6 +16,8 @@ fn changing_case(
   told : Array[Int],
   shown : @signals.Signal[Array[Int]],
   put : Double,
+  from_end? : Bool = false,
+  align_end? : Bool = true,
 ) -> (@view.Tree, (Double, Double) -> Unit, @view.Scroll) {
   let scroll = @view.Scroll::list()
   if put > 0.0 {
@@ -26,7 +28,7 @@ fn changing_case(
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
       o.show(fn() { there.get() }, fn(p) {
         p.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-        p.scrolls_window(scroll, fn() { keys.get() }, est=40.0, shown~, seen=fn(came) { told.append(came) }, fn(b, k) {
+        p.scrolls_window(scroll, fn() { keys.get() }, est=40.0, from_end~, align_end~, shown~, seen=fn(came) { told.append(came) }, fn(b, k) {
           let h = tall.get(k).unwrap()
           b.height(By(fn() { Some(h.get()) })) |> ignore
         })
@@ -81,6 +83,8 @@ fn changed_on_the_way(
   frames : ((Double, Double) -> Unit, Double, Double) -> Unit,
   down? : Bool = false,
   put? : Double = 0.0,
+  from_end? : Bool = false,
+  align_end? : Bool = true,
 ) -> (Array[Int], Array[Int], Array[Int], Array[Int]) raise {
   let keys = @signals.signal(Array::makei(400, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let tall : Map[Int, @signals.Signal[Double]] = {}
@@ -93,7 +97,7 @@ fn changed_on_the_way(
   let there = @signals.signal(true)
   let told : Array[Int] = []
   let shown : @signals.Signal[Array[Int]] = @signals.signal([])
-  let (tree, draw, scroll) = changing_case(keys, tall, there, told, shown, put)
+  let (tree, draw, scroll) = changing_case(keys, tall, there, told, shown, put, from_end~, align_end~)
   draw(0.0, 0.0)
   let first = told.length()
   let came : Array[Int] = []
@@ -301,4 +305,22 @@ test "scrolls_window put 200 rows down and flung down the column, what it holds 
   let (apart, laid) = changed_apart(true, 8000.0)
   // (apart in what it told, where it was laid out the same; laid out elsewhere)
   assert_eq(apart + laid, [], msg=(apart.map(fn(a) { "TOLD " + a }) + laid.map(fn(l) { "LAID " + l })).join("\n"))
+}
+
+///|
+test "an end-following list that becomes short during a glide tells seen with the same top alignment at the logic moment" {
+  let histories = frame_histories()
+  let shrink = fn(keys : @signals.Signal[Array[Int]], _) { keys.set([1000, 1001]) }
+  let (expected, shown, _, at_end) = changed_on_the_way(
+    shrink, histories[0].1, down=true, from_end=true, align_end=false,
+  )
+  assert_eq(expected, shown)
+  assert_eq(at_end, [1000, 1001])
+  for history in histories[1:] {
+    let (told, _, _, final_rows) = changed_on_the_way(
+      shrink, history.1, down=true, from_end=true, align_end=false,
+    )
+    assert_eq(final_rows, at_end, msg=history.0)
+    assert_eq(told, expected, msg=history.0)
+  }
 }

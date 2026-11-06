@@ -260,6 +260,7 @@ fn Scroll::past_held(self : Scroll, t : Double) -> Unit {
 /// applyToScroll; iOS's rubber band), the rest moves it; what of that goes past an end pulls it there (Android: in its
 /// heights, no further than one; iOS: on the rubber band), as an old view's list's (ui's Ctx::feed, Ctx::pull).
 fn Scroll::dragged(self : Scroll, v : View, t : Double, d : Double) -> Unit {
+  if d != 0.0 { (self.on_hand_attempt)() }
   (self.rebase)()
   let x = self.stopped(t)
   let (feel, density) = (v.tree.list_feel)()
@@ -365,6 +366,7 @@ fn Scroll::list_fling(
   self.fling.set(Some(f))
   (self.on_scrolled)(t)
   self.list_settles(v, t)
+  self.activity_start(t, x0)
 }
 
 ///|
@@ -441,6 +443,9 @@ fn Scroll::fling_grew(self : Scroll, f : Fling, w : ListWay, t : Double, d : Dou
   match list_planned(f.t0, f.x0 + d, f.v0, w, w.same, density, bound) {
     Some(g) => self.fling.set(Some(g))
     None => {
+      if self.activity_coasting {
+        self.activity_changed = self.activity_changed || w.at(f, t) + d != self.activity_from
+      }
       self.fling.set(None)
       self.x.set(f.x0 + d)
     }
@@ -476,6 +481,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
       self.fling.set(None)
       self.x.set(dclamp(f.end_x, 0.0, self.most()))
       self.past.set(Some(p))
+      self.activity_stop(t, f.end_x)
     }
     Some(w) => {
       let left = @signals.untracked(fn() { self.past_at(t) })
@@ -495,6 +501,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
 /// before carrying on into it from where it is and as fast as it moves then, as an old view's list's (ui's
 /// Ctx::ease_list); whether it moves it (under way already, or not at its end that way: ListState::wheel_moves).
 fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
+  if d != 0.0 { (self.on_hand_attempt)() }
   (self.rebase)()
   let (x0, total, v0) = match @signals.untracked(fn() { self.notch.get() }) {
     Some(n) => {
@@ -516,6 +523,9 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   self.notch.set(Some({ x0, total, v0, t0: t, sent: false, kept: true }))
   (self.on_scrolled)(t)
   self.list_settles(v, t)
+  if (d > 0.0 && x0 < self.most()) || (d < 0.0 && x0 > 0.0) {
+    self.activity_start(t, x0)
+  }
   true
 }
 
@@ -525,9 +535,11 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
 fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   (self.settle_off)()
   self.settle_off = fn() {  }
-  guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else { return }
+  guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else {
+    self.activity_stop(t, @signals.untracked(fn() { self.x.get() }))
+    return
+  }
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
-  ignore(t)
   self.settle_off = v.at_moment(rest, fn() {
     self.settle_off = fn() {  }
     let flung = @signals.untracked(fn() { self.fling.get() })
@@ -547,6 +559,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
       (_, Some(n)) => self.x.set(if n.kept && !free { dclamp(n.x0 + n.total, 0.0, self.most()) } else { n.x0 + n.total })
       _ => ()
     }
+    self.activity_stop(rest, @signals.untracked(fn() { self.x.get() }))
   })
 }
 
@@ -566,12 +579,16 @@ fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? 
     return
   }
   let density = w.px / dmax(w.h, 1.0)
+  let before = if self.activity_coasting { @signals.untracked(fn() { self.where_at(t) }) } else { 0.0 }
   match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
     // (past its foot already as it is laid out now (what is under what is in sight less by more than it had left to
     // go): it meets it now, at its speed now)
     Some(g) if g.end_t < t => self.fling.set(Some(met_now(f, w, t, most, density)))
     Some(g) => self.fling.set(Some(g))
     None => {
+      if self.activity_coasting {
+        self.activity_changed = self.activity_changed || before != self.activity_from
+      }
       self.fling.set(None)
       self.x.set(f.x0)
     }
