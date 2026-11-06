@@ -196,3 +196,30 @@ pub fn View::shown_nowhere(self : View) -> Bool {
   self.tree.outs_said.get() |> ignore
   !self.alive() || self.tree.out_at(self.at)
 }
+
+///|
+/// Whether it or an ancestor is explicitly kept out by laid_nowhere(Is/By), as those declarations say now.
+/// Followed at their causes, without laying out or reading a previous layout's omissions. A retained activity
+/// uses this declaration, not shown_nowhere: a row squeezed out by drops, a Roomed omission, clipping and opacity
+/// are layout or paint results and do not start or cancel that activity. A node let go is nowhere.
+pub fn View::declared_nowhere(self : View) -> Bool {
+  guard self.alive() else { return true }
+  let mut i = self.at
+  while i >= 0 {
+    let n = self.tree.nodes[i]
+    let said = match n.nowhere_said {
+      Some(said) => said
+      None => {
+        let said = @signals.signal(0)
+        n.nowhere_said = Some(said)
+        said
+      }
+    }
+    said.get() |> ignore
+    if n.nowhere_by is Some(read) && read() {
+      return true
+    }
+    i = n.parent
+  }
+  false
+}

@@ -93,9 +93,8 @@ pub fn[T] ListRows::in_node(
   v.owns(fn() { live.val = false; (due.val)() }) |> ignore
   let all : @signals.Signal[(Array[T], Array[String])] = @signals.signal(([], []))
   let previous : Ref[String?] = Ref(None)
-  // The tree reports omissions together. Changes elsewhere in it should not rebuild or remeasure this list;
-  // the list only needs to react when its own visibility changes.
-  let visible = @signals.computed(fn(_) { !v.shown_nowhere() }, same=fn(a, b) { a == b })
+  // Activity follows explicit hidden ancestors at their causes, not the last layout's omissions.
+  let visible = @signals.computed(fn(_) { !v.declared_nowhere() }, same=fn(a, b) { a == b })
   // Changing the row set also tells its height causes. Publish the rows after that change has been worked out,
   // in one reaction; a lazy computed would tell readers of its causes while it was still replacing its value.
   v.reacts(fn() {

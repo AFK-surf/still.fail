@@ -30,10 +30,11 @@ let nav_page_shown : @view.Lent[() -> Bool] = @view.Lent::new()
 
 ///|
 /// Whether the navigation page holding `v` is shown, read as navigation changes
-/// it. This says nothing about clipping or painted opacity. Outside a stack,
-/// true; a nested stack also follows the page holding it.
+/// it, and whether an ancestor explicitly keeps it out (laid_nowhere Is/By). This says nothing about clipping,
+/// room-dependent omissions or painted opacity. Outside a stack, only the explicit omissions apply;
+/// a nested stack also follows the page holding it.
 pub fn page_shown(v : @view.View) -> Bool {
-  v.lent(nav_page_shown).map_or(true, fn(shown) { shown() })
+  !v.declared_nowhere() && v.lent(nav_page_shown).map_or(true, fn(shown) { shown() })
 }
 
 ///|

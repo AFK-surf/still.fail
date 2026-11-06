@@ -671,6 +671,10 @@ struct Node {
   /// left out of its row as it was last laid out (View::drops): laid out nowhere, what it holds with it; none of it drawn,
   /// pressed or read out
   mut out : Bool
+  /// explicit omission's source (laid_nowhere Is/By), read at a cause without running layout; Roomed is layout's
+  mut nowhere_by : (() -> Bool)?
+  /// readers of that declaration, told if it is replaced; its source's own signals say when its value changes
+  mut nowhere_said : @signals.Signal[Int]?
   mut lx : Double
   mut ly : Double
   mut la : Double
@@ -1432,6 +1436,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.place_due = false
       n.placed = false
       n.out = false
+      n.nowhere_by = None
+      n.nowhere_said = None
       n.content = None
       n.left_at = -1.0
       n.span = 0.0
@@ -1550,6 +1556,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         place_due: false,
         placed: false,
         out: false,
+        nowhere_by: None,
+        nowhere_said: None,
         lx: 0.0,
         ly: 0.0,
         la: 1.0,
@@ -5745,6 +5753,8 @@ fn View::let_go(self : View) -> Unit {
   n.beside_point = None
   n.focused_cell = None
   n.focus_shown_cell = None
+  n.nowhere_by = None
+  n.nowhere_said = None
   n.size_cell = None
   n.rect_cell = None
   n.drawn_rect_cell = None

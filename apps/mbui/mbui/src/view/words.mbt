@@ -614,7 +614,20 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double]) -> View {
 /// reader) or read out, a press held on it called off, from the layout that lays it out so; back, the same nodes, as
 /// it is laid out again. Layout's.
 pub fn View::laid_nowhere(self : View, on : Live[Bool]) -> View {
+  guard self.live() is Some(n) else { return self }
+  // The declaration is available before a layout samples it. A room-dependent omission remains layout's;
+  // it cannot decide whether a cause starts or ends an activity (declared_nowhere).
+  n.nowhere_by = match on {
+    Is(on) => Some(fn() { on })
+    By(read) => Some(read)
+    Roomed(_, _) => None
+    Painted(_) => not_painted("a property layout reads")
+  }
   self.bind(Nowhere, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.display = if on { @flex.DisplayNone } else { @flex.Flex } })
+  match n.nowhere_said {
+    Some(said) => said.set(@signals.untracked(fn() { said.get() }) + 1)
+    None => ()
+  }
   self
 }
 
