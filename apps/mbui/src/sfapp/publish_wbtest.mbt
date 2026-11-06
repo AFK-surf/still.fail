@@ -323,6 +323,48 @@ test "多选: the chat's picture opened from a message has that message alone ti
 }
 
 ///|
+test "多选: a message pressed anywhere is ticked or not as its box is; one not ticked fades, its box does not" {
+  let calls : Array[Made] = []
+  let t = publish_core(calls, menu=true)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sfpages.publish_message_left_out(6.0))
+  // the boxes of those not ticked drawn whole, not faded with their messages
+  // (how opaque the box of message `i` is drawn: its own and every box's it is in)
+  let box_alpha = fn(i : Int) -> Double {
+    let (x, y, w, h) = t.all(Checkbox, label="放进图片")[i].rect
+    let laid = t.boxes()
+    let by_index : Map[Int, @ui.Laid] = {}
+    for b in laid {
+      by_index[b.index] = b
+    }
+    let mut most = 0.0
+    for b in laid {
+      if (b.x - x).abs() < 0.5 && (b.y - y).abs() < 0.5 && (b.w - w).abs() < 0.5 && (b.h - h).abs() < 0.5 {
+        let mut a = 1.0
+        let mut at = Some(b)
+        while at is Some(n) {
+          a = a * n.opacity
+          at = by_index.get(n.parent)
+        }
+        most = dmax(most, a)
+      }
+    }
+    most
+  }
+  t.run_for(@ui.move_most_ms)
+  assert_eq(box_alpha(1), 1.0)
+  t.tap_text("部署好了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(!@sfpages.publish_message_left_out(6.0))
+  t.tap_text("部署好了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sfpages.publish_message_left_out(6.0))
+}
+
+///|
 test "多选 from a message the preview does not hold: all of it ticked" {
   let calls : Array[Made] = []
   let t = publish_core(calls, menu=true)

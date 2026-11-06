@@ -620,7 +620,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         let lit = if taking {
           0.0
         } else {
-          let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k)))
+          let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k))) || c.hand_lit(c.lit(c.id("publish/said/" + k)))
           @motion.animate(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
         }
         let ground = if taking {
@@ -635,18 +635,34 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
             let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
             c.look(g, @ui.look(alpha=lit))
           }
+          // (what it says, faded once out of the picture; its box to tick beside it never is, so that every one shows,
+          // 2026-11-06 用户 of the boxes of those not ticked: 「看不清」; pressed anywhere, it is ticked or not as its box
+          // is, 「其它行怎么选」)
+          let content = Ref(0)
+          let press = if taking { 0 } else { c.id("publish/said/" + k) }
           let said = c.box(style=publish_said, fn() {
+            content.val = c.box(style=publish_said, id=press, fn() {
             // (its files drawn each to tick: file_item asks picturing)
             picturing.val = Some((m.seq, taking))
             message_row(c, src, here, m)
             picturing.val = None
+            match hidden.get(m.seq) {
+              Some(h) if !taking =>
+                c.box(style=if m.mine { publish_note_mine } else { publish_note_said }, fn() {
+                  @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
+                  c.text(h, style=publish_meta) |> ignore
+                })
+                |> ignore
+              _ => ()
+            }
+            })
             // on the page its box to tick, in the column before the words (before the pictures out in the margin), on
             // the middle of its first line: its head's, or the first of the viewer's own bubble
             if !taking {
               c.layer(fn() {
                 let style = @ui.style(ml=@sf.room_of(-(paper_in - paper_edge + ticks)), pt=@sf.room_of(down))
                 c.box(style=publish_message_tick.then(style), fn() {
-                  let look = @kit.checkbox_look_of(size=side, radius=@sf.theme().rows.check_corner)
+                  let look = @kit.checkbox_look_of(size=side, radius=@sf.theme().rows.check_corner, edge=@sf.theme().p.muted)
                   let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message"), look~).value
                   if (now == On) != on {
                     if now == On {
@@ -660,22 +676,20 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
               })
               |> ignore
             }
-            match hidden.get(m.seq) {
-              Some(h) if !taking =>
-                c.box(style=if m.mine { publish_note_mine } else { publish_note_said }, fn() {
-                  @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
-                  c.text(h, style=publish_meta) |> ignore
-                })
-                |> ignore
-              _ => ()
-            }
           })
+          if press != 0 && c.clicked(press) {
+            if on {
+              publishing.off[k] = true
+            } else {
+              publishing.off.remove(k)
+            }
+          }
           if !taking && publishing.aim && publishing.picked == Some(m.seq) {
             @motion.measure(c, said, publish_aim_measure(m.seq))
           }
           let out = if taking { 0.0 } else { publish_out(c, k, on) }
           if out > 0.0 {
-            c.look(said, @ui.look(alpha=publish_faded(out)))
+            c.look(content.val, @ui.look(alpha=publish_faded(out)))
           }
         })
         |> ignore
