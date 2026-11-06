@@ -370,7 +370,7 @@ fn Ctx::in_layer(self : Ctx, l : Layer, x : Double, y : Double) -> Bool {
 ///|
 /// As the frame starts: Escape to the topmost layer; a press since the last frame dismisses the layers it was outside
 /// of, from the top down to the first it was in (or a modal one: what is under that never saw it).
-fn Ctx::layer_keys(self : Ctx) -> Unit {
+fn Ctx::layer_keys(self : Ctx, tree_stack? : Int = -2) -> Unit {
   // (the keys and the focus, read so: hand.mbt)
   hand_presses_read()
   hand.focus_id.get() |> ignore
@@ -399,6 +399,11 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
         let l = self.last_layers[k]
         k = k - 1
         if !self.layer_takes(l) {
+          continue
+        }
+        // A tree target above this layer took the input before it could reach the old layer. In particular, a
+        // dismissing Down may already have removed that target, so use the stack captured before it was delivered.
+        if self.press_down_tree && self.layer_stack(l) < tree_stack {
           continue
         }
         if self.in_layer(l, x, y) {
@@ -1091,14 +1096,14 @@ fn Ctx::keys_reach(self : Ctx, id : Int) -> Bool {
 /// begins (Ctx::layer_keys), from what the last frame built: an Escape come since to the topmost it dismisses, down to
 /// where the keys go; the press outside each, from the top down; each dismissed so given up and told so then, the
 /// topmost first (Ctx::layers_dismissed).
-fn Ctx::layer_keys_now(self : Ctx) -> Unit {
+fn Ctx::layer_keys_now(self : Ctx, tree_stack? : Int = -2) -> Unit {
   let before : Map[Int, Dismiss] = {}
   self.dismissals.each(fn(id, why) { before[id] = why })
   let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
   // (an Escape come since the frame began: in the keys the next frame takes, desk_frame_start; taken here, it is gone
   // for everything else as it is there)
   self.layer_escape(desk.mutable_keys) |> ignore
-  self.layer_keys()
+  self.layer_keys(tree_stack~)
   let gone : Array[(Int, Dismiss)] = []
   for l in open {
     match self.dismissals.get(l.id) {

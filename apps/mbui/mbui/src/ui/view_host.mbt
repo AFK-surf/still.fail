@@ -2772,7 +2772,7 @@ fn view_old_moved(x : Double, y : Double) -> Unit {
 /// button, pressed; called off, nothing); down where the old view is, the old view's (held so, its own to call off);
 /// down elsewhere, nothing's. A move with nothing held goes to the old view where it is over it. True where the old
 /// view is to see none of it.
-fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
+fn view_pointer(kind : Int, x : Double, y : Double, button : Int, down_stack : Ref[Int]) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return false
@@ -2784,6 +2784,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   g().projected_input(tree)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
+  // Keep the target's stack before delivering Down: its handler can close or replace the layer that took it.
+  if kind == 0 {
+    down_stack.val = tree.stack_takes(x, y)
+  }
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
     // Resolve its logical owner before outside-press reactions can close a panel and its hosted portals.

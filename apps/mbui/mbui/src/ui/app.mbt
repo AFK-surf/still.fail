@@ -899,17 +899,17 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   view_point_said(kind, x, y)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
-  if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
+  let down_stack = Ref(-2)
+  if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button, down_stack) {
     view_pointed()
     input_taped("pointer", h_event_time(), args)
     host_tree_input("pointer", h_event_time(), args)
-    // (a press the window's tree took is outside every layer of the old frame's: what it dismisses so, at its moment,
-    // as one the old frame takes is: overlay.mbt)
+    // A tree press is outside old layers above or at its target's stack, but not layers under it.
     if kind == 0 {
       let c = g()
       c.press_down = Some((x, y))
       c.press_down_tree = true
-      c.layer_keys_now()
+      c.layer_keys_now(tree_stack=down_stack.val)
     }
   } else {
     // (what it changes, as it is taken, its own, till the event it came as is over: frame_watch.mbt's
