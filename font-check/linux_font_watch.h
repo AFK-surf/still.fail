@@ -13,6 +13,7 @@
 
 typedef struct {
   gboolean tree;
+  char *path;
   GHashTable *children;  // names of configured roots (or the next missing component) in this parent
 } mb_font_dir;
 
@@ -25,6 +26,7 @@ typedef struct {
 
 static void mb_font_dir_free(gpointer data) {
   mb_font_dir *dir = data;
+  g_free(dir->path);
   g_hash_table_unref(dir->children);
   g_free(dir);
 }
@@ -36,6 +38,7 @@ static void mb_font_watch_dir(mb_font_watch *w, const char *path, gboolean tree,
   mb_font_dir *dir = g_hash_table_lookup(w->dirs, GINT_TO_POINTER(wd));
   if (!dir) {
     dir = g_new0(mb_font_dir, 1);
+    dir->path = g_strdup(path);
     dir->children = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
     g_hash_table_insert(w->dirs, GINT_TO_POINTER(wd), dir);
   }
@@ -112,6 +115,7 @@ static gboolean mb_font_watch_install(mb_font_watch *w) {
 static gboolean mb_font_watch_event(gint fd, GIOCondition condition, gpointer data) {
   mb_font_watch *w = data;
   gboolean changed = (condition & (G_IO_ERR | G_IO_HUP)) != 0;
+  GHashTable *written = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
   char buf[16384] __attribute__((aligned(__alignof__(struct inotify_event))));
   ssize_t len;
   while ((len = read(fd, buf, sizeof buf)) > 0) {
@@ -120,10 +124,21 @@ static gboolean mb_font_watch_event(gint fd, GIOCondition condition, gpointer da
       mb_font_dir *dir = g_hash_table_lookup(w->dirs, GINT_TO_POINTER(event->wd));
       if ((event->mask & IN_Q_OVERFLOW) || (dir && (dir->tree || !event->len ||
           g_hash_table_contains(dir->children, event->name)))) changed = TRUE;
+      // Replacing a font in place does not alter its directory's timestamp. Refresh that directory's cache explicitly
+      // on close, before FcConfigBuildFonts, so fontconfig cannot reuse a stale but apparently valid cache.
+      if (dir && dir->tree && (event->mask & IN_CLOSE_WRITE)) g_hash_table_add(written, g_strdup(dir->path));
       p += sizeof *event + event->len;
     }
   }
   if (len < 0 && errno != EAGAIN && errno != EINTR) changed = TRUE;
+  GHashTableIter it;
+  gpointer path;
+  g_hash_table_iter_init(&it, written);
+  while (g_hash_table_iter_next(&it, &path, NULL)) {
+    FcCache *cache = FcDirCacheRescan((const FcChar8 *)path, FcConfigGetCurrent());
+    if (cache) FcDirCacheUnload(cache);
+  }
+  g_hash_table_unref(written);
   if (!changed) return G_SOURCE_CONTINUE;
   if (!mb_font_watch_install(w)) return G_SOURCE_CONTINUE;
   w->changed();
