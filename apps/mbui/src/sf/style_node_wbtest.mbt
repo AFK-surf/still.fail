@@ -614,6 +614,49 @@ test "an unpressed tall inner row and its avatar follow the old corner rule" {
 }
 
 ///|
+test "a tall account card and avatar have the same corner check in old and retained trees" {
+  let old = @ui.Tester::new(fn(c) {
+    c.with_theme(ui_theme(), fn() {
+      c.box(w=Px(256.0), h=Px(277.0), pad=16.0, radius=42.0, bg=0x777777FFL, fn() {
+        c.box(w=Px(224.0), h=Px(245.0), pad=8.0, radius=26.0, bg=0x333333FFL, clip=true, fn() {
+          c.box(style=@ui.style(radius=Inner), w=Fill(1.0), h=Fill(1.0), dir=Row, pad=16.0, fn() {
+            avatar(c, "alexandra@example.org", "Alexandra Chen", "", 46.0)
+          }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    })
+  }, w=320.0, h=320.0, corners_held=false)
+  old.draw()
+  let old_faults = old.corner_faults()
+  assert_eq(old_faults, [])
+  let row_pad = @signals.signal(16.0)
+  let t = @ui.Tester::new(fn(_) {  }, w=320.0, h=320.0, corners_held=false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.box(fn(panel) {
+      panel.width(Is(Some(256.0))).height(Is(Some(277.0))).pad(Is(16.0))
+      .radius(Is(42.0)).ground(Is(0x777777FFL)) |> ignore
+      panel.box(fn(card) {
+        card.width(Is(Some(224.0))).height(Is(Some(245.0))).pad(Is(8.0))
+        .radius(Is(26.0)).ground(Is(0x333333FFL)).clips(Is(true)) |> ignore
+        card.box(fn(row) {
+          row.row(Is(true)).height(Is(Some(229.0))).pad(By(fn() { row_pad.get() })) |> ignore
+          style_node(row, fn() { @ui.style(radius=Inner) })
+          avatar_node(row, fn() { "alexandra@example.org" }, fn() { "Alexandra Chen" }, fn() { "" }, 46.0)
+        }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let tree_faults = t.corner_faults()
+  assert_eq(tree_faults, old_faults)
+  row_pad.set(4.0)
+  t.draw()
+  let near_faults = t.corner_faults()
+  assert_true(near_faults.iter().any(fn(f) { f.contains("too square for the circle") }), msg=near_faults.join("\n"))
+}
+
+///|
 test "layout-derived corners are not recomputed for unrelated text ink changes" {
   let ink = @signals.signal(0x111111FFL, same=fn(a, b) { a == b })
   let ground = @signals.signal(0x333333FFL, same=fn(a, b) { a == b })

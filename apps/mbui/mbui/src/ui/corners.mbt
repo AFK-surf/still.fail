@@ -951,7 +951,10 @@ fn Ctx::round_held(
         continue
       }
       let (dx, dy) = corner_gaps(a, b, k)
-      let near_both = (dx < ra && dy < ra) || ((dx - dy).abs() <= 0.5 && dx <= far + 0.5)
+      // A circle beyond the theme's following range stands on its own: it cannot require the containing card to
+      // change its corner. Still check one within range even where the current corner is too square to reach it.
+      let in_range = match fit { Some(_) => dmax(dx, dy) <= far + 0.5; None => true }
+      let near_both = in_range && ((dx < ra && dy < ra) || ((dx - dy).abs() <= 0.5 && dx <= far + 0.5))
       // (a circle there: one whose corner there is its half; one round elsewhere but following the corner there, a
       // block in it, InnerOr's, is no circle there)
       if b.corner_at(k) >= half - 0.5 && dx >= -0.5 && dy >= -0.5 && near_both && nearest_corner(k, l, t, r, d) {
