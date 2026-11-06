@@ -2032,6 +2032,18 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   }
   self.scene_block_take(l, at, self.ninst, sat, self.segs.length() / 4, band) |> ignore
   held.clear()
+  // (a Tester's: what the walk said its own reach is holds all its own instances reach, Ctx::scene_layer_left_out
+  // leaving out nothing of it that shows)
+  if looks_check.val {
+    let (a0, b0, a1, b1) = own_reach_checked.rect()
+    let (x0, y0, x1, y1) = l.own_reach.rect()
+    if !l.own_only && a1 > a0 && !(x1 > x0 && a0 >= x0 && b0 >= y0 && a1 <= x1 && b1 <= y1) {
+      @view.fault(
+        "layer \{l.id.at}: its own instances reach \{own_reach_checked.rect()}, past what its walk said it reaches \{l.own_reach.rect()}",
+      )
+    }
+    own_reach_checked.clear()
+  }
   scene_now_reach(l)
   l.block_seg_base = s0
   l.bands_at.clear()
@@ -2045,6 +2057,10 @@ fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom
   let mut band = band
   if to > from {
     self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
+    // (a Tester's: how far its own instances reach, worked out from them, to hold what the walk said against)
+    if looks_check.val {
+      scene.parts.reach_add(self.inst, from, to, own_reach_checked)
+    }
     // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
     while band < l.bands_at.length() && l.bands_at[band] < to {
       if l.bands_at[band] >= from {
@@ -2804,3 +2820,8 @@ fn scene_check_begin() -> Unit {
   check_said.insts_compared = 0
   check_said.insts_skipped = 0
 }
+
+///|
+/// A Tester's: how far a layer's own instances reach, worked out from them as its block is kept (Ctx::scene_block_kept).
+// kept across runs: cleared as each block is kept
+let own_reach_checked : @damage.Rect = @damage.Rect::none()
