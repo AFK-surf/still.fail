@@ -141,6 +141,8 @@ priv struct TapeBar {
   /// what such a page does in its bar, as it gave it, how tall it stands there in a page laid out so, and which making
   /// of the page gave it (the bar's made again for each)
   page_actions : @signals.Signal[((@view.View) -> Unit, (@sf.Look) -> Double, Int)?]
+  /// the outside bar's back overridden by a page, while the node that gave it is alive
+  page_back : @signals.Signal[(() -> String?, () -> Unit, Int)?]
 }
 
 ///|
@@ -171,6 +173,13 @@ fn tape_bar_of(k : Int) -> TapeBar {
         back: fn() {  },
         page_said: @signals.signal(None, same=fn(a, b) { a == b }),
         page_actions: @signals.signal(None, same=fn(a, b) {
+          match (a, b) {
+            (None, None) => true
+            (Some(x), Some(y)) => x.2 == y.2
+            _ => false
+          }
+        }),
+        page_back: @signals.signal(None, same=fn(a, b) {
           match (a, b) {
             (None, None) => true
             (Some(x), Some(y)) => x.2 == y.2
@@ -210,7 +219,7 @@ fn tape_bar_head(b : @view.View, k : Int, made : Bool, tips : @sf.TipLayer) -> U
       }
       None => ()
     }
-    Some(tape_made_bar(under.val, place.val, tb.page_said.get()))
+    Some(tape_made_bar(under.val, place.val, tb.page_said.get(), tape_made_back_label(tb)))
   }
   b.show(fn() { said() is Some(_) }, fn(h) {
     pane_bar_node(
@@ -218,7 +227,7 @@ fn tape_bar_head(b : @view.View, k : Int, made : Bool, tips : @sf.TipLayer) -> U
       said,
       fn() {
         if made {
-          app.nav.pop() |> ignore
+          tape_made_back(tb)
         } else {
           (tb.back)()
         }
@@ -239,6 +248,41 @@ fn tape_bar_head(b : @view.View, k : Int, made : Bool, tips : @sf.TipLayer) -> U
     )
     |> ignore
   })
+}
+
+///|
+/// What the page says of the outside bar's back now, followed as its label's signals change.
+fn tape_made_back_label(tb : TapeBar) -> String? {
+  match tb.page_back.get() {
+    Some((label, _, _)) => label()
+    None => None
+  }
+}
+
+///|
+/// The page's override acts only while it says so; otherwise the made page's back is the stack's, as before.
+fn tape_made_back(tb : TapeBar) -> Unit {
+  match tb.page_back.get() {
+    Some((label, go, _)) if label() is Some(_) => go()
+    _ => app.nav.pop() |> ignore
+  }
+}
+
+///|
+/// Let pages under `p` register an outside-bar back for `tb`. The registering node owns it; an older node let go after
+/// its replacement cannot clear the replacement's. The bar is captured rather than looked up again after its entry goes.
+fn tape_lend_page_back(p : @view.View, tb : TapeBar) -> Unit {
+  p.lends(@sf.page_bar_back_lent, fn(owner, label, go) {
+    let gen = next_tape_actions_gen()
+    tb.page_back.set(Some((label, go, gen)))
+    owner.owns(fn() {
+      if @signals.untracked(fn() { tb.page_back.get() }) is Some((_, _, g)) && g == gen {
+        tb.page_back.set(None)
+      }
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -318,6 +362,8 @@ fn tape_made(
             let acts = fn(make : (@view.View) -> Unit, side : (@sf.Look) -> Double) {
               tape_bar_of(k).page_actions.set(Some((make, side, gen)))
             }
+            // (a page can override its outside bar's back without owning its visibility or the system's back)
+            tape_lend_page_back(p, tape_bar_of(k))
             p.owns(fn() {
               let tb = tape_bar_of(k)
               if @signals.untracked(fn() { tb.page_actions.get() }) is Some((_, _, g)) && g == gen {
@@ -454,11 +500,12 @@ let tape_made_frame : @sf.PageFrame = { back: None, top: 0.0, foot: 0.0, named: 
 /// The bar over a page made once in the page's panel (tape_made), as it said of itself (`said`: its title, what it is
 /// for; none yet, nothing said), back where the page it was put on from (`under`) is one of the settings' or a place
 /// of the rail's (setting_page's); none over a `place` of the rail's itself, whatever is under it (place_page's).
-fn tape_made_bar(under : Page?, place : Bool, said : @sf.PageSaid?) -> PaneBarSaid {
+fn tape_made_bar(under : Page?, place : Bool, said : @sf.PageSaid?, back_override : String?) -> PaneBarSaid {
   let back = match under {
     Some(u) if !place && u is (Setting(_) | Place(_)) => Some(@sfbase.back_label(u))
     _ => None
   }
+  let back = back.map(fn(original) { back_override.unwrap_or(original) })
   match said {
     Some(s) => { back, title: s.title, small: "", about: s.about }
     None => { back, title: "", small: "", about: "" }
