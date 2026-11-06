@@ -1,14 +1,53 @@
 ///|
+fn info_release(t : @ui.Tester, label : String, hz : Int) -> Double raise {
+  let (x, y) = t.find(label).unwrap()
+  let start = t.time()
+  let press_ms = 50.0
+  let release_at = start + press_ms
+  let frames : Array[Double] = []
+  t.record_host()
+  t.touch_at(0, x, y, start)
+  if hz > 0 {
+    let period = 1000.0 / hz.to_double()
+    let mut i = 1
+    while i.to_double() * period < press_ms {
+      let at = start + i.to_double() * period
+      t.frame_at(at)
+      frames.push(at)
+      i += 1
+    }
+  }
+  t.advance(release_at - t.time())
+  t.touch_at(2, x, y, release_at)
+  assert_eq(t.host_frames().map(fn(f) { f.at }), frames)
+  println("info input \{label} at \{start}/\{release_at}, \{hz} Hz: actual frames \{frames}")
+  release_at
+}
+
+///|
 test "a chat info action opens its tab and closes the info at release, once, with no following frame" {
-  for (label, tab) in [("Station 文件", "files"), ("图片、文件和链接", "things"), ("全部 4 个 PR", "things")] {
-    for framed in [false, true] {
+  for (label, tab) in [("Station 文件", "files"), ("图片、文件和链接", "things"), ("全部 4 个 PR", "things"), ("agent 往来", "letters")] {
+    let release_times : Array[Double] = []
+    for hz in [0, 60, 120] {
       new_run()
       let calls : Array[Made] = []
+      let opened_at : Array[Double] = []
       let base = fixture("chat")
       let src : Source = {
         ..base,
+        topic: fn(name, params) {
+          let answer = (base.topic)(name, params)
+          match (tab, name, answer.value) {
+            ("letters", "chat", Some(v)) => { ..answer, value: Some(fix_with_letters(v)) }
+            ("letters", "chatLetters", _) => { ..answer, value: Some(fix_letters()) }
+            _ => answer
+          }
+        },
         call: fn(name, params, done) {
           calls.push({ name, params, bytes: None, done, heard: None })
+          if name == "chat.tabs.open" {
+            opened_at.push(@ui.view_tree().unwrap().logic_at())
+          }
           (base.call)(name, params, done)
         },
       }
@@ -18,15 +57,14 @@ test "a chat info action opens its tab and closes the info at release, once, wit
       t.run_for(@ui.move_most_ms)
       t.click(Button, label="对话信息")
       t.run_for(@kit.pop_ms)
-      let (x, y) = t.find(label).unwrap()
-      t.touch_at(0, x, y, t.time())
-      if framed { t.frame() }
-      t.touch_at(2, x, y, t.time())
+      let release_at = info_release(t, label, hz)
+      release_times.push(release_at)
       assert_eq(@sfdesk.chat_pops_open().0, false, msg=label)
       assert_eq(side_now(r), ([tab], tab), msg=label)
       let opened = named(calls, "chat.tabs.open")
       assert_eq(opened.length(), 1, msg=label)
       assert_eq(text(Some(opened[0].params), "chat"), "ws1/st1:s-c1")
+      assert_eq(opened_at, [release_at], msg="the action belongs to the release's input time")
       t.run_for(dmax(@kit.presence_out_ms, @ui.move_most_ms))
       assert_eq(named(calls, "chat.tabs.open").length(), 1, msg="drawing does not repeat the action")
       if tab == "files" {
@@ -36,5 +74,46 @@ test "a chat info action opens its tab and closes the info at release, once, wit
         assert_eq(arrivals.length(), 1, msg="rebuilding or retaining the tab tells its directory once")
       }
     }
+    assert_eq(release_times[0], release_times[1])
+    assert_eq(release_times[0], release_times[2])
   }
+}
+
+///|
+test "a chat info opener changes the page at release with the same inputs at any frame cadence" {
+  let release_times : Array[Double] = []
+  for hz in [0, 60, 120] {
+    let t = wide_tester([], mode="chat-opener")
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="对话信息")
+    t.run_for(@kit.pop_ms)
+    let depth = app.nav.depth()
+    release_times.push(info_release(t, "由「和 Ana 一起看新版的引导页」创建", hz))
+    assert_false(@sfdesk.chat_pops_open().0)
+    opener_open(t)
+    assert_eq(app.nav.depth(), depth + 1)
+    t.run_for(@ui.move_most_ms)
+    opener_open(t)
+    assert_eq(app.nav.depth(), depth + 1, msg="drawing does not open the page a second time")
+  }
+  assert_eq(release_times[0], release_times[1])
+  assert_eq(release_times[0], release_times[2])
+}
+
+///|
+test "a chat info pull opens its URL at release once without waiting for a frame" {
+  let release_times : Array[Double] = []
+  for hz in [0, 60, 120] {
+    let t = wide_tester([], mode="chat")
+    t.run_for(@ui.move_most_ms)
+    t.click(Button, label="对话信息")
+    t.run_for(@kit.pop_ms)
+    release_times.push(info_release(t, "列表里的图片按需解码", hz))
+    assert_false(@sfdesk.chat_pops_open().0)
+    assert_eq(t.opened(), ["https://github.com/acme/shop/pull/131"])
+    t.run_for(@ui.move_most_ms)
+    assert_eq(t.opened(), ["https://github.com/acme/shop/pull/131"], msg="drawing does not open the URL again")
+  }
+  assert_eq(release_times[0], release_times[1])
+  assert_eq(release_times[0], release_times[2])
 }
