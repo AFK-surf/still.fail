@@ -2045,7 +2045,10 @@ fn Ctx::scene_emitted(
           self.scene_emitted(p, c)
         } else {
           match self.scene_moved_by(p.tree, l, c) {
-            Some(m) => self.scene_emitted(p, c, moved=m)
+            Some(m) => {
+              copy_not_count("(moved by an offset in what holds it)")
+              self.scene_emitted(p, c, moved=m)
+            }
             None => self.scene_redrawn_in(p, l, c)
           }
         }
@@ -2100,6 +2103,7 @@ fn insts_moved_by(
       a[b + 3] = a[b + 3] + dy
     }
   }
+  copy_nots["(instances shifted)"] = copy_nots.get_or_default("(instances shifted)", 0) + k1 - k0
   for k in k0..<k1 {
     let b = k * inst_size
     // (the frame's shapes' pieces: shares of their bands, nothing to move)
