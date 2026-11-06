@@ -48,6 +48,10 @@ fn ptrace(step : Double, change? : Bool = false) -> Unit {
     let f = @signals.untracked(fn() { scroll.fling.get() })
     println("FRAME t=\{t} x=\{@signals.untracked(fn() { scroll.x.get() })} past=\{scroll.past(tree)} fling=\{f.map(fn(f) { (f.end_t, f.end_x, f.till) })}")
   }
+  if !told {
+    println("EVENT at 1520")
+    tree.event(1520.0, fn() { keys.set(keys.get()[0:keys.get().length() - 1].to_array()) })
+  }
   tree.frame(390.0, 844.0, now=2600.0) |> ignore
   let rows = []
   for d in tree.drawn() {
