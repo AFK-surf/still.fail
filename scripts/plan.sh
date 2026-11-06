@@ -15,7 +15,7 @@ has_but() {
 }
 
 decide() {
-  # Part by part, as ~/bin/ember-deploy decided them.
+  # Part by part.
   static=()
   # A reviewed stable release gets a fresh, pinned web artifact even when only its notes changed.
   if has '^docs/releases/'; then static+=(web-beta); fi
