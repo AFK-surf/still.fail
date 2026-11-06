@@ -567,7 +567,15 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 /// however far that is: Scroll::grew_above): a fling under way down toward its foot, short of it still (or meeting it
 /// at this very moment), meets it where it is now, worked out again from where it set out (rows below measured anew,
 /// come or gone; what grew above, Scroll::grew_above), at rest then.
+///|
+let foot_trace : Ref[Bool] = Ref(false)
+
+///|
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
+  if foot_trace.val {
+    let f = @signals.untracked(fn() { self.fling.get() })
+    println("FM t=\{t} most_in=\{most} bar_off=\{(self.bar_off)()} foot_hand=\{(self.foot_hand)()} held_since=\{(self.held_since)()} laid=\{laid} fling=\{f.map(fn(f) { (f.t0, f.x0, f.v0, f.end_t, f.end_x, f.till) })}")
+  }
   // (a list that holds itself at its ends (reads_free) counts how far it can go in its own terms, its fling goes in the
   // hand's: its foot where the hand's terms have it, as measured where its last row is laid out (list_anchor.mbt's
   // foot_hand), else as far from where the hand has it as the list counts it to be)
@@ -584,6 +592,9 @@ fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? 
     return
   }
   let density = w.px / dmax(w.h, 1.0)
+  if foot_trace.val {
+    println("FM   replanned to \{most}")
+  }
   match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
     // (past its foot already as it is laid out now: it met it where its way comes to it, at the moment it did, as
     // planned from where it set out, whatever frames were drawn between; not before what it holds came to be as it
