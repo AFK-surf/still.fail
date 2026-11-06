@@ -2806,14 +2806,15 @@ fn Ctx::scene_block_put(
     // (its glyphs not yet set on the pixels, told where they are in the frame: set as what they are in is put, scene_glyphs)
     // (put where no place of its own is: set on the pixels now, where the window has them)
     let unset = scene_own_depth.val > 0 || scene_put_in_own.val > 0
-    for gl in l.block_glyphs {
-      if gl.0 >= from && gl.0 < to {
-        if unset {
-          scene_glyphs.push((k + gl.0 - from, gl.1))
-        } else {
-          glyph_set(self.inst, k + gl.0 - from, gl.1, self.scale)
-        }
+    let mut g = block_glyphs_from(l.block_glyphs, from)
+    while g < l.block_glyphs.length() && l.block_glyphs[g].0 < to {
+      let (i, oy) = l.block_glyphs[g]
+      if unset {
+        scene_glyphs.push((k + i - from, oy))
+      } else {
+        glyph_set(self.inst, k + i - from, oy, self.scale)
       }
+      g = g + 1
     }
     // (each one's levels as drawn, as far below the one it begins in now (`lvl`): what puts it where a layer holding it
     // is drawn from a place of its own reads, scene_origin_put)
@@ -3146,19 +3147,25 @@ fn scene_glyphs_cut(k : Int) -> Unit {
 }
 
 ///|
-/// Where in scene_glyphs the first of instance `k` or after is.
-fn scene_glyphs_from(k : Int) -> Int {
+/// Where in `gs` (a block's glyphs, in the order of their instances) the first of instance `k` or after is.
+fn block_glyphs_from(gs : Array[(Int, Double)], k : Int) -> Int {
   let mut lo = 0
-  let mut hi = scene_glyphs.length()
+  let mut hi = gs.length()
   while lo < hi {
     let m = (lo + hi) / 2
-    if scene_glyphs[m].0 < k {
+    if gs[m].0 < k {
       lo = m + 1
     } else {
       hi = m
     }
   }
   lo
+}
+
+///|
+/// Where in scene_glyphs the first of instance `k` or after is.
+fn scene_glyphs_from(k : Int) -> Int {
+  block_glyphs_from(scene_glyphs, k)
 }
 
 ///|
