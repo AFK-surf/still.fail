@@ -1,6 +1,56 @@
 // A retained list across its first reading, a change of source, and changes while earlier rows are still going.
 
 ///|
+test "a retained moving row keeps its focused control through its zero-height first frame" {
+  let items = @signals.signal(["a", "b", "c"])
+  let buttons : Map[String, @view.View] = {}
+  let position : @view.AnchoredPosition[String] = @view.AnchoredPosition::new()
+  let scroll = @view.Scroll::list()
+  let presses = Ref(0)
+  let t = Tester::new(fn(_) { }, w=300.0, h=300.0)
+  set_view_app(fn(root) {
+    let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(k) { k }, fn(_) { "" },
+      moves=fn(_) { true })
+    root.height(Is(Some(300.0))).scrolls_window(scroll, fn() { [..(rows.read)().1, "footer"] }, position~,
+      rooms=fn() {
+        let room = (rows.room_now)()
+        fn(k, natural, width) {
+          if k == "footer" { @view.list_room(natural) } else { room(k, natural, width) }
+        }
+      }, fn(row, k) {
+        row.height(Is(Some(50.0))) |> ignore
+        if k != "footer" {
+          row.box(fn(button) {
+            buttons[k] = button
+            button.height(Is(Some(50.0))).focusable(Is(true)).says(Is(Some(@view.said(Button, label=k))))
+            .on_press(fn() { presses.val += 1 }) |> ignore
+          }) |> ignore
+        }
+      }) |> ignore
+  })
+  t.draw()
+  t.act(Button, Focus, label="b")
+  let focused = buttons["b"].id()
+  // A new zero-height row between the moved row and the old anchor must not hide the moved row either.
+  items.set(["b", "new", "a", "c"])
+  t.draw()
+  let laid = position.geometry().unwrap().rows
+  assert_eq(laid[0], ("b", 0.0, 0.0))
+  assert_eq(laid[1], ("new", 0.0, 0.0))
+  assert_eq(view_tree().unwrap().focused_now().0, Some(focused), msg="laid rows: \{laid}")
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("b"))
+  assert_eq(scroll.at(view_tree().unwrap()), 0.0)
+  assert_eq(scroll.most(), 0.0)
+  t.key(key_space)
+  assert_eq(presses.val, 1)
+  items.set(["a", "c"])
+  t.draw()
+  assert_true(t.all(Button, label="b").is_empty())
+  t.key(key_space)
+  assert_eq(presses.val, 1)
+}
+
+///|
 test "retained rows show a first reading and another source at once, then animate changes to that source" {
   let source : @signals.Signal[(String?, Array[(String, Double)])] = @signals.signal((None, []))
   let out : Ref[NodeRows[(String, Double)]?] = Ref(None)
