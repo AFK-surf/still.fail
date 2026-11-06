@@ -1,5 +1,5 @@
 {
-  "meta.monoid-one-devices.499d": "monoid · One devices",
+  "meta.monoid-one-devices.499d": "monoid · すべてのデバイスを、ひとつに",
   "meta.monoid-joins-the-agents.1792": "monoid は、すべてのコンピューターの agent をひとつにつなぎます。サブスクリプションはひとつのアカウントプールに、指示はチームで Slack から、iPhone・Android・デスクトップ・Web でいつでも続きを。",
   "meta.account-pool-teams-every.c744": "アカウントプール、チーム、マルチデバイス。すべてのコンピューターの agent を、ひとつに。",
   "nav.sections.7ff5": "セクション",
@@ -12,6 +12,7 @@
   "nav.faq.0368": "よくある質問",
   "nav.open-monoid.5754": "monoid を開く",
   "nav.menu.57f5": "メニュー",
+  "hero.one-devices.6d97": "全デバイスを<span class=\"vh\">、</span><br>ひとつに",
   "hero.monoid-joins-the-agents.967e": "すべてのコンピューターの agent を、<span class=\"nb\">ひとつにつなぐ。</span>サブスクリプションは<b>ひとつのアカウントプール</b>に、指示は<b>チームで</b> Slack から、続きは<b>どのデバイス</b>からでも。",
   "hero.download-monoid.7e7d": "monoid をダウンロード",
   "hero.open-the-web-app.7646": "Web アプリを開く",

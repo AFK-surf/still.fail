@@ -14,7 +14,6 @@
 }
 .band.end h2 { font-size: var(--t-display); line-height: var(--lh-display); letter-spacing: var(--tr-display); max-width: 13ch; margin-inline: auto; }
 /* The comma the line break replaces, for screen readers only. */
-.band.end h2 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .band.end .lead { color: var(--brand-ink); margin: clamp(16px, 1.6vw, 24px) auto 0; text-wrap: balance; }
 .band.end .actions { justify-content: center; margin-top: clamp(28px, 2.6vw, 40px); }
 .band.end .field-wrap { height: calc(var(--fc) * 3); }

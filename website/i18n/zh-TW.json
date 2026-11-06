@@ -1,5 +1,5 @@
 {
-  "meta.monoid-one-devices.499d": "monoid · One devices",
+  "meta.monoid-one-devices.499d": "monoid · 所有裝置，合而為一",
   "meta.monoid-joins-the-agents.1792": "monoid 把每台電腦上的 agent 連成一台：訂閱帳號共用一個帳號池，團隊在 Slack 裡一起指揮，iPhone、Android、桌面和網頁隨時接手。",
   "meta.account-pool-teams-every.c744": "帳號池、協作、多裝置：把每台電腦上的 agent 連成一台。",
   "nav.sections.7ff5": "頁面",
@@ -12,6 +12,7 @@
   "nav.faq.0368": "常見問題",
   "nav.open-monoid.5754": "開啟 monoid",
   "nav.menu.57f5": "選單",
+  "hero.one-devices.6d97": "所有裝置<span class=\"vh\">，</span><br>合而為一",
   "hero.monoid-joins-the-agents.967e": "把每台電腦上的 agent 連成一台。<b>一個帳號池</b>裝下所有訂閱，<b>一個團隊</b>在 Slack 裡指揮，<b>每台裝置</b>都能<span class=\"nb\">接著做。</span>",
   "hero.download-monoid.7e7d": "下載 monoid",
   "hero.open-the-web-app.7646": "開啟網頁版",

@@ -1,5 +1,5 @@
 {
-  "meta.monoid-one-devices.499d": "monoid · One devices",
+  "meta.monoid-one-devices.499d": "monoid · 모든 기기를 하나로",
   "meta.monoid-joins-the-agents.1792": "monoid는 모든 컴퓨터의 agent를 하나로 묶어요. 구독은 하나의 계정 풀로 모으고, 팀은 Slack에서 지시하고, iPhone, Android, 데스크톱, 웹 어디서든 이어서 쓸 수 있어요.",
   "meta.account-pool-teams-every.c744": "계정 풀, 팀, 모든 기기: 모든 컴퓨터의 agent를 하나로.",
   "nav.sections.7ff5": "섹션",
@@ -12,6 +12,7 @@
   "nav.faq.0368": "자주 묻는 질문",
   "nav.open-monoid.5754": "monoid 열기",
   "nav.menu.57f5": "메뉴",
+  "hero.one-devices.6d97": "모든 기기를<br>하나로",
   "hero.monoid-joins-the-agents.967e": "모든 컴퓨터의 agent를 하나로 묶어요. <b>하나의 계정 풀</b>에 모든 구독을 담고, <b>한 팀</b>이 Slack에서 지시하고, <b>모든 기기</b>에서 하던 일을 <span class=\"nb\">이어서 해요.</span>",
   "hero.download-monoid.7e7d": "monoid 다운로드",
   "hero.open-the-web-app.7646": "웹 앱 열기",

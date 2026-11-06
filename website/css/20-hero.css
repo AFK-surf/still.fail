@@ -16,6 +16,8 @@
 .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 28em); color: var(--brand-ink); text-wrap: pretty; } /* zh: two lines, the break after 订阅， */
 :root:not(:lang(zh), :lang(ja), :lang(ko)) .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 30em); }
 .hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
+/* Japanese runs long phrases with no spaces: a bold phrase kept whole would break the line early. */
+:root:lang(ja) .hero .lead b { white-space: normal; }
 .hero .lead .nb { white-space: nowrap; } /* no lone 干。 on the last line (WebKit has no text-wrap: pretty yet) */
 .hero .actions { justify-content: flex-end; }
 

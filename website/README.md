@@ -64,10 +64,10 @@ narrower), Latin the rest; Chinese and Japanese headlines use half-width punctua
 words whole (`keep-all`), Japanese breaks between phrases (`auto-phrase`) where the browser can. A headline's text is
 one `<span>` (its translation), which those rules select.
 
-**The brand line stays English.** "One devices" (the hero's `<h1>`, the `<title>` and `og:title`, the share cards)
-is the product's line, written in English on every page, as the bilingual page had it in Chinese too; it has no
-`data-t` in the hero, and each language's `meta.monoid-one-devices.*` is the English on purpose. To translate the title,
-change those entries; to translate the headline, give it a `data-t` and `--rekey`.
+**The brand line is translated.** "One devices" (the hero's `<h1>`, `hero.one-devices.*`, and the `<title>` /
+`og:title`, `meta.monoid-one-devices.*`) is said in each language: 所有设备，合而为一 / 所有裝置，合而為一 /
+すべてのデバイスを、ひとつに (the headline, shorter: 全デバイスを、ひとつに) / 모든 기기를 하나로. In the headline the comma breaks the line (a visually hidden comma and a
+`<br>`, so it still reads as one sentence); the share cards in `assets/og/` show each language's line.
 
 ### Changing the copy
 
