@@ -632,9 +632,9 @@ pub fn feishu_mark(@ui.Ctx, Double) -> Int32
 
 pub fn field(@ui.Ctx, String, () -> Unit, hint? : String, error? : String, aside? : () -> Unit) -> Unit
 
-pub fn field_node(@view.View, () -> String, (@view.View) -> Unit, hint? : () -> String, error? : () -> String, aside? : (@view.View) -> Unit) -> @view.View
-
 pub fn field_look(@ui.Ctx, @kit.FieldState, () -> Unit) -> Unit
+
+pub fn field_node(@view.View, () -> String, (@view.View) -> Unit, hint? : () -> String, error? : () -> String, aside? : (@view.View) -> Unit) -> @view.View
 
 pub fn field_round() -> Double
 
@@ -1452,13 +1452,17 @@ pub fn page_choice(@ui.Ctx, String, Array[String], Int32, item_w? : Double) -> I
 
 pub fn page_choice_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, item_w? : Double) -> Unit
 
+pub fn page_focus_node(@view.View, String) -> @view.View
+
 pub fn page_head(@ui.Ctx, String, meta? : String, actions? : () -> Unit) -> Unit
 
 pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
-pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer, seen? : (Array[String]) -> Unit) -> Unit
+pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, look? : () -> Look?, animated? : Bool, moves? : Bool, continuity? : (String) -> Bool, version? : (String) -> String, scroll? : @view.Scroll, tips? : TipLayer, seen? : (Array[String]) -> Unit) -> Unit
+
+pub fn[T] page_node_items(@view.View, () -> String, () -> Array[T], (T) -> String, (@view.View, () -> T) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, look? : () -> Look?, moves? : Bool, continuity? : (T) -> Bool, version? : (T) -> String, scroll? : @view.Scroll, tips? : TipLayer, seen? : (Array[String]) -> Unit) -> Unit
 
 pub fn page_none_node(@view.View, () -> String) -> Unit
 
@@ -1475,6 +1479,10 @@ pub fn page_said_node(@view.View, () -> String, bad? : Bool) -> Unit
 pub fn page_viewer_ink() -> ViewerInk
 
 pub fn page_waiting(@ui.Ctx, String, () -> Unit, text? : String, error? : String, note? : WaitNote) -> Unit
+
+pub fn page_waiting_bones_node(@view.View, (@view.View) -> Unit, error? : () -> String, note? : () -> WaitNote) -> Unit
+
+pub fn page_waiting_node(@view.View, () -> String, (@view.View) -> Unit, text? : () -> String, error? : () -> String, note? : () -> WaitNote) -> Unit
 
 pub fn page_wide(@ui.Ctx, String, String, Array[() -> Unit], on_back~ : () -> Unit, frame? : PageFrame, lead? : String, about? : String, actions? : () -> Unit, head? : () -> Unit) -> Unit
 
@@ -3164,6 +3172,18 @@ pub(all) struct PageBar {
   own_head : Bool
   actions : (() -> Unit)?
 }
+
+pub struct PageFocusScope {
+  lend_to : (@view.View) -> Unit
+  capture_focus : () -> Bool
+  has_pending_focus : () -> Bool
+  cancel_focus : () -> Unit
+}
+pub fn PageFocusScope::cancel(Self) -> Unit
+pub fn PageFocusScope::capture(Self) -> Bool
+pub fn PageFocusScope::has_pending(Self) -> Bool
+pub fn PageFocusScope::lend(Self, @view.View) -> Unit
+pub fn PageFocusScope::new() -> Self
 
 pub(all) struct PageFrame {
   back : String?
