@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn act(Core, String, String, @json.Json, done? : String, then? : (@json.Json) -> Unit) -> Unit
+pub fn act(Core, String, String, @json.Json, done? : String, then? : (@json.Json) -> Unit, failed? : (@json.Json) -> Unit) -> Unit
 
 pub fn action_asked_done() -> Unit
 
@@ -92,7 +92,9 @@ pub fn dark(@json.Json?, Bool) -> Bool
 
 pub fn decision_form_drop(Core, String, String) -> Unit
 
-pub fn decision_form_open(Core, String) -> String
+pub fn decision_form_name() -> String
+
+pub fn decision_form_open(Core, String, String, failed? : (@json.Json) -> Unit) -> Unit
 
 #callsite(autofill(loc))
 pub fn doing_mark(@ui.Ctx, Bool, String?, inline? : Bool, loc~ : SourceLoc) -> Unit
