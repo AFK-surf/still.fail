@@ -51,9 +51,17 @@ pub fn thumb_pressed(node : @view.View, id : String) -> Unit {
 fn thumb_settle(c : @ui.Ctx, id : String) -> Unit {
   let owner = tree_thumb_owner(id)
   guard @signals.untracked(fn() { owner.get() }) is None else { return }
+  if @signals.untracked(fn() { thumb_seen_first(c, id) }) is Some(h) {
+    owner.set(Some(h))
+  }
+}
+
+///|
+/// Of the showings of `id`, the one seen on the window now (thumb_settle's), first as they read.
+fn thumb_seen_first(c : @ui.Ctx, id : String) -> (@view.View, () -> ThumbLook)? {
   let mut best : ((Double, Double), (@view.View, () -> ThumbLook))? = None
   for h in pv_thumb_holders.get(id).unwrap_or([]) {
-    let seen = @signals.untracked(fn() {
+    let seen = fn() {
       guard tree_thumb_of(c, h.0, h.1) is Some(t) && t.seen is Some((sx, sy, sw, sh)) else { return None }
       // (what is left of it as what holds it cuts it, on the window; drawn some, as opaque as it is drawn)
       let (left, top) = (dmax(sx, 0.0), dmax(sy, 0.0))
@@ -61,8 +69,8 @@ fn thumb_settle(c : @ui.Ctx, id : String) -> Unit {
       guard right > left && foot > top else { return None }
       guard @ui.view_tree() is Some(tree) && tree.drawn_of(h.0.id()) is Some(d) && d.alpha > 0.0 else { return None }
       Some(t)
-    })
-    match seen {
+    }
+    match seen() {
       Some(t) =>
         match best {
           Some(((y, x), _)) if y < t.y || (y == t.y && x <= t.x) => ()
@@ -71,9 +79,18 @@ fn thumb_settle(c : @ui.Ctx, id : String) -> Unit {
       _ => ()
     }
   }
-  if best is Some((_, h)) {
-    owner.set(Some(h))
+  best.map(fn(b) { b.1 })
+}
+
+///|
+/// Whether the viewer, shut and flying back into the thumbnail of `id`, has none to fly into (the showing it flew from
+/// let go, made again in its place or another of it still here) and one of those is seen on the window now, as they are
+/// drawn: the viewer's to settle it then (thumb_settle), none taken before it is seen.
+pub fn thumb_to_settle(c : @ui.Ctx, id : String) -> Bool {
+  guard pv_leaving.get().map(fn(v) { v.thumb_id() }) == Some(id) && tree_thumb_owner(id).get() is None else {
+    return false
   }
+  thumb_seen_first(c, id) is Some(_)
 }
 
 ///|
@@ -130,7 +147,11 @@ pub fn note_thumb_node(
     match owner {
       Some(owner) =>
         match @signals.untracked(fn() { owner.get() }) {
-          Some((n, _)) if n.id() == node.id() => owner.set(None)
+          Some((n, _)) if n.id() == node.id() => {
+            // (the viewer shut already and flying back into it: another showing of it still here, made again in its
+            // place, settled as it is seen on the window: thumb_to_settle)
+            owner.set(None)
+          }
           _ => ()
         }
       None => ()

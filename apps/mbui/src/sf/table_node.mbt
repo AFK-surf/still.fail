@@ -316,39 +316,36 @@ fn md_table_body_node(
               .lies_along(Is(Middle))
               |> ignore
               // (a cell of only the message's images: each as wide as cell_image_width says, 6 apart, 4 over and under;
-              // else its words as a message's, in pieces, a press on a link where it leads: runs_links. Made by which
-              // files it shows, in order ("" its words): another file, one more or fewer, or words, made anew; one told
-              // again at another size the same)
-              let shows = fn() {
-                guard cell_images_of(words(), files) is Some(_) else { return "" }
-                let names = md_cell_picture_names(words(), fn(name) {
-                  files(name).bind(fn(f) { f.image }).map(fn(im) { im.0 })
-                })
-                names.map(fn(ns) { ns.map(fn(n) { n.0 }).join("\n") }).unwrap_or("")
+              // else its words as a message's, in pieces, a press on a link where it leads: runs_links; made anew as it
+              // turns from one to the other)
+              // (in one look at its words: its images by name and proportion, None where it holds anything else)
+              let pictures = fn() {
+                md_cell_picture_names(words(), fn(name) { files(name).bind(fn(f) { f.image }).map(fn(im) { im.0 }) })
               }
-              cell.pick(shows, fn(q, shown) {
-                if shown != "" {
-                  let list = @signals.untracked(fn() { cell_images_of(words(), files) }).unwrap_or([])
-                  // (their proportions now, a file told again at another size: worked out once for the cell, again
-                  // only as they change)
-                  let ratios : @signals.Computed[Array[Double]] = @signals.computed(
-                    fn(_) {
-                      match cell_images_of(words(), files) {
-                        Some(now) => now.map(fn(x) { x.0 })
-                        None => list.map(fn(x) { x.0 })
-                      }
-                    },
-                    same=fn(a, b) { a == b },
-                  )
+              cell.pick(fn() { pictures() is Some(_) }, fn(q, images) {
+                if images {
                   q.row(Is(true)).gap(Is(6.0)).padding(Is((0.0, 4.0, 0.0, 4.0))) |> ignore
-                  for j, im in list {
-                    // (as wide as its proportion now says; the picture filling it, made once, the same as it changes)
-                    q.box(fn(one) {
-                      one.width(By(fn() { Some(cell_image_width(ratios.get().get(j).unwrap_or(im.0))) })) |> ignore
-                      one.box(fn(fill) { (im.1)(fill) }) |> ignore
-                    })
-                    |> ignore
+                  // (each by its file and how many of it are before it, the two apart: one there still the
+                  // same image, moved as the order changes; one more made, one gone let go; one told again at another
+                  // size the same, as wide as its proportion now says)
+                  let keyed = fn() {
+                    let all : Array[(String, Int, Double)] = []
+                    let seen : Map[String, Int] = {}
+                    for im in pictures().unwrap_or([]) {
+                      let k = seen.get(im.0).unwrap_or(0)
+                      seen[im.0] = k + 1
+                      all.push((im.0, k, im.1))
+                    }
+                    all
                   }
+                  q.each(keyed, fn(im) { (im.0, im.1) }, fn(one, im) {
+                    one.width(By(fn() { Some(cell_image_width(im.get().2)) })) |> ignore
+                    let name = @signals.untracked(fn() { im.get().0 })
+                    match @signals.untracked(fn() { files(name).bind(fn(f) { f.image }) }) {
+                      Some((_, draw)) => one.box(fn(fill) { draw(fill) }) |> ignore
+                      None => ()
+                    }
+                  })
                   return
                 }
                 let look = fn() -> @view.WordsLook {

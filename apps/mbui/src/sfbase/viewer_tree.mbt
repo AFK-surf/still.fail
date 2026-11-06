@@ -183,6 +183,13 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       }
     },
   )
+  // shut and flying back, the showing it flies into let go (made again in its place): the one of it seen on the window
+  // takes its place as it is drawn there (thumb_to_settle), none before
+  n.reacts(fn() { thumb_to_settle(@ui.current(), vw.thumb_id()) }, fn(settle) {
+    if settle {
+      thumb_settle(@ui.current(), vw.thumb_id())
+    }
+  })
   // the stage: the room it is laid out in (the keyboard over it, not the stage made shorter for it: FilePreview.kt),
   // and the picture's size (as sent, else as decoded, else its stand-in's: followed by its own decodes), told the zoom
   // at the moment either changes
