@@ -105,6 +105,7 @@ fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()
+  modifiers_now.set(0)
   corners_hold.val = true
   text_runs.on = false
   inst_owners.on = false
@@ -1137,6 +1138,7 @@ pub fn Tester::local_acts(self : Tester) -> Array[String] {
 /// The keys held down from now on (@ui.mods_held: @ui.mod_alt, mod_cmd…; 0 none).
 pub fn Tester::hold_mods(self : Tester, mods : Int) -> Unit {
   self.fake.mods = mods
+  on_modifiers(mods)
 }
 
 ///|

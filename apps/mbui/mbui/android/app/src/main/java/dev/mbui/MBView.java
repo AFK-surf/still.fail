@@ -549,6 +549,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // (touches.mbt: two of them its, the first let go the second the first, one called off all of it)
         final int a = e.getActionMasked();
         final double t = e.getEventTime();
+        // A pointer can enter while a hardware modifier is already held. Publish this event's actual flags before
+        // delivering it, particularly before an up decides whether an internal file is copied or moved.
+        final int mods = Device.modsOfMeta(e.getMetaState());
+        queueEvent(() -> Native.modifiers(mods));
         switch (a) {
             case MotionEvent.ACTION_DOWN:
                 // (the display's highest from a finger going down: what it moves moves at it from its first frame)
@@ -883,6 +887,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
         @Override
         public boolean sendKeyEvent(KeyEvent e) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN || e.getAction() == KeyEvent.ACTION_UP) {
+                int mods = Device.keyModsAfter(e);
+                view.toGL(() -> Native.modifiers(mods));
+            }
             if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
             if (Device.catching) {
                 view.catchKey(e);

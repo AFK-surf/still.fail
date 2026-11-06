@@ -35,6 +35,9 @@ static struct {
   mb_key_fn key;
   mb_text_fn text;
 } cb;
+static void (*modifiers_cb)(int32_t);
+static int32_t held_modifiers;
+void mb_host_set_modifiers(void (*f)(int32_t)) { modifiers_cb = f; }
 
 static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls, notices_cls;
@@ -504,6 +507,11 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_key(JNIEnv *env, jclass c, jint code
   if (cb.key) cb.key(code, mods);
 }
 
+JNIEXPORT void JNICALL Java_dev_mbui_Native_modifiers(JNIEnv *env, jclass c, jint mods) {
+  held_modifiers = mods;
+  if (modifiers_cb) modifiers_cb(mods);
+}
+
 JNIEXPORT void JNICALL Java_dev_mbui_Native_text(JNIEnv *env, jclass c, jint kind, jstring s,
                                                 jint a, jint b) {
   if (cb.text) cb.text(kind, mstr(env, s), a, b);
@@ -515,6 +523,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_text(JNIEnv *env, jclass c, jint kin
 static void (*state_cb)(int32_t);
 void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
 JNIEXPORT void JNICALL Java_dev_mbui_Native_appState(JNIEnv *env, jclass c, jint state) {
+  if (!(state & 2)) held_modifiers = 0;
   if (state_cb) state_cb(state);
 }
 
@@ -1823,8 +1832,8 @@ moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0)
 int32_t mb_host_face_add_family(int32_t face, moonbit_string_t family) { (void)face; (void)family; return 0; }
 moonbit_string_t mb_host_local_font_families(void) { return moonbit_make_string_raw(0); }
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
-// The keys held now (@hostapi.mods_held): none read here.
-int32_t mb_host_mods_held(void) { return 0; }
+// The keys held now (@hostapi.mods_held), as the hardware keyboard last said on the GL thread.
+int32_t mb_host_mods_held(void) { return held_modifiers; }
 
 // ---------------------------------------------------------------------------
 // Streams (src/hostapi/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app

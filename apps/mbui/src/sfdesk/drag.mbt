@@ -222,11 +222,18 @@ fn fdrag_target(
 /// Each frame of the files' page, before it is built: the drag moved on or let go, files from outside held or let go,
 /// those read going up, the target under the pointer.
 pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true) -> Unit {
+  drive_node_watch_old(src, ws)
   if fdrag.frame == c.frame_number() {
     return
   }
   fdrag.frame = c.frame_number()
-  let (px, py, down) = c.pointer()
+  let (old_x, old_y, down) = c.pointer()
+  // A gesture captured by a new-tree row does not send its moves through the old frame. Old targets still need the
+  // current pointer while that row is carried, so their highlight follows the same coordinates as the window chip.
+  let (px, py) = match drive_node_position.get() {
+    Some(p) if drive_node_window.val => p
+    _ => (old_x, old_y)
+  }
   // the targets drawn last frame are where a drop lands now
   fdrag.drawn = fdrag.targets
   fdrag.targets = []
@@ -279,7 +286,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
   }
   fdrag.over = match (fdrag.item.get(), @ui.files_held()) {
     (Some(_), _) =>
-      match if drive_node_window.val { drive_node_old_at(c, px, py) } else { fdrag_at(c, px, py) } {
+      match (if drive_node_window.val { drive_node_old_at(c, px, py) } else { fdrag_at(c, px, py) }) {
         Some(t) => t.key
         None => ""
       }

@@ -24,6 +24,75 @@
 #include "post.h"
 
 mb_callbacks mb_cb;
+static void (*modifiers_cb)(int32_t);
+static int32_t held_modifiers;
+static unsigned modifier_keys;
+void mb_host_set_modifiers(void (*f)(int32_t)) { modifiers_cb = f; }
+
+static int modifiers_of_flags(UIKeyModifierFlags m) {
+  return ((m & UIKeyModifierShift) ? 1 : 0) | ((m & UIKeyModifierControl) ? 2 : 0) |
+         ((m & UIKeyModifierAlternate) ? 4 : 0) | ((m & UIKeyModifierCommand) ? 8 : 0);
+}
+
+// HID's modifier usages 0xe0…0xe7 are left/right Control, Shift, Option and Command. Track the sides so releasing
+// one does not clear the other when both are held.
+static int modifier_index(UIKeyboardHIDUsage code) {
+  switch ((int)code) {
+    case 0xe1: return 0; case 0xe5: return 1;
+    case 0xe0: return 2; case 0xe4: return 3;
+    case 0xe2: return 4; case 0xe6: return 5;
+    case 0xe3: return 6; case 0xe7: return 7;
+    default: return -1;
+  }
+}
+
+static void modifiers_from_presses(NSSet<UIPress *> *presses, BOOL down) {
+  int mods = 0, changed = 0;
+  BOOL saw_key = NO;
+  for (UIPress *p in presses) {
+    if (!p.key) continue;
+    saw_key = YES;
+    mods |= modifiers_of_flags(p.key.modifierFlags);
+    int i = modifier_index(p.key.keyCode);
+    if (i >= 0) {
+      unsigned side = 1u << i;
+      if (down) modifier_keys |= side; else modifier_keys &= ~side;
+      changed |= 1 << (i / 2);
+    }
+  }
+  if (!saw_key) return;
+  for (int i = 0; i < 4; i++) {
+    int bit = 1 << i;
+    if (changed & bit) {
+      if (modifier_keys & (3u << (2 * i))) mods |= bit; else mods &= ~bit;
+    }
+  }
+  held_modifiers = mods;
+  if (modifiers_cb) modifiers_cb(mods);
+}
+
+// The focused responder can be a native page rather than the canvas. Observe the window's hardware keys without
+// taking them, before UIKit delivers them to that responder.
+@interface MBApplication : UIApplication
+@end
+@implementation MBApplication
+- (void)sendEvent:(UIEvent *)event {
+  if (event.type == UIEventTypeTouches) {
+    held_modifiers = modifiers_of_flags(event.modifierFlags);
+    if (modifiers_cb) modifiers_cb(held_modifiers);
+  }
+  if (event.type == UIEventTypePresses && [event isKindOfClass:UIPressesEvent.class]) {
+    NSMutableSet<UIPress *> *began = [NSMutableSet set], *ended = [NSMutableSet set];
+    for (UIPress *p in ((UIPressesEvent *)event).allPresses) {
+      if (p.phase == UIPressPhaseBegan) [began addObject:p];
+      else if (p.phase == UIPressPhaseEnded || p.phase == UIPressPhaseCancelled) [ended addObject:p];
+    }
+    if (began.count) modifiers_from_presses(began, YES);
+    if (ended.count) modifiers_from_presses(ended, NO);
+  }
+  [super sendEvent:event];
+}
+@end
 
 // The app laid out round the system's bars (its Info.plist's MBUIEdge, as Android's manifest dev.mbui.edge): its view
 // from the screen's top to its foot, under the status bar and the home indicator, the bars said to it (the system's
@@ -1606,7 +1675,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   read_info();
   @autoreleasepool {
     char *argv[] = {"mbui", NULL};
-    UIApplicationMain(1, argv, nil, NSStringFromClass([MBAppDelegate class]));
+    UIApplicationMain(1, argv, NSStringFromClass([MBApplication class]), NSStringFromClass([MBAppDelegate class]));
   }
 }
 
@@ -1837,6 +1906,7 @@ static void tell_state(void) {
   UIApplicationState a = UIApplication.sharedApplication.applicationState;
   int shown = a != UIApplicationStateBackground;
   int front = a == UIApplicationStateActive;
+  if (!front) { modifier_keys = 0; held_modifiers = 0; }
   static int told = -1;
   if (((shown ? 1 : 0) | (front ? 2 : 0)) != told) {
     told = (shown ? 1 : 0) | (front ? 2 : 0);
@@ -2470,8 +2540,8 @@ void mb_host_set_badge(int32_t n) {
 void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
 moonbit_string_t mb_host_local_station(void) { return mb_string_from_ns(@""); }
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
-// The keys held now (@hostapi.mods_held): none read here.
-int32_t mb_host_mods_held(void) { return 0; }
+// The keys held now (@hostapi.mods_held), as the hardware keyboard last said.
+int32_t mb_host_mods_held(void) { return held_modifiers; }
 
 // ---- files picked (pick.mbt) ----
 // Pictures (kind 1) from the system's photo picker (PHPickerViewController: no leave to ask for), any file (kind 2) from

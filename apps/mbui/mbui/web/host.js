@@ -11,6 +11,16 @@
   const params = new URLSearchParams(location.search);
   const H = {};
   let cb = null;
+  // The current modifiers are also told between frames, even when no ordinary key is typed.
+  let heldModifiers = 0, modifiersCallback = null;
+  H.setModifiers = (f) => { modifiersCallback = f; };
+  H.modsHeld = () => heldModifiers;
+  const sayModifiers = (mods) => {
+    if (mods === heldModifiers) return;
+    heldModifiers = mods;
+    if (modifiersCallback) modifiersCallback(mods);
+  };
+  const modifiersOf = (e) => (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
   let canvas, gl, prog, post, vao, instBuf, atlasTex, ta;
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
@@ -166,6 +176,7 @@
       const now = (document.visibilityState === 'visible' ? 1 : 0) | (document.hasFocus() ? 2 : 0);
       if (now === was) return;
       was = now;
+      if (!(now & 2)) sayModifiers(0);
       f(now);
       H.requestFrame();
     };
@@ -2124,7 +2135,7 @@
   function ptr(kind, e, button) {
     const [x, y] = pos(e);
     evT = e.timeStamp;
-    try { cb.pointer(kind, x, y, button); } finally { evT = -1; }
+    try { sayModifiers(modifiersOf(e)); cb.pointer(kind, x, y, button); } finally { evT = -1; }
   }
 
   function setupInput() {
@@ -2160,7 +2171,10 @@
     const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9, PageUp: 15, PageDown: 16, Escape: 17, Tab: 18 };
     // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit, zoom)
     const browsers = new Set(['r', 'w', 't', 'n', 'l', 'q', 'v']);
-    const modsOf = (e) => (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+    const modsOf = modifiersOf;
+    // Capture sees both the hidden input's and the page's keys without consuming either.
+    window.addEventListener('keydown', (e) => sayModifiers(modsOf(e)), true);
+    window.addEventListener('keyup', (e) => sayModifiers(modsOf(e)), true);
     const command = (e) => keysCmd() === 8 ? e.metaKey : e.ctrlKey;
     const browserKey = (e, c) => command(e) && (browsers.has(c) ||
       (!e.altKey && !(e.ctrlKey && e.metaKey) && ['+', '=', '-', '0'].includes(c)));

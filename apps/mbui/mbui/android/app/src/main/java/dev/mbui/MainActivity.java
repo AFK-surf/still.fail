@@ -13,12 +13,22 @@ import android.window.OnBackInvokedDispatcher;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.view.WindowInsets;
+import android.view.KeyEvent;
 import android.view.WindowInsetsAnimation;
 import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
 
 /** Hosts one MBView inside the system bars and above the keyboard. */
 public class MainActivity extends Activity {
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        if (mbView != null && (e.getAction() == KeyEvent.ACTION_DOWN || e.getAction() == KeyEvent.ACTION_UP)) {
+            int mods = Device.keyModsAfter(e);
+            mbView.toGL(() -> Native.modifiers(mods));
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);

@@ -538,10 +538,6 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
           (shell_is(src, v.window().0), app.nav.top_stay().0, app.nav.top(), workspace_in_view(src).0.map(fn(w) { w.id }))
         }))
         let focus_tape_page = Ref(false)
-        // A file can be dragged between the sidebar, split panes and a chat, regardless of which shell holds them.
-        @sfdesk.drive_drag_window_node(v, src, fn() {
-          workspace_in_view(src).0.map(fn(w) { w.id }).unwrap_or("")
-        })
         // where the app is, put in the history's entry now as the stack or the workspace in view changes, at that
         // change (sfbase's app_history.mbt: a person's act pushed an entry before it moved the stack, one for all the
         // steps it takes, noted once it is done: history_acts_ended); on the wide frame Home alone is passing (land)
@@ -606,6 +602,10 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             // the room set before what follows it is worked out), the shell picked again by it)
             Unsized => ()
           }
+        })
+        // A file can be dragged between the sidebar, split panes and a chat. Its chip follows the shell in draw order.
+        @sfdesk.drive_drag_window_node(v, src, fn() {
+          workspace_in_view(src).0.map(fn(w) { w.id }).unwrap_or("")
         })
         }
       }

@@ -22,6 +22,13 @@
 __asm__(".linker_option \"-framework\", \"Network\"");
 
 mb_callbacks mb_cb;
+static void (*modifiers_cb)(int32_t);
+void mb_host_set_modifiers(void (*f)(int32_t)) { modifiers_cb = f; }
+
+static int modifiers_of(NSEventModifierFlags m) {
+  return ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
+         ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+}
 
 // Back (host_native.mbt `set_back`): a mouse's back button, while the app takes it (⌘[ is the app's key: its keymap's
 // nav.back, as Ctrl+[ elsewhere).
@@ -1152,9 +1159,7 @@ int32_t mb_host_window_snap_state(void) { return 0; }
 
 // The keys held now (@hostapi.mods_held), as a key's are told: shift 1, control 2, option 4, command 8.
 int32_t mb_host_mods_held(void) {
-  NSEventModifierFlags m = [NSEvent modifierFlags];
-  return ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
-         ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+  return modifiers_of([NSEvent modifierFlags]);
 }
 
 // This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation, installed.ts): its data
@@ -1867,6 +1872,15 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     the_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [box addSubview:the_view];
     w.contentView = box;
+    // A modifier alone does not come to keyDown. Watch the window's flags even while an embedded view has focus.
+    static id modifiers_monitor;
+    if (!modifiers_monitor)
+      modifiers_monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskFlagsChanged
+                                                                 handler:^NSEvent *(NSEvent *e) {
+        if (modifiers_cb && the_view.window.isKeyWindow && (!e.window || e.window == the_view.window))
+          modifiers_cb(modifiers_of(e.modifierFlags));
+        return e;
+      }];
     // the wheel's upright scroll over a page that gives it to the canvas (ui's Touch: VerticalOut; a list of messages
     // with a page in it scrolls as a list), the canvas's; any other the page's
     static id wheel_monitor;
