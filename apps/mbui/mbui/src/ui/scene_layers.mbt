@@ -323,6 +323,9 @@ priv struct Scene {
   mut old_due : Bool
   /// nothing kept to be copied this frame (a check drawing it anew, a picture at another size, who drew what kept)
   mut fresh : Bool
+  /// whether who drew each instance was kept as the last frame was drawn (inst_owners_kept): kept from this frame on
+  /// and not then, nothing kept has it, every layer drawn anew once
+  mut owners_were : Bool
   /// the frame drawn again as a check (Ctx::scene_check): the tree drawn as it is, not brought on
   mut checking : Bool
   /// the layer being drawn now, and whether something of it is drawn otherwise than by the tree alone
@@ -389,6 +392,7 @@ let scene : Scene = {
   old_insts_now: Map([]),
   old_due: true,
   fresh: false,
+  owners_were: false,
   checking: false,
   drawing: None,
   owners: None,
@@ -935,8 +939,12 @@ fn Ctx::scene_begin(self : Ctx) -> Unit {
     scene.drawn_by = by
     scene.parts.whole(if scene.prev_n == 0 { 1 } else if atlas_anew { 4 } else { 3 })
   }
-  // (a shot at another size: everything drawn anew; who drew what kept with each layer's block, Ctx::scene_block_kept)
-  scene.fresh = scene.fresh || looks_rebuilt.val || words_zoom.val != 1.0
+  // (a shot at another size: everything drawn anew; who drew what wanted from this frame on (a Tester's words over words,
+  // what is seen whole, a frame exported, contrast asked after none was kept): nothing kept has it, everything drawn anew
+  // once, and from then on kept with each layer's block, Ctx::scene_block_kept; never what decides how a layer is drawn)
+  let owners_now = inst_owners_kept()
+  scene.fresh = scene.fresh || looks_rebuilt.val || words_zoom.val != 1.0 || (owners_now && !scene.owners_were)
+  scene.owners_were = owners_now
   // (what is kept draws from the atlas still: said so before anything of this frame places a glyph)
   if !scene.fresh {
     scene_plots_drawn()
