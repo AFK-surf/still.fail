@@ -1442,6 +1442,8 @@ pub fn over_foot_reach(Double) -> @ui.Style
 
 pub fn over_rows(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn over_rows_node(@view.View, (@view.View) -> Unit, width? : () -> Double) -> Unit
+
 pub fn overlap(Double) -> @ui.Style
 
 pub fn oversize(Double) -> @ui.Style
@@ -2015,6 +2017,12 @@ pub fn row_tool_of(String, (@view.View) -> Unit, drop? : Int32, instead? : () ->
 pub let row_top_in_y : Double
 
 pub fn row_words_foot() -> Double
+
+pub fn rows_column_node(@view.View, (@view.View) -> Unit) -> Unit
+
+pub fn rows_foot(@view.View, narrow_foot? : () -> Double) -> Double
+
+pub fn rows_foot_node(@view.View, narrow_foot? : () -> Double) -> Unit
 
 pub fn rows_head(@ui.Ctx, () -> Unit, first? : Bool) -> Unit
 
