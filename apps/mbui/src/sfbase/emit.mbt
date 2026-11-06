@@ -516,10 +516,10 @@ pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, turns : Turns, sending : 
       Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over() => {
         // (its clock is linear: how far it is says when now is on it) going on from where it is at the speed it has,
         // to come down at its own end speed when they land: no step in its speed (Turn's warp)
-        let s = t.clock.get()
-        let now = t.clock.ends() - (1.0 - s) * t.span
-        let u = emit_clock(c, t)
-        let rate = turn_rate(t)
+        // (where it is at this change's moment, not at the frame drawn last: the same way said whichever frame came)
+        let s = turn_share_at(t, now)
+        let u = turn_value_at(t, s)
+        let rate = turn_rate_at(t, s)
         let way = @motion.Anim::new(0.0)
         let long = sending - now
         way.animate(1.0, @motion.tween(long, ease=Linear), start_at=now)
@@ -649,10 +649,28 @@ fn emit_clock_of(t : Turn) -> Double {
 }
 
 ///|
-/// How fast it goes through its pose now (a share a ms).
-fn turn_rate(t : Turn) -> Double {
+/// How far through its pose its linear clock is at moment `at` (0 to 1).
+fn turn_share_at(t : Turn, at : Double) -> Double {
+  if t.span <= 0.0 {
+    return 1.0
+  }
+  dmax(0.0, dmin(1.0, (at - (t.clock.ends() - t.span)) / t.span))
+}
+
+///|
+/// How far through its pose it is (warped as emit_clock's) where its clock is at share `s`.
+fn turn_value_at(t : Turn, s : Double) -> Double {
   match t.warp {
-    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.get()) / t.span
+    Some((u0, m0, m1)) => hermite(u0, m0, 1.0, m1, s)
+    None => s
+  }
+}
+
+///|
+/// How fast it goes through its pose (a share a ms) where its clock is at share `s`.
+fn turn_rate_at(t : Turn, s : Double) -> Double {
+  match t.warp {
+    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, s) / t.span
     None => 1.0 / t.span
   }
 }
