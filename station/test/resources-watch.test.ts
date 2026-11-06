@@ -59,6 +59,21 @@ test("whose: what runs on its own naming a chat's directory is that chat's, with
   assert.equal(whose.get(80), undefined);
 });
 
+test("whose: argument lookup keeps parent priority and does not ask for unneeded places", () => {
+  const rows = [...table, p(70, 1, 70, "sh"), p(71, 70, 70, "node")];
+  const args = new Map([[70, "sh /a/run"], [71, "node /b/run"]]);
+  const places = [{ dir: "/a", session: "a" }, { dir: "/b", session: "b" }];
+  let fallbacks = 0;
+  const indexed = whoseOf(rows, options, runners, args, () => { fallbacks++; return places; },
+    () => new Map([[args.get(70)!, "a"], [args.get(71)!, "b"]]));
+  assert.deepEqual(indexed, whoseOf(rows, options, runners, args, places));
+  assert.equal(indexed.get(71)?.session, "a", "the parent's ownership reaches its child first");
+  assert.equal(fallbacks, 0);
+  whoseOf(rows, options, runners, null, () => { fallbacks++; return places; });
+  whoseOf(rows, options, runners, new Map([[20, "owned /a/run"]]), () => { fallbacks++; return places; });
+  assert.equal(fallbacks, 0, "no unowned argument line needs the directory list");
+});
+
 const used = (cpuS: number, mb: number): Usage => ({ cpuNs: cpuS * 1e9, footprint: mb * 1e6 });
 
 test("what each used since the last look, by whose and process; one begun since counts whole; no one's is not read", async () => {

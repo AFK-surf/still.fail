@@ -61,7 +61,7 @@ import { CARRIED_SAVE_PENDING, Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
 import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
   SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
-import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
+import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_ARGUMENTS, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_INITIAL, SESSION_DIR_LIVE_FEW, SESSION_DIR_LIVE_MANY, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -135,6 +135,15 @@ function assertSessionDirectoryPlans() {
   }
   for (const sql of [SESSION_DIR_FIRST, SESSION_DIR_NEXT, SESSION_DIR_DIRTY]) assert.match(sql, /LIMIT \?$/);
   assert.match(plan(SESSION_DIR_NEXT, "a", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
+  assert.match(plan(SESSION_DIR_LIVE_MANY), /SCAN sessions USING (?:COVERING )?INDEX sessions_live/);
+  assert.match(SESSION_DIR_LIVE_MANY, /LIMIT 1 OFFSET 32$/);
+  assert.match(plan(SESSION_DIR_LIVE_FEW), /SCAN sessions USING INDEX sessions_live/);
+  assert.match(SESSION_DIR_LIVE_FEW, /LIMIT 32$/);
+  assert.match(plan(SESSION_DIR_INITIAL, "/", "0"), /SEARCH session_dir_rows USING COVERING INDEX session_dir_root .*root>\?/);
+  const argumentsPlan = plan(SESSION_DIR_ARGUMENTS, '["/a"]', "/home", '["a"]');
+  assert.match(argumentsPlan, /SEARCH d USING COVERING INDEX session_dir_root .*root=\?/);
+  assert.match(argumentsPlan, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+  assert.doesNotMatch(argumentsPlan, /SCAN (d|s|sessions)\b/);
 }
 
 function assertAwakeJobPlan() {

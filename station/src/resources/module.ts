@@ -90,6 +90,7 @@ export const ResourcesLive = Layer.effectDiscard(
         args: async () => parseArgs((await run("ps", ["-axo", "pid=,args="], { maxBuffer: 32 << 20 })).stdout),
         // A chat's own directory, not where it works (a repository people also work in).
         places: () => store.liveSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
+        placesInArguments: (lines) => hub.sessionsInArguments(lines, homedir()),
         usage: (pids) => (typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
         // Every process's, once: some 20 ms.
         traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
