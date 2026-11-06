@@ -9,11 +9,12 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LATEST_DECISIONS_SCOPED_NO_TIME, LEGACY_LATEST_DECISIONS, LEGACY_LATEST_DECISIONS_SCOPED, LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, newMessage,
+  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, decisionScopedWithSession, newMessage,
 } from "../src/store/store.ts";
 import { addClientColumn, addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, installArchivePolicyIndex } from "../src/store/archive-policy-index.ts";
 import { installDecisionTimeIndex } from "../src/store/legacy-decision-time.ts";
+import { LEGACY_LAST_DECISION_REPAIR, installDecisionSessionIndex } from "../src/store/legacy-decision-session.ts";
 import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
@@ -1840,6 +1841,19 @@ test("what the station asks again and again is planned by an index, never a scan
   const noTimePlan = (decisionOld.db.prepare(`EXPLAIN QUERY PLAN ${LATEST_DECISIONS_SCOPED_NO_TIME}`).all(0, "ws", 0) as { detail: string }[]).map((r) => r.detail);
   assert.ok(noTimePlan.some((d) => d.includes("sessions_by_connect") && d.includes("connect=?") && d.includes("ws=?")), noTimePlan.join(" | "));
   assert.ok(noTimePlan.some((d) => d.includes("decision_checks_session") && d.includes("session=?")), noTimePlan.join(" | "));
+  const decisionRepair = memory();
+  const putRepair = decisionRepair.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES('old',1,'{}')");
+  for (let n = 0; n < 64; n++) putRepair.run();
+  decisionRepair.db.exec("DROP INDEX decision_checks_session");
+  installDecisionSessionIndex(decisionRepair.db);
+  decisionRepair.db.exec("DROP INDEX legacy_decision_session_by_session");
+  installDecisionSessionIndex(decisionRepair.db);
+  const repairLast = (decisionRepair.db.prepare(`EXPLAIN QUERY PLAN ${LEGACY_LAST_DECISION_REPAIR}`).all("old") as { detail: string }[]).map((r) => r.detail);
+  assert.ok(repairLast.some((d) => d.includes("legacy_decision_session_repair_by_session") && d.includes("session=?")), repairLast.join(" | "));
+  assert.ok(repairLast.some((d) => d.includes("INTEGER PRIMARY KEY (rowid=?)")), repairLast.join(" | "));
+  const repairScope = (decisionRepair.db.prepare(`EXPLAIN QUERY PLAN ${decisionScopedWithSession(false, false, "repair")}`)
+    .all(0, "ws", 0) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(repairScope.some((d) => d.includes("legacy_decision_session_repair_by_session") && d.includes("session=?")), repairScope.join(" | "));
   // Current policy: seek this workspace's most recent change. An old store keeps the original scan only until its
   // background lookup is prepared; its ready branch must seek the workspace, then the chosen row by primary key.
   assert.ok(plans.get(ARCHIVE_POLICY)!.some((d) => d.includes("archive_policy_by_ws (ws=?)")), plans.get(ARCHIVE_POLICY)!.join(" | "));
