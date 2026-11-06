@@ -264,6 +264,9 @@ pub(all) struct Viewer {
   mut fly_to : (Double, Double, Double, Double)?
   /// a video's picture as it flies (its still, or the frame it goes back with)
   mut fly_pic : String
+  /// the thumbnail it opened from as it is known now, where its owner was told again under another id (thumb_moved):
+  /// None, the one its file and place name
+  mut thumb_as : String?
   /// a video opened again: where it was left (ms; -1 from its start), until its player is ready to go on from there
   mut start_at : Double
   /// a video closing into its thumbnail: the frame it shows being grabbed first (what it goes back with), and where
@@ -817,6 +820,7 @@ pub fn new_viewer(
     fly_lift: 0.0,
     fly_to: None,
     fly_pic: "",
+    thumb_as: None,
     start_at: match pv_frames.get(station + "/" + key + "/" + a.path) {
       Some((_, ms)) if drive is None && ms > 0.0 => ms
       _ => -1.0
@@ -905,6 +909,9 @@ pub fn thumb_place(file : String, station : String, session : String, at : Strin
 
 ///|
 pub fn Viewer::thumb_id(self : Viewer) -> String {
+  if self.thumb_as is Some(id) {
+    return id
+  }
   match self.steps {
     InChat(_, session) => thumb_place(self.id(), self.station, session, self.at)
     _ => self.id()
@@ -1533,7 +1540,8 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
     c.blur()
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
     match v.flight_target(c, src) {
-      Some(to) =>
+      Some(to) => {
+        thumb_settle(c, v.thumb_id())
         match thumb_of(c, v.thumb_id()) {
           Some(t) => {
             v.flies = true
@@ -1554,6 +1562,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
           }
           None => ()
         }
+      }
       None => ()
     }
     // as web's: fading in (FilePreview.css.ts fp: 140 ms ease-out), when there is no thumbnail to grow from
@@ -1572,6 +1581,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // closed at once: the one going is only drawn (what was going before it, gone)
     marks_leave()
     leaving_done()
+    thumb_settle(c, self.thumb_id())
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
     match (thumb_of(c, self.thumb_id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
@@ -3085,6 +3095,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_thumbs.clear()
   pv_tree_thumbs.clear()
   pv_tree_lists.clear()
+  pv_thumb_holders.clear()
   pv_lists.clear()
   pv_frames.clear()
   pv_frames_n.val = 0
@@ -3135,4 +3146,19 @@ pub fn Viewer::set_source(self : Viewer, on : Bool) -> Unit {
     self.page = None
   }
   self.source_told.set(@signals.untracked(fn() { self.source_told.get() }) + 1)
+}
+
+///|
+/// The thumbnail of id `was` now known as `now` (its node's file told again where it is kept: note_thumb_node): the
+/// viewer open from it or going back into it follows it there, and it stays hidden while it is.
+pub fn thumb_moved(was : String, now : String) -> Unit {
+  for v in [viewer.get(), pv_leaving.get()] {
+    match v {
+      Some(v) if v.thumb_id() == was => v.thumb_as = Some(now)
+      _ => ()
+    }
+  }
+  if pv_hidden.get() == was {
+    pv_hidden.set(now)
+  }
 }

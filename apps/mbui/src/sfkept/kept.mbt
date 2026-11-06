@@ -380,6 +380,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.at\",\"text\":\"[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)\",\"caret\":51}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2?history=k&entry=3)\",\"caret\":69}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"ab\",\"caret\":2}",{"at":null}]
+  #|["words","{\"call\":\"ref.at\",\"text\":\"abd\",\"caret\":3}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"sk_test_123\",\"caret\":11}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"zq\",\"caret\":2}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"一一\",\"caret\":2}",{"at":null}]

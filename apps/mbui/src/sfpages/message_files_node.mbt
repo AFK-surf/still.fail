@@ -80,9 +80,13 @@ fn media_file_node(
   let side = if kind == "image" { image_min_side } else { 0.0 }
   let boxed = fn() { image_box(a(), least, min_side=side) }
   // Its own width and ratio are data. The row supplies the available width in the same layout that wraps it.
-  // (`fills`: a placed image whose row or table cell says its width.)
-  let most = fn() { media_box_width(a(), kind, room(), fills) }
-  item.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) })) |> ignore
+  // (`fills`: a placed image as wide as the node it is in is laid out, its row's or its table cell's say)
+  if fills {
+    item.width_share(Is(1.0)) |> ignore
+  } else {
+    let most = fn() { media_box_width(a(), kind, room(), false) }
+    item.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) })) |> ignore
+  }
   let letterbox = fn() { boxed().2 }
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }
@@ -121,7 +125,7 @@ fn media_file_node(
         0L
       }
     }))
-    .alpha(By(fn() { @sfbase.thumb_shows(thumb()) }))
+    .alpha(By(fn() { @sfbase.thumb_node_shows(b, thumb()) }))
     .drawn_as(By(fn() { a().name }))
     .says(By(fn() {
       Some(
@@ -136,6 +140,8 @@ fn media_file_node(
       if p.unreached {
         src.images.again(now.station)
       } else if !(kind == "video" && a().upload != "" && a().path == @sfbase.upload_path(a().upload)) {
+        // (this showing the one it opens from: the same file may be shown more than once here)
+        @sfbase.thumb_pressed(b, @signals.untracked(thumb))
         open_file(now, a(), at=at())
       }
     }, menu=fn(x, y) {
@@ -162,7 +168,7 @@ fn media_file_node(
       .lines_up(Is(Some(Middle)))
       |> ignore
       // (none of it drawn while the viewer has its picture, flying from it or back into it: note_thumb's hidden)
-      room.show(fn() { @sfbase.thumb_shows(thumb()) > 0.0 }, fn(m) {
+      room.show(fn() { @sfbase.thumb_node_shows(b, thumb()) > 0.0 }, fn(m) {
         m.width_share(By(fn() { if kind == "image" { share().0 } else { 1.0 } }))
         .height_share(By(fn() { if kind == "image" { share().1 } else { 1.0 } })) |> ignore
         media_fitted_fill_node(m, picture, fit, fn() { 0.0 })
@@ -196,7 +202,7 @@ fn media_file_node(
     }
     @sfbase.note_thumb_node(
       b,
-      @signals.untracked(thumb),
+      thumb,
       fn() { corner },
       fn() {
         let p = picture()

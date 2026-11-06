@@ -321,24 +321,38 @@ fn md_table_body_node(
               .lies_along(Is(Middle))
               |> ignore
               // (a cell of only the message's images: each as wide as cell_image_width says, 6 apart, 4 over and under;
-              // else its words as a message's, in pieces, a press on a link where it leads: runs_links)
-              let images = @signals.untracked(fn() { cell_images_of(words(), files) })
-              if images is Some(list) {
-                cell.box(fn(row) {
-                  row.row(Is(true)).gap(Is(6.0)).padding(Is((0.0, 4.0, 0.0, 4.0))) |> ignore
-                  for im in list {
-                    row.box(fn(one) {
-                      let w = cell_image_width(im.0)
-                      one.width(Is(Some(w))) |> ignore
-                      (im.1)(one, fn() { w })
-                    })
-                    |> ignore
-                  }
-                })
-                |> ignore
-                return
+              // else its words as a message's, in pieces, a press on a link where it leads: runs_links; made anew as it
+              // turns from one to the other)
+              // (in one look at its words: its images by name and proportion, None where it holds anything else)
+              let pictures = fn() {
+                md_cell_picture_names(words(), fn(name) { files(name).bind(fn(f) { f.image }).map(fn(im) { im.0 }) })
               }
-              cell.box(fn(w) {
+              cell.pick(fn() { pictures() is Some(_) }, fn(q, images) {
+                if images {
+                  q.row(Is(true)).gap(Is(6.0)).padding(Is((0.0, 4.0, 0.0, 4.0))) |> ignore
+                  // (each by its file and how many of it are before it, the two apart: one there still the
+                  // same image, moved as the order changes; one more made, one gone let go; one told again at another
+                  // size the same, as wide as its proportion now says)
+                  let keyed = fn() {
+                    let all : Array[(String, Int, Double)] = []
+                    let seen : Map[String, Int] = {}
+                    for im in pictures().unwrap_or([]) {
+                      let k = seen.get(im.0).unwrap_or(0)
+                      seen[im.0] = k + 1
+                      all.push((im.0, k, im.1))
+                    }
+                    all
+                  }
+                  q.each(keyed, fn(im) { (im.0, im.1) }, fn(one, im) {
+                    one.width(By(fn() { Some(cell_image_width(im.get().2)) })) |> ignore
+                    let name = @signals.untracked(fn() { im.get().0 })
+                    match @signals.untracked(fn() { files(name).bind(fn(f) { f.image }) }) {
+                      Some((_, draw)) => one.box(fn(fill) { draw(fill) }) |> ignore
+                      None => ()
+                    }
+                  })
+                  return
+                }
                 let look = fn() -> @view.WordsLook {
                   let size = if head { 12.0 } else { 13.0 }
                   {
@@ -351,14 +365,13 @@ fn md_table_body_node(
                   }
                 }
                 let runs = fn() { table_cell_runs(words()) }
-                w
+                q
                 .words_runs(By(runs), look=look())
                 .runs_look(By(table_runs_look))
                 .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
                 |> ignore
-                @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
+                @ui.runs_links(q, runs, on_link, hold?=on_link_hold) |> ignore
               })
-              |> ignore
             }
             let rule_node = fn(rule : @view.View) { rule.ground(By(fn() { theme().p.line })) |> ignore }
             // (how far its key hangs out as it was last laid out: what a press on it reads, as it reads where it is)
@@ -597,7 +610,7 @@ fn table_md(c : @ui.Ctx) -> Md {
 ///|
 /// A table's cell of only the message's images (Md::cell_images', of the window's tree): each one's proportion and its
 /// drawing in a node as wide as it is given; None for any other cell, drawn as words.
-fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Array[(Double, (@view.View, () -> Double) -> Unit)]? {
+fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Array[(Double, (@view.View) -> Unit)]? {
   let names = match md_cell_picture_names(cell, fn(name) { files(name).bind(fn(f) { f.image }).map(fn(im) { im.0 }) }) {
     Some(images) => images
     None => return None

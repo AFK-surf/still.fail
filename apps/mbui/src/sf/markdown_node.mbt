@@ -122,11 +122,11 @@ priv struct MdNode {
 
 ///|
 /// A file the message places (Placed's, of the window's tree): `draw` it in a node on a line of its own; an image's
-/// width over its height and its drawing in a node as wide as it is given (`image`, the width as a row of them has it
-/// now).
+/// width over its height and its drawing filling a node, as wide as that is laid out (`image`: a row of them, a table's
+/// cell, says how wide), drawn as the file is now as it changes (one made once, its proportion read again by it).
 pub(all) struct PlacedNode {
   draw : (@view.View) -> Unit
-  image : (Double, (@view.View, () -> Double) -> Unit)?
+  image : (Double, (@view.View) -> Unit)?
 }
 
 ///|
@@ -954,22 +954,15 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
 
 ///|
 /// A paragraph's images in rows (image_rows'), each by the file it names and its width over its height (`images`, as they
-/// change): 8 apart either way, 8 over and under; as many on a row as fit the room it is laid out in at least 120 high,
-/// then grown alike to fill it, 200 high at most; a row's images one height. Each drawn by its file (`md`'s `files`) at
-/// the width it has now, kept by the file and which of its showings in the paragraph it is; another file made again in
-/// its place.
+/// change): 8 apart either way, 8 over and under; as many on a row as fit the width it is laid out at, at least 120
+/// high, then grown alike to fill it, 200 high at most; a row's images one height. Each drawn by its file (`md`'s
+/// `files`) filling its place, kept by the file and which of its showings in the paragraph it is, drawing the file as it
+/// is now. A row as tall as its tallest image is laid out (each as wide as its share, floored). Rows and widths worked
+/// out by its layout from the width it is given, in the same layout: nothing of its laid size read back.
 fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String, Double)]) -> Unit {
-  p.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))).gap(Is(image_row_gap)) |> ignore
-  // det-ok(layout-read-back): a message's image is drawn at a width it is given (its box, its picture decoded that size), as image_rows has it
-  let room = fn() {
-    p.words_redone() |> ignore
-    match p.laid_size_told() {
-      Some((w, _)) => w
-      None => p.window().0
-    }
-  }
-  // (each by its key, the file and how many of it are before it: one file twice two images)
-  let rows = fn() {
+  // (each by its key, the file and how many of it are before it: one file twice two images; one whose proportion
+  // changed the same image, drawn by what the file is now as it changes, laid out at its new proportion)
+  let keyed = fn() {
     let all : Array[(String, String, Double)] = []
     let seen : Map[String, Int] = {}
     for named in images() {
@@ -977,36 +970,37 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       seen[named.0] = k + 1
       all.push((named.0 + "#" + k.to_string(), named.0, named.1))
     }
-    md_picture_row_spans(all.map(fn(im) { im.2 }), room()).map(fn(span) {
-      let row : Array[(String, String, Double)] = []
-      for i in span.0..<span.1 { row.push(all[i]) }
-      row
-    })
+    all
   }
-  p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
-    let i = @signals.untracked(fn() { i.get() })
-    line.row(Is(true)).gap(Is(image_row_gap)) |> ignore
-    let row = fn() { rows().get(i).unwrap_or([]) }
-    let h = fn() {
-      let all = row()
-      let ratios = all.fold(init=0.0, fn(n, im) { n + im.2 })
-      if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (room() - image_row_gap * (all.length() - 1).to_double()) / ratios) }
+  p.layout_box(By(keyed), sized=true, fn(l, all) {
+    let mut y = image_row_gap
+    for span in md_picture_row_spans(all.map(fn(im) { im.2 }), l.width) {
+      let n = span.1 - span.0
+      let mut ratios = 0.0
+      for i in span.0..<span.1 {
+        ratios = ratios + all[i].2
+      }
+      let h = if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (l.width - image_row_gap * (n - 1).to_double()) / ratios) }
+      let mut x = 0.0
+      // (the row as tall as its tallest image is drawn: each as wide as its share of `h`, floored)
+      let mut tall = 0.0
+      for i in span.0..<span.1 {
+        let (k, file, ratio) = all[i]
+        let w = (ratio * h).floor()
+        let cell = l.child(k, fn(cell) {
+          match (md.files)(file).bind(fn(f) { f.image }) {
+            Some(im) => (im.1)(cell)
+            None => ()
+          }
+        })
+        let (_, ch) = l.measure(cell, w)
+        tall = dmax(tall, ch)
+        l.place(cell, x, y)
+        x = x + w + image_row_gap
+      }
+      y = y + tall + image_row_gap
     }
-    line.each(fn() { row().map(fn(im) { im.0 }) }, fn(k) { k }, fn(cell, k) {
-      let k = @signals.untracked(fn() { k.get() })
-      let at = fn() { row().search_by(fn(im) { im.0 == k }) }
-      let width = fn() {
-        match at() {
-          Some(j) => (row()[j].2 * h()).floor()
-          None => 0.0
-        }
-      }
-      let n = @signals.untracked(fn() { at().map(fn(j) { row()[j].1 }).unwrap_or("") })
-      match (md.files)(n).bind(fn(f) { f.image }) {
-        Some(im) => (im.1)(cell, width)
-        None => ()
-      }
-      cell.width(By(fn() { Some(width()) })) |> ignore
-    })
+    l.size_to(y)
   })
+  |> ignore
 }
