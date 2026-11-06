@@ -898,6 +898,8 @@ pub fn long_jobs_lit(Source, Workspace) -> Bool
 
 pub fn long_jobs_seen(Source, Workspace) -> Unit
 
+pub fn long_stop(String, @json.Json?) -> (String, @json.Json, Array[(String, String)])
+
 pub fn looks_file(Source, String, (Bytes) -> Unit) -> LooksFile
 
 pub fn looks_files_again(Source, Array[String]) -> Unit

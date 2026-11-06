@@ -9,7 +9,10 @@ import type { Job, LongJobsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { stationBase } from "./station.tsx";
-import { JobDot, JobStop } from "./Jobs.tsx";
+import { JobDot } from "./Jobs.tsx";
+import { DoingShown, useDoingState } from "./DoingMark.tsx";
+import { Stop } from "@stillfail/ui/icons.tsx";
+import { openJobAction } from "./open-job-action.ts";
 import { Tip } from "./ui.tsx";
 import * as css from "./OpenJobs.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -28,9 +31,11 @@ export function useLongJobs(scope: string, toast: (text: string) => void) {
   const view = useTopic<LongJobsView>({ topic: "longJobs", scope }).value;
   const groups = view?.groups ?? [];
   const call = useCall();
-  // The core puts the job in place as it is now: gone from here, stopped in its chat.
-  const stop = (job: Job) => void (call("job.stop", { station: job.station, id: job.id }) as Promise<unknown>)
-    .catch((e: unknown) => toast(t("web-main.jobs.stopFailed", { name: job.name, error: failure(e) })));
+  // The core says how each row is stopped: a job, simulator or remote view.
+  const stop = (job: Job) => {
+    const action = openJobAction(job);
+    if (action) void call(action.call, action.params).catch((e: unknown) => toast(t("web-main.jobs.stopFailed", { name: job.name, error: failure(e) })));
+  };
   // The rail's bell has shown them: they no longer light it (the core's `lit`) until another is left up long.
   const seen = () => void (call("prefs.set", { jobsSeen: { [scope]: view?.ids ?? [] } }) as Promise<unknown>).catch(() => undefined);
   return { groups, stop, lit: view?.lit ?? false, seen };
@@ -40,6 +45,19 @@ export function useLongJobs(scope: string, toast: (text: string) => void) {
 export function chatPath(job: Job): string | null {
   const station = job.chat?.station ?? job.station;
   return job.chat && station ? `${stationBase(station)}/chats/${encodeURIComponent(job.chat.id)}` : null;
+}
+
+function OpenJobStop({ job, stop }: { job: Job; stop: (job: Job) => void }) {
+  const action = openJobAction(job)!;
+  const state = useDoingState(action.call, action.params);
+  const label = action.word ? `${action.word} ${job.name}` : t("web-main.jobs.stopNamed", { name: job.name });
+  return (
+    <Tip label={action.word ?? t("web-main.jobs.stop")} side="top">
+      <button type="button" className={css.openJobStop} aria-label={label} disabled={state.running} aria-busy={state.running || undefined} onClick={() => stop(job)}>
+        <DoingShown state={state} idle={<Stop size={14} />} />
+      </button>
+    </Tip>
+  );
 }
 
 export function OpenJobs({ scope }: { scope: string }) {
@@ -63,9 +81,7 @@ export function OpenJobs({ scope }: { scope: string }) {
     return (
       <div key={`${job.station}/${job.id}`} className={css.openJob}>
         {chat ? <NavLink className={css.openJobRow} to={chat}>{body}</NavLink> : <div className={css.openJobRow}>{body}</div>}
-        <Tip label={t("web-main.jobs.stop")} side="top">
-          <JobStop station={job.station ?? ""} job={job} stop={stop} className={css.openJobStop} label={t("web-main.jobs.stopNamed", { name: job.name })} />
-        </Tip>
+        {openJobAction(job) && <OpenJobStop job={job} stop={stop} />}
       </div>
     );
   };

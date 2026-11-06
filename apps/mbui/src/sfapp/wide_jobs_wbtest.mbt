@@ -34,3 +34,19 @@ test "wide: the jobs left up long light the bell until its panel has shown them:
   assert_eq(field(field(Some(seen[0].params), "jobsSeen"), "ws1"), Some(Json::array([Json::string("ws1/st1/j-web")])))
   assert_true(t.find("开了很久的网页服务 · 1") is Some(_))
 }
+
+///|
+test "wide: a long-running simulator and remote view can be stopped from the list" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="home-jobs-screens", h=1000.0)
+  t.host_says_finger(Some(true))
+  t.frame()
+  t.click(Button, label="待处理")
+  t.frame()
+  t.click(Button, label="关闭 Demo iPhone · iOS 27.2")
+  assert_eq(named(calls, "screen.close").length(), 1)
+  assert_eq(named(calls, "screen.close")[0].params, { "station": "ws1/st1", "screen": "simulator:A" })
+  t.click(Button, label="断开 Willow 的桌面")
+  assert_eq(named(calls, "screen.endView").length(), 1)
+  assert_eq(named(calls, "screen.endView")[0].params, { "station": "ws1/st1", "screen": "desktop", "view": "v1" })
+}

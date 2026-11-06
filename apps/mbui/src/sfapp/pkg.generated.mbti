@@ -526,6 +526,8 @@ pub fn local_sent(@sfbase.Outgoing) -> Bool
 
 pub fn long_jobs(@sfbase.Source, @sfbase.Workspace) -> Int32
 
+pub fn long_stop(String, @json.Json?) -> (String, @json.Json, Array[(String, String)])
+
 pub fn mark_numbers(Array[@sfbase.Mark]) -> Map[Int32, Int32]
 
 pub fn mark_where(@sfbase.PageMark, String) -> String
