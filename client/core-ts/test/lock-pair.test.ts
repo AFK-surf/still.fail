@@ -87,6 +87,87 @@ test("a new device met face to face: the code the trusted device shows, typed ri
   assert.deepEqual((await m.prompts()).pairing, [], "no longer shown");
 });
 
+test("a trusted app still loading its signing key waits before answering a new device", async () => {
+  const g = grant();
+  const ready = Deferred.makeUnsafe<void>();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }), (host) => {
+    const read = host.secureGet!;
+    host.secureGet = (key, opts) => key === Signer.KEY && !opts.user
+      ? Effect.andThen(Deferred.await(ready), read.call(host, key, opts))
+      : read.call(host, key, opts);
+  });
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const [trusted, phone] = await pipe();
+  r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, trusted));
+  const answers: unknown[] = [];
+  r.core.inner.runner.fork(Effect.ignore(Effect.andThen(
+    phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", PHONE, "s2") }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }),
+    Effect.map(phone.next(), (answer) => { answers.push(answer); }),
+  )));
+  await r.host.time.pass(500);
+  assert.deepEqual(answers, [], "the device has not refused while its own key is still loading");
+  Deferred.doneUnsafe(ready, Effect.void);
+  await r.host.time.pass(1_000);
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["ws"] }]);
+  assert.equal((await prompts()).pairing.length, 1);
+});
+
+test("a trusted app finishes pairing after its signing key loads, even when a stream read cannot be cancelled", async () => {
+  const g = grant();
+  const ready = Deferred.makeUnsafe<void>();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }), (host) => {
+    const read = host.secureGet!;
+    host.secureGet = (key, opts) => key === Signer.KEY && !opts.user
+      ? Effect.andThen(Deferred.await(ready), read.call(host, key, opts))
+      : read.call(host, key, opts);
+  });
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const [trusted, phone] = await pipe();
+  // Native and binding reads continue in the host even if the effect waiting on them is interrupted.
+  const uncancellable = { ...trusted, next: () => Effect.promise(() => Effect.runPromise(trusted.next())) };
+  r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, uncancellable));
+  await Effect.runPromise(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", PHONE, "s2") }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }));
+  await r.host.time.pass(500);
+  Deferred.doneUnsafe(ready, Effect.void);
+  const answers: unknown[] = [];
+  r.core.inner.runner.fork(Effect.map(phone.next(), (answer) => { answers.push(answer); }));
+  await r.host.time.pass(1_000);
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["ws"] }]);
+  const code = (await prompts()).pairing[0].code;
+  const results: unknown[] = [];
+  r.core.inner.runner.fork(Effect.map(Effect.result(tryOne(r.core.inner, { id: ME, d: phone, workspaces: ["ws"] }, PHONE, code)), (result) => { results.push(result); }));
+  await r.host.time.pass(5_000);
+  assert.equal(results.length, 1, "the verification exchange is not lost to a second in-flight read");
+  assert.equal((results[0] as { _tag: string })._tag, "Success");
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+});
+
+test("a new device goes away while the trusted app loads its key: no prompt remains", async () => {
+  const g = grant();
+  const ready = Deferred.makeUnsafe<void>();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }), (host) => {
+    const read = host.secureGet!;
+    host.secureGet = (key, opts) => key === Signer.KEY && !opts.user
+      ? Effect.andThen(Deferred.await(ready), read.call(host, key, opts))
+      : read.call(host, key, opts);
+  });
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const [trusted, phone] = await pipe();
+  const finished: boolean[] = [];
+  r.core.inner.runner.fork(Effect.map(serveTrusted(r.core.inner, PHONE, ME, trusted), () => { finished.push(true); }));
+  await Effect.runPromise(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", PHONE, "s2") }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }));
+  await r.host.time.pass(500);
+  phone.close();
+  await r.host.time.pass(500);
+  assert.deepEqual(finished, [true], "the request stops when the connection closes");
+  Deferred.doneUnsafe(ready, Effect.void);
+  await r.host.time.pass(500);
+  assert.deepEqual((await prompts()).pairing, []);
+});
+
 test("the owner approves a member's first device that signs, not a later one: that one the member approves from a device of their own", async () => {
   // One the owner (or an admin) puts in for a person who has one of their own already would be no one's, signing
   // nothing (lock-check.ts Device `own`): this device offers no code for it.
