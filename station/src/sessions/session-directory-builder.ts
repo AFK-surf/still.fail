@@ -1,7 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
-import { installSessionDirectories, sessionDirectoriesReady, sessionDirectoriesStep, sessionDirectory, type DirectorySession } from "../store/session-directory.ts";
+import { installSessionDirectories, sessionDirectoriesReady, sessionDirectoriesStep, sessionDirectory, sessionDirectoryArguments, SESSION_DIR_LIVE_MANY, type DirectorySession } from "../store/session-directory.ts";
 import type { Store } from "../store/store.ts";
 
 /// A memory check answers immediately while one shared worker prepares the directory lookup after handover.
@@ -37,6 +37,21 @@ export class SessionDirectoryBuilder {
     }
     void this.prepare();
     return null;
+  }
+
+  /// The resource page attributes independent processes by directories mentioned in their arguments.
+  findArguments(lines: readonly string[], home: string): Map<string, string> | null {
+    if (this.stopped) return null;
+    if (!lines.some((line) => line.includes("/"))) return new Map();
+    try {
+      const found = sessionDirectoryArguments(this.store.db, lines, home);
+      if (!sessionDirectoriesReady(this.store.db) && this.store.db.prepare(SESSION_DIR_LIVE_MANY).get() !== undefined) void this.prepare();
+      return found;
+    } catch (error) {
+      log.warn("resources", "the session directory lookup could not be read", { error: (error as Error).message });
+      void this.prepare();
+      return null;
+    }
   }
 
   async settled(): Promise<void> { await this.pending; }
