@@ -556,6 +556,9 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 /// at this very moment), meets it where it is now, worked out again from where it set out (rows below measured anew,
 /// come or gone; what grew above, Scroll::grew_above), at rest then.
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
+  // (a list that holds itself at its ends (reads_free) counts how far it can go in its own terms, its fling goes in the
+  // hand's: its foot where the hand's terms have it, as far from where the hand has it as the list counts it to be)
+  let most = if self.reads_free { most - (self.bar_off)() } else { most }
   guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
     f.v0 > 0.0 &&
     t <= f.end_t &&
