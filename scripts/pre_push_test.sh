@@ -67,10 +67,20 @@ git update-ref refs/remotes/origin/arch/next "$next"
 # A later arch/next commit does not hide changes made on an older branch.
 git checkout -q next
 git commit -qm 'next advances' --allow-empty
-git update-ref refs/remotes/origin/arch/next HEAD
+new_next=$(git rev-parse HEAD)
+git update-ref refs/remotes/origin/arch/next "$new_next"
 run "$feature" "$zero"
 expect "check push $next..$feature"
 expect "undone $next $feature"
+
+# A rebased existing branch checks its own changes, not the inherited changes
+# between the old remote head and the new integration base.
+git checkout -qb rebased "$new_next"
+git commit -qm 'feature rebased' --allow-empty
+rebased=$(git rev-parse HEAD)
+run "$rebased" "$feature"
+expect "check push $new_next..$rebased"
+expect "undone $new_next $rebased"
 
 # A branch from main continues using main, and an existing remote ref uses
 # its actual remote SHA even when it differs from either base.

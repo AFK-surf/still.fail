@@ -6,12 +6,13 @@ zero=0000000000000000000000000000000000000000
 status=0
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue
-  if [ "$remote_sha" = "$zero" ]; then
-    # A new branch: against where it left main, or arch/next when it left
-    # that branch later. Its inherited changes have already been pushed.
-    base=$(sh "$root/scripts/branch-base.sh" "$local_sha" "$remote_ref")
-  else
+  if [ "$remote_sha" != "$zero" ] && git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+    # An ordinary update: only what has not been pushed before.
     base=$remote_sha
+  else
+    # A new or rebased branch: its full difference from the integration base.
+    # Comparing a rebased branch to its old head would check inherited changes again.
+    base=$(sh "$root/scripts/branch-base.sh" "$local_sha" "$remote_ref")
   fi
   echo "checking $local_ref ($(git rev-list --count "$base..$local_sha") commits)"
   sh "$root/scripts/check.sh" push "$base..$local_sha" || status=1

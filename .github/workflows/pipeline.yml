@@ -232,17 +232,28 @@ jobs:
   check:
     needs: plan
     runs-on: [self-hosted, macos-ci]
-    # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
+    # A test that hangs (one waiting on what never comes,
     # up to its 10 minutes each) held one of macos-ci's four runners for most of an hour, and every run behind it waited
     # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
     timeout-minutes: 5
+    # Rust must not compete with the station's real-time tests, but waiting for all of them in one job left too little
+    # of its five minutes for a cold Rust build. Each half has its own limit; they still run one at a time.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - part: station
+            checks: station-js
+          - part: native
+            checks: station-native core
     env:
-      STILLFAIL_CHECK_PART: station core
+      STILLFAIL_CHECK_PART: ${{ matrix.checks }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Full check (station, core)
+      - name: Full check (${{ matrix.part }})
         run: |
           range='${{ needs.plan.outputs.range }}'
           github_range=$range
@@ -251,14 +262,18 @@ jobs:
           # Its guards beside it: the stable release's selection, and (a branch) nothing on the branch base taken back by
           # a squash onto a base that moved (scripts/undone.sh), and the changelog's trailers (scripts/changelog.ts: no
           # `Changelog: none`, the parts said).
-          python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
-          stable=$!
-          bash .github/test_mac_release_prebuild.sh > "$RUNNER_TEMP/mac-prebuild-test.log" 2>&1 &
-          mac_prebuild_test=$!
+          stable=""
+          mac_prebuild_test=""
           undone=""
-          if [ "$GITHUB_REF" != refs/heads/main ]; then
-            sh scripts/undone.sh "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
-            undone=$!
+          if [ '${{ matrix.part }}' = station ]; then
+            python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
+            stable=$!
+            bash .github/test_mac_release_prebuild.sh > "$RUNNER_TEMP/mac-prebuild-test.log" 2>&1 &
+            mac_prebuild_test=$!
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              sh scripts/undone.sh "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
+              undone=$!
+            fi
           fi
           status=0
           # In the background, so that when the job's time is up the runner's signal (to this shell alone) reaches it too,
@@ -267,9 +282,13 @@ jobs:
           check=$!
           trap 'kill -TERM $check 2> /dev/null; wait $check; exit 1' INT TERM
           wait $check || status=1
-          if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
-          if wait $mac_prebuild_test; then echo "· Mac release prebuild … ok"; else echo "· Mac release prebuild … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/mac-prebuild-test.log"; status=1; fi
-          if [ "$GITHUB_REF" != refs/heads/main ]; then
+          if [ -n "$stable" ]; then
+            if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
+          fi
+          if [ -n "$mac_prebuild_test" ]; then
+            if wait $mac_prebuild_test; then echo "· Mac release prebuild … ok"; else echo "· Mac release prebuild … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/mac-prebuild-test.log"; status=1; fi
+          fi
+          if [ '${{ matrix.part }}' = station ] && [ "$GITHUB_REF" != refs/heads/main ]; then
             if node scripts/changelog.ts --refuse "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
           fi
           if [ -n "$undone" ]; then
