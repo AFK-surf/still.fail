@@ -118,7 +118,8 @@ fn phone_ask_card_node(v : @view.View, here : () -> MessageHere, m : () -> Messa
             _ => None
           }
         },
-        fn() { open_page(Setting(@settings.phone_steps(here().core, here().station))) },
+        fn() { open_page(Setting(@settings.phone_steps(here().core, here().station, request=first.request))) },
+        chat=h.view.chat_address,
       )
     })
     |> ignore

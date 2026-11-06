@@ -184,6 +184,7 @@ pub fn phone_card_node(
   who : String?,
   ended : () -> (String, String, String)?,
   how : () -> Unit,
+  chat? : String = "",
 ) -> Unit {
   @sf.card_node(parent, fn(k) {
     @sf.ask_words_node(k, fn() { tr("android-misc.adb.ask.chat.title") }, reason) |> ignore
@@ -191,7 +192,7 @@ pub fn phone_card_node(
       Some(core) if mine =>
         answered_in_place_node(k, fn() {
           ended().map(fn(e) { (e.0 == "granted", [@ui.span(phone_outcome_words(e.0, e.1, e.2))]) })
-        }, fn(a) { phone_foot_node(a, core, station, request, lasts, how) })
+        }, fn(a) { phone_foot_node(a, core, station, request, lasts, how, chat) })
       _ =>
         match who {
           Some(w) if w != "" => @sf.words_node(k, fn() { w }, fn() { @sf.ask_note }) |> ignore
@@ -205,16 +206,21 @@ pub fn phone_card_node(
 ///|
 /// A phone request's answer (phone_foot's) in `parent`: 允许 (for the length chosen), 拒绝, and the length's menu; on a
 /// phone that lacks something first, what, and 查看步骤 (`how`) in 允许's place.
-fn phone_foot_node(parent : @view.View, core : Core, station : String, request : String, lasts : () -> String, how : () -> Unit) -> Unit {
+fn phone_foot_node(parent : @view.View, core : Core, station : String, request : String, lasts : () -> String, how : () -> Unit, chat : String) -> Unit {
   let key = "phone/" + request
   parent.reacts(fn() { () }, fn(_) { adb_phone_ask() })
   let lacks = fn() {
-    match adb_ready_now() {
+    let row = phone_row(core, request)
+    if flag(row, "oldStation") {
+      Some(tr("android-misc.personal.updateStation"))
+    } else if flag(row, "join") {
+      Some(tr("android-misc.personal.open"))
+    } else { match adb_ready_now() {
       AdbLacks(step) => Some(step)
       // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
       AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
       _ => None
-    }
+    } }
   }
   let scopes = fn() { if lasts() == "hour" { ["hour"] } else { ["hour", "chat"] } }
   let scope = fn() {
@@ -241,6 +247,7 @@ fn phone_foot_node(parent : @view.View, core : Core, station : String, request :
     let params : Array[(String, Json)] = [("station", str(station)), ("request", str(request))]
     if yes {
       params.push(("scope", str(@signals.untracked(scope))))
+      if chat != "" { params.push(("chat", str(chat))) }
     }
     (core.call)("adb.decide", obj(params), fn(r) {
       match r {
@@ -259,7 +266,9 @@ fn phone_foot_node(parent : @view.View, core : Core, station : String, request :
   @sf.ask_buttons_node(parent, fn(b) {
     b.pick(fn() { lacks() is Some(_) }, fn(first, lacking) {
       if lacking {
-        @sf.button_node(first, fn() { tr("android-misc.adb.ask.how") }, how, tone=Primary, at_foot=true) |> ignore
+        @sf.button_node(first, fn() {
+          tr(if flag(phone_row(core, request), "join") { "android-misc.personal.open" } else { "android-misc.adb.ask.how" })
+        }, how, tone=Primary, at_foot=true) |> ignore
       } else {
         @sf.button_node(first, fn() { tr("android-settings.vault.act.allow") }, fn() { decide(true) }, tone=Primary, busy=fn() {
           pending() == Some(true)

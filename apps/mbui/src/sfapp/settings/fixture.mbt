@@ -64,6 +64,7 @@ priv struct SettingsFixture {
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
+  mut pairing_personal : Bool
   /// Maple is being added to security mode (settings-security-protecting).
   mut protecting : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
@@ -130,6 +131,7 @@ let fx : SettingsFixture = {
   reset_expiry: false,
   models_added: [],
   pairing: false,
+  pairing_personal: false,
   protecting: false,
   pair_ended: "",
   key_ask: false,
@@ -238,6 +240,7 @@ fn fixture_reset() -> Unit {
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
+  fx.pairing_personal = false
   fx.protecting = false
   fx.pair_ended = ""
   fx.key_ask = false
@@ -415,7 +418,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     // The grants list with long reasons is itself in view for the spacing and corner sweeps.
-    "settings-adb-chats-long" => up("", "settings/adb/", 4)
+    "settings-adb-chats-long" | "settings-adb-local-approval" => up("", "settings/adb/", 4)
     "settings-station-mark" => up("mark", "", 0)
     "settings-station-many-profiles" => fx_station_many_profiles.val = true
     "settings-station-gpu" => fx.gpus = true
@@ -501,6 +504,11 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
+    // (one asking into the person's own lock: no workspace named)
+    "settings-lock-prompt-personal" => {
+      fx.pairing = true
+      fx.pairing_personal = true
+    }
     "settings-vault-prompt" => fx.key_ask = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
     "settings-vault-add" => fixture_open.desk = "vault-add"
@@ -546,7 +554,8 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" => "adb:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-local-approval" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" | "settings-adb-revocations-error" => "adb:"
+    "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" | "settings-adb-lock-pending" => "personal-lock:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
@@ -575,7 +584,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
-    "settings-notify-off" | "settings-lock-prompt" | "settings-vault-prompt" => "home"
+    "settings-notify-off" | "settings-lock-prompt" | "settings-lock-prompt-personal" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
     "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
@@ -2008,7 +2017,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
                   ("untilText", str("14:05 前有效")),
-                  ("workspaces", [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]),
+                  ("workspaces", if fx.pairing_personal { [] } else { [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])] }),
                 ]),
               ]
             } else {
@@ -3403,6 +3412,37 @@ fn fx_adb_share() -> Json {
     )
   }
   match fx_adb.val {
+    "revocations-error" => obj([("sharing", Json::boolean(false)), ("phase", str("off")), ("on", Json::boolean(true)), ("tunnels", Json::number(0.0)), ("revocationsError", Json::boolean(true))])
+    "local-approval" =>
+      obj([
+        ("sharing", Json::boolean(false)),
+        ("phase", str("idle")),
+        ("on", Json::boolean(true)),
+        ("tunnels", Json::number(0.0)),
+        ("grants", [obj([("station", str("ws1/st1")), ("id", str("p-local")), ("session", str("s-c1")), ("chat", str("CHAT/1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("记录键盘升起时的帧时间")), ("status", str("granted")), ("scope", str("hour")), ("held", Json::boolean(false)), ("localApproval", Json::boolean(true)), ("approvalProof", str("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))])]),
+      ])
+    "lock-pending" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("pending", Json::boolean(true)), ("devices", Json::array([obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))])]))])]))])
+    // the person's own lock on the page (docs/personal-lock.md): this device on it, outside it, or asked for a code
+    "lock-member" =>
+      lent("connected", [
+        ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("devices", Json::array([
+          obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))]),
+          obj([("key", str("ed25519:bb")), ("label", str("MacBook Pro")), ("me", Json::boolean(false))]),
+        ]))])])),
+        ("toConfirm", Json::number(2.0)),
+      ])
+    // 共享调试 off the person's own lock: none yet, or this device joining one (the page is the lock's step alone)
+    "gate-none" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("none")), ("devices", Json::array([]))])]))])
+    "gate-code" =>
+      lent("connected", [
+        ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
+      ])
+    "lock-outside" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([]))])]))])
+    "lock-code" =>
+      lent("connected", [
+        ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
+      ])
+    "lock-replaced" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("replaced")), ("devices", Json::array([]))])]))])
     "unpaired" => lent("unpaired", [])
     "pairing" => lent("unpaired", [("pairPort", Json::number(37115.0))])
     "connected" => lent("connected", [("tunnels", Json::number(1.0))])
@@ -3437,9 +3477,22 @@ fn fx_adb_share() -> Json {
         ("tunnels", Json::number(0.0)),
         ("lends", [obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("tunnels", Json::number(1.0))])]),
         ("grants", [
-          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在开发版里打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
+          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chat", str("c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在开发版里打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
           obj([("station", str("ws1/st1")), ("id", str("p-long-2")), ("session", str("s-c2")), ("chatTitle", str("客户端卡顿排查")), ("reason", str("量整页重搭那一帧实际跑多久，CPU 跑在什么频率，并比较改动前后的差别")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("2 小时前"))]))]),
           obj([("station", str("ws1/st1")), ("id", str("p-long-3")), ("session", str("s-c3")), ("chatTitle", str("检查登录页面")), ("reason", str("检查登录页面")), ("status", str("granted")), ("scope", str("hour"))]),
+        ]),
+      ])
+    // a grant from before the person's own lock (docs/personal-lock.md): signed by no device on it, so the phone
+    // lends nothing on it; no reason given, and its station not lent yet
+    "unsigned" =>
+      obj([
+        ("sharing", Json::boolean(false)),
+        ("phase", str("idle")),
+        ("on", Json::boolean(true)),
+        ("tunnels", Json::number(0.0)),
+        ("toConfirm", Json::number(1.0)),
+        ("grants", [
+          obj([("station", str("ws1/st1")), ("id", str("p-u-1")), ("session", str("s-c1")), ("chatTitle", str("定时 · 每 15 分钟审 mbui 三条线")), ("status", str("granted")), ("scope", str("chat")), ("held", Json::boolean(false))]),
         ]),
       ])
     // settings' 共享调试, its switch on: two chats granted it, one asking; lent to both their stations, Willow's adb

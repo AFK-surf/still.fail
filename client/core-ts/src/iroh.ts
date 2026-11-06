@@ -3,7 +3,7 @@
 // the browser from iroh's wasm build (relay only); Android from its JNI shell. The mesh (mesh.ts) is the core's own
 // logic over it: links, credentials, renewals, races, measurements.
 import type { Effect } from "effect";
-import type { HostError } from "./error.ts";
+import type { CoreError, HostError } from "./error.ts";
 
 /// Where an endpoint is: its id (hex), the relays it may be on, the addresses it may be at (`ip:port`).
 export type IrohAddr = { id: string; relays?: string[]; ips?: string[] };
@@ -26,6 +26,9 @@ export interface IrohStream {
   /// What came next; null at its end.
   read(): Effect.Effect<Uint8Array | null, HostError>;
   write(bytes: Uint8Array): Effect.Effect<void, HostError>;
+  /// Check immediately before starting the host's write, in the same synchronous callback. A stream without this
+  /// capability cannot send a request whose authorization can change while it opens.
+  writeGuarded?(bytes: Uint8Array, check: () => CoreError | null): Effect.Effect<void, HostError | CoreError>;
   /// Nothing more goes out on it.
   finish(): Effect.Effect<void, HostError>;
   /// Once what was sent is acknowledged: null, or the code the other end stopped it with.

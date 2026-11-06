@@ -2645,4 +2645,6 @@ let zh : Map[String, String] = {
   "web-pages.screen.device.back": "返回",
   "web-pages.screen.debug.paneHide": "收起右栏",
   "web-pages.screen.debug.paneShow": "展开右栏",
+  "android-misc.personal.heading": "个人锁",
+  "android-misc.personal.note": "哪些设备能以你的名义批准，比如手机调试",
 }

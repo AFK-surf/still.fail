@@ -162,6 +162,34 @@ test "共享调试: granted, the app turns Wireless debugging on itself; the hos
 }
 
 ///|
+test "allowing a phone request binds the decision to the chat showing its card" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("chat-phone")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  for c in t.native_calls() {
+    if c.1 == "adb.phone" { t.answer_native(c.0, adb_phone_of(wireless=true)) }
+  }
+  t.draw()
+  let allow = t.words().filter(fn(w) { w.0 == "允许" })
+  assert_eq(allow.length(), 1)
+  t.tap(allow[0].1 + allow[0].3 / 2.0, allow[0].2 + allow[0].4 / 2.0)
+  t.draw()
+  let asked = calls.filter(fn(call) { call.name == "adb.decide" })
+  assert_eq(asked.length(), 1)
+  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-1", "scope": "chat", "chat": "CHAT/123.456" })
+}
+
+///|
 test "共享调试: a host without it, nothing to lend" {
   let t = settings_tester("adb:ws1/st1")
   t.refuse_native(t.native_calls()[0].0, "unsupported")
@@ -221,21 +249,18 @@ test "共享调试 of the second station a phone is lent to: its own lending, wa
 }
 
 ///|
-test "settings' 共享调试: the stations its grants lend it to, each as its adb holds the phone, its own page a tap away" {
-  let t = settings_tester("adb:", shows="settings-adb-chats")
-  for c in t.native_calls() {
-    if c.1 == "adb.phone" {
-      t.answer_native(c.0, adb_phone_of(wireless=true))
-    }
-  }
+test "settings' 共享调试: a station waiting for the phone to be paired: the pairing step on the page, no list of stations" {
+  let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
+  assert_true(t.find("共享给的 station") is None)
+  assert_true(t.find("打开配对窗口") is Some(_))
+  t.tap_text("前往无线调试")
   t.draw()
-  assert_true(t.find("共享给的 station") is Some(_))
-  assert_true(t.find("agent 可以使用 adb") is Some(_))
-  assert_true(t.find("手机尚未完成配对") is Some(_))
-  t.tap_text("手机尚未完成配对")
+  assert_eq(asked_native(t, "adb.open"), [{ "what": "wireless", "beside": true }])
+  // paired: nothing left to do, and nothing said of it
+  @settings.fixture_motion(1)
+  t.draw()
   t.run_for(@ui.move_most_ms)
-  // (Maple's page: settings' page gone from view)
-  assert_true(t.find("默认最长授权") is None)
+  assert_true(t.find("打开配对窗口") is None)
 }
 
 ///|
@@ -243,7 +268,7 @@ test "settings' 共享调试: unfinished setup stands out before routine setting
   let t = settings_tester("adb:", shows="settings-adb-chats-off", platform=2)
   guard t.find("待处理") is Some((_, attention_y)) else { fail("unfinished setup is marked") }
   guard t.find("开启无线调试") is Some((_, step_y)) else { fail("the next step is named") }
-  guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("the station list is shown") }
+  guard t.find("已授权的对话") is Some((_, stations_y)) else { fail("the chats are shown") }
   assert_true(attention_y < stations_y && step_y < stations_y)
   assert_true(t.find("前往设置开启") is Some(_))
   // When more than one prerequisite is missing, the first step and all the other missing settings are visible.
@@ -253,8 +278,7 @@ test "settings' 共享调试: unfinished setup stands out before routine setting
   assert_true(t.find("设置 › 关于手机") is Some(_))
   assert_true(t.find("WLAN") is Some(_))
   assert_true(t.find("无线调试") is Some(_))
-  // The less urgent default remains available further down the page.
-  t.wheel(195.0, 400.0, 1500.0)
+  // The setting stays with the switch at the page's top.
   assert_true(t.find("默认最长授权") is Some(_))
 }
 
@@ -271,7 +295,7 @@ test "settings' 共享调试: the unfinished setup's mark follows its title" {
 test "settings' 共享调试: a pending request comes before information and opens its chat" {
   let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
   guard t.find("等你允许") is Some((_, pending_y)) else { fail("the request is shown") }
-  guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("the stations are shown") }
+  guard t.find("已授权的对话") is Some((_, stations_y)) else { fail("the chats are shown") }
   assert_true(pending_y < stations_y)
   t.tap_text("通知权限检查")
   t.run_for(@ui.move_most_ms)
@@ -337,35 +361,14 @@ test "settings' 共享调试: the take back button acts on its own chat" {
   t.draw()
   let asked = calls.filter(fn(call) { call.name == "adb.revoke" })
   assert_eq(asked.length(), 1)
-  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-long-1" })
-}
-
-///|
-test "settings' 共享调试: a station needing pairing precedes connected stations" {
-  let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
-  guard t.find("Maple") is Some((_, unpaired_y)) else { fail("the unpaired station is shown") }
-  guard t.find("agent 可以使用 adb") is Some((_, connected_y)) else { fail("the connected station is shown") }
-  assert_true(unpaired_y < connected_y)
-}
-
-///|
-test "settings' 共享调试: a station moves in place when pairing finishes" {
-  let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
-  let (_, before) = t.drawn_of("Maple").unwrap()
-  @settings.fixture_motion(1)
-  t.draw()
-  t.run_for(@ui.row_size_ms / 2.0)
-  let (_, halfway) = t.drawn_of("Maple").unwrap()
-  t.run_for(@ui.row_size_ms)
-  let (_, after) = t.drawn_of("Maple").unwrap()
-  assert_true(before < halfway && halfway < after, msg="\{before}, \{halfway}, \{after}")
+  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-long-1", "chat": "c1" })
 }
 
 ///|
 test "settings' 共享调试: phone setup comes before a long list of grants" {
   let t = settings_tester("adb:", shows="settings-adb-chats-off", platform=2)
   guard t.find("本机设置") is Some((_, phone_y)) else { fail("phone setup is shown") }
-  guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("stations are shown") }
+  guard t.find("已授权的对话") is Some((_, stations_y)) else { fail("the chats are shown") }
   assert_true(phone_y < stations_y)
 }
 
@@ -391,6 +394,10 @@ test "settings' 共享调试: wireless debugging turns on in the app when allowe
 ///|
 test "settings' 共享调试: the phone setup closes in place as wireless debugging comes on" {
   let t = settings_tester("adb:", shows="settings-adb-chats-off", platform=2)
+  // (its stations' adb holding the phone already: nothing next once it is on)
+  @settings.fixture_motion(1)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
   let (_, before) = t.drawn_of("等你允许").unwrap()
   t.post("native:adb.phone", adb_phone_of(wireless=true).stringify())
   t.draw()
@@ -411,4 +418,171 @@ test "共享调试 of a station a grant lends the phone to: no switch that canno
   // the code reader's row says where Accessibility keeps it
   let t = settings_tester("adb:ws1/st2", shows="settings-adb-second")
   assert_true(t.find("自动填配对码") is Some(_))
+}
+
+///|
+test "a device without the person's own lock is not let allow: its way to turn it on instead, on a phone and on a computer alike" {
+  for phone in [adb_phone_of(wireless=true), adb_phone_of(supported=false)] {
+    let t = phone_chat("chat-phone-outside", phone)
+    assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
+    assert_eq(t.words().filter(fn(x) { x.0 == "000000" }).length(), 0)
+    t.tap_text("开启个人锁")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("个人锁") is Some(_))
+    assert_true(t.find("默认最长授权") is None)
+  }
+}
+
+///|
+test "a station from before signed phone grants must be updated before the request can be allowed" {
+  let t = phone_chat("chat-phone-old-station", adb_phone_of(supported=false))
+  assert_true(t.find("需要先更新这台 station") is Some(_))
+  assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
+  assert_true(t.find("查看步骤") is Some(_))
+}
+
+///|
+test "settings' 共享调试: a grant the phone does not lend keeps its title whole, what it says clear of 收回" {
+  let t = settings_tester("adb:", shows="settings-adb-unsigned", platform=2)
+  let title = t.rect_of("定时 · 每 15 分钟审 mbui 三条线").unwrap()
+  assert_true(title.2 > 200.0, msg="\{title}")
+  let said = t.words().filter(fn(w) { w.0 == "待确认" })
+  let back = t.words().filter(fn(w) { w.0 == "收回" })
+  assert_eq(said.length(), 1)
+  assert_eq(back.length(), 1)
+  assert_true(said[0].1 + said[0].3 <= back[0].1, msg="\{said} \{back}")
+  // the card's link rows' words on the same line as its other rows' (the switch's)
+  let other = t.rect_of("重启手机、更新 app 后也保持开启").unwrap()
+  assert_eq(title.0, other.0)
+  assert_eq(t.rect_of("默认最长授权").unwrap().0, other.0)
+  assert_true(t.room_faults().is_empty(), msg="\{t.room_faults()}")
+}
+
+///|
+test "settings' 共享调试: off the person's own lock, the page is the lock's step alone" {
+  let t = settings_tester("adb:", shows="settings-adb-gate-none", platform=2)
+  assert_true(t.find("共享调试要先开启个人锁") is Some(_))
+  // nothing that does anything without it: the switch, the stations, how long grants last
+  assert_true(t.find("重启手机、更新 app 后也保持开启") is None)
+  assert_true(t.find("共享给的 station") is None)
+  assert_true(t.find("默认最长授权") is None)
+}
+
+///|
+test "settings' 共享调试: 开启个人锁 there turns the lock on, and a device joining types the code in the page" {
+  for mode in ["settings-adb-gate-none", "settings-adb-gate-code"] {
+    new_run()
+    @settings.fixture_page(mode) |> ignore
+    let base = fixture("settings")
+    let calls : Array[(String, Json)] = []
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        calls.push((name, params))
+        (base.call)(name, params, done)
+      },
+    }
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+    open_setting("adb:")
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    if mode == "settings-adb-gate-none" {
+      // the button, not the title over it that names it too
+      let button = t.words().filter(fn(w) { w.0 == "开启个人锁" })
+      assert_eq(button.length(), 1)
+      t.tap(button[0].1 + button[0].3 / 2.0, button[0].2 + button[0].4 / 2.0)
+      t.draw()
+      assert_true(calls.iter().any(fn(call) { call.0 == "adb.personalOpen" && call.1 == { "sub": "s" } }), msg="\{calls.map(fn(call) { call.0 })}")
+    } else {
+      assert_true(t.find("先把这台设备加入个人锁") is Some(_))
+      assert_true(t.find("14:05 前有效") is Some(_))
+      t.tap_text("MacBook Pro")
+      t.type_text("123456")
+      let typed = calls.filter(fn(call) { call.0 == "adb.personalCode" })
+      assert_eq(typed.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+      assert_eq(typed[0].1, { "code": "123456" })
+    }
+  }
+}
+
+///|
+test "settings' shared debugging: a failed revocation record offers a retry" {
+  new_run()
+  @settings.fixture_page("settings-adb-revocations-error") |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("adb:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("共享调试已暂停") is Some(_))
+  let retry = t.words().filter(fn(w) { w.0 == "重试" })
+  assert_eq(retry.length(), 1)
+  t.tap(retry[0].1 + retry[0].3 / 2.0, retry[0].2 + retry[0].4 / 2.0)
+  t.draw()
+  assert_true(calls.iter().any(fn(call) { call.0 == "adb.retryRevocations" && call.1 == {} }), msg="\{calls.map(fn(call) { call.0 })}")
+}
+
+///|
+test "settings' shared debugging: a taken back chat can be approved here for its shown grant" {
+  new_run()
+  @settings.fixture_page("settings-adb-local-approval") |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("adb:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("已收回，需在手机重新允许") is Some(_))
+  assert_true(t.find("1 小时内") is Some(_))
+  assert_true(t.find("记录键盘升起时的帧时间") is Some(_))
+  t.tap_text("在手机允许")
+  t.draw()
+  assert_true(calls.iter().any(fn(call) { call.0 == "adb.approveHere" && call.1 == { "station": "ws1/st1", "request": "p-local", "proof": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" } }), msg="\{calls.map(fn(call) { call.0 })}")
+}
+
+///|
+test "settings' personal lock: a failed save pauses authorization and offers a retry" {
+  new_run()
+  @settings.fixture_page("settings-adb-lock-pending") |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("personal-lock:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("重试保存") is Some(_))
+  assert_true(t.find("OPPO PLP110") is None)
+  t.tap_text("重试保存")
+  t.draw()
+  assert_true(calls.iter().any(fn(call) { call.0 == "adb.personalOpen" && call.1 == { "sub": "s" } }), msg="\{calls.map(fn(call) { call.0 })}")
+}
+
+///|
+test "settings' 共享调试: its settings at the top, the lists after them" {
+  let t = settings_tester("adb:", shows="settings-adb-chats-long", platform=2)
+  guard t.find("默认最长授权") is Some((_, lasts_y)) else { fail("the setting is shown") }
+  guard t.find("已授权的对话") is Some((_, chats_y)) else { fail("the chats are shown") }
+  assert_true(lasts_y < chats_y)
 }

@@ -606,6 +606,8 @@ pub fn flight_hint_due(String) -> Double?
 
 pub fn flight_landing(@ui.Ctx, SendFlight, Int32, String, share? : (Double, Double), top_crop? : Bool, paint? : ((Double, Double, @ui.Fit, Double) -> Unit)?) -> Unit
 
+pub fn flight_landing_of(String) -> Double?
+
 pub fn flight_landing_words(@ui.Ctx, SendFlight, Int32) -> Unit
 
 pub fn flight_len(Bool) -> Double
@@ -2289,6 +2291,7 @@ pub(all) struct ChatTabs {
 pub(all) struct ChatView {
   title : String
   thread : Double?
+  chat_address : String
   unread : Double
   people : Array[Person]
   agents : Array[Agent]
@@ -3602,6 +3605,7 @@ pub fn Turns::admit(Self, @ui.Ctx, String, Double, after? : Bool) -> Unit
 pub fn Turns::after_sent(Self, TurnAsk) -> Double
 pub fn Turns::ask(Self, @ui.Ctx, TurnFor, Double, after? : Bool) -> Unit
 pub fn Turns::emits(Self, @ui.Ctx) -> Unit
+pub fn Turns::emits_held(Self) -> Bool
 pub fn Turns::emitting(Self) -> Bool
 pub fn Turns::free_at(Self, TurnAsk) -> Double
 pub fn Turns::in_turn(Self, @ui.Ctx, String, Bool, Double, seen~ : Bool) -> Bool

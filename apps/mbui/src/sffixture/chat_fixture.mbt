@@ -239,7 +239,7 @@ pub fn rich_chat(older : Int) -> Json {
   {
     "archived": false,
     "me": { "email": "lin@example.com" },
-    "thread": { "id": 7, "unread": 0 },
+    "thread": { "id": 7, "unread": 0, "channel": "CHAT", "threadTs": "123.456" },
     "title": "整理发布清单",
     "people": [me, ana],
     "agents": [
@@ -1468,7 +1468,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
-  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-outside" || f.mode == "chat-phone-old-station" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
   // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
   // on a computer)

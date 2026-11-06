@@ -69,19 +69,24 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
     c.box(style=pair_column, fn() {
       c.text(fill("web-pages.security.pairBody", [("device", text(rv, "deviceText"))]), style=pair_body)
       |> ignore
-      c.box(style=pair_places, fn() {
-        c.text(tr("web-pages.security.promptFor"), style=pair_places_head) |> ignore
-        for w in items(shown, "workspaces") {
-          let wv = Some(w)
-          // its mark before its name, its letter where it has none
-          c.box(style=pair_place_line, fn() {
-            @sf.workspace_badge(c, text(wv, "name"), text(wv, "emoji"), text(wv, "icon"), pair_place_mark)
-            c.text(text(wv, "name"), style=pair_place) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
+      // (asked into the person's own lock, no workspace's: said so)
+      if items(shown, "workspaces").is_empty() {
+        c.text(tr("web-pages.security.pairPersonal"), style=pair_places_head) |> ignore
+      } else {
+        c.box(style=pair_places, fn() {
+          c.text(tr("web-pages.security.promptFor"), style=pair_places_head) |> ignore
+          for w in items(shown, "workspaces") {
+            let wv = Some(w)
+            // its mark before its name, its letter where it has none
+            c.box(style=pair_place_line, fn() {
+              @sf.workspace_badge(c, text(wv, "name"), text(wv, "emoji"), text(wv, "icon"), pair_place_mark)
+              c.text(text(wv, "name"), style=pair_place) |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      }
       mono(c, spaced(text(shown, "code")), size=34.0, weight=600, line=44.0, center=true)
       // until when it holds (gone from here then)
       match text(shown, "untilText") {

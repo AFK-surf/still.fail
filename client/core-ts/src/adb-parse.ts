@@ -16,12 +16,28 @@ export type AdbCall =
   /// The ports the app found for adbd, and what the phone is: lent with them to every station a grant wants it on.
   | { kind: "ports"; ports: Omit<Offer, "station" | "minutes"> }
   /// A chat's request for this person's phone decided (`scope`: "hour" | "chat"; null refuses it), or a grant taken back.
-  | { kind: "decide"; station: string; request: string; scope: "hour" | "chat" | null }
-  | { kind: "revoke"; station: string; request: string }
+  | { kind: "decide"; station: string; request: string; scope: "hour" | "chat" | null; chat?: string }
+  | { kind: "revoke"; station: string; request: string; chat?: string }
+  /// Explicitly allow one already-granted request here after this phone took back its chat.
+  | { kind: "approveHere"; station: string; request: string; proof: string }
   /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
   | { kind: "lasts"; lasts: "hour" | "chat" }
+  /// The person's own lock (docs/personal-lock.md): this device asks to join it, types the code shown on one on it, stops
+  /// asking; a device taken off; the lock pinned here left, and one begun anew.
+  /// (`sub`: whose: a device may be signed in to several accounts, each with a lock of its own.)
+  | { kind: "personalOpen"; sub: string }
+  | { kind: "personalJoin"; sub: string }
+  | { kind: "personalCode"; code: string }
+  | { kind: "personalCancel" }
+  | { kind: "personalRemove"; sub: string; key: string }
+  | { kind: "personalForget"; sub: string }
+  | { kind: "personalRestart"; sub: string }
+  /// The grants made before they were signed, signed now at one go (the person asked once).
+  | { kind: "personalConfirm" }
   /// This phone's 共享调试 switch: off, lent to no chat; on, until turned off (kept on the device).
-  | { kind: "on"; on: boolean };
+  | { kind: "on"; on: boolean }
+  /// Retry reading or saving the phone's local grants and revocations without changing its sharing switch.
+  | { kind: "retryRevocations" };
 
 export function parseAdb(name: string, params: unknown): AdbCall | null {
   const text = (field: string) => {
@@ -60,10 +76,29 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
       return { kind: "on", on };
     }
+    case "adb.retryRevocations":
+      return { kind: "retryRevocations" };
+    case "adb.personalOpen":
+      return { kind: "personalOpen", sub: text("sub") };
+    case "adb.personalJoin":
+      return { kind: "personalJoin", sub: text("sub") };
+    case "adb.personalCode":
+      return { kind: "personalCode", code: text("code") };
+    case "adb.personalCancel":
+      return { kind: "personalCancel" };
+    case "adb.personalRemove":
+      return { kind: "personalRemove", sub: text("sub"), key: text("key") };
+    case "adb.personalForget":
+      return { kind: "personalForget", sub: text("sub") };
+    case "adb.personalRestart":
+      return { kind: "personalRestart", sub: text("sub") };
+    case "adb.personalConfirm":
+      return { kind: "personalConfirm" };
     case "adb.ports":
       return { kind: "ports", ports: { connect: port("connect"), pair: port("pair"), device: text("device"), android: text("android"), package: text("package") } };
     case "adb.decide":
-    case "adb.revoke": {
+    case "adb.revoke":
+    case "adb.approveHere": {
       const station = text("station");
       try {
         StationAddr.parse(station);
@@ -72,9 +107,14 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       }
       const request = text("request");
       if (request === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "request" }));
-      if (name === "adb.revoke") return { kind: "revoke", station, request };
+      if (name === "adb.revoke") return { kind: "revoke", station, request, ...(text("chat") !== "" ? { chat: text("chat") } : {}) };
+      if (name === "adb.approveHere") {
+        const proof = text("proof");
+        if (!/^[0-9a-f]{64}$/.test(proof)) throw CoreError.invalid(t("core-misc.params.missing", { field: "proof" }));
+        return { kind: "approveHere", station, request, proof };
+      }
       const s = get(params, "scope");
-      return { kind: "decide", station, request, scope: s === "hour" || s === "chat" ? s : null };
+      return { kind: "decide", station, request, scope: s === "hour" || s === "chat" ? s : null, ...(text("chat") !== "" ? { chat: text("chat") } : {}) };
     }
     default:
       return null;

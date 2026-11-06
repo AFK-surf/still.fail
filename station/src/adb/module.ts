@@ -96,21 +96,21 @@ export const AdbLive = Layer.effectDiscard(
       }
       // A grant decided, taken back, or the owner's grants listed (from their app).
       const ask = head.adb ?? {};
-      if (ask.op === "decide" || ask.op === "revoke" || ask.op === "grants" || ask.op === "lasts") {
+      if (ask.op === "decide" || ask.op === "revoke" || ask.op === "grants" || ask.op === "lasts" || ask.op === "sign") {
         const reply = async (status: number, body: unknown) => {
           await writeLine(stream, { status, headers: { "content-type": "application/json" } });
           await stream.write(Buffer.from(JSON.stringify(body)));
           await stream.finish();
         };
         const email = viewer.email.toLowerCase();
-        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: grants.lastsOf(email) });
+        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: grants.lastsOf(email), signs: true });
         if (ask.op === "lasts") {
           const why = grants.setLasts(email, ask.lasts, ask.at);
           return why === null ? reply(200, { lasts: grants.lastsOf(email) }) : reply(422, { message: why });
         }
         const id = typeof ask.request === "string" ? ask.request : "";
         const scope = ask.scope === "hour" || ask.scope === "chat" ? (ask.scope as Scope) : null;
-        const why = ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace) : grants.revoke(email, id, viewer.workspace);
+        const why = ask.op === "sign" ? grants.sign(email, id, ask.signed, viewer.workspace) : ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace, ask.signed) : grants.revoke(email, id, viewer.workspace);
         const request = grants.get(id);
         return why === null ? reply(200, { request: request === null ? null : grants.shown(request) }) : reply(422, { message: why });
       }

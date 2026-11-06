@@ -2,7 +2,7 @@
 // (hosts/node-iroh.ts), client/iroh-wasm in a browser (hosts/web.ts). Both have the same calls; this makes them the
 // core's Effects.
 import { Effect } from "effect";
-import { HostError } from "./error.ts";
+import { CoreError, HostError } from "./error.ts";
 import type { BindOptions, CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohStream } from "./iroh.ts";
 
 export type BoundStream = {
@@ -59,6 +59,15 @@ export function wrapIroh(bind: (o: BindOptions) => Promise<BoundEndpoint>, bytes
         return b === null || b === undefined ? null : view(b);
       }),
     write: (b) => call(() => s.write(out(b))),
+    // The decision and the binding's write happen in one synchronous registration, before its promise is awaited.
+    writeGuarded: (b, check) => Effect.tryPromise({
+      try: () => {
+        const refused = check();
+        if (refused) throw refused;
+        return s.write(out(b));
+      },
+      catch: (e) => e instanceof CoreError ? e : host(e),
+    }),
     finish: () => call(() => s.finish()),
     stopped: () =>
       call(async () => {
