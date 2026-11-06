@@ -24,3 +24,14 @@ test "layers drawn again not where the frame kept them: said, each way" {
   // (one drawn into fewer than it says it drew)
   assert_true(wrong([(10, 0, 2, 0, 0, 3, 0, 2)]))
 }
+
+///|
+test "layers drawn again whose pieces lie in the other order than their instances: put together round them; overlapping, said" {
+  let wrong = fn(spans) { scene_spans_wrong(spans, 10, 24) is Some(_) }
+  // (B at 0 with pieces 12..24, A at 2 with pieces 0..12: apart each way, as a raise over the scrim leaves them)
+  assert_true(!wrong([(902, 0, 2, 12, 12, 3, 12, 3), (901, 2, 2, 0, 12, 2, 12, 2)]))
+  // (their pieces overlapping, whatever order the instances are in)
+  assert_true(wrong([(902, 0, 2, 10, 12, 2, 12, 2), (901, 2, 2, 0, 12, 2, 12, 2)]))
+  // (their instances overlapping, whatever order the pieces are in)
+  assert_true(wrong([(902, 0, 3, 12, 12, 3, 12, 3), (901, 2, 2, 0, 12, 2, 12, 2)]))
+}
