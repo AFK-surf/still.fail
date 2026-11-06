@@ -31,7 +31,19 @@ const FOLLOWED_FOR = 10 * 60_000;
 /// Encoded frames kept for a view that asks slowly: past this they are dropped up to a new key frame (a delta dropped
 /// alone would break every frame after it).
 const QUEUE_MOST = 30;
-const BITRATE = 8_000_000;
+/// What a view is encoded at, by the side scrcpy is asked for (sideOf): its encoder takes no new rate while it runs, so a
+/// view cannot start low and climb as the pace asks of a helper's. A phone's UI stays sharp at these where 1.5 Mbit/s
+/// (the pace's start, which this took before) left 1280 and up soft; a still screen sends nothing at any of them.
+export function bitrateOf(side: number): number {
+  return side <= 480 ? 2_000_000 : side <= 720 ? 3_000_000 : side <= 1080 ? 5_000_000 : side <= 1440 ? 7_000_000 : 8_000_000;
+}
+/// A preview (a link's card): about two pictures a second, small and cheap.
+export const PEEK_FPS = 2;
+export const PEEK_BITRATE = 300_000;
+/// The most previews of this machine's devices running at once, besides the views: each is a run of scrcpy and an
+/// encoder on a device, and a video decoder in the client showing its card (a page of cards would use up a phone's
+/// hardware decoders). One more is refused (503) and its card asks again later.
+export const PEEKS_MOST = 2;
 /// What a view opened to drive shows at least, however small the window it opened in: scrcpy cannot change its size
 /// without starting over.
 const LEAST_SIDE = 1280;
@@ -489,6 +501,40 @@ export function sideOf(options: ViewOptions): number {
   return Math.min(MOST_SIDE, options.peek ? asked : Math.max(LEAST_SIDE, asked)) & ~7;
 }
 
+/// What scrcpy is run with for a view: its side, its rate by that side (bitrateOf; `ViewOptions.bitrate`, the pace's start
+/// for a source that climbs from it, is not taken), its frames a second as asked (none: 60), its screen turned on to
+/// drive. A preview: PEEK_FPS and PEEK_BITRATE at the card's size, the screen left as it is.
+export function viewArgs(options: ViewOptions): { maxSide: number; bitrate: number; fps?: number; wake: boolean } {
+  const maxSide = sideOf(options);
+  if (options.peek === true) return { maxSide, bitrate: PEEK_BITRATE, fps: PEEK_FPS, wake: false };
+  return { maxSide, bitrate: bitrateOf(maxSide), ...(options.fps ? { fps: options.fps } : {}), wake: true };
+}
+
+/// The previews running of a machine's devices, PEEKS_MOST at most.
+export class PeekCount {
+  #running = 0;
+  readonly #most: number;
+
+  constructor(most = PEEKS_MOST) {
+    this.#most = most;
+  }
+
+  /// One more starts, unless as many as can run already do.
+  take(): boolean {
+    if (this.#running >= this.#most) return false;
+    this.#running++;
+    return true;
+  }
+
+  free() {
+    this.#running = Math.max(0, this.#running - 1);
+  }
+
+  get running(): number {
+    return this.#running;
+  }
+}
+
 /// One device on adb.
 export class AndroidScreen implements ScreenSource {
   readonly id: string;
@@ -501,10 +547,12 @@ export class AndroidScreen implements ScreenSource {
   readonly #file: string;
   readonly #changed: () => void;
   readonly #views = new Set<AndroidView>();
+  readonly #peeks: PeekCount;
   #size: { width: number; height: number };
 
-  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void }) {
+  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void; peeks?: PeekCount }) {
     this.id = o.id;
+    this.#peeks = o.peeks ?? new PeekCount();
     this.panels = o.panels;
     this.#title = o.title;
     this.#size = o.size;
@@ -523,7 +571,12 @@ export class AndroidScreen implements ScreenSource {
 
   async open(options: ViewOptions): Promise<ScreenView> {
     if (!options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
-    const view: AndroidView = new AndroidView(this.#adb, () => this.#views.delete(view), (size) => {
+    const peek = options.peek === true;
+    if (peek && !this.#peeks.take()) throw new ScreenRefused(503, "station.screen.failed", { said: `at most ${PEEKS_MOST} Android screens are previewed at once` });
+    const view: AndroidView = new AndroidView(this.#adb, () => {
+      this.#views.delete(view);
+      if (peek) this.#peeks.free();
+    }, (size) => {
       // Turned or unfolded: its shape as the listing has it.
       if (Math.abs(size.width / size.height - this.#size.width / this.#size.height) < SAME_SHAPE) return;
       this.#size = size;
@@ -531,12 +584,7 @@ export class AndroidScreen implements ScreenSource {
     });
     this.#views.add(view);
     try {
-      await view.start(this.#file, {
-        maxSide: sideOf(options),
-        bitrate: Math.round(options.bitrate ?? BITRATE),
-        ...(options.fps ? { fps: options.fps } : {}),
-        wake: options.peek !== true,
-      });
+      await view.start(this.#file, viewArgs(options));
       return view;
     } catch (error) {
       view.close();
@@ -597,6 +645,8 @@ export class AndroidScreens {
   readonly #adb: () => string | null;
   readonly #file: string;
   readonly #listed = new Map<string, { id: string; source: AndroidScreen; remove: () => void }>();
+  /// The previews running, of all its devices.
+  readonly #peeks = new PeekCount();
   #follow: ChildProcess | null = null;
   #again: (() => void) | null = null;
   #closed = false;
@@ -712,6 +762,7 @@ export class AndroidScreens {
       adb,
       file: this.#file,
       changed: () => this.#screens.changed(),
+      peeks: this.#peeks,
     });
   }
 
