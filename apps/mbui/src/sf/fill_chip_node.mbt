@@ -3,8 +3,9 @@
 
 ///|
 /// A fill chip in `parent` (fill_chip's): on the neutral ground, filled from the left as far as `fill` (0–100) in its
-/// level's tint (`level`, as level_color), `mark` and `words` in the text's colour; `small` 16 high, else 22. `said`
-/// over it while it is pointed at, in `tips` (none: no tip). Drawn whole in bones. Each as it changes. The node.
+/// level's tint (`level`, as level_color), `mark` and `words` in the text's colour; `small` 16 high, else 22;
+/// `compact` gives a small chip less horizontal padding. `said` over it while it is pointed at, in `tips` (none: no
+/// tip). Drawn whole in bones. Each as it changes. The node.
 pub fn fill_chip_node(
   parent : @view.View,
   fill : () -> Int,
@@ -12,6 +13,7 @@ pub fn fill_chip_node(
   mark : () -> String,
   words : () -> String,
   small? : Bool = false,
+  compact? : Bool = false,
   said? : () -> String = fn() { "" },
   tips? : TipLayer,
 ) -> @view.View {
@@ -58,7 +60,7 @@ pub fn fill_chip_node(
     b.box(fn(w) {
       w
       .row(Is(true))
-      .padding(Is(if small { (5.0, 0.0, 5.0, 0.0) } else { (8.0, 0.0, 8.0, 0.0) }))
+      .padding(Is(if small && compact { (4.0, 0.0, 4.0, 0.0) } else if small { (5.0, 0.0, 5.0, 0.0) } else { (8.0, 0.0, 8.0, 0.0) }))
       .gap(By(fn() { if chip_joined(mark(), words()) { 0.0 } else { 5.0 } }))
       .lines_up(Is(Some(Middle)))
       |> ignore
@@ -74,7 +76,11 @@ pub fn fill_chip_node(
     })
     |> ignore
     match tips {
-      Some(t) => tip_node(t, b, said) |> ignore
+      Some(t) => {
+        // A fill chip never takes a press from the row holding it. It does take the pointer for its tip.
+        b.points(By(fn() { said() != "" })) |> ignore
+        tip_node(t, b, said) |> ignore
+      }
       None => ()
     }
   })
@@ -103,17 +109,7 @@ pub fn quota_chips_node(
     // (each window by its mark)
     row.each(windows, fn(w) { chip_str(Some(w), "mark") }, fn(chip, one) {
       let w = fn() { Some(one.get()) }
-      fill_chip_node(
-        chip,
-        fn() { chip_left(w()) },
-        fn() { chip_str(w(), "level") },
-        fn() { if marked { chip_str(w(), "mark") } else { "" } },
-        fn() { chip_left(w()).to_string() + "%" },
-        small~,
-        said=fn() { quota_said(w()) },
-        tips?,
-      )
-      |> ignore
+      quota_chip_node(chip, w, small~, marked~, tips?) |> ignore
     })
   })
 }
