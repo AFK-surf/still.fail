@@ -110,7 +110,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         own_picture.reading != "" ||
         is_doing(core, ["account.setPicture"], [("account", here.sub)])
       let removing = is_doing(core, ["account.removePicture"], [("account", here.sub)])
-      if @sf.link_row(c, "own-picture", @sf.t("android-settings.me.picture"), chevron=false, tail?=if setting {
+      if @sf.link_row(c, "own-picture", @sf.t("android-settings.me.picture"), chevron=false, lead=fn() { own_picture_mark(c, "photo") }, tail?=if setting {
             Some(fn() { spinner(c, inline=true) })
           } else {
             None
@@ -120,7 +120,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         pick_own_picture(core, here.sub)
       }
       if own_picture_of(core, here.sub) &&
-        @sf.link_row(c, "own-picture-default", @sf.t("android-settings.me.pictureDefault"), chevron=false, tail?=if removing {
+        @sf.link_row(c, "own-picture-default", @sf.t("android-settings.me.pictureDefault"), chevron=false, lead=fn() { own_picture_mark(c, "user") }, tail?=if removing {
             Some(fn() { spinner(c, inline=true) })
           } else {
             None
@@ -148,7 +148,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         })
         |> ignore
       }
-      if @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false) {
+      if @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false, lead=fn() { own_picture_mark(c, "plus") }) {
         (core.sign_in)()
       }
     })
@@ -277,6 +277,17 @@ fn pick_own_picture(core : Core, sub : String) -> Unit {
   if !asked {
     (core.say)(@sf.t("android-settings.me.pictureUnread"))
   }
+}
+
+///|
+/// The mark before 更换头像, 恢复默认头像 and 登录另一个账号 (its ＋): one size and ink, so the three rows' words start
+/// in one line.
+fn own_picture_mark(c : @ui.Ctx, name : String) -> Unit {
+  @sf.icon(c, name, size=match @sf.look() {
+    Narrow => @sf.pg_chevron
+    Wide => @sf.desk_chevron
+  }, color=@sf.theme().p.text)
+  |> ignore
 }
 
 ///|

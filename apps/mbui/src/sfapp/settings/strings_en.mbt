@@ -486,7 +486,7 @@ let en : Map[String, String] = {
   "android-settings.machine.someone": "Signed in",
   "android-settings.machine.use": "Use this account",
   "android-settings.me.accounts": "Accounts on this device",
-  "android-settings.me.addAccount": "+ Add another account",
+  "android-settings.me.addAccount": "Add another account",
   "android-settings.me.delete": "Delete account",
   "android-settings.me.deleteAction": "Delete",
   "android-settings.me.deleteText": "The account {email} will be deleted. Workspaces that are only yours are deleted with it, and their stations leave them; the other workspaces you're in remove you. Chats and files on your stations are on your own machines and stay untouched. This can't be undone.",
