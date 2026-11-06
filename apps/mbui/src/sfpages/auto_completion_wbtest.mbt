@@ -488,3 +488,99 @@ test "归档建议 left before the core answered its draft's opening: the draft 
   assert_eq(opened, { asked: ["open", "drop="], held_left: 0, calls_late: 0, said_late: 0, held_late: 0 })
   assert_eq(failed, { asked: ["open", "drop="], held_left: 0, calls_late: 0, said_late: 1, held_late: 0 })
 }
+
+///|
+/// 归档建议 of 24 stations (completion_scrolled's) flung up by a finger (240 in 10 ms, let go), `between` done with its
+/// Tester, the moment it let go and what to call once each of its frames is done (frames on the way, or none), a frame
+/// 150 ms after it let go, and left then: the stations whose drafts it asked for after it opened as each frame of
+/// `between` was done, and as the one at 150 was, and how many it dropped as it was left.
+fn completion_flung(between : (@ui.Tester, Double, () -> Unit) -> Unit) -> (Array[Array[String]], Array[String], Int) {
+  let form : @signals.Signal[Json?] = @signals.signal(None)
+  let calls = []
+  let t = setting_tester(AutoCompletion, 390.0, platform=2, h=360.0, over=fn(base) {
+    form.set((base.topic)("decisionForm", Map::new()).value)
+    completion_over(base, form, calls, like=23)
+  })
+  let stations = fn(name : String) { named_calls(calls, name).map(fn(c) { text(Some(c), "station") }) }
+  let opened = stations("automaticDecisions.form.open").length()
+  let asked = fn() { stations("automaticDecisions.form.open")[opened:].to_array() }
+  // (a flick: the finger 120 further up each 5 ms)
+  let flick_step_ms = 5.0
+  t.touch_at(0, 195.0, 300.0, t.time())
+  t.advance(flick_step_ms)
+  t.touch_at(1, 195.0, 180.0, t.time())
+  t.advance(flick_step_ms)
+  t.touch_at(1, 195.0, 60.0, t.time())
+  t.touch_at(2, 195.0, 60.0, t.time())
+  let up = t.time()
+  let each : Array[Array[String]] = []
+  between(t, up, fn() { each.push(asked()) })
+  t.frame_at(up + 150.0)
+  let at_150 = asked()
+  let before_left = named_calls(calls, "automaticDecisions.form.drop").length()
+  app.nav.pop() |> ignore
+  t.run_for(@ui.move_most_ms)
+  (each, at_150, named_calls(calls, "automaticDecisions.form.drop").length() - before_left)
+}
+
+///|
+/// completion_flung's frames every `dt` ms from the moment it let go till 150, each drawn for `ahead` ms later than its
+/// host is (as a phone draws its frame for its next vsync).
+fn completion_frames(dt : Double, ahead : Double) -> (@ui.Tester, Double, () -> Unit) -> Unit {
+  fn(t, up, done) {
+    let mut at = dt
+    while at < 150.0 {
+      t.frame_shown_at(up + at, up + at + ahead)
+      done()
+      at = at + dt
+    }
+  }
+}
+
+///|
+test "归档建议 of 24 stations flung: the drafts asked for as a frame on the way is done and as one at 150 ms after it let go is, those its sections showed by then, each once in order, the same whatever was drawn before (none; one at 100, or drawn for 200 or 600 with its host at 100; every 16 ms, drawn then or 16 later; every 7 ms); each dropped as it is left then" {
+  let at_100 : (@ui.Tester, Double, () -> Unit) -> Unit = fn(t, up, done) {
+    t.frame_shown_at(up + 100.0, up + 100.0)
+    done()
+  }
+  let drawn_for = fn(shown : Double) -> (@ui.Tester, Double, () -> Unit) -> Unit {
+    fn(t, up, done) {
+      t.frame_shown_at(up + 100.0, up + shown)
+      done()
+    }
+  }
+  let runs = [
+    ("none", completion_flung(fn(_, _, _) {  })),
+    ("a frame at 100", completion_flung(at_100)),
+    ("drawn for 200 at 100", completion_flung(drawn_for(200.0))),
+    ("drawn for 600 at 100", completion_flung(drawn_for(600.0))),
+    ("every 16 ms", completion_flung(completion_frames(16.0, 0.0))),
+    ("every 16 ms, drawn 16 later", completion_flung(completion_frames(16.0, 16.0))),
+    ("every 7 ms", completion_flung(completion_frames(7.0, 0.0))),
+  ]
+  let said = runs.map(fn(r) { "\{r.0}: on the way \{r.1.0}, at 150 \{r.1.1}, dropped \{r.1.2}" }).join("\n")
+  let apart : Array[String] = []
+  let (_, none, _) = runs[0].1
+  for r in runs {
+    let (name, (each, at_150, dropped)) = r
+    // (at 150 as with none: Near 01 on, each once, as their sections are from the top)
+    let in_order = Array::makei(at_150.length(), fn(i) { if i + 1 < 10 { "ws1/near0\{i + 1}" } else { "ws1/near\{i + 1}" } })
+    if at_150 != none || at_150 != in_order {
+      apart.push("\{name}: at 150")
+    }
+    // (Willow's, asked as it opened, and those)
+    if dropped != at_150.length() + 1 {
+      apart.push("\{name}: dropped")
+    }
+    // (the frame at 100, drawn for then or later: as the one drawn then)
+    if name.has_prefix("drawn for") && each != runs[1].1.0 {
+      apart.push("\{name}: at 100")
+    }
+  }
+  // (each frame every 16 ms, drawn for 16 later: as each drawn then)
+  if runs[5].1.0 != runs[4].1.0 {
+    apart.push("every 16 ms, drawn 16 later: on the way")
+  }
+  assert_eq(apart, [], msg=apart.join("; ") + "\n" + said)
+  assert_true(none.length() > 1, msg="flung on: \{none}")
+}

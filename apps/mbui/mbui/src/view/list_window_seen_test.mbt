@@ -400,6 +400,111 @@ test "scrolls_window flung, let go at a moment come due on the way (its page clo
 }
 
 ///|
+/// gone_case's windowed list flung (a finger up 80 in 10 ms, let go at 11), `between` done with its tree and its frame
+/// (a frame, or none), `end` at `at` (what stops it or lets it go then), frames every 16 ms from then to 6 s: the blocks
+/// it told seen after its first frame, as told (each telling's, in its order, one after another)
+fn flung_then(
+  between : (@view.Tree, (Double) -> Unit) -> Unit,
+  at : Double,
+  end : (@view.Tree, @signals.Signal[Bool], Double) -> Unit,
+) -> Array[Int] {
+  let there = @signals.signal(true)
+  let told : Array[Int] = []
+  let (tree, frame) = gone_case(true, there, told)
+  frame(0.0)
+  let first = told.length()
+  guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -80.0) is Some(id) else {
+    abort("nothing takes the finger")
+  }
+  tree.drag_at(id, Down, 150.0, 90.0, 1.0) |> ignore
+  tree.drag_at(id, Moved, 150.0, 50.0, 6.0) |> ignore
+  tree.drag_at(id, Moved, 150.0, 10.0, 11.0) |> ignore
+  tree.drag_at(id, Up, 150.0, 10.0, 11.0) |> ignore
+  between(tree, frame)
+  end(tree, there, at)
+  let mut t = at
+  while t < 6000.0 {
+    t = t + 16.0
+    frame(t)
+  }
+  let out = told[first:].to_array()
+  tree.dispose()
+  out
+}
+
+///|
+/// Whether what flung_then's list told is each block once, in the order they came in sight gliding down, from the one
+/// under those its first frame showed (0 to 2).
+fn once_each(told : Array[Int]) -> Bool {
+  told == Array::makei(told.length(), fn(i) { 3 + i })
+}
+
+///|
+/// A finger down at `at` on the list, stopping it, up 10 ms later where it went down.
+fn pressed_at(tree : @view.Tree, _there : @signals.Signal[Bool], at : Double) -> Unit {
+  guard tree.claimer_of(tree.claimers_at(150.0, 50.0), 0.0, -20.0) is Some(id) else {
+    abort("nothing takes the finger")
+  }
+  tree.drag_at(id, Down, 150.0, 50.0, at) |> ignore
+  tree.drag_at(id, Up, 150.0, 50.0, at + 10.0) |> ignore
+}
+
+///|
+/// The list let go by an input at `at` (its page closed: the tree brought to that moment first, as an input brings it).
+fn closed_by_input(tree : @view.Tree, there : @signals.Signal[Bool], at : Double) -> Unit {
+  tree.bring_to(at)
+  there.set(false)
+}
+
+///|
+/// The list let go in an event at `at` (a message come then, its page closed by it).
+fn closed_in_event(tree : @view.Tree, there : @signals.Signal[Bool], at : Double) -> Unit {
+  tree.event_said(at, fn() {  }, fn() { there.set(false) })
+}
+
+///|
+/// A frame drawn for `shown`, its host come to `now` (as a phone draws its frame for its next vsync: what is drawn
+/// sampled then, the logic no further than `now`), what it said to tell once it is painted told.
+fn drawn_ahead(tree : @view.Tree, now : Double, shown : Double) -> Unit {
+  tree.at(shown)
+  tree.frame(300.0, 100.0, now~) |> ignore
+  for f in tree.take_after_paint() {
+    f()
+  }
+}
+
+///|
+test "scrolls_window flung, a frame on the way drawn for 200 with its host at 100, then stopped by a finger at 150, its page closed by an input then or in an event then: told seen of what it glided across up to 150, each once in the order it came in sight, as with a frame drawn at 100 or none; none of what it was drawn showing by 200" {
+  let ends = [("pressed", pressed_at), ("input", closed_by_input), ("event", closed_in_event)]
+  let apart : Array[String] = []
+  for e in ends {
+    let (name, end) = e
+    let none = flung_then(fn(_, _) {  }, 150.0, end)
+    let at_now = flung_then(fn(_, frame) { frame(100.0) }, 150.0, end)
+    let ahead = flung_then(fn(tree, _) { drawn_ahead(tree, 100.0, 200.0) }, 150.0, end)
+    // (glided on past the first few, each once in the order it came in sight)
+    if (at_now, ahead) != (none, none) || !once_each(none) || none.length() <= 5 {
+      apart.push("\{name}: none \{none}; drawn at 100 \{at_now}; drawn for 200 at 100 \{ahead}")
+    }
+  }
+  assert_eq(apart, [], msg=apart.join("\n"))
+}
+
+///|
+test "scrolls_window flung, a frame on the way drawn for 200 with its host at 100, its page closed by an input at 200 itself or in an event then: told seen of what it glided across up to 200, each once in the order it came in sight, as with none between" {
+  let apart : Array[String] = []
+  for e in [("input", closed_by_input), ("event", closed_in_event)] {
+    let (name, end) = e
+    let none = flung_then(fn(_, _) {  }, 200.0, end)
+    let ahead = flung_then(fn(tree, _) { drawn_ahead(tree, 100.0, 200.0) }, 200.0, end)
+    if ahead != none || !once_each(none) || none.length() <= 5 {
+      apart.push("\{name}: none \{none}; drawn for 200 at 100 \{ahead}")
+    }
+  }
+  assert_eq(apart, [], msg=apart.join("\n"))
+}
+
+///|
 /// A column 300 by 100 of `0..<400` 40 tall at rest, telling seen where `seen` says so, with what is due that holds
 /// nothing of it (three at 100; one at 150 saying another there as it is done; one at 200), drawn at 0 and every `dt`
 /// till 1 s: the work its tree did after its first frame (layouts where things stood before what was due, nodes laid
