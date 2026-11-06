@@ -48,6 +48,52 @@ test "rows nodes: a fixed filter and scrolling rows keep their own narrow room, 
 }
 
 ///|
+test "rows nodes: a page changing arrangement keeps the filter's words and lays the filter and rows out in its new column" {
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=400.0)
+  let width = @signals.signal(390.0)
+  let filter = @ui.Field::new()
+  let filter_room : Ref[@view.View?] = Ref(None)
+  let row_room : Ref[@view.View?] = Ref(None)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.pick(fn() { look_for(width.get()) }, fn(page, look) {
+      look_lent(page, look)
+      over_rows_node(page, fn(f) {
+        filter_room.val = Some(f)
+        input_node(f, filter, placeholder="筛选") |> ignore
+      })
+      rows_column_node(page, fn(r) {
+        row_room.val = Some(r)
+        r.height(Is(Some(40.0))) |> ignore
+      })
+    })
+    |> ignore
+  })
+  let columns = fn() {
+    let (fx, _, fw, _) = filter_room.val.unwrap().placed_window_now()
+    let (rx, _, rw, _) = row_room.val.unwrap().placed_window_now()
+    ((fx, fw), (rx, rw))
+  }
+  t.draw()
+  assert_eq(columns(), ((12.0, 366.0), (0.0, 390.0)))
+  let (x, y, w, h) = t.get(TextField, label="筛选").rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.type_text("模型")
+  width.set(900.0)
+  t.resize(900.0, 400.0)
+  t.draw()
+  assert_eq((columns(), filter.text()), (((54.0, 792.0), (54.0, 792.0)), "模型"))
+  let (x, y, w, h) = t.get(TextField, label="筛选").rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.type_text("二")
+  assert_eq(filter.text(), "模型二")
+  width.set(390.0)
+  t.resize(390.0, 400.0)
+  t.draw()
+  assert_eq((columns(), filter.text()), (((12.0, 366.0), (0.0, 390.0)), "模型二"))
+}
+
+///|
 test "rows foot: follows the system inset, leaves a pane's card room, and lets a frame give its own narrow foot" {
   for pane in [false, true] {
     for wide in [false, true] {
@@ -85,7 +131,7 @@ test "rows foot: follows the system inset, leaves a pane's card room, and lets a
 }
 
 ///|
-test "rows nodes: typing and scrolling with a finger or a pointer leave the filter fixed and focused while the windowed list moves" {
+test "rows nodes: typing and scrolling with a finger or a pointer keep the filter fixed and its words, with the usual focus for each input" {
   for platform in [0, 2] {
     let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=400.0, platform~)
     let filter = @ui.Field::new()
@@ -114,6 +160,8 @@ test "rows nodes: typing and scrolling with a finger or a pointer leave the filt
     let (x, y, w, h) = before
     t.tap(x + w / 2.0, y + h / 2.0)
     t.type_text("模型")
+    let had_focus = t.focused().map(fn(s) { s.label })
+    let had_keyboard = t.ime().0
     if platform == 2 {
       t.drag(195.0, 350.0, 195.0, 150.0)
     } else {
@@ -125,8 +173,14 @@ test "rows nodes: typing and scrolling with a finger or a pointer leave the filt
       Some(tree) => sc.at(tree)
       None => 0.0
     }
-    assert_eq((after, filter.text(), t.focused().map(fn(s) { s.label })), (before, "模型", Some("筛选")))
+    // A finger scrolling a list dismisses the keyboard, as for old and new fields; a wheel keeps the focus.
+    let focus_after = if platform == 2 { None } else { Some("筛选") }
+    assert_eq((had_focus, after, filter.text(), t.focused().map(fn(s) { s.label })), (Some("筛选"), before, "模型", focus_after), msg="platform \{platform}")
+    if platform == 2 { assert_eq((had_keyboard, t.ime().0), (true, false)) }
     assert_true(moved > 0.0, msg="platform \{platform}")
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.type_text("二")
+    assert_eq((filter.text(), t.focused().map(fn(s) { s.label })), ("模型二", Some("筛选")), msg="platform \{platform}")
   }
 }
 
