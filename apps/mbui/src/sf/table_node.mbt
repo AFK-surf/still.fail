@@ -316,24 +316,41 @@ fn md_table_body_node(
               .lies_along(Is(Middle))
               |> ignore
               // (a cell of only the message's images: each as wide as cell_image_width says, 6 apart, 4 over and under;
-              // else its words as a message's, in pieces, a press on a link where it leads: runs_links)
-              let images = @signals.untracked(fn() { cell_images_of(words(), files) })
-              if images is Some(list) {
-                cell.box(fn(row) {
-                  row.row(Is(true)).gap(Is(6.0)).padding(Is((0.0, 4.0, 0.0, 4.0))) |> ignore
-                  for im in list {
-                    row.box(fn(one) {
-                      let w = cell_image_width(im.0)
-                      one.width(Is(Some(w))) |> ignore
-                      (im.1)(one)
+              // else its words as a message's, in pieces, a press on a link where it leads: runs_links. Made by which
+              // files it shows, in order ("" its words): another file, one more or fewer, or words, made anew; one told
+              // again at another size the same)
+              let shows = fn() {
+                guard cell_images_of(words(), files) is Some(_) else { return "" }
+                let names = md_cell_picture_names(words(), fn(name) {
+                  files(name).bind(fn(f) { f.image }).map(fn(im) { im.0 })
+                })
+                names.map(fn(ns) { ns.map(fn(n) { n.0 }).join("\n") }).unwrap_or("")
+              }
+              cell.pick(shows, fn(q, shown) {
+                if shown != "" {
+                  let list = @signals.untracked(fn() { cell_images_of(words(), files) }).unwrap_or([])
+                  // (their proportions now, a file told again at another size: worked out once for the cell, again
+                  // only as they change)
+                  let ratios : @signals.Computed[Array[Double]] = @signals.computed(
+                    fn(_) {
+                      match cell_images_of(words(), files) {
+                        Some(now) => now.map(fn(x) { x.0 })
+                        None => list.map(fn(x) { x.0 })
+                      }
+                    },
+                    same=fn(a, b) { a == b },
+                  )
+                  q.row(Is(true)).gap(Is(6.0)).padding(Is((0.0, 4.0, 0.0, 4.0))) |> ignore
+                  for j, im in list {
+                    // (as wide as its proportion now says; the picture filling it, made once, the same as it changes)
+                    q.box(fn(one) {
+                      one.width(By(fn() { Some(cell_image_width(ratios.get().get(j).unwrap_or(im.0))) })) |> ignore
+                      one.box(fn(fill) { (im.1)(fill) }) |> ignore
                     })
                     |> ignore
                   }
-                })
-                |> ignore
-                return
-              }
-              cell.box(fn(w) {
+                  return
+                }
                 let look = fn() -> @view.WordsLook {
                   let size = if head { 12.0 } else { 13.0 }
                   {
@@ -346,14 +363,13 @@ fn md_table_body_node(
                   }
                 }
                 let runs = fn() { table_cell_runs(words()) }
-                w
+                q
                 .words_runs(By(runs), look=look())
                 .runs_look(By(table_runs_look))
                 .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
                 |> ignore
-                @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
+                @ui.runs_links(q, runs, on_link, hold?=on_link_hold) |> ignore
               })
-              |> ignore
             }
             let rule_node = fn(rule : @view.View) { rule.ground(By(fn() { theme().p.line })) |> ignore }
             // (the widths its picture is taken at: the table's as it is laid out then, shown as it is pressed)
