@@ -20,6 +20,7 @@ import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsRea
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { hasLegacySaid, LEGACY_HAS_UNREAD, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
+import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
@@ -86,11 +87,14 @@ export type Store = {
   prepareUpJobs: string | null;
   /// This connection uses the already-published lookup on an older database.
   legacySaid: boolean;
+  /// This connection uses the time lookup prepared for an older database.
+  legacyAgent: boolean;
 };
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null, legacySaid: hasLegacySaid(db) };
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null,
+    legacySaid: hasLegacySaid(db), legacyAgent: hasLegacyAgent(db) };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
@@ -769,7 +773,7 @@ export const ASKED_DURING = "SELECT max(n) AS n FROM entries WHERE thread = ? AN
 /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
 /// about (`about`), else the agent's latest message during the turn; with the two messages before it.
 export function askingMessage(s: Store, thread: number, about: number | null, during: [number, number | bigint]): [MessageRow, MessageRow[]] | null {
-  const n: number | null = about ?? one(s, ASKED_DURING, thread, during[0], during[1]).n;
+  const n: number | null = about ?? one(s, s.legacyAgent ? LEGACY_ASKED_DURING : ASKED_DURING, thread, during[0], during[1]).n;
   if (n === null) return null;
   const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
   // A post with a card is pending_card's: one no longer pending was answered, closed or withdrawn.

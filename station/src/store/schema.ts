@@ -2,6 +2,7 @@
 // columns that came after, added in place on open (add_*_columns).
 import type { DatabaseSync } from "node:sqlite";
 import { hasLegacySaid, installLegacySaid } from "./legacy-said-build.ts";
+import { hasLegacyAgent, installLegacyAgent } from "./legacy-agent-build.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
@@ -1235,7 +1236,7 @@ export function addPendingCards(db: DatabaseSync): void {
 /// - sessions_efforts: the efforts someone's chats on a runtime and model ran at, by when (store.ts EFFORTS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
   addSaidIndex(db);
-  db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+  addAgentIndex(db);
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
   // The archive's, a page at a time by
   // when each was archived (ARCHIVED_PAGE): its whole list was made at once, 60 s on a station (2026-11-03).
@@ -1243,6 +1244,23 @@ export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
   addEffortIndex(db);
+}
+
+/// As for messages, a large older store cannot install a native time index without scanning it under a writer lock.
+function addAgentIndex(db: DatabaseSync): void {
+  const native = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_agent_at'").get() !== undefined;
+  if (hasLegacyAgent(db) || native()) return;
+  let prepare = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!hasLegacyAgent(db) && !native()) {
+      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+        db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
+      else prepare = true;
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  if (prepare) installLegacyAgent(db,true);
 }
 
 /// A native index is cheap on a new or small store. For an older large one, answer from the old table while the
