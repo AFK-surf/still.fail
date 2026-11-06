@@ -47,11 +47,20 @@ fn tab_job(tab : String) -> String? {
 ///|
 /// Its tab closed: what its page asked of the station stopped, its view gone (web: closePreview), once it is no longer
 /// drawn (the panel shows what it showed as it slides out: sv_sweep); opened again before, kept.
-fn tab_let_go(r : ChatRef, tab : String) -> Unit {
+fn tab_let_go(src : Source, r : ChatRef, tab : String, visible~ : Bool) -> Unit {
   panel_screen_pages.remove(tabs_key(r) + "/" + tab)
   history_let_go(r, tab)
   match tab_job(tab) {
-    Some(job) => sv_closing[service_key(r.station, job)] = (r.station, job)
+    Some(job) => {
+      let key = service_key(r.station, job)
+      sv_closing[key] = (r.station, job)
+      // A tab closed while another is in front has no node whose later removal can release it. If no old or new view
+      // still shows this page, release it at the close itself, without waiting for an unrelated frame.
+      if !visible && !sv_nodes.contains(key) && !sv_drawn.contains(key) {
+        sv_closing.remove(key)
+        service_left(src, r.station, job)
+      }
+    }
     None => ()
   }
 }
@@ -68,10 +77,10 @@ fn tab_kept(r : ChatRef, tab : String) -> Unit {
 /// After a build: the pages of tabs closed that it did not draw let go.
 pub fn sv_sweep(c : @ui.Ctx, src : Source) -> Unit {
   for key, at in sv_closing {
-    if !sv_drawn.contains(key) {
+    if !sv_drawn.contains(key) && !sv_nodes.contains(key) {
       let (station, job) = at
       c.tell("sv-let-go/" + key, fn() {
-        if sv_closing.contains(key) {
+        if sv_closing.contains(key) && !sv_nodes.contains(key) {
           sv_closing.remove(key)
           service_left(src, station, job)
         }
@@ -92,9 +101,48 @@ let sv_closing : Map[String, (String, String)] = {}
 let sv_drawn : Map[String, Bool] = {}
 
 ///|
+/// Service tab nodes still shown, including while their side panel slides out. A node hidden by another tab does not
+/// release the page; a closed tab releases it only once its last visible node leaves.
+let sv_nodes : Map[String, Array[Int]] = {}
+
+///|
+/// A unique holder also keeps a node left from before a reset from releasing a later node's page.
+let sv_node_number : Ref[Int] = Ref(0)
+
+///|
+fn service_tab_held(v : @view.View, src : Source, station : String, job : String) -> Unit {
+  let key = service_key(station, job)
+  sv_node_number.val += 1
+  let id = sv_node_number.val
+  let held = sv_nodes.get(key).unwrap_or([])
+  held.push(id)
+  sv_nodes[key] = held
+  v.owns(fn() {
+    match sv_nodes.get(key) {
+      Some(holders) =>
+        match holders.search_by(fn(holder) { holder == id }) {
+          Some(i) => {
+            holders.remove(i) |> ignore
+            if holders.is_empty() {
+              sv_nodes.remove(key)
+              if sv_closing.contains(key) {
+                sv_closing.remove(key)
+                service_left(src, station, job)
+              }
+            }
+          }
+          None => ()
+        }
+      None => ()
+    }
+  }) |> ignore
+}
+
+///|
 fn sv_reset() -> Unit {
   sv_closing.clear()
   sv_drawn.clear()
+  sv_nodes.clear()
 }
 
 ///|

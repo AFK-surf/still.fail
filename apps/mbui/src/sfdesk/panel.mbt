@@ -60,8 +60,8 @@ pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) ->
   side_changing(chat_key(r), tabs, front, any)
   // a web service's or a visualization's tab closed lets its page go (ChatPage.tsx endPreview)
   match (action, tab) {
-    ("close", Some(t)) => tab_let_go(r, t)
-    ("clear", _) => for t in tabs { tab_let_go(r, t) }
+    ("close", Some(t)) => tab_let_go(src, r, t, visible=t == front)
+    ("clear", _) => for t in tabs { tab_let_go(src, r, t, visible=t == front) }
     ("open", Some(t)) => tab_kept(r, t)
     _ => ()
   }
