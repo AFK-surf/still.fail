@@ -10,7 +10,7 @@ import { Host } from "./api/host.ts";
 import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
 import { outputAt, tail } from "./read/jobs.ts";
 import { Store as StationStore } from "./store/store.ts";
-import { buildLegacySaid } from "./store/legacy-said-builder.ts";
+import { buildLegacyEntryLookups } from "./store/legacy-said-builder.ts";
 import { type StationKey, loadKey } from "./cloud/key.ts";
 import { Cloud as CloudState } from "./cloud/state.ts";
 import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
@@ -102,7 +102,7 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
       const store = yield* Store;
       const previous = yield* Previous;
       yield* Effect.acquireRelease(
-        Effect.sync(() => buildLegacySaid(store, previous.exited)),
+        Effect.sync(() => buildLegacyEntryLookups(store, previous.exited)),
         (builder) => Effect.promise(() => builder.close()),
       );
       return yield* Effect.acquireRelease(Effect.sync(() => {

@@ -60,6 +60,7 @@ import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION 
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { hasLegacySaid, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
+import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -326,6 +327,7 @@ export class Store {
   readonly backfillPriority: SharedArrayBuffer;
   readonly #effortsIndex: boolean;
   readonly #legacySaid: boolean;
+  readonly #legacyAgent: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -352,6 +354,7 @@ export class Store {
     this.db = db;
     this.#effortsIndex = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
     this.#legacySaid = hasLegacySaid(db);
+    this.#legacyAgent = hasLegacyAgent(db);
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -2146,7 +2149,7 @@ export class Store {
   askingMessage(thread: number, about: number | null, during: [number, number]): [MessageRow, MessageRow[]] | null {
     const n: number | null =
       about ??
-      this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?", thread, during[0], during[1]).n;
+      this.#one(this.#legacyAgent ? LEGACY_ASKED_DURING : "SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?", thread, during[0], during[1]).n;
     if (n === null) return null;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
     // A post with a card is pendingCard's: one no longer pending was answered, closed or withdrawn.
