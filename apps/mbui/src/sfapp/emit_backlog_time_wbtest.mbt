@@ -47,6 +47,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
     let words : Array[Array[(String, Double, Double, Double, Double, Double)]] = []
     let hits : Array[Array[String]] = []
     let covered_phases : Array[(Double?, Double, Pose, Double, Double)] = []
+    let resumed_phases : Array[Array[(Double, String, Double, Double, Double)]] = []
     for hz in [0, 60, 120] {
       let ended = Ref(false)
       let t = backlog_window(width, ended)
@@ -71,6 +72,20 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       let em = emits_of(emit_chat)
       assert_true(em.current is Some(turn) && turn.pose == Float && turn.agent == agents[0])
       assert_eq(em.queue.map(fn(q) { q.2 }), agents[1:].to_array())
+      let declared : Array[(Double, String, Double, Double, Double)] = []
+      let stop_declared = @signals.effect(fn() {
+        em.read()
+        @signals.untracked(fn() {
+          match em.current {
+            Some(turn) => {
+              let phase = (turn.seq, turn.pose.to_string(), turn.clock.starts_at(), turn.clock.end(), turn.span)
+              if declared.last() != Some(phase) { declared.push(phase) }
+            }
+            None => ()
+          }
+        })
+      })
+      defer { stop_declared() }
       // A page still beside the incoming page remains shown until navigation's declared end. The distance-based
       // Float can finish in that interval. Observe the phase at the actual hide cause, without inserting a frame.
       let covered : Ref[(@sfbase.Turn, Double?)?] = Ref(None)
@@ -115,6 +130,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       assert_true(shown() && physical_equal(rd.shown_by.unwrap(), shown), msg="returning keeps the same retained page")
       assert_true(em.current is None && em.queue.is_empty() && em.out_at.is_empty(), msg="every expired reply finishes before the next picture")
       for i in 0..<agents.length() { assert_true(em.done.contains("\{171 + i}")) }
+      resumed_phases.push(declared.copy())
       // The final common picture is after the page's return and the ended
       // activities' declared linger, not after another reply's running time.
       t.frame_at(returned_at + linger_ms + 2.0 * @ui.move_most_ms)
@@ -140,6 +156,9 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
     }
     assert_true(covered_phases[0] == covered_phases[1], msg="navigation hides the same phase at the same cause without pictures: \{covered_phases}")
     assert_true(covered_phases[0] == covered_phases[2], msg="navigation hides the same phase at 120 Hz: \{covered_phases}")
+    assert_true(resumed_phases[0].length() > 1, msg="the resumed replies publish their declared phases")
+    assert_eq(resumed_phases[0], resumed_phases[1], msg="returning catches up the same phases and durations without intermediate pictures")
+    assert_eq(resumed_phases[0], resumed_phases[2], msg="returning catches up the same phases and durations at 120 Hz")
     if pictures[0] != pictures[1] {
       // Keep the complete comparison below, and name its first differing instances on CI instead of only the
       // assertion's message. Atlas slots have already been replaced by glyph content keys by drawn_text.
