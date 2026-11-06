@@ -1452,6 +1452,10 @@ pub fn page(@ui.Ctx, String, String, Array[() -> Unit], on_back~ : () -> Unit, f
 
 pub fn page_bar(@ui.Ctx, () -> Unit, corners? : (Double, Double)?) -> Unit
 
+pub fn page_bar_back(@view.View, () -> String?, () -> Unit) -> Unit
+
+pub let page_bar_back_lent : @view.Lent[(@view.View, () -> String?, () -> Unit) -> Unit]
+
 pub fn page_bleed() -> @ui.Style
 
 pub fn page_block(@view.View, (@view.View) -> Unit) -> Unit
