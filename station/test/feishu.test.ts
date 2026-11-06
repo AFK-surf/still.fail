@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { questionCard, textCards, took } from "../src/feishu/cards.ts";
+import { questionCard, textPosts, took } from "../src/feishu/cards.ts";
 import { CONTROL, DATA, Parts, decode, encode, header } from "../src/feishu/frame.ts";
 import { messageOf, resourceOf } from "../src/feishu/parse.ts";
 import { ADDONS, Registrations, encodeAddons } from "../src/feishu/register.ts";
@@ -62,10 +62,12 @@ test("messages: mentions as names and whether the bot was among them, rich text 
   assert.equal(messageOf(ev({ message_type: "sticker", content: "{}" }), "ou_bot")!.text, "[sticker]");
 });
 
-test("cards: long text in several; a question's buttons with the recommended one last and filled, a text card's field", () => {
-  const long = textCards(`${"字".repeat(5000)}\n\n${"字".repeat(5000)}`);
+test("cards: long text in several rich-text messages, mentions as md writes them; a question's buttons with the recommended one last and filled, a text card's field", () => {
+  const long = textPosts(`${"字".repeat(5000)}\n\n${"字".repeat(5000)}`);
   assert.equal(long.length, 2);
-  assert.equal(long[0].schema, "2.0");
+  assert.deepEqual(JSON.parse(textPosts("<at id=ou_ada></at> 好了\n\n| a |\n|---|\n| 1 |")[0]!), {
+    zh_cn: { content: [[{ tag: "md", text: '<at user_id="ou_ada"></at> 好了\n\n| a |\n|---|\n| 1 |' }]] },
+  });
   const q = questionCard("选一个", { type: "options", options: [{ label: "合并", recommended: true }, { label: "先不", detail: "留着分支" }] }, "om_t", "zh");
   const buttons = q.body.elements.filter((e: Json) => e.tag === "button");
   assert.deepEqual(buttons.map((b: Json) => [b.text.content, b.type, b.behaviors[0].value]), [
@@ -214,7 +216,7 @@ test("surface: a topic group's topics are conversations of their own, answered i
     const reply = r.fake.calls("POST", "/open-apis/im/v1/messages/om_root/reply");
     assert.equal(reply.length, 1);
     assert.equal(reply[0]!.body.reply_in_thread, true);
-    assert.equal(JSON.parse(reply[0]!.body.content).body.elements[0].content, "答案");
+    assert.deepEqual([reply[0]!.body.msg_type, JSON.parse(reply[0]!.body.content).zh_cn.content[0][0].text], ["post", "答案"]);
   } finally {
     await r.close();
   }
@@ -343,13 +345,14 @@ test("surface: relaying lists the groups the bot is in, topic group or not; begi
     assert.equal(r.threads.topicRoot("fs", "omt_9"), "om_r1");
     await r.surface.post({ channel: "oc_t", threadTs: "omt_9" }, "摘要", []);
     assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages/om_r1/reply").length, 1);
-    // Its first message changed in place, when what it says fits in one card.
-    r.fake.answer("PATCH /open-apis/im/v1/messages/om_r1", { code: 0, data: {} });
+    // Its first message changed in place, when what it says fits in one message.
+    r.fake.answer("PUT /open-apis/im/v1/messages/om_r1", { code: 0, data: {} });
     assert.equal(await r.surface.edit({ channel: "oc_t", threadTs: "omt_9" }, "om_r1", "接力到这里\n\n摘要"), true);
-    const patched = r.fake.calls("PATCH", "/open-apis/im/v1/messages/om_r1");
-    assert.equal(JSON.parse(patched[0]!.body.content).body.elements[0].content, "接力到这里\n\n摘要");
+    const put = r.fake.calls("PUT", "/open-apis/im/v1/messages/om_r1");
+    assert.equal(put[0]!.body.msg_type, "post");
+    assert.equal(JSON.parse(put[0]!.body.content).zh_cn.content[0][0].text, "接力到这里\n\n摘要");
     assert.equal(await r.surface.edit({ channel: "oc_t", threadTs: "omt_9" }, "om_r1", `${"甲".repeat(6000)}\n\n乙`), false);
-    assert.equal(r.fake.calls("PATCH", "/open-apis/im/v1/messages/om_r1").length, 1);
+    assert.equal(r.fake.calls("PUT", "/open-apis/im/v1/messages/om_r1").length, 1);
     // A topic Feishu did not name in its answer is read back from the message.
     r.fake.answer("GET /open-apis/im/v1/messages/om_r2", { code: 0, data: { items: [{ message_id: "om_r2", thread_id: "omt_10" }] } });
     assert.deepEqual((await r.surface.begin("oc_t", "再接力")).thread, { channel: "oc_t", threadTs: "omt_10" });
@@ -365,7 +368,7 @@ test("surface: relaying lists the groups the bot is in, topic group or not; begi
   }
 });
 
-test("surface: posts as cards in the chat, files after them; a question's button answers as the person and the card shows the answer", async () => {
+test("surface: posts as rich text in the chat, files after them; a question's button answers as the person and the card shows the answer", async () => {
   const r = await surfaceRig();
   const dir = mkdtempSync(join(tmpdir(), "fsf-"));
   try {
@@ -377,7 +380,7 @@ test("surface: posts as cards in the chat, files after them; a question's button
     ]);
     const sent = r.fake.calls("POST", "/open-apis/im/v1/messages");
     assert.deepEqual(sent.map((s) => [s.query.receive_id_type, s.body.receive_id, s.body.msg_type]), [
-      ["chat_id", "oc_g", "interactive"],
+      ["chat_id", "oc_g", "post"],
       ["chat_id", "oc_g", "image"],
       ["chat_id", "oc_g", "file"],
     ]);

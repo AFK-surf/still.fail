@@ -30,7 +30,7 @@
 
 ## 发出去的样子
 
-- 文字一律发成卡片（JSON 2.0 的 markdown 组件）：飞书卡片的 Markdown 和 still.fail 的写法基本一样（标题、列表、表格、代码块），agent 照 still.fail chat 的写法写。太长的分成几张（每张 6000 字以内）。@人写 `<at id=ou_xxx></at>`。
+- 文字发成富文本消息（`post`，一个 `md` 元素）：飞书的 Markdown 和 still.fail 的写法基本一样（标题、列表、表格、代码块），agent 照 still.fail chat 的写法写。太长的分成几条（每条 6000 字以内）。@人 agent 写 `<at id=ou_xxx></at>`（和卡片一样），发出时改成 `md` 的 `<at user_id="ou_xxx"></at>`。不发成卡片，是因为别的机器人用 API 读回卡片消息时拿不到正文；卡片只用于提问的按钮和状态。
 - 文件跟在文字后面各发一条：图片 `im/v1/images` 上传后发图片消息，其他 `im/v1/files` 上传后发文件消息。
 - 话题群的话题和 thread 模式的 thread 里就回到其中（`reply_in_thread`），否则直接发到群里。
 - 选项卡片（`card.type` 为 options）：按钮，推荐的那个是主按钮，点了就当那个人说了这个选项（addressed），卡片换成「已选：…」不再能点；文字卡片（text）：不放输入框，卡片带橙色标题「✍️ 需要你回答」，正文下一行灰字「直接回复作答」（有 placeholder 时跟在后面），回复就是回答。login 卡片不在飞书里出，agent 只发链接。
