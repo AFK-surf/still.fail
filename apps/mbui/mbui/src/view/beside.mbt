@@ -333,21 +333,26 @@ fn Tree::window_place(self : Tree, at : Int) -> (Double, Double, Double)? {
 
 ///|
 /// It let go as `owner` is, wherever it is held (what is drawn elsewhere for another, a tip in a layer over all of the
-/// window for the control it tells of: its scope the other's, nothing of it left once that one goes). It.
+/// window for the control it tells of: its scope the other's, nothing of it left once that one goes). It. `owner` let go
+/// in a layout (a list's row it no longer lays out), it is let go as that layout is done, before it returns: what holds
+/// it (the window's root) is no box that layout lays out (View::made_after_layout).
 pub fn View::lives_with(self : View, owner : View) -> View {
   owner.owns(fn() {
-    guard self.live() is Some(_) else { return }
-    match self.parent() {
-      Some(p) => p.drop(self)
-      None => {
-        // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
-        // any state written by the checkpoint only after the node has been let go.
-        @signals.start_batch()
-        self.tree.before_removing(self)
-        self.let_go()
-        @signals.end_batch()
+    let go = fn() {
+      guard self.live() is Some(_) else { return }
+      match self.parent() {
+        Some(p) => p.drop(self)
+        None => {
+          // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
+          // any state written by the checkpoint only after the node has been let go.
+          @signals.start_batch()
+          self.tree.before_removing(self)
+          self.let_go()
+          @signals.end_batch()
+        }
       }
     }
+    if self.laying_out() { self.tree.made_after.push(go) } else { go() }
   })
   |> ignore
   self

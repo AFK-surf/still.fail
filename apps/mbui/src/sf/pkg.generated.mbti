@@ -1758,7 +1758,11 @@ pub let pointer_tip : Double
 
 pub fn popover_arrow(@ui.Ctx, Int64) -> Int32
 
+pub fn popup_root_lazy(@view.View) -> () -> @view.View
+
 pub fn popup_root_node(@view.View) -> @view.View
+
+pub fn popup_root_when(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
 
 pub fn presented(@ui.Ctx, alone? : Bool) -> Unit
 

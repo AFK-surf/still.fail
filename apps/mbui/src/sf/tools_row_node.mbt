@@ -134,7 +134,8 @@ pub fn tools_row_node(
       gone + [None] + fixed
     }
   }
-  let popup = popup_root_node(row)
+  // (its window layer made as its menu first opens, never in a layout that builds the row: popup_root_when)
+  popup_root_when(row, fn() { opened.get() }, fn(popup) {
   popup.show(fn() { opened.get() }, leave=@kit.pop_out_ms, fn(layer) {
     layer.over(Is(true)) |> ignore
     match trigger.val {
@@ -157,6 +158,7 @@ pub fn tools_row_node(
       }
       None => ()
     }
+  })
   })
   row
 }
