@@ -302,7 +302,7 @@ export class Core {
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
         pair: {
-          begin: (sub) => personalBegin(inner, sub),
+          begin: (subs) => personalBegin(inner, subs),
           code: (typed) => personalProve(inner, typed),
           cancel: () => personalCancel(inner),
           state: (sub) => personalPairState(inner, sub),

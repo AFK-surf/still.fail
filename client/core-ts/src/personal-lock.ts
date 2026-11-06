@@ -164,19 +164,19 @@ export class PersonalLock {
     return this.#seen.has(sub) ? "outside" : "none";
   }
 
-  /// This device's key's id, the key made the first time (the person asked).
-  makeKey(reason: string): Effect.Effect<string, CoreError> {
-    return Effect.map(this.#madeKey(reason), (k) => k.id);
+  /// This device's key's id, made the first time, no one asked: keeping it takes no check, using it does.
+  makeKey(): Effect.Effect<string, CoreError> {
+    return Effect.map(this.#madeKey(null), (k) => k.id);
   }
 
   /// This device's key's id; made just now, its seed too: the person was asked once for that, and is not asked again to
   /// read what is in hand.
-  #madeKey(reason: string): Effect.Effect<{ id: string; seed: Uint8Array | null }, CoreError> {
+  #madeKey(reason: string | null): Effect.Effect<{ id: string; seed: Uint8Array | null }, CoreError> {
     const { host } = this.#env;
     return Effect.gen({ self: this }, function* () {
       if (this.#myKey !== null) return { id: this.#myKey, seed: null };
       if (!host.appKeys || !host.secureSet) return yield* Effect.fail(new CoreError("personal_no_key", t("core-misc.personal.noKey")));
-      if (host.secureAsk) yield* Effect.mapError(host.secureAsk(reason), asCoreError);
+      if (reason !== null && host.secureAsk) yield* Effect.mapError(host.secureAsk(reason), asCoreError);
       const seed = new Uint8Array(32);
       host.randomBytes(seed);
       yield* Effect.mapError(host.secureSet(KEY, seed, { user: true }), asCoreError);
@@ -264,11 +264,17 @@ export class PersonalLock {
     });
   }
 
-  /// A new device let in here, face to face: the whole lock then, for it to pin.
-  addDevice(sub: string, device: Device, reason: string): Effect.Effect<Entry[], CoreError> {
+  /// The key's seed, the person asked, ahead of a code shown here: letting the new device in then asks nothing more.
+  unseal(reason: string): Effect.Effect<Uint8Array, CoreError> {
+    return this.#unseal(reason);
+  }
+
+  /// A new device let in here, face to face, signed with `seed` (else the person is asked now): the whole lock then, for
+  /// it to pin.
+  addDevice(sub: string, device: Device, reason: string, seed: Uint8Array | null = null): Effect.Effect<Entry[], CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#append(sub, yield* this.#unseal(reason), "device", device);
+      yield* this.#append(sub, seed ?? (yield* this.#unseal(reason)), "device", device);
       return this.#pinned.get(sub) ?? [];
     });
   }
@@ -307,6 +313,11 @@ export class PersonalLock {
   /// devices that pinned that one do not follow it by themselves (`replaced`).
   restart(sub: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.map(this.begin(sub, reason), () => null);
+  }
+
+  /// The accounts here this device is not on the lock of, of those signed in (`subs`), one asked first.
+  outside(subs: string[]): string[] {
+    return subs.filter((s) => this.standing(s) === "outside");
   }
 
   /// Who may let this device in: the devices on the lock the cloud has, as it says.
