@@ -1688,6 +1688,10 @@ pub let phone_max : @ui.Len = Fixed(420.0)
 pub let nav_button_side : @ui.Len = Fixed(34.0)
 
 ///|
+/// The fixed settings head's title line, as in settings/parts.mbt's wide_head.
+let fixed_head_title_line : Double = 34.0
+
+///|
 /// A hairline across (0.5: a panel's rule over its foot).
 pub let hairline : @ui.Len = Fixed(0.5)
 
