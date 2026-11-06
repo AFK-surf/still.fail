@@ -44,7 +44,7 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
     paint: None, ground: 0L, quote_words: None, quote_to: None, source_scale: 1.0, leaving: None, leaving_node: None,
     face: fn() { }, node: Some(fn(p) { p.ground(Is(ink)) |> ignore }),
   }
-  flight_start_from(t.ctx(), "files", "files", "row", "", 140.0, [ff], field.lines(), hold=fn(_) { }, desk=true)
+  flight_start_from(t.ctx(), "files", "files", "row", "", [ff], field.lines(), hold=fn(_) { }, desk=true)
   source.set(false)
   t.draw()
   let f = send_flight.get().unwrap()

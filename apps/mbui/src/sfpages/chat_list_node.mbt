@@ -8,46 +8,44 @@
 ///|
 /// Chat `r`'s list in `v`: `view` as the core says it now (none while it is read the first time), its rows read by
 /// index (sfbase ChatRows: a message come is that row's change alone),
-/// `top` the room over its first row, `foot` under its last (the composer's), `core` the settings' over its workspace;
-/// `composer_across` the same width the page gives its composer, so the floating actions align with it;
-/// `follows` said whether it is kept at its end, as that changes.
+/// `top` the room over its first row, `core` the settings' over its workspace; what covers its foot (the composer's
+/// room, its own lift over that added there: ChatListNode's `lift`) given it by what holds it as that measures it
+/// (Layout::measure's `foot`: its page's layout, the composer measured first, none under its window), its last row
+/// (Foot) that tall;
+/// `composer_across` the width the page gives its composer in a list as wide as given, so the floating actions align
+/// with it; `follows` said whether it is kept at its end, as that changes.
 pub fn chat_list_node(
   v : @view.View,
   src : Source,
   r : ChatRef,
   view : () -> ChatView?,
   top : () -> Double,
-  foot : () -> Double,
   core : Core,
   foot_gap? : Double = 0.0,
-  composer_across? : () -> Double,
+  composer_across? : (Double) -> Double = composer_width,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
   let scroll = @view.Scroll::list()
   // The last row stands above the decision bell when the core says that it can cover the list's end (the old
-  // list's ask_clear). The bell itself stays over the composer's room, even while its post is elsewhere in the list.
-  let clear_foot = fn() {
-    foot() + (if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 })
-  }
-  // (a card's field with the focus kept in view with the keyboard up, as the window grows shorter under it: out from
-  // under the bar and the composer, 16 clear of each, its foot giving way to its top where it does not fit between
-  // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field)). Asked of the list at its
-  // causes (the keyboard as the host says it, the window, the bar's and the composer's room), the part of the field
-  // with that room round it brought into sight as the list is laid out next (Tree::show_in_sight, Scroll's reveal):
-  // nothing of where it was laid out read back.
-  v.reacts(fn() { (@ui.current().ime_inset(), v.window(), top(), clear_foot()) }, fn(now) {
+  // list's ask_clear): that much more room under it than the composer's, given it with that (`lift`). The bell itself
+  // stays over the composer's room, even while its post is elsewhere in the list.
+  let lift = fn() { if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 } }
+  // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
+  // become an input to another layout. Non-layout changes can still report the last drawn place.
+  let last_sighted : Ref[@view.Sighted[String]?] = Ref(None)
+  // (a card's field with the focus kept in view with the keyboard up: out from under the bar and the composer, 16 clear
+  // of each, its foot giving way to its top where it does not fit between them, in the layout they or the window change
+  // in (View::scrolls_anchored's `keep`); with touch (the old list's list_holds_field))
+  let keep_field = fn() {
     guard !@sf.pointer_rests() &&
-      now.0 > 0.0 &&
+      @ui.current().keyboard_up() &&
       @ui.focused_field_in() is Some((island, (_, fy, _, fh))) &&
       v.tree.holds(v.id(), island) else {
-      return
+      return None
     }
-    let (_, _, top_now, foot_now) = now
-    v.tree.show_in_sight(island, within=fn() {
-      Some((fy - field_held_room - top_now, fy + fh + field_held_room + foot_now))
-    })
-  })
+    Some((island, Some((fy, fy + fh)), field_held_room))
+  }
   // (shown while it is laid out somewhere: what comes out of its avatars played on then, linger_tick)
   let shown_by = fn() { !v.shown_nowhere() }
   @sfbase.reading_of(rk).shown_by = Some(shown_by)
@@ -354,9 +352,6 @@ pub fn chat_list_node(
   }) |> ignore
   // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
-  // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
-  // become an input to another layout. Non-layout changes can still report the last drawn place.
-  let last_sighted : Ref[@view.Sighted[String]?] = Ref(None)
   // Follow the data of the rows in that observation separately. A message can replace an outgoing row without
   // changing its geometry; that is a data change, not a new layout observation.
   let reading_data = @signals.signal(0)
@@ -478,9 +473,9 @@ pub fn chat_list_node(
       // (new to it: said while it shows, an agent starting, sent from here; not what is caught up on, at once)
       // (the bar over its top: what comes taller than what shows is read from its top under it)
       cover=top,
+      keep=keep_field,
       // The composer covers the list without moving its rows. Report its cover with the drawn rows, so what is read
       // is updated when a message is uncovered even if its place does not change.
-      foot_cover=clear_foot,
       fresh=fn(k) {
         match row_of(k) {
           Some((Said(m), _)) => m.said
@@ -503,7 +498,15 @@ pub fn chat_list_node(
         }) |> ignore
         match @signals.untracked(fn() { row_of(k) }) {
           Some((Top, _)) => { slot.height(By(fn() { Some(top()) })) |> ignore; return }
-          Some((Foot, _)) => { slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }
+          // (as tall as what covers the list's foot (the composer's room, its own lift with it), given it as what holds
+          // it measures it (Layout::given_foot), and the gap under its last row: in the same layout)
+          Some((Foot, _)) => {
+            slot.layout_box(Is(()), sized=true, fn(l, _) {
+              l.size_to(l.given_foot().map(fn(g) { g.1 }).unwrap_or(0.0) + foot_gap)
+            })
+            |> ignore
+            return
+          }
           _ => ()
         }
         // (its node while it is made, for an event that needs its place)
@@ -1058,22 +1061,16 @@ pub fn chat_list_node(
     }
     !asks.iter().all(seen)
   }
-  // Both actions stand six points inside the composer's end. The page supplies the same width it gives the
-  // composer, including a panel's corners; a list made alone falls back to the width in its own room.
-  let float_right = fn(w : Double) {
-    let cw = composer_across.map(fn(f) { f() }).unwrap_or(composer_width(w))
-    (w - cw) / 2.0 + float_in
-  }
+  // Both actions stand six points inside the composer's end: the composer as wide as the page gives it in the list's
+  // width, a panel's corners counted (composer_across), worked out as the list is laid out; over the composer's room
+  // (the room under its last row given the list, less its own lift), as what holds them is laid out (floats_over).
+  let float_right = fn(w : Double) { (w - composer_across(w)) / 2.0 + float_in }
   v.reacts(fn() { asking() }, fn(a) { rd0.ask = a })
-  v.box(fn(f) {
+  floats_over(v, fn() { lift() - float_lift - (if jump_shown() { float_above } else { 0.0 }) }, fn(f) {
     f
-    .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(Roomed(v, fn(w, _) {
-      let above = jump_shown()
-      (0.0, 0.0, float_right(w), foot() + float_lift + (if above { float_above } else { 0.0 }))
-    }))
+    .padding(Roomed(v, fn(w, _) { (0.0, 0.0, float_right(w), 0.0) }))
     |> ignore
     f.show(asking, fn(b) {
       b
@@ -1121,14 +1118,11 @@ pub fn chat_list_node(
     core_doing(src, ["chat.latest"], [("station", r.station), ("thread", thread)])
   }
   let jump_fade_ms = 160.0
-  v.box(fn(f) {
+  floats_over(v, fn() { lift() - float_lift }, fn(f) {
     f
-    .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(Roomed(v, fn(w, _) {
-      (0.0, 0.0, float_right(w), foot() + float_lift)
-    }))
+    .padding(Roomed(v, fn(w, _) { (0.0, 0.0, float_right(w), 0.0) }))
     |> ignore
     let initial = Ref(true)
     f.show(jump_shown, fn(b) {
@@ -1191,6 +1185,7 @@ pub fn chat_list_node(
   {
     to_latest: to_end,
     follows,
+    lift,
     // (by its row as the list has it: its message's place, or its outbox entry's)
     landing_of: fn(k) {
       match row_of(k) {
@@ -1271,6 +1266,9 @@ let chat_column_most : Double = 760.0
 pub(all) struct ChatListNode {
   to_latest : () -> Unit
   follows : @signals.Signal[Bool]
+  /// how much more room than the composer's it is to be given under its last row (the decision bell's, where the
+  /// core says that can cover its end): what its page adds as it measures it (Layout::measure's `foot`)
+  lift : () -> Double
   landing_of : (String) -> MineLanding?
 }
 
@@ -1403,6 +1401,25 @@ impl Eq for ListedFrom with equal(self, other) {
 ///|
 /// How far from what covers a chat's list a card's field in it is kept with the keyboard up (the old list's).
 let field_held_room : Double = 16.0
+
+///|
+/// What floats over list `v`'s foot (its decision bell, its way to the newest) made by `make` in a node over all of it,
+/// laid out over what covers its foot as what holds the list gave it (Layout::given_foot: the composer's room, with
+/// the list's own lift), less `less` of that (the lift, less how far over the composer it stands): in the same layout,
+/// nothing of the composer read back.
+fn floats_over(v : @view.View, less : () -> Double, make : (@view.View) -> Unit) -> Unit {
+  v.box(fn(o) {
+    o.over(Is(true)) |> ignore
+    let f = o.box(make)
+    o.layout_box(By(less), fn(l, less) {
+      let foot = l.given_foot().map(fn(g) { g.1 }).unwrap_or(0.0)
+      l.measure(f, l.width, height=dmax(0.0, l.height - dmax(0.0, foot - less))) |> ignore
+      l.place(f, 0.0, 0.0)
+    })
+    |> ignore
+  })
+  |> ignore
+}
 
 ///|
 /// How far past its column a chat's row lets what it holds scroll across (a message's tables): the row, worked out from

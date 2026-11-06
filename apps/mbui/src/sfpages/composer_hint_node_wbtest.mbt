@@ -62,7 +62,7 @@ test "a quote-only send hides the retained field's hint from the moment its card
     key: @sfbase.quote_key(0), from: (20.0, 400.0, 300.0, 120.0), shown: None, picture: None, paint: None,
     ground: 0L, quote_words: None, quote_to: None, source_scale: 1.0, leaving: None, leaving_node: None, face: fn() { }, node: None,
   }
-  @sfbase.flight_start_from(t.ctx(), "quoted", "quoted", "row", "", 140.0, [ff], field.lines(), hold=fn(_) { }, desk=true)
+  @sfbase.flight_start_from(t.ctx(), "quoted", "quoted", "row", "", [ff], field.lines(), hold=fn(_) { }, desk=true)
   t.draw()
   assert_eq((opacity.val)(), 0.0)
   assert_eq(t.glyphs_seen().length(), 0)
