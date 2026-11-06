@@ -62,6 +62,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/workspace-activity-worker.js", { kind: "recovery" }],
       ["sessions/workspace-activity-worker.js", { kind: "sandbox" }],
+      ["sessions/workspace-activity-worker.js", { kind: "directory" }],
       ["sessions/session-count-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
@@ -98,6 +99,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT n FROM session_turns WHERE session='old-turn'").get()?.n, 70);
     assert.deepEqual(store.recoveryWaits()?.map(({ row }) => row.key), ["old-count"]);
     assert.equal(store.db.prepare("SELECT name FROM sandbox_name_rows WHERE session=?").get("old-count")?.name, sandboxName(keyPart("old-count")));
+    assert.equal(store.db.prepare("SELECT root FROM session_dir_rows WHERE session=?").get("old-count")?.root, "/w");
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
     assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");

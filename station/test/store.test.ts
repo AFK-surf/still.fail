@@ -61,6 +61,7 @@ import { CARRIED_SAVE_PENDING, Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
 import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
   SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
+import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -118,6 +119,22 @@ function assertSandboxPlans() {
     assert.match(sql, /LIMIT \?$/);
   assert.match(plan(SANDBOX_SCAN_NEXT, "s", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
   assert.match(plan(SANDBOX_PRUNE_NEXT, "s", "z", 64), /SEARCH sandbox_name_rows USING PRIMARY KEY .*session>\?/);
+}
+
+function assertSessionDirectoryPlans() {
+  const db = memory().db;
+  installSessionDirectories(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  for (const live of [true, false]) {
+    const candidate = plan(sessionDirectoryCandidate(live), "/a");
+    assert.match(candidate, /SEARCH d USING COVERING INDEX session_dir_root .*root=\?/);
+    assert.match(candidate, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+    assert.doesNotMatch(candidate, /SCAN (d|s|sessions)\b/);
+    assert.match(plan(sessionDirectoryChoice(2, live), "a", "b", "/a", "/a"), /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+  }
+  for (const sql of [SESSION_DIR_FIRST, SESSION_DIR_NEXT, SESSION_DIR_DIRTY]) assert.match(sql, /LIMIT \?$/);
+  assert.match(plan(SESSION_DIR_NEXT, "a", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
 }
 
 function assertAwakeJobPlan() {
@@ -1525,6 +1542,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assertAwakeJobPlan();
   assertSessionJobPlans();
   assertSandboxPlans();
+  assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
@@ -1738,6 +1756,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertAwakeJobPlan();
   assertSessionJobPlans();
   assertSandboxPlans();
+  assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
