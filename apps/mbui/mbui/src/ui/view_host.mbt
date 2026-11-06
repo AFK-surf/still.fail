@@ -2771,11 +2771,11 @@ fn view_old_moved(x : Double, y : Double) -> Unit {
 /// node that does something when pressed, it is that node's (held till it is let go, and let go on it with the primary
 /// button, pressed; called off, nothing); down where the old view is, the old view's (held so, its own to call off);
 /// down elsewhere, nothing's. A move with nothing held goes to the old view where it is over it. True where the old
-/// view is to see none of it.
-fn view_pointer(kind : Int, x : Double, y : Double, button : Int, down_stack : Ref[Int]) -> Bool {
+/// view is to see none of it, with the Down target's stack as it was before the event was delivered (-2 if not Down).
+fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> (Bool, Int) {
   let tree = match view_app.val {
     Some(t) => t
-    None => return false
+    None => return (false, -2)
   }
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
@@ -2785,9 +2785,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int, down_stack : R
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
   // Keep the target's stack before delivering Down: its handler can close or replace the layer that took it.
-  if kind == 0 {
-    down_stack.val = tree.stack_takes(x, y)
-  }
+  let down_stack = if kind == 0 { tree.stack_takes(x, y) } else { -2 }
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
     // Resolve its logical owner before outside-press reactions can close a panel and its hosted portals.
@@ -3147,7 +3145,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int, down_stack : R
       select_none()
     }
   }
-  took
+  (took, down_stack)
 }
 
 ///|
