@@ -1,0 +1,12 @@
+== rLB: 249 frames
+  1 tree walk (Ctx::tree_walk, tree_walk_in: own): own 12584/frame; the largest inclusive among them 7862658/frame; functions [('Ctx::tree_walk_in (closure l1345)', 5952, 7852182, 9027), ('Ctx::tree_walk_in', 3456, 7862587, 4181), ('Ctx::tree_walk', 2674, 7862658, 4181), ('Ctx::tree_walk_in (closure l1360)', 501, 501, 11352)]
+  2 layer recording (scene_block_kept, scene_block_take, scene_drawn_end: own): own 29210/frame; the largest inclusive among them 302519/frame; functions [('Ctx::scene_block_kept', 13605, 131283, 4181), ('Ctx::scene_block_take', 10474, 31739, 11320), ('Ctx::scene_drawn_end', 5130, 302519, 4181)]
+  3 frame put together (scene_emitted, scene_block_put, scene_origin_put, clip_cut_by: own): own 1132248/frame; the largest inclusive among them 7824970/frame; functions [('scene_origin_put_2einner', 505499, 1018931, 30304), ('Ctx::scene_block_put', 322848, 812693, 115593), ('clip_cut_by', 150853, 936680, 25787), ('Ctx::scene_emitted_2einner', 136322, 7824659, 57808), ('Ctx::scene_emitted', 16638, 7824970, 57808), ('scene_origin_put', 87, 35908, 1203)]
+  4 to the host (h_present, present: own): own 184/frame; the largest inclusive among them 15143/frame; functions [('h_present', 184, 15143, 249)]
+  app frame (on_frame inclusive): 20268062/frame
+== rMN: 249 frames
+  1 tree walk (Ctx::tree_walk, tree_walk_in: own): own 45774/frame; the largest inclusive among them 12012115/frame; functions [('Ctx::tree_walk', 38082, 12012115, 51999), ('Ctx::tree_walk (closure l1299)', 7069, 8333460, 10723), ('Ctx::tree_walk (closure l1314)', 623, 623, 14105)]
+  2 layer recording (scene_block_kept, scene_block_take, scene_drawn_end: own): own 189179/frame; the largest inclusive among them 814160/frame; functions [('Ctx::scene_drawn_end', 189179, 814160, 51999)]
+  3 frame put together (scene_emitted, scene_block_put, scene_origin_put, clip_cut_by: own): own 0/frame; the largest inclusive among them 0/frame; functions []
+  4 to the host (h_present, present: own): own 184/frame; the largest inclusive among them 15386/frame; functions [('h_present', 184, 15386, 249)]
+  app frame (on_frame inclusive): 26419212/frame
