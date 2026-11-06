@@ -532,6 +532,12 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         // signed out, the sign-in page: the window's tree's nodes (entry_tree.mbt)
         SignedOut => signed_out_tree(v, src)
         SignedIn => {
+        // One focus scope per navigation entry survives a shell replacement, but not leaving that logical page.
+        let page_focus = @sfbase.page_focus_owner(v)
+        let focus_before = Ref(@signals.untracked(fn() {
+          (shell_is(src, v.window().0), app.nav.top_stay().0, app.nav.top(), workspace_in_view(src).0.map(fn(w) { w.id }))
+        }))
+        let focus_tape_page = Ref(false)
         // where the app is, put in the history's entry now as the stack or the workspace in view changes, at that
         // change (sfbase's app_history.mbt: a person's act pushed an entry before it moved the stack, one for all the
         // steps it takes, noted once it is done: history_acts_ended); on the wide frame Home alone is passing (land)
@@ -564,11 +570,30 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             None
           }
         })
-        v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
+        v.pick(fn() {
+          let now = (shell_is(src, v.window().0), app.nav.top_stay().0, app.nav.top(), workspace_in_view(src).0.map(fn(w) { w.id }))
+          let (was_shell, was_entry, was_page, was_workspace) = focus_before.val
+          let (shell, entry, page, workspace) = now
+          if was_entry != entry || was_page != page || was_workspace != workspace {
+            page_focus.leave(was_entry)
+          }
+          let mut carrying_focus = false
+          if was_shell != shell {
+            if was_entry == entry && was_page == page && was_workspace == workspace &&
+              was_shell is (Stacked | Taped | Paned) && shell is (Stacked | Taped | Paned) {
+              carrying_focus = page_focus.replace(entry)
+            } else {
+              page_focus.leave(entry)
+            }
+          }
+          focus_tape_page.val = shell is Taped && carrying_focus
+          focus_before.val = now
+          shell
+        }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
           match shell {
             Stacked => narrow_shell(s, src)
-            Taped => taped_shell(s, src)
+            Taped => taped_shell(s, src, focus_page=focus_tape_page.val)
             Paned => paned_shell(s, src)
             Landing => landing_tree(s, src)
             Reading => reading_tree(s, src)

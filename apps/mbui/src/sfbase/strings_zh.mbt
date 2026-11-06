@@ -2544,6 +2544,7 @@ let zh : Map[String, String] = {
   "web-pages.stations.latency": "当前延迟 {latency}",
   "web-pages.stations.netNone": "未连接",
   "web-pages.stations.offline": "离线",
+  "web-pages.stations.online": "在线",
   "web-pages.stations.page.more": "更多",
   "web-pages.stations.page.openFiles": "打开文件",
   "web-pages.stations.page.part.processes": "进程",

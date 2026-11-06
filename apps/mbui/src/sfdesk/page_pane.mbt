@@ -179,6 +179,7 @@ fn pane_made(
       (
         kind,
         fn(v : @view.View, page : () -> Page, under : Page?, stint : () -> Int, k : Int) {
+          @sfbase.page_focus_entry(v, k)
           v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
             guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
             let core = settings_core(src, w)
@@ -258,7 +259,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | Permissions | AutoCompletion) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -290,6 +291,10 @@ fn pane_made(
       // (a workspace's picture asked for again each time it is come back to: nav_flat_view's stint)
       made("notifications", fn(a, core, here, stint, frame, width) {
         @sfpages.notify_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
+      })
+    Setting(Permissions) =>
+      made("permissions", fn(a, core, _here, _stint, frame, width) {
+        @sfpages.permissions_node(a, core, on_back=core.pop, frame~, width~)
       })
     Setting(AutoCompletion) =>
       made("auto-completion", fn(a, core, here, _stint, frame, width) {
