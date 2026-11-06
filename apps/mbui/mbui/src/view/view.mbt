@@ -764,8 +764,9 @@ pub struct Tree {
   /// what a layout found to tell of its moment, told as it is done (Tree::said_after_laid): a windowed list's blocks
   /// come in sight
   after_laid : Array[() -> Unit]
-  /// how deep in Tree::laid_out it is (0: not laying out)
+  /// how deep in Tree::laid_out it is (0: not laying out), and whether what layouts found is being told
   mut laying : Int
+  mut telling_laid : Bool
   /// the nodes waiting to be first drawn (View::on_first_drawn): node, making, what is then told
   first_drawn : Array[(Int, Int, () -> Unit)]
   /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
@@ -1080,6 +1081,7 @@ pub fn Tree::new(
     after_paint: [],
     after_laid: [],
     laying: 0,
+    telling_laid: false,
     first_drawn: [],
     bindings_due: [],
     pulls_held: 0,
@@ -9215,9 +9217,14 @@ fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
 }
 
 ///|
-/// What layouts said to tell of their moments (Tree::said_after_laid), told, in order; what that telling says so told
-/// too.
+/// What layouts said to tell of their moments (Tree::said_after_laid), told, one after another in the order said; what
+/// a telling lays out at once (an event reading where things are) said after those said before it and told in its
+/// turn, never within another's telling: so how deep it goes is not how many follow one another.
 fn Tree::tell_laid(self : Tree) -> Unit {
+  if self.telling_laid {
+    return
+  }
+  self.telling_laid = true
   while !self.after_laid.is_empty() {
     let now = self.after_laid.copy()
     self.after_laid.clear()
@@ -9225,6 +9232,7 @@ fn Tree::tell_laid(self : Tree) -> Unit {
       f()
     }
   }
+  self.telling_laid = false
 }
 
 ///|
