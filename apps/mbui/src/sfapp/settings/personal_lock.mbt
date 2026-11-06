@@ -43,19 +43,27 @@ fn confirm_row(c : @ui.Ctx, core : Core, view : Json?, blocks : Array[() -> Unit
   }
   keys.push("confirm")
   blocks.push(fn() {
-    list_card(c, fn() {
-      let doing = is_doing(core, ["adb.personalConfirm"], [])
-      list_row(c, key="personal-confirm", fn() {
-        c.box(style=fill_words, fn() { row_lines(c, fill("android-misc.personal.toConfirm", [("n", n.to_string())]), tr("android-misc.personal.toConfirm.note"), wrap_sub=true) })
-        |> ignore
-        if @sf.button(c, tr("android-misc.personal.confirm"), key="personal-confirm-do", tone=Primary, busy=doing, disabled=doing) {
-          act(core, tr("android-misc.personal.confirm"), "adb.personalConfirm", obj([]))
-        }
+    // (what it is for under its title as wide as the card, 确认 at its foot as 本机设置's step has it: not beside them,
+    // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压)
+    let doing = is_doing(core, ["adb.personalConfirm"], [])
+    card(c, foot=UiCapsule, fn() {
+      c.box(style=personal_confirm_box, fn() {
+        @sf.card_lines(c, fill("android-misc.personal.toConfirm", [("n", n.to_string())]), note=tr("android-misc.personal.toConfirm.note"))
+        @sf.card_foot(c, fn() {
+          if @sf.button(c, tr("android-misc.personal.confirm"), key="personal-confirm-do", tone=Primary, busy=doing, disabled=doing) {
+            act(core, tr("android-misc.personal.confirm"), "adb.personalConfirm", obj([]))
+          }
+        })
       })
       |> ignore
     })
+    |> ignore
   })
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let personal_confirm_box : @ui.Style = @ui.css("w=Full gap=S3_5")
 
 ///|
 /// Joining the lock `p`, as far as it got: looking for a device on it; where to read the code and the code's boxes

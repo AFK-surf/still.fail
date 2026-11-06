@@ -1345,6 +1345,10 @@ pub fn link_row(
       None => ()
     }
   }
+  // (wide under a finger, a control with lines under the first is by the whole row's side, as a face's: a wide row's
+  // first line is too low for a finger's least room, and the row is wide enough for its lines beside it)
+  let face = face ||
+    (look() is Wide && native_input() is Finger && control is Some(_) && (note != "" || trouble != "" || below is Some(_)))
   // (a face's row with a control at its end, lines under its first: its words cut short where the control leaves them
   // less, the control by the whole row's side rather than its first line's)
   let note_cut = note_cut || (face && control is Some(_) && (note != "" || trouble != "" || below is Some(_)))
@@ -1457,8 +1461,11 @@ pub fn link_row(
                     after()
                   })
                   |> ignore
+                } else if note_cut || title_cut {
+                  // (cut short, in a box that takes the line's room: what is at its end stays at the row's end)
+                  c.box(style=pg_row_words, fn() { c.text(title, style=titled.then(cut_words), color?=ink) |> ignore }) |> ignore
                 } else {
-                  c.text(title, style=if note_cut || title_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
+                  c.text(title, style=titled, color?=ink) |> ignore
                 }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the

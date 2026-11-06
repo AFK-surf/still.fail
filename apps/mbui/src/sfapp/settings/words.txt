@@ -95,7 +95,6 @@ android-misc.adb.notify.title
 android-misc.adb.off
 android-misc.adb.offValue
 android-misc.adb.on
-android-misc.adb.on.note
 android-misc.adb.pair.action
 android-misc.adb.pair.ask
 android-misc.adb.pair.auto
@@ -130,6 +129,7 @@ android-misc.adb.step.wifi
 android-misc.adb.step.wireless
 android-misc.adb.stop
 android-misc.adb.stopWhat
+android-misc.adb.on.note
 android-misc.adb.title
 android-misc.adb.typeCode
 android-misc.adb.unauthorized
