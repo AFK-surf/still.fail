@@ -25,6 +25,10 @@ priv struct Run {
   mut notify_index : Int
   mut queued_length : Int
   mut active_sub : ReactiveNode?
+  /// Readers temporarily hidden by `untracked` still form part of the current computation.
+  mut hidden_readers : Int
+  /// The readers below a delivered old-frame input, which is taken after its build (deliver_input).
+  mut input_readers : (Int, Int, Int, Int)?
   /// what owns what is made now (an effect, a scope): what is reading where something is, else this (Solid's Owner
   /// apart from its Listener: `untracked` stops following reads, never owning)
   mut owner : ReactiveNode?
@@ -66,6 +70,8 @@ let run : Run = {
   notify_index: 0,
   queued_length: 0,
   active_sub: None,
+  hidden_readers: 0,
+  input_readers: None,
   owner: None,
   asked_for: None,
   queued: [],
@@ -912,9 +918,33 @@ pub fn[T] Computed::watched(self : Computed[T]) -> Bool {
 /// What `f` makes, nothing it reads followed by what is reading now.
 pub fn[T] untracked(f : () -> T) -> T {
   let prev_sub = set_active_sub(None)
+  if prev_sub is Some(_) { run.hidden_readers += 1 }
   let v = f()
+  if prev_sub is Some(_) { run.hidden_readers -= 1 }
   run.active_sub = prev_sub
   v
+}
+
+///|
+/// Whether a tracked computation is on the stack, including one hidden by `untracked`. An action must not mistake
+/// that for an outside event: it would turn what it reads from layout into an input of the computation.
+pub fn tracking_underway() -> Bool {
+  let (hidden, effects, computeds, watches) = run.input_readers.unwrap_or((0, 0, 0, 0))
+  run.active_sub is Some(_) || run.hidden_readers > hidden || run.run_depth > effects ||
+    run.computing > computeds || watch_reading.depth > watches
+}
+
+///|
+/// Deliver one input taken by the old frame, after that frame's builds. The outer frame's watch still runs, but no
+/// build is under way; a watch, computed or effect started inside the input remains a tracked computation. For the
+/// UI framework's input delivery alone, not for app code or a layout's result.
+pub fn deliver_input(f : () -> Unit) -> Unit {
+  untracked(fn() {
+    let was = run.input_readers
+    run.input_readers = Some((run.hidden_readers, run.run_depth, run.computing, watch_reading.depth))
+    f()
+    run.input_readers = was
+  })
 }
 
 ///|

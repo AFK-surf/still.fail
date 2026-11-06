@@ -26,6 +26,8 @@ pub fn batch_depth() -> Int32
 
 pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
 
+pub fn deliver_input(() -> Unit) -> Unit
+
 pub fn effect(() -> Unit) -> () -> Unit
 
 pub fn effect_cleanup(() -> () -> Unit) -> () -> Unit
@@ -55,6 +57,8 @@ pub fn[T] signal(T, same? : (T, T) -> Bool) -> Signal[T]
 pub fn start_batch() -> Unit
 
 pub fn trigger(() -> Unit) -> Unit
+
+pub fn tracking_underway() -> Bool
 
 pub fn[T] untracked(() -> T) -> T
 

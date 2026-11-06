@@ -52,6 +52,9 @@ pub fn sheet_node(
   }, fn(layer) {
     shown()
     layer.owns(gone) |> ignore
+    // A page owning this presenter may itself leave as a layout removes it. Resolve that removal at the change
+    // that caused it, even if no frame comes between that change and the sheet's exit.
+    layer.laid_before_causes()
     let opened = layer.cause_at()
     let still = @ui.current().still()
     let slide = @motion.Way::new(0.0)

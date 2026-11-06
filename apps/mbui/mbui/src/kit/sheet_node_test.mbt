@@ -265,6 +265,45 @@ test "tree sheet closes from the size its contents changed to at that event, wit
 }
 
 ///|
+fn sheet_owner_removed_in_layout(draw_first : Bool) -> (Double, Int) raise {
+  let owner_shown = @signals.signal(true)
+  let open = @signals.signal(true)
+  let content = @signals.signal(120.0)
+  let sheet : Ref[@view.View?] = Ref(None)
+  let extent : Ref[@view.View?] = Ref(None)
+  let gone = Ref(0)
+  let t = @ui.Tester::new(fn(_) {  }, time=0.0, tree=fn(root : @view.View) {
+    root.box(fn(page) {
+      page.height(Is(Some(20.0))).layout_box(By(fn() { owner_shown.get() }), fn(l, visible) {
+        if visible {
+          let owner = l.child("owner", fn(v) { v.owns(fn() { open.set(false) }) |> ignore })
+          l.measure(owner, l.width) |> ignore
+          l.place(owner, 0.0, 0.0)
+        }
+      }) |> ignore
+    }) |> ignore
+    @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) },
+      extent=fn(v) { extent.val = Some(v) }, gone=fn() { gone.val += 1 }, fn(s) {
+        sheet.val = Some(s)
+        s.box(fn(body) { body.height(By(fn() { Some(content.get()) })) |> ignore }) |> ignore
+      })
+  })
+  t.run_for(sheet_test_late_ms)
+  let tree = @ui.view_tree().unwrap()
+  tree.event(t.time(), fn() { content.set(200.0); owner_shown.set(false) })
+  assert_false(open.get(), msg="owner's removal is taken at the change, without a frame")
+  assert_eq(extent.val.unwrap().laid_size().1, 200.0)
+  if draw_first { t.draw() }
+  t.run_for(sheet_test_150_ms)
+  (sheet.val.unwrap().rect().1, gone.val)
+}
+
+///|
+test "tree sheet closes from a layout-removed owner at the same moment with or without a frame" {
+  assert_eq(sheet_owner_removed_in_layout(false), sheet_owner_removed_in_layout(true))
+}
+
+///|
 fn sheet_moments(frames : Bool) -> (Double, Double, Int) {
   let (t, k) = node_sheet_case()
   if frames {

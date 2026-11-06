@@ -2357,6 +2357,19 @@ pub fn Ctx::tell(self : Ctx, key : String, f : () -> Unit) -> Unit {
 }
 
 ///|
+/// An action caused by an input taken in this old frame's build. Once its builds are over, deliver it as that input's
+/// action (not a layout result), once by `key`. This permits a retained view's `event_action` to snapshot geometry for
+/// an exit. Outside a build, an event handler may call it directly.
+pub fn Ctx::tell_input(self : Ctx, key : String, f : () -> Unit) -> Unit {
+  if building.val {
+    guard frame_inputs_taken.val else { abort("tell_input requires an input taken by this frame") }
+    self.tell(key, fn() { @signals.deliver_input(f) })
+  } else {
+    f()
+  }
+}
+
+///|
 /// The probe of frames slower than the display's (MBUI_PROBE=1, or always on a device build that sets it): a line on
 /// the log for each frame whose work took longer than `probe_slow_ms`, or that came later than that after the one
 /// before (the main thread held between them), with where its time went.

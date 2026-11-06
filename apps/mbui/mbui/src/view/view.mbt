@@ -827,6 +827,8 @@ pub struct Tree {
   mut boxes_deferred : BoxesBatch?
   /// Flex may call back into the tree. Removals in that call must update its child lists immediately.
   mut layouts_active : Int
+  /// A node's own cleanup is running. It may ask for its owner's event after a layout finishes.
+  mut cleanups_active : Int
   mut layout_due : Bool
   /// the node whose own layout (View::layout_box) is running now, building and measuring its children (-1 none)
   mut layout_owner : Int
@@ -1142,6 +1144,7 @@ pub fn Tree::new(
     pulls_marked: [],
     boxes_deferred: None,
     layouts_active: 0,
+    cleanups_active: 0,
     timeline: [],
     told: 0,
     advancing: false,
@@ -5604,6 +5607,32 @@ fn Tree::before_removing(self : Tree, root : View) -> Unit {
 }
 
 ///|
+/// An action at the current cause, committed as one event. This is for a programmatic action which, like a press,
+/// needs a one-time layout measurement for its motion (for example, closing a stack of sheets). It cannot run in a
+/// tracked computation or a layout. If a node's `owns` cleanup asks during a layout, it runs after that layout at
+/// the same cause, while the rest of the window still exists. A callback queued by a disposed tree is dropped.
+pub fn View::event_action(self : View, f : () -> Unit) -> Unit {
+  let tree = self.tree
+  let at = if tree.cause_at >= 0.0 { tree.cause_at } else { tree.time_now() }
+  if tree.layouts_active > 0 {
+    guard tree.cleanups_active > 0 else { abort("an event action cannot be started by layout") }
+    @signals.after_flush(fn() {
+      if !tree.gone {
+        guard tree.layouts_active == 0 && !@signals.tracking_underway() else {
+          abort("an event action cannot be started by a tracked computation or layout")
+        }
+        tree.event(at, f)
+      }
+    })
+  } else {
+    guard !@signals.tracking_underway() else {
+      abort("an event action cannot be started by a tracked computation or layout")
+    }
+    if tree.gone { @signals.untracked(f) } else { tree.event(at, f) }
+  }
+}
+
+///|
 /// Capture event-time state before a window resize, while the old window's constraints still apply.
 fn View::capture_before_resize(self : View, f : () -> Unit, finish : () -> Unit, position : Bool) -> Unit {
   guard self.alive() else { return }
@@ -5706,9 +5735,11 @@ fn View::let_go(self : View) -> Unit {
   }
   let drops = n.drops.values().collect()
   n.drops.clear()
+  self.tree.cleanups_active += 1
   for f in drops {
     f()
   }
+  self.tree.cleanups_active -= 1
   n.on_press = None
   n.on_action = None
   n.top_row = false
@@ -5977,8 +6008,10 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
   let had : Ref[View?] = Ref(None)
   // (the one leaving, shown again as it leaves: the same node, come back)
   let gone : Ref[View?] = Ref(None)
+  let change = Ref(0)
   let stop = slot.tree.structured(when, fn(on) {
     guard slot.alive() else { return }
+    change.val += 1
     match (on, had.val) {
       (true, None) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
@@ -5993,13 +6026,29 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
       }
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
-        let duration = match leave_by {
-          Some(f) => f(v)
-          None => leave
+        let leave_now = fn() {
+          let duration = match leave_by {
+            Some(f) => f(v)
+            None => leave
+          }
+          slot.leave(v, duration)
+          had.val = None
+          gone.val = if duration > 0.0 { Some(v) } else { None }
         }
-        slot.leave(v, duration)
-        had.val = None
-        gone.val = if duration > 0.0 { Some(v) } else { None }
+        if slot.tree.layouts_active > 0 && leave_by is Some(_) {
+          // A node can own a presenter while being removed by a layout. Its cleanup closes the presenter during
+          // that same compute, before the rest of the tree has its new sizes. Wait for this layout to finish, then
+          // take the close at the original cause's moment; a later change or removal cancels this pending close.
+          let at = slot.tree.cause_now()
+          let version = change.val
+          @signals.after_flush(fn() {
+            if slot.alive() && v.alive() && change.val == version {
+              slot.tree.event(at, leave_now)
+            }
+          })
+        } else {
+          leave_now()
+        }
       }
       _ => ()
     }

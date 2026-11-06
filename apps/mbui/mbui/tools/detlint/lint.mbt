@@ -181,11 +181,26 @@ fn event_layout_read(f : MbtFile, c : Call) -> Bool {
     if outer.is_def || !event_view_receiver(f, outer) {
       return false
     }
+    // Starting an event action from a binding or a layout is still feedback. An actual handler registered in that
+    // binding/layout runs later and is safe (notably a layout child's `owns` cleanup).
+    if outer.name == "event_action" && f.calls.iter().any(fn(binding) {
+      (binding.name == "By" || binding.name == "layout_box") &&
+      binding.args.iter().any(fn(arg) { arg.1.contains(outer.at) }) &&
+      !f.calls.iter().any(fn(handler) {
+        handler.at > binding.at && handler.at < outer.at &&
+        (handler.name == "owns" || handler.name == "on_press" || handler.name == "on_drag" ||
+          handler.name == "on_key" || handler.name == "takes_back") &&
+        handler.args.iter().any(fn(arg) { arg.1.contains(outer.at) })
+      })
+    }) {
+      return false
+    }
     outer.args.iter().any(fn(arg) {
       let direct = arg.1.length() > 0 && arg.1[0] == closure && arg.1.contains(c.at)
       direct &&
       (outer.name == "on_press" || outer.name == "on_drag" || outer.name == "on_key" ||
-        outer.name == "takes_back" || (outer.name == "show" && arg.0 == Some("leave_by")))
+        outer.name == "takes_back" || outer.name == "event_action" ||
+        (outer.name == "show" && arg.0 == Some("leave_by")))
     })
   })
 }
@@ -393,6 +408,10 @@ fn lint_mbt(
     // where or how large something was laid out, read back by what builds (a first frame has none, a change lays the
     // frame out twice): said as layout instead; the framework's own not counted
     if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t && !event_layout_read(f, c) {
+      add("layout-read-back", c.at, f.line_text(c.at))
+    }
+    // Only the UI framework delivers a real old-frame input with the enclosing frame watch masked.
+    if c.name == "deliver_input" && c.kind == "pkg" && c.qual == "@signals" && app && !in_t {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was

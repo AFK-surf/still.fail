@@ -2047,17 +2047,24 @@ test "layout-read-back allows an event's size, but not a binding made by an even
         "  v.on_press(fn() { let h = v.laid_size().1 })\n" +
         "  v.show(open, leave_by=fn(_) { v.laid_size().1 }, fn(_) { () })\n" +
         "  v.on_drag(fn(_) { v.laid_size() |> ignore })\n" +
+        "  v.event_action(fn() { v.laid_size() |> ignore })\n" +
         "  v.on_press(fn() { v.height(By(fn() { Some(v.laid_size().1) })) })\n" +
+        "  v.event_action(fn() { v.height(By(fn() { Some(v.laid_size().1) })) })\n" +
+        "  v.height(By(fn() { v.event_action(fn() { v.laid_size() |> ignore }); None }))\n" +
+        "  v.layout_box(Is(()), fn(_, _) { v.event_action(fn() { v.laid_size() |> ignore }) })\n" +
+        "  v.layout_box(Is(()), fn(_, _) { v.owns(fn() { v.event_action(fn() { v.laid_size() |> ignore }) }) })\n" +
+        "  @signals.deliver_input(fn() { () })\n" +
         "  v.on_press(fn() { v.reacts(fn() { v.laid_size_told() }, fn(_) { () }) })\n" +
         "  v.reacts(fn() { v.laid_size_told() }, fn(_) { () })\n" +
         "  v.on_press(fn() { c.laid_size(id) |> ignore })\n" +
         "  fake.on_press(fn() { fake.laid_size() |> ignore })\n" +
+        "  fake.event_action(fn() { fake.laid_size() |> ignore })\n" +
         "}\n",
       ),
     ],
     "layout-read-back",
-    5,
+    10,
     cfg~,
   )
-  assert_eq(lines(fs), [5, 6, 7, 8, 9])
+  assert_eq(lines(fs), [6, 7, 8, 9, 11, 12, 13, 14, 15, 16])
 }
