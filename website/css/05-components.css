@@ -30,6 +30,7 @@
 .task { background: #fff; border-radius: 12px; box-shadow: inset 0 0 0 .5px var(--line), 0 1px 2px rgba(16,24,40,.05); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; color: var(--ink); }
 .task-t { display: flex; gap: 8px; align-items: center; font-weight: 500; font-size: 14px; }
 .task-t svg { width: 16px; height: 16px; flex: none; }
+:is(.task, .chatv, .main) > .cap { align-self: flex-start; }
 .task small { color: var(--graphite); font-size: 12px; }
 .c-ok { color: var(--ok); }
 .c-warn { color: var(--warn); }
@@ -69,13 +70,13 @@
 .phone .composer { margin: auto 10px 12px; height: 34px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; padding: 0 6px 0 14px; color: var(--silver); font-size: 11px; justify-content: space-between; }
 .phone .composer i { width: 24px; height: 24px; border-radius: 50%; background: var(--brand-deep); display: grid; place-items: center; }
 .phone .composer i svg { width: 12px; height: 12px; color: #fff; }
-.notif { position: absolute; left: 50%; top: 52px; width: calc(100% - 22px); transform: translateX(-50%); background: rgba(241,241,242,.96); backdrop-filter: blur(10px); border-radius: 16px; padding: 10px 12px; display: flex; gap: 8px; font-size: 11px; line-height: 1.35; z-index: 3; box-shadow: 0 10px 24px -12px rgba(42, 11, 2, .35); }
+.notif { position: absolute; left: 50%; top: 52px; width: calc(100% - 22px); transform: translateX(-50%); background: rgba(241,241,242,.96); backdrop-filter: blur(10px); border-radius: 16px; padding: 10px 12px; display: flex; gap: 8px; font-size: 11px; line-height: 1.35; text-wrap: pretty; z-index: 3; box-shadow: 0 10px 24px -12px rgba(42, 11, 2, .35); }
 .notif img { width: 22px; height: 22px; border-radius: 6px; flex: none; }
 .notif b { font-weight: 600; display: flex; justify-content: space-between; }
 .notif b em { font-style: normal; font-weight: 400; color: var(--graphite); }
 .duo { display: flex; gap: 0; border-radius: 30px; background: #0E0F11; padding: 8px; box-shadow: 0 30px 60px -30px rgba(42, 11, 2, .45); width: min(100%, 470px); aspect-ratio: 1 / .93; position: relative; }
 .duo::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 50%; width: 2px; transform: translateX(-1px); background: linear-gradient(to bottom, rgba(0,0,0,.08), rgba(0,0,0,.18), rgba(0,0,0,.08)); }
-.duo .scr { flex: 1; background: #fff; display: flex; flex-direction: column; font-size: 11.5px; color: var(--ink); overflow: hidden; }
+.duo .scr { flex: 1; min-width: 0; background: #fff; display: flex; flex-direction: column; font-size: 11.5px; color: var(--ink); overflow: hidden; }
 .duo .scr:first-child { border-radius: 23px 4px 4px 23px; background: var(--mist); }
 .duo .scr:last-child { border-radius: 4px 23px 23px 4px; }
 .duo .status { display: flex; justify-content: space-between; padding: 12px 16px 6px; font-size: 10px; font-weight: 600; }
@@ -109,23 +110,27 @@
 /* ---------- Running state, as the product shows it ----------
    An agent at work is an activity line, not a card: its avatar (the maker's mark in a grey disc) with the segmented
    ring, the activity and the seconds. A busy chat row carries the yellow spokes. Both step an eighth of a turn ten
-   times a second (the product's own cadence; web/ui/src/styles/spokes.ts), and only where the picture is on screen:
-   in the overview stage and the device tabs (their bands skip rendering off screen), and in the scroll scene once it
-   is marked .play. Under reduced motion they stand still (00-base.css). */
+   times a second (the product's own cadence; web/ui/src/styles/spokes.ts), only in the overview stage and the device
+   tabs: hidden panes don't render, and their bands skip rendering off screen (content-visibility). The scroll scene
+   keeps them still: there the scroll sets the time. Under reduced motion they stand still (00-base.css). */
 .act { --segments: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.5'><path d='M8.99 1.16A11.25 11.25 0 0 1 15.01 1.16'/><path d='M17.54 2.21A11.25 11.25 0 0 1 21.79 6.46' stroke-opacity='.2'/><path d='M22.84 8.99A11.25 11.25 0 0 1 22.84 15.01' stroke-opacity='.2'/><path d='M21.79 17.54A11.25 11.25 0 0 1 17.54 21.79' stroke-opacity='.25'/><path d='M15.01 22.84A11.25 11.25 0 0 1 8.99 22.84' stroke-opacity='.32'/><path d='M6.46 21.79A11.25 11.25 0 0 1 2.21 17.54' stroke-opacity='.42'/><path d='M1.16 15.01A11.25 11.25 0 0 1 1.16 8.99' stroke-opacity='.55'/><path d='M2.21 6.46A11.25 11.25 0 0 1 6.46 2.21' stroke-opacity='.75'/></svg>");
   --anthropic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill-rule='evenodd' d='M13.827 3.52h3.603L24 20h-3.603l-6.57-16.48zm-7.258 0h3.767L16.906 20h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm4.132 9.959L8.453 7.687 6.205 13.48H10.7z'/></svg>");
   align-self: flex-start; display: inline-flex; align-items: center; gap: .62em; margin-left: .5em; padding-left: 3px;
   font-size: 13px; line-height: 1.54; font-weight: 400; color: #565B62; white-space: nowrap; }
+.act { max-width: calc(100% - .5em); }
+.act > span:not(.t) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .act .t { font-feature-settings: "tnum"; }
 .act .ag { position: relative; flex: none; width: 1.385em; height: 1.385em; border-radius: 50%; background: rgb(36 39 43 / .075); }
 .act .ag::before { content: ""; position: absolute; inset: 21%; background: #24272B; -webkit-mask: var(--anthropic) center / contain no-repeat; mask: var(--anthropic) center / contain no-repeat; }
 .act .ag::after { content: ""; position: absolute; inset: -3px; background: #DC5929; -webkit-mask: var(--segments) center / 100% no-repeat; mask: var(--segments) center / 100% no-repeat; }
+/* In a phone's chat the line takes the column's width and never widens the device (contain: inline-size). */
+.chatv > .act { contain: inline-size; align-self: stretch; }
 .duo .act, .phone .act { font-size: 11px; }
 .mk-busy { --spokes: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.9' stroke-linecap='round'><path d='M12 7.2V2.4'/><path d='M15.39 8.61l3.4-3.4' stroke-opacity='.2'/><path d='M16.8 12h4.8' stroke-opacity='.2'/><path d='M15.39 15.39l3.4 3.4' stroke-opacity='.25'/><path d='M12 16.8v4.8' stroke-opacity='.32'/><path d='M8.61 15.39l-3.4 3.4' stroke-opacity='.42'/><path d='M7.2 12H2.4' stroke-opacity='.55'/><path d='M8.61 8.61l-3.4-3.4' stroke-opacity='.75'/></svg>");
   display: inline-block; flex: none; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; background: #F2B01E;
   -webkit-mask: var(--spokes) center / 100% no-repeat; mask: var(--spokes) center / 100% no-repeat; }
 @keyframes step-turn { to { transform: rotate(1turn); } }
-:is(.stage, .fpanel, .play) .act .ag::after, :is(.stage, .fpanel, .play) .mk-busy { animation: step-turn .8s steps(8) infinite; }
+:is(.stage, .fpanel) .act .ag::after, :is(.stage, .fpanel) .mk-busy { animation: step-turn .8s steps(8) infinite; }
 /* A notification lands from the top edge, the way the phone shows one, a beat after its picture appears (the
    overview's third pane, the Android tab). It is the event the picture is about. The scroll scene moves its own. */
 @keyframes notif-in { from { opacity: 0; translate: 0 -14px; } }

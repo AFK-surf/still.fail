@@ -117,26 +117,28 @@
     <h1 id="hero-title" class="display">One devices<span class="hit">,</span></h1>
     <div class="hero-body">
       <p class="lead">
-        <span class="zh">把每台电脑上的 Claude Code、Codex 连成一台电脑：<b>订阅账号进同一个号池</b>，<b>团队在 Slack 里一起指挥</b>，<b>iPhone、Android 和桌面端</b>随时接着干。</span>
-        <span class="en">monoid joins the agents on all your computers into one: <b>your subscriptions share one account pool</b>, <b>your team directs them together from Slack</b>, and <b>iPhone, Android and desktop</b> pick up wherever you are.</span>
+        <span class="zh">把每台电脑上的 agent 连成一台。<b>一个号池</b>装下所有订阅，<b>一个团队</b>在 Slack 里指挥，<b>每台设备</b>都能接着干。</span>
+        <span class="en">monoid joins the agents on all your computers into one. <b>One account pool</b> for your subscriptions, <b>one team</b> directing them from Slack, <b>every device</b> picking up where you left&nbsp;off.</span>
       </p>
       <div class="actions">
-        <a class="btn btn-paper lg" href="#download"><span class="zh">下载 monoid</span><span class="en">Download monoid</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>
+        <a class="btn btn-paper lg" href="#download"><span class="zh">下载 monoid</span><span class="en">Download monoid</span><svg class="ico arr" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         <a class="btn btn-line lg" data-app href="https://app.monoid.build"><span class="zh">打开网页版</span><span class="en">Open the web app</span></a>
       </div>
     </div>
+    <!-- The key to the Week below: its swatches are the field's own comma, lit and unlit. -->
     <div class="legend">
-      <span><b><span class="zh">亮起的 45 格</span><span class="en">45 lit cells</span></b>　<span class="zh">你坐在电脑前的 45 小时</span><span class="en">your 45 hours at the desk</span></span>
-      <span><i><span class="zh">其余 123 格</span><span class="en">123 other cells</span></i>　<span class="zh">你不在，station 上的 agent 还在跑</span><span class="en">you're away, the agents on your stations keep running</span></span>
-      <span><span class="zh">这里 1 秒 = 1 小时</span><span class="en">Here, 1 second = 1 hour</span></span>
-      <button class="tool" type="button" id="pause"><span class="zh">暂停</span><span class="en">Pause</span></button>
+      <b class="lg-title"><span class="zh">一周 168 小时</span><span class="en">One week, 168 hours</span></b>
+      <span class="key"><svg class="sw on" viewBox="25.6 26.6 16.4 17.4" aria-hidden="true"><path id="g-comma" d="M27.5752 30.475C29.5842 26.9956 34.0342 25.803 37.5137 27.8119C40.8501 29.7385 42.081 33.9084 40.4053 37.3158C40.4099 37.3203 40.4144 37.3251 40.4189 37.3295C40.3568 37.4447 40.2857 37.5685 40.2051 37.6977C40.1952 37.715 40.1858 37.7331 40.1758 37.7504C39.7991 38.4028 39.3363 38.9749 38.8105 39.4604C37.1152 41.2376 34.3055 43.2112 30.4131 43.7602C30.2618 43.7814 30.1769 43.5981 30.29 43.4955C30.9997 42.8536 31.8303 42.0905 32.6543 41.2846C31.8262 41.1437 31.0084 40.8571 30.2383 40.4125C26.7589 38.4036 25.5665 33.9545 27.5752 30.475Z"/></svg><span class="zh"><b>45 小时</b>你在电脑前</span><span class="en"><b>45</b> at your desk</span></span>
+      <span class="key"><svg class="sw off" viewBox="25.6 26.6 16.4 17.4" aria-hidden="true"><use href="#g-comma"/></svg><span class="zh"><b>123 小时</b>你不在，agent 照常在跑</span><span class="en"><b>123</b> away, your agents still running</span></span>
+      <span class="ctl"><span class="rate"><span class="zh">1 秒 = 1 小时</span><span class="en">1 s = 1 h</span></span><button class="tool" type="button" id="pause"><span class="zh">暂停</span><span class="en">Pause</span></button></span>
     </div>
   </div>
+  <!-- Notes on the Week: each rings a real cell (--c: hour 0–23, --r: day, Monday 0) and a leader runs to its label. -->
   <div class="field-wrap">
-    <canvas class="field" id="field" aria-label="168 周格：横向 24 小时，纵向 7 天" role="img"></canvas>
-    <span class="ftag" style="--c:10;--r:2"><i></i><span class="zh">你在 · 周三 10:00</span><span class="en">you · Wed 10:00</span></span>
-    <span class="ftag r" style="--c:3;--r:5"><i></i><span class="zh">station · 周六 03:00 · 3 个 agent 在跑</span><span class="en">station · Sat 03:00 · 3 agents running</span></span>
-    <span class="ftag l" style="--c:20;--r:1"><i></i><span class="zh">号池 · 换到 Codex · Pro</span><span class="en">pool · switched to Codex · Pro</span></span>
+    <canvas class="field" id="field" aria-label="一周 168 小时：横向 24 小时，纵向 7 天；工作日 9 点到 18 点亮起" data-aria-en="A week of 168 hours: 24 hours across, 7 days down; weekdays 9 to 18 lit" role="img"></canvas>
+    <span class="ftag" style="--c:10;--r:2"><span class="ft-l"><i></i><span class="zh">你在 · 周三 10:00</span><span class="en">you · Wed 10:00</span></span></span>
+    <span class="ftag" style="--c:15;--r:0"><span class="ft-l"><i></i><span class="zh">号池 · 额度到 80% · 换号</span><span class="en">pool · 80% used · next account</span></span></span>
+    <span class="ftag" style="--c:3;--r:5"><span class="ft-l"><i></i><span class="zh">station · 周六 03:00 · 3 个 agent 在跑</span><span class="en">station · Sat 03:00 · 3 agents running</span></span></span>
   </div>
 </section>
 
@@ -166,29 +168,29 @@
         <span class="eyebrow"><svg class="ico"><use href="#i-spark"/></svg><span class="zh">产品</span><span class="en">Product</span></span>
         <h2 id="product-title"><span class="zh">三件事，让每台电脑都接着干<span class="hit">，</span></span><span class="en">Three things keep every computer working<span class="hit">,</span></span></h2>
       </div>
-      <p class="lead"><span class="zh">agent 本身不变，还是官方命令行。monoid 管的是它们之外的事：用哪个号、谁来指挥、在哪块屏幕上看。</span><span class="en">The agents stay as they are: their official command-line tools. monoid handles everything around them: which account runs, who gives directions, and which screen you follow it on.</span></p>
+      <p class="lead"><span class="zh">agent 还是官方命令行，monoid 管它们之外的<span class="nb">三件事：</span>用哪个号，谁来指挥，在哪块屏幕上看。</span><span class="en">The agents stay their official command-line tools. monoid handles the rest: which account runs, who directs it, and which screen you follow it on.</span></p>
     </div>
 
-    <div class="overview rv" data-tabs>
+    <div class="overview rv" data-tabs="stack">
       <ul class="ov-list">
         <li class="ov-item" data-on>
-          <button type="button" data-tab id="ov-t1" aria-controls="ov-p1" aria-expanded="true"><svg class="ico"><use href="#i-pool"/></svg><span class="zh">号池</span><span class="en">Account pool</span><span class="num">01</span></button>
+          <button type="button" data-tab id="ov-t1" aria-controls="ov-p1" aria-expanded="true"><span class="ov-l"><svg class="ico"><use href="#i-pool"/></svg><span class="zh">号池</span><span class="en">Account pool</span></span><span class="num">01</span></button>
           <div class="ov-text"><div>
-            <p><span class="zh">Claude、ChatGPT、Google AI 的订阅账号和 API 密钥放进同一个池子。新对话自动分给还有余量的号，5 小时额度用到 80% 就让位。</span><span class="en">Claude, ChatGPT and Google AI subscriptions and API keys go into one pool. Each new chat goes to an account with room left, and one that has used 80% of its 5-hour limit steps aside.</span></p>
+            <p><span class="zh">Claude、ChatGPT、Google AI 的订阅和 <span class="nb">API 密钥</span>放进<span class="nb">一个池子</span>。新对话交给还有余量的号，<span class="nb">5 小时额度</span>用到 80% 的<span class="nb">排到最后。</span></span><span class="en">Claude, ChatGPT and Google AI subscriptions and API keys share one pool. Each new chat goes to an account with room left; one past 80% of its 5-hour limit goes last.</span></p>
             <a href="#pool"><span class="zh">号池怎么分号</span><span class="en">How the pool picks</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
           </div></div>
         </li>
         <li class="ov-item">
-          <button type="button" data-tab id="ov-t2" aria-controls="ov-p2" aria-expanded="false"><svg class="ico"><use href="#i-team"/></svg><span class="zh">协同</span><span class="en">Teams</span><span class="num">02</span></button>
+          <button type="button" data-tab id="ov-t2" aria-controls="ov-p2" aria-expanded="false"><span class="ov-l"><svg class="ico"><use href="#i-team"/></svg><span class="zh">协同</span><span class="en">Teams</span></span><span class="num">02</span></button>
           <div class="ov-text"><div>
-            <p><span class="zh">Slack thread 和 App 里，大家和同一个 agent 说话。station 之间互相派任务、共享账号，构建交给最空的那台。</span><span class="en">In a Slack thread or the app, everyone talks to the same agent. Stations hand each other tasks and share accounts, and a build goes to whichever machine is least busy.</span></p>
+            <p><span class="zh">在 Slack thread 或 App 里，整个团队和同一个 <span class="nb">agent 说话。</span>电脑之间互相派任务、借账号，构建交给<span class="nb">最空的那台。</span></span><span class="en">In a Slack thread or the app, the whole team talks to the same agent. Your computers hand each other tasks and lend each other accounts; a build goes to the least busy one.</span></p>
             <a href="#teams"><span class="zh">团队怎么一起用</span><span class="en">How teams use it</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
           </div></div>
         </li>
         <li class="ov-item">
-          <button type="button" data-tab id="ov-t3" aria-controls="ov-p3" aria-expanded="false"><svg class="ico"><use href="#i-devices"/></svg><span class="zh">多端</span><span class="en">Every device</span><span class="num">03</span></button>
+          <button type="button" data-tab id="ov-t3" aria-controls="ov-p3" aria-expanded="false"><span class="ov-l"><svg class="ico"><use href="#i-devices"/></svg><span class="zh">多端</span><span class="en">Every device</span></span><span class="num">03</span></button>
           <div class="ov-text"><div>
-            <p><span class="zh">iPhone（含 iPhone Duo）、Android、Mac、Windows 和网页。Mac 上等你审核的任务，手机上同时收到通知，在哪块屏幕上都能接着看。</span><span class="en">iPhone (iPhone Duo included), Android, Mac, Windows and the web. A task waiting for review on your Mac pings your phone too, and you can pick it up on any screen.</span></p>
+            <p><span class="zh">iPhone（含 iPhone Duo）、Android、Mac、Windows 和网页。Mac 上的任务等你审核时，手机同时收到通知，换哪块屏幕都能<span class="nb">接着看。</span></span><span class="en">iPhone (and iPhone Duo), Android, Mac, Windows and the web. When a task on your Mac needs review, your phone is notified too; pick it up on any screen.</span></p>
             <a href="#devices"><span class="zh">看看每一端</span><span class="en">See each device</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
           </div></div>
         </li>
@@ -196,7 +198,7 @@
 
       <div class="stage">
         <!-- 01 Account pool -->
-        <div class="pane" id="ov-p1">
+        <div class="pane" id="ov-p1" data-on>
           <div class="win">
             <div class="win-bar"><i></i><i></i><i></i><span><span class="zh">号池 · Acme</span><span class="en">Account pool · Acme</span></span></div>
             <div class="win-body">
@@ -209,12 +211,12 @@
                 <div class="acct"><span class="logo" style="background:var(--graphite)">D</span><span><b>DeepSeek API</b><small><span class="zh">密钥 · 用前要你批准</span><span class="en">Key · needs your approval</span></small></span><span class="meter"><i style="width:73%"></i></span><span class="pct">73%</span></div>
                 <div class="acct out"><span class="logo" style="background:var(--graphite)">C</span><span><b>Claude Pro · Laptop</b><small><span class="zh">登录已失效，跳过</span><span class="en">Signed out, skipped</span></small></span><span class="meter"><i style="width:0"></i></span><span class="pct">—</span></div>
               </div>
-              <span class="bubble agent"><span class="zh">新对话交给 <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>Claude Max · Alex</span>：本周还剩 64%，周四就重置，该先用它。</span><span class="en">New chat goes to <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>Claude Max · Alex</span>: 64% left and it resets Thursday, so it goes first.</span><svg class="tail"><use href="#tail"/></svg></span>
+              <span class="bubble agent beat"><span class="zh">新对话交给 <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>Claude Max · Alex</span>：本周还剩 64%，周四就重置，该先用它。</span><span class="en">New chat goes to <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>Claude Max · Alex</span>: 64% left and it resets Thursday, so it goes first.</span><svg class="tail"><use href="#tail"/></svg></span>
             </div>
           </div>
         </div>
         <!-- 02 Teams -->
-        <div class="pane" id="ov-p2" hidden>
+        <div class="pane" id="ov-p2" inert>
           <div class="win">
             <div class="win-bar"><i></i><i></i><i></i><span>#eng-api · Slack</span></div>
             <div class="win-cols">
@@ -231,13 +233,13 @@
                 <span class="bubble agent"><span class="zh">orders 表少了 (user_id, created_at) 联合索引。加上后 p99 回到 120 ms，迁移在 <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>0042_orders_index.sql</span></span><span class="en">The orders table was missing a (user_id, created_at) index. With it, p99 is back to 120 ms; the migration is in <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>0042_orders_index.sql</span></span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
                 <span class="who r">Alex <span class="av" style="background:var(--ink)">A</span></span>
                 <span class="bubble user"><span class="zh">合进去，在 Server 上再跑一遍压测</span><span class="en">Merge it, and run the load test again on Server</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                <div class="act"><i class="ag"></i><span class="zh">在 Server 上跑压测</span><span class="en">Running the load test on Server</span><span class="t">8s</span></div>
+                <div class="act beat"><i class="ag"></i><span class="zh">在 Server 上跑压测</span><span class="en">Running the load test on Server</span><span class="t">8s</span></div>
               </div>
             </div>
           </div>
         </div>
         <!-- 03 Every device: two devices, one event -->
-        <div class="pane" id="ov-p3" hidden>
+        <div class="pane" id="ov-p3" inert>
           <div class="compose-2">
             <div class="win" style="max-width:600px">
               <div class="win-bar"><i></i><i></i><i></i><span>monoid · Willow</span></div>
@@ -256,7 +258,7 @@
               <div class="notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em><span class="zh">现在</span><span class="en">now</span></em></b><span class="zh">更新说明写好了，等你看</span><span class="en">Release notes are ready for your review</span></div></div>
               <div class="scr">
                 <div class="status"><span>9:41</span><span>●●●</span></div>
-                <div class="app-h" style="margin-top:56px"><span class="zh">对话</span><span class="en">Chats</span></div>
+                <div class="app-h" style="margin-top:72px"><span class="zh">对话</span><span class="en">Chats</span></div>
                 <div class="list">
                   <div class="row on"><b><span class="zh">更新说明</span><span class="en">Release notes</span><em>Willow</em></b><small><span class="zh">待审核</span><span class="en">Needs Review</span></small></div>
                   <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">API p99</span><em>Server</em></b><small><span class="zh">压测进行中</span><span class="en">Load test running</span></small></div>
@@ -477,7 +479,7 @@
                   <div class="win-body body-web">
                     <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
                     <span class="bubble agent"><span class="zh">改好了，在你手机的虚拟屏幕上点了一遍，按钮不再被挡住</span><span class="en">Fixed, and checked on your phone's virtual screen: the button shows</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                    <div class="task" style="align-self:flex-start;width:70%"><div class="task-t"><svg class="ico c-mut"><use href="#i-run"/></svg>pnpm test login</div><span class="bar-g" style="width:90%"></span><span class="bar-g" style="width:62%"></span></div>
+                    <div class="act"><i class="ag"></i><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span><span class="t">12s</span></div>
                   </div>
                 </div>
               </div>
@@ -584,10 +586,7 @@
               <div class="chatv">
                 <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
                 <span class="bubble agent"><span class="zh">改好了，正在 Willow 上跑测试</span><span class="en">Fixed, running the tests on Willow</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                <div class="task" style="padding:9px 10px">
-                  <div class="task-t" style="font-size:12px"><svg class="ico c-mut"><use href="#i-run"/></svg>pnpm test login</div>
-                  <span class="bar-g" style="width:88%"></span><span class="bar-g" style="width:60%"></span>
-                </div>
+                <div class="act"><i class="ag"></i><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span><span class="t">12s</span></div>
               </div>
             </div>
           </div>

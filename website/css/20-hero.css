@@ -1,32 +1,105 @@
-/* ---------- Hero ---------- */
-.hero .top { display: flex; justify-content: space-between; gap: var(--gap); flex-wrap: wrap; align-items: baseline; padding-block: clamp(28px, 4vw, 60px) clamp(20px, 2.6vw, 40px); font-size: var(--t-small); font-weight: 500; }
+/* ---------- Hero ----------
+   Base ground, the open sentence, its lead and two calls to action; under a hairline, the key to the 168 Week that
+   fills the band's bottom edge. Vertical spacing steps in fractions of 1U (the 24-unit grid), clamped for small
+   screens. */
+.hero .top { display: flex; justify-content: space-between; gap: 8px var(--gap); flex-wrap: wrap; align-items: baseline;
+  padding-block: clamp(24px, calc(var(--u) * .8), 56px) clamp(20px, calc(var(--u) * .55), 40px);
+  font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); font-weight: 500; }
 .hero .top .mut { color: var(--mut); font-weight: 400; }
 .hero h1 { max-width: 15ch; }
-.hero-body { display: grid; grid-template-columns: minmax(0, 13fr) minmax(0, 9fr); gap: clamp(24px, 4vw, 80px); align-items: end; padding-block: clamp(28px, 3.4vw, 52px) clamp(32px, 4vw, 60px); }
-.hero .lead { color: var(--brand-ink); }
-.hero .lead b { color: var(--ink); font-weight: 500; }
+/* The lead holds about 11U (two lines in Chinese, three in English at 1440); the calls to action end on the right margin,
+   their bottom on the lead's last line. */
+.hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px var(--u); align-items: end;
+  padding-block: clamp(20px, calc(var(--u) * .7), 52px) clamp(28px, calc(var(--u) * .8), 60px); }
+.hero .lead { max-width: max(calc(var(--u) * 11), 20em); color: var(--brand-ink); }
+.hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
 .hero .actions { justify-content: flex-end; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px clamp(18px, 3vw, 48px); align-items: center; padding-bottom: clamp(16px, 2vw, 28px); font-size: var(--t-small); color: var(--mut); border-top: 1px solid var(--hair); padding-top: 16px; }
+
+/* The key: a title, the two kinds of cell with the field's own comma as swatch, and the clock with its pause. */
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px clamp(20px, 2.4vw, 40px);
+  padding-block: 14px clamp(16px, calc(var(--u) * .35), 24px); border-top: 1px solid var(--hair);
+  font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); color: var(--mut); }
 .legend b { color: var(--ink); font-weight: 500; }
-.legend i { font-style: normal; color: var(--brand-ink); font-weight: 500; }
-.legend .tool { margin-left: auto; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1px var(--hair); color: var(--fg); font-size: 13px; font-weight: 500; cursor: pointer; }
+.legend .key { display: inline-flex; align-items: center; gap: 8px; }
+.legend .key b { margin-right: .35em; }
+:root[data-lang=en] .legend .key b { margin-right: 0; }
+.legend .sw { width: 15px; height: 16px; flex: none; margin-top: -1px; }
+.legend .sw.on { fill: #fff; }
+.legend .sw.off { fill: var(--brand-haze); }
+.legend .ctl { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; }
+.legend .tool {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px 0 9px; border: 0; border-radius: 999px;
+  background: transparent; box-shadow: inset 0 0 0 1px var(--hair); color: var(--ink); font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: background-color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.legend .tool::before { content: ""; position: absolute; inset: -8px -4px; } /* a 44 px target on touch */
+.legend .tool svg { width: 10px; height: 10px; flex: none; fill: currentColor; }
+.legend .tool svg.play { margin-right: -1px; transform: translateX(1px); } /* optical centre of the triangle */
+.legend .tool:active { transform: scale(.96); }
+@media (hover: hover) and (pointer: fine) {
+  .legend .tool:hover { box-shadow: inset 0 0 0 1px var(--ink); background: rgba(255,255,255,.18); }
+}
+
+/* ---------- The 168 Week ---------- */
 .field { display: block; width: 100%; height: auto; }
+.end .field { background: var(--brand); }
+.field-wrap { position: relative; }
+/* A note rings a real cell (1U square: the field is 24 cells across and 7 down wherever notes show) and a leader runs
+   from the ring to a mono label. */
+.ftag { position: absolute; left: calc(var(--c) / 24 * 100%); top: calc(var(--r) / 7 * 100%); width: calc(100% / 24); aspect-ratio: 1; pointer-events: none; }
+.ftag::before { content: ""; position: absolute; inset: 5%; border-radius: 6px; box-shadow: 0 0 0 1px #fff; }
+.ftag::after { content: ""; position: absolute; top: 50%; left: 95%; width: 45%; height: 1px; margin-top: -.5px; background: #fff; transform-origin: 0 50%; }
+.ft-l { position: absolute; left: 140%; top: 50%; display: inline-flex; align-items: center; gap: 7px; height: 24px; margin-top: -12px; padding: 0 9px 0 8px;
+  border-radius: 4px; background: #fff; color: var(--ink); font-family: var(--mono); font-size: 12px; line-height: 1; letter-spacing: 0; white-space: nowrap;
+  box-shadow: 0 6px 16px -8px rgba(42,11,2,.45); }
+.ft-l i { width: 8px; height: 8px; flex: none; border-radius: 1.5px; background: var(--brand); }
+@media (max-width: 960px) {
+  .ftag { display: none; }
+}
+
+/* ---------- Entrance, once, on load ----------
+   The words are painted at the first frame and rise into place on a strong ease-out, one after another; the headline
+   and the lead (the largest text, what LCP measures) start fading at once, so their paint is never held back. The
+   Week fades in once main.js has drawn it (the canvas is blank until then), and its notes follow: ring, leader, label. */
+@keyframes hero-fade { from { opacity: 0; } }
+@keyframes hero-dim { from { opacity: .25; } } /* never 0: an element painted transparent is not an LCP candidate */
+@keyframes hero-rise { from { transform: translateY(14px); } }
+@keyframes ft-ring { from { opacity: 0; transform: scale(.88); } }
+@keyframes ft-lead { from { transform: scaleX(0); } }
+@keyframes ft-label { from { opacity: 0; transform: translateX(-6px); } }
+.hero :is(.top, h1, .lead, .actions, .legend) {
+  animation: hero-fade 560ms var(--ease-out) both, hero-rise 900ms var(--ease-out) both;
+  animation-delay: var(--fd, 0ms), calc(var(--hi, 0) * 60ms);
+}
+.hero .top { --hi: 0; }
+.hero h1 { --hi: 1; }
+.hero .lead { --hi: 2; }
+.hero :is(h1, .lead) { animation-name: hero-dim, hero-rise; }
+.hero .actions { --hi: 3; --fd: 120ms; }
+.hero .legend { --hi: 4; --fd: 180ms; }
+.hero .field:not([data-drawn]), .field:not([data-drawn]) ~ .ftag { visibility: hidden; }
+.hero .field[data-drawn] { animation: hero-fade 800ms var(--ease-out) 120ms both; }
+.field[data-drawn] ~ .ftag::before { animation: ft-ring 420ms var(--ease-out) both; animation-delay: calc(560ms + var(--n) * 160ms); }
+.field[data-drawn] ~ .ftag::after { animation: ft-lead 360ms var(--ease-out) both; animation-delay: calc(700ms + var(--n) * 160ms); }
+.field[data-drawn] ~ .ftag .ft-l { animation: ft-label 420ms var(--ease-out) both; animation-delay: calc(820ms + var(--n) * 160ms); }
+.ftag:nth-of-type(1) { --n: 0; }
+.ftag:nth-of-type(2) { --n: 1; }
+.ftag:nth-of-type(3) { --n: 2; }
+/* Reduced motion: nothing moves; the words, the field and its notes only fade in, briefly. */
+@media (prefers-reduced-motion: reduce) {
+  .hero :is(.top, h1, .lead, .actions, .legend), .hero .field[data-drawn] { animation: hero-fade 300ms ease both !important; }
+  .field[data-drawn] ~ .ftag::before, .field[data-drawn] ~ .ftag::after, .field[data-drawn] ~ .ftag .ft-l { animation: hero-fade 300ms ease 200ms both !important; }
+}
+
+/* ---------- Smaller screens ---------- */
 @media (max-width: 960px) {
   .hero-body { grid-template-columns: minmax(0, 1fr); }
   .hero .actions { justify-content: flex-start; }
 }
 @media (max-width: 640px) {
-  .legend .tool { margin-left: 0; }
+  .hero .actions .btn { flex: 1 1 0; min-width: max-content; } /* equal halves, or full width each when they don't fit */
+  .legend { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .legend .lg-title { margin-bottom: 2px; }
+  .legend .ctl { margin: 6px 0 0; }
 }
-.field-wrap { position: relative; }
-.ftag { position: absolute; left: calc((var(--c) + .5) / 24 * 100%); top: calc((var(--r) + .5) / 7 * 100%); display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px;
-  margin: -12px 0 0 calc(100% / 24 * .55); border-radius: 4px; background: #fff; color: var(--ink); font-family: var(--mono); font-size: 12px; white-space: nowrap; box-shadow: 0 6px 16px -8px rgba(42,11,2,.45); pointer-events: none; }
-.ftag i { width: 8px; height: 8px; border-radius: 1.5px; background: var(--brand); }
-.ftag::before { content: ""; position: absolute; right: 100%; top: 50%; width: calc(100vw / 24 * .3); height: 1px; background: #fff; }
-.ftag.r::before { width: calc(100vw / 24 * .3); }
-@media (max-width: 960px) {
-  .ftag { display: none; }
-}
-.end .field { background: var(--brand); }
-.ftag.l { margin-left: calc(100% / 24 * -.55); transform: translateX(-100%); }
-.ftag.l::before { right: auto; left: 100%; }

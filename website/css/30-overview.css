@@ -1,37 +1,122 @@
-/* ---------- Product overview (tabs left, stage right) ---------- */
-.overview { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 15fr); gap: clamp(24px, 3.4vw, 64px); align-items: stretch; }
+/* ---------- Product overview: three items beside one stage ----------
+   The list and the stage are one control. Picking an item opens its text (the others close) and turns the stage to its
+   picture. The pictures sit on top of one another, each in its place in the list's order: earlier ones rest just above,
+   later ones just below, so a switch moves the way the list does, and a quick second click turns it round from where
+   it is (transitions, not keyframes). While nobody is using it on a wide screen, the active item's top rule fills as a
+   timer and the overview turns to the next item (main.js: data-auto, data-run). */
+.overview { --ov-dwell: 7s; display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 15fr); gap: clamp(24px, 3.4vw, 64px); align-items: stretch; }
+
+/* ---- The list ---- */
 .ov-list { display: flex; flex-direction: column; }
-.ov-item { border-top: 1px dashed #CFCFD2; }
+.ov-item { position: relative; border-top: 1px dashed #CFCFD2; }
 .ov-item:last-child { border-bottom: 1px dashed #CFCFD2; }
-.ov-item button { all: unset; box-sizing: border-box; display: flex; width: 100%; align-items: center; gap: 12px; padding: clamp(18px, 1.8vw, 26px) 0; cursor: pointer; font-size: clamp(22px, 1.9vw, 30px); font-weight: 600; letter-spacing: -.015em; color: #6B6D72; transition: color .15s; }
-.ov-item button:focus-visible { outline: 2px solid var(--brand-deep); outline-offset: 2px; }
-.ov-item button .ico { width: 26px; height: 26px; flex: none; }
-.ov-item button .num { margin-left: auto; font-size: var(--t-small); font-weight: 500; color: #6B6D72; font-feature-settings: "tnum"; }
-.ov-item button:hover { color: var(--graphite); }
-.ov-item[data-on] button { color: var(--ink); }
-.ov-item[data-on] button .ico { color: var(--brand-deep); }
-.ov-item .ov-text { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
+/* The active item's rule: drawn over the dashed hairline from the left. Picked by hand it draws at once; turning on
+   its own, it is the timer. */
+.ov-item::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--ink);
+  transform: scaleX(0); transform-origin: left center; pointer-events: none;
+  transition: transform var(--dur-ui) var(--ease-out);
+}
+.ov-item[data-on]::before { transform: scaleX(1); transition-duration: 480ms; }
+.overview[data-auto] .ov-item[data-on]::before { animation: ov-dwell var(--ov-dwell) linear both; animation-play-state: paused; }
+.overview[data-auto][data-run] .ov-item[data-on]::before { animation-play-state: running; }
+@keyframes ov-dwell { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.ov-item button {
+  all: unset; box-sizing: border-box; display: flex; width: 100%; align-items: center; gap: 12px;
+  padding: clamp(18px, 1.8vw, 26px) 0; cursor: pointer; color: #6B6D72;
+  font-size: clamp(22px, 1.9vw, 30px); font-weight: 600; line-height: 1.2; letter-spacing: -.015em;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: color var(--dur-ui) ease;
+}
+.ov-item[data-on] button { color: var(--ink); cursor: default; }
+.ov-item button:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 6px; }
+/* Icon and name press in together (feedback on press, from the left edge they hang on). */
+.ov-l { display: inline-flex; align-items: center; gap: 14px; transform-origin: left center; transition: transform var(--dur-press) var(--ease-out); }
+.ov-item button:active .ov-l { transform: scale(.97); }
+.ov-l .ico { width: 1em; height: 1em; flex: none; margin-block: -.1em; stroke-width: 1.8; transition: color var(--dur-ui) ease; }
+.ov-item[data-on] .ov-l .ico { color: var(--brand-deep); }
+.ov-item button .num { margin-left: auto; font-size: var(--t-small); font-weight: 500; letter-spacing: var(--tr-small); color: #6B6D72; font-feature-settings: "tnum"; }
+.ov-item[data-on] button .num { color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  .ov-item:not([data-on]) button:hover { color: var(--ink); }
+}
+
+/* The text opens and closes by its own height (the one layout transition here: a small block, beside a stage that
+   keeps its size); the words fade in once there is room and out at once, and a closed item's link takes no Tab stop. */
+.ov-text { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 360ms var(--ease-drawer); }
 .ov-item[data-on] .ov-text { grid-template-rows: 1fr; }
-.ov-text > div { overflow: hidden; }
-.ov-text p { color: var(--graphite); padding-bottom: clamp(18px, 1.8vw, 26px); max-width: 30em; text-wrap: pretty; }
-.ov-text a { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; text-decoration: none; color: var(--brand-deep); margin-top: -6px; padding-bottom: clamp(18px, 1.8vw, 26px); font-size: var(--t-small); }
-.stage { position: relative; border-radius: 20px; background: var(--brand); overflow: hidden; min-height: clamp(420px, 38vw, 640px); display: grid; place-items: center; padding: clamp(24px, 3vw, 56px); }
-.stage .pane { width: 100%; display: grid; place-items: center; }
-.stage .pane[hidden] { display: none !important; }
-.stage .pane { animation: rise .45s cubic-bezier(.2,.7,.2,1); }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ov-text > div {
+  min-height: 0; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  opacity: 0; visibility: hidden; transition: opacity 120ms ease, visibility 0s linear 360ms;
+}
+.ov-item[data-on] .ov-text > div { opacity: 1; visibility: visible; transition: opacity 280ms var(--ease-out) 90ms, visibility 0s; }
+.ov-text p { color: var(--graphite); max-width: 30em; text-wrap: pretty; }
+.ov-text a {
+  display: inline-flex; gap: 6px; align-items: center; margin-bottom: clamp(20px, 2vw, 28px);
+  font-size: var(--t-small); font-weight: 500; letter-spacing: var(--tr-small); line-height: 1.3; text-decoration: none; color: var(--brand-deep);
+}
+.ov-text a svg { transition: transform var(--dur-ui) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .ov-text a:hover svg { transform: translateX(3px); }
+}
+
+/* ---- The stage ---- */
+.stage {
+  position: relative; border-radius: 20px; background: var(--brand); overflow: hidden; isolation: isolate;
+  min-height: clamp(420px, 38vw, 640px); display: grid; place-items: center; padding: clamp(24px, 3vw, 56px);
+}
+/* Every picture in the same cell, so the stage takes the tallest and never changes size. */
+.stage > .pane {
+  --y: -14px; grid-area: 1 / 1; width: 100%; display: grid; place-items: center;
+  opacity: 0; visibility: hidden; transform: translate3d(0, var(--y), 0) scale(.98); filter: blur(4px);
+  /* Leaving: quicker than arriving, and gone (visibility) once faded. */
+  transition: opacity 200ms ease, transform 280ms var(--ease-out), filter 200ms ease, visibility 0s linear 280ms;
+}
+.stage > .pane[data-on] ~ .pane { --y: 14px; }
+.stage > .pane[data-on] {
+  opacity: 1; visibility: visible; transform: none; filter: none;
+  transition: opacity 300ms var(--ease-out), transform 380ms var(--ease-out), filter 300ms var(--ease-out), visibility 0s;
+}
+/* The event each picture is about lands a beat after it: the pool's choice, the run starting, the notification
+   dropping in from the phone's top edge. Its own `translate`, so the parts' transforms stay theirs. */
+.stage > .pane :is(.beat, .notif) { --from: 8px; opacity: 0; translate: 0 var(--from); transition: opacity 150ms ease, translate 150ms var(--ease-out); }
+.stage > .pane .notif { --from: -14px; animation: none; }
+.stage > .pane[data-on] :is(.beat, .notif) {
+  opacity: 1; translate: 0 0;
+  transition: opacity 320ms var(--ease-out) 300ms, translate 420ms var(--ease-out) 300ms;
+}
+/* Before the band has come in (it waits below the fold), the event waits too, and lands as the band arrives. */
+.overview.rv-wait .stage > .pane[data-on] :is(.beat, .notif) { opacity: 0; translate: 0 var(--from); }
+.overview.rv-in .stage > .pane[data-on] :is(.beat, .notif) { transition-delay: 520ms; }
+/* The pictures' small loops (the agent's ring, the busy spinner) run only in the picture shown, while on screen. */
+.stage .ag::after, .stage .mk-busy { animation-play-state: paused; }
+.overview.play .pane[data-on] .ag::after, .overview.play .pane[data-on] .mk-busy { animation-play-state: running; }
+
 /* Two devices, one event: the phone sits over the window's right margin, never its content. */
 .compose-2 { position: relative; width: 100%; max-width: 760px; display: flex; align-items: center; padding-right: 150px; }
 .compose-2 .win-body { padding-right: 64px; }
 .compose-2 .phone { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 196px; }
+
+/* Reduced motion: no movement and no blur, a short cross-fade only; the text opens at once. */
+@media (prefers-reduced-motion: reduce) {
+  .stage > .pane { transform: none !important; filter: none !important; transition: opacity 200ms ease, visibility 0s linear 200ms !important; }
+  .stage > .pane[data-on] { transition: opacity 200ms ease, visibility 0s !important; }
+  .stage :is(.beat, .notif) { translate: none !important; }
+  .ov-item::before { transform: scaleX(1); opacity: 0; }
+  .ov-item[data-on]::before { opacity: 1; }
+}
+
 @media (max-width: 960px) {
   .overview { grid-template-columns: minmax(0, 1fr); }
-  .stage { min-height: 420px; }
+  .stage { min-height: 0; }
 }
 @media (max-width: 640px) {
   .compose-2 { padding-right: 96px; }
   .compose-2 .win-body { padding-right: 52px; }
   .compose-2 .phone { width: 140px; }
   .compose-2 .phone .list small, .compose-2 .notif { font-size: 9.5px; }
-  .stage { padding: 18px; }
+  /* The window is narrow here: the task card takes its full width rather than three-quarters of it. */
+  .compose-2 .task { width: auto !important; align-self: stretch !important; }
+  .stage { padding: 18px; border-radius: 16px; }
 }

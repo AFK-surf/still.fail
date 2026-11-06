@@ -135,9 +135,13 @@
   setLang(root.dataset.lang === "en" ? "en" : "zh", false);
 
   // ---- Tabs (the product overview and the devices) ----
+  // data-tabs: panels are shown and hidden ([hidden]). data-tabs="stack" (the overview): the panels sit on top of one
+  // another and the active one is marked [data-on] (the others inert), so CSS can cross-fade them; each picture keeps
+  // its place in the list's order (earlier ones above, later ones below), so a switch moves the way the list does.
   for (const group of $$("[data-tabs]")) {
     // Real tabs (role=tab) keep one tab stop and arrow keys; the overview's accordion buttons (data-tab) are each a stop.
     const tabs = $$('[role="tab"], [data-tab]', group);
+    const stack = group.dataset.tabs === "stack";
     const select = (tab, focus) => {
       for (const t of tabs) {
         const on = t === tab;
@@ -145,11 +149,42 @@
         else { t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1; }
         t.closest(".ov-item")?.toggleAttribute("data-on", on);
         const panel = document.getElementById(t.getAttribute("aria-controls"));
-        if (panel) panel.hidden = !on;
+        if (!panel) continue;
+        if (stack) { panel.toggleAttribute("data-on", on); panel.inert = !on; } else panel.hidden = !on;
       }
       if (focus) tab.focus();
     };
     const pick = (i, focus) => select(tabs[i], focus);
+    if (stack) {
+      // The overview turns to its next item on its own while nobody is using it, so a reader who only scrolls sees all
+      // three pictures. The active item's top rule fills as its timer (a CSS animation, so pausing is exact and costs
+      // no script); its end turns the page. It runs only on wide screens (on narrow ones the text above the picture
+      // would push it about), while at least half of it is on screen and the tab is visible; it pauses while the
+      // pointer or the focus is inside, and stops for good once the reader picks an item. Never with reduced motion.
+      const wide = matchMedia("(min-width: 961px)");
+      let stopped = reduce, seen = false, inside = false;
+      const sync = () => {
+        const auto = !stopped && wide.matches;
+        group.toggleAttribute("data-auto", auto);
+        group.toggleAttribute("data-run", auto && seen && !inside && !document.hidden);
+      };
+      new IntersectionObserver(([e]) => {
+        seen = e.intersectionRatio >= 0.5;
+        group.classList.toggle("play", e.isIntersecting); // the pictures' own loops run only while on screen
+        sync();
+      }, { threshold: [0, 0.5] }).observe(group);
+      const hold = () => { inside = group.matches(":hover") || group.contains(document.activeElement); sync(); };
+      for (const ev of ["pointerenter", "pointerleave", "focusin", "focusout"]) group.addEventListener(ev, () => setTimeout(hold));
+      document.addEventListener("visibilitychange", sync);
+      wide.addEventListener("change", sync);
+      group.addEventListener("animationend", (e) => {
+        if (e.animationName !== "ov-dwell" || stopped) return;
+        const i = tabs.findIndex((t) => t.getAttribute("aria-expanded") === "true");
+        pick((i + 1) % tabs.length);
+      });
+      tabs.forEach((t) => t.addEventListener("click", () => { stopped = true; sync(); }));
+      sync();
+    }
     tabs.forEach((t, i) => {
       t.addEventListener("click", () => pick(i));
       if (t.hasAttribute("data-tab")) return;
@@ -404,14 +439,31 @@
       canvas.width = Math.round(w * d);
       canvas.height = Math.round(h * d);
       ctx.setTransform(d, 0, 0, d, 0, 0);
+      clear();
+      // Drawn: the hero fades the field in and brings its notes after it (CSS); until now the canvas was blank.
+      canvas.dataset.drawn = "";
+    }
+    // The notes on the field (.ftag): the cells under each label are left empty, so a label sits in a clean lane
+    // instead of on top of half-hidden commas. Measured again when a label changes width (the language).
+    const notes = $$(".ftag", canvas.parentElement);
+    const empty = new Set();
+    function clear() {
+      empty.clear();
+      for (const t of notes) {
+        const label = t.firstElementChild;
+        if (offset || !cell || !label?.offsetWidth) continue; // hidden, or the field is cropped (a phone)
+        const r = Math.round(t.offsetTop / cell), x = t.offsetLeft + label.offsetLeft;
+        for (let c = Math.floor(x / cell); c <= Math.floor((x + label.offsetWidth - 1) / cell) && c < 24; c++) empty.add(r * 24 + c);
+      }
       draw();
     }
+    if (notes.length) { const ro = new ResizeObserver(() => cell && clear()); for (const t of notes) ro.observe(t.firstElementChild); }
     function draw() {
       ctx.clearRect(0, 0, w, cell * 7);
       const k = cell / 26;
       for (let r = 0; r < 7; r++) for (let c = 0; c < 24; c++) {
         const x = offset + c * cell + cell / 2;
-        if (x < -cell || x > w + cell) continue;
+        if (x < -cell || x > w + cell || empty.has(r * 24 + c)) continue;
         ctx.save();
         ctx.translate(x, r * cell + cell / 2);
         ctx.rotate(((c * 15 + r * shift + phase) * Math.PI) / 180);
@@ -453,10 +505,11 @@
   const pause = $("#pause");
   const syncPause = () => {
     pause.innerHTML = hero.running
-      ? '<span class="zh">暂停</span><span class="en">Pause</span>'
-      : '<span class="zh">继续</span><span class="en">Play</span>';
+      ? '<svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1" width="2.4" height="8" rx=".6"/><rect x="6.1" y="1" width="2.4" height="8" rx=".6"/></svg><span class="zh">暂停</span><span class="en">Pause</span>'
+      : '<svg class="play" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1.6v6.8a.6.6 0 0 0 .9.5l5.6-3.4a.6.6 0 0 0 0-1L2.9 1.1a.6.6 0 0 0-.9.5Z"/></svg><span class="zh">继续</span><span class="en">Play</span>';
   };
-  if (reduce) pause.hidden = true;
+  // Still under reduced motion: the clock and its pause have nothing to say.
+  if (reduce) pause.parentElement.hidden = true;
   pause.addEventListener("click", () => { hero.toggle(); syncPause(); });
   syncPause();
 })();
