@@ -1031,7 +1031,15 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
         self.set_by.push(s)
       }
       guard e.own is WatchOwned(o) else { abort("a watch without its own") }
+      // (told as a watch is told in a flush, run_effect: the watch running, nothing reading; what it asks for is its
+      // own, asker, not what read it)
+      let running = run.running
+      let sub = run.active_sub
+      run.running = Some(e)
+      run.active_sub = None
       (o.told)()
+      run.active_sub = sub
+      run.running = running
     }
   }
   v

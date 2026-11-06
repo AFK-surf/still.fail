@@ -223,6 +223,73 @@ fn af_kept_watch_told() -> Unit raise {
 }
 
 ///|
+// kept across runs: what the fourth stopped run below's watches read and set again as they read
+let af_self : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_self, what sets an effect made in the fourth stopped run going
+let af_trigger : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_self, what a watch made in the fourth stopped run and owned by none of it asked as it was
+// told at the end of its read (what it read set again as it read), done
+let af_kept_self : Array[String] = []
+
+///|
+test "panic: a run stopped in a layout, watches told as they read what they set, one read in a kept effect" {
+  af_run()
+  // (a watch owned by none of the run: kept; what it reads set again as it reads: told as its read ends)
+  let kept = @signals.watch(fn() {
+    @signals.after_flush(fn() { af_kept_self.push("after_flush") })
+    @signals.after_all_flushed(fn() { af_kept_self.push("after_all_flushed") })
+  })
+  // (the run's own, let go as a run begins, on_reset; read in an effect kept from the run: told as that effect runs)
+  let own = @signals.watch(fn() {
+    @signals.after_flush(fn() { af_note("the stopped run's own watch's after_flush, told as it read") })
+    @signals.after_all_flushed(fn() { af_note("the stopped run's own watch's after_all_flushed, told as it read") })
+  })
+  on_reset(fn() { own.stop() })
+  @signals.effect(fn() {
+    if af_trigger.get() > 0 {
+      own.read(fn() { af_self.set(af_self.get() + 1) }) |> ignore
+    }
+  })
+  |> ignore
+  @signals.afters_held(fn() {
+    kept.read(fn() { af_self.set(af_self.get() + 1) }) |> ignore
+    af_trigger.set(1)
+    af_reached.push("told as read")
+    abort("stopped")
+  })
+}
+
+///|
+test "a Tester started after a run stopped in a layout: what a kept watch asked as its read ended done, none of its own" {
+  af_stopped(["batch", "held", "watched", "told as read"])
+  af_next() |> ignore
+  af_kept_self_told()
+}
+
+///|
+/// wasm-gc, Wasm, JS: what the watch kept from the stopped layout asked as its read there ended, done as the Tester
+/// began (its own, kept), in the order of each way
+#cfg(any(target="wasm-gc", target="wasm", target="js"))
+fn af_kept_self_told() -> Unit raise {
+  assert_eq(
+    af_kept_self,
+    ["after_flush", "after_all_flushed"],
+    msg="the kept watch's, asked as its read in the stopped layout ended: done as the run began",
+  )
+}
+
+///|
+/// Native and LLVM: no stopped run here, no watch of it
+#cfg(any(target="native", target="llvm"))
+fn af_kept_self_told() -> Unit raise {
+  assert_eq(af_kept_self, [])
+}
+
+///|
 /// wasm-gc, Wasm, JS: each stopped run before, reached as far as its abort (what waited in it asked for), in order
 #cfg(any(target="wasm-gc", target="wasm", target="js"))
 fn af_stopped(runs : Array[String]) -> Unit raise {
