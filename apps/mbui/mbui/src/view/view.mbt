@@ -1991,12 +1991,9 @@ pub fn View::laying_out(self : View) -> Bool {
 /// once it is let go.
 pub fn View::made_after_layout(self : View, f : () -> Unit) -> Unit {
   guard self.laying_out() else { f(); return }
-  let (at, gen) = (self.at, self.gen)
+  let id = self.id()
   let tree = self.tree
-  tree.made_after.push(fn() {
-    let n = tree.nodes[at]
-    if n.live && n.gen == gen { f() }
-  })
+  tree.made_after.push(fn() { if tree.alive_id(id) { f() } })
 }
 
 ///|

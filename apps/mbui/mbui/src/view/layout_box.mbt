@@ -470,8 +470,7 @@ fn Tree::anchors_due(self : Tree, holder : Int, child : Int) -> Unit {
   guard self.anchor_readers.get(holder) is Some(rs) else { return }
   let due = []
   for r in rs {
-    let n = self.nodes[r.reader.at]
-    if n.live && n.gen == r.reader.gen && self.child_under(r.reader.at, holder) == child &&
+    if self.alive_id(r.reader) && self.child_under(r.reader.at, holder) == child &&
       self.anchor_size(r.target, holder) != r.seen {
       due.push(r.reader.at)
     }

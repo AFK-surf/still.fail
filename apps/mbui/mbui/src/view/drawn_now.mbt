@@ -64,10 +64,8 @@ pub fn View::drawn_now(self : View) -> DrawnNow? {
 /// in no event, now. Not done once it is let go. For what reads where things are once the event's own changes are in
 /// (View::drawn_now): a picture closed back to its thumbnail after the handler that closed it moved the list.
 pub fn View::after_event(self : View, f : () -> Unit) -> Unit {
-  let (at, gen) = (self.at, self.gen)
+  guard self.alive() else { return }
+  let id = self.id()
   let tree = self.tree
-  tree.after_event(fn() {
-    let n = tree.nodes[at]
-    if n.live && n.gen == gen { f() }
-  })
+  tree.after_event(fn() { if tree.alive_id(id) { f() } })
 }
