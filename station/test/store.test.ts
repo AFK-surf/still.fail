@@ -8,7 +8,7 @@ import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, newMessage,
 } from "../src/store/store.ts";
 import { addClientColumn, addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
@@ -56,6 +56,7 @@ import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREA
 import { FIRST_HOME_CHAT_MEMBERS, NEXT_HOME_CHAT_MEMBERS } from "../src/store/chat-list-home-source.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "../src/vault/pending-index.ts";
@@ -1343,7 +1344,7 @@ test("an options card is kept as options too, and a choice that closes it ends t
   assert.equal(store.pendingCard(t2.id), null);
   assert.equal(store.closeCard("local", t2.id, k, "合并"), true, "closing again is no change");
   assert.equal(h.changes.length, 2);
-  const answers = store.answersSince(0);
+  const answers = referenceAnswersSince(store, 0);
   assert.deepEqual(answers.map((a) => [a.question.n, a.by, a.answer]), [[k, "local", null]]);
   h.stop();
 });
@@ -1361,9 +1362,10 @@ test("the cards answered lately of some threads alone are those the whole statio
     return t.id;
   });
   const reader = read.openStore(data);
-  const whole = read.answersSince(reader, 0);
+  const whole = read.answersSince(reader, 0, threads);
   assert.deepEqual(whole.map((a) => a.question.thread).sort(), [...threads].sort());
   assert.deepEqual(read.answersSince(reader, 0, [threads[1]!]), whole.filter((a) => a.question.thread === threads[1]));
+  assert.deepEqual(read.answersSince(reader, 0, [threads[1]!, threads[1]!]), whole.filter((a) => a.question.thread === threads[1]));
   assert.deepEqual(read.answersSince(reader, 0, []), []);
 });
 
@@ -1375,7 +1377,7 @@ test("an agent withdraws its own card only", () => {
   assert.equal(store.withdrawCard("b", thread.id, "1.2"), false);
   assert.equal(store.withdrawCard("a", thread.id, "1.2"), true);
   assert.equal(store.pendingCard(thread.id), null);
-  assert.deepEqual(store.answersSince(0), [], "withdrawn is not answered");
+  assert.deepEqual(referenceAnswersSince(store, 0), [], "withdrawn is not answered");
   assert.ok(n > 0);
 });
 
@@ -1731,7 +1733,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [SESSION_UP_JOBS_END, ["a"]],
     [SESSION_UP_JOBS_FIRST, ["a", "100", 64]], [SESSION_UP_JOBS_NEXT, ["a", "1", "100", 64]],
     [WIDGET_SOURCE_POSITIONS_FIRST, [1, "100", 64]], [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 64]],
-    [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
+    [LATEST_DECISIONS, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
