@@ -48,11 +48,12 @@ pub fn View::list_room(self : View) -> ListRoom? {
 /// too, only to be measured, and let go in the same layout. So `make` makes a block's nodes and reads what they show,
 /// and starts nothing outside them (a draft, a call to the core, anything said): what is kept for a block is started
 /// as `seen` tells it came in sight, told as the layout that found it is done, of its moment, whether a frame is
-/// painted before what comes next or not: in sight as it was laid out (at an input's moment or a frame's), or gone
-/// across as it went on by itself (a fling, a wheel's notches easing in), whether the frames between were many or one;
-/// never one gone past as it was moved at once (a wheel's turn, a drag's move, its bar, put) nor as it was first laid
-/// out where it was scrolled to. How tall each that does not show was is forgotten as the column is laid out at another
-/// width or all words are measured anew.
+/// painted before what comes next or not (laid out within another's telling: in its turn after it, to the list if it
+/// is still there): in sight as it was laid out (at an input's moment or a frame's), or gone across as it went on by
+/// itself (a fling, a wheel's notches easing in), whether the frames between were many or one; never one gone past as
+/// it was moved at once (a wheel's turn, a drag's move, its bar, put) nor as it was first laid out where it was
+/// scrolled to. How tall each that does not show was is forgotten as the column is laid out at another width or all
+/// words are measured anew.
 /// `from_end` (a chat's, an old view's list's `from_end` and `stick_end`): shorter than the column, its blocks at its
 /// foot; first shown at its end; at its end, kept there as what it holds grows or what shows is laid out taller,
 /// no longer once it is scrolled from there, again once it is back. `follows` says, followed, whether it is kept at its
