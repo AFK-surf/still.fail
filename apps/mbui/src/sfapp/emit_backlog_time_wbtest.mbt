@@ -94,9 +94,10 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
           assert_true(em.queue.iter().all(fn(q) { q.3.end() < at }))
         }
       }
-      println("backlog returned \{width}, \{hz} Hz at \{returned_at}: current \{em.current.map(fn(turn) { (turn.seq, turn.pose, turn.clock.end()) })}, queue \{em.queue.map(fn(q) { q.0 })}, done \{em.done.length()}, revealing \{em.out_at.length()}, due \{tree.due_count()}, frames \{t.host_frames().length()}")
-      if hz == 0 { assert_eq(t.host_frames().length(), 0) }
-      assert_true(t.host_frames().iter().all(fn(frame) { frame.at < returned_at }), msg="returning has no following picture in any history")
+      let frames = t.host_frames()
+      println("backlog returned \{width}, \{hz} Hz at \{returned_at}: current \{em.current.map(fn(turn) { (turn.seq, turn.pose, turn.clock.end()) })}, queue \{em.queue.map(fn(q) { q.0 })}, done \{em.done.length()}, revealing \{em.out_at.length()}, due \{tree.due_count()}, frames \{frames.length()}")
+      if hz == 0 { assert_eq(frames.length(), 0) }
+      assert_true(frames.iter().all(fn(frame) { frame.at < returned_at }), msg="returning has no following picture in any history")
       assert_true(shown() && physical_equal(rd.shown_by.unwrap(), shown), msg="returning keeps the same retained page")
       assert_true(em.current is None && em.queue.is_empty() && em.out_at.is_empty(), msg="every expired reply finishes before the next picture")
       for i in 0..<agents.length() { assert_true(em.done.contains("\{171 + i}")) }
@@ -138,6 +139,17 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
         }
       }
       println("backlog picture \{width}: lines \{direct.length()}/\{framed.length()}, different \{different}")
+      let mut changed_words = 0
+      let count = if words[0].length() > words[1].length() { words[0].length() } else { words[1].length() }
+      for i in 0..<count {
+        if words[0].get(i) != words[1].get(i) {
+          if changed_words < 12 {
+            println("backlog words \{width} item \{i}: 0 Hz \{words[0].get(i)}; 60 Hz \{words[1].get(i)}")
+          }
+          changed_words += 1
+        }
+      }
+      println("backlog words \{width}: counts \{words[0].length()}/\{words[1].length()}, different \{changed_words}")
     }
     assert_eq(pictures[0], pictures[1], msg="all drawing instances at rest are independent of intermediate frames")
     assert_eq(pictures[0], pictures[2])

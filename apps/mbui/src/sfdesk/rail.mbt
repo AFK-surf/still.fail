@@ -174,7 +174,6 @@ fn rail(
   bar : Bool,
   moving? : FoldLook? = None,
 ) -> Unit {
-  let lit = lit_place()
   let rail_id = c.id("rail")
   match c.menu_asked(rail_id) {
     Some((x, y)) if wide.rail_menu.get() is None => wide.rail_menu.set(Some(("", x, y)))
@@ -257,7 +256,10 @@ fn rail(
     |> ignore
     // settings
     let gear = c.id("rail/settings")
-    if c.clicked(gear) {
+    // Entering or leaving settings can replace this shell and release its rail looks. Do it at the input, as the
+    // other places do, never halfway through the old rail's build before it samples the gear's look below.
+    c.on_press(gear, fn() {
+      let lit = lit_place()
       // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
       // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
       if lit == "settings" && wide.crowded {
@@ -271,7 +273,7 @@ fn rail(
         open_settings()
         wide.peek_next.set(wide.crowded)
       }
-    }
+    })
     rail_ground(
       c,
       gear,
