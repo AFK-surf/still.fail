@@ -1286,7 +1286,7 @@ let views_told : Map[Int, Bool] = Map::new()
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_outside_now(kind, id, state) })
+  view_event(fn() { on_outside_now(kind, id, state) }, what=if kind == outside_posted { "messages" } else { "host" })
 }
 
 ///|

@@ -37,6 +37,9 @@ drawn or not. Off, nothing runs: no timer, no file touched, a flag read each fra
 | `frames motions (the 5 heaviest, ms/frames): 290ms/118 a motion of Anim "slide", told at src/sf/x.mbt:12:5-12:40@stillfail \| …` | mbui app.mbt | the motions the frames were for (the ones `frames why` names as what read the clock), each its work and count, whether its frames were built, laid out or painted for it: the animations that keep the frames going. Not written when no frame was for a named motion |
 | `measures: 150 now-room/… 39x18 to 0x18 \| 150 emit-tail/… not laid out \| …` | mbui motion/layer.mbt | the measures (measure, measured_size, measured_rect) that told what read them since the last summary, the 6 most told first, each its count, key and why: its size from to, `laid out again` / `not laid out` (gone a frame, back the next: a reader that measures only some frames), `moved`, `first`, `forgotten`. A row built again each frame for a measure shows here by its key |
 | `frames heaviest: Nms <why>` | mbui app.mbt | the slowest frame and why it was |
+| `event: kind=touch-up in_frame=false ms=N tree_made= tree_gone= tree_bound= tree_laid= tree_alive=A->B mem=A->BMB` | mbui view_host.mbt | an outer event taking at least 24 ms, including its nested events, the tree's settling and the hand told after it; `in_frame=false` was outside the work counted by `frames`. Tree counts are the work during the event, alive nodes and the process's memory at its start and end. Its kind is a fixed name, not the words or position of an input; the memory counts have no allocation stacks and can miss a peak within the event |
+| `touch: to_submit=Nms` | mbui perf.mbt | at least 24 ms from the first finger up after the previous frame to the next submitted frame, measured even if handling the touch itself held the main thread. A submission is not the time the screen showed the frame, nor proof the frame drew what the touch chose |
+| `chat-list: filter=all rows=N` | sfpages sidebar_node.mbt | a list's filter and number of chat rows when first said or the count changes, while recording. It contains neither titles nor chat contents |
 | `messages (bytes/count, by channel): …` | mbui messages.mbt | what was posted to the app (`core`, the screens', the system's), each its bytes and count |
 | `core: in (ms/count/KB, the 6 longest): 3.2ms/12/40KB topic chats delta \| … \|\| out (count, the 6 most): 4 chat.read \| …` | src/core | what the core said to the app, by topic (`value`, `delta`, `error`) or call (`answer`, `progress`), each the app's time taking it on the main thread, its count and size; what the app asked of the core |
 | `page: Chat` | src/sfbase | the page on top |
@@ -89,8 +92,11 @@ relay or addresses iroh kept, so neither says whether the dial needed the DHT.
    that keeps going is named with who told it, and `frames motions` sums the frames each motion was for. High
    `avg … build` with few frames: building is slow (nodes=); high `present` or `gpu_avg`: the GPU's side (`drawn
    whole/part/none`: whole frames redrawn for little). High `avg … tree`: the window's tree (the pages made once as
-   nodes, the bars) is what costs. `mem_peak` far above `mem` or the `ios: mem=` around it: something was made and let
-   go within the span; the main thread slow while memory is high is the system pressing it.
+   nodes, the bars) is what costs. `mem_peak` far above `mem` or the `ios: mem=` around it shows a sampled rise and
+   fall within the span; it does not name an allocation or establish why the main thread was slow.
+   A slow `event` with `in_frame=false` is not in `main_busy` or `tree`: it may build or lay out nodes before any frame
+   begins. `touch: to_submit` includes that work and the delay until the next submission. Neither line identifies the
+   allocator, and a high memory footprint alone does not establish that memory pressure caused a pause.
 4. The core: `core js:` says which task kind the core's thread spent its time on (an app call, a shell answer, a
    timer). `core: in` says which topic's messages cost the main thread the most and how big they were: a topic
    changing many times a second, or a whole value sent each time instead of a delta, shows there; `out` shows the app
@@ -102,7 +108,8 @@ relay or addresses iroh kept, so neither says whether the dial needed the DHT.
 
 ## What it costs
 
-Off: one flag read per frame and per core task. On: counters and sums, one map entry per frame's why (and its motion),
-per core task kind and per core message kind; each 5 s a few lines appended (a file opened, written, closed on a queue
-of its own). The per-slow-frame lines of MBUI_PROBE=1 are not written (counted as `slow=`). MBUI_PROBE=1 still prints
-its lines on the log as before, with or without the record.
+Off: one flag read per frame, outer event and core task. On: counters and sums, one map entry per frame's why (and its
+motion), per core task kind and per core message kind; each outer event reads the tree's work and memory at its start,
+and a slow one is written when it ends. Each 5 s a few lines are appended (a file opened, written, closed on a queue of
+its own). The per-slow-frame lines of MBUI_PROBE=1 are not written (counted as `slow=`). MBUI_PROBE=1 still prints its
+lines on the log as before, with or without the record.

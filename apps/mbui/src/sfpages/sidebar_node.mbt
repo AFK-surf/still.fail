@@ -150,6 +150,8 @@ fn chats_pane_node(
   let revision : @signals.Signal[Int] = @signals.signal(0)
   let seen : Ref[Array[ChatDay]] = Ref([])
   let stamp = Ref(0)
+  // A count alone helps diagnose the work of opening a list, without recording any chat's name or contents.
+  let recorded_rows = Ref(-1)
   // what of its rows and days comes, goes and goes ahead of others as the list changes while it is watched (ListRows'):
   // its lines as last shown, the rows going still among them (each after the line it came after, as it was), each
   // line coming or going and since when; told by a number as they change
@@ -179,6 +181,10 @@ fn chats_pane_node(
         for item in d.items {
           by_name[@sfbase.row_name(item)] = item
         }
+      }
+      if @hostapi.perf_recording() && by_name.length() != recorded_rows.val {
+        recorded_rows.val = by_name.length()
+        @hostapi.perf_line("chat-list: filter=\{filter} rows=\{recorded_rows.val}")
       }
       motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched))
       ordered.set(shown)
