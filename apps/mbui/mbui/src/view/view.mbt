@@ -2698,7 +2698,21 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
       // (what else it reads, followed: changed, what holds it laid out again)
+      let pending : Bound = { queued: false, marked: false, live: true, watch: None, run: fn() {  } }
       let watch = @signals.watch(fn() { tree.layout_marked_at(at) })
+      // A roomed rule is only worked out in its holder's layout. Record a possible change as it is set too, so a
+      // layout read in the same event can mark that layout before the batch tells the watch.
+      watch.on_marked(fn() {
+        if pending.live && !pending.marked {
+          pending.marked = true
+          tree.pulls_marked.push(pending)
+        }
+      })
+      pending.watch = Some(watch)
+      pending.run = fn() {
+        pending.marked = false
+        if pending.live { tree.layout_marked_at(at) }
+      }
       let run = fn(w : Double, h : Double) {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
@@ -2728,6 +2742,9 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       tree.roomed_add(of.at, at, gen, run)
       tree.layout_marked_at(at)
       n.props[prop] = fn() {
+        pending.live = false
+        pending.watch = None
+        pending.run = fn() {  }
         watch.stop()
         tree.roomed_drop(of.at, at, gen)
       }
