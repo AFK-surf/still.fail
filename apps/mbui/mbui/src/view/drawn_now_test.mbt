@@ -395,3 +395,36 @@ fn host_takes(asks : Bool) -> (Int, Int) {
 test "drawn_now leaves the host nothing more to take than without the look" {
   assert_eq(host_takes(true), host_takes(false))
 }
+
+///|
+/// A still node of a fixed size and a ground, its ground said at once anew in an event at 40 that then asks where it is
+/// drawn now or not, a frame sampled for 50 with the host at 0 before, the host's changes taken before it: whether the
+/// host is to take it made again after the event, and the ground the next frame draws.
+fn ground_said_then_looked(asks : Bool) -> (Bool, Int64?) {
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root.box(fn(v) {
+      v.width(Is(Some(30.0))).height(Is(Some(10.0))).ground(Is(0x112233FFL)) |> ignore
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.take_changed() |> ignore
+  tree.take_placed() |> ignore
+  let v = page.val.unwrap()
+  tree.event(40.0, fn() {
+    v.ground(Is(0x445566FFL)) |> ignore
+    if asks {
+      v.drawn_now() |> ignore
+    }
+  })
+  tree.frame(400.0, 300.0, now=40.0) |> ignore
+  (tree.take_changed().contains(v.id()), tree.drawn_of(v.id()).map(fn(d) { d.ground }))
+}
+
+///|
+test "drawn_now after a look said at once in the same event: made again for the host and drawn as without the look" {
+  assert_eq(ground_said_then_looked(true), ground_said_then_looked(false))
+}

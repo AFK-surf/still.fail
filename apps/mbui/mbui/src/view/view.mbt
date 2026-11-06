@@ -6825,9 +6825,17 @@ fn Tree::settled_at(self : Tree, at : Double, look? : () -> Unit) -> Bool {
     // that follows it told; then worked out and laid out as drawn again, as it was)
     @signals.untracked(fn() {
       // (what was due before it, due after it as it was: neither layout of it does what is left for that one)
-      // (and what was told before it and not laid out yet (a binding marked in the same change): due as it was, laid
-      // out and drawn by the layout that would have, what sizes it tells told there)
-      let told_before = self.layout_due ||
+      // (and what was told before it and not laid out or drawn yet (a binding marked in the same change, a look said at
+      // once, an order, anything due): due as it was, laid out and drawn by the layout that would have, what sizes it
+      // tells told there, what the host is to take of it kept)
+      let told_before = self.due ||
+        self.drawn_due ||
+        self.layout_due ||
+        self.order_due ||
+        self.telling_due ||
+        self.modals_due ||
+        self.bars_due ||
+        !self.looks_due.is_empty() ||
         !self.places_due.is_empty() ||
         !self.bindings_due.is_empty() ||
         !self.pulls_marked.is_empty()
