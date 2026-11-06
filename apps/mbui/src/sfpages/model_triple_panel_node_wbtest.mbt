@@ -369,7 +369,7 @@ test "model panel nodes: model and effort headings align" {
     assert_true((model_y - effort_y).abs() < 1.0 && (model_h - effort_h).abs() < 1.0,
       msg="column titles align with and without search: \{(searching, model_y, model_h, effort_y, effort_h)}")
     let (_, low_y, _, low_h) = t.get(Radio, label=effort_text("low")).rect
-    let below_title = if searching { @ui.Space::S1_5.px() } else { @ui.Space::S1.px() }
+    let below_title = if searching { @ui.Space::S0_5.px() } else { @ui.Space::S1.px() }
     assert_true((low_y - effort_y - effort_h - below_title - @ui.Space::SPx.px()).abs() < 0.5,
       msg="the effort list starts below its heading: \{(searching, effort_y, effort_h, low_y)}")
     let (_, high_y, _, _) = t.get(Radio, label=effort_text("high")).rect

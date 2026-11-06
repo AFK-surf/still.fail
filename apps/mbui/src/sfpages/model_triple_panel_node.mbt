@@ -8,7 +8,7 @@ let triple_node_panel_head : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 g
 ///|
 // A search is 36 high: its centered title and the other column's title share the same baseline.
 // kept across runs: a value (no field of it changes)
-let triple_node_panel_head_search : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 pb=S1_5 gap=S0_5")
+let triple_node_panel_head_search : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 pb=S0_5 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
