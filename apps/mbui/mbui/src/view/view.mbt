@@ -6473,7 +6473,8 @@ pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
 /// One event at `at` whose own facts (`said`: what it came by, as a host says it) are so as of its moment: what was due
 /// by then done first (seeing what was so before it), then `said` committed and told (what follows it brought to it,
 /// the event's moment their cause), then `f` taken as Tree::event takes it, finding things as they are with it. Inside
-/// another event, both in that one's, as one change.
+/// another event, both in that one's, as one change. A new event encloses its signal batches, never the reverse:
+/// an enclosing raw batch would withhold each deadline's publication and the event's synchronous result.
 pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
   // (in an event already: its moment, settled as it began)
   if self.cause_at >= 0.0 {
@@ -6482,6 +6483,9 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
     @signals.untracked(f)
     @signals.end_batch()
     return
+  }
+  if @signals.batch_depth() > 0 {
+    abort("view: start Tree::event before opening its signal batch; finish a raw batch before dispatching another event")
   }
   self.settle(at)
   // (what went on by itself laid out where it is at the event's moment before it is taken, where it says so, as before
@@ -6764,7 +6768,8 @@ fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
 /// over let go, a coming back done, a step of what goes by steps taken (each of them, none skipped, none run as a
 /// larger one). What one does that is due by `upto` too (a cleanup setting another leaving, a step's count) is done in
 /// its turn. Frames, inputs and the host's calls each advance it to their moment and no further: how often they come
-/// changes nothing of what it does.
+/// changes nothing of what it does. A raw signal batch may read geometry at the current logical moment, but cannot
+/// advance time or dispatch a deadline: finish it first, or put its writes inside Tree::event at the new moment.
 pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
   self.advance_logic(upto)
   self.advance_clock(upto)
@@ -6778,6 +6783,15 @@ fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
   // structure it changed committing), the loop doing it goes on from where it is once that one is done)
   if self.advancing {
     return
+  }
+  // A callback already being committed is one cause. Its nested input/geometry cannot insert another deadline
+  // midway through it; the outer advance resumes after the callback and its signal publication have finished.
+  if self.cause_at >= 0.0 && self.committing > 0 {
+    return
+  }
+  if @signals.batch_depth() > 0 &&
+    (upto > self.logic || self.wake() is Some(at) && at <= upto) {
+    abort("view: finish the raw signal batch before advancing the timeline; use Tree::event to batch a timed change")
   }
   self.advancing = true
   self.advance_loop(upto)
