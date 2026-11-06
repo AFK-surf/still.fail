@@ -27,6 +27,41 @@ test "model panel nodes: favourite checkbox takes space but not enter" {
 }
 
 ///|
+test "model panel nodes: favourite and model are separate touch targets" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let state = triple_node_panel_state(Some({
+    "value": { "model": "Alpha" }, "option": "Alpha",
+    "options": [{ "model": "Alpha", "name": "Alpha" }, { "model": "Beta", "name": "Beta" }],
+  }))
+  let calls : Array[(String, Json)] = []
+  let closed = Ref(0)
+  let src = @sfbase.made_source(call=fn(name, args, done) { calls.push((name, args)); done(Ok({})) })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=700.0, platform=2)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(panel) {
+      panel.width(Is(Some(350.0))) |> ignore
+      triple_node_catalog(panel, src, "ws/st", "new", state, fn() { true }, fn() { false }, "", fn() { closed.val += 1 })
+    }) |> ignore
+  })
+  t.draw()
+  let label = @sf.t("web-main.model.likeModel", args=[("model", "Beta")])
+  let (check_x, check_y, check_w, check_h) = t.get(Checkbox, label~).rect
+  let (model_x, model_y, model_w, model_h) = t.get(Button, label="Beta").rect
+  assert_true(check_w >= 44.0 && check_h >= 44.0 && check_x + check_w <= model_x,
+    msg="the checkbox has its own 44-point room: \{(check_x, check_w, check_h, model_x)}")
+  t.tap(check_x + check_w / 2.0, check_y + check_h / 2.0)
+  assert_eq(calls.map(fn(call) { call.0 }), ["pick.like"])
+  assert_eq(closed.val, 0)
+  t.tap(model_x + model_w / 2.0, model_y + model_h / 2.0)
+  assert_eq(calls.map(fn(call) { call.0 }), ["pick.like", "pick.save"])
+  assert_eq(text(Some(calls[1].1), "model"), "Beta")
+  assert_eq(closed.val, 1)
+}
+
+///|
 test "model panel nodes: search and model rows fit the two-column catalogue" {
   @sfbase.reset()
   @sf.set_words(@sfbase.fill)
