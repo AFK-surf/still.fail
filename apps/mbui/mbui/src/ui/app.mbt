@@ -597,6 +597,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   turns_said(c, c.clock, frame=true)
   // (what takes a field's keys the frame no longer said so of, let go: Ctx::on_key)
   keys_taken_built()
+  // (and old-build press callbacks no longer said or kept: Ctx::on_press)
+  ctx_presses_built()
   c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()
@@ -1955,7 +1957,13 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
+  let key_slot = desk.mutable_keys.length()
   key_in(code, mods)
+  // Old focus navigation and callbacks need the input's own cause and the focus left by preceding inputs. A Bool
+  // widget still consumes its activation in focus_frame_start, as it did before.
+  if desk.mutable_keys.length() > key_slot && !desk.mutable_keys[key_slot].2 {
+    g().focus_key_input(code, mods, key_slot)
+  }
   // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
   if code == key_escape {
     g().layer_keys_now()
@@ -2362,19 +2370,6 @@ pub fn Ctx::tell(self : Ctx, key : String, f : () -> Unit) -> Unit {
       Some(k) => self.told[k] = (id, f)
       None => self.told.push((id, f))
     }
-  } else {
-    f()
-  }
-}
-
-///|
-/// An action caused by an input taken in this old frame's build. Once its builds are over, deliver it as that input's
-/// action (not a layout result), once by `key`. This permits a retained view's `event_action` to snapshot geometry for
-/// an exit. Outside a build, an event handler may call it directly.
-pub fn Ctx::tell_input(self : Ctx, key : String, f : () -> Unit) -> Unit {
-  if building.val {
-    guard frame_inputs_taken.val else { abort("tell_input requires an input taken by this frame") }
-    self.tell(key, fn() { @signals.deliver_input(f) })
   } else {
     f()
   }

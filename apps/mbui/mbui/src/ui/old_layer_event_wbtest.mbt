@@ -41,9 +41,87 @@ test "a new old layer can be built and measured at an event without a frame" {
   })
   // after_build belongs to a frame's final build, so staging alone must not tell it.
   assert_eq((built.val, height.val, told.val, after.val), (1, 120.0, 0, 0))
-  t.drawn_now()
+  t.frame_at(t.time())
   assert_eq((built.val, told.val, after.val), (1, 1, 1))
   assert_true(t.query(Button, label="Sheet") is Some(_))
+}
+
+///|
+fn old_layer_counts_by_frame(staged : Bool) -> Array[(Int, Int, Int)] {
+  let open = @signals.signal(false)
+  let built = Ref(0)
+  let told = Ref(0)
+  let after = Ref(0)
+  let host : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = old(layer, fn(c) {
+        built.val += 1
+        c.tell("made", fn() { told.val += 1 })
+        c.after_build("made", fn() { after.val += 1 })
+        c.overlay("sheet", modal=true, initial_focus=0, fn() {
+          c.box(w=Px(200.0), h=Px(120.0), fn() {  }) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.draw()
+  let root = view_tree().unwrap().root()
+  root.event_action(fn() {
+    open.set(true)
+    if staged { root.after_event_action(fn() { probe_old_layer(host.val.unwrap()) }) }
+  })
+  let counts : Array[(Int, Int, Int)] = []
+  for _ in 0..<3 {
+    t.frame_at(t.time())
+    counts.push((built.val, told.val, after.val))
+  }
+  counts
+}
+
+///|
+test "a staged old layer says the same effects as an ordinary layer over the same frames" {
+  assert_eq(old_layer_counts_by_frame(true), old_layer_counts_by_frame(false))
+}
+
+///|
+test "a staged old layer discarded before its first frame does not deliver its tell" {
+  let shown = @signals.signal(false)
+  let open = @signals.signal(true)
+  let told = Ref(0)
+  let host : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(layer) {
+      let v = old(layer, fn(c) {
+        if open.get() {
+          c.tell("only while open", fn() { told.val += 1 })
+          c.box(w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+        }
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.draw()
+  let root = view_tree().unwrap().root()
+  root.event_action(fn() {
+    shown.set(true)
+    root.after_event_action(fn() { probe_old_layer(host.val.unwrap()) })
+  })
+  assert_eq(told.val, 0)
+  root.event_action(fn() {
+    probe_old_layer(host.val.unwrap())
+    open.set(false)
+    probe_discard_staged_tells(host.val.unwrap())
+  })
+  t.drawn_now()
+  assert_eq(told.val, 0)
 }
 
 ///|

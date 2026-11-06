@@ -27,7 +27,7 @@ priv struct Run {
   mut active_sub : ReactiveNode?
   /// Readers temporarily hidden by `untracked` still form part of the current computation.
   mut hidden_readers : Int
-  /// The readers below a delivered old-frame input, which is taken after its build (deliver_input).
+  /// Readers outside a genuine host input being delivered (deliver_input).
   mut input_readers : (Int, Int, Int, Int)?
   /// what owns what is made now (an effect, a scope): what is reading where something is, else this (Solid's Owner
   /// apart from its Listener: `untracked` stops following reads, never owning)
@@ -935,9 +935,9 @@ pub fn tracking_underway() -> Bool {
 }
 
 ///|
-/// Deliver one input taken by the old frame, at its start or after its builds. The outer frame's watch still runs, but
-/// no build is under way; a watch, computed or effect started inside the input remains a tracked computation. For the
-/// UI framework's input delivery alone, not for app code or a layout's result.
+/// Deliver an input handed to the UI framework at its actual event boundary. The outer frame's watch may still run,
+/// but no build is under way; a watch, computed or effect started inside the input remains a tracked computation.
+/// For the framework's input delivery alone, not for app code, a later build, or a layout's result.
 pub fn deliver_input(f : () -> Unit) -> Unit {
   untracked(fn() {
     let was = run.input_readers

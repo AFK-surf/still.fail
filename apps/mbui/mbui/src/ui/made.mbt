@@ -266,6 +266,79 @@ let made_placed : Array[(Int, Node)] = []
 let made_presses : Map[Int, () -> Unit] = {}
 
 ///|
+/// A callback said by an old build, as opposed to one held by a Made node. Its owner and last build let it go when
+/// the old view no longer says it, including when a kept part is put back without running its build.
+priv struct CtxPress {
+  take : () -> Unit
+  owner : @view.NodeId?
+  mut build : Int
+  mut stage : Int
+}
+
+///|
+let ctx_presses : Map[Int, CtxPress] = {}
+
+///|
+// The current independently staged old island and its build, distinct from the full-frame build number.
+let ctx_press_stage : Ref[(@view.NodeId, Int)?] = Ref(None)
+
+///|
+let ctx_press_stage_no : Ref[Int] = Ref(0)
+
+///|
+fn ctx_press_mark(p : CtxPress) -> Unit {
+  p.build = g().build_no
+  match (ctx_press_stage.val, p.owner) {
+    (Some((id, stage)), Some(owner)) if id == owner => p.stage = stage
+    _ => ()
+  }
+}
+
+///|
+fn ctx_press_remove(id : Int) -> Unit {
+  match ctx_presses.get(id) {
+    Some(p) => {
+      match made_presses.get(id) {
+        Some(f) if physical_equal(f, p.take) => made_presses.remove(id)
+        _ => ()
+      }
+      ctx_presses.remove(id)
+    }
+    None => ()
+  }
+}
+
+///|
+fn ctx_presses_built() -> Unit {
+  let gone = ctx_presses.iter().filter(fn(e) { e.1.build < builds_made.val }).map(fn(e) { e.0 }).collect()
+  for id in gone { ctx_press_remove(id) }
+}
+
+///|
+fn ctx_presses_owner_gone(owner : @view.NodeId) -> Unit {
+  let gone = ctx_presses.iter().filter(fn(e) { e.1.owner == Some(owner) }).map(fn(e) { e.0 }).collect()
+  for id in gone { ctx_press_remove(id) }
+}
+
+///|
+fn ctx_press_stage_begin(owner : @view.NodeId) -> Unit {
+  ctx_press_stage_no.val += 1
+  ctx_press_stage.val = Some((owner, ctx_press_stage_no.val))
+}
+
+///|
+fn ctx_press_stage_end() -> Unit {
+  match ctx_press_stage.val {
+    Some((owner, stage)) => {
+      let gone = ctx_presses.iter().filter(fn(e) { e.1.owner == Some(owner) && e.1.stage != stage }).map(fn(e) { e.0 }).collect()
+      for id in gone { ctx_press_remove(id) }
+    }
+    None => ()
+  }
+  ctx_press_stage.val = None
+}
+
+///|
 /// A run begins: nothing made is kept.
 fn made_forget() -> Unit {
   for _, m in made_roots {
@@ -274,6 +347,9 @@ fn made_forget() -> Unit {
   made_roots.clear()
   made_placed.clear()
   made_presses.clear()
+  ctx_presses.clear()
+  ctx_press_stage.val = None
+  ctx_press_stage_no.val = 0
   keys_taken.clear()
 }
 
@@ -346,7 +422,10 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
     made_placed.push((slot, n))
   }
   match m.on_press {
-    Some(f) if n.id != 0 => made_presses[n.id] = f
+    Some(f) if n.id != 0 => {
+      ctx_presses.remove(n.id)
+      made_presses[n.id] = f
+    }
     _ => ()
   }
   let kids = match m.kids {
@@ -421,7 +500,16 @@ pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
     return
   }
   self.takes_presses(id)
+  let p : CtxPress = { take: f, owner: island_building.val, build: self.build_no, stage: -1 }
+  ctx_press_mark(p)
+  ctx_presses[id] = p
   made_presses[id] = f
+  built_used(fn() {
+    match ctx_presses.get(id) {
+      Some(now) if physical_equal(now, p) => ctx_press_mark(p)
+      _ => ()
+    }
+  })
 }
 
 ///|

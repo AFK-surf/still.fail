@@ -490,6 +490,8 @@ pub fn pointing() -> Pointing
 
 pub fn probe_keep_staged_body() -> Bool
 
+pub fn probe_discard_staged_tells(@view.View) -> Unit
+
 pub fn probe_kept_sheet_body(Ctx, String, () -> Unit) -> Unit
 
 pub fn probe_old_layer(@view.View) -> Unit
@@ -1464,7 +1466,6 @@ pub fn Ctx::takes_presses(Self, Int32) -> Unit
 pub fn Ctx::taking_shot(Self, String) -> Bool
 pub fn Ctx::tapped_anywhere(Self) -> (Double, Double)?
 pub fn Ctx::tell(Self, String, () -> Unit) -> Unit
-pub fn Ctx::tell_input(Self, String, () -> Unit) -> Unit
 pub fn Ctx::text(Self, String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, wrap? : Bool, w? : Size, line? : Double, trim? : Bool, center? : Bool, tracking? : Double, max_lines? : Int32, tabular? : Bool, balance? : Bool, keep? : Bool, breaks? : Bool, shorter? : Array[String], allow_ellipsis? : Bool) -> Int32
 pub fn Ctx::text_asked(Self, Int32) -> String?
 pub fn Ctx::text_size(Self, TextSize) -> (Double, Double)

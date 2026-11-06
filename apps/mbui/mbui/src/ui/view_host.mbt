@@ -76,8 +76,19 @@ let old_islands : Array[OldIsland] = []
 let old_layer_staged_tells : Map[@view.NodeId, Array[(Int, () -> Unit)]] = {}
 
 ///|
+/// Discard work said by an independently staged old layer that was removed before its first real build. Its owner
+/// still handles the layer's own close lifecycle; the staged body never became part of an actual frame.
+pub fn probe_discard_staged_tells(v : @view.View) -> Unit {
+  old_layer_staged_tells.remove(v.id())
+}
+
+///|
 // Probe only: event-staged layers to update to an input's time before finding its old targets.
 let old_layer_staged_views : Map[@view.NodeId, (@view.View, Double)] = {}
+
+///|
+// A staged island's first real frame must put back its staged part even when it is the only old view.
+let old_layer_needs_frame : Map[@view.NodeId, Bool] = {}
 
 ///|
 // Probe only: motions read by each staged old layer, including ones a later frame let go at rest.
@@ -490,6 +501,7 @@ pub fn view_painted() -> ViewPaintWork {
 fn view_forget() -> Unit {
   probe_causal_layer.val = false
   old_layer_staged_tells.clear()
+  old_layer_needs_frame.clear()
   old_layer_staged_views.clear()
   old_layer_staged_motions.clear()
   old_layer_staged_parts.clear()
@@ -903,7 +915,8 @@ fn old_place(tree : @view.Tree) -> Unit {
       (id, x, y, iw, ih, a, _, _, _) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
     }) &&
     // (one as tall as what it holds measured in a box of its own, whatever it fills: old_natural_after_layout)
-    !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural is Some(_) })
+    !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural is Some(_) }) &&
+    !old_layer_needs_frame.contains(old_placed[0].0)
   old_places_tell()
 }
 
@@ -1099,6 +1112,7 @@ fn old_frame(c : Ctx) -> Unit {
       None => ()
     }
   }
+  for p in old_placed { old_layer_needs_frame.remove(p.0) }
 }
 
 ///|
@@ -3450,6 +3464,7 @@ pub fn old(
       held_box: -1,
     })
     n.owns(fn() {
+      ctx_presses_owner_gone(id)
       if old_layer_staged_views.contains(id) {
         let c = g()
         let ids : Array[Int] = []
@@ -3471,6 +3486,7 @@ pub fn old(
         let layers = c.last_layers.filter(fn(l) { l.owner == Some(id) }).rev()
         for l in layers { c.layer_ended(l.id) }
         old_layer_staged_views.remove(id)
+        old_layer_needs_frame.remove(id)
         old_layer_staged_motions.remove(id)
         old_layer_staged_parts.remove(id)
         old_layer_staged_ranges.remove(id)
@@ -6314,6 +6330,7 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
   nodes_run.evented = false
   c.layers_opened.clear()
   for pass in 0..<frame_passes_most {
+    ctx_press_stage_begin(o.id)
     let reclaimed = match old_layer_staged_ranges.get(o.id) {
       Some((from, until)) if until == c.count && old_boxes.get(o.id) == Some(from) => Some((from, until))
       _ => None
@@ -6407,6 +6424,7 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
     c.raise_layers()
     c.reads_after_layout()
     c.layers_focus()
+    ctx_press_stage_end()
     old_layer_staged_ranges[o.id] = (wrapper, c.count)
     laying.val = false
     building.val = false
@@ -6457,5 +6475,6 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
   c.theme = previous_theme
   c.narrow = previous_narrow
   old_layer_staged_views[v.id()] = (v, v.cause_at())
+  old_layer_needs_frame[v.id()] = true
   old_layer_body_pending[v.id()] = true
 }

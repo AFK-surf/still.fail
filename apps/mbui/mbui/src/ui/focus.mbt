@@ -8,8 +8,8 @@
 // focus (as its widget says: a checkbox only takes Space). The focus shows (a ring) only once it came by the keyboard,
 // as a browser's :focus-visible; a press lets it go from anything but a field, unless what was pressed takes it.
 //
-// The keys are dealt with as the frame starts, from what the last frame built, before the view builds this one: what
-// they did (a focus moved, a press) is there for the widgets as they are built, and a key used so is taken (the
+// Focus navigation and a callback's press are dealt with at the key's input, from what the last frame built. An old
+// Bool widget's press is dealt with as the frame starts, before the view builds this one; a key used so is taken (the
 // view's Ctx::key_pressed does not see it, as a field's keys).
 
 ///|
@@ -261,6 +261,38 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
     }
     if used {
       desk.keys[k] = (code, mods, true)
+    }
+  }
+}
+
+///|
+/// Focus navigation and a registered press at the key's input. A key whose target is an old Bool widget stays queued
+/// for the frame, so its `clicked` result retains the original build-time contract.
+fn Ctx::focus_key_input(self : Ctx, code : Int, mods : Int, slot : Int) -> Unit {
+  let focus = self.focus_allowed()
+  let field = self.editors.contains(focus)
+  let left = match self.editors.get(focus) { Some(st) => st.leaves; None => [] }
+  if mods == 0 && left.contains(code) { return }
+  if code == key_tab && (mods | mod_shift_key) == mod_shift_key {
+    desk.mutable_keys[slot] = (code, mods, true)
+    self.tab((mods & mod_shift_key) != 0)
+    return
+  }
+  if field || mods != 0 { return }
+  if [key_left, key_right, key_up, key_down, key_home, key_end].contains(code) {
+    if self.rove(code) { desk.mutable_keys[slot] = (code, mods, true) }
+    return
+  }
+  if (code != key_enter && code != key_space) || focus == 0 || focus != self.focus || !made_presses.contains(focus) {
+    return
+  }
+  let key = if code == key_enter { press_enter } else { press_space }
+  for f in self.last_focusables {
+    if f.id == focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
+      // Mark the original queued key before calling user code, which may itself change the stack or deliver input.
+      desk.mutable_keys[slot] = (code, mods, true)
+      self.press_focused(key) |> ignore
+      return
     }
   }
 }

@@ -930,15 +930,13 @@ test "a staged legacy sheet can close from a real button without a stale press o
           c.box(w=Px(100.0), h=Px(159.0), id=fit, fn() {
             let id = c.id("done")
             c.box(w=Px(100.0), h=Px(40.0), id~, label="Done", fn() { c.text("Done") |> ignore }) |> ignore
-            if c.clicked(id) {
-              c.tell_input("done", fn() {
-                window.val.unwrap().event_action(fn() {
-                  @ui.probe_old_layer(host.val.unwrap())
-                  presses.val += 1
-                  open.set(false)
-                })
+            c.on_press(id, fn() {
+              window.val.unwrap().event_action(fn() {
+                @ui.probe_old_layer(host.val.unwrap())
+                presses.val += 1
+                open.set(false)
               })
-            }
+            })
           }) |> ignore
         }) |> ignore
       })
@@ -961,7 +959,7 @@ test "a staged legacy sheet can close from a real button without a stale press o
 }
 
 ///|
-test "a staged legacy sheet can open from an old input during a frame" {
+test "a staged legacy sheet can open at an old input event" {
   let shown = @signals.signal(false)
   let host : Ref[@view.View?] = Ref(None)
   let window : Ref[@view.View?] = Ref(None)
@@ -970,14 +968,12 @@ test "a staged legacy sheet can open from an old input during a frame" {
     @ui.old(root, fn(c) {
       let id = c.id("open")
       c.box(w=Px(100.0), h=Px(40.0), id~, label="Open", fn() { c.text("Open") |> ignore }) |> ignore
-      if c.clicked(id) {
-        c.tell_input("open", fn() {
-          root.event_action(fn() {
-            shown.set(true)
-            root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
-          })
+      c.on_press(id, fn() {
+        root.event_action(fn() {
+          shown.set(true)
+          root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
         })
-      }
+      })
     }).height(Is(Some(40.0))) |> ignore
     root.show(fn() { shown.get() }, fn(layer) {
       let v = @ui.old(layer, fn(c) {
