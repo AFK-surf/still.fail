@@ -89,8 +89,13 @@ pub fn Layout::measure(
         tree.feet[child.at] = f
         // (what reads it laid out again, in this layout: Layout::given_foot)
         match tree.foot_readers.get(child.at) {
-          Some(r) if tree.nodes[r].live => tree.layout_marked_at(r)
-          _ => ()
+          Some(rs) =>
+            for r in rs {
+              if tree.nodes[r.at].live && tree.nodes[r.at].gen == r.gen {
+                tree.layout_marked_at(r.at)
+              }
+            }
+          None => ()
         }
       }
     }
@@ -167,8 +172,9 @@ pub fn[K : Eq] View::layout_box(
     }
     // Only the final state is published by Tree::walk, so a child kept hidden and then placed never disappears.
     for at in n.kids { self.tree.nodes[at].flex.line = -1 }
-    // (what it reports said anew by this layout: Layout::report)
+    // (what it reports said anew by this layout: Layout::report; the foot it reads read anew, Layout::given_foot)
     self.tree.reports.remove(self.at)
+    self.tree.foot_unread(self.at)
     match value.val {
       Some(v) => {
         let guard_before = @signals.set_access_guard(Some("layout_box node \{self.at} must use content and constraints"))
@@ -267,6 +273,27 @@ pub fn Layout::let_go(self : Layout, key : String) -> Unit {
 }
 
 ///|
+/// Box `at` no longer a reader of the foot it read last (Layout::given_foot): laid out again (it reads it anew, if it
+/// still does), or its place made again for another.
+fn Tree::foot_unread(self : Tree, at : Int) -> Unit {
+  match self.foot_read.get(at) {
+    Some(foot) => {
+      self.foot_read.remove(at)
+      match self.foot_readers.get(foot) {
+        Some(rs) => {
+          rs.retain(fn(r) { r.at != at })
+          if rs.is_empty() {
+            self.foot_readers.remove(foot)
+          }
+        }
+        None => ()
+      }
+    }
+    None => ()
+  }
+}
+
+///|
 /// The room under what it holds and how much of its foot is covered, as what holds it (or a holder of that) gave it as
 /// it measured it (Layout::measure's `foot`), in this layout: None where none did. Read so, it is laid out again as
 /// that changes.
@@ -276,7 +303,15 @@ pub fn Layout::given_foot(self : Layout) -> (Double, Double)? {
   while i >= 0 {
     match tree.feet.get(i) {
       Some(f) => {
-        tree.foot_readers[i] = self.owner.at
+        let me = self.owner.id()
+        if tree.foot_read.get(me.at) != Some(i) {
+          tree.foot_unread(me.at)
+          tree.foot_read[me.at] = i
+        }
+        match tree.foot_readers.get(i) {
+          Some(rs) => if !rs.contains(me) { rs.push(me) }
+          None => tree.foot_readers[i] = [me]
+        }
         return Some(f)
       }
       None => ()

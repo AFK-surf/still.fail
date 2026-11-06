@@ -233,6 +233,14 @@ function Ask([string]$op) {
   }
 }
 function Said { try { Get-Content (Join-Path $run 'station.json') -Raw | ConvertFrom-Json } catch { $null } }
+function HandoffWhy {
+  # A new station may know why it could not start; an older launcher only records its exit code.
+  $detail = Get-Content (Join-Path $run 'handoff-error') -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+  if ($detail) { return $detail.Trim() }
+  $why = Get-Content (Join-Path $run 'handoff-failed') -Raw -ErrorAction SilentlyContinue
+  if ($why) { return $why.Trim() }
+  return ''
+}
 
 # Handed over without stopping (as install.sh does): the new release goes where the old one was, and the launcher,
 # which stays, starts it beside the one serving; that one hands its sessions over once the new one is up, and the
@@ -241,6 +249,7 @@ $handed = ''
 if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
   $started = $said.startedAt
   Remove-Item (Join-Path $run 'handoff-failed') -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $run 'handoff-error') -ErrorAction SilentlyContinue
   Step 'handoff'
   Say (__SAY(cloud.install.handoff.start))
   Swap
@@ -259,7 +268,7 @@ if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
     }
   }
   if (-not $handed) {
-    $why = Get-Content (Join-Path $run 'handoff-failed') -Raw -ErrorAction SilentlyContinue
+    $why = HandoffWhy
     $now = Said
     if ($why -and $swap.aside -and (Get-Process -Id $station.ProcessId -ErrorAction SilentlyContinue) -and $now -and $now.startedAt -eq $started) {
       # The new release did not come up or take over, and the station is the launcher it was: the release before goes

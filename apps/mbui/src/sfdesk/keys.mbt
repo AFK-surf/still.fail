@@ -158,6 +158,7 @@ pub fn keys_node(v : @view.View, outer : @view.View, src : Source, ws : () -> Wo
       ("nav.forward", act("nav.forward")),
       ("chat.prev", act("chat.prev")),
       ("chat.next", act("chat.next")),
+      ("composer.focus", act("composer.focus")),
     ],
   )
   // (the chat before or after goes on in a field: its caret moved by the key as well, as `keys` read them in_field)
@@ -206,6 +207,12 @@ fn action_done(src : Source, w : Workspace, action : String) -> Bool {
       new_chat()
       true
     }
+    "composer.focus" =>
+      if app.nav.top() is NewChat && !switcher_open() {
+        @sfpages.new_chat_focus(src, w)
+      } else {
+        false
+      }
     "sidebar.toggle" =>
       if framed {
         sidebar_toggle()

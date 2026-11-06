@@ -166,15 +166,24 @@ fn View::scroll_bar(
   bar : BarState,
   bar_in? : Double = 0.0,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  bar_in_of? : Ref[View?],
 ) -> Unit {
   let across = s.across
+  // (in from either end: as said, or as far as what it holds is padded at its start as laid out with it (View::scrolls'
+  // bar_in_held): read with its size, laid out in the same layout)
+  let bar_in_now = fn() {
+    match bar_in_of.bind(fn(r) { r.val }) {
+      Some(held) if held.alive() => held.tree.nodes[held.at].flex.style.padding_left_value()
+      _ => bar_in
+    }
+  }
   // (where its thumb runs and how long, how far the column goes for a point it moves: ui's bar_track over all of its
   // right, nothing over it kept clear; across, along its foot from `bar_in` to as far from its end)
   // (across, as an old view's foot_bar along the view it is for: `bar_in` in from either side, no more than leaves it
   // its least twice, what scrolls and what it holds as wide less that)
   let track = fn(x : Double) {
     let (vh, ends) = match self.laid_size_told() {
-      Some((w, h)) => if across { (w, dclamp(bar_in, 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
+      Some((w, h)) => if across { (w, dclamp(bar_in_now(), 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
       None => (0.0, 0.0)
     }
     let content = vh + s.most_now()

@@ -1456,6 +1456,7 @@ pub fn Pdf::close(self : Pdf) -> Unit {
     if src.has_prefix(prefix) {
       for e in list {
         h_image_free(e.id)
+        image_dropped(e)
       }
       gone.push(src)
     }

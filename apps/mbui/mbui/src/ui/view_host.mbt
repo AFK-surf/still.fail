@@ -365,6 +365,8 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  // A replacement tree can change who may type even if the numeric focus stays the same during an event.
+  view_modals_version.val += 1
   view_read_tells.clear()
   view_shape_of.val = OfOld
   let c = g()
@@ -388,6 +390,8 @@ fn view_forget() -> Unit {
     Some(t) => t.dispose()
     None => ()
   }
+  passive_hold_cancel()
+  passive_holds.clear()
   // (what was said of its nodes' corners its own: tree_corners_linked)
   tree_links.clear()
   view_app.val = None
@@ -2560,7 +2564,10 @@ fn Ctx::island_of_id(self : Ctx, id : Int) -> @view.NodeId? {
 /// The field with the focus where it takes typing now, when it is an old view's: that old view's node of the window's
 /// tree and where the field is in it (x, y, w, h from its top left, as the old frame last laid it out): what a list
 /// it is in reads to keep it in view as the keyboard comes up (Ctx::list_holds_field's, for a list of the tree's).
+/// Read so, what reads it is told as the focus moves (View::scrolls_anchored's `keep`: the field it keeps let go as
+/// another takes the focus).
 pub fn focused_field_in() -> (@view.NodeId, (Double, Double, Double, Double))? {
+  hand.focus_id.get() |> ignore
   let c = g()
   let focus = c.typing_allowed()
   guard focus != 0 else { return None }
@@ -2681,13 +2688,21 @@ let view_down_most : Int = 20
 ///|
 /// The hold now (a press of a node's, a gesture's not its own yet, an old view's, nobody's) taken over at
 /// (x, y) at `at` by what holds what it went down on, where one says it takes it as it has moved so far
-/// (Tree::claimer_of): what had it called off (a node's press let go unpressed; a gesture's told Off; the old view's told
-/// the press is called off, as the host calls one off), the rest of it that one's,
-/// down where it went down, moved to where it is now. Whether it was.
+/// (Tree::claimer_of): another's hold called off (a node's press let go unpressed; a gesture's told Off; the old view's
+/// told the press is called off), then that one's down and move. The one already holding it can claim its own hold
+/// without interruption. Whether the move was delivered to a different node.
 fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool {
   guard view_down.val is Some((x0, y0, chain, events)) else { return false }
   guard tree.claimer_of(chain, x - x0, y - y0) is Some(id) else { return false }
   view_down.val = None
+  // (the held node itself won: keep this same hold and deliver the move normally, without cancelling and restarting)
+  if view_held.val is Some(Dragging(held)) && held == id {
+    match tree.view_of(id) {
+      Some(v) => v.yield_drag(false)
+      None => ()
+    }
+    return false
+  }
   // (a finger setting off scrolling lets go of the keyboard, as an old view's list does: Ctx::scroll_lets_go; one
   // taking it over for anything else, not)
   if tree.claims_scroll(id) && tree.scrolls_for(id).map(tree_said_id) != Some(g().focused_id()) {
@@ -2753,6 +2768,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
   tree.bring_to(at)
+  let held_tip = passive_hold_before(kind, x, y)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
@@ -2791,6 +2807,16 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           match old_press_owner(g(), x, y, island) {
             Some(o) if old_wheel_there(o, x, y) => Some(o)
             _ => None
+          }
+        // (a small target reached from outside its drawing: the claim chain starts with that target, not the sibling
+        // or ground physically at this point)
+        Pressed(id) | Dragged(id) =>
+          match tree.view_of(id) {
+            Some(v) => {
+              let (rx, ry, rw, rh) = v.rect()
+              if x < rx || y < ry || x >= rx + rw || y >= ry + rh { Some(id) } else { None }
+            }
+            None => None
           }
         _ => None
       }
@@ -2991,7 +3017,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     }
     (2, Some(Node(id))) => {
       view_held.val = None
-      if tree.press_held(id) && tree.target_at(x, y) == Pressed(id) {
+      if tree.press_held(id) && !held_tip && tree.target_at(x, y) == Pressed(id) {
         // (words a finger picked: the tap theirs, letting them go, nothing pressed (as an old view's pick takes the
         // press), but on what keeps them)
         tapped.val = if picked.finger && !tree_keeps_picked(id) { true } else { tree.run_press_at(id, at) }
@@ -3042,10 +3068,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       view_held.val = None
       tree.gesture_tap_taken() |> ignore
       // (words a finger picked: a tap's theirs, letting them go, the gesture's tap not done, but on what keeps them)
-      tree.withhold_taps(picked.finger && !tree_keeps_picked(id))
+      tree.withhold_taps(held_tip || (picked.finger && !tree_keeps_picked(id)))
       tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at, finger=view_fingers[0]) |> ignore
       tree.withhold_taps(false)
-      tapped.val = tree.gesture_tap_taken()
+      tapped.val = tree.gesture_tap_taken() && !held_tip
       tapped_on.val = Some(id)
       h_frame_owed()
       true
@@ -3079,7 +3105,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       false
     }
   }
-  if tapped.val {
+  if kind == 0 && !over && button != 2 && pointing() is Finger {
+    passive_hold_down(tree, x, y, at)
+  } else if kind == 1 {
+    passive_hold_after_move()
+  }
+  if tapped.val && !held_tip {
     tree.tapped(at)
     // (words a finger picked let go by a tap anywhere else, as an old view's tap lets them go: finger_select.mbt; not
     // by one on what keeps them picked (keeps_picked: a bar of what to do with them), as Ctx::keeps_selection's)
@@ -3459,6 +3490,8 @@ pub fn host_event(f : () -> Unit) -> Unit {
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
+  let focus_before = g().focus
+  let modals_before = view_modals_version.val
   match view_app.val {
     Some(t) => t.event_said(h_event_time(), said, f)
     None => {
@@ -3468,6 +3501,11 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
   turns_said(g(), h_event_time())
+  // A focus or modal change belongs to this event. The host must know which field accepts the next key before
+  // another event arrives, even if no frame was painted in between.
+  if g().focus != focus_before || view_modals_version.val != modals_before {
+    g().sync_ime()
+  }
 }
 
 ///|
@@ -3475,6 +3513,12 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
 /// rest of what it does nobody's.
 fn view_hold_lost() -> Unit {
   pointer_down_now.set(false)
+  if passive_holding.val is Some(_) {
+    // The host took this finger; no later move of it may start an ancestor's scroll.
+    view_down.val = None
+    tree_finger_off()
+  }
+  passive_hold_cancel()
   match (view_app.val, view_held.val) {
     (Some(tree), Some(Dragging(_))) | (Some(tree), Some(Node(_))) => {
       // (a field of the tree's holding it: the press called off, nothing of it kept, tree_field.mbt)
@@ -3911,9 +3955,14 @@ fn old_whole_island() -> @view.NodeId? {
 }
 
 ///|
+/// A change to what the window's tree lets take input (view_modals_told), observed at the end of an event.
+let view_modals_version : Ref[Int] = Ref(0)
+
+///|
 /// What may take input changed in the window's tree (Tree::on_modals: a modal layer, a node let go, leaving, said to
 /// take no press): what an old view that may take input no more holds let go of then, at that cause (view_captures_off).
 fn view_modals_told() -> Unit {
+  view_modals_version.val += 1
   view_captures_off(view_moment(), fn(owner) { !old_owner_open(owner) }, back_gone=fn(owner) { !held_back_open(owner) })
   // (whether the app takes back: what of the tree takes it may have changed)
   g().back_told_host()
@@ -4723,20 +4772,30 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
           // (taken, its press found and done as one event of this moment: Tree::activate_at)
           if tree.activate_at(nid, view_moment()) {
             h_frame_owed()
+          } else if tree.said_action_at(nid, action, view_moment()) {
+            h_frame_owed()
           }
         }
         // (the focus to it, as Tab would give it, at the moment it is asked, where a screen reader may give it then (read
         // out, able to take it; nothing of the old frame's modal over it): else the focus where it was)
         Focus if free => {
           tree.event(view_moment(), fn() {
-            if tree.focus_asked_takes(nid) {
+            if tree.said_takes_action(nid) && tree.focus_asked_takes(nid) {
               g().focus_moved(id, visible=true)
+            } else {
+              tree.said_action_at(nid, action, view_moment()) |> ignore
             }
           })
           h_frame_owed()
         }
         // (words put in a field of its own in place of what it held: as an old view's editor takes them, tree_field.mbt)
-        SetText(_) if free => tree.event(view_moment(), fn() { tree_field_asked(nid, action) |> ignore })
+        SetText(_) if free => tree.event(view_moment(), fn() {
+          if tree.said_takes_action(nid) && !tree_field_asked(nid, action) &&
+            tree.said_action_at(nid, action, view_moment()) {
+            h_frame_owed()
+          }
+        })
+        _ if free => if tree.said_action_at(nid, action, view_moment()) { h_frame_owed() }
         _ => ()
       }
       true
@@ -4847,8 +4906,15 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
         }
         // (what can be done to it, of what it said or would: Activate where a press does something, Focus where it can take the focus)
         let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }
-        if tree.can_focus(sn.id) {
-          actions.push(Focus)
+        if !sn.disabled {
+          if tree.can_focus(sn.id) {
+            actions.push(Focus)
+          }
+          for action in s.actions {
+            if !actions.contains(action) {
+              actions.push(action)
+            }
+          }
         }
         out.push({
           id: tree_said_id(sn.id),

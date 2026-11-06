@@ -37,7 +37,10 @@ let tip_out_scale : Double = 0.97
 /// how far from what it is beside; `at_pointer`: beside the pointer as it moves along the control, its middle level with
 /// it (a tall thin thing's: an edge, usePointerTip), not the control's middle. `within`: shown by the pointer within
 /// `anchor` as it is placed (View::pointer_within), where it is no control and takes no press (a bar's name, what is
-/// pressed there the bar's), not by its being pointed at.
+/// pressed there the bar's), not by its being pointed at. `shortcut`: the action whose keys follow the words, as it
+/// changes (shortcut_keys: only while a keyboard is at hand); none by default. The keys are quieter, as tip_look's.
+/// `passive_hold`: a finger may hold a non-pressing anchor for the tip, while short presses and drags go to what is
+/// under it. Once held, this press is no tap. A control handling its own gesture uses TipHand instead, as before.
 pub fn tip_node(
   tips : TipLayer,
   anchor : @view.View,
@@ -48,6 +51,8 @@ pub fn tip_node(
   gap? : Double = tip_gap,
   at_pointer? : Bool = false,
   within? : Bool = false,
+  shortcut? : () -> String = fn() { "" },
+  passive_hold? : Bool = false,
 ) -> TipHand {
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
@@ -79,7 +84,7 @@ pub fn tip_node(
     })
     |> ignore
     holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) {
-      tip_look_node(t, anchor_id, side, label, fade, gap, at_pointer, owner)
+      tip_look_node(t, anchor_id, side, label, shortcut, fade, gap, at_pointer, owner)
     })
     true
   }
@@ -201,7 +206,7 @@ pub fn tip_node(
     (lifted_end.val)()
   })
   |> ignore
-  {
+  let tip : TipHand = {
     hold: fn() {
       (lifted_end.val)()
       hand.set(Held)
@@ -226,6 +231,10 @@ pub fn tip_node(
       }
     },
   }
+  if passive_hold {
+    @ui.observe_finger_hold(anchor, fn() { label() != "" && anchor.takes_input() }, tip.hold, tip.lift, tip.cancel)
+  }
+  tip
 }
 
 ///|
@@ -327,6 +336,7 @@ fn tip_look_node(
   anchor : @view.NodeId,
   side : @view.Side,
   label : () -> String,
+  shortcut : () -> String,
   fade : TipFade,
   gap : Double,
   at_pointer : Bool,
@@ -335,10 +345,21 @@ fn tip_look_node(
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
   let py = @ui.Space::px(S1_25)
+  let keys = fn() { shortcut_keys(shortcut()) }
+  // (of the ground's: what of the words shows over as much of the ground as there is)
+  let words_in = fn() {
+    let a = fade.shown(t)
+    let ground = if a * 2.0 < 1.0 { a * 2.0 } else { 1.0 }
+    let words = if a * 2.0 - 1.0 > 0.0 { a * 2.0 - 1.0 } else { 0.0 }
+    if ground > 0.0 { words / ground } else { 0.0 }
+  }
   t
   .beside(anchor, side~, along=Middle, offset=gap, at_pointer~)
   .padding(Is((px, py, px, py)))
   .max_width(Is(Some(tip_widest)))
+  .row(Is(true))
+  .gap(Is(@ui.Space::px(S2)))
+  .lines_up(Is(Some(Middle)))
   .radius(By(fn() { theme().corner(Lg) }))
   .ground(By(fn() { theme().color(Primary) }))
   .shadow(By(fn() {
@@ -374,25 +395,30 @@ fn tip_look_node(
   t.box(fn(w) {
     w
     .words(By(fn() { label() }))
+    .shrink(Is(1.0))
+    .min_width(Is(Some(0.0)))
     .words_look(By(fn() {
       let (size, line) = theme().text_size(Meta)
       { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
     }))
     .ink(By(fn() { theme().color(OnPrimary) }))
-    .alpha(By(fn() {
-      // (of its ground's: what of the words shows over as much of the ground as there is)
-      let a = fade.shown(t)
-      let ground = if a * 2.0 < 1.0 { a * 2.0 } else { 1.0 }
-      let words = if a * 2.0 - 1.0 > 0.0 { a * 2.0 - 1.0 } else { 0.0 }
-      if ground > 0.0 {
-        words / ground
-      } else {
-        0.0
-      }
-    }))
+    .alpha(By(words_in))
     |> ignore
   })
   |> ignore
+  t.show(fn() { keys() != "" }, fn(k) {
+    k
+    .shrink(Is(1.0))
+    .min_width(Is(Some(0.0)))
+    .words(By(keys))
+    .words_look(By(fn() {
+      let (size, line) = theme().text_size(Meta)
+      { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+    }))
+    .ink(By(fn() { theme().color(OnPrimary) }))
+    .alpha(By(fn() { words_in() * 0.6 }))
+    |> ignore
+  })
 }
 
 ///|

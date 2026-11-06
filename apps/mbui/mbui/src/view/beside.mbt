@@ -339,7 +339,14 @@ pub fn View::lives_with(self : View, owner : View) -> View {
     guard self.live() is Some(_) else { return }
     match self.parent() {
       Some(p) => p.drop(self)
-      None => self.let_go()
+      None => {
+        // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
+        // any state written by the checkpoint only after the node has been let go.
+        @signals.start_batch()
+        self.tree.before_removing(self)
+        self.let_go()
+        @signals.end_batch()
+      }
     }
   })
   |> ignore
@@ -471,10 +478,17 @@ pub fn View::window_taps(self : View) -> Int {
 
 ///|
 /// Whether what a finger or a button at (`x`, `y`) of the window is for, as the tree is now, is this node (Tree::target_at:
-/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's.
+/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's. A
+/// gesture begun on its drawing is on it only while in that drawing; one begun in its press room may end there too.
 pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
   match self.tree.target_at(x, y) {
-    Pressed(id) | Dragged(id) => id == self.id()
+    Pressed(id) | Dragged(id) => {
+      if id != self.id() { return false }
+      match self.live() {
+        Some(n) if n.gesture_from_room == Some(false) => self.tree.under(x, y).contains(id)
+        _ => true
+      }
+    }
     _ => false
   }
 }

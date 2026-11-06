@@ -632,6 +632,53 @@ describe("remote", { concurrency: true }, () => {
     return { a, b, home, clock, use, asked, back };
   }
 
+  test("a failed re-prepare cannot start the command from the previous prepare", async () => {
+    const { b, use } = pair();
+    const task = { station: "B", key: "same" };
+    const original = { ...task, action: "prepare", command: "echo original > output" };
+    await use("station_task", original);
+    await assert.rejects(use("station_task", { ...original, command: "echo replacement > output" }), /different inputs/);
+    await assert.rejects(use("station_task", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.deepEqual((await use("station_task", { ...task, action: "get" })).job, null, "the old command was not started");
+
+    // An explicit, successful re-prepare makes the intended command usable again, including start retries.
+    await use("station_task", original);
+    const started = (await use("station_task", { ...task, action: "start" })).job;
+    await until("the intended command ends", () => b.store.getJob(started.id)!.state !== "running");
+    assert.equal(readFileSync(join(started.cwd, "output"), "utf8"), "original\n");
+    assert.equal((await use("station_task", { ...task, action: "start" })).job.id, started.id);
+  });
+
+  test("a locally rejected re-prepare also prevents the old command from starting", async () => {
+    const { use } = pair();
+    const task = { station: "B", key: "same-local" };
+    await use("station_task", { ...task, action: "prepare", command: "true" });
+    await assert.rejects(use("station_task", { ...task, action: "prepare", command: "true", dir: "relative" }), /absolute path/);
+    await assert.rejects(use("station_task", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.deepEqual((await use("station_task", { ...task, action: "get" })).job, null);
+  });
+
+  test("a failed prepare stays fenced after migration of an older record and a restart", async () => {
+    const { a, b, clock, use } = pair();
+    const task = { station: "B", key: "restart" };
+    await use("station_task", { ...task, action: "prepare", command: "true" });
+    await assert.rejects(use("station_task", { ...task, action: "prepare", command: "different" }), /different inputs/);
+    // A pre-migration record found after the failure must not replace the newer fence.
+    const name = `${hash(["ws", "s1", "B", "restart"])}.json`;
+    writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
+    await a.remote["movePrepared"]();
+    await a.remote.close();
+    const next = station({ dir: a.dir, store: a.store, jobs: a.jobs, clock });
+    next.remote.attach(async (target, workspace, request) => {
+      if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
+      const answer = await answerPeer(b.remote, workspace ?? "ws", "A", overWire(request));
+      if ("error" in answer) throw new Refused(answer.error);
+      return answer.result;
+    });
+    await assert.rejects(next.remote.tool("station_task", "s1", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.equal((await next.remote.tool("station_task", "s1", { ...task, action: "get" })).job, null);
+  });
+
   test("a small offscreen task reaches the target's small slot", async () => {
     const { b, use, asked } = pair();
     await use("station_task", { station: "B", key: "build", action: "prepare", command: FOREVER });
@@ -657,7 +704,7 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("a chat can ask the target station to remove its own unused mirror while a busy one stays", async () => {
-    const { b, home, use } = pair();
+    const { a, b, home, use } = pair();
     const idle = join(home, "idle");
     const busy = join(home, "busy");
     mkdirSync(idle);
@@ -670,6 +717,7 @@ describe("remote", { concurrency: true }, () => {
     };
     const first = await run("one", idle, "echo output > built.txt");
     await until("the first task ends", () => b.store.getJob(first.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task one on ") && text.includes('"state":"exited"')));
     const second = await run("two", busy, FOREVER);
     const room = b.remote.room("ws", "A", "s1");
     const idlePath = join(room, "work", "idle");
@@ -712,7 +760,7 @@ describe("remote", { concurrency: true }, () => {
     let release!: () => void;
     let entered = 0;
     const gate = new Promise<void>((resolve) => void (release = resolve));
-    const { b, home, use, clock } = pair(undefined, { removeMirror: async (path) => {
+    const { a, b, home, use, clock } = pair(undefined, { removeMirror: async (path) => {
       entered++;
       await gate;
       await rm(path, { recursive: true, force: true });
@@ -723,6 +771,7 @@ describe("remote", { concurrency: true }, () => {
     await use("station_task", { station: "B", key: "slow", action: "prepare", dir, command: "true" });
     const started = await use("station_task", { station: "B", key: "slow", action: "start" });
     await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task slow on ") && text.includes('"state":"exited"')));
     const sleeps = clock.asked();
     const first = use("station_task", { station: "B", action: "clean", mirror: "slow" });
     await until("removal starts", () => entered === 1);
@@ -743,7 +792,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("an interrupted cleanup leaves a prepared task needing a sync before it can start", async () => {
     let fail = true;
-    const { b, home, use } = pair(undefined, { removeMirror: async (path) => {
+    const { a, b, home, use } = pair(undefined, { removeMirror: async (path) => {
       if (fail) throw new Error("removal interrupted");
       await rm(path, { recursive: true, force: true });
     } });
@@ -753,6 +802,7 @@ describe("remote", { concurrency: true }, () => {
     await use("station_task", { station: "B", key: "one", action: "prepare", dir, command: "true" });
     const started = await use("station_task", { station: "B", key: "one", action: "start" });
     await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task one on ") && text.includes('"state":"exited"')));
     const record = join(b.remote.root, "incoming", hash(["ws", "A", "s1", "one"]), "task.json");
     assert.equal(readJson(record).synced, true);
     await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "interrupted" }), /could not be removed/);
@@ -961,6 +1011,53 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(a.told[0][1].includes('"state":"stopped"'), a.told[0][1]);
     assert.deepEqual(asked.slice(before).map((r) => r.method), ["task.gets"], "asked once, after it was told");
     assert.equal(readJson(a.remote.outgoing("ws", "s1", "B", "k")).delivered, true);
+  });
+
+  test("a task waiting for the screen is not reported ended before it actually runs", async () => {
+    for (const older of [false, true]) {
+      const jobsClock = testClock();
+      let ticks = 0;
+      const machine: Machine = { cpus: () => 8, ticks: () => [0, ticks += 1000], pressure: async () => "normal" };
+      const { a, b, use, clock } = pair(undefined, { jobsClock, machine });
+      let polls = 0;
+      if (older) a.remote.attach(async (target, workspace, request) => {
+        if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
+        if (request.method === "task.gets") polls++;
+        const sent = overWire(request);
+        if (sent.method === "task.start") delete sent.push;
+        const answer = await answerPeer(b.remote, workspace ?? "ws", "A", sent);
+        if ("error" in answer) throw new Refused(answer.error);
+        return answer.result;
+      });
+      const first = { station: "B", key: "first" };
+      const second = { station: "B", key: "second" };
+      await use("station_task", { ...first, action: "prepare", screen: true, command: "while [ ! -e proceed ]; do sleep 0.05; done" });
+      const running = (await use("station_task", { ...first, action: "start" })).job;
+      await use("station_task", { ...second, action: "prepare", screen: true, command: "echo ran > second-ran" });
+      const waiting = await use("station_task", { ...second, action: "start" });
+      assert.equal(waiting.job.queued, true);
+      assert.equal(waiting.queue.why, "screen");
+      for (let i = 0; i < 12; i++) {
+        await Effect.runPromise(jobsClock.adjust("5 seconds"));
+        await Effect.runPromise(clock.adjust("5 seconds"));
+        await turn();
+        const got = await use("station_task", { ...second, action: "get" });
+        assert.equal(got.job.state, "running");
+        assert.equal(got.job.queued, true);
+        assert.equal(got.queue.why, "screen");
+        assert.equal(a.told.some(([, text]) => text.startsWith("Remote task second on ")), false);
+      }
+      assert.equal(existsSync(join(running.cwd, "second-ran")), false);
+      if (older) assert.ok(polls > 1, "a station without push was polled repeatedly while it waited");
+      writeFileSync(join(running.cwd, "proceed"), "go");
+      await until("the first task ends", () => b.store.getJob(running.id)!.state === "exited");
+      await rounds("the second task runs", jobsClock, "5 seconds", () => b.store.getJob(waiting.job.id)!.state === "exited");
+      await rounds("the second task's completion is told", clock, "5 seconds", () => a.told.some(([, text]) => text.startsWith("Remote task second on ")));
+      const notices = a.told.filter(([, text]) => text.startsWith("Remote task second on "));
+      assert.equal(notices.length, 1);
+      assert.match(notices[0]![1], /"state":"exited".*"exitCode":0/);
+      assert.equal(readFileSync(join(running.cwd, "second-ran"), "utf8"), "ran\n");
+    }
   });
 
   test("a change the source was not reached for is told again until it is, and after the target restarts", async () => {

@@ -39,8 +39,8 @@ typedef struct {
   /// as Hermes answers String's normalize, Intl and the rest in Java through it. May be NULL.
   void (*thread)(void *ctx);
   /// A call only the app answers, at once (`text.collate`: the order people read names in, its system's): the answer's
-  /// JSON (UTF-8, NUL-terminated, malloc'd: the engine frees it), or NULL for the shell's answer. Called on the core's
-  /// thread. May be NULL.
+  /// JSON (UTF-8, NUL-terminated: allocated with CoTaskMemAlloc on Windows, malloc elsewhere; the engine frees it), or
+  /// NULL for the shell's answer. Called on the core's thread. May be NULL.
   char *(*app_sync)(void *ctx, const char *op, const char *json, size_t len);
   /// The Rust shell the core runs on (client/shell's, from sf_shell_start), as it has started, on the core's thread
   /// before the core's script runs: for what the host asks of it itself, past the core (sf_shell_set_say: a remote

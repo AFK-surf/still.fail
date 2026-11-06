@@ -1,10 +1,21 @@
 // The station's place with still.fail cloud (src/cloud/state.ts) as kept in memory and in <data>/mesh/cloud.json.
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Cloud, writeState } from "../src/cloud/state.ts";
+import { Cloud, readState, writeState } from "../src/cloud/state.ts";
+import { setStationLang } from "../src/ops/i18n.ts";
+
+test("an unreadable cloud state names the file and suggests encryption without exposing its contents", () => {
+  setStationLang("en");
+  const data = mkdtempSync(join(tmpdir(), "cloud-invalid-"));
+  mkdirSync(join(data, "mesh"));
+  const file = join(data, "mesh", "cloud.json");
+  writeFileSync(file, "%TSD-Header-###%secret");
+  assert.throws(() => readState(data), (error: Error) =>
+    error.message.includes(file) && /encrypt/i.test(error.message) && !error.message.includes("secret"));
+});
 
 test("cloud.json's watch failing (macOS turning it down: EMFILE) ends the watch, not the station", () => {
   const data = mkdtempSync(join(tmpdir(), "cloud-state-"));

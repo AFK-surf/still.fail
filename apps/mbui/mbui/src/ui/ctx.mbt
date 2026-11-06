@@ -2522,11 +2522,14 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 ///|
 /// How fast the pointer went at its latest event (points per ms, across and down; at most a fling's fastest): what a
 /// list let go flings at (Compose's VelocityTracker over the press's events, by their own times), for what else a
-/// finger lets go of moving (a picture zoomed in).
+/// finger lets go of moving (a picture zoomed in). None where it stood still longer than tracker_gap_ms before that
+/// event (Tracker::velocity_at): held still, then let go, it was not flung.
 pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
-  ignore(self)
   hand.pointer.get() |> ignore
-  (dclamp(track_x.velocity(), -max_fling, max_fling), dclamp(track_y.velocity(), -max_fling, max_fling))
+  (
+    dclamp(track_x.velocity_at(self.pointer_t), -max_fling, max_fling),
+    dclamp(track_y.velocity_at(self.pointer_t), -max_fling, max_fling),
+  )
 }
 
 ///|
