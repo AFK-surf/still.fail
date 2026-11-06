@@ -38,6 +38,9 @@ fn main {
   let a11y = @ui.env("MBUI_A11YCHECK") == "1"
   // MBUI_FONTSCALECHECK=1: the system's size of words as the host gives it, on the log (fontscalecheck.mbt)
   let font_scaled = @ui.env("MBUI_FONTSCALECHECK") == "1"
+  if imaged != "" {
+    @gallery.image_check_follow()
+  }
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }

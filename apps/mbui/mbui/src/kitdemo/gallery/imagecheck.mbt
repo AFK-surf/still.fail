@@ -18,6 +18,9 @@ let image_check_key = "mem:imagecheck"
 let image_check_told : Ref[Int] = Ref(-1)
 
 ///|
+let image_check_given : Ref[Bool] = Ref(false)
+
+///|
 /// 0 shown, 1 its context asked anew, 2 made anew, 3 told again
 let image_check_at : Ref[Int] = Ref(0)
 
@@ -70,14 +73,21 @@ fn image_check_step(path : String, scale : Double) -> Unit {
 }
 
 ///|
+/// What the host says of the picture followed, from before the app's first frame: owned by no build (one a build
+/// made would go with the next build of it, and what the host says after with it).
+pub fn image_check_follow() -> Unit {
+  @signals.effect(fn() {
+    @ui.image_state(image_check_key) |> ignore
+    image_check_told.val += 1
+  })
+  |> ignore
+}
+
+///|
 pub fn image_check_run(c : @ui.Ctx, path : String) -> Unit {
-  if image_check_told.val < 0 {
+  if !image_check_given.val {
+    image_check_given.val = true
     c.image_bytes(image_check_key, @codec.from_base64(image_check_png))
-    @signals.effect(fn() {
-      @ui.image_state(image_check_key) |> ignore
-      image_check_told.val += 1
-    })
-    |> ignore
   }
   c.image(image_check_key, w=Px(120.0), h=Px(120.0), fade=false) |> ignore
   let scale = c.scale
