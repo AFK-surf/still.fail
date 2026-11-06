@@ -102,27 +102,49 @@ test "scrolls_anchored: flung down to its foot, rows taller and shorter than cou
 }
 
 ///|
-/// The same list flung down to its foot, then up, with frames every `step` ms: where its rows are at each moment said
-/// (2000 ms after each fling, and at the end), and whether a frame's layout ran to the most.
-fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)], Array[(Int?, Double?)], Bool) raise {
+/// The same list flung down to its foot, then up, with frames every `step` ms (none between where it is infinite), each
+/// drawn `ahead` ms after its logic's moment (a host's frame drawn for when it is to be shown; the frame each moment said
+/// is drawn at is that moment's): where its rows are at each moment said (2000 ms after each fling, and at the end), and
+/// whether a frame's layout ran to the most.
+fn flip_run(step : Double, up : Double, speed : Double, ahead? : Double = 0.0, tall_tail? : Bool = false) -> (Array[(Int, Double?)], Array[(Int?, Double?)], Bool) raise {
   let told : Array[String] = []
   let missed : Array[String] = []
   @view.faults_stop.val = false
   @view.fault_told.val = Some(fn(said) { told.push(said) })
-  let c = anchored_case(200, tall_of=fn(k) { if k % 7 == 0 { 131.0 } else if k % 3 == 0 { 23.0 } else { 47.0 } })
+  // (`tall_tail`: its last 30 rows six times as tall as the rest, counted as the rest are till measured)
+  let c = anchored_case(200, tall_of=fn(k) {
+    if tall_tail && k >= 170 { 240.0 } else if k % 7 == 0 { 131.0 } else if k % 3 == 0 { 23.0 } else { 47.0 }
+  }, pressed=true)
   c.tree.lists_feel(fn() { (@view.ListFeel::Android, 3.0) })
+  // (the logic's moment of the last frame or event, and of the last frame: none goes back)
+  let logic = Ref(10.0)
   let at = Ref(10.0)
-  // (frames every `step` ms after the last, as long as they come before `till`; what is drawn at `till` itself, said)
+  let to = fn(now : Double) {
+    if now < logic.val {
+      missed.push("the logic's moment back from \{logic.val} to \{now}")
+    }
+    logic.val = now
+  }
+  // (a frame of the logic's moment `now`, drawn `ahead` after it)
+  let frame_of = fn(now : Double) {
+    to(now)
+    if ahead > 0.0 {
+      c.tree.at(now + ahead)
+    }
+    c.tree.frame(390.0, 844.0, now~) |> ignore
+  }
+  // (frames every `step` ms of the logic after the last, as long as they come before `till`)
   let frames_before = fn(till : Double) {
     while at.val + step < till {
       at.val = at.val + step
-      c.tree.frame(390.0, 844.0, now=at.val) |> ignore
+      frame_of(at.val)
     }
   }
-  let run_to = fn(till : Double) {
-    frames_before(till)
-    at.val = till
-    c.tree.frame(390.0, 844.0, now=till) |> ignore
+  // (what is shown at `shown`: the frame of the logic's moment `ahead` before it, drawn then)
+  let run_to = fn(shown : Double) {
+    frames_before(shown - ahead)
+    at.val = shown - ahead
+    frame_of(at.val)
   }
   // (a finger moved `by` from t to t + 10, let go there: each of its events at its moment, the frames due before it
   // drawn before it, in the order of the one clock)
@@ -131,10 +153,13 @@ fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)
     let from = if by < 0.0 { 90.0 } else { 10.0 }
     match c.tree.claimer_of(c.tree.claimers_at(150.0, from), 0.0, by) {
       Some(id) => {
+        to(t)
         let down = c.tree.drag_at(id, Down, 150.0, from, t)
         frames_before(t + 5.0)
+        to(t + 5.0)
         let moved = c.tree.drag_at(id, Moved, 150.0, from + by / 2.0, t + 5.0)
         frames_before(t + 10.0)
+        to(t + 10.0)
         let last = c.tree.drag_at(id, Moved, 150.0, from + by, t + 10.0) &&
           c.tree.drag_at(id, Up, 150.0, from + by, t + 10.0)
         if !(down && moved && last) {
@@ -160,6 +185,14 @@ fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)
         None => false
       }
     })
+    // (and what a press there finds, by the tree's own way of finding it: the same row)
+    let hit = match c.tree.target_at(150.0, 50.0) {
+      @view.Pressed(id) => c.made().iter().find_first(fn(k) { c.live.get(k).map(fn(v) { v.id() == id }).unwrap_or(false) })
+      _ => None
+    }
+    if hit != on {
+      missed.push("at \{at.val}: a press at (150, 50) finds \{hit}, the row drawn there \{on}")
+    }
     ends.push((on, c.scroll.glides_till()))
   }
   c.tree.wheel_at(150.0, 50.0, 0.0, -up, 0, 10.0) |> ignore
@@ -182,7 +215,7 @@ fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)
 }
 
 ///|
-test "scrolls_anchored flung to its foot and back, its rows not as tall as counted: where they are, the row a finger is on and when it comes to rest, at each moment the same at 60, 144 and 30 frames a second" {
+test "scrolls_anchored flung to its foot and back, its rows not as tall as counted: where they are, the row a finger is on and when it comes to rest, at each moment the same at 60, 144 and 30 frames a second, with none between, and drawn ahead" {
   for cs in [(300.0, 140.0), (900.0, 60.0), (2500.0, 20.0)] {
     let (up, speed) = cs
     let (at60, end60, ran60) = flip_run(1000.0 / 60.0, up, speed)
@@ -193,5 +226,116 @@ test "scrolls_anchored flung to its foot and back, its rows not as tall as count
     assert_eq(at30, at60, msg="up \{up} speed \{speed}: 30 against 60")
     assert_eq(end144, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 144 against 60")
     assert_eq(end30, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 30 against 60")
+    // (and no frame between the moments said, and each frame at 60 drawn 16 ms after its logic's moment)
+    let (at0, end0, ran0) = flip_run(1.0e9, up, speed)
+    let (at_ahead, end_ahead, ran_ahead) = flip_run(1000.0 / 60.0, up, speed, ahead=16.0)
+    assert_eq((ran0, ran_ahead), (false, false), msg="up \{up} speed \{speed}: a frame's layout ran to the most")
+    assert_eq((at0, end0), (at60, end60), msg="up \{up} speed \{speed}: no frames between against 60")
+    assert_eq((at_ahead, end_ahead), (at60, end60), msg="up \{up} speed \{speed}: drawn 16 ms ahead against 60")
   }
+  // (its last rows far taller than the rest, counted as the rest till measured: its foot further than it is counted
+  // as a fling toward it sets out; the same, whatever frames are drawn between)
+  for cs in [(6000.0, 40.0), (3000.0, 20.0)] {
+    let (up, speed) = cs
+    let (at60, end60, _) = flip_run(1000.0 / 60.0, up, speed, tall_tail=true)
+    let (at0, end0, _) = flip_run(1.0e9, up, speed, tall_tail=true)
+    let (at_ahead, end_ahead, _) = flip_run(1000.0 / 60.0, up, speed, ahead=16.0, tall_tail=true)
+    assert_eq((at0, end0), (at60, end60), msg="tall tail, up \{up} speed \{speed}: no frames between against 60")
+    assert_eq((at_ahead, end_ahead), (at60, end60), msg="tall tail, up \{up} speed \{speed}: drawn 16 ms ahead against 60")
+  }
+}
+
+///|
+test "scrolls_anchored flung hard to its foot, what it holds changed on the way (rows swapped, a row a little taller, a row more or less at its top): at rest at its foot, its last row there" {
+  let tall = fn(k : Int) { if k % 7 == 0 { 131.0 } else if k % 3 == 0 { 23.0 } else { 47.0 } }
+  // (the first row made as it was scrolled up from its end: over the window once it is flung down)
+  let seen_first = Ref(0)
+  let changes : Array[(String, (AnchoredCase) -> Unit)] = [
+    ("rows over the window swapped", fn(c) {
+      let ks = c.keys.get().copy()
+      let i = seen_first.val
+      let k = ks[i]
+      ks[i] = ks[i + 1]
+      ks[i + 1] = k
+      c.keys.set(ks)
+    }),
+    ("rows in the window swapped", fn(c) {
+      let ks = c.keys.get().copy()
+      let i = ks.length() - 3
+      let k = ks[i]
+      ks[i] = ks[i + 1]
+      ks[i + 1] = k
+      c.keys.set(ks)
+    }),
+    ("a row over the window 0.3 taller", fn(c) {
+      match c.heights.get(seen_first.val) {
+        Some(h) => h.set(h.get() + 0.3)
+        None => ()
+      }
+    }),
+    ("a row in the window 0.3 taller", fn(c) {
+      match c.made().last() {
+        Some(k) =>
+          match c.heights.get(k) {
+            Some(h) => h.set(h.get() + 0.3)
+            None => ()
+          }
+        None => ()
+      }
+    }),
+    ("a row more at its top", fn(c) {
+      let ks = [-1]
+      ks.append(c.keys.get())
+      c.keys.set(ks)
+    }),
+    ("its first row gone", fn(c) { c.keys.set(c.keys.get()[1:].to_array()) }),
+  ]
+  let wrong : Array[String] = []
+  let told : Array[String] = []
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { told.push(said) })
+  for ch in changes {
+    for after in [40.0, 120.0, 300.0] {
+      let (what, change) = ch
+      let c = anchored_case(200, tall_of=fn(k) { if k < 0 { 47.0 } else { tall(k) } })
+      c.tree.lists_feel(fn() { (@view.ListFeel::Android, 3.0) })
+      let was = told.length()
+      c.tree.wheel_at(150.0, 50.0, 0.0, -900.0, 0, 10.0) |> ignore
+      let mut t = 26.0
+      while t < 1500.0 {
+        c.tree.frame(390.0, 844.0, now=t) |> ignore
+        t = t + 16.0
+      }
+      seen_first.val = c.made().get(0).unwrap_or(150)
+      let took = match c.tree.claimer_of(c.tree.claimers_at(150.0, 90.0), 0.0, -80.0) {
+        Some(id) =>
+          c.tree.drag_at(id, Down, 150.0, 90.0, 1500.0) &&
+          c.tree.drag_at(id, Moved, 150.0, 50.0, 1505.0) &&
+          c.tree.drag_at(id, Moved, 150.0, 10.0, 1510.0) &&
+          c.tree.drag_at(id, Up, 150.0, 10.0, 1510.0)
+        None => false
+      }
+      let mut changed = false
+      t = 1516.0
+      while t < 8000.0 {
+        if !changed && t >= 1510.0 + after {
+          change(c)
+          changed = true
+        }
+        c.tree.frame(390.0, 844.0, now=t) |> ignore
+        t = t + 16.0
+      }
+      let last = c.keys.get()[c.keys.get().length() - 1]
+      let foot = c.top(last).map(fn(top) { top + c.heights.get(last).map(fn(h) { h.get() }).unwrap_or(0.0) })
+      // (to a thousandth: its rows' tops summed from heights told in fractions)
+      let at_foot = foot.map(fn(f) { (f - 100.0).abs() < 0.001 }).unwrap_or(false)
+      if !took || !at_foot || c.scroll.glides_till() is Some(_) || told.length() > was {
+        wrong.push("\{what} \{after} ms in: taken \{took}, its last row's foot at \{foot}, gliding till \{c.scroll.glides_till()}, \{told.length() - was} told")
+      }
+      c.tree.dispose()
+    }
+  }
+  @view.faults_stop.val = true
+  @view.fault_told.val = None
+  assert_true(wrong.is_empty(), msg="\{wrong.length()} of \{changes.length() * 3}:\n" + wrong.iter().take(6).collect().join("\n"))
 }

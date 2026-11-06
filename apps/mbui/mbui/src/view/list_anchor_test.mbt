@@ -14,7 +14,7 @@ priv struct AnchoredCase {
 }
 
 ///|
-fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double, Double) -> @view.ListRoom, tall_of? : (Int) -> Double = fn(_) { 40.0 }) -> AnchoredCase {
+fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double, Double) -> @view.ListRoom, tall_of? : (Int) -> Double = fn(_) { 40.0 }, pressed? : Bool = false) -> AnchoredCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
@@ -40,6 +40,10 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
         b.height(By(fn() { Some(h.get()) })) |> ignore
+        // (each row pressed where `pressed` says: what a press finds there, Tree::target_at)
+        if pressed {
+          b.on_press(fn() {  }) |> ignore
+        }
       })
       |> ignore
     })
