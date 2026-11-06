@@ -191,7 +191,8 @@ pub fn Scroll::shown_by(self : Scroll) -> View? {
 
 ///|
 /// Whether it is laid out nowhere, or what holds it is (View::laid_nowhere, left out of its row: View::drops; a page
-/// of a stack not shown): nothing of it shows, its place none.
+/// of a stack not shown): nothing of it shows, its place none. Followed as the tree publishes the layout's omissions.
 pub fn View::shown_nowhere(self : View) -> Bool {
+  self.tree.outs_said.get() |> ignore
   !self.alive() || self.tree.out_at(self.at)
 }
