@@ -18,7 +18,7 @@ import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
-import { Signer, next } from "../src/lock.ts";
+import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { pairs } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
@@ -165,6 +165,103 @@ test("a new device goes away while the trusted app loads its key: no prompt rema
   Deferred.doneUnsafe(ready, Effect.void);
   await r.host.time.pass(500);
   assert.deepEqual((await prompts()).pairing, []);
+});
+
+test("a trusted device whose newer lock is still being read waits before answering", async () => {
+  const g = grant();
+  const owner = elsewhere();
+  let ownKey = "";
+  const r = await rig((me) => {
+    ownKey = me.id;
+    return { ws: genesis("ws", owner, false, [], g.keys, ME, [{ id: "aa".repeat(32), sub: "s1", kind: "app", label: "owner", sign_key: owner.id }]) };
+  });
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const added = next("ws", r.cloud.head("ws"), r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this", sign_key: ownKey });
+  const signed: Entry = { ...added, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(signedBytes(entryHash(added))) } };
+  r.cloud.chains.set("ws", [...r.cloud.chains.get("ws")!, signed]);
+  const release = r.host.hold("/v1/workspaces/ws/lock?after=0");
+  const topic = { topic: "workspace", workspace: "ws" };
+  r.core.inner.data.set(topic, { ...(r.core.inner.data.shared(topic) as object), lock: r.cloud.head("ws") });
+  await r.host.time.pass(500);
+  assert.ok(r.core.inner.scheduler.pending().some((s) => s.includes("lock/ws")), "the newer lock is being read");
+  const [trusted, phone] = await pipe();
+  r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, trusted));
+  const answers: unknown[] = [];
+  r.core.inner.runner.fork(Effect.ignore(Effect.andThen(
+    phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", PHONE, "s1") }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }),
+    Effect.map(phone.next(), (answer) => { answers.push(answer); }),
+  )));
+  await r.host.time.pass(500);
+  assert.deepEqual(answers, [], "the old lock must not make the trusted device refuse prematurely");
+  release();
+  await r.host.time.pass(2_000);
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["ws"] }]);
+  assert.equal((await prompts()).pairing.length, 1);
+});
+
+test("a newer lock changes who may approve: the old permission does not show a code", async () => {
+  const m = await met();
+  const signer = Effect.runSync(Signer.make(m.host));
+  const added = signer.sign(next("ws", m.cloud.head("ws"), m.host.nowMs() / 1000, "device", {
+    id: "ee".repeat(32), sub: "s2", kind: "app", label: "their first", sign_key: "ed25519:" + "22".repeat(32),
+  }));
+  m.cloud.chains.set("ws", [...m.cloud.chains.get("ws")!, added]);
+  const release = m.host.hold("/v1/workspaces/ws/lock?after=0");
+  const topic = { topic: "workspace", workspace: "ws" };
+  m.core.inner.data.set(topic, { ...(m.core.inner.data.shared(topic) as object), lock: m.cloud.head("ws") });
+  await m.host.time.pass(500);
+  await Effect.runPromise(m.phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: m.g.credential("ws", PHONE, "s2") }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }));
+  const answers: unknown[] = [];
+  m.core.inner.runner.fork(Effect.map(m.phone.next(), (answer) => { answers.push(answer); }));
+  await m.host.time.pass(500);
+  assert.deepEqual(answers, [], "the old permission is not used while the newer lock is loading");
+  release();
+  await m.host.time.pass(2_000);
+  assert.deepEqual(answers, [{ t: "no", error: "not_here" }]);
+  assert.deepEqual((await m.prompts()).pairing, []);
+});
+
+test("a newer lock cannot be read: a permission from the old one does not show a code", async () => {
+  const m = await met();
+  const signer = Effect.runSync(Signer.make(m.host));
+  const added = signer.sign(next("ws", m.cloud.head("ws"), m.host.nowMs() / 1000, "device", {
+    id: "ee".repeat(32), sub: "s2", kind: "app", label: "their first", sign_key: "ed25519:" + "22".repeat(32),
+  }));
+  m.cloud.chains.set("ws", [...m.cloud.chains.get("ws")!, added]);
+  stationReplies(m.host, (req) => (req.method === "GET" && req.url.includes("/v1/workspaces/ws/lock") ? new Status(503, { error: "unavailable" }) : m.cloud.reply(req)));
+  const topic = { topic: "workspace", workspace: "ws" };
+  m.core.inner.data.set(topic, { ...(m.core.inner.data.shared(topic) as object), lock: m.cloud.head("ws") });
+  await m.host.time.pass(500);
+  assert.deepEqual(await m.hello(), { ok: { t: "no", error: "not_here" } });
+  assert.deepEqual((await m.prompts()).pairing, []);
+});
+
+test("one workspace's lock is updating: another ready workspace can show a code immediately", async () => {
+  const g = grant();
+  const r = await rig((me) => ({
+    ws: genesis("ws", me, true, [], g.keys, ME),
+    w2: genesis("w2", me, true, [], g.keys, ME),
+  }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  await r.watch({ topic: "lock", workspace: "w2" });
+  const signer = Effect.runSync(Signer.make(r.host));
+  const added = signer.sign(next("w2", r.cloud.head("w2"), r.host.nowMs() / 1000, "member", { sub: "s3", email: "s3@x.com", role: "member" }));
+  r.cloud.chains.set("w2", [...r.cloud.chains.get("w2")!, added]);
+  const release = r.host.hold("/v1/workspaces/w2/lock?after=0");
+  const topic = { topic: "workspace", workspace: "w2" };
+  r.core.inner.data.set(topic, { ...(r.core.inner.data.shared(topic) as object), lock: r.cloud.head("w2") });
+  await r.host.time.pass(500);
+  const [trusted, phone] = await pipe();
+  r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, trusted));
+  const answers: unknown[] = [];
+  r.core.inner.runner.fork(Effect.ignore(Effect.andThen(
+    phone.send({ t: "hello", v: 1, workspaces: ["ws", "w2"].map((ws) => ({ ws, credential: g.credential(ws, PHONE, "s2") })), kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }),
+    Effect.map(phone.next(), (answer) => { answers.push(answer); }),
+  )));
+  await r.host.time.pass(1_000);
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["ws"] }]);
+  release();
 });
 
 test("the owner approves a member's first device that signs, not a later one: that one the member approves from a device of their own", async () => {
