@@ -206,6 +206,8 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// A borrowed host's changed reset count supersedes a local quota read already in flight.
+  private borrowedResetVersion = new Map<string, number>();
   /// A host on an older version may know the reset count but not the cards' expiries. Try the borrowed login at most
   /// once a round for the same count, including when the provider cannot supply all of the details.
   private resetDetailsAsked = new Map<string, { at: number; count: number }>();
@@ -1043,6 +1045,10 @@ export class Accounts {
         !this.missingBorrowedResetDetails(profile, mine) && mine.resetCount === got.quota.resetCount &&
         mine.checkedAt <= now && now - mine.checkedAt < QUOTA_EVERY_MS;
       if (isObject(got.quota) && !local?.codexRevoked && !completeHere && !(mine !== undefined && Number(got.quota.checkedAt ?? 0) < mine.checkedAt)) {
+        if (mine?.resetCount !== got.quota.resetCount) {
+          this.borrowedResetVersion.set(profile.id, (this.borrowedResetVersion.get(profile.id) ?? 0) + 1);
+          this.resetDetailsAsked.delete(profile.id);
+        }
         this.quotas.set(profile.id, got.quota as ProfileQuota);
         this.deps.store.setProfileQuota(profile.id, got.quota);
       }
@@ -1091,6 +1097,7 @@ export class Accounts {
   private readQuota(id: string, afterReset: boolean): Promise<ProfileQuota | null> {
     const busy = this.quotaBusy.get(id);
     if (busy && !afterReset) return Promise.resolve(this.quotas.get(id) ?? null);
+    const resetVersion = this.borrowedResetVersion.get(id) ?? 0;
     // A read after a reset waits for any older one, so an in-flight snapshot from before cannot win.
     const read = (async () => {
       if (busy) await busy;
@@ -1102,7 +1109,12 @@ export class Accounts {
     );
     this.quotaBusy.set(id, done);
     void done.then(() => {
-      if (this.quotaBusy.get(id) === done) this.quotaBusy.delete(id);
+      if (this.quotaBusy.get(id) !== done) return;
+      this.quotaBusy.delete(id);
+      if ((this.borrowedResetVersion.get(id) ?? 0) !== resetVersion) {
+        const profile = this.profile(id);
+        if (profile) this.refreshMissingBorrowedResetDetails(profile);
+      }
     });
     return read;
   }
@@ -1115,6 +1127,7 @@ export class Accounts {
     // (none lent yet, run out, refused) it comes with its host's check.
     if (borrowed(profile) && accessKind(profile) === "subscription" && this.deps.shared) {
       const now = this.background.now();
+      const resetVersion = this.borrowedResetVersion.get(id) ?? 0;
       let own = profile.runtime === "codex" ? await lentCodexUsage(profile.home, now, this.urls).catch(() => null) : null;
       if (profile.runtime === "codex" && (own === null || own.signedOut) && this.deps.shared.lendCodex) {
         try {
@@ -1128,6 +1141,12 @@ export class Accounts {
         } catch {
           // Keep a refusal from the token actually used here, even when the host is unavailable.
         }
+      }
+      // The host changed its reset count while the local read was away. Its earlier answer cannot replace that count.
+      // Once this read lets go, read the new count's missing details in the normal, rate-limited way.
+      if ((this.borrowedResetVersion.get(id) ?? 0) !== resetVersion) {
+        if (own?.signedOut) this.codexLogin(id, true);
+        return this.quotas.get(id) ?? null;
       }
       if (own?.state === "ok") {
         const { signedOut: _, ...asked } = own;
