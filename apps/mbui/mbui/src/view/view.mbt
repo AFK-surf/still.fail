@@ -817,6 +817,9 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
+  /// Pointer-follow callbacks are notified after placement and the input batch, never by pulling properties.
+  follows_due : Array[Bound]
+  mut follows_telling : Bool
   /// how many bindings live: what is asked at once (View::laid_size, Tree::bring_to) pulls those whose reads changed
   mut pulls_held : Int
   /// those marked as what they read changed, since they last ran (Tree::pull)
@@ -1138,6 +1141,8 @@ pub fn Tree::new(
     telling_laid: false,
     first_drawn: [],
     bindings_due: [],
+    follows_due: [],
+    follows_telling: false,
     pulls_held: 0,
     pulls_marked: [],
     boxes_deferred: None,
@@ -1871,6 +1876,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
+  self.follows_due.clear()
   self.pulls_held = 0
   self.pulls_marked.clear()
   self.boxes_deferred = None
@@ -2114,7 +2120,7 @@ priv enum Phase {
 /// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : Bool) -> () -> Unit {
   // (a node's own read, of what is laid out too, as told last: wherever a write set it off, reads_own)
   let read = fn() { reads_own(read) }
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
@@ -2127,7 +2133,12 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     if b.live && !b.queued {
       b.queued = true
       told_at.val = if self.standing { self.cause_now() } else { self.time_now() }
-      self.bindings_due.push(b)
+      if property {
+        self.bindings_due.push(b)
+      } else {
+        self.follows_due.push(b)
+        @signals.after_flush(fn() { self.follows_done() })
+      }
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
       // something asks, View::laid_before_causes)
@@ -2137,7 +2148,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
-      self.pulls_marked.push(b)
+      if property { self.pulls_marked.push(b) }
     }
   })
   b.run = fn() {
@@ -2148,7 +2159,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     }
     let v = w.read(read)
     let was = self.cause_at
-    self.cause_at = told_at.val
+    if told_at.val >= 0.0 { self.cause_at = told_at.val }
     told_at.val = -1.0
     @signals.untracked(fn() { then(v) })
     self.cause_at = was
@@ -2164,6 +2175,36 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     self.pulls_held -= 1
     w.stop()
   }
+}
+
+///|
+/// A followed pointer's change is an observation of the completed geometry. Its public callback can change or
+/// dispose the tree, so it must not share the property-binding pull, a partial input batch, or an active layout.
+fn Tree::follows_done(self : Tree) -> Unit {
+  if self.follows_telling || self.committing > 0 || self.laying > 0 || self.layouts_active > 0 ||
+    @signals.batch_depth() > 0 || self.follows_due.is_empty() || self.gone {
+    return
+  }
+  self.follows_telling = true
+  defer { self.follows_telling = false }
+  let mut i = 0
+  while i < self.follows_due.length() && !self.gone {
+    let b = self.follows_due[i]
+    i += 1
+    if b.live && b.queued {
+      // All dependent properties are current before the target is read. Further callbacks made by this layout
+      // remain in this queue; no callback can recursively tell another half-finished placement.
+      if self.standing {
+        // An active picture is already sampling its own time; completing its placement does not rewind it.
+        self.pull()
+        self.laid_out(@signals.untracked(fn() { self.clock.get() }))
+      } else {
+        self.laid_now()
+      }
+      if b.live && !self.gone { (b.run)() }
+    }
+  }
+  self.follows_due.clear()
 }
 
 ///|
@@ -2447,7 +2488,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         last.val = Some(v)
         apply(v)
         marked()
-      })
+      }, property=true)
       n.props[prop] = stop
     }
     Roomed(of, f) => {
@@ -3575,6 +3616,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
     })
   }
   self.standing = was_standing
+  self.follows_done()
 }
 
 ///|
@@ -3948,6 +3990,7 @@ fn Tree::modals_settled(self : Tree) -> Unit {
     self.modals_now()
   }
   self.withins_settled()
+  self.follows_done()
 }
 
 ///|
@@ -7262,6 +7305,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // event finding where things are, a change settled): once, by the outermost)
   if self.laying == 0 {
     self.tell_laid()
+    self.follows_done()
   }
 }
 
@@ -9159,7 +9203,7 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
     self.points_hover = found.1
     then(found.0)
-  })
+  }, property=false)
   if self.gone || self.point_said != mine {
     stop()
   } else {
