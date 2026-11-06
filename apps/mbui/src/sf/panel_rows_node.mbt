@@ -44,6 +44,35 @@ pub fn panel_row_context(v : @view.View) -> PanelRowContext {
 }
 
 ///|
+/// A room that clips or scrolls cards, at the same line as `panel_card_out`. Its children see the panel's sides and
+/// words from that room, so a card in it does not reach out a second time. A small panel and a page keep their room.
+pub fn panel_card_room_node(parent : @view.View, body : (@view.View) -> Unit) -> @view.View {
+  // Take the lender before the room lends its adjusted value: reading the room itself would find that new lender.
+  let inherited = parent.lent(panel_rows_at)
+  parent.box(fn(room) {
+    match inherited {
+      Some(read) => {
+        let margin = fn() {
+          let at = read()
+          if at.small || (at.sides_in <= 0.0 && at.words_in <= 0.0) { 0.0 } else { panel_card_in - at.sides_in }
+        }
+        room.margin(By(fn() { let x = margin(); (x, 0.0, x, 0.0) })) |> ignore
+        panel_rows_lent(room, fn() {
+          let at = read()
+          if at.small || (at.sides_in <= 0.0 && at.words_in <= 0.0) {
+            at
+          } else {
+            { ..at, sides_in: panel_card_in, words_in: at.words_in + at.sides_in - panel_card_in }
+          }
+        })
+      }
+      None => ()
+    }
+    body(room)
+  })
+}
+
+///|
 /// A row's panel geometry at `v`, as row_line's: a small panel's own padding and inner corner; no panel reach on a
 /// list card; otherwise the panel's words inset, or its reach capped by the row's own room. A page outside a panel
 /// keeps its own margin, padding and corner. Read in a node binding for changes of the lent geometry to be followed.

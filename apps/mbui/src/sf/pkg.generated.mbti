@@ -1526,6 +1526,8 @@ pub fn panel_card_out() -> @ui.Style
 
 pub fn panel_card_room(@ui.Ctx, @ui.Style, () -> Unit) -> Int32
 
+pub fn panel_card_room_node(@view.View, (@view.View) -> Unit) -> @view.View
+
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
