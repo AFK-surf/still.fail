@@ -1565,7 +1565,7 @@
   "web-pages.security.confirmAll": "Matches, approve all",
   "web-pages.security.confirmDevice": "approve the device",
   "web-pages.security.pairTitle": "{name}'s new device asks for approval",
-  "web-pages.security.pairBody": "{device}. Type the security code below on the new device to approve it. If you didn't start this, deny it.",
+  "web-pages.security.pairBody": "{device}. Confirm the person and the device, then enter the security code below on the new device. If you can't confirm them, deny the request.",
   "web-pages.security.pairNote": "The security code shows only on this device and is never sent",
   "web-pages.security.pairRetry": "Nothing yet? Ask again",
   "web-pages.security.pairDeny": "Deny",

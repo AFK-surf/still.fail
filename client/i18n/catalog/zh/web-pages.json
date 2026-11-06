@@ -1490,7 +1490,7 @@
   "web-pages.security.confirmAll": "一致，全部批准",
   "web-pages.security.confirmDevice": "批准设备",
   "web-pages.security.pairTitle": "{name}的新设备请求批准",
-  "web-pages.security.pairBody": "{device}。在新设备上输入下方安全码即可批准；如果不是你本人的操作，请拒绝。",
+  "web-pages.security.pairBody": "{device}。确认申请人和设备后，在新设备上输入下方安全码；无法确认请拒绝。",
   "web-pages.security.pairNote": "安全码只显示在此设备上，不会发送给任何人",
   "web-pages.security.pairRetry": "没收到？重新申请",
   "web-pages.security.pairDeny": "拒绝",

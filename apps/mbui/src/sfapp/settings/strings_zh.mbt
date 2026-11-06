@@ -1417,7 +1417,7 @@ let zh : Map[String, String] = {
   "web-pages.security.openLead": "以下成员、设备和 station 将被列为受信任，此后的任何变更都需受信任设备批准。请取消勾选不认识的项。",
   "web-pages.security.openTitle": "开启安全模式",
   "web-pages.security.ownerOnly": "只有 owner 能开启",
-  "web-pages.security.pairBody": "{device}。在新设备上输入下方安全码即可批准；如果不是你本人的操作，请拒绝。",
+  "web-pages.security.pairBody": "{device}。确认申请人和设备后，在新设备上输入下方安全码；无法确认请拒绝。",
   "web-pages.security.pairAgain": "重新获取安全码",
   "web-pages.security.pairChecking": "正在验证",
   "web-pages.security.pairDeny": "拒绝",
