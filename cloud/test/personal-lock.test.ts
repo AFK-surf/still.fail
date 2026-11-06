@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
 import { entryHash, signedBytes, type Entry } from "../../station/src/cloud/lock.ts";
-import { extendPersonal, walk, type PersonalEntry } from "../src/personal-lock.ts";
+import { personFold } from "../../station/src/cloud/lock.ts";
+import { extendPersonal, type PersonalEntry } from "../src/personal-lock.ts";
 
 const SUB = "s1";
 
@@ -21,7 +22,7 @@ function entry(by: ReturnType<typeof key>, seq: number, prev: string | null, kin
   return { ...e, sig: { key: by.id, alg: "Ed25519", sig: sign(null, signedBytes(hash), by.privateKey).toString("hex") } };
 }
 const hashOf = (e: PersonalEntry) => entryHash(e as unknown as Entry);
-const device = (k: ReturnType<typeof key>) => ({ key: k.id, id: "aa", label: "x" });
+const device = (k: ReturnType<typeof key>) => ({ key: k.id, id: "ab".repeat(32), label: "x" });
 
 test("a lock begins with its device's own genesis, and grows only by a device on it", () => {
   const a = key(), b = key(), stranger = key();
@@ -30,13 +31,13 @@ test("a lock begins with its device's own genesis, and grows only by a device on
   const added = entry(a, 1, hashOf(first), "device", device(b));
   const two = extendPersonal(SUB, kept, [added]);
   assert.equal(two.length, 2);
-  assert.deepEqual([...walk(SUB, two).keys].sort(), [a.id, b.id].sort());
+  assert.deepEqual(personFold(two, SUB).devices.map((d) => d.key).sort(), [a.id, b.id].sort());
   // A device not on it, a stolen login's.
   assert.throws(() => extendPersonal(SUB, two, [entry(stranger, 2, hashOf(added), "device", device(stranger))]), /lock_refused/);
   // Not following what is kept.
-  assert.throws(() => extendPersonal(SUB, two, [entry(a, 2, "00", "device", device(stranger))]), /lock_does_not_follow/);
+  assert.throws(() => extendPersonal(SUB, two, [entry(a, 2, "00", "device", device(stranger))]), /lock_refused/);
   // Another person's.
-  assert.throws(() => extendPersonal("s2", [], [first]), /lock_does_not_follow/);
+  assert.throws(() => extendPersonal("s2", [], [first]), /lock_refused/);
   // A genesis signed by another than the device it names.
   assert.throws(() => extendPersonal(SUB, [], [entry(stranger, 0, null, "genesis", { sub: SUB, device: device(a) })]), /lock_refused/);
   // Signature not its own.
@@ -59,5 +60,6 @@ test("the last device is not removed; one taken off signs no more; a lock may be
 test("what is not an entry is refused", () => {
   assert.throws(() => extendPersonal(SUB, [], []), /invalid_lock_entries/);
   assert.throws(() => extendPersonal(SUB, [], [{ v: 2 }]), /invalid_lock_entries/);
+  assert.throws(() => extendPersonal(SUB, [], [{ v: 2, seq: 0 }]), /lock_refused/);
   assert.throws(() => extendPersonal(SUB, [], "x"), /invalid_lock_entries/);
 });

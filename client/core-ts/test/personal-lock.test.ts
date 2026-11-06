@@ -33,11 +33,12 @@ function cloud() {
 }
 
 /// A device: its host keeps what is sealed with `user: true` apart, each read of it counted, as asking the person.
-function device(c: ReturnType<typeof cloud>, id: string) {
+function device(c: ReturnType<typeof cloud>, name: string) {
+  const id = name.charCodeAt(0).toString(16).repeat(32);
   const host = new FakeHost();
   host.appKeys = true;
   // (each device's keys its own: FakeHost's are the same for all)
-  host.randomBytes = (b: Uint8Array) => void b.fill(id.charCodeAt(0));
+  host.randomBytes = (b: Uint8Array) => void b.fill(name.charCodeAt(0));
   const sealed = new Map<string, Uint8Array>();
   const asks = { n: 0, refuse: false };
   // (asking by itself, as much as a read of what is sealed: each is a prompt on the person's screen)
@@ -48,7 +49,7 @@ function device(c: ReturnType<typeof cloud>, id: string) {
   };
   host.secureAsk = () => Effect.sync(() => void asks.n++);
   const runner = new Runner(host.time.clock);
-  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => id, changed: () => {} });
+  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => {} });
   return { host, runner, lock, asks };
 }
 
@@ -113,11 +114,11 @@ test("a chain holds only as signed by a device on it; a device off it signs no m
   try {
     await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
     const bKey = await b.runner.run(b.lock.makeKey("why"));
-    await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "b", label: "b" }, "why"));
+    await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "bb".repeat(32), label: "b" }, "why"));
     assert.equal(a.lock.chain(SUB)!.devices.size, 2);
     assert.notEqual(checkChain(c.kept.entries, SUB), null);
     assert.equal(checkChain(c.kept.entries, "s2"), null, "another person's");
-    const tampered = c.kept.entries.map((e, i) => (i === 1 ? { ...e, body: { key: "ed25519:" + "22".repeat(32), id: "x", label: "x" } } : e));
+    const tampered = c.kept.entries.map((e, i) => (i === 1 ? { ...e, body: { key: "ed25519:" + "22".repeat(32), id: "cc".repeat(32), label: "x" } } : e));
     assert.equal(checkChain(tampered, SUB), null, "an entry changed");
     assert.equal(checkChain(c.kept.entries.slice(1), SUB), null, "no genesis");
 
@@ -201,7 +202,7 @@ test("a phone started anew reads the lock it pinned, and lends for its grants be
   const a = device(c, "a");
   const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: 4_000_000_000 }), "why"));
   // The same device's storage, the process gone and back, the cloud out of reach.
-  const again = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("a"), label: () => "a", changed: () => {} });
+  const again = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
   const p = phone({ personal: again, subOf: () => SUB, sub: () => SUB });
   try {
     p.adb.heard(STATION, { ...grantOf(signed), exp: 4_000_000_000 });
