@@ -28,7 +28,7 @@ jobs:
           test "$(git rev-parse HEAD)" = eb250d6dd89bed9a19a22c3efc01e0cbe928aeda
           tar -xzf ../evidence/evidence/agent-notes-input.tar.gz
           task_key=$(node scripts/native.ts key mbui-film-wasm darwin-arm64)
-          test "$task_key" = e22d113c24ea75e2d072d6e3
+          test "$task_key" = 19b428d28c04c7b9aec141b3
           bash apps/mbui/scripts/wasm-film-build.sh "$RUNNER_TEMP/notes-renderer"
           jq -n --arg key "$task_key" '{part:"mbui-film-wasm",target:"darwin-arm64",key:$key,commit:"eb250d6dd89bed9a19a22c3efc01e0cbe928aeda",from:"temporary isolated component evidence scene"}' > "$RUNNER_TEMP/notes-renderer/manifest.json"
           shasum -a 256 "$RUNNER_TEMP/notes-renderer/scene.wasm"
