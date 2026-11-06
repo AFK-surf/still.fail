@@ -167,6 +167,211 @@ test("a lock the cloud says began anew is not followed by itself", async () => {
   }
 });
 
+for (const entry of ["open", "sign"] as const) {
+  for (const observed of [false, true]) {
+    test(`automatic ${entry} cannot replace a concurrently created lock${observed ? " it has heard" : " it has not heard"}`, async () => {
+      const c = cloud(), original = c.call;
+      c.call = (sub, method, path, value) => {
+        if (method === "POST" && path.endsWith("/append")) {
+          const expect = (value as { expect?: { length: number; head: string | null } }).expect;
+          if (!expect || expect.length !== c.kept.entries.length || expect.head !== (c.kept.entries.length ? entryHash(c.kept.entries.at(-1)!) : null)) {
+            return Effect.fail(new CoreError("lock_refused", "the cloud lock changed", 409));
+          }
+        }
+        return original(sub, method, path, value);
+      };
+      const a = device(c, "a"), b = device(c, "b");
+      const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+      a.host.secureAsk = () => Effect.andThen(Effect.sync(() => reached.resolve()), Deferred.await(release));
+      try {
+        const starting = entry === "open" ? a.runner.run(a.lock.open(SUB, "why")) : a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+        await reached.promise;
+        await b.runner.run(b.lock.open(SUB, "why"));
+        const existing = [...c.kept.entries];
+        if (observed) {
+          await a.runner.run(a.lock.refresh(SUB));
+          assert.equal(a.lock.standing(SUB), "outside");
+        }
+        Deferred.doneUnsafe(release, Effect.void);
+        await assert.rejects(starting, /./, "the earlier empty read cannot authorize replacing the new lock");
+        assert.deepEqual(c.kept.entries, existing, "the other device's lock remains in the cloud");
+        assert.notEqual(a.lock.standing(SUB), "member");
+      } finally { Deferred.doneUnsafe(release, Effect.void); a.runner.shutdown(); b.runner.shutdown(); }
+    });
+  }
+}
+
+test("automatic creation fails closed against a cloud without guarded creation", async () => {
+  const c = cloud(), original = c.call;
+  let guarded = false;
+  c.call = (sub, method, path, value) => {
+    if (method === "POST" && path.endsWith("/append") && !guarded) return Effect.fail(new CoreError("not_found", "cloud has no guarded route", 404));
+    return original(sub, method, path, value);
+  };
+  const a = device(c, "a");
+  try {
+    await assert.rejects(a.runner.run(a.lock.open(SUB, "why")), /guarded route/);
+    assert.deepEqual(c.kept.entries, [], "it does not fall back to an unguarded reset");
+    guarded = true;
+    await a.runner.run(a.lock.open(SUB, "why"));
+    assert.equal(a.lock.standing(SUB), "member");
+  } finally { a.runner.shutdown(); }
+});
+
+test("a first lock accepted by the cloud but not acknowledged can be recovered after restart", async () => {
+  const c = cloud(), original = c.call;
+  let loseReply = true;
+  c.call = (sub, method, path, value) => {
+    const result = original(sub, method, path, value);
+    return method === "POST" && path.endsWith("/append") && loseReply
+      ? Effect.andThen(result, Effect.fail(new CoreError("offline", "reply lost")))
+      : result;
+  };
+  const a = device(c, "a");
+  try {
+    await assert.rejects(a.runner.run(a.lock.open(SUB, "why")), /reply lost/);
+    assert.equal(c.kept.entries.length, 1, "the cloud committed before the response was lost");
+    const offline = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await assert.rejects(a.runner.run(offline.signGrant(SUB, body(), "why")), /offline/, "the unsigned local candidate is not taken as a confirmed lock");
+    loseReply = false;
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.refresh(SUB));
+    assert.equal(cold.standing(SUB), "member", "only the exact locally signed genesis is recovered");
+    assert.equal(cold.chain(SUB)?.hash, entryHash(c.kept.entries[0]!));
+    assert.equal([...a.host.storage.keys()].some((key) => key.startsWith("personal-first-")), false, "the confirmed candidate is removed");
+  } finally { a.runner.shutdown(); }
+});
+
+test("an unacknowledged first lock does not trust a different cloud lock after restart", async () => {
+  const c = cloud(), original = c.call;
+  c.call = (sub, method, path, value) => method === "POST" && path.endsWith("/append")
+    ? Effect.fail(new CoreError("offline", "before sending"))
+    : original(sub, method, path, value);
+  const a = device(c, "a"), other = cloud(), b = device(other, "b");
+  try {
+    await assert.rejects(a.runner.run(a.lock.open(SUB, "why")), /before sending/);
+    await b.runner.run(b.lock.open(SUB, "why"));
+    c.kept.entries = [...other.kept.entries];
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.refresh(SUB));
+    assert.equal(cold.standing(SUB), "outside");
+    assert.equal(cold.chain(SUB)?.hash, null, "another genesis was never pinned");
+    await assert.rejects(a.runner.run(cold.signGrant(SUB, body(), "why")));
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("recovering a first lock also keeps a later removal of this device", async () => {
+  const c = cloud(), original = c.call;
+  let loseReply = true;
+  c.call = (sub, method, path, value) => {
+    const result = original(sub, method, path, value);
+    return method === "POST" && path.endsWith("/append") && loseReply
+      ? Effect.andThen(result, Effect.fail(new CoreError("offline", "reply lost")))
+      : result;
+  };
+  const a = device(c, "a"), b = device(c, "b");
+  try {
+    await assert.rejects(a.runner.run(a.lock.open(SUB, "why")), /reply lost/);
+    const first = c.kept.entries[0]!;
+    const aSeed = (await a.runner.run(a.host.secureGet!("personal-signer", { user: true })))!;
+    const bKey = await b.runner.run(b.lock.makeKey());
+    const bSeed = (await b.runner.run(b.host.secureGet!("personal-signer", { user: true })))!;
+    const next = { v: 1 as const, ws: `person:${SUB}`, seq: 1, prev: entryHash(first), at: 1, kind: "device", body: { key: bKey, id: "62".repeat(32), label: "b" } };
+    const added: Entry = { ...next, sig: { key: first.sig.key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(next)), aSeed)) } };
+    const remove = { v: 1 as const, ws: `person:${SUB}`, seq: 2, prev: entryHash(added), at: 1, kind: "device.remove", body: { key: first.sig.key } };
+    const removed: Entry = { ...remove, sig: { key: bKey, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(remove)), bSeed)) } };
+    c.kept.entries = [first, added, removed];
+    loseReply = false;
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.refresh(SUB));
+    assert.equal(cold.chain(SUB)?.hash, entryHash(removed), "the verified newer chain is kept whole");
+    assert.equal(cold.standing(SUB), "outside", "the later removal still takes effect");
+    await assert.rejects(a.runner.run(cold.signGrant(SUB, body(), "why")));
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+for (const afterWrite of [false, true]) {
+  test(`a first lock is not sent if its recovery record ${afterWrite ? "was written before failing" : "could not be written"}`, async () => {
+    const c = cloud(), a = device(c, "a"), set = a.host.storageSet.bind(a.host);
+    try {
+      a.host.storageSet = (key, value) => {
+        if (!key.startsWith("personal-first-")) return set(key, value);
+        const failure = Effect.fail(new HostError("first save failed", true));
+        return afterWrite ? Effect.andThen(set(key, value), failure) : failure;
+      };
+      await assert.rejects(a.runner.run(a.lock.open(SUB, "why")), /first save failed/);
+      assert.deepEqual(c.kept.entries, [], "no genesis is posted before its recovery record is saved");
+      const stored = [...a.host.storage.entries()].find(([key]) => key.startsWith("personal-first-"))?.[1];
+      a.host.storageSet = set;
+      const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+      await a.runner.run(cold.open(SUB, "why"));
+      assert.equal(cold.standing(SUB), "member");
+      if (stored) assert.equal(entryHash((JSON.parse(new TextDecoder().decode(stored)) as Entry[])[0]!), entryHash(c.kept.entries[0]!), "a record that was actually written is reused");
+    } finally { a.host.storageSet = set; a.runner.shutdown(); }
+  });
+}
+
+test("a first-lock recovery record signed by a different device cannot be loaded", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    a.host.store(`personal-first-${hex(new TextEncoder().encode(SUB))}`, other.kept.entries);
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await assert.rejects(a.runner.run(cold.load(SUB)), /./);
+    assert.equal(cold.loaded(SUB), false);
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("an unpinned lock already seen is not erased by an earlier empty reply or offline restart", async () => {
+  const c = cloud(), a = device(c, "a"), b = device(c, "b");
+  const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  try {
+    await b.runner.run(b.lock.open(SUB, "why"));
+    let first = true;
+    const call = (sub: string, method: string, path: string, value: unknown) => {
+      if (method === "GET" && first) {
+        first = false;
+        return Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), { entries: [] }));
+      }
+      return c.call(sub, method, path, value);
+    };
+    const lock = new PersonalLock({ host: a.host, runner: a.runner, cloud: call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    const earlier = a.runner.run(lock.refresh(SUB));
+    await reached.promise;
+    await a.runner.run(lock.refresh(SUB));
+    assert.equal(lock.standing(SUB), "outside");
+    Deferred.doneUnsafe(release, Effect.void);
+    await earlier;
+    assert.equal(lock.standing(SUB), "outside");
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.standing(SUB), "outside");
+    await assert.rejects(a.runner.run(cold.signGrant(SUB, body(), "why")));
+  } finally { Deferred.doneUnsafe(release, Effect.void); a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("a restart cannot accept a different lock first heard while its confirmation waits", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    const read = a.host.secureGet!;
+    a.host.secureGet = (key, options) => key === "personal-signer"
+      ? Effect.andThen(Effect.sync(() => reached.resolve()), Effect.andThen(Deferred.await(release), read(key, options)))
+      : read(key, options);
+    const restarting = a.runner.run(a.lock.restart(SUB, "why"));
+    await reached.promise;
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(restarting, /./);
+    assert.deepEqual(c.kept.entries, other.kept.entries);
+    assert.equal(a.lock.standing(SUB), "replaced");
+  } finally { Deferred.doneUnsafe(release, Effect.void); a.runner.shutdown(); b.runner.shutdown(); }
+});
+
 test("an earlier cloud reply cannot clear a replacement already observed", async () => {
   const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
   const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
@@ -276,6 +481,270 @@ for (const action of ["join", "restart"] as const) {
   });
 }
 
+for (const action of ["join", "restart"] as const) {
+  test(`a failed replacement cleanup after ${action} blocks lending and can be retried offline`, async () => {
+    const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b"), remove = a.host.storageDelete.bind(a.host);
+    let p: ReturnType<typeof phone> | null = null;
+    try {
+      const oldGrant = await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      let grant = oldGrant;
+      if (action === "join") {
+        const key = await a.runner.run(a.lock.makeKey());
+        await b.runner.run(b.lock.addDevice(SUB, { key, id: "61".repeat(32), label: "a" }, "why"));
+        grant = await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      }
+      c.kept.entries = [...other.kept.entries];
+      await a.runner.run(a.lock.refresh(SUB));
+      a.host.storageDelete = (key) => key.startsWith("personal-replaced-") ? Effect.fail(new HostError("replacement removal failed", true)) : remove(key);
+      const result = action === "join" ? a.lock.joined(SUB, c.kept.entries, a.lock.joinGeneration(SUB)) : a.lock.restart(SUB, "why");
+      await assert.rejects(a.runner.run(result), /replacement removal failed/);
+      assert.equal(a.lock.ready(SUB), false, "an incomplete confirmation cannot lend or sign");
+      p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+      p.adb.heard(STATION, grantOf(grant));
+      assert.deepEqual(p.adb.wanted(), []);
+      a.host.storageDelete = remove;
+      const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+      await a.runner.run(cold.load(SUB));
+      assert.equal(cold.ready(SUB), false, "restart preserves the incomplete confirmation");
+      await a.runner.run(cold.open(SUB, "why"));
+      assert.equal(cold.ready(SUB), true, "cleanup retries without the cloud");
+      assert.equal(cold.standing(SUB), "member");
+    } finally { a.host.storageDelete = remove; p?.runner.shutdown(); a.runner.shutdown(); b.runner.shutdown(); }
+  });
+}
+
+test("a pairing on the old lock cannot clear an observed different lock", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const old = [...c.kept.entries];
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    await assert.rejects(a.runner.run(a.lock.joined(SUB, old, a.lock.joinGeneration(SUB))), /./);
+    assert.equal(a.lock.standing(SUB), "replaced");
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.standing(SUB), "replaced");
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("joining an older prefix cannot discard a removal already seen on the replacement", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const aKey = await a.runner.run(a.lock.makeKey());
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.addDevice(SUB, { key: aKey, id: "61".repeat(32), label: "a" }, "why"));
+    const oldProof = [...other.kept.entries];
+    await b.runner.run(b.lock.removeDevice(SUB, aKey, "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    await assert.rejects(a.runner.run(a.lock.joined(SUB, oldProof, a.lock.joinGeneration(SUB))), /./);
+    assert.equal(a.lock.standing(SUB), "replaced");
+    assert.notEqual(a.lock.chain(SUB)?.hash, entryHash(oldProof.at(-1)!));
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("a later stale cloud read cannot discard a removal already seen on a replacement", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const key = await a.runner.run(a.lock.makeKey());
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.addDevice(SUB, { key, id: "61".repeat(32), label: "a" }, "why"));
+    const older = [...other.kept.entries];
+    await b.runner.run(b.lock.removeDevice(SUB, key, "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    c.kept.entries = older;
+    await a.runner.run(a.lock.refresh(SUB));
+    await assert.rejects(a.runner.run(a.lock.joined(SUB, older, a.lock.joinGeneration(SUB))), /./);
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    await assert.rejects(a.runner.run(cold.joined(SUB, older, cold.joinGeneration(SUB))), /./, "the later removal is also kept across restart");
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+for (const afterWrite of [false, true]) {
+  test(`an interrupted join ${afterWrite ? "after" : "before"} writing its pin resumes from the confirmed proof offline`, async () => {
+    const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b"), set = a.host.storageSet.bind(a.host);
+    try {
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      const key = await a.runner.run(a.lock.makeKey());
+      await b.runner.run(b.lock.addDevice(SUB, { key, id: "61".repeat(32), label: "a" }, "why"));
+      c.kept.entries = [...other.kept.entries];
+      await a.runner.run(a.lock.refresh(SUB));
+      a.host.storageSet = (name, value) => {
+        if (!name.startsWith("personal-lock-")) return set(name, value);
+        const failure = Effect.fail(new HostError("pin save failed", true));
+        return afterWrite ? Effect.andThen(set(name, value), failure) : failure;
+      };
+      await assert.rejects(a.runner.run(a.lock.joined(SUB, c.kept.entries, a.lock.joinGeneration(SUB))), /pin save failed/);
+      assert.equal(a.lock.ready(SUB), false);
+      a.host.storageSet = set;
+      const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+      await a.runner.run(cold.load(SUB));
+      assert.equal(cold.ready(SUB), false);
+      await a.runner.run(cold.open(SUB, "why"));
+      assert.equal(cold.ready(SUB), true);
+      assert.equal(cold.standing(SUB), "member");
+      assert.equal(cold.chain(SUB)?.hash, entryHash(other.kept.entries.at(-1)!));
+    } finally { a.host.storageSet = set; a.runner.shutdown(); b.runner.shutdown(); }
+  });
+}
+
+for (const afterWrite of [false, true]) {
+  test(`a restart is not sent when its confirmation record ${afterWrite ? "was written before failing" : "could not be written"}`, async () => {
+    const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b"), set = a.host.storageSet.bind(a.host);
+    try {
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      c.kept.entries = [...other.kept.entries];
+      await a.runner.run(a.lock.refresh(SUB));
+      a.host.storageSet = (name, value) => {
+        if (!name.startsWith("personal-accepting-")) return set(name, value);
+        const failure = Effect.fail(new HostError("confirmation save failed", true));
+        return afterWrite ? Effect.andThen(set(name, value), failure) : failure;
+      };
+      await assert.rejects(a.runner.run(a.lock.restart(SUB, "why")), /confirmation save failed/);
+      assert.deepEqual(c.kept.entries, other.kept.entries, "the old cloud chain was not replaced");
+      assert.equal(a.lock.ready(SUB), false);
+      a.host.storageSet = set;
+      if (afterWrite) {
+        const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+        await a.runner.run(cold.load(SUB));
+        assert.equal(cold.ready(SUB), false);
+        await a.runner.run(cold.open(SUB, "why"));
+        assert.equal(cold.standing(SUB), "member", "the saved choice is retried against the same cloud chain");
+      }
+    } finally { a.host.storageSet = set; a.runner.shutdown(); b.runner.shutdown(); }
+  });
+}
+
+test("a confirmation whose final record cannot be removed remains pending across restart", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b"), remove = a.host.storageDelete.bind(a.host);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    const key = await a.runner.run(a.lock.makeKey());
+    await b.runner.run(b.lock.addDevice(SUB, { key, id: "61".repeat(32), label: "a" }, "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    a.host.storageDelete = (name) => name.startsWith("personal-accepting-") ? Effect.fail(new HostError("confirmation removal failed", true)) : remove(name);
+    await assert.rejects(a.runner.run(a.lock.joined(SUB, c.kept.entries, a.lock.joinGeneration(SUB))), /confirmation removal failed/);
+    assert.equal(a.lock.ready(SUB), false);
+    a.host.storageDelete = remove;
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.ready(SUB), false);
+    await a.runner.run(cold.open(SUB, "why"));
+    assert.equal(cold.ready(SUB), true);
+    assert.equal(cold.standing(SUB), "member");
+  } finally { a.host.storageDelete = remove; a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+for (const committed of [false, true]) {
+  test(`a restart whose reply was lost ${committed ? "after" : "before"} the cloud commit resumes its exact choice`, async () => {
+    const c = cloud(), other = cloud(), call = c.call;
+    let loseReply = false;
+    c.call = (sub, method, path, value) => Effect.suspend(() => {
+      if (method === "POST" && path.endsWith("/append")) {
+        const expect = (value as { expect: { length: number; head: string | null } }).expect;
+        if (expect.length !== c.kept.entries.length || expect.head !== (c.kept.entries.length ? entryHash(c.kept.entries.at(-1)!) : null)) {
+          return Effect.fail(new CoreError("lock_refused", "the cloud lock changed", 409));
+        }
+        if (loseReply) {
+          loseReply = false;
+          const failure = Effect.fail(new CoreError("offline", "reply lost"));
+          return committed ? Effect.andThen(call(sub, method, path, value), failure) : failure;
+        }
+      }
+      return call(sub, method, path, value);
+    });
+    const a = device(c, "a"), b = device(other, "b");
+    try {
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      c.kept.entries = [...other.kept.entries];
+      await a.runner.run(a.lock.refresh(SUB));
+      await a.host.time.pass(1_000);
+      loseReply = true;
+      await assert.rejects(a.runner.run(a.lock.restart(SUB, "why")), /reply lost/);
+      const saved = [...a.host.storage.entries()].find(([key]) => key.startsWith("personal-accepting-"))![1];
+      const target = (JSON.parse(new TextDecoder().decode(saved)) as { target: Entry[] }).target;
+      const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+      await a.runner.run(cold.load(SUB));
+      assert.equal(cold.ready(SUB), false);
+      await a.runner.run(cold.open(SUB, "why"));
+      assert.equal(cold.standing(SUB), "member");
+      assert.equal(cold.chain(SUB)?.hash, entryHash(target[0]!));
+      assert.equal(entryHash(c.kept.entries[0]!), entryHash(target[0]!));
+    } finally { a.runner.shutdown(); b.runner.shutdown(); }
+  });
+}
+
+test("a restart cannot overwrite a different cloud lock created before its guarded write", async () => {
+  const c = cloud(), other = cloud(), newest = cloud(), call = c.call;
+  let race = false;
+  c.call = (sub, method, path, value) => Effect.suspend(() => {
+    if (method === "POST" && path.endsWith("/append")) {
+      if (race) { race = false; c.kept.entries = [...newest.kept.entries]; }
+      const expect = (value as { expect: { length: number; head: string | null } }).expect;
+      if (expect.length !== c.kept.entries.length || expect.head !== (c.kept.entries.length ? entryHash(c.kept.entries.at(-1)!) : null)) {
+        return Effect.fail(new CoreError("lock_refused", "the cloud lock changed", 409));
+      }
+    }
+    return call(sub, method, path, value);
+  });
+  const a = device(c, "a"), b = device(other, "b"), d = device(newest, "d");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    await d.runner.run(d.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    const old = a.lock.chain(SUB)?.hash;
+    await a.host.time.pass(1_000);
+    race = true;
+    await assert.rejects(a.runner.run(a.lock.restart(SUB, "why")), /cloud lock changed/);
+    assert.deepEqual(c.kept.entries, newest.kept.entries);
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    await assert.rejects(a.runner.run(cold.open(SUB, "why")), /./);
+    assert.equal(cold.standing(SUB), "replaced");
+    assert.equal(cold.chain(SUB)?.hash, old, "the previously pinned chain was not replaced by an unconfirmed one");
+    assert.equal(cold.ready(SUB), true, "the newer observation remains available for a new decision");
+  } finally { a.runner.shutdown(); b.runner.shutdown(); d.runner.shutdown(); }
+});
+
+test("an interrupted forget cannot resume the confirmation it was meant to discard", async () => {
+  const c = cloud(), call = c.call;
+  let loseReply = false;
+  c.call = (sub, method, path, value) => method === "POST" && path.endsWith("/append") && loseReply
+    ? Effect.andThen(call(sub, method, path, value), Effect.fail(new CoreError("offline", "reply lost")))
+    : call(sub, method, path, value);
+  const a = device(c, "a"), remove = a.host.storageDelete.bind(a.host);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await a.host.time.pass(1_000);
+    loseReply = true;
+    await assert.rejects(a.runner.run(a.lock.restart(SUB, "why")), /reply lost/);
+    a.host.storageDelete = (name) => name.startsWith("personal-accepting-") ? Effect.fail(new HostError("forget cleanup failed", true)) : remove(name);
+    await assert.rejects(a.runner.run(a.lock.forget(SUB, "why")), /forget cleanup failed/);
+    assert.equal(a.lock.ready(SUB), false);
+    a.host.storageDelete = remove;
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.ready(SUB), false);
+    await a.runner.run(cold.open(SUB, "why"));
+    assert.equal(cold.standing(SUB), "none", "retry finishes forgetting rather than recovering the old confirmation");
+    assert.equal(cold.chain(SUB)?.hash, null);
+  } finally { a.host.storageDelete = remove; a.runner.shutdown(); }
+});
+
 test("a replacement that could not be saved blocks lending until an offline retry saves it", async () => {
   const c = cloud(), other = cloud(), request = c.call;
   let offline = false;
@@ -320,7 +789,7 @@ test("a failed removal of a replacement cannot silently restore signing after fo
   } finally { a.host.storageDelete = remove; a.runner.shutdown(); b.runner.shutdown(); }
 });
 
-for (const problem of ["chain read", "chain contents", "chain empty", "identity read", "identity contents", "replacement read", "replacement contents"] as const) {
+for (const problem of ["chain read", "chain contents", "chain empty", "identity read", "identity contents", "replacement read", "replacement contents", "first read", "first contents", "acceptance read", "acceptance contents"] as const) {
   test(`a failed or corrupt ${problem} cannot be treated as an absent personal lock`, async () => {
     const c = cloud(), a = device(c, "a");
     const read = a.host.storageGet.bind(a.host);
@@ -330,8 +799,8 @@ for (const problem of ["chain read", "chain contents", "chain empty", "identity 
       const pinned = a.host.storage.get(pinKey)!;
       c.kept.entries = [];
       a.host.storageGet = (key) => {
-        if (key === pinKey && problem === "chain read" || key === "personal-signer-id" && problem === "identity read" || key.startsWith("personal-replaced-") && problem === "replacement read") return Effect.fail(new HostError("storage read failed", true));
-        if (key === pinKey && (problem === "chain contents" || problem === "chain empty") || key === "personal-signer-id" && problem === "identity contents" || key.startsWith("personal-replaced-") && problem === "replacement contents") return Effect.succeed(new TextEncoder().encode(problem === "chain empty" ? "[]" : "invalid"));
+        if (key === pinKey && problem === "chain read" || key === "personal-signer-id" && problem === "identity read" || key.startsWith("personal-replaced-") && problem === "replacement read" || key.startsWith("personal-first-") && problem === "first read" || key.startsWith("personal-accepting-") && problem === "acceptance read") return Effect.fail(new HostError("storage read failed", true));
+        if (key === pinKey && (problem === "chain contents" || problem === "chain empty") || key === "personal-signer-id" && problem === "identity contents" || key.startsWith("personal-replaced-") && problem === "replacement contents" || key.startsWith("personal-first-") && problem === "first contents" || key.startsWith("personal-accepting-") && problem === "acceptance contents") return Effect.succeed(new TextEncoder().encode(problem === "chain empty" ? "[]" : "invalid"));
         return read(key);
       };
       const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
@@ -794,7 +1263,9 @@ test("forgetting while the first personal genesis is being accepted is not undon
     for (let i = 0; i < 100 && !held; i++) await a.host.time.pass(10);
     assert.equal(held, true, "the cloud accepted the first genesis before its reply arrived");
     assert.equal(c.kept.entries.length, 1);
+    assert.equal([...a.host.storage.keys()].some((key) => key.startsWith("personal-first-")), true, "the unacknowledged genesis was saved");
     await a.runner.run(a.lock.forget(SUB, "why"));
+    assert.equal([...a.host.storage.keys()].some((key) => key.startsWith("personal-first-")), false, "forgetting removes it");
     Deferred.doneUnsafe(release, Effect.void);
     await assert.rejects(opening, (error: unknown) => error instanceof CoreError && error.code === "personal_changed");
     assert.equal(a.lock.chain(SUB)?.hash, null);
@@ -1228,7 +1699,7 @@ test("a phone's startup refresh cannot lend after its pending load is forgotten"
     assert.deepEqual(p.adb.wanted(), [], "the previously signed grant cannot lend from a forgotten lock");
     const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
     await a.runner.run(restarted.load(SUB));
-    assert.equal(restarted.standing(SUB), "none");
+    assert.equal(restarted.standing(SUB), "outside", "the unpinned cloud lock heard after forgetting remains known");
   } finally {
     Deferred.doneUnsafe(release, Effect.void);
     p.runner.shutdown();
