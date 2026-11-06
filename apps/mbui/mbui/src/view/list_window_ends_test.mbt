@@ -81,12 +81,12 @@ test "scrolls_window flung to its foot, counted shorter than it is: at rest at i
 test "scrolls_window dragged on past its foot, counted taller than it is: held at its foot as it really is, at rest there let go" {
   let (tree, scroll, live) = ends_case(200.0)
   guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -40.0) is Some(id) else { fail("nothing takes the finger") }
-  // (a finger up the column 40 a frame, far past its foot, held there)
+  // (a finger up the column 2.5 a millisecond for 960 ms, far past its foot, a frame each 16 ms, held there)
   let mut at = 100.0
   tree.drag_at(id, Down, 150.0, 90.0, at) |> ignore
-  for k in 1..=60 {
+  while at < 1060.0 {
     at = at + 16.0
-    tree.drag_at(id, Moved, 150.0, 90.0 - 40.0 * k.to_double(), at) |> ignore
+    tree.drag_at(id, Moved, 150.0, 90.0 - 2.5 * (at - 100.0), at) |> ignore
     tree.frame(300.0, 100.0, now=at) |> ignore
   }
   let held = (last_foot(live), scroll.at(tree))
