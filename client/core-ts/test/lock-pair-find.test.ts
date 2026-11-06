@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { CoreError } from "../src/error.ts";
+import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
@@ -61,8 +62,90 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
   const secondLock = secondWorkspace ? await r.watch({ topic: "lock", workspace: "w2" }) : null;
   const pair = async () => (await lock()).me.pair;
-  return { ...r, ways, dials, hellos, lock, pair, secondLock };
+  return { ...r, owner, ways, dials, hellos, lock, pair, secondLock };
 }
+
+function addApprover(w: Awaited<ReturnType<typeof waiting>>, addedDevice: string) {
+  const entry = next("ws", w.cloud.head("ws"), w.host.nowMs() / 1000, "device", {
+    id: addedDevice, sub: "s1", kind: "app", label: "new trusted device", sign_key: w.owner.id,
+  });
+  const signed: Entry = { ...entry, sig: { key: w.owner.id, alg: "Ed25519", sig: w.owner.signBytes(signedBytes(entryHash(entry))) } };
+  w.cloud.chains.set("ws", [...w.cloud.chains.get("ws")!, signed]);
+  const topic = { topic: "workspace", workspace: "ws" };
+  w.core.inner.data.set(topic, { ...(w.core.inner.data.shared(topic) as object), lock: w.cloud.head("ws") });
+}
+
+test("a newly trusted device becomes available while the new device is looking: it is also asked", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal(w.dials[addedDevice], undefined);
+  release();
+  await w.host.time.pass(2 * PAIR_REDIAL_MS, 100);
+  assert.equal(w.dials[addedDevice], 1, "the new trusted device is asked when its lock has been read");
+  assert.equal((await w.pair()).state, "code");
+});
+
+test("a newer lock still being read is followed even when all old devices immediately say no", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "no", [LAPTOP_APP]: "no", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "finding");
+  release();
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], 1);
+  assert.equal((await w.pair()).state, "code");
+});
+
+test("an unreadable newer lock does not leave the search waiting forever", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "no", [LAPTOP_APP]: "no", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass((PAIR_DIAL_TRIES + 1) * PAIR_REDIAL_MS, 100);
+  assert.equal((await w.pair()).state, "none");
+  release();
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], undefined);
+});
+
+test("an approver added after looking began is asked without repeating an existing code", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away", [addedDevice]: "code" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], 1);
+  assert.equal(w.dials[PHONE_APP], 1, "the existing code is not replaced");
+  assert.equal((await w.pair()).devices, 2);
+});
+
+test("cancelling while a newer lock is read never asks a newly added device", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  release();
+  await w.host.time.pass(2 * PAIR_REDIAL_MS, 100);
+  assert.equal(w.dials[addedDevice], undefined);
+  assert.equal(await w.pair(), undefined);
+});
 
 test("a trusted device opened after the new device asked shows its code: dialled again every PAIR_REDIAL_MS", async () => {
   const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away" });
