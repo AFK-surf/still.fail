@@ -84,6 +84,12 @@ priv struct SceneLayer {
   /// where this recording put what is over everything of others' (its instance and piece there, and whose, how many):
   /// a reference in its block to their tops
   tops_put : Array[(Int, Int, @view.NodeId, Int)]
+  /// how far it is put from where it was drawn, its block as it was drawn moved by it (Android's setTranslationX on a
+  /// RenderNode): (0, 0) as it is drawn; the clips its drawing pushed and its node cut by, all it holds' too (as drawn,
+  /// in its block's terms), and whether what it holds is faded by something of its own: what moving it may change
+  mut shown : (Double, Double)
+  inner_cuts : @damage.Rect
+  mut fades_inside : Bool
 }
 
 ///|
@@ -1154,15 +1160,30 @@ fn Ctx::scene_copied(
     return copy_not(id, "who drew it not kept")
   }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked, told \{l.told}") }
-  // (placed otherwise: what its node's place draws of it (turned, its ground drawn in a box of its own, what it holds
-  // faded, stretched, glyphed by it) may be another where it is drawn in the same place; drawn as it keeps how it is
-  // drawn, its node's place as it is now)
-  guard !scene.moved_layers.contains(id) else { return copy_not(id, "placed otherwise") }
-  // (what it was drawn in, as it is drawn in now: its key; another, drawn anew)
-  guard scene_began_same(l, held, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
+  // (what it was drawn in, as it is drawn in now, but where: its key; another, drawn anew)
+  let now = scene_held_now(l)
+  guard scene_began_same(l, now, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
   // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
-  // shown, asked again)
-  self.scene_emitted(p, l)
+  // shown, asked again. Put elsewhere (scrolled, slid, its page moved), its block moved by how far, where that is all
+  // moving it changes (Ctx::scene_offset_ok); put where it was put but drawn elsewhere, what it holds moved with it)
+  if held != now {
+    guard scene_still(l) && self.scene_offset_ok(l, held) else { return copy_not(id, "placed otherwise") }
+    self.scene_emitted(p, l, moved=(held.0 - now.0, held.1 - now.1))
+  } else {
+    guard l.shown == (0.0, 0.0) || scene_still(l) else { return copy_not(id, "put moved, holding what changed") }
+    self.scene_emitted(p, l)
+  }
+  // (what it cuts and fades by its own, told what it is drawn in)
+  match scene.drawing {
+    Some(r) => {
+      let (x0, y0, x1, y1) = l.inner_cuts.rect()
+      r.inner_cuts.add(x0 + l.shown.0, y0 + l.shown.1, x1 + l.shown.0, y1 + l.shown.1)
+      if l.fades_inside {
+        r.fades_inside = true
+      }
+    }
+    None => ()
+  }
   let n = l.count
   scene_work.copied = scene_work.copied + 1
   scene_work.copied_insts = scene_work.copied_insts + n
@@ -1180,7 +1201,7 @@ fn scene_began_same(
   stretching : Array[(@view.NodeId, Double, Double, Double, Double, Double)],
   glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
 ) -> Bool {
-  if l.held != held || l.scrim != !dr.scrims.is_empty() || l.fading != fading || l.stretching != stretching || l.glyphing.length() != glyphing.length() {
+  if scene_held_now(l) != held || l.scrim != !dr.scrims.is_empty() || l.fading != fading || l.stretching != stretching || l.glyphing.length() != glyphing.length() {
     return false
   }
   for i, g in glyphing {
@@ -1272,6 +1293,9 @@ fn Ctx::scene_drawn(
         tops: [],
         tops_owners: None,
         tops_put: [],
+        shown: (0.0, 0.0),
+        inner_cuts: @damage.Rect::none(),
+        fades_inside: false,
       }
       scene.layers[id] = l
       l
@@ -1402,6 +1426,9 @@ fn scene_drawn_begin(
   l.tops.clear()
   l.tops_owners = None
   l.tops_put.clear()
+  l.shown = (0.0, 0.0)
+  l.inner_cuts.clear()
+  l.fades_inside = false
   // (drawn again alone, from what it began in: what holds it as it was)
   match outer {
     Some(o) => l.outer = Some(o.id)
@@ -1435,6 +1462,10 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
   match outer {
     Some(o) => {
       o.inner.push(l.id)
+      o.inner_cuts.take(l.inner_cuts)
+      if l.fades_inside {
+        o.fades_inside = true
+      }
       if l.own_only {
         o.own_only = true
       }
@@ -1899,9 +1930,29 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
 /// Layer `l` put into the frame from its own block and those of the layers it holds, each where its reference in the
 /// block says, in the order drawn (Flutter's compositing a layer's children by their references): where each is in the
 /// frame said by this, its bands' first pieces told where its pieces are now, who drew each where that is kept.
-fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
+fn Ctx::scene_emitted(
+  self : Ctx,
+  p : TreePaint,
+  l : SceneLayer,
+  fixed? : FixedArray[Double]? = None,
+  soft? : Bool = l.fading.is_empty(),
+  moved? : (Double, Double) = (0.0, 0.0),
+) -> Unit {
   let at = self.ninst
   let seg0 = self.segs.length() / 4
+  // (moved since the frame before by `moved`, with what holds it or on its own: how far it is put from where it was
+  // drawn, what it reached told so (scene_reach_moved))
+  if moved != (0.0, 0.0) {
+    l.shown = (l.shown.0 + moved.0, l.shown.1 + moved.1)
+    scene_reach_moved(l, moved.0, moved.1)
+  }
+  let (dx, dy) = l.shown
+  let off = dx != 0.0 || dy != 0.0
+  // (what it is cut by from outside what moves, kept where it is: the clip the first of them moved began in)
+  let fixed_here = match fixed {
+    Some(f) => f
+    None => l.clip
+  }
   // (its own pieces in the frame as they were in it as it was drawn: the same in between what it holds)
   let dseg = (seg0 - l.block_seg_base).to_double()
   let ip = Ref(0)
@@ -1915,6 +1966,9 @@ fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
       }
       let k = self.ninst
       l.block.blit_to(self.inst, len=n * inst_size, src_offset=ip.val * inst_size, dst_offset=k * inst_size)
+      if off {
+        insts_moved_by(self.inst, k, k + n, dx, dy, fixed_here, soft)
+      }
       while band.val < l.bands.length() && l.bands[band.val] < to {
         let o = (k + l.bands[band.val] - ip.val) * inst_size
         self.inst[o + 12] = self.inst[o + 12] + dseg
@@ -1942,6 +1996,8 @@ fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
     ip.val = to
     sp.val = sto
   }
+  // (what it holds moved with it where it is moved or put moved: none of it moved in it nor changed, scene_still)
+  let along = off || fixed is Some(_)
   for r in l.block_refs {
     let (ri, rs, cid, tops) = r
     put(ri, rs)
@@ -1954,9 +2010,19 @@ fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
       continue
     }
     match scene.layers.get(cid) {
-      // (as kept where nothing of it changed; else drawn anew where its reference is, the rest of what holds it as kept:
+      Some(c) if along => self.scene_emitted(p, c, fixed=Some(fixed_here), soft~, moved~)
+      // (as kept where nothing of it changed, where it was put; moved in it, put where it is now, its block moved by
+      // its reference (scene_moved_by); else drawn anew where its reference is, the rest of what holds it as kept:
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
-      Some(c) => if scene_copyable(c) { self.scene_emitted(p, c) } else { self.scene_redrawn_in(p, l, c) }
+      Some(c) =>
+        if scene_copyable(c) && (c.shown == (0.0, 0.0) || scene_still(c)) {
+          self.scene_emitted(p, c)
+        } else {
+          match self.scene_moved_by(p.tree, l, c) {
+            Some(m) => self.scene_emitted(p, c, moved=m)
+            None => self.scene_redrawn_in(p, l, c)
+          }
+        }
       None => ()
     }
   }
@@ -1974,6 +2040,223 @@ fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
     @signals.untracked(fn() { self.image_for(i.0, i.1) |> ignore })
   }
 }
+
+///|
+/// Instances `k0` to `k1` of `a` moved by (`dx`, `dy`), as drawn where they were: their rects, where they are turned
+/// about, the clips and soft cuts of their own; what they are cut by from outside what moved (`fixed`, the clip it
+/// began in, its own and its outer, as an instance keeps them: 16-19, 24-31, 40-51) kept where it is, as is no clip
+/// (one reaching past any window: push_unclipped); where all its soft cuts are its own (`soft`: nothing outside fades
+/// it), those moved too.
+fn insts_moved_by(
+  a : FixedArray[Double],
+  k0 : Int,
+  k1 : Int,
+  dx : Double,
+  dy : Double,
+  fixed : FixedArray[Double],
+  soft : Bool,
+) -> Unit {
+  let same = fn(b : Int, at : Int) {
+    let mut s = true
+    for j in 0..<4 {
+      if a[b + j] != fixed[at + j] {
+        s = false
+      }
+    }
+    s
+  }
+  let mv = fn(b : Int) {
+    if a[b] > -1.0e9 && a[b] < 1.0e9 {
+      a[b] = a[b] + dx
+    }
+    if a[b + 1] > -1.0e9 && a[b + 1] < 1.0e9 {
+      a[b + 1] = a[b + 1] + dy
+    }
+    if a[b + 2] > -1.0e9 && a[b + 2] < 1.0e9 {
+      a[b + 2] = a[b + 2] + dx
+    }
+    if a[b + 3] > -1.0e9 && a[b + 3] < 1.0e9 {
+      a[b + 3] = a[b + 3] + dy
+    }
+  }
+  for k in k0..<k1 {
+    let b = k * inst_size
+    // (the frame's shapes' pieces: shares of their bands, nothing to move)
+    if a[b + 5] == 12.0 {
+      continue
+    }
+    a[b] = a[b] + dx
+    a[b + 1] = a[b + 1] + dy
+    if a[b + 32] != 0.0 {
+      a[b + 33] = a[b + 33] + dx
+      a[b + 34] = a[b + 34] + dy
+    }
+    // (its own clip: the one it began in, or the outer of that, kept; one of its own moved)
+    if !(same(b + 16, 0) && same(b + 24, 4) && same(b + 28, 8)) &&
+      !(same(b + 16, 12) && same(b + 24, 16) && same(b + 28, 20)) {
+      mv(b + 16)
+    }
+    // (its outer: none, or one of those it began in, kept)
+    let outer = a[b + 44] > 0.0 || a[b + 45] > 0.0 || a[b + 46] > 0.0 || a[b + 47] > 0.0
+    if outer &&
+      !(same(b + 40, 0) && same(b + 44, 4) && same(b + 48, 8)) &&
+      !(same(b + 40, 12) && same(b + 44, 16) && same(b + 48, 20)) {
+      mv(b + 40)
+    }
+    if soft {
+      if a[b + 53] > 0.0 {
+        a[b + 52] = a[b + 52] + dy
+      }
+      if a[b + 55] > 0.0 {
+        a[b + 54] = a[b + 54] + dy
+      }
+      if a[b + 57] > 0.0 {
+        a[b + 56] = a[b + 56] + dx
+      }
+      if a[b + 59] > 0.0 {
+        a[b + 58] = a[b + 58] + dx
+      }
+    }
+  }
+}
+
+///|
+/// Whether nothing of what layer `l` holds changed nor moved in it, nor draws over everything: all of it put where `l`
+/// is put, moved with it.
+fn scene_still(l : SceneLayer) -> Bool {
+  if l.tops.length() > 0 {
+    return false
+  }
+  for r in l.block_refs {
+    let (_, _, cid, tops) = r
+    if tops {
+      continue
+    }
+    match scene.layers.get(cid) {
+      Some(c) => if !scene_copyable(c) || !scene_still(c) { return false }
+      None => return false
+    }
+  }
+  true
+}
+
+///|
+/// Whether layer `l`, drawn where `drawn` was and put now `place` is (as far from it as (`sx`, `sy`)), comes to its block
+/// moved by that, all of it: turned, as big, laid out as far from where it is drawn, as it was; on the pixels by whole
+/// pixels; nothing of what holds it stretching it or setting its glyphs, nor fading it where something of its own fades
+/// too; and all it reaches and all it cuts by its own clips, where it was and where it goes, inside what it began in
+/// (clear of that clip's curves) and in the window, where nothing of that cuts it and nothing of it lies outside to be
+/// left out (Ctx's culling, scene.mbt's paint): a move that changes none of what moving it would.
+fn Ctx::scene_offset_ok(
+  self : Ctx,
+  l : SceneLayer,
+  place : (Double, Double, Double, Double, Double, Double),
+) -> Bool {
+  let d = l.held
+  let (sx, sy) = (place.0 - d.0, place.1 - d.1)
+  guard place.2 == d.2 &&
+    place.3 == d.3 &&
+    place.4 - place.0 == d.4 - d.0 &&
+    place.5 - place.1 == d.5 - d.1 &&
+    (sx * self.scale).round() == sx * self.scale &&
+    (sy * self.scale).round() == sy * self.scale &&
+    l.stretching.is_empty() &&
+    l.glyphing.is_empty() &&
+    (l.fading.is_empty() || !l.fades_inside) &&
+    l.entries is Some(_) else {
+    return false
+  }
+  let c = l.clip
+  let rmax = fn(at : Int) { dmax(dmax(c[at], c[at + 1]), dmax(c[at + 2], c[at + 3])) }
+  let r = rmax(4)
+  let mut x0 = dmax(c[0] + r, 0.0)
+  let mut y0 = dmax(c[1] + r, 0.0)
+  let mut x1 = dmin(c[2] - r, self.width)
+  let mut y1 = dmin(c[3] - r, self.height)
+  let ro = rmax(16)
+  if ro > 0.0 {
+    x0 = dmax(x0, c[12] + ro)
+    y0 = dmax(y0, c[13] + ro)
+    x1 = dmin(x1, c[14] - ro)
+    y1 = dmin(y1, c[15] - ro)
+  }
+  let inside = fn(rx0 : Double, ry0 : Double, rx1 : Double, ry1 : Double, mx : Double, my : Double) {
+    rx1 <= rx0 || ry1 <= ry0 || (rx0 + mx >= x0 && ry0 + my >= y0 && rx1 + mx <= x1 && ry1 + my <= y1)
+  }
+  let (shx, shy) = l.shown
+  let reach = match scene.reach.get(l.id) {
+    Some(e) => e.reach.rect()
+    None => return false
+  }
+  let u = l.inner_cuts.rect()
+  inside(reach.0, reach.1, reach.2, reach.3, 0.0, 0.0) &&
+  inside(reach.0, reach.1, reach.2, reach.3, sx - shx, sy - shy) &&
+  inside(u.0, u.1, u.2, u.3, shx, shy) &&
+  inside(u.0, u.1, u.2, u.3, sx, sy)
+}
+
+///|
+/// Whether layer `l` is kept as it was drawn but for where it is (Ctx::scene_copied's asks but its place's).
+fn scene_kept_but_place(l : SceneLayer) -> Bool {
+  !scene.fresh &&
+  l.seen >= 0 &&
+  l.seen >= scene.frame - 1 &&
+  !l.own_only &&
+  !l.each &&
+  (!inst_owners_kept() || l.block_owners is Some(_)) &&
+  !l.told &&
+  !scene.marked.contains(l.id)
+}
+
+///|
+/// Layer `c`, held by `l` put as kept where it was drawn, moved in it: how far it moved since the frame before, where
+/// its block moved so comes to it (Ctx::scene_offset_ok), what it holds still; the place of it `l`'s drawing keeps
+/// told where it is now. None: drawn anew.
+fn Ctx::scene_moved_by(self : Ctx, tree : @view.Tree, l : SceneLayer, c : SceneLayer) -> (Double, Double)? {
+  guard scene_kept_but_place(c) && scene_still(c) && l.shown == (0.0, 0.0) else { return None }
+  let (ox, oy, oa, os, oux, ouy) = l.held
+  guard tree.placed_in(c.id, l.id.at, oa, os) is Some((x, y, a, s, ux, uy)) else { return None }
+  let place = (ox + x, oy + y, a, s, oux + ux, ouy + uy)
+  guard self.scene_offset_ok(c, place) else { return None }
+  // (where it is in what holds it, as that keeps how it is drawn: as the walk tells it, view_host.mbt)
+  match l.entries {
+    Some(es) =>
+      for e in es {
+        if e.layer && e.c.id == c.id {
+          e.x = x
+          e.y = y
+          e.a = a
+          e.s = s
+          e.ux = ux
+          e.uy = uy
+          e.gone = false
+          break
+        }
+      }
+    None => ()
+  }
+  Some((place.0 - c.held.0 - c.shown.0, place.1 - c.held.1 - c.shown.1))
+}
+
+///|
+/// What layer `l` and all it holds reached, as last drawn, moved by (`dx`, `dy`) with it: where it is drawn again as it
+/// changes, or let go.
+fn scene_reach_moved(l : SceneLayer, dx : Double, dy : Double) -> Unit {
+  match l.entries {
+    Some(es) =>
+      for e in es {
+        let r = e.reach
+        if r.x1 > r.x0 {
+          r.x0 = r.x0 + dx
+          r.y0 = r.y0 + dy
+          r.x1 = r.x1 + dx
+          r.y1 = r.y1 + dy
+        }
+      }
+    None => ()
+  }
+}
+
 
 ///|
 /// Whether layer `l`, held by one put into the frame as kept, is put in as kept too (what Ctx::scene_copied asks of a
@@ -2027,6 +2310,11 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
   }
   scene.drawing = was
   pop_clip()
+  // (what it cuts and fades by its own, what holds it's too)
+  l.inner_cuts.take(c.inner_cuts)
+  if c.fades_inside {
+    l.fades_inside = true
+  }
   // (what holds it as own only, as drawn each frame, as it now is: put in as kept no more)
   if c.own_only {
     l.own_only = true
@@ -2108,4 +2396,32 @@ fn Ctx::scene_tops_raised(self : Ctx) -> Unit {
     }
   }
   scene.tops_now.clear()
+}
+
+///|
+/// Where layer `l` is put now as the frame before put it: where it was drawn, moved as far as it is put from there.
+fn scene_held_now(l : SceneLayer) -> (Double, Double, Double, Double, Double, Double) {
+  let (x, y, a, s, ux, uy) = l.held
+  let (dx, dy) = l.shown
+  (x + dx, y + dy, a, s, ux + dx, uy + dy)
+}
+
+///|
+/// A clip pushed (or a node's own drawing cut to its box) as the layer being drawn draws: what moving it may change
+/// (its inner_cuts).
+fn scene_cut_inside(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
+  match scene.drawing {
+    Some(l) => l.inner_cuts.add(x0, y0, x1, y1)
+    None => ()
+  }
+}
+
+///|
+/// What the layer being drawn holds faded by something of its own (View::fades, cuts_softly): moved, it fades
+/// otherwise where something holding it fades it too.
+fn scene_fades_inside() -> Unit {
+  match scene.drawing {
+    Some(l) => l.fades_inside = true
+    None => ()
+  }
 }

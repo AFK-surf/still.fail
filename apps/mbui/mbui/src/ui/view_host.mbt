@@ -1624,6 +1624,7 @@ fn Ctx::tree_draw_node(
     }
   }
   if e.fade_start > 0.0 || e.fade_top > 0.0 || e.fade_end > 0.0 || e.fade_foot > 0.0 {
+    scene_fades_inside()
     p.fading.push(
       (
         c.id,
@@ -1742,6 +1743,8 @@ fn Ctx::tree_draw_own(
     e.ground_w == 0.0 &&
     e.ground_h == 0.0 &&
     (c.shadow.2 & 0xFFL) == 0L {
+    // (left out where it is drawn: moving what it is in may bring it in, scene_layers.mbt)
+    scene_cut_inside(x, y, x + bw, y + bh)
     self.tree_unseen(c, s)
     return -1
   }
@@ -2427,6 +2430,7 @@ fn Ctx::view_blit(
       s[b + 16 + j] = clip_stack[k + j]
     }
     if i >= made.cut.0 && i < made.cut.1 {
+      scene_cut_inside(x, y, x + made.w, y + made.h)
       s[b + 16] = dmax(s[b + 16], x)
       s[b + 17] = dmax(s[b + 17], y)
       s[b + 18] = dmin(s[b + 18], x + made.w)

@@ -195,6 +195,8 @@ fn push_clip_r(
   outer_kept? : Bool = false,
   outer_whole? : Bool = false,
 ) -> Unit {
+  // (cut inside the layer being drawn: scene_layers.mbt)
+  scene_cut_inside(x0, y0, x1, y1)
   let k = clip_top()
   let has_outer = clip_has_outer(k)
   // (an outer apart from the clip it is in, where that is laid out (clip_apart): not measured against it, kept unless
