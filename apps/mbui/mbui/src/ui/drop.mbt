@@ -59,19 +59,26 @@ priv struct Dropping {
   mut held : (Double, Double)?
   drops : Array[(Double, Double, Int, Int)]
   mut words : (Array[Int], String, Int)?
-  mut paths : PathsLetGo?
+  paths : Array[PathsLetGo]
 }
 
 ///|
-let dropping : Dropping = { held: None, drops: [], words: None, paths: None }
+let dropping : Dropping = { held: None, drops: [], words: None, paths: [] }
 
 ///|
 fn drop_reset() -> Unit {
   tree_drop_fields.clear()
+  let hover = tree_file_hover.val
+  tree_file_hover.val = None
+  match hover {
+    Some(own) => own.over.set(false)
+    None => ()
+  }
+  tree_file_drops.clear()
   dropping.held = None
   dropping.drops.clear()
   dropping.words = None
-  dropping.paths = None
+  dropping.paths.clear()
 }
 
 ///|
@@ -122,13 +129,13 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
 fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) -> Unit {
   old_input_brought()
   let c = g()
-  if tree_paths_let_go(x, y, paths) {
+  if !tree_file_before_tree_paths(x, y) && tree_paths_let_go(x, y, paths) {
     drop_taken(pick)
     hand_event()
     return
   }
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
-  dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
+  dropping.paths.push({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
   hand_event()
 }
 
@@ -136,11 +143,19 @@ fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) 
 /// The paths let go this frame on box `id` (beside field `field`, or on it: one let go on another field is that field's),
 /// not taken yet.
 fn paths_on(c : Ctx, id : Int, field : Int) -> PathsLetGo? {
-  match dropping.paths {
-    Some(d) if d.frame == c.frame_no &&
-      d.within.contains(id) &&
-      (d.target == field || !c.editors.contains(d.target)) => Some(d)
-    _ => None
+  for d in dropping.paths {
+    if d.frame == c.frame_no && d.within.contains(id) &&
+      (d.target == field || !c.editors.contains(d.target)) { return Some(d) }
+  }
+  None
+}
+
+///|
+/// Forget only the paths belonging to this drop: others can arrive before the same frame.
+fn paths_taken(pick : Int) -> Unit {
+  match dropping.paths.search_by(fn(d) { d.pick == pick }) {
+    Some(i) => dropping.paths.remove(i) |> ignore
+    None => ()
   }
 }
 
@@ -170,7 +185,6 @@ pub fn Ctx::words_into(self : Ctx, id : Int, key : String) -> Unit {
     _ =>
       match paths_on(self, id, field) {
         Some(d) => {
-          dropping.paths = None
           drop_taken(d.pick)
           if d.target == field {
             place_caret_at(st, d.x, d.y, self.clock)
@@ -190,7 +204,6 @@ pub fn Ctx::words_into(self : Ctx, id : Int, key : String) -> Unit {
 pub fn Ctx::paths_into(self : Ctx, id : Int, key : String) -> Array[DroppedPath]? {
   hand_events_read()
   guard paths_on(self, id, self.id(key)) is Some(d) else { return None }
-  dropping.paths = None
   drop_taken(d.pick)
   Some(d.paths)
 }
@@ -198,6 +211,7 @@ pub fn Ctx::paths_into(self : Ctx, id : Int, key : String) -> Array[DroppedPath]
 ///|
 /// Drop `pick` taken otherwise than as files (by their paths): let go, unread.
 fn drop_taken(pick : Int) -> Unit {
+  paths_taken(pick)
   match dropping.drops.search_by(fn(d) { d.2 == pick }) {
     Some(i) => forget_drop(dropping.drops.remove(i).2)
     None => ()
@@ -209,8 +223,8 @@ fn drop_taken(pick : Int) -> Unit {
 /// field they were let go on, as a paste's words, the field taking the focus (shown by the frame after); the drops none
 /// took in it, let go, unread.
 fn drops_frame_end(c : Ctx) -> Unit {
-  if dropping.paths is Some(d) {
-    dropping.paths = None
+  tree_files_after_old()
+  for d in dropping.paths {
     match c.editors.get(d.target) {
       Some(st) if d.frame == c.frame_no => {
         c.focus_visible = false
@@ -223,6 +237,7 @@ fn drops_frame_end(c : Ctx) -> Unit {
       _ => ()
     }
   }
+  dropping.paths.clear()
   for d in dropping.drops {
     forget_drop(d.2)
   }
@@ -260,11 +275,18 @@ fn init {
       _ => ""
     }
     match kind {
-      "over" => dropping.held = Some((num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val))
+      "over" => {
+        old_input_brought()
+        dropping.held = Some((num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val))
+        tree_files_refresh()
+      }
       "drop" => {
         dropping.held = None
         let id = num("pick").to_int()
         let (x, y) = (num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val)
+        // The target and any field in front must be found in the layout the hand let go on. Clearing the hover first
+        // can change that layout (a target may grow while hovered) and send this drop to a different view.
+        old_input_brought()
         dropping.drops.push((x, y, id, g().frame_no))
         // (where they are, as the host says: taken so, they are not read)
         let paths = match v {
@@ -293,9 +315,12 @@ fn init {
         if !paths.is_empty() {
           paths_let_go(x, y, paths, id)
         }
+        tree_files_let_go(x, y, id, !paths.is_empty())
+        tree_files_refresh()
       }
       "words" => {
         dropping.held = None
+        tree_files_refresh()
         match v {
           Object(m) =>
             match m.get("text") {
@@ -305,7 +330,10 @@ fn init {
           _ => ()
         }
       }
-      _ => dropping.held = None
+      _ => {
+        dropping.held = None
+        tree_files_refresh()
+      }
     }
   })
 }
@@ -324,21 +352,40 @@ pub fn files_held() -> (Double, Double)? {
 /// unread, as its frame ends.
 pub fn take_drop(over? : (Double, Double) -> Bool = fn(_, _) { true }) -> (Double, Double, Pick)? {
   let c = g()
-  let on_field = fn(id) { dropping.paths is Some(d) && d.pick == id && c.editors.contains(d.target) }
+  let on_field = fn(id) { dropping.paths.iter().any(fn(d) { d.pick == id && c.editors.contains(d.target) }) }
   guard dropping.drops.search_by(fn(d) { d.3 == c.frame_no && !on_field(d.2) && over(d.0, d.1) }) is Some(i) else {
     return None
   }
   let (x, y, id, _) = dropping.drops.remove(i)
-  if dropping.paths is Some(d) && d.pick == id {
-    dropping.paths = None
-  }
+  Some((x, y, dropped_pick(id)))
+}
+
+///|
+/// Take a particular drop for a retained target, after the old and new fields' first chance at its paths.
+fn take_drop_id(id : Int) -> Pick? {
+  let c = g()
+  guard dropping.drops.search_by(fn(d) { d.2 == id && d.3 == c.frame_no }) is Some(i) else { return None }
+  dropping.drops.remove(i) |> ignore
+  Some(dropped_pick(id))
+}
+
+///|
+fn dropped_pick(id : Int) -> Pick {
+  paths_taken(id)
   let p : Pick = match fake.val {
     // (a Tester's: the ask Tester::drop_files made, from 1)
-    Some(_) => { hosts: [], got: [], fake: id - 1 }
+    Some(f) => {
+      // The host starts reading when a target takes the drop, not when the test queued its message.
+      match f.pick_asks.get(id - 1) {
+        Some(ask) => ask.frame = answers_frames.val
+        None => ()
+      }
+      { hosts: [], got: [], fake: id - 1 }
+    }
     None => { hosts: [@hostapi.dropped_pick(id)], got: [None], fake: -1 }
   }
   p.wait("files dropped")
-  Some((x, y, p))
+  p
 }
 
 ///|
@@ -363,7 +410,7 @@ pub fn Tester::drop_files(
   paths? : Array[String] = [],
 ) -> Unit {
   self.picks(files)
-  self.fake.pick_asks.push({ kind: Files, frame: g().frame_no, taken: false })
+  self.fake.pick_asks.push({ kind: Files, frame: answers_frames.val, taken: false, files: Some(self.fake.picks.copy()) })
   let id = self.fake.pick_asks.length()
   let m : Map[String, Json] = {
     "type": Json::string("drop"),
