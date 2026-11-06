@@ -10063,13 +10063,15 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
 /// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
-  let budget = match self.brought_budget {
-    Some(b) => b
-    None => (Ref(0), Ref(false))
-  }
+  // A standalone measure can say something before there is a layout budget. In that case it belongs to the layout
+  // which eventually tells it, including that layout's stop flag. A notification made by a layout keeps its own.
+  let budget = self.brought_budget
   self.after_laid.push(fn() {
     let was_budget = self.brought_budget
-    self.brought_budget = Some(budget)
+    match budget {
+      Some(b) => self.brought_budget = Some(b)
+      None => ()
+    }
     defer { self.brought_budget = was_budget }
     f()
   })
