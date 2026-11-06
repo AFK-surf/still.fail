@@ -12,7 +12,7 @@ let spin_period_ms : Double = 800.0
 
 ///|
 /// A spinner turning on the resident clock over a chat's list of `n` messages (none: an empty page): what drawing the
-/// tree did while it turned for spinning_ms (after its first turn), and where its last frame of the tree alone drew again.
+/// tree did while it turned for spinning_ms (after its first turn), and the parts its last frame presented drew again in.
 fn spinner_over(n : Int) -> (SceneWork, Array[(Double, Double, Double, Double)]) {
   let t = Tester::new(fn(_) {  }, w=400.0, h=600.0)
   set_view_app(fn(root) {
@@ -65,7 +65,7 @@ fn spinner_over(n : Int) -> (SceneWork, Array[(Double, Double, Double, Double)])
       alone_recorded: after.alone_recorded - before.alone_recorded,
       alone_parts: after.alone_parts - before.alone_parts,
     },
-    [scene.alone_reach],
+    scene_parts(),
   )
 }
 
@@ -84,8 +84,8 @@ test "a spinner turning over a chat's 3000 messages costs what it costs over an 
   // (and its step drawn again where the spinner reaches, before and now: its turn's circle, its edge's reach, nothing
   // of the list)
   assert_eq(long_parts, empty_parts)
-  let (x0, y0, x1, y1) = empty_parts[0]
-  assert_true(x1 - x0 > 0.0 && x1 - x0 < 48.0 && y1 - y0 > 0.0 && y1 - y0 < 48.0, msg="\{empty_parts}")
+  let (_, _, w, h) = empty_parts[0]
+  assert_true(empty_parts.length() == 1 && w > 0.0 && w < 48.0 && h > 0.0 && h < 48.0, msg="\{empty_parts}")
 }
 
 ///|

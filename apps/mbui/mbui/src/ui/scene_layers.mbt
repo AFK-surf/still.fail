@@ -310,8 +310,6 @@ priv struct Scene {
   full_whys : Array[String]
   /// layers to draw again the frame after this (a glyph of theirs there was no room for in the atlas)
   again : Array[@view.NodeId]
-  /// where what the last frame of the tree alone drew again reaches now (a test's to say)
-  mut alone_reach : (Double, Double, Double, Double)
   /// the buffers layers are drawn again alone into, kept from frame to frame (one for each drawn in a frame)
   scratch : Array[FixedArray[Double]]
   /// the parts the last frame presented was drawn again in (h_present), for a test or a bench to read
@@ -370,7 +368,6 @@ let scene : Scene = {
   copy_why: "",
   full_whys: [],
   again: [],
-  alone_reach: (1.0e18, 1.0e18, -1.0e18, -1.0e18),
   scratch: [],
   told_parts: [],
   wakes: [],
@@ -498,7 +495,6 @@ fn scene_forget() -> Unit {
   scene.owners = None
   scene.src_n = 0
   scene.src_seen = -1
-  scene.alone_reach = @damage.nowhere
   scene.src_segs.clear()
   scene.checking = false
   scene.alone_why = ""
