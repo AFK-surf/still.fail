@@ -688,7 +688,7 @@ pub let fill_chip_corner : Double
 
 pub let fill_chip_h : Double
 
-pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () -> String, small? : Bool, said? : () -> String, tips? : TipLayer) -> @view.View
+pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () -> String, small? : Bool, compact? : Bool, said? : () -> String, tips? : TipLayer) -> @view.View
 
 pub let fill_chip_small_h : Double
 
@@ -1803,6 +1803,8 @@ pub let quiet : @ui.TextStyle
 pub let quieter : @ui.TextStyle
 
 pub fn quota_chip(@ui.Ctx, @json.Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
+
+pub fn quota_chip_node(@view.View, () -> @json.Json?, small? : Bool, compact? : Bool, marked? : Bool, said? : () -> String, tips? : TipLayer) -> @view.View
 
 pub fn quota_chips(@ui.Ctx, @json.Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
 
