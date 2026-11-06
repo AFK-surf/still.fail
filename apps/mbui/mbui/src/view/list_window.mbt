@@ -94,8 +94,10 @@ pub fn View::list_room_ground(self : View) -> View {
 /// `kept_keys`: blocks needed outside the visible window too, such
 /// as a send's landing while the list glides towards it, laid out in their own slots, still cut by the list, not among
 /// those `shown` reports in sight. `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last
-/// block, laid out even while the last block is off screen. Where its host sets a page's list's rows on its pixels
-/// (Tree::set_rows_grid), each block's room is as tall as whole pixels.
+/// block, laid out even while the last block is off screen. `tucked` names a block initially kept above `cover`: the
+/// block after it starts at the cover's foot, with enough room under the last block to do so even in a short list.
+/// Where its host sets a page's list's rows on its pixels (Tree::set_rows_grid), each block's room is as tall as whole
+/// pixels.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -114,6 +116,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
+  tucked? : () -> K? = fn() { None },
   rooms? : () -> (K, Double, Double) -> ListRoom,
   room_transforms? : Bool = true,
   kept_keys? : () -> Array[K],
@@ -126,7 +129,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, align_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
     put?=put, put_fraction?=put_fraction, put_fraction_lead_within_row~, rooms?=rooms, room_transforms~,
-    fresh~, read_from_top~, cover~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
+    fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
     seen?=seen, position?=position,
   )
 }

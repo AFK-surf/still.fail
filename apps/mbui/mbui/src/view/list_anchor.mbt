@@ -359,6 +359,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // (the rows it ended with as last laid out)
   let was_tail : Ref[Array[K]] = Ref([])
   let tuck_done = Ref(false)
+  let tuck_moves = s.moved_at_once
   let window_h = Ref(0.0)
   let window_cover : Ref[(Double, Double)] = Ref((0.0, 0.0))
   // (what each row is known by, whatever node it is made in, by its key: View::row_known_as)
@@ -852,13 +853,20 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             match find(k, 0) {
               Some(i) => {
                 let own = measure(i)
-                let mut over = 0.0
-                for j in 0..<i {
-                  over = over + measure(j)
+                // Only the rows below the tucked one can fill the visible window. Measure them until it is full;
+                // where they run out first, leave exactly the missing room under them. Counting what is above the
+                // tucked row instead leaves a short list unable to put the row's foot at the cover.
+                let need = dmax(0.0, h - c.cover)
+                let mut below = 0.0
+                let mut j = i + 1
+                while j < n && below < need {
+                  below += measure(j)
+                  j += 1
                 }
-                // (all that is over its foot out of sight, however few rows there are under it)
-                slack = dmax(0.0, over + own - c.cover)
-                if !tuck_done.val && c.x <= 0.5 && seen_x.val is None {
+                slack = dmax(0.0, need - below)
+                // The requested row can arrive after the first layout. Do not override an explicit placement or
+                // a scroll made in the meantime.
+                if !tuck_done.val && !putting && c.x <= 0.5 && s.moved_at_once == tuck_moves {
                   anchor.val = Some({ key: k, under: own - c.cover, near: i })
                 }
                 tuck_done.val = true
