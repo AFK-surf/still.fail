@@ -1290,10 +1290,13 @@ fn Ctx::tree_walk(
       scene_origin_push()
       l.base_lvl = clip_top() / clip_n
       let (fx, fy) = scene_frame_origin.val
+      // (the clip it began in, in the window's terms: what is drawn in it cut by it as it is put, scene_own_clips)
+      scene_own_clips.push(own_clip_in_window(l.clip, (fx, fy)))
       scene_frame_origin.val = (fx + x, fy + y)
       scene_own_depth.val = scene_own_depth.val + 1
       let es = self.tree_walk_in(p, from, (0.0, 0.0, a, s, ux - x, uy - y), depth, kept)
       scene_own_depth.val = scene_own_depth.val - 1
+      scene_own_clips.pop() |> ignore
       scene_frame_origin.val = (fx, fy)
       pop_clip()
       es
