@@ -306,6 +306,7 @@
     "other": "{n} agent processes, {size}"
   },
   "core-views.present.profile.blocked": "Suspended",
+  "core-views.present.profile.disabled": "Disabled",
   "core-views.present.profile.decision_pending": "Finding the decision models",
   "core-views.present.profile.decision.no_probabilities": "This sign-in offers no decision probabilities",
   "core-views.present.profile.decision.none_verified": "No decision model verified yet",

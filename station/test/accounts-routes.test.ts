@@ -115,6 +115,38 @@ async function waitFor(t: Rig, id: string, state: string): Promise<any> {
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
+  test("an API key can be disabled and re-enabled without losing the key or its settings", async () => {
+    const moved: string[] = [];
+    let checks = 0;
+    const t = await rig({
+      hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, profileGone: async (id) => { moved.push(id); } },
+      check: async () => { checks++; return { state: "ok", detail: "fake", models: [], checkedAt: 0 }; },
+    });
+    try {
+      assert.equal((await t.call("PUT", "/profiles/key", { runtime: "claude", access: { kind: "anthropic-api", key: "sk-my-secret" }, models: ["opus"] }))[0], 200);
+      await settle();
+      assert.equal(t.view("key")!.enabled, true);
+      assert.equal((await t.call("PUT", "/profiles/key", { enabled: "no" }))[0], 400);
+      const disabled = await t.call("PUT", "/profiles/key", { enabled: false });
+      assert.equal(disabled[0], 200);
+      assert.equal(t.view("key")!.enabled, false);
+      assert.deepEqual(moved, ["key"]);
+      assert.equal((t.profile("key")!.access as any).key, "sk-my-secret");
+      assert.deepEqual(t.profile("key")!.models, ["opus"]);
+      await settle();
+      const before = checks;
+      assert.equal((await t.call("POST", "/profiles/key/check"))[0], 409);
+      await t.accounts.refreshQuota("key");
+      assert.equal(checks, before, "a disabled key is not checked in the background or by hand");
+      assert.equal((await t.call("PUT", "/profiles/key", { name: "Backup" }))[0], 200);
+      assert.equal(t.profile("key")!.enabled, false, "other edits retain the disabled state");
+      assert.equal((await t.call("PUT", "/profiles/key", { enabled: true }))[0], 200);
+      assert.equal(t.view("key")!.enabled, true);
+      assert.equal((t.profile("key")!.access as any).key, "sk-my-secret");
+      assert.deepEqual(t.profile("key")!.models, ["opus"]);
+    } finally { await t.close(); }
+  });
+
   test("a profile serves every workspace the station joined but those withheld from it; a joined workspace's members do all its own do", async () => {
     const t = await rig({ workspaces: ["W1", "W2", "W3"] });
     const joined = { ...viewer("guest@example.com", "admin"), workspace: "W2", home: false };
@@ -1119,6 +1151,11 @@ describe("the remaining accounts routes", { concurrency: true }, () => {
     const decision = t.view("groq")!.check.decision;
     assert.ok(decision.state === "pending" || decision.state === "ready", JSON.stringify(decision));
     assert.equal((await t.call("POST", "/automatic-decisions/refresh"))[0], 200);
+    assert.equal((await t.call("PUT", "/profiles/groq", { enabled: false }))[0], 200);
+    assert.deepEqual(t.accounts.decisionModels(), [], "a disabled key is not offered for automatic decisions");
+    assert.equal((await t.call("POST", "/automatic-decisions/refresh"))[0], 200, "refresh skips it");
+    assert.equal((await t.call("PUT", "/profiles/groq", { enabled: true }))[0], 200);
+    await until(() => t.accounts.decisionModels().length > 0, "the re-enabled key can decide again");
     await t.close();
   });
 
