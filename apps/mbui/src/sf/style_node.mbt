@@ -33,7 +33,18 @@ fn node_style_size(len : @ui.Len?, along : Bool) -> @view.StyleSize? {
     Some(Full) if !along => Some(Percent(100.0))
     Some(Full | Grow(_) | Hug | Cut) => Some(Automatic)
     Some(Pct(p)) => Some(Percent(p))
+    Some(Within(_)) => abort("style: Within is a bound, not a size")
+    Some(v) => v.points().map(fn(n) { Points(n) })
+  }
+}
+
+///|
+fn node_style_bound(len : @ui.Len?) -> @view.StyleSize? {
+  match len {
+    None => None
     Some(Within(v)) => Some(Within(v))
+    Some(Hug | Cut | Full | Grow(_)) => Some(Automatic)
+    Some(Pct(_)) => abort("style: a bound cannot be a percentage")
     Some(v) => v.points().map(fn(n) { Points(n) })
   }
 }
@@ -103,10 +114,10 @@ pub fn style_node(
       row: q.row,
       width: node_style_size(q.w, in_row),
       height: node_style_size(q.h, !in_row),
-      min_width: node_style_size(q.min_w, false),
-      max_width: node_style_size(q.max_w, false),
-      min_height: node_style_size(q.min_h, false),
-      max_height: node_style_size(q.max_h, false),
+      min_width: node_style_bound(q.min_w),
+      max_width: node_style_bound(q.max_w),
+      min_height: node_style_bound(q.min_h),
+      max_height: node_style_bound(q.max_h),
       grow,
       basis,
       padding: node_style_sides(node_style_room, q.p, q.px, q.py, q.pl, q.pt, q.pr, q.pb),
@@ -123,7 +134,8 @@ pub fn style_node(
         None => None
         Some(JCenter) => Some(Middle)
         Some(JEnd) => Some(End)
-        Some(_) => Some(Start)
+        Some(JBetween) => Some(Between)
+        Some(JStart) => Some(Start)
       },
       ground: q.bg.map(fn(c) { th.color(c) }),
       radius: q.radius.map(fn(r) { th.corner(r) }),

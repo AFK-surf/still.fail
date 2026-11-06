@@ -47,11 +47,14 @@ test "a node style comes, grows, is fixed and goes: the caller's live properties
   which.set(1)
   t.draw()
   assert_eq((v.laid_size(), style_node_drawn(v).ground), ((80.0, 40.0), 0xAABBCCFFL))
+  assert_eq(style_node_drawn(v).radius, @ui.tree_theme().corner(Md))
+  assert_true(width.watched() && ground.watched())
   width.set(64.0)
   ground.set(0x445566FFL)
   which.set(2)
   t.draw()
   assert_eq((v.laid_size().0, v.laid_size().1), (300.0, 32.0))
+  assert_eq(style_node_drawn(v).radius, 3.0)
   which.set(1)
   t.draw()
   assert_eq(v.laid_size(), (80.0, 40.0))
@@ -171,4 +174,107 @@ test "a node style resolves the mouse, finger and keyboard patches in the old st
   t.touch(2, 10.0, 10.0)
   t.draw()
   assert_eq(style_node_drawn(v).ground, base)
+}
+
+///|
+test "a node style follows caller-owned selected and disabled states in style order" {
+  let selected = @signals.signal(false, same=fn(a, b) { a == b })
+  let disabled = @signals.signal(false, same=fn(a, b) { a == b })
+  let made : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(_) {  }, w=200.0, h=100.0)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(v) {
+      made.val = Some(v)
+      style_node(v, fn() {
+        @ui.style(
+          w=Fixed(80.0), h=Fixed(32.0), bg=Data(0x111111FFL),
+          selected=@ui.patch(bg=Data(0x222222FFL)),
+          disabled=@ui.patch(bg=Data(0x333333FFL)),
+        )
+      }, selected=fn() { selected.get() }, disabled=fn() { disabled.get() })
+    })
+    |> ignore
+  })
+  t.draw()
+  let v = made.val.unwrap()
+  assert_eq(style_node_drawn(v).ground, 0x111111FFL)
+  selected.set(true)
+  t.draw()
+  assert_eq(style_node_drawn(v).ground, 0x222222FFL)
+  disabled.set(true)
+  t.draw()
+  assert_eq(style_node_drawn(v).ground, 0x333333FFL)
+  disabled.set(false)
+  t.draw()
+  assert_eq(style_node_drawn(v).ground, 0x222222FFL)
+}
+
+///|
+test "a node style reads its dynamic look once per change, sharing one binding across its properties" {
+  let on = @signals.signal(false, same=fn(a, b) { a == b })
+  let reads = Ref(0)
+  let t = @ui.Tester::new(fn(_) {  }, w=200.0, h=100.0)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(v) {
+      style_node(v, fn() {
+        reads.val += 1
+        if on.get() { @ui.style(w=Fixed(80.0), h=Fixed(32.0), bg=Data(0x222222FFL), radius=Md) }
+        else { @ui.style(w=Fixed(60.0), h=Fixed(24.0), bg=Data(0x111111FFL)) }
+      })
+    })
+    |> ignore
+  })
+  t.draw()
+  let held = @ui.view_tree().unwrap().bindings_held()
+  let before = reads.val
+  on.set(true)
+  t.draw()
+  assert_eq((reads.val - before, @ui.view_tree().unwrap().bindings_held()), (1, held))
+}
+
+///|
+test "a node style switches a column's height between fixed and growing" {
+  let growing = @signals.signal(false, same=fn(a, b) { a == b })
+  let made : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(_) {  }, w=200.0, h=120.0)
+  @ui.set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(v) {
+      made.val = Some(v)
+      style_node(v, fn() { @ui.style(w=Fixed(40.0), h=if growing.get() { Grow(1.0) } else { Fixed(32.0) }) })
+    })
+    |> ignore
+  })
+  t.draw()
+  let v = made.val.unwrap()
+  assert_eq(v.laid_size(), (40.0, 32.0))
+  growing.set(true)
+  t.draw()
+  assert_eq(v.laid_size(), (40.0, 120.0))
+  growing.set(false)
+  t.draw()
+  assert_eq(v.laid_size(), (40.0, 32.0))
+}
+
+///|
+test "a node style leaves existing painted properties in their original order" {
+  let on = @signals.signal(false, same=fn(a, b) { a == b })
+  let order : Array[String] = []
+  let t = @ui.Tester::new(fn(_) {  }, w=200.0, h=100.0)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(80.0))).height(Is(Some(32.0))) |> ignore
+      v.ground(Painted(fn(_) { order.push("ground"); 0x112233FFL })) |> ignore
+      v.radius(Painted(fn(_) { order.push("radius"); 3.0 })) |> ignore
+      style_node(v, fn() { if on.get() { @ui.style(bg=Data(0xAABBCCFFL)) } else { @ui.style() } })
+    })
+    |> ignore
+  })
+  t.draw()
+  on.set(true)
+  t.draw()
+  order.clear()
+  on.set(false)
+  t.draw()
+  assert_eq(order, ["ground", "radius"])
 }

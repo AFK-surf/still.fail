@@ -64,7 +64,7 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Cursor] = { stop, remake: None }
+        n.props[Cursor] = { stop, refresh: None }
       })
   }
   self

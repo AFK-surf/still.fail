@@ -1,5 +1,5 @@
 // A node's style is a layer over its own properties. When a style stops saying a property, its original binding is
-// installed again; a property said explicitly after the style replaces the style for that property.
+// restored; a property said explicitly after the style replaces the style for that property.
 
 ///|
 /// A length a node's style says, or an automatic size. Percent is in the range 0 to 100.
@@ -8,6 +8,14 @@ pub(all) enum StyleSize {
   Points(Double)
   Percent(Double)
   Within(Double)
+} derive(Eq)
+
+///|
+pub(all) enum StyleJustify {
+  Start
+  Middle
+  End
+  Between
 } derive(Eq)
 
 ///|
@@ -22,7 +30,8 @@ fn StyleSize::dimension(self : StyleSize) -> @flex.Dim {
 
 ///|
 /// A node's optional style properties. None leaves its own property in place; a property later omitted returns to its
-/// own value and binding. A nested option says a value which itself can be absent, such as stretched alignment.
+/// own value. Its binding remains in place underneath. A nested option says a value which itself can be absent, such as
+/// stretched alignment.
 pub(all) struct NodeStyle {
   row : Bool?
   width : StyleSize?
@@ -37,7 +46,7 @@ pub(all) struct NodeStyle {
   margin : (Double, Double, Double, Double)?
   gap : Double?
   align : Along??
-  justify : Along?
+  justify : StyleJustify?
   ground : Int64?
   radius : Double?
   corners : (Double, Double, Double, Double)??
@@ -50,7 +59,7 @@ pub(all) struct NodeStyle {
 
 ///|
 /// A property of a style. All properties of one style share its one tracked read; only those whose value changed
-/// are set. `fallback` restores the original static value, or the old live binding is installed again.
+/// are set. `fallback` restores the original static value, or the old live binding supplies its latest value.
 fn[T : Eq] View::style_binding(
   self : View,
   prop : Prop,
@@ -78,7 +87,7 @@ fn[T : Eq] View::style_binding(
     None => ()
   }
   let base = match n.props.get(prop) {
-    Some(binding) => binding.remake.unwrap_or(fallback)
+    Some(binding) => binding.refresh.unwrap_or(fallback)
     None => fallback
   }
   let enabled = Ref(true)
@@ -103,7 +112,7 @@ fn[T : Eq] View::style_binding(
       mark()
     }
   }
-  styles[prop] = { stop: fn() { enabled.val = false }, restore }
+  styles[prop] = { stop: fn() { enabled.val = false }, restore, active: fn() { active.val } }
   fn() {
     if !enabled.val || !self.alive() { return }
     let value = read()
@@ -111,16 +120,7 @@ fn[T : Eq] View::style_binding(
     last.val = Some(value)
     match value {
       Some(value) => {
-        if !active.val {
-          match n.props.get(prop) {
-            Some(binding) => {
-              n.props.remove(prop)
-              (binding.stop)()
-            }
-            None => ()
-          }
-          active.val = true
-        }
+        active.val = true
         apply(value)
         mark()
       }
@@ -204,7 +204,7 @@ pub fn View::style_layer(self : View, read : () -> NodeStyle) -> View {
   }, fn() { f.align_items = align }))
   let justify = f.justify
   updates.push(self.style_binding(LiesAlong, fn() { style().justify }, Layout, fn(x) {
-    f.justify = match x { Start => FlexStart; Middle => Center; End => FlexEnd }
+    f.justify = match x { Start => FlexStart; Middle => Center; End => FlexEnd; Between => SpaceBetween }
   }, fn() { f.justify = justify }))
   let ground = n.look.ground
   updates.push(self.style_binding(Ground, fn() { style().ground }, Paint, fn(x) { n.look.ground = x }, fn() { n.look.ground = ground }))

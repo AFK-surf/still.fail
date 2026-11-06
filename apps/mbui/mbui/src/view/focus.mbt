@@ -84,7 +84,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[Focusable] = { stop, remake: None }
+        n.props[Focusable] = { stop, refresh: None }
       })
   }
   self
@@ -600,7 +600,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[TabStop] = { stop, remake: None }
+        n.props[TabStop] = { stop, refresh: None }
       })
   }
   self

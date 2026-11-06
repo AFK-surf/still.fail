@@ -459,16 +459,17 @@ pub(all) struct Work {
 } derive(Eq, Debug)
 
 ///|
-/// A property's running binding and, for a regular property, how to install it again after a temporary style releases it.
+/// A property's running binding and, for a regular property, how to restore its latest value after a style releases it.
 priv struct PropBinding {
   stop : () -> Unit
-  remake : (() -> Unit)?
+  refresh : (() -> Unit)?
 }
 
 ///|
 priv struct StyleBinding {
   stop : () -> Unit
   restore : () -> Unit
+  active : () -> Bool
 }
 
 ///|
@@ -2572,6 +2573,19 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
 }
 
 ///|
+fn View::styled(self : View, prop : Prop) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  match n.style_props {
+    Some(styles) =>
+      match styles.get(prop) {
+        Some(style) => (style.active)()
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
 /// Install a property's own binding without removing a style layered over it.
 fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
@@ -2618,10 +2632,17 @@ fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Pha
           return
         }
         last.val = Some(v)
-        apply(v)
-        marked()
+        if !self.styled(prop) {
+          apply(v)
+          marked()
+        }
       })
-      n.props[prop] = { stop, remake: Some(fn() { self.bind_base(prop, live, phase, apply) }) }
+      n.props[prop] = { stop, refresh: Some(fn() {
+        match last.val {
+          Some(v) => { apply(v); marked() }
+          None => ()
+        }
+      }) }
     }
     Roomed(of, f) => {
       match phase {
@@ -2649,20 +2670,21 @@ fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Pha
         let v = reads_own(fn() { watch.read(fn() { f(w, h) }) })
         if last.val != Some(v) {
           last.val = Some(v)
-          // (applied as part of the layout under way: what holds it up to `of` found again here, not marked to be laid
-          // out again)
-          let was = tree.roomed_applying
-          tree.roomed_applying = at
-          apply(v)
-          tree.roomed_applying = was
-          // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
-          let mut j = at
-          while j >= 0 && j != of.at {
-            let fl = tree.nodes[j].flex
-            fl.dirty = true
-            fl.cache_n = 0
-            fl.p_ok = false
-            j = tree.nodes[j].parent
+          if !self.styled(prop) {
+            // Applied within this layout: other changes made by `apply` must still mark their own layout.
+            let was = tree.roomed_applying
+            tree.roomed_applying = at
+            apply(v)
+            tree.roomed_applying = was
+            // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
+            let mut j = at
+            while j >= 0 && j != of.at {
+              let fl = tree.nodes[j].flex
+              fl.dirty = true
+              fl.cache_n = 0
+              fl.p_ok = false
+              j = tree.nodes[j].parent
+            }
           }
         }
       }
@@ -2673,7 +2695,12 @@ fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Pha
           watch.stop()
           tree.roomed_drop(of.at, at, gen)
         },
-        remake: Some(fn() { self.bind_base(prop, live, phase, apply) }),
+        refresh: Some(fn() {
+          match last.val {
+            Some(v) => { apply(v); marked() }
+            None => ()
+          }
+        }),
       }
     }
     Painted(f) => {
@@ -2693,8 +2720,10 @@ fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Pha
         let v = watch.read(fn() { f({ tree, }) })
         if last.val != Some(v) {
           last.val = Some(v)
-          apply(v)
-          marked()
+          if !self.styled(prop) {
+            apply(v)
+            marked()
+          }
         }
       }
       // (first worked out as the frame it is said in is painted, after its layout: Tree::painted_now; a frame owed)
@@ -2708,7 +2737,12 @@ fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Pha
             None => ()
           }
         },
-        remake: Some(fn() { self.bind_base(prop, live, phase, apply) }),
+        refresh: Some(fn() {
+          match last.val {
+            Some(v) => { apply(v); marked() }
+            None => ()
+          }
+        }),
       }
     }
   }
@@ -3930,7 +3964,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Presses] = { stop, remake: None }
+        n.props[Presses] = { stop, refresh: None }
       })
   }
   self
@@ -3967,7 +4001,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[OverAll] = { stop, remake: None }
+        n.props[OverAll] = { stop, refresh: None }
       })
   }
   self
@@ -4159,7 +4193,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Modal] = { stop, remake: None }
+        n.props[Modal] = { stop, refresh: None }
       })
   }
   self
@@ -5057,7 +5091,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[MovesWindow] = { stop, remake: None }
+        n.props[MovesWindow] = { stop, refresh: None }
       })
   }
   self
