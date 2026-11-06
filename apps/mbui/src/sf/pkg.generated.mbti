@@ -1270,6 +1270,8 @@ pub let meta : @ui.TextStyle
 
 pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, drop? : Int32, keep? : Bool, key? : String) -> Unit
 
+pub fn meter_chip_node(@view.View, () -> @json.Json?, brief? : Bool, tips? : TipLayer) -> @view.View
+
 pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
 
 pub fn mix(Int64, Double, Int64) -> Int64
