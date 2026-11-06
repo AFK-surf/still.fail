@@ -19,6 +19,7 @@ public static class ExplorerDropProbe {
   [DllImport("user32.dll", SetLastError=true)] static extern bool ClientToScreen(IntPtr h, ref Point p);
   [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint process);
@@ -137,7 +138,29 @@ public static class ExplorerDropProbe {
           Console.WriteLine("EXPLORER window process={0}, probe process={1}", explorerProcess, appId);
           if (!SetForegroundWindow(explorerWindow)) throw new Exception("cannot foreground Explorer");
           item.SetFocus();
+          // The Details view can be scrolled to the right so a row's UIA click point lands on its date column. Switch
+          // to large icons and use the file itself as the drag origin, waiting for the new accessible layout.
+          while (changed.WaitOne(0)) {}
+          keybd_event(0x11, 0, 0, UIntPtr.Zero); // Ctrl
+          keybd_event(0x10, 0, 0, UIntPtr.Zero); // Shift
+          keybd_event(0x32, 0, 0, UIntPtr.Zero); // 2
+          keybd_event(0x32, 0, 2, UIntPtr.Zero);
+          keybd_event(0x10, 0, 2, UIntPtr.Zero);
+          keybd_event(0x11, 0, 2, UIntPtr.Zero);
+          item = null;
+          while (item == null) {
+            foreach (AutomationElement candidate in explorer.FindAll(TreeScope.Descendants, itemName)) {
+              if (candidate.Current.BoundingRectangle.Height >= 40 && candidate.TryGetClickablePoint(out source)) {
+                item = candidate;
+                break;
+              }
+            }
+            if (item != null) break;
+            TimeSpan left = deadline - DateTime.UtcNow;
+            if (left <= TimeSpan.Zero || !changed.WaitOne(left)) throw new Exception("Explorer did not show the file as an icon");
+          }
           if (!item.TryGetClickablePoint(out source)) throw new Exception("Explorer file is not visible");
+          Console.WriteLine("EXPLORER file element {0}, bounds {1}", item.Current.ControlType.ProgrammaticName, item.Current.BoundingRectangle);
           var target = new Point { x = 250, y = 150 };
           if (!ClientToScreen(appWindow, ref target)) throw new Exception("cannot locate the drop target");
           deadline = DateTime.UtcNow.AddSeconds(seconds);
@@ -152,6 +175,7 @@ public static class ExplorerDropProbe {
             if (!SetCursorPos((int)source.X + 30, (int)source.Y)) throw new Exception("cannot start the drag");
             bool drag = events.Drag.WaitOne(TimeSpan.FromSeconds(5));
             Console.WriteLine("EXPLORER drag-start event={0}", drag);
+            Shot(shot + ".start.png");
             if (!SetCursorPos(target.x, target.y)) throw new Exception("cannot drag to the probe");
             WaitLog(log, "HOVER folder", deadline);
           }
