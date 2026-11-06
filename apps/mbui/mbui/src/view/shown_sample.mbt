@@ -103,6 +103,7 @@ fn Tree::shown_owed(self : Tree, upto : Double) -> Bool {
 /// What the layout of a frame shown later wrote, as it was before (Tree::shadow_shown): each live node's compute and
 /// its place and size, and the tree's tables of what a layout reported and read.
 struct ShadowSaved {
+  index : Map[Int, Int]
   nodes : Array[(Int, Int, @flex.Node, Double, Double, Double, Double, Bool)]
   feet : Map[Int, (Double, Double)]
   foot_readers : Map[Int, Array[NodeId]]
@@ -116,9 +117,11 @@ struct ShadowSaved {
 ///|
 fn Tree::shadow_save(self : Tree) -> ShadowSaved {
   let nodes = []
+  let index : Map[Int, Int] = {}
   for i in 0..<self.nodes.length() {
     let n = self.nodes[i]
     if n.live {
+      index[i] = nodes.length()
       nodes.push((i, n.gen, n.flex.saved(), n.lx, n.ly, n.lw, n.lh, n.out))
     }
   }
@@ -137,6 +140,7 @@ fn Tree::shadow_save(self : Tree) -> ShadowSaved {
   let anchor_read : Map[Int, Int] = {}
   self.anchor_read.each(fn(k, v) { anchor_read[k] = v })
   {
+    index,
     nodes,
     feet,
     foot_readers,
@@ -231,4 +235,18 @@ fn Tree::shadow_restore(self : Tree) -> Unit {
 /// made first, how many times they laid an anchored list out. For the tests that hold it, and for measuring.
 pub fn Tree::shadow_counts(self : Tree) -> (Int, Int) {
   (self.shadow_made, self.shadow_lists)
+}
+
+///|
+/// Node `at`'s compute as the logic's layout left it: kept apart while a frame shown later draws its own
+/// (Tree::shadow_shown), else its own.
+fn Tree::real_flex(self : Tree, at : Int) -> @flex.Node {
+  match self.shadow_saved {
+    Some(s) =>
+      match s.index.get(at) {
+        Some(k) if s.nodes[k].1 == self.nodes[at].gen => s.nodes[k].2
+        _ => self.nodes[at].flex
+      }
+    None => self.nodes[at].flex
+  }
 }

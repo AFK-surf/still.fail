@@ -1771,8 +1771,14 @@ fn Tree::beat_set(self : Tree, ms : Double) -> Unit {
 pub fn View::cycle_resident(self : View, period : Double) -> Double {
   let step = self.tree.resident.get()
   // (sampled at the moment shown: its step then, the resident clock followed as ever)
-  let t = match self.tree.sample { Some(s) => resident_of(s); None => step }
-  self.tree.resident_readers[self.at] = (self.gen, t)
+  let t = match self.tree.sample {
+    Some(s) => resident_of(s)
+    None => {
+      // (what reads it as the logic's clock steps, for the host to wake it: never a sample's reading, Tree::resident_read)
+      self.tree.resident_readers[self.at] = (self.gen, step)
+      step
+    }
+  }
   if period <= 0.0 {
     return 0.0
   }
@@ -2881,7 +2887,8 @@ pub fn View::laid_size(self : View) -> (Double, Double) {
   // (laid out at the active sample or logic's moment, what the change under way set so far counted, nothing of the logic run; read,
   // not placed by: each node where it stood till the change is placed, Tree::measured_now)
   self.tree.measured_now()
-  (n.flex.width, n.flex.height)
+  let f = self.tree.real_flex(self.at)
+  (f.width, f.height)
 }
 
 ///|
@@ -3767,8 +3774,11 @@ fn Tree::measured_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
-  // (the logic's geometry measured: what a frame shown later laid out put back first, Tree::shadow_shown)
-  self.unsample()
+  // (the logic's geometry measured: what a frame shown later laid out put back first where anything is to be laid out
+  // again; else it is read where it was kept, Tree::real_flex, the frame on screen left as drawn)
+  if self.layout_due || self.pulls_marked.length() > 0 || self.bindings_due.length() > 0 {
+    self.unsample()
+  }
   let shown = @signals.untracked(fn() { self.clock.get() })
   // A measure requested by the sampling already under way belongs to that sample. Rewinding it to the input
   // clock and restoring it can notify the same visual threshold again, asking for this measure without end.
@@ -3858,12 +3868,14 @@ pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
     let m = self.tree.nodes[i]
     // (a slot lays out nothing of its own: what it holds is placed in the one that holds it)
     if !m.slot {
-      x = x + m.flex.left + m.look.dx + m.look.sx * m.flex.width
-      y = y + m.flex.top + m.look.dy + m.look.sy * m.flex.height
+      let f = self.tree.real_flex(i)
+      x = x + f.left + m.look.dx + m.look.sx * f.width
+      y = y + f.top + m.look.dy + m.look.sy * f.height
     }
     i = m.parent
   }
-  (x, y, n.flex.width, n.flex.height)
+  let f = self.tree.real_flex(self.at)
+  (x, y, f.width, f.height)
 }
 
 ///|
@@ -3882,12 +3894,8 @@ pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
 pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
-  (
-    n.flex.left + n.look.dx + n.look.sx * n.flex.width,
-    n.flex.top + n.look.dy + n.look.sy * n.flex.height,
-    n.flex.width,
-    n.flex.height,
-  )
+  let f = self.tree.real_flex(self.at)
+  (f.left + n.look.dx + n.look.sx * f.width, f.top + n.look.dy + n.look.sy * f.height, f.width, f.height)
 }
 
 ///|
