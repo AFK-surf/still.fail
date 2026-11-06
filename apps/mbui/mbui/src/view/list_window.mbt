@@ -82,7 +82,8 @@ pub fn View::list_room_ground(self : View) -> View {
 /// end so. With `align_end=false`, a shorter list starts at its top while retaining end-following; the option has no
 /// effect without `from_end`. `shown` is told the keys of the blocks in sight, in order, as they change (what is read, how far from its
 /// end). `put`, said, puts it at once where that block's top is that far under its top (it follows its end no more),
-/// and is said none again. A block come at its end while it follows that `fresh` says is new to it is glided after, not
+/// and is said none again. `put_fraction` and `position` restore and read a measured fraction of a row as in
+/// `scrolls_anchored`; `put_fraction_lead_within_row` keeps its lead within that row. A block come at its end while it follows that `fresh` says is new to it is glided after, not
 /// there at once; one come that is taller than what shows under `cover` (what lies over its top: a bar) is glided to
 /// only as far as its top under that, read from its top (Follow.kt), and it follows its end no more. `read_from_top`
 /// may say false for a block whose end should stay in view even when tall, such as the reader's own message.
@@ -108,6 +109,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
+  put_fraction? : @signals.Signal[(K, Double, Double)?],
+  put_fraction_lead_within_row? : Bool = false,
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
@@ -117,13 +120,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
   seen? : (Array[K]) -> Unit,
+  position? : AnchoredPosition[K],
 ) -> View {
   // (only what shows: nothing made ahead of it; each never laid out counted as `est`, not as the mean of those laid out)
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, align_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
-    put?=put, rooms?=rooms, room_transforms~,
+    put?=put, put_fraction?=put_fraction, put_fraction_lead_within_row~, rooms?=rooms, room_transforms~,
     fresh~, read_from_top~, cover~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
-    seen?=seen,
+    seen?=seen, position?=position,
   )
 }
 

@@ -312,3 +312,31 @@ test "letting go of an older list does not detach a position handle from its rep
   current.dispose()
   assert_eq(position.get(), None)
 }
+
+///|
+test "a windowed list restores a fractional place at its new measured width" {
+  let width = @signals.signal(200.0, same=fn(a, b) { a == b })
+  let put : @signals.Signal[(Int, Double, Double)?] = @signals.signal(None)
+  let position : @view.AnchoredPosition[Int] = @view.AnchoredPosition::new()
+  let row : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(list) {
+      list.width(By(fn() { Some(width.get()) })).height(Is(Some(100.0))) |> ignore
+      list.scrolls_window(@view.Scroll::list(), fn() { Array::makei(20, fn(i) { i }) },
+        from_end=false, put_fraction=put, position~, est=40.0, fn(view, key) {
+          if key == 10 { row.val = Some(view) }
+          view.layout_box(Is(key), sized=true, fn(l, k) { l.size_to(if k == 10 { l.width } else { 40.0 }) }) |> ignore
+        }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(200.0, 200.0, now=0.0) |> ignore
+  put.set(Some((10, 0.5, 0.0)))
+  tree.frame(200.0, 200.0, now=10.0) |> ignore
+  assert_eq(position.get(), Some((10, 0.5)))
+  assert_eq(row.val.unwrap().rect().1, -100.0)
+  width.set(160.0)
+  tree.frame(200.0, 200.0, now=20.0) |> ignore
+  assert_eq(position.get(), Some((10, 0.5)))
+  assert_eq(row.val.unwrap().rect().1, -80.0)
+  tree.dispose()
+}
