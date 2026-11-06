@@ -1,5 +1,6 @@
 ///|
 test "old press callbacks take accessibility and keyboard inputs in their event, once, with and without a retained host" {
+  let results : Array[Bool] = []
   for hosted in [false, true] {
     for how in ["activate", "enter", "space"] {
       let calls : Array[(Double, Bool)] = []
@@ -28,11 +29,13 @@ test "old press callbacks take accessibility and keyboard inputs in their event,
         t.key_told(if how == "enter" { key_enter } else { key_space }, 0, at)
       }
       assert_eq(t.host_frames().length(), 0)
-      assert_eq(calls, [(at, false)], msg="\{how}, retained host \{hosted}: callback belongs to the input, outside a build")
+      let immediate = calls.copy()
       t.draw()
-      assert_eq(calls, [(at, false)], msg="the following frame cannot replay the callback")
+      println("press input \{how}, retained host \{hosted}: immediate \{immediate}, following frame \{calls}")
+      results.push(immediate == [(at, false)] && calls == [(at, false)])
     }
   }
+  assert_true(results.all(fn(ok) { ok }), msg="callbacks belong to their input outside a build, and no following frame replays them")
 }
 
 ///|

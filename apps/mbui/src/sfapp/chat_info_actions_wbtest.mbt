@@ -118,7 +118,7 @@ test "covered and dismissed real info rows cannot be activated through their rem
     // page dialog beneath it, and prove that the real row is actually excluded before asking its old id.
     let covered = @signals.signal(true)
     @ui.view_tree().unwrap().root().show(fn() { covered.get() }, fn(layer) {
-      layer.over_all(Is(true)).over(Is(true)).modal(Is(true)).presses(Is(true))
+      layer.over_all(Is(true)).over(Is(true)).modal(Is(true)).presses(Is(true)).focus_returns()
         .says(Is(Some(@view.said(Dialog, label="覆盖信息")))) |> ignore
     }) |> ignore
     t.draw()
@@ -135,6 +135,7 @@ test "covered and dismissed real info rows cannot be activated through their rem
     assert_eq(t.opened(), [])
     covered.set(false)
     t.run_for(@ui.move_most_ms)
+    assert_eq(t.focused().map(fn(n) { n.id }), Some(s.id), msg="the covering modal returns the info row's focus")
     t.key_told(@ui.key_escape, 0, t.time())
     assert_false(@sfdesk.chat_pops_open().0)
     assert_true(t.query(role, label~) is None, msg="a closing row stops offering its action before the exit frame")
