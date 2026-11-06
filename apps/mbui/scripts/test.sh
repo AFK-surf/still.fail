@@ -97,8 +97,9 @@ for t in $targets; do
   s=$(date +%s)
   # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
   if [ -z "${APP_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
-    # Keep the compiler's source span and explanation: they use the same box drawing as warnings.
-    # Filtering those lines left only "Error: [4122]" for a failing test closure, with no actionable location.
+    # Keep every error block: another package's warnings can fill the tail after the actual error.
+    awk '/^Error:/ { error=1 } /^Warning:/ { error=0 } error { print }' "$out.build"
+    # Also keep unclassified tool failures at the end. Error spans use the same box drawing as warnings.
     tail -100 "$out.build"
     rm -f "$out.build"
     exit 1
