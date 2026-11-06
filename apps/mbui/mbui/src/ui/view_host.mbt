@@ -365,6 +365,8 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  // A replacement tree can change who may type even if the numeric focus stays the same during an event.
+  view_modals_version.val += 1
   view_read_tells.clear()
   view_shape_of.val = OfOld
   let c = g()
@@ -3459,6 +3461,8 @@ pub fn host_event(f : () -> Unit) -> Unit {
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
+  let focus_before = g().focus
+  let modals_before = view_modals_version.val
   match view_app.val {
     Some(t) => t.event_said(h_event_time(), said, f)
     None => {
@@ -3468,6 +3472,11 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
   turns_said(g(), h_event_time())
+  // A focus or modal change belongs to this event. The host must know which field accepts the next key before
+  // another event arrives, even if no frame was painted in between.
+  if g().focus != focus_before || view_modals_version.val != modals_before {
+    g().sync_ime()
+  }
 }
 
 ///|
@@ -3911,9 +3920,14 @@ fn old_whole_island() -> @view.NodeId? {
 }
 
 ///|
+/// A change to what the window's tree lets take input (view_modals_told), observed at the end of an event.
+let view_modals_version : Ref[Int] = Ref(0)
+
+///|
 /// What may take input changed in the window's tree (Tree::on_modals: a modal layer, a node let go, leaving, said to
 /// take no press): what an old view that may take input no more holds let go of then, at that cause (view_captures_off).
 fn view_modals_told() -> Unit {
+  view_modals_version.val += 1
   view_captures_off(view_moment(), fn(owner) { !old_owner_open(owner) }, back_gone=fn(owner) { !held_back_open(owner) })
   // (whether the app takes back: what of the tree takes it may have changed)
   g().back_told_host()
