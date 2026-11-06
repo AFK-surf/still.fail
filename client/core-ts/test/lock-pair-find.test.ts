@@ -132,6 +132,22 @@ test("an approver added after looking began is asked without repeating an existi
   assert.equal((await w.pair()).devices, 2);
 });
 
+test("a lock begins updating during a search: the search follows its pending read", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "mute", [LAPTOP_APP]: "no", [addedDevice]: "code" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  // The old devices have answered or timed out, but the newer record is still being read.
+  await w.host.time.pass(35_000, 100);
+  assert.equal((await w.pair()).state, "finding");
+  release();
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], 1);
+  assert.equal((await w.pair()).state, "code");
+});
+
 test("cancelling while a newer lock is read never asks a newly added device", async () => {
   const addedDevice = "e3".repeat(32);
   const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away", [addedDevice]: "code" });
