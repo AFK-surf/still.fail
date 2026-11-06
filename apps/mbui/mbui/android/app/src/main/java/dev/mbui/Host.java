@@ -468,12 +468,28 @@ final class Host {
         main.post(() -> { if (activity != null) activity.setBackEnabled(backWanted); });
     }
 
+    /**
+     * What of a line a tape must not keep: a credential's value (a token, an API, access or private key, a cookie, an
+     * Authorization header, a password, a secret; not a field merely named key: a chat's or a row's) put as "-" wherever
+     * a JSON field named so holds it, escaped or not (a message's JSON in a MSG line's JSON), and a Bearer's. What was
+     * said otherwise (a chat's words) kept: a replay needs it. As CORETRACE keeps no token (src/stillfail/main.mbt).
+     */
+    static final java.util.regex.Pattern SECRET = java.util.regex.Pattern.compile(
+            "(\\\\*\"[A-Za-z_\\-]*(?i:token|api_?key|access_?key|private_?key|secret|passw(?:or)?d|cookie|authorization|credential)[A-Za-z_\\-]*\\\\*\"\\s*:\\s*\\\\*\")((?:[^\"\\\\]|\\\\[^\"])*)(\\\\*\")");
+    static final java.util.regex.Pattern BEARER = java.util.regex.Pattern.compile("(?i)(bearer\\s+)[A-Za-z0-9._~+/=-]+");
+
+    static String unsecret(String s) {
+        if (s.indexOf('"') < 0 && s.toLowerCase(java.util.Locale.ROOT).indexOf("bearer") < 0) return s;
+        String t = SECRET.matcher(s).replaceAll("$1-$3");
+        return BEARER.matcher(t).replaceAll("$1-");
+    }
+
     static void log(String s) {
         java.io.Writer f = logFile;
         if (f != null) {
             synchronized (Host.class) {
                 try {
-                    f.write(s);
+                    f.write(unsecret(s));
                     f.write('\n');
                     f.flush();
                 } catch (java.io.IOException e) {
@@ -487,16 +503,35 @@ final class Host {
     /**
      * MBUI_LOG_FILE=NAME: the log also written, whole, to the app's files/NAME (a run's tape, MBUI_DRAW_LOG and
      * MBUI_TEXT_RECORD: thousands of lines that logcat's ring would drop), each line there before logcat has it.
-     * Opened by MainActivity once the environment is set.
+     * Opened by MainActivity once the environment is set. A NAME with {start} in it is one file a start, {start} the
+     * moment the app started (yyyyMMdd-HHmmss, the device's time): the dev build's own tape of every run
+     * (android/apk.json), the MBUI_LOG_KEEP (5) latest of that name kept, the older ones let go as a start opens its
+     * own (scripts/tape.sh takes one back and sees it again in a Tester).
      */
     static volatile java.io.Writer logFile;
 
     static void openLogFile(Context c) {
         String name = android.system.Os.getenv("MBUI_LOG_FILE");
         if (name == null || name.isEmpty() || logFile != null) return;
+        int at = name.indexOf("{start}");
+        if (at >= 0) {
+            String head = name.substring(0, at), tail = name.substring(at + "{start}".length());
+            String start = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(new java.util.Date());
+            name = head + start + tail;
+            int keep = 5;
+            try { keep = Integer.parseInt(android.system.Os.getenv("MBUI_LOG_KEEP")); } catch (Exception e) {}
+            // (the earlier starts' of the same name, by their names' time: the latest keep - 1 kept beside this one)
+            java.io.File[] old = c.getFilesDir().listFiles((dir, n) -> n.startsWith(head) && n.endsWith(tail)
+                    && n.length() == head.length() + start.length() + tail.length());
+            if (old != null && old.length >= keep) {
+                java.util.Arrays.sort(old, (a, b) -> a.getName().compareTo(b.getName()));
+                for (int i = 0; i < old.length - Math.max(keep - 1, 0); i++) old[i].delete();
+            }
+        }
         try {
             logFile = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
                     new java.io.FileOutputStream(new java.io.File(c.getFilesDir(), name)), "UTF-8"));
+            Log.i("mbui", "MBUI_LOG_FILE " + name);
         } catch (java.io.IOException e) {
             Log.i("mbui", "MBUI_LOG_FILE " + name + ": " + e);
         }
