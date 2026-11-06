@@ -129,3 +129,53 @@ test "a way follows its look without being remade and updates a step that become
   t.tap_text("Projects")
   assert_eq(went, [])
 }
+
+///|
+test "a way's hover style follows the pointer or a finger held on a link" {
+  for platform in [0, 2] {
+    let path = @signals.signal(["Home", "Projects"], same=fn(a, b) { a == b })
+    let went : Array[Int] = []
+    let t = way_node_case(path, @signals.signal(500.0), @signals.signal(false), went, platform~)
+    let (x, y, w, h) = t.rect_of("Home").unwrap()
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0)
+    if platform == 0 {
+      t.move(cx, cy)
+    } else {
+      t.touch(0, cx, cy)
+    }
+    t.draw()
+    let hover = @ui.tree_theme().color(Hover)
+    assert_true(t.drawn_rects().iter().any(fn(r) {
+      r.4 == hover && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + w && r.1 + r.3 >= y + h
+    }), msg="platform \{platform}")
+    if platform == 2 {
+      t.touch(2, cx, cy)
+      assert_eq(went, [0])
+    }
+  }
+}
+
+///|
+test "a way lets go of its open menu when removed" {
+  presenters_reset()
+  let visible = @signals.signal(true)
+  let t = @ui.Tester::new(fn(_c) {  }, w=1000.0, h=600.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.show(fn() { visible.get() }, fn(body) {
+      way_line_node(body, fn() { ["Home", "Projects", "Reports", "Quarterly", "Final notes"] },
+        fn() { way_node_look(false) }, fn(_) {  }, width=fn() { Some(200.0) }) |> ignore
+    })
+    @ui.old(root, fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() { presented(c) })
+    }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    presented_nodes(root)
+  })
+  t.draw()
+  t.tap_text(way_more)
+  assert_true(presenting())
+  visible.set(false)
+  assert_false(presenting())
+}

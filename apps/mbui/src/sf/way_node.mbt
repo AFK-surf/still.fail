@@ -171,8 +171,12 @@ fn way_step_ground(step : @view.View, style : () -> @ui.Style) -> Unit {
     let th = @ui.tree_theme()
     let color = fn(c : @ui.Color?) { match c { Some(c) => th.color(c); None => 0L } }
     let base = color(s.base.bg)
+    let hovered = match @ui.pointing() {
+      Mouse => step.pointed()
+      Finger => step.pressed()
+    }
     match s.hovered {
-      Some(p) if @ui.pointing() is Mouse && step.pointed() => @ui.over(base, color(p.bg))
+      Some(p) if hovered => @ui.over(base, color(p.bg))
       _ => base
     }
   })) |> ignore
