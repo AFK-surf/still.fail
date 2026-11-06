@@ -714,6 +714,8 @@ pub fn tree_scroll_bar() -> @view.ScrollBar
 
 pub fn tree_theme() -> Theme
 
+pub fn tree_window_corners_now() -> (Double, Double, Double, Double)
+
 pub fn update_apply(String) -> Unit
 
 pub fn update_fetch(String, String, Double, String, Bool) -> Unit

@@ -30,7 +30,7 @@ fn node_style_sides(
 fn node_style_size(len : @ui.Len?, along : Bool) -> @view.StyleSize? {
   match len {
     None => None
-    Some(Full) if !along => Some(Percent(100.0))
+    Some(Full | Grow(_)) if !along => Some(Percent(100.0))
     Some(Full | Grow(_) | Hug | Cut) => Some(Automatic)
     Some(Pct(p)) => Some(Percent(p))
     Some(Within(_)) => abort("style: Within is a bound, not a size")
@@ -50,6 +50,32 @@ fn node_style_bound(len : @ui.Len?) -> @view.StyleSize? {
 }
 
 ///|
+/// Linked corners of a retained node follow its tree's window and theme, not the old frame's current context.
+fn node_style_radius(theme : @ui.Theme, radius : @ui.Radius) -> Double {
+  match radius {
+    Linked(link) => link.radius(@ui.tree_corner_roots_now())
+    LinkedEach(a, b, c, d) => {
+      let roots = @ui.tree_corner_roots_now()
+      theme.corner(Corners(a.radius(roots), b.radius(roots), c.radius(roots), d.radius(roots)))
+    }
+    InnerOr(own) => node_style_radius(theme, own)
+    _ => theme.corner(radius)
+  }
+}
+
+///|
+fn node_style_corners(radius : @ui.Radius) -> (Double, Double, Double, Double)? {
+  match radius {
+    LinkedEach(a, b, c, d) => {
+      let roots = @ui.tree_corner_roots_now()
+      Some((a.radius(roots), b.radius(roots), c.radius(roots), d.radius(roots)))
+    }
+    InnerOr(own) => node_style_corners(own)
+    _ => radius.each().map(fn(c) { (c[0], c[1], c[2], c[3]) })
+  }
+}
+
+///|
 /// Lay `look` on the already made `v`, following its theme, narrowness, hand and visible keyboard focus. In a row,
 /// `w=Full` and `w=Grow` take the room left along it; in a column `h` does. `selected` and `disabled` give the
 /// caller-owned states where the style has those blocks. What the style does not say belongs to the node's maker;
@@ -63,7 +89,6 @@ pub fn style_node(
 ) -> Unit {
   v.style_layer(fn() {
     let s = look()
-    let th = @ui.tree_theme()
     let hovered = if s.hovered is Some(_) {
       match @ui.pointing() {
         Mouse => v.pointed_in()
@@ -73,13 +98,20 @@ pub fn style_node(
       false
     }
     let q = s.resolve(
-      @ui.tree_narrow(), th.dark,
+      s.narrow is Some(_) && @ui.tree_narrow(),
+      s.dark is Some(_) && @ui.tree_theme().dark,
       if s.selected is Some(_) { selected() } else { false },
       hovered,
       s.focused is Some(_) && v.focus_shown(),
       s.pressed is Some(_) && v.pressed(),
       if s.disabled is Some(_) { disabled() } else { false },
     )
+    // A size-only style with no dark block does not need to follow the theme at all.
+    let th = if q.bg is Some(_) || q.radius is Some(_) || q.border_color is Some(_) || q.shadow is Some(_) {
+      Some(@ui.tree_theme())
+    } else {
+      None
+    }
     let along = if in_row { q.w } else { q.h }
     let grow = match along {
       None => None
@@ -94,20 +126,22 @@ pub fn style_node(
     }
     let corners = match q.radius {
       None => None
-      Some(radius) =>
-        Some(match radius.each() {
-          Some(c) => Some((c[0], c[1], c[2], c[3]))
-          None => None
-        })
+      Some(radius) => Some(node_style_corners(radius))
     }
-    let edge = if q.border is Some(_) || q.border_color is Some(_) {
-      Some((q.border.map(fn(b) { b.px() }).unwrap_or(0.0), q.border_color.map(fn(c) { th.color(c) }).unwrap_or(0L)))
+    let corner_rule = match q.radius {
+      Some(Inner) => Some(@view.StyleCornerRule::FromContainer)
+      Some(InnerOr(_)) => Some(@view.StyleCornerRule::FromContainerOrOwn)
+      Some(Around) => Some(@view.StyleCornerRule::AroundContents)
+      _ => None
+    }
+    let corner_context = if corner_rule is Some(_) {
+      Some((@ui.tree_corner_roots_now(), @ui.tree_window_corners_now()))
     } else {
       None
     }
     let shadow = q.shadow.map(fn(s) {
       let (blur, y) = s.blur_y()
-      let color = match s { Cast(_, _, c) => c; _ => th.shadow }
+      let color = match s { Cast(_, _, c) => c; _ => th.unwrap().shadow }
       (blur, y, color)
     })
     {
@@ -120,6 +154,7 @@ pub fn style_node(
       max_height: node_style_bound(q.max_h),
       grow,
       basis,
+      cut: match q.w { Some(Cut) => Some(true); _ => None },
       padding: node_style_sides(node_style_room, q.p, q.px, q.py, q.pl, q.pt, q.pr, q.pb),
       margin: node_style_sides(node_style_margin, q.m, q.mx, q.my, q.ml, q.mt, q.mr, q.mb),
       gap: node_style_room(q.gap),
@@ -132,20 +167,24 @@ pub fn style_node(
       },
       justify: match q.justify {
         None => None
-        Some(JCenter) => Some(Middle)
-        Some(JEnd) => Some(End)
-        Some(JBetween) => Some(Between)
-        Some(JStart) => Some(Start)
+        Some(JCenter) => Some(JustifyMiddle)
+        Some(JEnd) => Some(JustifyEnd)
+        Some(JBetween) => Some(JustifyBetween)
+        Some(JStart) => Some(JustifyStart)
       },
-      ground: q.bg.map(fn(c) { th.color(c) }),
-      radius: q.radius.map(fn(r) { th.corner(r) }),
+      ground: q.bg.map(fn(c) { th.unwrap().color(c) }),
+      radius: q.radius.map(fn(r) { node_style_radius(th.unwrap(), r) }),
       corners,
+      corner_links: match q.radius { Some(r) => r.links(); None => None },
+      corner_rule,
+      corner_context,
       clips: q.clip,
       alpha: q.opacity.map(fn(o) { o.value() }),
-      edge,
+      edge_width: q.border.map(fn(b) { b.px() }),
+      edge_color: q.border_color.map(fn(c) { th.unwrap().color(c) }),
       edge_dashed: q.dashed,
       shadow,
     }
-  })
+  }, size_along_width=in_row)
   |> ignore
 }

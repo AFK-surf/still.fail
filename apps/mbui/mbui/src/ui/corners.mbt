@@ -96,6 +96,10 @@ fn Ctx::inner_row(self : Ctx, p : Int) -> Bool {
   if n.fw <= n.fh * 1.5 {
     return false
   }
+  // A node of the window's tree can also say this corner; it is temporary here, not in the old frame's index.
+  if n.corner_by == corner_inner || n.corner_by == corner_inner_or {
+    return true
+  }
   // (the inners are in the order they were built: by their numbers)
   let mut lo = 0
   let mut hi = self.inners.length()
@@ -233,9 +237,23 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     Some(t) if !old_whole.val => t
     _ => return f()
   }
+  self.with_tree_nodes_for(tree, fn(_) { f() }, laid~)
+}
+
+///|
+/// The same temporary nodes for a given tree, with their identities available while `f` runs. `fallback` starts a
+/// layout-derived styled corner at its own value, so moving out of a container does not keep its previous result.
+fn[T] Ctx::with_tree_nodes_for(
+  self : Ctx,
+  tree : @view.Tree,
+  f : (Array[(@view.NodeId, Int)]) -> T,
+  laid? : Bool = false,
+  fallback? : Bool = false,
+) -> T {
   let count = self.count
   let kept : Array[Node] = []
   let reparented : Array[(Int, Int)] = []
+  let identities : Array[(@view.NodeId, Int)] = []
   let add = fn(n : Node) -> Int {
     let i = self.count
     if i < self.nodes.length() {
@@ -287,10 +305,32 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       Some((tl, tr, br, bl)) => n.set_radii(FixedArray::from_array([tl, tr, br, bl]))
       None => ()
     }
-    // (linked each where it says so: tree_corners_linked)
-    match tree_links.get(d.id) {
-      Some(links) => n.links = @signals.untracked(links)
+    match tree.style_corner(d.id) {
+      Some((rule, own, corners)) => {
+        n.corner_by = match rule {
+          FromContainer => corner_inner
+          FromContainerOrOwn => corner_inner_or
+          AroundContents => corner_around
+        }
+        if fallback {
+          n.radius = own
+          n.radii = None
+          match corners {
+            Some((tl, tr, br, bl)) => n.set_radii(FixedArray::from_array([tl, tr, br, bl]))
+            None => ()
+          }
+        }
+      }
       None => ()
+    }
+    // A style may temporarily own the corners over an earlier tree_corners_linked binding.
+    match tree.style_corner_links(d.id) {
+      Some(links) => n.links = links
+      None =>
+        match tree_links.get(d.id) {
+          Some(links) => n.links = @signals.untracked(links)
+          None => ()
+        }
     }
     n.glass = d.glass
     n.clip = d.clips
@@ -309,6 +349,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       n.id = -(k + 1)
     }
     let i = add(n)
+    identities.push((d.id, i))
     at[k] = i
     link(parent, i)
     // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
@@ -341,7 +382,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   }
   // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn; laid out, where
   // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
-  let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
+  let out = if laid {
+    self.with_old_laid(count, fn() { f(identities) })
+  } else {
+    self.with_old_drawn(fn() { f(identities) })
+  }
   tree_pictures.clear()
   for r in reparented {
     self.nodes[r.0].parent = r.1
@@ -351,6 +396,62 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   }
   self.count = count
   out
+}
+
+///|
+/// The shared corner rule's scratch frame for the window's tree. Nodes are temporary copies of the scene being laid
+/// out, never an old view wrapped around those nodes; what belongs to a tree is cleared when that tree goes away.
+// kept across runs: one scratch context reused when the window's tree is replaced (view_forget clears its contents)
+let tree_corner_context : Ref[Ctx?] = Ref(None)
+
+///|
+/// Work the tree's styled Inner / InnerOr / Around corners by the same rule as old boxes, from the current layout.
+/// Around is worked first, then inners outside in; only the resulting corners are handed back to their live nodes.
+fn tree_style_corners_after_layout(tree : @view.Tree) -> Unit {
+  let c = match tree_corner_context.val {
+    Some(c) => c
+    None => {
+      let c = Ctx::new()
+      // This context never paints; it does not need a frame's initial instance buffer.
+      c.inst = FixedArray::make(inst_size, 0.0)
+      tree_corner_context.val = Some(c)
+      c
+    }
+  }
+  let (w, h) = view_window.val
+  c.width = w
+  c.height = h
+  c.window_w = w
+  c.window_h = h
+  let theme = @signals.untracked(fn() { tree_theme() })
+  c.corner_fit = theme.corner_fit
+  c.corner_ladder = theme.corner_ladder
+  c.window_corner = tree_window_corner.get()
+  let (tl, tr, br, bl) = tree_window_corners_now()
+  c.window_corners[0] = tl
+  c.window_corners[1] = tr
+  c.window_corners[2] = br
+  c.window_corners[3] = bl
+  // The old frame records layout reads for its own rebuilds; this pass belongs to the retained tree instead.
+  let old_read = layout_read_at.val
+  c.with_tree_nodes_for(tree, fn(ids) {
+    c.inner_faults.clear()
+    c.corners_found()
+    c.arounds_after_layout()
+    let grounds = c.layer_grounds()
+    let hung = c.hung_marks()
+    for i in c.inners { c.inner_after_layout(i, grounds, hung) }
+    for (id, i) in ids {
+      if tree.style_corner(id) is Some(_) {
+        let n = c.nodes[i]
+        let corners = n.radii.map(fn(r) { (r[0], r[1], r[2], r[3]) })
+        tree.style_corner_worked(id, n.radius, corners)
+      }
+    }
+  }, laid=true, fallback=true)
+  layout_read_at.val = old_read
+  // The scratch context must not retain copies of the first scene's content after the layout pass.
+  c.nodes.clear()
 }
 
 ///|
@@ -420,6 +521,13 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let c = self
   // the corners said `Inner` that could not be worked out (corners_after_layout), first
   let out : Array[String] = c.inner_faults.copy()
+  // The retained tree works its own layout-derived corners after its layout. Keep the same diagnostics as an old
+  // box, and discard them as soon as its last styled corner has gone.
+  match (view_app.val, tree_corner_context.val) {
+    (Some(tree), Some(worked)) if !old_whole.val && tree.has_style_corners() =>
+      for fault in worked.inner_faults { out.push(fault) }
+    _ => ()
+  }
   let grounds = c.layer_grounds()
   let pictures = c.pictures()
   let ladder = c.corner_ladder
@@ -1558,6 +1666,8 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
     // (nor one linked: its corners come from where its links say, and the rule holds it to them, corner_faults)
     if b.kind != kind_box ||
       b.layer ||
+      // A tree node's layout-derived corner is already worked out by the tree before the old frame sees it.
+      b.corner_by != 0 ||
       b.radius < 0.5 ||
       b.fw <= 0.0 ||
       b.fh <= 0.0 ||

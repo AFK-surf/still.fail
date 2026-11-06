@@ -12,10 +12,18 @@ pub(all) enum StyleSize {
 
 ///|
 pub(all) enum StyleJustify {
-  Start
-  Middle
-  End
-  Between
+  JustifyStart
+  JustifyMiddle
+  JustifyEnd
+  JustifyBetween
+} derive(Eq)
+
+///|
+/// A corner worked out from the node's laid-out container or contents.
+pub(all) enum StyleCornerRule {
+  FromContainer
+  FromContainerOrOwn
+  AroundContents
 } derive(Eq)
 
 ///|
@@ -42,6 +50,8 @@ pub(all) struct NodeStyle {
   max_height : StyleSize?
   grow : Double?
   basis : StyleSize?
+  /// The width says `Cut`: give way along a row, restoring the node's own shrink binding when omitted.
+  cut : Bool?
   padding : (Double, Double, Double, Double)?
   margin : (Double, Double, Double, Double)?
   gap : Double?
@@ -50,9 +60,13 @@ pub(all) struct NodeStyle {
   ground : Int64?
   radius : Double?
   corners : (Double, Double, Double, Double)??
+  corner_links : FixedArray[@paint.CornerOf]?
+  corner_rule : StyleCornerRule?
+  corner_context : (@paint.CornerRoots, (Double, Double, Double, Double))?
   clips : Bool?
   alpha : Double?
-  edge : (Double, Int64)?
+  edge_width : Double?
+  edge_color : Int64?
   edge_dashed : Bool?
   shadow : (Double, Double, Int64)?
 } derive(Eq)
@@ -94,6 +108,7 @@ fn[T : Eq] View::style_binding(
   let active = Ref(false)
   let last : Ref[T??] = Ref(None)
   let mark = fn() {
+    self.tree.style_corner_property_changed(self.at, prop)
     match phase {
       Layout => self.tree.layout_marked_at(self.at)
       Paint => self.tree.look_marked_at(self.at)
@@ -131,14 +146,18 @@ fn[T : Eq] View::style_binding(
 
 ///|
 /// Lay `read` over this node's properties, following it as it changes. Nothing is remade: focus, input and the node's
-/// lifetime remain its own. A later call to a property setter wins over this style for that property.
-pub fn View::style_layer(self : View, read : () -> NodeStyle) -> View {
+/// lifetime remain its own. A later call to a property setter wins over this style for that property. Where grow and
+/// basis come from one size, `size_along_width` says which size, so replacing it also restores those properties.
+pub fn View::style_layer(self : View, read : () -> NodeStyle, size_along_width? : Bool) -> View {
   guard self.live() is Some(n) else { return self }
   match n.style_watch {
     Some(stop) => stop()
     None => ()
   }
   n.style_watch = None
+  n.style_corner = None
+  n.style_corner_context = None
+  self.tree.style_corners.remove(self.id())
   match n.style_props {
     Some(styles) => {
       let old = styles.values().collect()
@@ -150,6 +169,8 @@ pub fn View::style_layer(self : View, read : () -> NodeStyle) -> View {
     }
     None => ()
   }
+  n.style_edge_base = None
+  n.style_axis = size_along_width.map(fn(width) { if width { Width } else { Height } })
   let current : Ref[NodeStyle?] = Ref(None)
   let style = fn() { current.val.unwrap() }
   let updates : Array[() -> Unit] = []
@@ -186,6 +207,18 @@ pub fn View::style_layer(self : View, read : () -> NodeStyle) -> View {
   updates.push(self.style_binding(Grow, fn() { style().grow }, Layout, fn(x) { f.grow = x }, fn() { f.grow = grow }))
   let basis = f.get_basis()
   updates.push(self.style_binding(Basis, fn() { style().basis }, Layout, fn(x) { f.set_basis(x.dimension()) }, fn() { f.set_basis(basis) }))
+  let cut = (n.cut, n.shrink_said, f.fit_held)
+  updates.push(self.style_binding(Shrink, fn() { style().cut }, Layout, fn(x) {
+    n.cut = x
+    f.fit_held = false
+    n.shrink_said = if x { None } else { Some(0.0) }
+    if x { self.tree.cut_applied(self.at) } else { self.tree.give_way_applied(self.at) }
+  }, fn() {
+    n.cut = cut.0
+    n.shrink_said = cut.1
+    f.fit_held = cut.2
+    if n.cut { self.tree.cut_applied(self.at) } else { self.tree.give_way_applied(self.at) }
+  }))
   let pad = (f.get_padding_left(), f.get_padding_top(), f.get_padding_right(), f.get_padding_bottom())
   updates.push(self.style_binding(Padding, fn() { style().padding }, Layout, fn(x) {
     f.set_padding_left(Pt(x.0)); f.set_padding_top(Pt(x.1)); f.set_padding_right(Pt(x.2)); f.set_padding_bottom(Pt(x.3))
@@ -204,7 +237,12 @@ pub fn View::style_layer(self : View, read : () -> NodeStyle) -> View {
   }, fn() { f.align_items = align }))
   let justify = f.justify
   updates.push(self.style_binding(LiesAlong, fn() { style().justify }, Layout, fn(x) {
-    f.justify = match x { Start => FlexStart; Middle => Center; End => FlexEnd; Between => SpaceBetween }
+    f.justify = match x {
+      JustifyStart => FlexStart
+      JustifyMiddle => Center
+      JustifyEnd => FlexEnd
+      JustifyBetween => SpaceBetween
+    }
   }, fn() { f.justify = justify }))
   let ground = n.look.ground
   updates.push(self.style_binding(Ground, fn() { style().ground }, Paint, fn(x) { n.look.ground = x }, fn() { n.look.ground = ground }))
@@ -216,15 +254,100 @@ pub fn View::style_layer(self : View, read : () -> NodeStyle) -> View {
   updates.push(self.style_binding(Clips, fn() { style().clips }, Paint, fn(x) { n.look.clips = x }, fn() { n.look.clips = clips }))
   let alpha = n.look.alpha
   updates.push(self.style_binding(Alpha, fn() { style().alpha }, Place, fn(x) { n.look.alpha = x }, fn() { n.look.alpha = alpha }))
-  let edge = n.look.edge
-  updates.push(self.style_binding(Edge, fn() { style().edge }, Paint, fn(x) { n.look.edge = x }, fn() { n.look.edge = edge }))
+  let edge = Ref(n.look.edge)
+  n.style_edge_base = Some(edge)
+  updates.push(self.style_binding(EdgeWidth, fn() { style().edge_width }, Paint, fn(x) {
+    n.look.edge = (x, n.look.edge.1)
+  }, fn() { n.look.edge = (edge.val.0, n.look.edge.1) }))
+  updates.push(self.style_binding(EdgeColor, fn() { style().edge_color }, Paint, fn(x) {
+    n.look.edge = (n.look.edge.0, x)
+  }, fn() { n.look.edge = (n.look.edge.0, edge.val.1) }))
   let dashed = n.look.edge_dashed
   updates.push(self.style_binding(EdgeDashed, fn() { style().edge_dashed }, Paint, fn(x) { n.look.edge_dashed = x }, fn() { n.look.edge_dashed = dashed }))
   let shadow = n.look.shadow
   updates.push(self.style_binding(Shadow, fn() { style().shadow }, Paint, fn(x) { n.look.shadow = x }, fn() { n.look.shadow = shadow }))
   n.style_watch = Some(self.tree.queued(read, fn(value) {
+    if n.style_corner_links != value.corner_links && !self.tree.style_corners.is_empty() {
+      self.tree.style_corners_due = true
+    }
+    n.style_corner_links = value.corner_links
     current.val = Some(value)
     for update in updates { update() }
+    let next = match (value.corner_rule, value.radius, value.corners) {
+      (Some(rule), Some(own), Some(corners)) if self.styled(Radius) && self.styled(Corners) =>
+        Some((rule, own, corners))
+      _ => None
+    }
+    if n.style_corner != next {
+      let was_worked = n.style_corner is Some(_)
+      n.style_corner = next
+      self.tree.style_corners_due = true
+      match next {
+        Some(_) => self.tree.style_corners.add(self.id())
+        None => self.tree.style_corners.remove(self.id())
+      }
+      // A layout-derived radius may differ from the style's own fallback even when that fallback has not changed.
+      if was_worked {
+        if self.styled(Radius) && value.radius is Some(own) { n.look.radius = own }
+        if self.styled(Corners) && value.corners is Some(corners) { n.look.corners = corners }
+      }
+      self.tree.look_marked_at(self.at)
+    }
+    let context = if next is Some(_) { value.corner_context } else { None }
+    if n.style_corner_context != context {
+      n.style_corner_context = context
+      self.tree.style_corners_due = true
+      self.tree.look_marked_at(self.at)
+    }
   }))
   self
+}
+
+///|
+/// The style's links while its corners are in force. The outer option says the style owns the corners; its inner
+/// option is none when those corners are not linked. Otherwise a caller's earlier corner links remain in force.
+pub fn Tree::style_corner_links(self : Tree, id : NodeId) -> FixedArray[@paint.CornerOf]?? {
+  guard self.alive_id(id) else { return None }
+  let n = self.nodes[id.at]
+  match n.style_props {
+    Some(styles) =>
+      match styles.get(Corners) {
+        Some(binding) if (binding.active)() => Some(n.style_corner_links)
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
+/// The corner rule and own fallback of a styled node, before the host works it out from this layout.
+pub fn Tree::style_corner(self : Tree, id : NodeId) -> (StyleCornerRule, Double, (Double, Double, Double, Double)?)? {
+  guard self.alive_id(id) else { return None }
+  self.nodes[id.at].style_corner
+}
+
+///|
+/// Whether any live node still has a styled corner worked out after layout.
+pub fn Tree::has_style_corners(self : Tree) -> Bool {
+  !self.style_corners.is_empty()
+}
+
+///|
+/// Install the host's shared rule for corners that depend on layout. It is called after layout and before painting,
+/// only when such a corner is present and something relevant to the scene changed.
+pub fn Tree::style_corners_by(self : Tree, resolve : (Tree) -> Unit) -> Unit {
+  self.resolve_style_corners = resolve
+}
+
+///|
+/// Give a layout-dependent styled corner its result without replacing its live style binding.
+pub fn Tree::style_corner_worked(self : Tree, id : NodeId, radius : Double, corners : (Double, Double, Double, Double)?) -> Unit {
+  guard self.alive_id(id) else { return }
+  let n = self.nodes[id.at]
+  guard n.style_corner is Some(_) else { return }
+  if n.look.radius != radius || n.look.corners != corners {
+    n.look.radius = radius
+    n.look.corners = corners
+    self.look_marked_at(id.at)
+  }
 }

@@ -14,6 +14,19 @@ pub fn corner_roots() -> CornerRoots {
 let tree_window_corner : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
+/// Each system window corner, followed independently (a window can have unlike corners).
+// kept across runs: set as each frame begins
+let tree_window_corners : @signals.Signal[(Double, Double, Double, Double)] = @signals.signal(
+  (0.0, 0.0, 0.0, 0.0), same=fn(a, b) { a == b },
+)
+
+///|
+/// The window's four corners as the current tree frame began, followed as the system changes them.
+pub fn tree_window_corners_now() -> (Double, Double, Double, Double) {
+  tree_window_corners.get()
+}
+
+///|
 /// The content zoom of the frame being drawn, followed along with the window's corner.
 // kept across runs: set as each frame begins
 let tree_window_zoom : @signals.Signal[Double] = @signals.signal(1.0, same=fn(a, b) { a == b })
