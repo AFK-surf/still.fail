@@ -72,6 +72,10 @@ pub fn drag_ask(Asking) -> Unit
 
 pub fn drag_frame(@ui.Ctx, @sfbase.Source, String, outside? : Bool) -> Unit
 
+pub fn drive_drag_window_node(@view.View, @sfbase.Source, () -> String) -> Unit
+
+pub fn drive_side_target_node(@view.View, @sfbase.Source, () -> String, () -> @sfbase.DriveAt?, () -> String, () -> Bool, () -> Bool) -> () -> String?
+
 pub fn dragged() -> @sfbase.Dragged?
 
 pub fn drive_folder(@sfbase.Source, String, String, String) -> (@json.Json?, String?)
