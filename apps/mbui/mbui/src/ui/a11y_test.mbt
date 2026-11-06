@@ -89,7 +89,8 @@ test "a screen reader writing in a field: told it takes words, they take the pla
   t.draw()
   let line = a11y_line(t.a11y_said(), "TextField", "Note").unwrap()
   assert_eq(line[10], "draft")
-  assert_eq(line[15], "t")
+  // The editor's retained focus stop also exposes Focus, beside SetText.
+  assert_eq(line[15], "tf")
   t.post(
     @hostapi.a11y_channel,
     "{\"id\":\{line[2]},\"action\":\"set_text\",\"text\":\"from the reader\"}",

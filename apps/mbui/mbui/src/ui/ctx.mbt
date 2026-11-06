@@ -632,6 +632,8 @@ pub struct Ctx {
   // part hidden from it the view builds; the actions asked of them (by the host's accessibility, a test) for the next
   // frame, and this frame's
   sems : Array[Sem]
+  /// Index into the last build's declarations; an input reads its target without constructing the read-out tree.
+  sem_ids : Map[Int, Int]
   mut sem_hide : Int
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
@@ -645,6 +647,7 @@ pub struct Ctx {
   mut focus_before : Int
   mut focusables : Array[Focusable]
   mut last_focusables : Array[Focusable]
+  last_focus_ids : Map[Int, Focusable]
   groups : Map[Int, Group]
   mut group_cur : Int
   // what lies over the page (overlay.mbt): its layers as this frame builds them and as the last one did, the one
@@ -892,6 +895,7 @@ fn Ctx::new() -> Ctx {
     inner_faults: [],
     direction: Ltr,
     sems: [],
+    sem_ids: {},
     sem_hide: 0,
     asked_actions: [],
     actions: [],
@@ -901,6 +905,7 @@ fn Ctx::new() -> Ctx {
     focus_before: 0,
     focusables: [],
     last_focusables: [],
+    last_focus_ids: {},
     groups: Map::new(),
     group_cur: 0,
     layers: [],
@@ -1059,6 +1064,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.hand_chooses.clear()
   self.sems.clear()
   self.sems.shrink_to_fit()
+  self.sem_ids.clear()
   self.asked_actions.clear()
   self.asked_actions.shrink_to_fit()
   self.actions.clear()
@@ -1067,6 +1073,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.focusables.shrink_to_fit()
   self.last_focusables.clear()
   self.last_focusables.shrink_to_fit()
+  self.last_focus_ids.clear()
   atlas_said.val = None
   built_in_island.clear()
   self.groups.clear()
