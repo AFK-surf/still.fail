@@ -74,6 +74,26 @@ test("a queued closed-card request does not recreate state after its chat is del
   } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir,{ recursive:true, force:true }); }
 });
 
+test("an older prepared deletion uses the cleanup installed on reopen", () => {
+  const dir = mkdtempSync(join(tmpdir(),"closed-cards-old-delete-")), { path,threads } = oldStore(dir);
+  let store = Store.open(path);
+  const thread = threads[0]!;
+  while (!closedCardsStep(store.db,thread).done) { /* prepare */ }
+  store.db.exec("DROP TRIGGER legacy_closed_drop_thread");
+  store.close();
+  const old = new DatabaseSync(path);
+  const dropCards = old.prepare("DELETE FROM closed_cards WHERE thread=?");
+  const dropThread = old.prepare("DELETE FROM threads WHERE id=?");
+  store = Store.open(path);
+  try {
+    old.exec("BEGIN IMMEDIATE");
+    dropCards.run(thread);
+    dropThread.run(thread);
+    old.exec("COMMIT");
+    assert.equal(store.db.prepare("SELECT 1 FROM legacy_closed_scopes WHERE thread=?").get(thread),undefined);
+  } finally { old.close(); store.close(); rmSync(dir,{ recursive:true, force:true }); }
+});
+
 test("old prepared writes and read snapshots agree as requested chats are prepared", async () => {
   const dir = mkdtempSync(join(tmpdir(), "closed-cards-store-"));
   const { path, threads } = oldStore(dir);
