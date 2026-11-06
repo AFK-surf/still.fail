@@ -180,19 +180,16 @@ pub fn Tree::laid_as_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Finish `f` after the tree's current change has been published, before its next deadline or input. This queue
-/// belongs to that tree's commit, not the outer signal flush: a deadline reached from a structural reader must
-/// finish before that reader continues. Work raised by layout waits for that layout to return. No frame is asked
-/// for and no deadline advanced. The caller keeps its own lifetime guard.
+/// Finish `f` after the tree's current change has been published, before its next deadline or input. Tree events
+/// enter outside an unfinished signal change, and drain their completions before advancing further. Work raised
+/// by layout waits for that layout to return; work in a raw signal batch also wakes at that batch's end. No frame
+/// is asked for and no deadline advanced here. The caller keeps its own lifetime guard.
 pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
   if self.gone { return }
   self.changes.push((self.logic_at(), f))
-  // The commit/layout boundaries drain this queue themselves, even inside an outer signal flush. Only a call
-  // made in an unrelated raw signal batch needs its end notification; no tree change is under way in that case.
-  if self.committing == 0 && self.laying == 0 && self.layouts_active == 0 && !self.changes_running {
-    if @signals.batch_depth() == 0 { self.changes_done() |> ignore }
-    else { @signals.after_flush(fn() { self.changes_done() |> ignore }) }
-  }
+  // Every request has a batch-end wake, including one made inside a tree commit nested in a raw signal batch.
+  // A tree event's own end also drains it, before the next deadline, once all its readers have returned.
+  @signals.after_flush(fn() { self.changes_done() |> ignore })
 }
 
 ///|
@@ -201,7 +198,7 @@ pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
 /// layout or a partial tree commit. Disposal clears the remaining callbacks.
 fn Tree::changes_done(self : Tree) -> Bool {
   if self.changes_running || self.committing > 0 || self.laying > 0 || self.layouts_active > 0 ||
-    @signals.batch_depth() > 0 || self.changes.is_empty() {
+    @signals.batch_depth() > 0 || @signals.is_flushing() || self.changes.is_empty() {
     return false
   }
   self.changes_running = true

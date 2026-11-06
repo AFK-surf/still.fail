@@ -268,6 +268,12 @@ pub fn batch_depth() -> Int {
 }
 
 ///|
+/// Whether the current change is still notifying its readers. A new logical event waits for all of them.
+pub fn is_flushing() -> Bool {
+  run.flushing > 0
+}
+
+///|
 pub fn start_batch() -> Unit {
   if run.batch_depth == 0 { run.batch_changed = false }
   run.batch_depth += 1

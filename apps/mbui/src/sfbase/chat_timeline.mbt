@@ -8,7 +8,6 @@ pub fn chat_timeline(
   rd : Reading,
   read : () -> ChatView?,
   shown : () -> Bool,
-  in_front : () -> Bool,
 ) -> () -> Unit {
   let em = emits_of(rk)
   let stop : Ref[() -> Unit] = Ref(fn() { })
@@ -16,24 +15,27 @@ pub fn chat_timeline(
   let lingering : Map[String, (Int, Double)] = {}
   let advancing = Ref(false)
   let pending = Ref(false)
+  let again = Ref(false)
   owner.owns(fn() {
     (stop.val)()
     pending.val = false
   }) |> ignore
   fn advance() {
-    if advancing.val || pending.val || !owner.alive() { return }
-    guard read() is Some(cv) else { return }
-    let c = @ui.current()
-    let showing = shown()
+    if !owner.alive() { return }
+    if advancing.val { again.val = true; return }
+    if pending.val { return }
     pending.val = true
-    // Decide which replies are held before the caller publishes this data change's rows. Deferring this take
-    // lets a waiting reply enter and then leave the list in the same input, starting a move it never should have.
-    chat_take(c, rk, rd, cv, shown=showing, in_front=in_front())
     owner.tree.after_change(fn() {
       pending.val = false
       if advancing.val || !owner.alive() { return }
+      guard read() is Some(cv) else { return }
+      let c = @ui.current()
+      let showing = shown()
       advancing.val = true
-      defer { advancing.val = false }
+      defer {
+        advancing.val = false
+        if again.val { again.val = false; advance() }
+      }
       let now = owner.cause_at()
       if showing {
         let placed = Ref(false)
