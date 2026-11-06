@@ -467,6 +467,8 @@ struct Node {
   /// its properties' bindings, by property: what stops each
   props : Map[Prop, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// what a declared accessibility action does (View::on_action)
+  mut on_action : ((Action) -> Unit)?
   /// whether it is a top row of the app's own (View::moves_window: a press on it its own), and whether a press on it
   /// moves the window now
   mut top_row : Bool
@@ -1285,6 +1287,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.hosted = false
       n.hosted_clips = false
       n.on_press = None
+      n.on_action = None
       n.top_row = false
       n.moves_window = false
       n.on_menu = None
@@ -1380,6 +1383,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drop_next: 0,
         props: {},
         on_press: None,
+        on_action: None,
         top_row: false,
         moves_window: false,
         on_menu: None,
@@ -5503,6 +5507,7 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.on_action = None
   n.top_row = false
   n.moves_window = false
   n.on_menu = None
