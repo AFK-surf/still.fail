@@ -44,6 +44,13 @@ pub fn panel_row_context(v : @view.View) -> PanelRowContext {
 }
 
 ///|
+/// Whether `v` is in a presented panel's body. A panel may lend all-zero geometry, so the values alone cannot tell
+/// it apart from a page outside a panel.
+pub fn in_panel_node(v : @view.View) -> Bool {
+  v.lent(panel_rows_at) is Some(_)
+}
+
+///|
 /// A room that clips or scrolls cards, at the same line as `panel_card_out`. Its children see the panel's sides and
 /// words from that room, so a card in it does not reach out a second time. A small panel and a page keep their room.
 pub fn panel_card_room_node(parent : @view.View, body : (@view.View) -> Unit) -> @view.View {

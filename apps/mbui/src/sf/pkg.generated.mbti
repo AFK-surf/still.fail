@@ -888,6 +888,8 @@ pub fn in_pane() -> Bool
 
 pub fn in_panel() -> Bool
 
+pub fn in_panel_node(@view.View) -> Bool
+
 pub fn in_small_panel() -> Bool
 
 pub fn initial(String) -> String

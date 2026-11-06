@@ -96,6 +96,8 @@ test "panel row geometry: inherited late, updated on the same node, shadowed by 
   assert_eq(side_probe.val.unwrap().rect().2, 24.0)
   assert_true(panel_row_layout(outside.val.unwrap(), false, false) == { out: 0.0, padding: None, inner: false })
   assert_true(panel_row_context(outside.val.unwrap()) == { sides_in: 0.0, rows_out: 0.0, words_in: 0.0, small: false })
+  assert_true(in_panel_node(r))
+  assert_true(!in_panel_node(outside.val.unwrap()))
   context.set({ sides_in: 0.0, rows_out: 0.0, words_in: 24.0, small: false })
   show.set(true)
   tree.frame(300.0, 300.0) |> ignore
@@ -113,12 +115,17 @@ test "panel row geometry: inherited late, updated on the same node, shadowed by 
   tree.frame(300.0, 300.0) |> ignore
   assert_eq(side_probe.val.unwrap().rect().2, panel_card_in)
   assert_true(panel_row_layout(r, false, false) == { out: 0.0, padding: Some(24.0), inner: false })
+  context.set({ sides_in: 0.0, rows_out: 0.0, words_in: 0.0, small: false })
+  tree.frame(300.0, 300.0) |> ignore
+  assert_true(in_panel_node(r))
+  assert_true(panel_row_context(r) == panel_row_context(outside.val.unwrap()))
   show.set(false)
   tree.frame(300.0, 300.0) |> ignore
   assert_true(!child.alive())
   assert_true(!late.val.unwrap().alive())
   tree.dispose()
   assert_true(panel_row_layout(body.val.unwrap(), false, false) == { out: 0.0, padding: None, inner: false })
+  assert_true(!in_panel_node(body.val.unwrap()))
 }
 
 ///|
