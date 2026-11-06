@@ -93,6 +93,7 @@ pub fn tools_row_node(
           opened.set(!@signals.untracked(fn() { opened.get() }))
         },
         tips?=tips,
+        on=fn() { opened.get() },
         linked=fn() { if in_panel || @ui.window_keys_own_now() { None } else { Some(window_corner_key()) } },
       )
       trigger.val = Some(button)

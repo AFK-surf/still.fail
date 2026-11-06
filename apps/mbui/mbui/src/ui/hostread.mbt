@@ -187,8 +187,22 @@ fn platform_pointing(platform : Int) -> Pointing {
 /// menu's row) says them while one is, from the moment one is plugged in to the moment it is taken away; never what
 /// is shown otherwise, where or how big. A Tester's `keyboard` (by default its system's); else, where a program plays
 /// another system (set_platform), that system's; else the host's as it is asked (@hostapi.keyboard: a Mac's and a
-/// PC's always, a phone's or a tablet's while one is connected), its system's where it cannot tell.
+/// PC's always, a phone's or a tablet's while one is connected), its system's where it cannot tell. What reads it is
+/// told as the next frame begins if the host's answer changed, without telling what did not read it.
 pub fn keyboard() -> Bool {
+  let now = keyboard_now()
+  // The first reader sees the host directly; seed the signal before it subscribes, so an unchanged next frame does
+  // not tell it. Once followed, changes are published together as the frame begins (hand_arrive).
+  if !hand.keyboard.watched() {
+    hand.keyboard.set(now)
+  }
+  hand.keyboard.get() |> ignore
+  now
+}
+
+///|
+/// The host's current answer, without tracking it: published by hand_arrive as each frame begins.
+fn keyboard_now() -> Bool {
   match fake.val {
     Some(f) => f.keyboard
     None if said_platform.val >= 0 => platform_keyboard(said_platform.val)

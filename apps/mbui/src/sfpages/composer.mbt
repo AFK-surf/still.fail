@@ -498,6 +498,17 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 }
 
 ///|
+/// How many composers of the tree's were made (each one's own kind of what the host says to it: composer_node).
+// kept across runs: only counted on, never read for its number but to tell them apart
+let composer_made : Ref[Int] = Ref(0)
+
+///|
+fn composer_made_next() -> Int {
+  composer_made.val += 1
+  composer_made.val
+}
+
+///|
 /// What comes into the draft from outside the field before the box is laid out: the files the system's picker
 /// answered (for this draft), the files pasted into the field (⌘V with files or a picture on the clipboard, as the
 /// web's paste takes the clipboard's files), the rows the 文件 tab's 添加到消息 put in (named by their path, or as files where this chat
@@ -505,12 +516,20 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool, focus? : () -> Unit = fn() { c.focus_editor(composer_field_key) }) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
   @sfbase.drafts_given_read()
+  // (what the system's picker gave, asked for this draft: only its own composer takes it, none of another draft's
+  // takes it from it)
   match composing.picking.get() {
-    Some((key, picker)) =>
+    Some((key, picker)) if key == w.key =>
       match picker.files() {
         Some(files) => {
           composing.picking.set(None)
-          if key == w.key && !no_files {
+          if no_files {
+            let list = shared_into.get(w.key).unwrap_or([])
+            for f in files {
+              list.push(f)
+            }
+            shared_into[w.key] = list
+          } else {
             for f in files {
               writing_add_picked(src, w, spec.station, f)
             }
@@ -518,7 +537,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
         }
         None => ()
       }
-    None => ()
+    _ => ()
   }
   // files shared into the app from another, for this draft (share.mbt)
   match shared_into.get(w.key) {
@@ -606,9 +625,11 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     }
     _ => ()
   }
-  let sent = @sfbase.files_taken(w.key)
-  if !sent.is_empty() && !no_files {
-    writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+  if !no_files {
+    let sent = @sfbase.files_taken(w.key)
+    if !sent.is_empty() {
+      writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+    }
   }
 }
 

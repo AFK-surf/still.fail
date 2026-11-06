@@ -85,7 +85,8 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
 /// is now, followed (in place of `placeholder`). `line_by`, `max_lines_by`, `enter_by` and `paste_limit_by`: those
-/// options as they change, keeping the same editor, selection and undo. `max_lines_in`: the most lines it shows worked
+/// options as they change, keeping the same editor, selection and undo. `label_by` names the editor to a screen reader
+/// when its visible label is separate from its placeholder; absent, the placeholder names it. `max_lines_in`: the most lines it shows worked
 /// out by how big `holder` (what holds it) is laid out, as that is laid out (a Roomed rule: nothing of it read back),
 /// in place of `max_lines`; such a field wraps. `files_when`: whether it takes files at the paste's moment (else its
 /// words, like a field without `files`). The node made.
@@ -122,6 +123,7 @@ pub fn field(
   colors_by? : () -> (Int64, Int64, Int64),
   placeholder_by? : () -> String,
   keys? : (Int, Int) -> Bool,
+  label_by? : () -> String,
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
@@ -250,7 +252,8 @@ pub fn field(
     // (its words read out, a secret's none: as an old view's editor says them)
     .says(By(fn() {
       let value = field.composed_said()
-      Some(@view.said(TextField, label=hint(), value=if secret { "" } else { value }, actions=[SetText("")]))
+      let label = match label_by { Some(read) => read(); None => hint() }
+      Some(@view.said(TextField, label~, value=if secret { "" } else { value }, actions=[SetText("")]))
     }))
     // (a press on it: taken as it goes down where the field takes it so, else a tap's as it is let go: tree_field_down)
     .on_press(fn() { tree_field_tapped(id) })
