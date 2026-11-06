@@ -38,6 +38,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   r.core.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const dials: Record<string, number> = {};
   const hellos: unknown[] = [];
+  const peers: Record<string, Duplex> = {};
   const open = (id: string): Effect.Effect<Duplex, CoreError> =>
     Effect.suspend(() => {
       dials[id] = (dials[id] ?? 0) + 1;
@@ -46,6 +47,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
       if (way === "silent") return Effect.never;
       return Effect.flatMap(Effect.promise(() => pipe()), ([here, there]) =>
         Effect.sync(() => {
+          peers[id] = there;
           r.core.inner.runner.fork(
             Effect.gen(function* () {
               const hello = yield* there.next();
@@ -62,7 +64,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
   const secondLock = secondWorkspace ? await r.watch({ topic: "lock", workspace: "w2" }) : null;
   const pair = async () => (await lock()).me.pair;
-  return { ...r, owner, ways, dials, hellos, lock, pair, secondLock };
+  return { ...r, owner, ways, dials, hellos, peers, lock, pair, secondLock };
 }
 
 test("a signing key that cannot be read ends the request with its error, and a retry can ask again", async () => {
@@ -233,6 +235,48 @@ test("the laptop opened before its last try: it shows its code beside the phone'
   const p = await w.pair();
   assert.deepEqual([p.devices, p.approvers.map((a: { showing: boolean }) => a.showing)], [2, [true, true]]);
   assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [1, 4]);
+});
+
+test("a code disappears during the search: another device opened afterwards can still show one", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "finding", "the other device is still being sought");
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1, "the device whose code was shown is not asked again");
+  assert.equal(w.dials[LAPTOP_APP], 2);
+});
+
+test("a code disappears during the search and no other device answers: say why it ended", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS);
+  const p = await w.pair();
+  assert.equal(p.state, "failed");
+  assert.ok(p.error, "the page explains why the previous code went away");
+  assert.equal(w.dials[PHONE_APP], 1);
+  assert.equal(w.dials[LAPTOP_APP], PAIR_DIAL_TRIES);
+});
+
+test("cancelling after a code disappears stops looking for the remaining devices", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "finding");
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS * 2);
+  assert.equal(await w.pair(), undefined);
+  assert.equal(w.dials[LAPTOP_APP], 1);
 });
 
 test("a dial that hangs is given up after PAIR_DIAL_MS and made again", async () => {

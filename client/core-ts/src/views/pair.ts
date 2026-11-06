@@ -418,7 +418,8 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
 /// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void };
+/// `searching`: other devices or newer locks are still being sought; `lastEnd`: why the last code went away then.
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnd?: CoreError };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -576,8 +577,10 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
         const asked = new Set<string>();
         const done = Deferred.makeUnsafe<void>();
         let active = 1; // Hold completion until the initial seeks and any pending lock reads have been started.
+        y.searching = true;
         const finish = () => {
           if (--active === 0) {
+            y.searching = false;
             delete y.lockMoved;
             delete y.lockReading;
             Deferred.doneUnsafe(done, Effect.void);
@@ -621,9 +624,14 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
         refresh();
         finish();
         yield* Deferred.await(done);
-        // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials.
+        // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials. If a code went away while the
+        // others were still being sought, say why it ended once none of the remaining devices can show one.
         if (tryings.get(inner) !== y || y.state !== "finding") return;
-        y.state = y.met.size > 0 ? "code" : "none";
+        if (y.met.size > 0) y.state = "code";
+        else if (y.lastEnd) {
+          y.state = "failed";
+          y.error = endedText([y.lastEnd]);
+        } else y.state = "none";
         changed(inner, y);
       }),
     );
@@ -676,8 +684,8 @@ export function trying(inner: Inner, workspaces: string[]): Trying {
 
 /// A trusted device that shows a code, kept: what it says while no code is being checked (`no`: turned away, the code
 /// too old; its end), and its code's time up with no word from it (PAIR_WAIT_MS and PAIR_GRACE_MS since it came), end
-/// it here at once, and the last one ended says why (`endedText`), so the page asks again; what it answers a code
-/// typed is `tryOne`'s.
+/// it here at once. If another device is still being sought, keep looking; otherwise the last one ended says why
+/// (`endedText`), so the page asks again. What it answers a code typed is `tryOne`'s.
 export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspaces: string[]): Met {
   const heard = Effect.runSync(Queue.unbounded<J | null>());
   const closed = Deferred.makeUnsafe<void>();
@@ -696,8 +704,15 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
     d.close();
     y.met.delete(id);
     if (y.met.size === 0) {
-      y.state = "failed";
-      y.error = endedText([why]);
+      if (y.searching) {
+        y.state = "finding";
+        y.lastEnd = why;
+        y.lost = true;
+        delete y.error;
+      } else {
+        y.state = "failed";
+        y.error = endedText([why]);
+      }
       delete y.left;
     } else y.lost = true;
     changed(inner, y);
