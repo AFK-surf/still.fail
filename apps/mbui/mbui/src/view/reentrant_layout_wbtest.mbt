@@ -266,7 +266,8 @@ test "a notification queued outside layout shares the dispatching frame's stop" 
   t.frame(200.0, 100.0, now=10.0) |> ignore
   assert_eq(called.val, 1)
   assert_true(marked.val)
-  assert_eq(t.work.computes - before, 2, msg="the frame and its notification laid out once each")
+  let during = t.work.computes - before
+  assert_eq(during, 2, msg="the frame and its notification laid out once each, got \{during}")
   assert_true(t.due && t.layout_due, msg="the self-marked layout waits for the next operation")
   t.frame(200.0, 100.0, now=11.0) |> ignore
   assert_eq(t.work.computes - before, 3)
