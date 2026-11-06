@@ -231,6 +231,8 @@ pub fn memory_of(Core, String) -> MemoryRead
 
 pub fn meter_chips(@ui.Ctx, String, Array[@json.Json], alerts? : Bool) -> Unit
 
+pub fn meter_chips_node(@view.View, () -> Array[@json.Json], tips~ : @sf.TipLayer, alerts? : Bool) -> Unit
+
 pub fn mode_name(String) -> String
 
 pub fn mono(@ui.Ctx, String, style? : @ui.TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, wrap? : Bool, center? : Bool) -> Unit

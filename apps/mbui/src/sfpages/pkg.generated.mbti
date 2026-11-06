@@ -660,9 +660,13 @@ pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, 
 
 pub fn station_figures(@ui.Ctx, @sfbase.Source, @json.Json?) -> Unit
 
+pub fn station_figures_node(@view.View, @sfbase.Source, () -> @json.Json?, tips? : @sf.TipLayer) -> Unit
+
 pub fn station_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 
 pub fn station_state(@ui.Ctx, @json.Json?) -> Unit
+
+pub fn station_state_node(@view.View, () -> @json.Json?) -> Unit
 
 pub fn station_waiting(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 

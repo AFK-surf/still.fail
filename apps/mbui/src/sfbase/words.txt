@@ -2522,6 +2522,7 @@ web-pages.stations.deviceLoading
 web-pages.stations.latency
 web-pages.stations.netNone
 web-pages.stations.offline
+web-pages.stations.online
 web-pages.stations.page.more
 web-pages.stations.page.openFiles
 web-pages.stations.page.part.processes
