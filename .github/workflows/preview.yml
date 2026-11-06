@@ -506,7 +506,13 @@ jobs:
           # MoonBit's, what the C's, 2026-11-05)
           export MBC_T0=$(date +%s)
           nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build 2>&1 | while IFS= read -r l; do printf "%4d %s\n" $SECONDS "$l"; done > "$0/log"; echo ${PIPESTATUS[0]} > "$0/status"' "$B" > /dev/null 2>&1 &
-      - uses: ./.github/actions/setup
+      - id: setup
+        uses: ./.github/actions/setup
+        with:
+          # A push installs only these two packages. Do not rebuild its store on a cloud or station lockfile change.
+          pnpm-cache-scope: ${{ env.E2E == '' && 'core' || 'all' }}
+          # Save it after the installs, while the app builds, rather than in the post action after all the checks.
+          pnpm-cache-save: 'false'
       # core.hbc by its inputs (HBC_CACHE, scripts/core.sh hermes), as the other jobs keep it: the core's step was 12-17 s
       # of every run (~14 s of a CPU, beside cl), the core unchanged in most of them (restored on every run, saved by
       # main's when it made one: the names in it are their contents' keys)
@@ -537,6 +543,12 @@ jobs:
           [ -n "$E2E" ] || exit 0
           (cd cloud && quiet pnpm install --frozen-lockfile --prefer-offline)
           (cd station && quiet pnpm install --frozen-lockfile --prefer-offline && quiet pnpm run build)
+      - name: Keep the pnpm store while the app builds
+        if: steps.setup.outputs.pnpm-cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: ${{ steps.setup.outputs.pnpm-cache-key }}
       # The test station's natives (e2e/win.sh: mesh and runner, win32-x64), by their keys. A change to one of them is in
       # no release yet and is built only by the pipeline's natives job (a Mac's cross-build: this machine has no zig):
       # then its end is waited for (an outside wait, its job's own state), and a branch takes what it built (its run's
