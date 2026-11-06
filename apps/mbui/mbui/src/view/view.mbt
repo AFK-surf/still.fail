@@ -6627,11 +6627,22 @@ fn Tree::settle_after_change(self : Tree, at : Double) -> Unit {
 /// Where things stand as of `at` laid out and placed now, where something asks (View::laid_before_causes): what was told
 /// worked out, laid out and placed as a frame would, nothing drawn.
 fn Tree::settle_now(self : Tree, at : Double) -> Unit {
-  if self.before_causes <= 0 || self.standing || self.last_w <= 0.0 {
+  if self.before_causes <= 0 {
     return
   }
+  self.settled_at(at) |> ignore
+}
+
+///|
+/// Laid out and placed as of `at`, what was told so far worked out, as a frame would, nothing drawn (Tree::settle_now's,
+/// View::drawn_now's): false where it cannot be (inside such a settle already, or the window not sized yet), true where
+/// it is or nothing was due.
+fn Tree::settled_at(self : Tree, at : Double) -> Bool {
+  if self.standing || self.last_w <= 0.0 {
+    return false
+  }
   if !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
-    return
+    return true
   }
   self.standing = true
   self.work.settles = self.work.settles + 1
@@ -6659,6 +6670,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = false
   self.withins_restored()
+  true
 }
 
 ///|
