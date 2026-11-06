@@ -290,6 +290,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // measured or open, till the hand moves it, it is put again or asked to its end; from its end its anchor is the row
   // at its foot, which moves what is over it as it grows)
   let pinned : Ref[(K, Double)?] = Ref(None)
+  // (and how tall that row was as it was last laid out where it was put: out of sight there, laid out from again only
+  // as it is measured otherwise)
+  let pinned_tall : Ref[Double] = Ref(0.0)
   // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
   // measured)
   s.on_hand = fn(d) {
@@ -609,8 +612,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           Some((k, off)) if putting =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
               Some(i) => {
-                anchor.val = Some({ key: k, under: if from_end { off + measure(i) - h } else { -off }, near: i })
+                let hk = if from_end { measure(i) } else { 0.0 }
+                anchor.val = Some({ key: k, under: if from_end { off + hk - h } else { -off }, near: i })
                 pinned.val = if from_end { Some((k, off)) } else { None }
+                pinned_tall.val = hk
               }
               None => ()
             }
@@ -776,52 +781,31 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           _ => ()
         }
         // (put at a row and nothing moved it since: its top where it was put, whatever came to be measured round it)
-        // (one put out of sight kept made while it is put there, so that one that says how tall it is only after it is
-        // first laid out (an old view's island) can say it: where its top is as the rows laid out put it, it as tall as
-        // it is measured now and those between as tall as they were (measured where they never were), and how tall it is)
-        let pinned_out = fn(r : ListLaid[K], i : Int) -> (Double, Double) {
-          let hk = measure(i)
-          let tall = fn(j : Int) {
-            match known(j) {
-              Some(t) => t
-              None => measure(j)
-            }
-          }
-          if i < r.first {
-            let mut top = r.tops[0] - hk
-            for j in (i + 1)..<r.first {
-              top = top - tall(j)
-            }
-            (top, hk)
-          } else {
-            let q = r.keys.length() - 1
-            let mut top = r.tops[q] + r.heights[q]
-            for j in (r.last + 1)..<i {
-              top = top + tall(j)
-            }
-            (top, hk)
-          }
-        }
         match pinned.val {
           Some((k, off)) if glide is None && !read_held.val =>
             match r.keys.search(k) {
-              Some(q) =>
+              Some(q) => {
+                pinned_tall.val = r.heights[q]
                 if (r.tops[q] - off).abs() > 0.01 {
                   match find(k, r.first + q) {
                     Some(i) => r = lay(Some({ key: k, under: off + r.heights[q] - h, near: i }), 0.0)
                     None => ()
                   }
                 }
-              // (out of sight, elsewhere than it was put (measured taller since, or shorter): laid out from it again)
+              }
+              // (out of sight where it was put, kept made there (below), so that one that says how tall it is only after
+              // it is first laid out (an old view's island) can say it: measured otherwise than it was laid out there,
+              // laid out from it again; the rows between it and those in sight not gone through)
               None =>
                 match find(k, r.first) {
-                  Some(i) if r.keys.length() > 0 => {
-                    let (top, hk) = pinned_out(r, i)
-                    if (top - off).abs() > 0.01 {
+                  Some(i) => {
+                    let hk = measure(i)
+                    if (hk - pinned_tall.val).abs() > 0.01 {
+                      pinned_tall.val = hk
                       r = lay(Some({ key: k, under: off + hk - h, near: i }), 0.0)
                     }
                   }
-                  _ => ()
+                  None => ()
                 }
             }
           _ => if glide is Some(_) || read_held.val { pinned.val = None }
@@ -857,8 +841,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                   match find(k, r.first + q) {
                     Some(i) => {
                       let top = h / 2.0 - (y0 + y1) / 2.0
-                      r = lay(Some({ key: k, under: if from_end { top + r.heights[q] - h } else { -top }, near: i }), 0.0)
+                      let hk = r.heights[q]
+                      r = lay(Some({ key: k, under: if from_end { top + hk - h } else { -top }, near: i }), 0.0)
                       pinned.val = if from_end { Some((k, top)) } else { None }
+                      pinned_tall.val = hk
                     }
                     None => ()
                   }
@@ -921,13 +907,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             }
           None => ()
         }
-        // (and the row it is put at, out of sight while it is put there: kept made, where the rows laid out and those
-        // between put it)
+        // (and the row it is put at, out of sight while it is put there: kept made, out of sight beside the rows laid out
+        // on its side, as a kept row is)
         let put_kept = match pinned.val {
           Some((k, _)) if r.keys.length() > 0 && !r.keys.contains(k) =>
             match find(k, r.first) {
               Some(i) => {
-                let (top, _) = pinned_out(r, i)
+                let q = r.keys.length() - 1
+                let top = if i < r.first { r.tops[0] - pinned_tall.val } else { r.tops[q] + r.heights[q] }
                 l.place(slot_of(k), 0.0, top + c.x)
                 Some(k)
               }
