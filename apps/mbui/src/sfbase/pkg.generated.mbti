@@ -828,6 +828,8 @@ pub fn long_jobs_lit(Source, Workspace) -> Bool
 
 pub fn long_jobs_seen(Source, Workspace) -> Unit
 
+pub fn long_stop(String, Json?) -> (String, Json, Array[(String, String)])
+
 pub let machine_here : @ref.Ref[String?]
 
 pub fn[T] made_again(Array[Json], Array[(Json, T)], (Json) -> String, (Json) -> T) -> Array[(Json, T)]

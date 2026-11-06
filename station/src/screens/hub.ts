@@ -276,7 +276,8 @@ export class ScreenHub implements Screens {
   /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had, `install` where a file to
-  /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab).
+  /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab); `since`, since when it has been up
+/// (ms: a simulator's boot, an emulator's start).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
     return {
@@ -285,6 +286,7 @@ export class ScreenHub implements Screens {
         const access = accessShown(s.access?.(), lang);
         const clipboard = s.clipboard?.() ?? [];
         const by = s.openedBy?.();
+        const since = s.since?.();
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
@@ -295,6 +297,7 @@ export class ScreenHub implements Screens {
           ...(s.panels?.length ? { panels: s.panels } : {}),
           ...(s.chrome?.length ? { chrome: s.chrome.map(toldOf) } : {}),
           ...(by ? { openedBy: by } : {}),
+          ...(since !== undefined ? { since } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };
       }),
