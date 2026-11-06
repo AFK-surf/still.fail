@@ -101,6 +101,9 @@ output inside it rather than elsewhere on that machine (or over ssh): it is remo
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
 versions: clone or fetch the intended revision there, or upload a bundle.
 
+If prepare fails or is interrupted, start refuses that key until a prepare succeeds. Retry the intended prepare; use a
+new key for different work. A failed re-prepare never makes the previous command the intended one.
+
 A station is often someone's own computer, in use. A command that needs an administrator's password or a permission
 the system asks for (`sudo`, `sfltool dumpbtm`, a first `osascript` controlling another app, a protected folder) puts
 the system's dialog on that machine's screen, naming only the command, so nobody there can tell who asks; the task
