@@ -540,7 +540,15 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else { return }
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
   ignore(t)
-  self.settle_off = v.at_moment(rest, fn() {
+  // (flung down toward a foot it counts, not measured yet (Scroll::foot_hand): the moment it would meet it a moment
+  // something is done at, so it is laid out where it is then (View::laid_before_due), a frame drawn then or none: its
+  // foot found there or further, the fling planned again to it before it is taken to have met it)
+  let meet_off = match @signals.untracked(fn() { self.fling.get() }) {
+    Some(f) if self.reads_free && f.v0 > 0.0 && (self.foot_hand)() is None && f.end_t > t && f.end_t < rest =>
+      v.at_moment(f.end_t, fn() {  })
+    _ => fn() {  }
+  }
+  let rest_off = v.at_moment(rest, fn() {
     self.settle_off = fn() {  }
     let flung = @signals.untracked(fn() { self.fling.get() })
     let notch = @signals.untracked(fn() { self.notch.get() })
@@ -560,6 +568,10 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
       _ => ()
     }
   })
+  self.settle_off = fn() {
+    meet_off()
+    rest_off()
+  }
 }
 
 ///|
