@@ -124,10 +124,14 @@ fn clip_say_from(from : Int) -> Unit {
 }
 
 ///|
-/// Of each instance the frame draws, the level of `clip_stack` its clip is (and that level's outer's, clip_from), as it
-/// is drawn: level * 4096 + its outer's + 1 (inst_level_of). What a layer moved keeps of what it is cut by.
+/// Of each instance the frame draws, the level of `clip_stack` its clip is, and that level's outer's (clip_from: -1
+/// none), as it is drawn. What a layer moved keeps of what it is cut by.
 // kept across runs: written as each instance is
 let inst_levels : Array[Int] = []
+
+///|
+// kept across runs: written as each instance is
+let inst_froms : Array[Int] = []
 
 ///|
 /// Instance `i` drawn in the clip painted in now (inst_levels).
@@ -135,8 +139,10 @@ fn inst_level_said(i : Int) -> Unit {
   let level = clip_top() / clip_n
   while inst_levels.length() <= i {
     inst_levels.push(0)
+    inst_froms.push(-1)
   }
-  inst_levels[i] = level * 4096 + clip_from_of(level) + 1
+  inst_levels[i] = level
+  inst_froms[i] = clip_from_of(level)
 }
 
 ///|

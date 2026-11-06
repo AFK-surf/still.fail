@@ -1561,27 +1561,8 @@ fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
     to = to + 1
   }
   // (where each was drawn among the clips, moved with it: inst_levels)
-  let lv = inst_levels
-  if lv.length() >= self.ninst {
-    let up : Array[Int] = []
-    for r in ranges {
-      for q in r.0..<r.1 {
-        up.push(lv[q])
-      }
-    }
-    let mut t = ranges[0].0
-    for k, r in ranges {
-      let end = if k + 1 < ranges.length() { ranges[k + 1].0 } else { self.ninst }
-      for q in r.1..<end {
-        lv[t] = lv[q]
-        t = t + 1
-      }
-    }
-    for v in up {
-      lv[t] = v
-      t = t + 1
-    }
-  }
+  ints_raised(inst_levels, ranges, self.ninst)
+  ints_raised(inst_froms, ranges, self.ninst)
   if inst_owners_kept() {
     inst_owners_raised(ranges, self.ninst)
   }
@@ -2018,4 +1999,31 @@ fn Ctx::paint_put_off(self : Ctx, i : Int, alpha : Double, words : Double, surfa
   self.paint(i, alpha)
   words_alpha.val = words_was
   look_surface.val = surface_was
+}
+
+///|
+/// What is kept of each of the frame's instances (`lv`, one for each of the first `n`) moved as Ctx::raise_ranges moves
+/// them: those in `ranges` after the rest, the rest closed up in its order.
+fn ints_raised(lv : Array[Int], ranges : Array[(Int, Int)], n : Int) -> Unit {
+  if lv.length() < n {
+    return
+  }
+  let up : Array[Int] = []
+  for r in ranges {
+    for q in r.0..<r.1 {
+      up.push(lv[q])
+    }
+  }
+  let mut t = ranges[0].0
+  for k, r in ranges {
+    let end = if k + 1 < ranges.length() { ranges[k + 1].0 } else { n }
+    for q in r.1..<end {
+      lv[t] = lv[q]
+      t = t + 1
+    }
+  }
+  for v in up {
+    lv[t] = v
+    t = t + 1
+  }
 }

@@ -90,12 +90,13 @@ priv struct SceneLayer {
   mut shown : (Double, Double)
   /// the level of clip_stack it began in as last drawn, that level's outer's (clip_from) as far below it (none:
   /// scene_no_level), and how far below the level what holds it began in it began: and of each of its own instances, as
-  /// far below the level it began in its clip and that clip's outer are (scene_level_pack). What it pushed itself moves
+  /// far below the level it began in its clip and that clip's outer are (block_own, block_from: scene_no_level none). What it pushed itself moves
   /// with it, what it began in stays (insts_moved_by)
   mut clip_lvl : Int
   mut from_rel : Int
   mut depth_in : Int
-  block_lvls : Array[Int]
+  block_own : Array[Int]
+  block_from : Array[Int]
   inner_cuts : @damage.Rect
   mut fades_inside : Bool
 }
@@ -1305,7 +1306,8 @@ fn Ctx::scene_drawn(
         clip_lvl: 0,
         from_rel: scene_no_level,
         depth_in: 0,
-        block_lvls: [],
+        block_own: [],
+        block_from: [],
         inner_cuts: @damage.Rect::none(),
         fades_inside: false,
       }
@@ -1893,7 +1895,8 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   }
   l.block_n = 0
   l.block_segs.clear()
-  l.block_lvls.clear()
+  l.block_own.clear()
+  l.block_from.clear()
   l.block_refs.clear()
   l.bands.clear()
   let owners : OwnersRun? = if inst_owners_kept() {
@@ -1908,7 +1911,9 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
         if self.inst[k * inst_size + 5] == 11.0 {
           l.bands.push(l.block_n + k - from)
         }
-        l.block_lvls.push(scene_level_pack(l, k))
+        let (own, from) = scene_levels_of(l, k)
+        l.block_own.push(own)
+        l.block_from.push(from)
       }
       match owners {
         Some(o) => {
@@ -1986,7 +1991,7 @@ fn Ctx::scene_emitted(
       let k = self.ninst
       l.block.blit_to(self.inst, len=n * inst_size, src_offset=ip.val * inst_size, dst_offset=k * inst_size)
       if off {
-        insts_moved_by(self.inst, k, k + n, dx, dy, l.block_lvls, ip.val, depth, soft)
+        insts_moved_by(self.inst, k, k + n, dx, dy, l.block_own, l.block_from, ip.val, depth, soft)
       }
       while band.val < l.bands.length() && l.bands[band.val] < to {
         let o = (k + l.bands[band.val] - ip.val) * inst_size
@@ -2063,8 +2068,8 @@ fn Ctx::scene_emitted(
 ///|
 /// Instances `k0` to `k1` of `a` moved by (`dx`, `dy`), as drawn where they were: their rects, where they are turned
 /// about, the clips and soft cuts of their own; what they are cut by from outside what moved kept where it is. Which is
-/// which each instance's levels say (`lvls` from `l0`: scene_level_pack, as far below the level the layer it is of
-/// began in), that layer's `depth` levels below the one the first moved began in: a clip of a level below that one
+/// which each instance's levels say (`own` and `froms` from `l0`: scene_levels_of, as far below the level the layer it
+/// is of began in), that layer's `depth` levels below the one the first moved began in: a clip of a level below that one
 /// moves, one of it or above stays; no clip (one reaching past any window: push_unclipped) stays. Where all its soft
 /// cuts are its own (`soft`: nothing outside what moved fades it), those moved too.
 fn insts_moved_by(
@@ -2073,7 +2078,8 @@ fn insts_moved_by(
   k1 : Int,
   dx : Double,
   dy : Double,
-  lvls : Array[Int],
+  owns : Array[Int],
+  froms : Array[Int],
   l0 : Int,
   depth : Int,
   soft : Bool,
@@ -2104,7 +2110,8 @@ fn insts_moved_by(
       a[b + 33] = a[b + 33] + dx
       a[b + 34] = a[b + 34] + dy
     }
-    let (own, from) = scene_level_unpack(lvls[l0 + k - k0])
+    let own = owns[l0 + k - k0]
+    let from = froms[l0 + k - k0]
     if own + depth > 0 {
       mv(b + 16)
     }
@@ -2129,24 +2136,15 @@ fn insts_moved_by(
 }
 
 ///|
-/// No level (an instance's clip with no outer: scene_level_pack).
-let scene_no_level : Int = -2048
+/// No level (an instance's clip with no outer: scene_levels_of): below every level there is.
+let scene_no_level : Int = -2147483647
 
 ///|
 /// Instance `k` of the frame, of layer `l`'s own: how far below the level `l` began in its clip's level is, and its
-/// outer's (scene_no_level: none), as one number (scene_level_unpack).
-fn scene_level_pack(l : SceneLayer, k : Int) -> Int {
-  let tag = if k < inst_levels.length() { inst_levels[k] } else { l.clip_lvl * 4096 }
-  let own = tag / 4096 - l.clip_lvl
-  let from = tag % 4096 - 1
-  let from_rel = if from < 0 { scene_no_level } else { from - l.clip_lvl }
-  (own + 2048) * 4096 + (from_rel + 2048)
-}
-
-///|
-/// What scene_level_pack packed: (its clip's, its outer's).
-fn scene_level_unpack(v : Int) -> (Int, Int) {
-  (v / 4096 - 2048, v % 4096 - 2048)
+/// outer's (scene_no_level: none).
+fn scene_levels_of(l : SceneLayer, k : Int) -> (Int, Int) {
+  let (own, from) = if k < inst_levels.length() { (inst_levels[k], inst_froms[k]) } else { (l.clip_lvl, -1) }
+  (own - l.clip_lvl, if from < 0 { scene_no_level } else { from - l.clip_lvl })
 }
 
 ///|
