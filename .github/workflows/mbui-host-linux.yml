@@ -14,6 +14,7 @@ on:
   pull_request:
     paths: &paths
       - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/main.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/sitecheck.mbt"
       - "apps/mbui/mbui/src/streamdemo/**"
@@ -68,7 +69,7 @@ jobs:
           name: mbui-host-linux
           packages: >-
             libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
-            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
+            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth xdotool fonts-noto-cjk fonts-noto-color-emoji
             fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
       - uses: ./.github/actions/mbui-moonbit
@@ -76,6 +77,8 @@ jobs:
         run: scripts/host_contract.sh linux build
       - name: "The host's contract: a run's tape = a Tester's frames"
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux record
+      - name: "Modifiers: X11 keyboard and mouse events carry the held keys to release"
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" bash test/host/linux_modifiers.sh
       - name: "The text's contract: linux_controls = Pango's"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux text
