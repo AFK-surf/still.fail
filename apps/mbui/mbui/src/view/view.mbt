@@ -5709,8 +5709,15 @@ pub fn View::owned_count(self : View) -> Int {
 
 ///|
 /// Lets it go: what it holds first, then its scope stopped (what it was made with: its bindings, its effects, their
-/// cleanups run), what goes with it run, its callback and measure dropped, its index free.
+/// cleanups run), what goes with it run, its callback and measure dropped, its index free. What all that reads is read
+/// by none of what is reading as it goes (a list laying out its blocks, a structure making again): what a node let go
+/// reads as it goes is its own, as Solid's cleanups run untracked.
 fn View::let_go(self : View) -> Unit {
+  @signals.untracked(fn() { self.let_go_now() })
+}
+
+///|
+fn View::let_go_now(self : View) -> Unit {
   guard self.live() is Some(n) else { return }
   // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
   // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
@@ -5722,7 +5729,7 @@ fn View::let_go(self : View) -> Unit {
   let kids = n.kids.map(fn(k) { self.tree.handle(k) })
   n.kids.clear()
   for k in kids {
-    k.let_go()
+    k.let_go_now()
   }
   n.live = false
   match self.tree.modals.search(self.at) {
