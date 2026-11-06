@@ -371,10 +371,13 @@ their room (#4095's `rooms_told`) and its extent held up from below (#4115's `ex
 host shuts and opens of layout reads (`shut_layout_reads`, `reads_own`: #4105, #4109), which the rule below holds
 everywhere. An old view hosted still lays out the old way, its passes counted as owed until it is gone (rule 10).
 
-**Where it stands (2026-11-06).** `Tree::laid_out` lays the tree out once a frame. What comes after that layout only
-places (a column brought to what is to be in sight moves what it holds); a layout more is taken only for what is owed,
-counted by what asked for it (`Tree::owed_passes`: sizes told, once laid out, rows left out told, brought into sight),
-and anything else that marks the tree's layout after its own layout is a fault saying where it marked it. The reads
+**Where it stands (2026-11-06).** `Tree::laid_out` lays the tree out once for each moment it is asked at (a frame's;
+an event's, finding where things are at its own moment: Tree::laid_now). What comes after that layout only places (a
+column brought to what is to be in sight moves what it holds); a layout more is taken only for what is owed, counted by
+what asked for it (`Tree::owed_passes`: sizes told, once laid out, rows left out told, brought into sight, what is under
+the pointer and a bar near it told after placing), and anything else that marks the tree's layout after its own layout
+is a fault saying where it marked it (in a host's run: told, the frame drawn and hit as that layout has it, what was
+marked laid out at the next frame's moment). The reads
 still owed are named so (`owed_laid_size`, `owed_laid_window`, `owed_drawn_window`, `owed_went`, `owed_left_out`,
 `owed_once_laid_out`), counted by detlint's `layout-read-back`; as each is gone its count, and its passes, are.
 
