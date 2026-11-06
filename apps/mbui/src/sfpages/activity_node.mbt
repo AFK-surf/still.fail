@@ -100,16 +100,17 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
     |> ignore
     // (what it does now and how long: folded away to its width's share, cut there, faded)
     line.box(fn(cut) {
-      let inner_w : @signals.Signal[Double] = @signals.signal(0.0, same=fn(x, y) { x == y })
+      // (folding: as wide as its share of what it holds whole, what it holds laid out at its whole width in the same
+      // layout, cut at its end: View::opens_across; open, as wide as what it holds, as its row leaves it)
       cut
       .row(Is(true))
       .min_width(Is(Some(0.0)))
       .shrink(Is(1.0))
       .clips(By(fn() { tail_k() < 1.0 }))
-      .max_width(By(fn() {
+      .opens_across(By(fn() {
         let k = tail_k()
-        if k < 1.0 && inner_w.get() > 0.0 {
-          Some(inner_w.get() * k)
+        if k < 1.0 {
+          Some(k)
         } else {
           None
         }
@@ -118,13 +119,6 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
       |> ignore
       cut.box(fn(inner) {
         inner.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))).min_width(Is(Some(0.0))).shrink(Is(1.0)) |> ignore
-        // (kept at its whole width while it is folded away: what is cut is measured as it was)
-        inner.reacts(fn() { inner.laid_size_told() }, fn(z) {
-          match z {
-            Some((w, _)) if @signals.untracked(tail_k) >= 1.0 => inner_w.set(w)
-            _ => ()
-          }
-        })
         // (its clock after its words, made once they are: what their room is less)
         let clock : Ref[Ref[@view.View?]] = Ref(Ref(None))
         steady_node(inner, row_key, said, fn() { (hot.val)() }, came, fn() {
