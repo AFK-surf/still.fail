@@ -1106,6 +1106,8 @@ pub fn open_item(Source, String, String, String, String?, Double?) -> Unit
 
 pub fn open_link(String) -> Unit
 
+pub fn open_link_from(Source?, String) -> Unit
+
 pub fn open_link_in(Source, String, outside? : Bool, at? : Double?, or_else? : () -> Unit) -> Unit
 
 pub fn open_listed(ChatsView) -> Unit

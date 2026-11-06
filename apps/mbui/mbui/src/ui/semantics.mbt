@@ -115,12 +115,95 @@ pub fn Ctx::hidden_from_semantics(self : Ctx, body : () -> Unit) -> Unit {
 /// What the nodes say they are in the tree read out (Node's `sem`), in the order they were made: the frame's `sems`.
 fn Ctx::sems_found(self : Ctx) -> Unit {
   self.sems.clear()
+  self.sem_ids.clear()
   for i in 0..<self.count {
     match self.nodes[i].sem {
-      Some(s) => self.sems.push({ ..s, node: i })
+      Some(s) => {
+        self.sems.push({ ..s, node: i })
+        if s.id != 0 { self.sem_ids[s.id] = i }
+      }
       None => ()
     }
   }
+}
+
+///|
+/// The last build's node for an old semantic id: an explicit declaration, else a box taking presses by that id.
+fn Ctx::said_node(self : Ctx, id : Int) -> Int? {
+  if id == 0 { return None }
+  match self.sem_ids.get(id) {
+    Some(i) if i >= 0 && i < self.count && self.nodes[i].sem is Some(s) && s.id == id => Some(i)
+    _ => match self.built_ids.get(id) {
+      Some(i) if i >= 0 && i < self.count && self.nodes[i].id == id => Some(i)
+      _ => None
+    }
+  }
+}
+
+///|
+/// Focus is declared by the same registration the keyboard uses, with its layer and host judged at the input.
+/// `built` reads the completed current build for a forward request, before it becomes last_focus_ids.
+fn Ctx::said_focusable(self : Ctx, id : Int, built? : Bool = false) -> Bool {
+  let found = if built {
+    self.focusables.iter().find_first(fn(f) { f.id == id })
+  } else {
+    self.last_focus_ids.get(id)
+  }
+  match found {
+    Some(f) => !self.layer_inert(f.layer, built~) && island_allows(f.island)
+    None => false
+  }
+}
+
+///|
+/// An immediate old action uses the last build's declaration and the current host/layer state. Walking only its
+/// ancestors applies the visibility rules of semantics_old without allocating labels, rectangles or a whole tree.
+/// A business condition inside an old build closure is still that build's; this does not re-run it for input.
+/// `built` is only for focus_built, after this build's declarations and layout are complete.
+fn Ctx::said_action_allowed(self : Ctx, id : Int, action : Action, built? : Bool = false) -> Bool {
+  let node = match self.said_node(id) {
+    Some(i) => i
+    None => return false
+  }
+  let n = self.nodes[node]
+  let declared = match n.sem {
+    Some(s) => {
+      if s.id != id || s.disabled { return false }
+      s.actions.contains(action)
+    }
+    None => {
+      if !self.press_target(node) { return false }
+      action == Activate
+    }
+  }
+  if !declared && !(action == Focus && self.said_focusable(id, built~)) { return false }
+  let modal = self.modal_node(built~)
+  let modal_id = if modal >= 0 { self.layer_of(modal) } else { 0 }
+  let mut in_modal = modal < 0
+  let mut i = node
+  while i >= 0 {
+    let n = self.nodes[i]
+    let p = n.parent
+    if n.sem_hid || n.bones != 0L ||
+      (p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits) ||
+      (n.portal && n.portal_id != 0 && self.layer_inert(n.portal_id, built~)) {
+      return false
+    }
+    match n.sem {
+      Some(s) if s.hidden || !island_allows(n.island) => return false
+      _ => ()
+    }
+    let nested = if n.portal && modal_id != 0 {
+      if built { self.layer_built_in(n.portal_id, modal_id) } else { self.layer_within(n.portal_id, modal_id) }
+    } else {
+      false
+    }
+    if i == modal || nested {
+      in_modal = true
+    }
+    i = p
+  }
+  in_modal
 }
 
 ///|
@@ -132,8 +215,16 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 }
 
 ///|
-/// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
+/// `action` asked of widget `id` by a test or the host's accessibility. Activate runs its press callback in this
+/// event, as a pointer release does; a widget still reading actions in its build sees those in the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
+  // A legacy label may ask for a field built after it. The build's indices are incomplete until published;
+  // finish this forward request when this build publishes its complete declaration, before another input can run.
+  // Host requests outside a build still act now and never gain this deferred path.
+  if building.val && action == Focus {
+    self.asked_actions.push((id, action))
+    return
+  }
   // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
   // one already, that one's, nothing done ahead of it: what it is asked of found and judged as things are then)
   match view_app.val {
@@ -152,8 +243,27 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
 }
 
 ///|
+/// Forward focus requests made while building use this build's complete declarations and layers. They finish
+/// before build callbacks or the host's next input, never in a later frame after a newer focus or key event.
+fn Ctx::focus_built(self : Ctx) -> Unit {
+  if !self.asked_actions.iter().any(fn(a) { a.1 == Focus }) { return }
+  let asked = self.asked_actions.filter(fn(a) { a.1 == Focus })
+  self.asked_actions.retain(fn(a) { a.1 != Focus })
+  let before = self.focus
+  for a in asked {
+    if tree_said_action(a.0, Focus, built=true) { continue }
+    if old_said_allowed(self, a.0, built=true) && self.said_action_allowed(a.0, Focus, built=true) {
+      self.focus_moved(a.0)
+    }
+  }
+  if self.focus != before { self.read_changed("the focus asked of this build") }
+}
+
+///|
 /// `action` asked of `id`, as things are now (Ctx::ask_action).
 fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
+  // The layer that allows this action is the one at the input's moment, including layout omission and return.
+  old_input_brought()
   // (a node of the window's tree's: its own, as a press on it is)
   if tree_said_action(id, action) {
     return
@@ -161,6 +271,23 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   // (an old view's widget: none where the tree keeps that old view from being read out or acted on now: a modal layer
   // of its over it, what holds it hidden, taking no presses, leaving: Tree::acts_on)
   if !old_said_allowed(self, id) {
+    return
+  }
+  // The retained declaration and its current host/layer state are the authority, as for the window tree. A
+  // remembered id alone cannot take focus or revive a hidden, disabled or no longer built control's callback.
+  if (action == Focus || (action == Activate && made_presses.contains(id))) &&
+    !self.said_action_allowed(id, action) {
+    return
+  }
+  if action == Focus {
+    self.focus_moved(id)
+    return
+  }
+  if action == Activate && made_presses.contains(id) {
+    self.clicked.push(id)
+    made_pressed(id)
+    hand_event()
+    input_came()
     return
   }
   self.asked_actions.push((id, action))
@@ -211,6 +338,14 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
 /// The old views' tree (Ctx::semantics_tree, with no window's tree), and the node each of its is said of.
 fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
   let count = self.count
+  // Focus is exposed from the same registration used by the keyboard, as it is for retained nodes. Pages do not
+  // need a second declaration of a focusable control's capability for accessibility.
+  let actions_for = fn(id : Int, declared : Array[Action], disabled : Bool) {
+    if disabled { return [] }
+    let actions = declared.copy()
+    if self.said_focusable(id) && !actions.contains(Focus) { actions.push(Focus) }
+    actions
+  }
   // by node: what said something of it (the last to say wins), -1 none
   let said = Array::make(count, -1)
   for k, s in self.sems {
@@ -252,7 +387,8 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
     // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
     let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
     // (and what a page's bones are made of, wherever it was built: bones.mbt)
-    let parent_hid = (p >= 0 && hid[p]) || n.sem_hid || left || n.bones != 0L
+    let parent_hid = (p >= 0 && hid[p]) || n.sem_hid || left || n.bones != 0L ||
+      (n.portal && n.portal_id != 0 && self.layer_inert(n.portal_id))
     let parent_named = p >= 0 && named[p]
     if p >= 0 && in_modal[p] {
       in_modal[i] = true
@@ -284,7 +420,7 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
         disabled: s.disabled,
         modal: s.modal,
         range: s.range,
-        actions: s.actions,
+        actions: actions_for(s.id, s.actions, s.disabled),
         rect: (n.x, n.y, n.fw, n.fh),
         focused: s.id != 0 && s.id == self.focus,
         hidden,
@@ -316,7 +452,7 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
         disabled: false,
         modal: false,
         range: None,
-        actions: [Activate],
+        actions: actions_for(n.id, [Activate], false),
         rect: (n.x, n.y, n.fw, n.fh),
         focused: n.id == self.focus,
         hidden,
@@ -424,11 +560,7 @@ fn Ctx::press_target(self : Ctx, i : Int) -> Bool {
     return false
   }
   // (nor one whose id a widget said itself by on another node: the widget is the node)
-  for s in self.sems {
-    if s.node == i || s.id == n.id {
-      return false
-    }
-  }
+  if n.sem is Some(_) || self.sem_ids.contains(n.id) { return false }
   n.fw * n.fh < 0.9 * self.width * self.height
 }
 
