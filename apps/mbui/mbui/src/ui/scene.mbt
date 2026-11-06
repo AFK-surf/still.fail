@@ -809,6 +809,10 @@ fn Ctx::push_inst(
   a[b + 58] = 0.0
   a[b + 59] = 0.0
   inst_level_said(self.ninst)
+  // (a band of a shape: kept where it is by the layer being drawn, scene_layers.mbt)
+  if kind == 11.0 {
+    scene_band_drawn(self.ninst)
+  }
   if inst_owners_kept() {
     inst_owned(self.ninst)
   }

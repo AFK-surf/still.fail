@@ -76,6 +76,8 @@ priv struct SceneLayer {
   /// where in its block each layer it holds goes (its instance and its piece there), and which: its block its own
   /// drawing alone, what it holds each by its own block (Ctx::scene_emitted)
   block_refs : Array[(Int, Int, @view.NodeId, Bool)]
+  /// where in the frame the bands it draws as it is drawn are (scene_band_drawn), till its block is kept
+  bands_at : Array[Int]
   /// what it drew that is over everything (a field's handles, Ctx::paint_top): never among its own, a block of its own
   /// put where the window's stack has it (what is over everything raised there, Ctx::raise_tops), who drew each where
   /// that is kept
@@ -1076,6 +1078,13 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
     }
     k - before
   }
+  // (the bands the layers being drawn drew, where they are now)
+  for _, l in scene.layers {
+    for i, k in l.bands_at {
+      l.bands_at[i] = moved_to(k)
+    }
+    l.bands_at.sort()
+  }
   for _, l in scene.layers {
     if l.seen != scene.frame || l.start < 0 || l.count == 0 {
       continue
@@ -1167,9 +1176,6 @@ fn Ctx::scene_copied(
   guard l.seen >= 0 && l.seen >= scene.frame - 1 else { return copy_not(id, "seen \{l.seen}, of \{scene.frame}") }
   guard !l.own_only else { return copy_not(id, "own only") }
   guard !l.each else { return copy_not(id, "drawn each frame") }
-  guard !inst_owners_kept() || l.block_owners is Some(_) else {
-    return copy_not(id, "who drew it not kept")
-  }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked, told \{l.told}") }
   // (what it was drawn in, as it is drawn in now, but where: its key; another, drawn anew)
   let now = scene_held_now(l)
@@ -1305,6 +1311,7 @@ fn Ctx::scene_drawn(
         block_seg_base: 0,
         block_owners: None,
         block_refs: [],
+        bands_at: [],
         tops: [],
         tops_owners: None,
         tops_put: [],
@@ -1445,6 +1452,7 @@ fn scene_drawn_begin(
   l.anchors.clear()
   l.tops.clear()
   l.tops_owners = None
+  l.bands_at.clear()
   l.tops_put.clear()
   l.shown = (0.0, 0.0)
   // (the level it begins in, and where what holds it began: a layer drawn again where its reference is keeps how far
@@ -1795,10 +1803,10 @@ fn owners_cut(n : Int) -> Unit {
 
 ///|
 /// Who drew `run` said of the instances from `at` on, as it was of theirs.
-fn owners_put(run : OwnersRun, at : Int) -> Unit {
+fn owners_put(run : OwnersRun, at : Int, from? : Int = 0, to? : Int = run.owner.length()) -> Unit {
   let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
-  for i in 0..<run.owner.length() {
-    let k = at + i
+  for i in from..<to {
+    let k = at + i - from
     inst_owners.painting = run.owner[i]
     inst_owners.tree_painting = run.tree[i]
     inst_owned(k)
@@ -1910,16 +1918,20 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   } else {
     None
   }
+  let band = Ref(0)
   let take = fn(from : Int, to : Int, sfrom : Int, sto : Int) {
     if to > from {
       self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
-      for k in from..<to {
-        if self.inst[k * inst_size + 5] == 11.0 {
-          l.bands.push(l.block_n + k - from)
+      // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
+      while band.val < l.bands_at.length() && l.bands_at[band.val] < to {
+        if l.bands_at[band.val] >= from {
+          l.bands.push(l.block_n + l.bands_at[band.val] - from)
         }
-        let (own, from) = scene_levels_of(l, k)
-        l.block_own.push(own)
-        l.block_from.push(from)
+        band.val = band.val + 1
+      }
+      for k in from..<to {
+        l.block_own.push(if k < inst_levels.length() { inst_levels[k] } else { l.clip_lvl })
+        l.block_from.push(if k < inst_froms.length() { inst_froms[k] } else { -1 })
       }
       match owners {
         Some(o) => {
@@ -1957,6 +1969,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   }
   take(at, self.ninst, sat, self.segs.length() / 4)
   l.block_seg_base = s0
+  l.bands_at.clear()
   l.block_owners = owners
 }
 
@@ -1985,52 +1998,16 @@ fn Ctx::scene_emitted(
   let off = dx != 0.0 || dy != 0.0
   // (its own pieces in the frame as they were in it as it was drawn: the same in between what it holds)
   let dseg = (seg0 - l.block_seg_base).to_double()
-  let ip = Ref(0)
-  let sp = Ref(0)
-  let band = Ref(0)
-  let put = fn(to : Int, sto : Int) {
-    let n = to - ip.val
-    if n > 0 {
-      while (self.ninst + n + 1) * inst_size > self.inst.length() {
-        self.grow()
-      }
-      let k = self.ninst
-      l.block.blit_to(self.inst, len=n * inst_size, src_offset=ip.val * inst_size, dst_offset=k * inst_size)
-      if off {
-        insts_moved_by(self.inst, k, k + n, dx, dy, l.block_own, l.block_from, ip.val, depth, soft)
-      }
-      while band.val < l.bands.length() && l.bands[band.val] < to {
-        let o = (k + l.bands[band.val] - ip.val) * inst_size
-        self.inst[o + 12] = self.inst[o + 12] + dseg
-        band.val = band.val + 1
-      }
-      match l.block_owners {
-        Some(o) if inst_owners_kept() =>
-          owners_put(
-            {
-              owner: o.owner[ip.val:to].to_owned(),
-              cell: o.cell[ip.val:to].to_owned(),
-              tree: o.tree[ip.val:to].to_owned(),
-              mark: o.mark[ip.val:to].to_owned(),
-              bone: o.bone[ip.val:to].to_owned(),
-            },
-            k,
-          )
-        _ => ()
-      }
-      self.ninst = k + n
-    }
-    for q in (sp.val * 4)..<(sto * 4) {
-      self.segs.push(l.block_segs[q])
-    }
-    ip.val = to
-    sp.val = sto
-  }
+  let mut ip = 0
+  let mut sp = 0
+  let mut band = 0
   // (what it holds moved with it where it is moved or put moved: none of it moved in it nor changed, scene_still)
   let along = off || along
   for r in l.block_refs {
     let (ri, rs, cid, tops) = r
-    put(ri, rs)
+    band = self.scene_block_put(l, ip, ri, sp, rs, band, dseg, dx, dy, depth, soft)
+    ip = ri
+    sp = rs
     // (what is over everything of another's, put here as the window's stack had it as this was drawn)
     if tops {
       match scene.layers.get(cid) {
@@ -2056,7 +2033,7 @@ fn Ctx::scene_emitted(
       None => ()
     }
   }
-  put(l.block_n, l.block_segs.length() / 4)
+  self.scene_block_put(l, ip, l.block_n, sp, l.block_segs.length() / 4, band, dseg, dx, dy, depth, soft) |> ignore
   // (what it drew over everything: put where the window's stack has it next, Ctx::raise_tops)
   if l.tops.length() > 0 {
     scene.tops_now.push(l.id)
@@ -2074,8 +2051,8 @@ fn Ctx::scene_emitted(
 ///|
 /// Instances `k0` to `k1` of `a` moved by (`dx`, `dy`), as drawn where they were: their rects, where they are turned
 /// about, the clips and soft cuts of their own; what they are cut by from outside what moved kept where it is. Which is
-/// which each instance's levels say (`own` and `froms` from `l0`: scene_levels_of, as far below the level the layer it
-/// is of began in), that layer's `depth` levels below the one the first moved began in: a clip of a level below that one
+/// which each instance's levels say (layer `l`'s, as drawn, from its own `l0`: block_own, block_from, below the level
+/// it began in), that layer's `depth` levels below the one the first moved began in: a clip of a level below that one
 /// moves, one of it or above stays; no clip (one reaching past any window: push_unclipped) stays. Where all its soft
 /// cuts are its own (`soft`: nothing outside what moved fades it), those moved too.
 fn insts_moved_by(
@@ -2084,8 +2061,7 @@ fn insts_moved_by(
   k1 : Int,
   dx : Double,
   dy : Double,
-  owns : Array[Int],
-  froms : Array[Int],
+  l : SceneLayer,
   l0 : Int,
   depth : Int,
   soft : Bool,
@@ -2116,8 +2092,10 @@ fn insts_moved_by(
       a[b + 33] = a[b + 33] + dx
       a[b + 34] = a[b + 34] + dy
     }
-    let own = owns[l0 + k - k0]
-    let from = froms[l0 + k - k0]
+    // (its levels as drawn, as far below the one the layer began in)
+    let own = l.block_own[l0 + k - k0] - l.clip_lvl
+    let f = l.block_from[l0 + k - k0]
+    let from = if f < 0 { scene_no_level } else { f - l.clip_lvl }
     if own + depth > 0 {
       mv(b + 16)
     }
@@ -2142,16 +2120,9 @@ fn insts_moved_by(
 }
 
 ///|
-/// No level (an instance's clip with no outer: scene_levels_of): below every level there is.
+/// No level (an instance's clip with no outer: scene_layers block_from): below every level there is.
 let scene_no_level : Int = -2147483647
 
-///|
-/// Instance `k` of the frame, of layer `l`'s own: how far below the level `l` began in its clip's level is, and its
-/// outer's (scene_no_level: none).
-fn scene_levels_of(l : SceneLayer, k : Int) -> (Int, Int) {
-  let (own, from) = if k < inst_levels.length() { (inst_levels[k], inst_froms[k]) } else { (l.clip_lvl, -1) }
-  (own - l.clip_lvl, if from < 0 { scene_no_level } else { from - l.clip_lvl })
-}
 
 ///|
 /// Whether nothing of what layer `l` holds changed nor moved in it, nor draws over everything: all of it put where `l`
@@ -2236,7 +2207,6 @@ fn scene_kept_but_place(l : SceneLayer) -> Bool {
   l.seen >= scene.frame - 1 &&
   !l.own_only &&
   !l.each &&
-  (!inst_owners_kept() || l.block_owners is Some(_)) &&
   !l.told &&
   !scene.marked.contains(l.id)
 }
@@ -2298,7 +2268,6 @@ fn scene_copyable(l : SceneLayer) -> Bool {
   l.seen >= scene.frame - 1 &&
   !l.own_only &&
   !l.each &&
-  (!inst_owners_kept() || l.block_owners is Some(_)) &&
   !l.told &&
   !scene.marked.contains(l.id) &&
   !scene.moved_layers.contains(l.id)
@@ -2379,6 +2348,10 @@ fn Ctx::scene_tops_taken(self : Ctx, l : SceneLayer, from : Int) -> Unit {
       }
       None => Some(r)
     }
+  }
+  // (no band of its own among them)
+  while l.bands_at.length() > 0 && l.bands_at[l.bands_at.length() - 1] >= from {
+    l.bands_at.pop() |> ignore
   }
   self.ninst = from
   if scene.tops_now.last() != Some(l.id) {
@@ -2478,4 +2451,60 @@ fn scene_own_place_same(tree : @view.Tree, l : SceneLayer) -> Bool {
   tree.stretch_of(id) == e.stretch &&
   tree.over_scrim_of(id) == e.over_scrim &&
   tree.glyphs_of(id) is None == e.glyphs is None
+}
+
+///|
+/// Layer `l`'s own instances `from` to `to` of its block and its pieces `sfrom` to `sto` put next in the frame, a run
+/// at once: moved by (`dx`, `dy`) where it is put moved (insts_moved_by, `depth` and `soft` its), its bands from
+/// `band` on told where its pieces are now (`dseg` on), who drew each where that is kept. The band next after them.
+fn Ctx::scene_block_put(
+  self : Ctx,
+  l : SceneLayer,
+  from : Int,
+  to : Int,
+  sfrom : Int,
+  sto : Int,
+  band : Int,
+  dseg : Double,
+  dx : Double,
+  dy : Double,
+  depth : Int,
+  soft : Bool,
+) -> Int {
+  let n = to - from
+  let mut band = band
+  if n > 0 {
+    while (self.ninst + n + 1) * inst_size > self.inst.length() {
+      self.grow()
+    }
+    let k = self.ninst
+    l.block.blit_to(self.inst, len=n * inst_size, src_offset=from * inst_size, dst_offset=k * inst_size)
+    if dx != 0.0 || dy != 0.0 {
+      insts_moved_by(self.inst, k, k + n, dx, dy, l, from, depth, soft)
+    }
+    while band < l.bands.length() && l.bands[band] < to {
+      let o = (k + l.bands[band] - from) * inst_size
+      self.inst[o + 12] = self.inst[o + 12] + dseg
+      band = band + 1
+    }
+    match l.block_owners {
+      Some(o) if inst_owners_kept() => owners_put(o, k, from~, to~)
+      _ => ()
+    }
+    self.ninst = k + n
+  }
+  for q in (sfrom * 4)..<(sto * 4) {
+    self.segs.push(l.block_segs[q])
+  }
+  band
+}
+
+///|
+/// A band of a shape drawn as instance `k` (kind 11), in the layer being drawn: where its block keeps it, its first
+/// piece told where its pieces are as it is put (Ctx::scene_block_put).
+fn scene_band_drawn(k : Int) -> Unit {
+  match scene.drawing {
+    Some(l) => l.bands_at.push(k)
+    None => ()
+  }
 }

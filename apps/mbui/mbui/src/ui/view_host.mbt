@@ -2416,6 +2416,7 @@ fn Ctx::view_blit(
     }
     if kind == 11.0 {
       s[b + 12] = s[b + 12] + seg_base
+      scene_band_drawn(self.ninst + i)
     }
     // (a box's, a shadow's, frosted glass's border colour, liquid glass's opacity: faded with it; a glyph's 12-15 are
     // where it is in the atlas)
