@@ -143,8 +143,6 @@ CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE ta
 CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
 -- The first person to answer a card is found by its entry number, without reading intervening agent messages.
 CREATE INDEX IF NOT EXISTS entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
--- The login cards (store.ts closeLoginCards, as a login ends): without it each read every entry of the station's.
-CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%';
 CREATE TABLE IF NOT EXISTS deliveries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
@@ -517,6 +515,8 @@ export function addClientColumn(db: DatabaseSync): void {
   if (!has(db, "entries", "options")) db.exec("ALTER TABLE entries ADD COLUMN options TEXT");
   // A message's card; an options card is kept in `options` too, which stations from before cards read.
   if (!has(db, "entries", "card")) db.exec("ALTER TABLE entries ADD COLUMN card TEXT");
+  // A database from before cards has no card column when SCHEMA runs. Make the login lookup only after adding it.
+  db.exec(`CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%'`);
   // How a session ran before a notice of its change and how it runs after (rows.ts RunChange); the `merged` view has no
   // need of it.
   if (!has(db, "entries", "change")) db.exec("ALTER TABLE entries ADD COLUMN change TEXT");
