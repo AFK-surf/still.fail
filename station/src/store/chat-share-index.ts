@@ -1,6 +1,6 @@
 // The share table keeps lapsed grants so another workspace can be told why access ended. Prepare their deadlines in
 // bounded batches; an older station's writes only journal keys and never parse a chat's shares in its transaction.
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { type Json, XSHARE_IDLE_MS, shareLive, toChatShare } from "./rows.ts";
 
 const VERSION = 1;
@@ -8,6 +8,16 @@ const EXISTS = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cha
 const DIRTY_LIMIT = 64;
 const SHARE_CHARS_LIMIT = 16_384;
 const SHARE_TARGET_LIMIT = 16;
+// Store reads are frequent; compiling the readiness and lookup statements on each one would penalize stations with
+// few shares even before an index is needed. A connection keeps only these fixed statements for its own lifetime.
+const statements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+function statement(db: DatabaseSync, sql: string): StatementSync {
+  let cached = statements.get(db);
+  if (cached === undefined) { cached = new Map(); statements.set(db, cached); }
+  let result = cached.get(sql);
+  if (result === undefined) { result = db.prepare(sql); cached.set(sql, result); }
+  return result;
+}
 const dirty = (key: string) => `INSERT INTO chat_share_dirty (session)
   SELECT ${key} WHERE ${key} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM chat_share_dirty d WHERE d.session = ${key});`;
 const conflicts = `INSERT INTO chat_share_dirty (session)
@@ -36,7 +46,7 @@ export const SHARE_NEXT_TIME = `SELECT t.used FROM chat_share_targets t INDEXED 
 export const SHARE_LAPSED_WORKSPACE = `SELECT 1 FROM chat_share_targets t INDEXED BY chat_share_target_workspace
   WHERE t.workspace = ? AND t.used <= ? AND ${CLEAN} LIMIT 1`;
 
-export const hasChatShareIndex = (db: DatabaseSync) => db.prepare(EXISTS).get() !== undefined;
+export const hasChatShareIndex = (db: DatabaseSync) => statement(db, EXISTS).get() !== undefined;
 
 export function installChatShareIndex(db: DatabaseSync): void {
   if (hasChatShareIndex(db)) {
@@ -72,7 +82,7 @@ export function installChatShareIndex(db: DatabaseSync): void {
 }
 
 export function chatShareIndexReady(db: DatabaseSync): boolean {
-  return hasChatShareIndex(db) && db.prepare(`SELECT 1 FROM chat_share_index_meta WHERE id = 1 AND version = ? AND phase = 1
+  return hasChatShareIndex(db) && statement(db, `SELECT 1 FROM chat_share_index_meta WHERE id = 1 AND version = ? AND phase = 1
     AND NOT EXISTS (SELECT 1 FROM chat_share_dirty LIMIT 1)`).get(VERSION) !== undefined;
 }
 
@@ -135,15 +145,15 @@ function snapshot<T>(db: DatabaseSync, now: number, read: () => T): T | null {
   if (!Number.isSafeInteger(now) || !Number.isSafeInteger(now - XSHARE_IDLE_MS) || !hasChatShareIndex(db)) return null;
   db.exec("BEGIN");
   try {
-    const prepared = db.prepare("SELECT 1 FROM chat_share_index_meta WHERE id = 1 AND version = ? AND phase = 1").get(VERSION);
-    const dirtyKeys = db.prepare(SHARE_DIRTY).all(DIRTY_LIMIT + 1) as { session: string }[];
+    const prepared = statement(db, "SELECT 1 FROM chat_share_index_meta WHERE id = 1 AND version = ? AND phase = 1").get(VERSION);
+    const dirtyKeys = statement(db, SHARE_DIRTY).all(DIRTY_LIMIT + 1) as { session: string }[];
     // An old SQLite table can contain a null primary key. Preserve the old answer until it is removed.
-    const nullKey = db.prepare("SELECT 1 FROM chat_shares WHERE session IS NULL LIMIT 1").get();
-    const uncertain = db.prepare("SELECT 1 FROM chat_share_uncertain LIMIT 1").get();
+    const nullKey = statement(db, "SELECT 1 FROM chat_shares WHERE session IS NULL LIMIT 1").get();
+    const uncertain = statement(db, "SELECT 1 FROM chat_share_uncertain LIMIT 1").get();
     if (prepared === undefined || dirtyKeys.length > DIRTY_LIMIT || nullKey !== undefined || uncertain !== undefined) {
       db.exec("COMMIT"); return null;
     }
-    const source = db.prepare("SELECT * FROM chat_shares WHERE session = ?");
+    const source = statement(db, "SELECT * FROM chat_shares WHERE session = ?");
     for (const { session } of dirtyKeys) {
       const row = source.get(session) as Json | undefined;
       if (row !== undefined && shareValues(row) === null) { db.exec("COMMIT"); return null; }
@@ -155,14 +165,14 @@ function snapshot<T>(db: DatabaseSync, now: number, read: () => T): T | null {
 }
 
 export function liveChatShareRows(db: DatabaseSync, now: number): Json[] | null {
-  return snapshot(db, now, () => db.prepare(SHARE_LIVE).all(now - XSHARE_IDLE_MS) as Json[]);
+  return snapshot(db, now, () => statement(db, SHARE_LIVE).all(now - XSHARE_IDLE_MS) as Json[]);
 }
 
 export function dueChatShareRows(db: DatabaseSync, since: number, now: number): { rows: Json[]; next: number | null } | null {
   if (!Number.isSafeInteger(since) || !Number.isSafeInteger(since - XSHARE_IDLE_MS)) return null;
   return snapshot(db, now, () => {
-    const rows = db.prepare(SHARE_DUE).all(since - XSHARE_IDLE_MS, now - XSHARE_IDLE_MS) as Json[];
-    const earliest = db.prepare(SHARE_NEXT_TIME).get(now - XSHARE_IDLE_MS) as { used: number } | undefined;
+    const rows = statement(db, SHARE_DUE).all(since - XSHARE_IDLE_MS, now - XSHARE_IDLE_MS) as Json[];
+    const earliest = statement(db, SHARE_NEXT_TIME).get(now - XSHARE_IDLE_MS) as { used: number } | undefined;
     return { rows, next: earliest === undefined ? null : earliest.used + XSHARE_IDLE_MS };
   });
 }
@@ -172,9 +182,9 @@ export function lapsedChatShareWorkspaces(db: DatabaseSync, workspaces: readonly
   return snapshot(db, now, () => {
     const found = new Set<string>();
     const wanted = new Set(workspaces);
-    const lookup = db.prepare(SHARE_LAPSED_WORKSPACE);
+    const lookup = statement(db, SHARE_LAPSED_WORKSPACE);
     for (const workspace of wanted) if (lookup.get(workspace, now - XSHARE_IDLE_MS) !== undefined) found.add(workspace);
-    for (const row of db.prepare(OVERLAY).all() as Json[]) for (const t of toChatShare(row).to)
+    for (const row of statement(db, OVERLAY).all() as Json[]) for (const t of toChatShare(row).to)
       if (wanted.has(t.workspace) && !shareLive(t, now)) found.add(t.workspace);
     return found;
   });
