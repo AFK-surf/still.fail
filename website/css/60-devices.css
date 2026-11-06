@@ -123,18 +123,21 @@
 .scrolly .dv-swipe { display: none; }
 .scrolly #devices { content-visibility: visible; }
 .scrolly .dv-show { display: block; height: 560vh; }
-.dv-stage { position: sticky; top: calc(var(--nav) + 16px); height: calc(100vh - var(--nav) - 32px); border-radius: 24px; overflow: hidden; isolation: isolate;
-  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 9fr); color: var(--dv-fg, var(--ink));
+/* The words take page columns 2-8 (7U, never under 340 px); the pictures get the rest, columns 9-23, and the full height.
+   svh: the stage's foot (rail, links) stays above Safari's toolbar on iPad; vh only where svh is unknown. */
+.dv-stage { position: sticky; top: calc(var(--nav) + 16px); height: calc(100vh - var(--nav) - 32px); height: calc(100svh - var(--nav) - 32px);
+  border-radius: 24px; overflow: hidden; isolation: isolate;
+  display: grid; grid-template-columns: max(calc(7 * var(--u)), 340px) minmax(0, 1fr); color: var(--dv-fg, var(--ink));
   background: radial-gradient(circle, rgba(255,255,255,.26) 1.1px, transparent 1.6px) 0 0 / 12px 12px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); }
 .dv-ink { position: absolute; inset: 0; z-index: -1; opacity: 0; background: radial-gradient(circle, rgba(255,255,255,.08) 1.1px, transparent 1.6px) 0 0 / 12px 12px, var(--ink); }
-.dv-copy { position: relative; display: flex; flex-direction: column; padding: clamp(32px, 3.6vw, 64px); min-width: 0; }
+.dv-copy { position: relative; display: flex; flex-direction: column; padding: clamp(32px, 3.6vw, 64px); padding-right: 16px; min-width: 0; }
 .dv-no { font-family: var(--mono); font-size: 14px; color: var(--dv-mut, var(--brand-ink)); }
 .dv-no b { font-weight: 500; color: var(--dv-fg, var(--ink)); font-size: 15px; }
 .dv-steps { display: grid; margin-top: clamp(24px, 4vh, 56px); }
 .dv-step { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 14px; }
 .dv-step:not([data-i="0"]) { opacity: 0; visibility: hidden; }
 .dv-step .eyebrow { color: var(--dv-fg, var(--ink)); font-family: var(--mono); font-weight: 400; font-size: 13px; }
-.dv-step h3 { font-size: clamp(30px, 3vw, 48px); line-height: 1.08; letter-spacing: -.025em; }
+.dv-step h3 { font-size: clamp(30px, 2.8vw, 46px); line-height: 1.08; letter-spacing: -.025em; text-wrap: balance; }
 .dv-step h3 .zh { font-feature-settings: "halt"; }
 .dv-step p { color: var(--dv-mut, var(--brand-ink)); font-size: var(--t-body); max-width: 26em; text-wrap: pretty; }
 .dv-rail { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
@@ -149,8 +152,10 @@
 .dv-bar { height: 2px; margin-top: 14px; background: rgba(26,27,30,.14); border-radius: 2px; overflow: hidden; }
 .dv-bar i { display: block; height: 100%; background: var(--dv-fg, var(--ink)); transform-origin: left; transform: scaleX(0); }
 .dv-view { position: relative; min-width: 0; }
-/* The scene is drawn at 900 × 720 and scaled to fit (main.js sets --k); devices move inside it by transforms only. */
-.dv-scene { position: absolute; left: 50%; top: 50%; width: 900px; height: 720px; transform: translate(-50%, -50%) scale(var(--k, 1)); }
+/* The scene is drawn at 900 × 720; main.js scales it (--k) so what the devices actually cover fills the view below the
+   tag row, and shifts it (--ox, --oy) to centre that area. Devices move inside it by transforms only. */
+.dv-scene { position: absolute; left: 50%; top: 50%; width: 900px; height: 720px;
+  transform: translate(-50%, -50%) translate(var(--ox, 0px), var(--oy, 0px)) scale(var(--k, 1)); }
 .dv-scene .d { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
 .dv-scene .d-duo { width: 440px; transform: translate(230px, 156px); }
 .dv-scene .d-android, .dv-scene .d-laptop, .dv-scene .d-slack { opacity: 0; }

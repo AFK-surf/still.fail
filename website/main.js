@@ -133,21 +133,29 @@
   // The bar takes the tone of the band behind it, so its material reads as part of that band: dark over Ink, paper
   // elsewhere. Two 1 px lines decide: the bar's middle (data-under, what is behind it) and its lower edge (data-below,
   // what meets it; where the two differ, the band's own boundary is the edge and the fade is dropped).
-  // An observer keeps the one or two bands near the top (WebKit's root for a pixel-thin margin is not innerHeight, so
-  // the lines themselves are measured), and only those are measured as the page scrolls.
+  // The lines are measured as the page scrolls, since they sit a few pixels from a band's edge: the search starts from
+  // the band found last, so a frame reads one or two boxes. Above the first band (the bar's own place at the top)
+  // there is no tone, and the bar is paper.
   const bands = $$("main > section[data-tone], footer[data-tone]");
-  const near = new Set();
-  let barH = nav.offsetHeight;
-  const at = (y) => { for (const b of near) { const r = b.getBoundingClientRect(); if (r.top <= y && r.bottom > y) return b.dataset.tone; } };
-  const setTone = (k, t) => { if (t && nav.dataset[k] !== t) nav.dataset[k] = t; };
+  let barH = nav.offsetHeight, bi = 0;
+  function at(y) {
+    let i = bi;
+    while (i > 0 && bands[i].getBoundingClientRect().top > y) i--;
+    while (i < bands.length - 1 && bands[i].getBoundingClientRect().bottom <= y) i++;
+    bi = i;
+    const r = bands[i].getBoundingClientRect();
+    return r.top <= y && r.bottom > y ? bands[i].dataset.tone : null;
+  }
+  const setTone = (k, t) => { if (t == null) delete nav.dataset[k]; else if (nav.dataset[k] !== t) nav.dataset[k] = t; };
   const tone = () => { setTone("under", at(barH / 2)); setTone("below", at(barH)); };
-  const nearIO = new IntersectionObserver((entries) => {
-    for (const e of entries) e.isIntersecting ? near.add(e.target) : near.delete(e.target);
-    tone();
-  }, { rootMargin: "0px 0px -70% 0px" });
-  for (const b of bands) nearIO.observe(b);
-  addEventListener("scroll", tone, { passive: true });
-  addEventListener("resize", () => { barH = nav.offsetHeight; tone(); }, { passive: true });
+  // Once more after the scroll settles, and when the bands' heights settle (content-visibility), which moves them
+  // without a scroll event.
+  let toneT;
+  addEventListener("scroll", () => { tone(); clearTimeout(toneT); toneT = setTimeout(tone, 120); }, { passive: true });
+  // The bar's height is read when its row is laid out (WebKit can run this before the imported sheets have styled it).
+  new ResizeObserver(() => { barH = nav.offsetHeight; tone(); }).observe($(".w", nav));
+  new ResizeObserver(() => tone()).observe($("main"));
+  tone();
   new ResizeObserver(() => placeInd(false)).observe(sheet);
   document.fonts?.ready.then(() => placeInd(false));
   setLang(root.dataset.lang === "en" ? "en" : "zh", false);
@@ -306,9 +314,17 @@
     const L = (n) => $(`.dv-links .l${n}`, scene);
     const navH = () => $("#nav").offsetHeight;
 
-    // The scene is drawn at 900 × 720 and scaled to fit what is left of the stage beside the words, with a margin so no
-    // device ever touches the stage's edge.
-    const fit = () => scene.style.setProperty("--k", Math.min((view.clientWidth - 72) / 900, (view.clientHeight - 96) / 720, 1.15).toFixed(3));
+    // The scene is drawn at 900 × 720, but across the six steps the devices only ever cover BOX (scene units). That box,
+    // not the whole drawing, is scaled to fill the view below the tag row, with a margin so no device touches an edge.
+    const BOX = { x: 80, y: 32, w: 796, h: 572 }, tagRow = $(".dv-tags", view);
+    const fit = () => {
+      const W = view.clientWidth, H = view.clientHeight, top = tagRow.offsetTop + tagRow.offsetHeight + 16, side = 32, foot = 32;
+      const k = Math.min((W - 2 * side) / BOX.w, (H - top - foot) / BOX.h, 1.3);
+      // Shift so the box's centre lands on the free area's centre (the scene scales about its own centre, 450 × 360).
+      scene.style.setProperty("--k", k.toFixed(3));
+      scene.style.setProperty("--ox", `${((450 - BOX.x - BOX.w / 2) * k).toFixed(1)}px`);
+      scene.style.setProperty("--oy", `${(top + (H - top - foot) / 2 - H / 2 + (360 - BOX.y - BOX.h / 2) * k).toFixed(1)}px`);
+    };
     fit();
     ScrollTrigger.addEventListener("refreshInit", fit);
 
