@@ -41,7 +41,7 @@ import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
 import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
 import { Lines } from "../mesh.ts";
-import { type Entry } from "../lock.ts";
+import { type Entry, entryHash } from "../lock.ts";
 import { isPerson, personOf } from "../personal-lock.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../pair.ts";
 import * as format from "../format.ts";
@@ -49,6 +49,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
+import { Priority } from "../sync/scheduler.ts";
 import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -200,6 +201,34 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
   return { places, who };
 }
 
+/// The requested workspaces this app knows about whose cloud view names a lock it has not read yet. If its held chain
+/// already contains that head, it is further ahead than the view and does not need to wait for it.
+function locksToRead(inner: Inner, hello: J): string[] {
+  const workspaces = new Set<string>();
+  for (const w of arr(get(hello, "workspaces"))) {
+    const ws = str(get(w, "ws"));
+    if (ws === null || inner.workspaces.owner(ws) === null) continue;
+    const v = view(inner, ws);
+    if (!isObject(v) || !("lock" in v)) continue;
+    const hash = str(get(v.lock, "hash")) ?? "";
+    const h = held(inner, ws);
+    if (hash === (h?.head?.hash ?? "")) continue;
+    try {
+      if (hash !== "" && h?.entries.some((e) => entryHash(e) === hash)) continue;
+    } catch {
+      // An incomplete held chain cannot prove it is ahead of the cloud view.
+    }
+    workspaces.add(ws);
+  }
+  return [...workspaces];
+}
+
+/// Workspaces whose newer lock has not been read cannot yet be used to decide who may approve.
+function withoutLocks(hello: J, excluded: string[]): J {
+  const blocked = new Set(excluded);
+  return { ...hello, workspaces: arr(get(hello, "workspaces")).filter((w) => !blocked.has(str(get(w, "ws")) ?? "")) };
+}
+
 /// One new device, met: what it asks checked, its code shown until it is typed, turned away, or too late.
 export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
@@ -208,13 +237,34 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     // An app can accept a connection while its kept signing key is still being read at startup. That is not a refusal:
     // wait for the read, unless the new device goes away, before deciding whether this device may approve it.
     const loading = signerLoading(inner);
+    const stale = locksToRead(inner, hello.value);
+    const initial = loading === null ? placesFor(inner, withoutLocks(hello.value, stale), peer, me) : null;
+    const initialPersonal = initial?.places.length === 0 ? personalAsked(inner, hello.value) : null;
+    const needLock = initial === null || (initial.places.length === 0 && initialPersonal === null);
     let receive = () => d.next();
-    if (loading !== null && arr(get(hello.value, "workspaces")).length > 0) {
+    let asked = initial;
+    if ((loading !== null && arr(get(hello.value, "workspaces")).length > 0) || (needLock && stale.length > 0)) {
       // A host stream read may continue after its waiting effect is interrupted. Keep the same read alive and use its
       // result as the first message after showing the code, so it cannot consume that message behind another read.
       const pending = yield* Effect.forkChild(Effect.orElseSucceed(d.next(), () => null));
-      const stillHere = yield* Effect.raceFirst(Effect.as(loading, true), Effect.as(Fiber.join(pending), false));
-      if (!stillHere) return;
+      const ready = Effect.gen(function* () {
+        if (loading !== null) yield* loading;
+        const stale = locksToRead(inner, hello.value);
+        let places = placesFor(inner, withoutLocks(hello.value, stale), peer, me);
+        // A newer lock is already known but still loading. If no other workspace can answer now, wait for that read:
+        // a device just approved in the newer lock can then show this try's code. A ready workspace can proceed now.
+        if (signerOf(inner) !== null && places.places.length === 0 && personalAsked(inner, hello.value) === null) {
+          const failed: string[] = [];
+          yield* Effect.forEach(stale, (ws) =>
+            Effect.map(Effect.result(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws))), (r) => { if (r._tag === "Failure") failed.push(ws); }),
+          { concurrency: "unbounded", discard: true });
+          places = placesFor(inner, withoutLocks(hello.value, failed), peer, me);
+        }
+        return places;
+      });
+      const result = yield* Effect.raceFirst(Effect.map(ready, (places) => ({ places }) as const), Effect.as(Fiber.join(pending), { away: true } as const));
+      if ("away" in result) return;
+      asked = result.places;
       let first = true;
       receive = () => {
         if (!first) return d.next();
@@ -222,7 +272,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
         return Fiber.join(pending);
       };
     }
-    const asked = placesFor(inner, hello.value, peer, me);
+    asked ??= placesFor(inner, hello.value, peer, me);
     const { places } = asked;
     // Into the person's own lock, where this device is on it (it signs it in with its own key, the person asked).
     const personal = places.length === 0 ? personalAsked(inner, hello.value) : null;
