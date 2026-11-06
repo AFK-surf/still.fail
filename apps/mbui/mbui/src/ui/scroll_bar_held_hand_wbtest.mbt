@@ -5,6 +5,14 @@
 // drew is said with it: where the thumb was drawn before the press, by each history.
 
 ///|
+/// How long after a press its pointer is moved (and after that, moved again).
+let hand_move_ms : Double = 10.0
+
+///|
+/// When a thumb is held, in the tests that hold it through a change.
+let hand_held_at : Double = 316.0
+
+///|
 fn hand_bar() -> @view.ScrollBar {
   {
     drawn: fn() { true },
@@ -111,7 +119,7 @@ fn hand_press(t : Tester, s : @view.Scroll, p : (Double, Double), at : Double, d
   t.advance(at - t.time())
   t.touch_at(0, p.0, p.1, at)
   let took = hand_holds_thumb()
-  t.advance(10.0)
+  t.advance(hand_move_ms)
   t.touch_at(1, p.0 + dx, p.1 + dy, at + 10.0)
   let kept = hand_holds_thumb()
   let moved = s.at(tree) - from
@@ -187,17 +195,17 @@ test "across, in by its padding: held, the padding changed, the next move as one
     let pad = @signals.signal(pad0, same=fn(a, b) { a == b })
     let (t, s) = hand_window(fn() { pad.get() })
     let tree = view_tree().unwrap()
-    t.advance(316.0 - t.time())
+    t.advance(hand_held_at - t.time())
     t.touch_at(0, p.0, p.1, 316.0)
     let took = hand_holds_thumb()
-    t.advance(10.0)
+    t.advance(hand_move_ms)
     t.touch_at(1, p.0 + 10.0, p.1, 326.0)
     pad.set(40.0)
     if frame {
       t.frame_at(330.0)
     }
     let from = s.at(tree)
-    t.advance(336.0 - t.time())
+    t.advance(hand_held_at + 2.0 * hand_move_ms - t.time())
     t.touch_at(1, p.0 + 20.0, p.1, 336.0)
     let kept = hand_holds_thumb()
     let moved = s.at(tree) - from
