@@ -150,7 +150,6 @@ pub fn sheet_node(
       .shrink(Is(1.0))
       .clips(Is(true))
       .presses(Is(true))
-      .on_press(fn() {  })
       .says(By(fn() { Some(@view.said(Dialog, label=label())) }))
       .offset(Painted(fn(laid) {
         let h = dmax(0.0, laid.size(sheet).map(fn(s) { s.1 }).unwrap_or(0.0) - under)
@@ -237,6 +236,8 @@ pub fn sheet_node(
           _ => ()
         }
       }) |> ignore
+      // Empty parts of the surface consume a press without making the dialog itself an actionable control.
+      sheet.box(fn(shield) { shield.over(Is(true)).on_press(fn() {  }) |> ignore }) |> ignore
       // A tap on the grabber toggles detents. It lies under the caller's content, so controls there keep their taps.
       if grows && draggable {
         sheet.box(fn(grip) {

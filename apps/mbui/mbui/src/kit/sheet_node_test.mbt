@@ -1,4 +1,22 @@
 ///|
+let sheet_test_late_ms : Double = 500.0
+
+///|
+let sheet_test_100_ms : Double = 100.0
+
+///|
+let sheet_test_150_ms : Double = 150.0
+
+///|
+let sheet_test_250_ms : Double = 250.0
+
+///|
+let sheet_test_300_ms : Double = 300.0
+
+///|
+let sheet_test_step_ms : Double = 30.0
+
+///|
 struct NodeSheetCase {
   open : @signals.Signal[Bool]
   content : @signals.Signal[Double]
@@ -44,7 +62,7 @@ fn node_sheet_case(tall? : Double = 0.0, grows? : Bool = false, under? : Double 
 ///|
 test "tree sheet fits its content, changes with it, and reports its visible height including the system inset" {
   let (t, k) = node_sheet_case(under=42.0)
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_eq(k.shown.val, 1)
   assert_eq(k.heights.last(), Some(225.0))
   let sheet = k.surface.val.unwrap()
@@ -62,8 +80,9 @@ test "tree sheet fits its content, changes with it, and reports its visible heig
 ///|
 test "tree sheet traps the page, returns focus and keeps only its picture until its exit is over" {
   let (t, k) = node_sheet_case()
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_true(t.query(@ui.Role::Button, label="Page") is None)
+  assert_false(t.query(@ui.Role::Dialog, label="Sheet").unwrap().actions.contains(Activate))
   t.click(@ui.Role::Button, label="Inside")
   assert_eq(k.pressed.val, 1)
   t.tap(10.0, 10.0)
@@ -71,7 +90,7 @@ test "tree sheet traps the page, returns focus and keeps only its picture until 
   assert_eq(k.gone.val, 0)
   assert_true(t.query(@ui.Role::Button, label="Page") is Some(_))
   assert_true(t.query(@ui.Role::Button, label="Inside") is None)
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_eq(k.gone.val, 1)
 }
 
@@ -79,11 +98,11 @@ test "tree sheet traps the page, returns focus and keeps only its picture until 
 test "tree sheet: Escape and system back dismiss the open sheet" {
   for back in [false, true] {
     let (t, k) = node_sheet_case()
-    t.run_for(500.0)
+    t.run_for(sheet_test_late_ms)
     if back { t.back() } else { t.press("Escape") }
     assert_false(k.open.get(), msg="back=\{back}")
     assert_eq(t.backs_out(), 0)
-    t.run_for(500.0)
+    t.run_for(sheet_test_late_ms)
     assert_eq(k.gone.val, 1)
   }
 }
@@ -91,16 +110,13 @@ test "tree sheet: Escape and system back dismiss the open sheet" {
 ///|
 test "tree sheet drag: a short drag returns, a long drag dismisses" {
   let (t, k) = node_sheet_case()
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   let y = k.surface.val.unwrap().rect().1 + 10.0
-  let target = @ui.view_tree().unwrap().target_at(190.0, y)
-  let is_sheet = target == @view.Target::Pressed(k.surface.val.unwrap().id())
-  let target_id = match target { Dragged(id) | Pressed(id) | Hosted(id) | TopRow(id) | Off(id) => id.at; Nothing => -1 }
-  let under = @ui.view_tree().unwrap().under(190.0, y).map(fn(id) { id.at })
-  assert_true(is_sheet, msg="target id=\{target_id}, under=\{under}, sheet id=\{k.surface.val.unwrap().id().at}, sheet=\{k.surface.val.unwrap().rect()}")
+  t.tap(190.0, y)
+  assert_true(k.open.get())
   t.drag(190.0, y, 190.0, y + 40.0)
-  t.run_for(500.0)
-  assert_true(k.open.get(), msg="sheet target=\{is_sheet}, sheet=\{k.surface.val.unwrap().rect()}, heights=\{k.heights}")
+  t.run_for(sheet_test_late_ms)
+  assert_true(k.open.get(), msg="sheet=\{k.surface.val.unwrap().rect()}, heights=\{k.heights}")
   assert_eq(k.heights.last(), Some(225.0))
   t.drag(190.0, y, 190.0, y + 120.0)
   assert_false(k.open.get())
@@ -109,7 +125,7 @@ test "tree sheet drag: a short drag returns, a long drag dismisses" {
 ///|
 test "tree sheet with a height share uses the window and excludes its extension from the reported height" {
   let (t, k) = node_sheet_case(tall=0.5, under=42.0)
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_eq(k.heights.last(), Some(422.0))
   assert_eq(k.surface.val.unwrap().rect().1, 422.0)
 }
@@ -117,27 +133,27 @@ test "tree sheet with a height share uses the window and excludes its extension 
 ///|
 test "tree sheet detents: the grabber toggles the sheet and the reported stack height stays its requested height" {
   let (t, k) = node_sheet_case(tall=0.55, grows=true)
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   let y = k.surface.val.unwrap().rect().1 + 10.0
   t.tap(190.0, y)
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_true((k.surface.val.unwrap().rect().3 - 844.0 * 0.94).abs() < 0.01)
   assert_true((k.heights.last().unwrap() - 844.0 * 0.55).abs() < 0.01)
   t.tap(190.0, k.surface.val.unwrap().rect().1 + 10.0)
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_true((k.surface.val.unwrap().rect().3 - 844.0 * 0.55).abs() < 0.01)
 }
 
 ///|
 test "tree sheet sent farther down while leaving stays until the new way is over" {
   let (t, k) = node_sheet_case()
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   k.open.set(false)
-  t.run_for(100.0)
+  t.run_for(sheet_test_100_ms)
   k.sinks.set(800.0)
-  t.run_for(250.0)
+  t.run_for(sheet_test_250_ms)
   assert_eq(k.gone.val, 0)
-  t.run_for(300.0)
+  t.run_for(sheet_test_300_ms)
   assert_eq(k.gone.val, 1)
 }
 
@@ -145,13 +161,13 @@ test "tree sheet sent farther down while leaving stays until the new way is over
 fn sheet_moments(frames : Bool) -> (Double, Double, Int) {
   let (t, k) = node_sheet_case()
   if frames {
-    for _ in 0..<5 { t.run_for(30.0) }
-  } else { t.run_for(150.0) }
+    for _ in 0..<5 { t.run_for(sheet_test_step_ms) }
+  } else { t.run_for(sheet_test_150_ms) }
   let coming = k.surface.val.unwrap().rect().1
   k.open.set(false)
   if frames {
-    for _ in 0..<5 { t.run_for(30.0) }
-  } else { t.run_for(150.0) }
+    for _ in 0..<5 { t.run_for(sheet_test_step_ms) }
+  } else { t.run_for(sheet_test_150_ms) }
   let going = k.surface.val.unwrap().rect().1
   (coming, going, k.gone.val)
 }
@@ -183,7 +199,7 @@ test "tree sheet caps a long scrolling body while keeping its head and foot in r
       foot.val = Some(s.box(fn(v) { v.height(Is(Some(50.0))) |> ignore }))
     })
   })
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   let frame = sheet.val.unwrap().rect()
   assert_true((frame.3 - 844.0 * 0.94).abs() < 0.01, msg="sheet=\{frame}")
   let fy = foot.val.unwrap().rect().1
@@ -211,9 +227,31 @@ test "tree sheet returns the keyboard focus to its opener as it begins closing" 
   t.tab()
   assert_eq(t.focused().unwrap().label, "Open")
   t.enter()
-  t.run_for(500.0)
+  t.run_for(sheet_test_late_ms)
   assert_true(open.get())
   t.press("Escape")
   assert_false(open.get())
   assert_eq(t.focused().unwrap().label, "Open")
+}
+
+///|
+test "a sheet's reported height reaches the sheet below in the first layout that shows it" {
+  let top_open = @signals.signal(false)
+  let top_height = @signals.signal(0.0)
+  let lower : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(_) {  }, time=0.0, tree=fn(root : @view.View) {
+    @kit.sheet_node(root, fn() { true }, fn() {  }, raised=fn() { top_height.get() / 4.0 }, fn(s) {
+      lower.val = Some(s)
+      s.box(fn(b) { b.height(Is(Some(200.0))) |> ignore }) |> ignore
+    })
+    @kit.sheet_node(root, fn() { top_open.get() }, fn() {  }, height=fn(h) { top_height.set(h) }, fn(s) {
+      s.box(fn(b) { b.height(Is(Some(240.0))) |> ignore }) |> ignore
+    })
+  })
+  t.run_for(sheet_test_late_ms)
+  let base = lower.val.unwrap().rect().1
+  top_open.set(true)
+  t.frame()
+  assert_eq(top_height.get(), 240.0)
+  assert_eq(lower.val.unwrap().rect().1, base - 60.0)
 }

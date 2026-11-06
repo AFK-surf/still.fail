@@ -695,6 +695,8 @@ struct Node {
   /// told as either starts or ends
   mut left_at : Double
   mut span : Double
+  /// A later end requested for a leaving node without changing the progress of its original way.
+  mut keep_until : Double
   mut back_at : Double
   mut back_from : Double
   mut going : @signals.Signal[Int]?
@@ -1432,6 +1434,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.content = None
       n.left_at = -1.0
       n.span = 0.0
+      n.keep_until = -1.0
       n.back_at = -1.0
       n.back_from = 0.0
       n.going = None
@@ -1562,6 +1565,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         content: None,
         left_at: -1.0,
         span: 0.0,
+        keep_until: -1.0,
         back_at: -1.0,
         back_from: 0.0,
         going: None,
@@ -6193,6 +6197,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   let p = gone_at(n, now)
   n.span = ms
   n.left_at = now - p * ms
+  n.keep_until = -1.0
   n.back_at = -1.0
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
@@ -6213,6 +6218,7 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_from = gone_at(n, now)
   n.back_at = now
   n.left_at = -1.0
+  n.keep_until = -1.0
   told_going(n)
   // (beside its anchor again, where that is now: View::beside)
   if n.beside is Some(_) {
@@ -6261,7 +6267,7 @@ pub fn View::leaves_at(self : View) -> Double {
 pub fn View::leaves_no_earlier_than(self : View, at : Double) -> View {
   guard self.live() is Some(n) && n.left_at >= 0.0 else { return self }
   if at > leave_ends(n) {
-    n.span = at - n.left_at
+    n.keep_until = at
     self.tree.due_leaving(self.id())
     self.tree.marked()
   }
@@ -6355,7 +6361,7 @@ fn Tree::leaving_at(self : Tree, at : Int) -> Bool {
 /// When node `n`'s leaving or coming back ends (-1: neither).
 fn leave_ends(n : Node) -> Double {
   if n.left_at >= 0.0 {
-    n.left_at + n.span
+    dmax(n.left_at + n.span, n.keep_until)
   } else if n.back_at >= 0.0 {
     n.back_at + n.back_from * n.span
   } else {

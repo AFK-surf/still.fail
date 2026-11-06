@@ -15,9 +15,16 @@ test "a node leaves for the duration its size says at the closing event, with no
   tree.event(10.0, fn() { tall.set(200.0) })
   tree.event(20.0, fn() { open.set(false) })
   assert_eq(card.val.unwrap().leaves_at(), 220.0)
-  tree.event(100.0, fn() { card.val.unwrap().leaves_no_earlier_than(300.0) |> ignore })
-  tree.advance(299.0)
+  let end = 300.0
+  let progress = Ref((0.0, 0.0))
+  tree.event(100.0, fn() {
+    let before = card.val.unwrap().going()
+    card.val.unwrap().leaves_no_earlier_than(end) |> ignore
+    progress.val = (before, card.val.unwrap().going())
+  })
+  assert_eq(progress.val.0, progress.val.1)
+  tree.advance(end - 1.0)
   assert_eq(gone.val, 0)
-  tree.advance(300.0)
+  tree.advance(end)
   assert_eq(gone.val, 1)
 }
