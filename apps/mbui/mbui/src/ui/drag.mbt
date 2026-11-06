@@ -108,16 +108,11 @@ priv struct CtxDragInput {
   take : (Drag, DragInput, Double) -> Unit
   owner : @view.NodeId?
   mut build : Int
-  mut stage : Int
 }
 
 ///|
 fn ctx_drag_input_mark(p : CtxDragInput) -> Unit {
   p.build = g().build_no
-  match (ctx_press_stage.val, p.owner) {
-    (Some((id, stage)), Some(owner)) if id == owner => p.stage = stage
-    _ => ()
-  }
 }
 
 ///|
@@ -125,7 +120,7 @@ fn ctx_drag_input_mark(p : CtxDragInput) -> Unit {
 /// of the old build or kept part that says it. As with `on_press`, a build that no longer says the callback lets it go.
 pub fn Ctx::on_drag_input(self : Ctx, id : Int, f : (Drag, DragInput, Double) -> Unit) -> Unit {
   if id == 0 { return }
-  let p : CtxDragInput = { take: f, owner: island_building.val, build: self.build_no, stage: -1 }
+  let p : CtxDragInput = { take: f, owner: island_building.val, build: self.build_no }
   ctx_drag_input_mark(p)
   ctx_drag_inputs[id] = p
   built_used(fn() {
@@ -173,8 +168,6 @@ pub fn Ctx::drag_area(
 /// `hold`), pressed and still: held long_press_ms since the press went down, the press is its from here (the others
 /// under it let it go, no tap), felt, moving; before then, a frame asked for when it will have been.
 pub fn Ctx::drag_of(self : Ctx, id : Int) -> Drag? {
-  // A partial build does not own a drag's pending movement/end; the complete old frame takes it once.
-  if probe_causal_layer.val { return None }
   match drags.get(id) {
     Some(d) => {
       // (read so: the press and, while it is on it, where the pointer is: hand.mbt)

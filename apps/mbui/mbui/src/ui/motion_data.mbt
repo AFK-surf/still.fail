@@ -117,7 +117,7 @@ pub fn Ctx::set_out(self : Ctx, who : Mover, m : &Moving, what? : String = "", l
     self.clock
   } else {
     self.owe_frame()
-    if probe_causal_layer.val { self.clock } else { h_now() }
+    h_now()
   }
 }
 

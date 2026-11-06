@@ -1194,11 +1194,6 @@ fn Ctx::alloc(self : Ctx, kind : Int) -> Int {
 /// source, which it sets).
 fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int = 0) -> Int {
   let i = self.count
-  if probe_causal_layer.val {
-    native_nodes.remove(i)
-    stream_nodes.remove(i)
-    picture_at.remove(i)
-  }
   if i < self.nodes.length() {
     self.node_known(i, kind, key)
     let n = self.nodes[i]
@@ -2502,7 +2497,7 @@ pub fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
 /// handler, a fiber, a test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt):
 /// for a stamp, or a moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
 pub fn Ctx::moment(self : Ctx) -> Double {
-  if self.in_frame() || probe_causal_layer.val {
+  if self.in_frame() {
     self.clock
   } else {
     h_now()

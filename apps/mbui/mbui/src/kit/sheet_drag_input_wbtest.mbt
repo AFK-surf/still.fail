@@ -2,12 +2,10 @@
 // than at whichever frame happens to follow it.
 
 ///|
-fn input_sheet_close(with_frames : Bool, delayed? : Bool = false, staged? : Bool = false) -> (Double, Double, Double, Int, Array[SheetDrag]) raise {
+fn input_sheet_close(with_frames : Bool, delayed? : Bool = false) -> (Double, Double, Double, Int, Array[SheetDrag]) raise {
   let open = @signals.signal(true)
   let height = @signals.signal(100.0)
   let extent : Ref[@view.View?] = Ref(None)
-  let host : Ref[@view.View?] = Ref(None)
-  let window : Ref[@view.View?] = Ref(None)
   let close_at = Ref(0.0)
   let measured = Ref(0.0)
   let closes = Ref(0)
@@ -15,14 +13,12 @@ fn input_sheet_close(with_frames : Bool, delayed? : Bool = false, staged? : Bool
   let top = Ref(0)
   let sheet_id = Ref(0)
   let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, tree=fn(root) {
-    window.val = Some(root)
     extent.val = Some(root.box(fn(v) { v.over(Is(true)).height(By(fn() { Some(height.get()) })) |> ignore }))
     let island = @ui.old(root, fn(c) {
       top.val = c.id("input-sheet/top")
       sheet_id.val = c.id("input-sheet")
       let sheet = sheet(c, "input-sheet", open.get(), h=300.0, on_drag_close=fn() {
         root.event_action(fn() {
-          if staged { @ui.probe_old_layer(host.val.unwrap()) }
           closes.val += 1
           close_at.val = root.cause_at()
           measured.val = extent.val.unwrap().laid_size().1
@@ -33,7 +29,6 @@ fn input_sheet_close(with_frames : Bool, delayed? : Bool = false, staged? : Bool
       match sheet.dragged { Some(dragged) => result.push(dragged); None => () }
     })
     island.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
-    host.val = Some(island)
   })
   t.check_looks(false)
   t.run_for(@ui.move_most_ms)
@@ -68,7 +63,6 @@ fn input_sheet_close(with_frames : Bool, delayed? : Bool = false, staged? : Bool
   }
   assert_eq((closes.val, measured.val, close_at.val), (1, 220.0, released_at))
   assert_false(open.get())
-  if staged { window.val.unwrap().event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) }) }
   height.set(300.0)
   let s = kit.val.sheets[sheet_id.val]
   assert_eq(s.below.target(), 600.0)
@@ -91,11 +85,6 @@ test "an old sheet closes at drag release using that event's stack geometry" {
 ///|
 test "a delayed old sheet drag still closes from the release time" {
   assert_eq(input_sheet_close(false, delayed=true), input_sheet_close(false))
-}
-
-///|
-test "a staged old sheet reports its input drag only in a real frame" {
-  assert_eq(input_sheet_close(false, staged=true), input_sheet_close(false))
 }
 
 ///|

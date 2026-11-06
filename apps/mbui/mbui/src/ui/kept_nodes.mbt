@@ -83,12 +83,6 @@ priv struct RowNodes {
   /// the lists it holds by their ids (a part's), laid out each frame
   links : Array[(Int, Int, Int, Int)]
   lists : Array[Int]
-  layers : Array[Layer]
-  layer_scrims : Array[Int]
-  staged_native : Array[(Int, NativeView, (Double, Double, Double, Double)?, FixedArray[Double])]
-  staged_streams : Array[(Int, Stream, (Double, Double, Double, Double)?)]
-  mut causal_layer : Bool
-  mut fragment : Bool
   /// a part's: what its caller builds it from (Ctx::kept_part's `key`), and whether it is read out
   mut key : String
   mut read : Bool
@@ -116,10 +110,6 @@ priv struct RowNodes {
 /// The rows kept, by list and item.
 // kept across runs: let go of as a run begins (nodes_forget) and as each frame ends for those it did not lay
 let kept_nodes : Map[(Int, Int), RowNodes] = {}
-
-///|
-// Probe only: whether an event is constructing a layer whose one-shot tells will be delivered by that event.
-let probe_causal_layer : Ref[Bool] = Ref(false)
 
 ///|
 /// Nodes no row nor the frame holds, for a row's to be swapped with.
@@ -601,12 +591,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     laid_looks: [],
     links: [],
     lists: [],
-    layers: [],
-    layer_scrims: [],
-    staged_native: [],
-    staged_streams: [],
-    causal_layer: false,
-    fragment: false,
     key: "",
     read: false,
     built_frame: -1,
@@ -758,7 +742,6 @@ priv struct NodesBegun {
   info : Int
   drawn : Int
   back : BackSaid
-  parent : Int
 }
 
 ///|
@@ -822,7 +805,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
     info: self.info_reads.length(),
     drawn: dr.entries.length(),
     back: self.back_said(),
-    parent: self.cur,
   }
 }
 
@@ -840,7 +822,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.base = r
   rn.said_base = r
   rn.n = self.count - r
-  rn.causal_layer = probe_causal_layer.val
   rn.in_pool = true
   // (the parts kept among its nodes, where among them)
   rn.inner = rn.inner_now.map(fn(i) { (i, i.base - r) })
@@ -882,41 +863,9 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   }
   let census_after : Array[Int] = []
   self.kept_census(census_after)
-  rn.layers.clear()
-  rn.layer_scrims.clear()
-  rn.staged_native.clear()
-  rn.staged_streams.clear()
-  if part && rn.own && rn.causal_layer {
-    for k in b.census[0]..<self.layers.length() {
-      let l = self.layers[k]
-      if l.node >= r && l.node < r + rn.n { rn.layers.push({ ..l, node: l.node - r }) }
-    }
-    for k in b.census[24]..<dr.scrims.length() {
-      let i = dr.scrims[k]
-      if i >= r && i < r + rn.n { rn.layer_scrims.push(i - r) }
-    }
-    for i in r..<(r + rn.n) {
-      match native_nodes.get(i) {
-        Some((v, content, corners)) => rn.staged_native.push((i - r, v, content, corners))
-        None => ()
-      }
-      match stream_nodes.get(i) {
-        Some((stream, at)) => rn.staged_streams.push((i - r, stream, at))
-        None => ()
-      }
-    }
-  }
   rn.why = ""
   for j in 0..<census_after.length() {
-    let layer_kept = part && rn.own && rn.causal_layer && !rn.layers.is_empty() &&
-      (j == 0 || j == 13 ||
-        (j == 24 && rn.layer_scrims.length() == census_after[24] - b.census[24]))
-    let staged_once = part && rn.causal_layer &&
-      (j == 10 || j == 15 || j == 16 ||
-        (j == 20 && rn.staged_native.length() >= census_after[20] - b.census[20]) ||
-        (j == 21 && rn.staged_streams.length() >= census_after[21] - b.census[21]))
-    if rn.why == "" && census_after[j] != b.census[j] &&
-      !(part && kept_census_names[j] == "a list of its own") && !layer_kept && !staged_once {
+    if rn.why == "" && census_after[j] != b.census[j] && !(part && kept_census_names[j] == "a list of its own") {
       rn.why = if kept_census_names[j] == "what a package keeps of it" && aside_why.val != "" {
         aside_why.val
       } else {
@@ -928,7 +877,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
     rn.why = "back said otherwise than over what was said before it"
   }
   if rn.why == "" {
-    rn.why = self.row_nodes_why(r, rn.n, part~, layers=part && rn.own && rn.causal_layer && !rn.layers.is_empty(), native=part && rn.own && rn.causal_layer, fragment_parent=if rn.fragment { b.parent } else { -1 })
+    rn.why = self.row_nodes_why(r, rn.n, part~)
   }
   // (an entry of draw.mbt's of a node not its own: what holds it drawn otherwise for it)
   for j in b.drawn..<dr.entries.length() {
@@ -948,14 +897,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
       // (how its nodes hold each other as it built them, from its first: what holds its root is where it is put back;
       // a list's rows are its layout's, none as built)
       let at = fn(i : Int) { if i >= r && i < r + rn.n { i - r } else { -1 } }
-      let up = if nd.portal && nd.parent == 0 {
-        -2
-      } else if rn.fragment && nd.parent == b.parent {
-        -3
-      } else {
-        at(nd.parent)
-      }
-      rn.links.push((up, at(nd.first), at(nd.last), at(nd.next)))
+      rn.links.push((at(nd.parent), at(nd.first), at(nd.last), at(nd.next)))
       if nd.kind == kind_list {
         rn.lists.push(nd.id)
         if rn.rows_stay {
@@ -975,11 +917,10 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
 /// shot); "" none. (What is placed by the clock (Ctx::moved_by: a page sliding) is kept with what moves it, its node's
 /// own, placed again as each frame is laid out and painted. A field is kept as the rest: what changes what it holds is
 /// an event, which builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
-fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool, layers? : Bool = false, native? : Bool = false, fragment_parent? : Int = -1) -> String {
+fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
   for j in 0..<n {
     let nd = self.nodes[r + j]
-    if j > 0 && (nd.parent < r || nd.parent >= r + n) && !(layers && nd.portal && nd.parent == 0) &&
-      !(fragment_parent >= 0 && nd.parent == fragment_parent) {
+    if j > 0 && (nd.parent < r || nd.parent >= r + n) {
       return "a node of it held elsewhere"
     }
     if nd.kind == kind_list && !part {
@@ -988,13 +929,13 @@ fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool, layers? : Bool
     if nd.kind == kind_scroll {
       return "what scrolls in it"
     }
-    if nd.kind == kind_native && !native {
+    if nd.kind == kind_native {
       return "a native view"
     }
     if nd.pager != 0 || nd.kind == kind_page {
       return "a pager's page"
     }
-    if (nd.portal && !layers) || nd.shot {
+    if nd.portal || nd.shot {
       return "a layer"
     }
   }
@@ -1046,28 +987,23 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
     nd.radii = radii.map(fn(a) { a.copy() })
     nd.corners_worked = worked
     let (up, first, last, next) = rn.links[j]
-    nd.parent = if up == -2 { 0 } else if up == -3 || (j == 0 && !rn.fragment) { parent } else { at(up) }
+    nd.parent = if j == 0 { parent } else { at(up) }
     nd.first = at(first)
     nd.last = at(last)
-    nd.next = if up == -2 || up == -3 { -1 } else { at(next) }
+    nd.next = at(next)
+  }
+  let p = self.nodes[parent]
+  if p.last >= 0 {
+    self.nodes[p.last].next = c0
+  } else {
+    p.first = c0
+  }
+  p.last = c0
+  // (counted among what its parent holds with no id, as made: what is built after it there is who it was)
+  if n > 0 && self.nodes[c0].keyless {
+    p.kids = p.kids + 1
   }
   self.count = c0 + n
-  let p = self.nodes[parent]
-  if rn.fragment {
-    for j in 0..<n {
-      if rn.links[j].0 == -3 {
-        self.link_last(parent, c0 + j)
-        if self.nodes[c0 + j].keyless { p.kids = p.kids + 1 }
-      }
-    }
-  } else if n > 0 {
-    self.link_last(parent, c0)
-    // (counted among what its parent holds with no id, as made: what is built after it there is who it was)
-    if self.nodes[c0].keyless { p.kids = p.kids + 1 }
-  }
-  for j in 0..<n {
-    if rn.links[j].0 == -2 { self.link_last(0, c0 + j) }
-  }
   rn.base = c0
   rn.in_pool = true
   c0
@@ -1078,10 +1014,6 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
 fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   let by = rn.base - rn.said_base
   self.say_again(rn.said, { ..unmoved, by: by })
-  for l in rn.layers { self.layers.push({ ..l, node: rn.base + l.node }) }
-  for i in rn.layer_scrims { dr.scrims.push(rn.base + i) }
-  for (i, v, content, corners) in rn.staged_native { native_nodes[rn.base + i] = (v, content, corners) }
-  for (i, stream, at) in rn.staged_streams { stream_nodes[rn.base + i] = (stream, at) }
   for f in rn.used {
     f()
   }
@@ -1161,7 +1093,6 @@ fn Ctx::part_nodes(
   named? : String = "",
   made_at? : SourceLoc,
   flows? : Bool = false,
-  fragment? : Bool = false,
 ) -> Unit {
   let build = fn() {
     let inner = fn() {
@@ -1171,9 +1102,7 @@ fn Ctx::part_nodes(
         self.hidden_from_semantics(body)
       }
     }
-    if fragment {
-      inner()
-    } else if flows {
+    if flows {
       self.box(style=part_flowing, inner) |> ignore
     } else {
       self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, inner) |> ignore
@@ -1194,7 +1123,6 @@ fn Ctx::part_nodes(
   rn.laid_pass.val = nodes_run.pass
   rn.own = own
   rn.rows_stay = rows_stay
-  rn.fragment = fragment
   rn.named = named
   rn.made_at = made_at
   rn.holder.val = outer
@@ -1205,17 +1133,11 @@ fn Ctx::part_nodes(
   } else {
     self.nodes_keep()
   }
-  let watch_changed = rn.watch.is_stale() || (probe_causal_layer.val && rn.watch.changed_now())
-  let theme_changed = rn.causal_layer && (match rn.theme {
-    Some(t) => !physical_equal(t, self.theme)
-    None => true
-  })
   if may_keep &&
     rn.ok &&
     !rn.in_pool &&
-    (rn.n > 0 || rn.fragment) &&
-    !watch_changed &&
-    !theme_changed &&
+    rn.n > 0 &&
+    !rn.watch.is_stale() &&
     rn.key == key &&
     rn.read == read_out &&
     rn.seed == self.id_seed &&
@@ -1234,11 +1156,6 @@ fn Ctx::part_nodes(
       self.nodes_put_back(rn, self.cur) |> ignore
       self.nodes_said_again(rn)
     })
-    // Probe only: event-staged parts may be reused once; their ordinary caching rules apply again afterwards.
-    if rn.causal_layer && !probe_causal_layer.val {
-      rn.causal_layer = false
-      rn.ok = false
-    }
     self.held_by(outer, rn)
     return
   }
@@ -1246,8 +1163,7 @@ fn Ctx::part_nodes(
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
   let fresh = (nodes_run.fresh && (!(own || rows_stay) || evented_for(id))) ||
     rn.n == 0 ||
-    watch_changed ||
-    theme_changed ||
+    rn.watch.is_stale() ||
     rn.key != key ||
     rn.read != read_out ||
     rn.seed != self.id_seed ||
@@ -1278,7 +1194,6 @@ fn Ctx::part_nodes(
   rn.sel = desk.selecting
   rn.layer = self.layer_cur
   rn.direction = self.direction
-  if probe_causal_layer.val { rn.theme = Some(self.theme) }
   self.nodes_end(rn, r, b, part=true)
   self.held_by(outer, rn)
 }

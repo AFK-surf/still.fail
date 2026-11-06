@@ -51,20 +51,6 @@ pub fn Ctx::press(self : Ctx) -> Press {
   hand.down.get() |> ignore
   hand_presses_read()
   hand.beyond.get() |> ignore
-  // An event-time layout is a partial old build. It may use the current held state for appearance, but the next
-  // full frame owns transient press events and must be the only build to observe their fresh/lifted edges.
-  if probe_causal_layer.val {
-    return {
-      ..self.press_seen,
-      down: self.down,
-      fresh: false,
-      lifted: false,
-      x: self.press_x,
-      y: self.press_y,
-      moved: self.dragging,
-      mods: self.press_mods,
-    }
-  }
   if self.press_seen_frame == self.frame_no {
     return self.press_seen
   }

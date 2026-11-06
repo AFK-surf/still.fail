@@ -249,7 +249,7 @@ pub fn Ctx::move_state(
     self.clock
   } else {
     self.owe_frame()
-    if probe_causal_layer.val { self.clock } else { h_now() }
+    h_now()
   }
   let who = Mover::new()
   // (its first frame: this one, said in it; else the next drawn, as it is handed its time)

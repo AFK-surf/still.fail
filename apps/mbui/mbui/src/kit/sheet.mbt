@@ -72,7 +72,6 @@ priv struct SheetKept {
   mut shown : Bool
   mut asked : Double
   mut opened : Int
-  mut opened_at : Double
   /// A drag decided at its input, to report once when the next real frame builds.
   mut input_dragged : SheetDrag?
   /// The height selected before a claimed drag, in case the gesture is cancelled.
@@ -186,7 +185,6 @@ pub fn sheet(
         shown: false,
         asked: -1.0,
         opened: -1,
-        opened_at: -1.0,
         input_dragged: None,
         drag_start: None,
       }
@@ -195,13 +193,8 @@ pub fn sheet(
     }
   }
   let mut now = open
-  let mut dragged : SheetDrag? = if @ui.probe_in_old_layer() {
-    None
-  } else {
-    let pending = s.input_dragged
-    s.input_dragged = None
-    pending
-  }
+  let mut dragged : SheetDrag? = s.input_dragged
+  s.input_dragged = None
   // opened: from below at its height; asked another height while open (what it holds laid out another height, the
   // window another): that height at once, as it is laid out (placed by its size, not chased to it)
   if open && !s.was_open {
@@ -217,9 +210,8 @@ pub fn sheet(
     s.shown = true
     s.asked = target
     s.opened = c.frame_number()
-    s.opened_at = c.moment()
   } else if open && target != s.asked {
-    if s.opened == c.frame_number() && c.moment() <= s.opened_at + @ui.same_moment_ms {
+    if s.opened == c.frame_number() {
       // (opened this frame, its height known only as this frame lays out what it holds: from below at that)
       s.h.put(target)
       s.below.put(target)
@@ -336,12 +328,7 @@ pub fn sheet(
             None => ()
           }
         }) |> ignore
-        // Probe only: keep the sheet's body separately from the motion of its shell.
-        if @ui.probe_keep_staged_body() {
-          @ui.probe_kept_sheet_body(c, key, body)
-        } else {
-          body()
-        }
+        body()
       })
     })
     match surface {
