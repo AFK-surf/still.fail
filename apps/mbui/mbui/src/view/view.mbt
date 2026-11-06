@@ -873,6 +873,9 @@ pub struct Tree {
   // what is to be done once the event being taken is committed whole (Tree::after_event), in order
   afters : Array[() -> Unit]
   mut modals_due : Bool
+  /// A property application or geometry read is still using the nodes; publish input ownership after it returns.
+  mut modals_held : Int
+  mut modals_asked : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
@@ -1161,6 +1164,8 @@ pub fn Tree::new(
     committing: 0,
     afters: [],
     modals_due: false,
+    modals_held: 0,
+    modals_asked: false,
     held: None,
     gesture_tapped: false,
     taps_withheld: false,
@@ -1881,6 +1886,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.before_due.clear()
   self.hosting = -1
   self.modals.clear()
+  self.modals_due = false
   self.back_said_at.clear()
   self.keys_said_at.clear()
   // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
@@ -2143,6 +2149,8 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : 
     }
   })
   b.run = fn() {
+    self.modals_held += 1
+    defer { self.modals_released() }
     b.queued = false
     b.marked = false
     if !b.live {
@@ -2174,6 +2182,8 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : 
 /// once (View::laid_size, Tree::bring_to). Nothing else run: what shows, which is picked and what effects do wait for
 /// the change's end; those not marked are not looked at.
 fn Tree::pull(self : Tree) -> Unit {
+  self.modals_held += 1
+  defer { self.modals_released() }
   while self.pulls_marked.length() > 0 {
     let marked = self.pulls_marked.copy()
     self.pulls_marked.clear()
@@ -2405,6 +2415,8 @@ priv enum Prop {
 fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
   let tree = self.tree
+  tree.modals_held += 1
+  defer { tree.modals_released() }
   let at = self.at
   let marked = fn() {
     match phase {
@@ -2672,10 +2684,13 @@ pub fn View::basis(self : View, b : Live[Double?]) -> View {
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
 /// Inside a sample already under way, it measures at that sample's clock without changing its moment.
 pub fn View::laid_size(self : View) -> (Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0) }
+  self.tree.modals_held += 1
+  defer { self.tree.modals_released() }
+  if !self.alive() { return (0.0, 0.0) }
   // (laid out at the active sample or logic's moment, what the change under way set so far counted, nothing of the logic run; read,
   // not placed by: each node where it stood till the change is placed, Tree::measured_now)
   self.tree.measured_now()
+  guard self.live() is Some(n) else { return (0.0, 0.0) }
   (n.flex.width, n.flex.height)
 }
 
@@ -3584,8 +3599,11 @@ fn Tree::measured_now(self : Tree) -> Unit {
 /// it is laid out too, drawn off and grown or shrunk by nothing): where a change told now puts it, said once at that
 /// moment, never followed.
 pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  self.tree.modals_held += 1
+  defer { self.tree.modals_released() }
+  if !self.alive() { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
+  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   let mut x = 0.0
   let mut y = 0.0
   let mut i = self.at
@@ -3615,8 +3633,11 @@ pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
 /// counted, as a frame would lay it out; its offset with it): where it goes for that change's cause, said once at that
 /// moment (View::laid_size's terms), never followed.
 pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  self.tree.modals_held += 1
+  defer { self.tree.modals_released() }
+  if !self.alive() { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
+  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   (
     n.flex.left + n.look.dx + n.look.sx * n.flex.width,
     n.flex.top + n.look.dy + n.look.sy * n.flex.height,
@@ -3934,20 +3955,38 @@ fn Tree::modals_told(self : Tree) -> Unit {
   if !self.bar_cols.is_empty() {
     self.bars_due = true
   }
-  if self.committing > 0 {
-    self.modals_due = true
-    return
-  }
-  self.modals_now()
+  self.modals_due = true
+  self.modals_settled()
+}
+
+///|
+/// A property application or geometry query has finished using its nodes and computing its return value.
+fn Tree::modals_released(self : Tree) -> Unit {
+  self.modals_held -= 1
+  if self.modals_held == 0 && self.modals_due { self.modals_settled() }
 }
 
 ///|
 /// A change committed whole (the outermost Tree::at_cause or event ending, its moment still the cause's): what a modal
 /// layer said in it told now.
 fn Tree::modals_settled(self : Tree) -> Unit {
-  if self.committing == 0 && self.modals_due {
-    self.modals_due = false
-    self.modals_now()
+  if self.gone || self.committing > 0 || self.modals_held > 0 || self.laying > 0 || self.layouts_active > 0 {
+    return
+  }
+  if self.modals_due && !self.modals_asked {
+    self.modals_asked = true
+    // A layout can pull properties from a still-open signal batch. Their values are available to geometry now;
+    // their input/focus notifications belong to the whole change, after all structural readers have returned.
+    @signals.after_flush(fn() {
+      self.modals_asked = false
+      if self.gone || self.committing > 0 || self.modals_held > 0 || self.laying > 0 || self.layouts_active > 0 {
+        return
+      }
+      if self.modals_due {
+        self.modals_due = false
+        self.modals_now()
+      }
+    })
   }
   self.withins_settled()
 }
@@ -5125,6 +5164,8 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 /// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
 /// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
 fn Tree::laid_now(self : Tree) -> Unit {
+  self.modals_held += 1
+  defer { self.modals_released() }
   if self.last_w <= 0.0 {
     return
   }
@@ -6922,6 +6963,8 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
 pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
+  self.modals_held += 1
+  defer { self.modals_released() }
   // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
@@ -6984,6 +7027,8 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
 /// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
 /// the tree has a size (its first frame).
 pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
+  self.modals_held += 1
+  defer { self.modals_released() }
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
@@ -7212,6 +7257,8 @@ fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, no
 /// marks more to do, each from the start, in a loop: once it ran in itself, as deep as passes came, and a frame whose
 /// passes never stopped (what it told taken at the host's clock, gone on: Tree::brought) ran the stack out, 2000 deep.
 fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+  self.modals_held += 1
+  defer { self.modals_released() }
   if !self.due {
     return
   }
