@@ -20,7 +20,8 @@
 // reads it then into the view's signals, and what reads them (a time shown, a timeline) is told.
 //
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
-// AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
+// AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>, the frame of H.siteFrame), Windows
+// (win_views.cpp: WebView2,
 // its players a page of its own with a <video>; no view where WebView2's runtime is not installed: `here` is false, the
 // app says it cannot show it), Linux (linux_views.c: WebKitGTK 6.0's pages and sites, none without it; its players
 // linux_player.h's, GStreamer's playbin, their pictures drawn in the canvas as Android's are, none without GStreamer).
@@ -76,6 +77,8 @@ pub struct NativeView {
   priv too_slow : String
   priv mut touch : Touch
   priv mut keeps_cookies : Bool
+  /// a site in a frame of its host's (the browser's), which runs no script of the app's: `tell_frame`
+  priv mut framed : Bool
   /// how many presses' rects the frame had when it was painted (those after it are drawn over it), and the rects of
   /// those over it the host was last told (`covers`)
   priv mut hits_before : Int
@@ -219,6 +222,7 @@ fn NativeView::make(
     too_slow,
     touch: All,
     keeps_cookies: false,
+    framed: false,
     hits_before: 0,
     island: None,
     told_covers: "",
@@ -305,7 +309,8 @@ pub fn NativeView::page(html : String, said? : (String) -> Unit) -> NativeView {
 /// its own at `start` (a path), each request its page makes of that host handed to `serve` to answer, as a browser
 /// would have it from a server (its scripts on, its cookies kept by the app as it answers); a link elsewhere is not
 /// followed but told to `leave`. Android's WebView and Windows' WebView2 (their requests intercepted), Apple's
-/// WKWebView and Linux's WebKitGTK (a scheme of its own); the browser has none. What its scripts say to the app goes to `said`, as a page's
+/// WKWebView and Linux's WebKitGTK (a scheme of its own); the browser a frame on a host of its own where its page gives one (H.siteFrame, its service
+/// worker handing requests over; else none), which runs no script of the app's (`framed`). What its scripts say to the app goes to `said`, as a page's
 /// (`NativeView::page`). A request whose head has not come in `site_head_wait_ms` is answered 502 with `no_answer`;
 /// one whose page reads it so slowly that more than `site_backlog_max` of it waits is stopped with `too_slow` (the
 /// app's words for each: a person may read them on the page), and let go of (its `when_gone`).
@@ -347,6 +352,21 @@ fn script_hash(js : String) -> String {
     out.write_char(digits.get_char(d).unwrap())
   }
   out.to_string()
+}
+
+///|
+/// Whether this site's page is in a frame of its host's (`NativeView::site`): nothing of the app's runs in it (no
+/// `script`); its sockets are told with `tell_frame`.
+pub fn NativeView::framed(self : NativeView) -> Bool {
+  self.framed
+}
+
+///|
+/// What one of the page's sockets did, to a framed site's frame: `[sid, what, …]` in JSON.
+pub fn NativeView::tell_frame(self : NativeView, message : String) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_tell(self.id, 7, message)
+  }
 }
 
 ///|
@@ -1391,6 +1411,7 @@ fn NativeView::take_site(self : NativeView) -> Unit {
           _ => ()
         }
         v.keeps_cookies = flag("cookies")
+        v.framed = flag("frame")
         v.can_back = flag("back")
         v.can_forward = flag("forward")
         v.loading = flag("loading")

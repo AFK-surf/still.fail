@@ -219,7 +219,12 @@ pub fn link_js(f : String, args : Array[Json]) -> String {
 pub fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : String, path : String, protocols : String) -> Unit {
   let l = p.link
   let event = fn(kind : String, args : Array[Json]) {
-    site.script(link_js("__stillfailSocketEvent", [Json::string(sid), Json::string(kind)] + args))
+    let said = [Json::string(sid), Json::string(kind)] + args
+    if site.framed() {
+      site.tell_frame(Json::array(said).stringify())
+    } else {
+      site.script(link_js("__stillfailSocketEvent", said))
+    }
   }
   let headers = if protocols != "" {
     [Json::array([Json::string("sec-websocket-protocol"), Json::string(protocols)])]

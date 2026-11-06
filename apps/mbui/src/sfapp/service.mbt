@@ -24,7 +24,8 @@
 //
 // Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): a marked picture's
 // pin and edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its
-// port (the WebView's cookies are not the app's to send along: it goes as the page's other requests do).
+// port (the WebView's cookies are not the app's to send along: it goes as the page's other requests do), and in a
+// browser marking it and what a visualization's widget keeps (its frame, cloud/src/preview.ts, runs no script of the app's).
 
 ///|
 /// A station's name as the workspace's stations say it.
