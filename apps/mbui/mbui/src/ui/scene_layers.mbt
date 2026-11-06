@@ -1689,6 +1689,13 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
     !scene_wanted() else {
     return
   }
+  // PROBE
+  let probe_lines : Array[String] = []
+  for x in scene.layers.values() {
+    if x.seen == scene.frame && x.shown != (0.0, 0.0) {
+      probe_lines.push("PROBE moved layer \{x.id.at} held \{x.held} shown \{x.shown} start \{x.start} count \{x.count} outer \{x.outer.map(fn(o) { o.at })}")
+    }
+  }
   let n = self.ninst
   let kept = FixedArray::make(n * inst_size + 1, 0.0)
   self.inst.blit_to(kept, len=n * inst_size)
@@ -1758,6 +1765,9 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
     Some(said) => {
       let s = "the scene kept a layer something of changed unsaid: as kept and drawn anew, \{said}"
       println(s)
+      for pl in probe_lines {
+        println(pl)
+      }
       abort(s)
     }
     None => ()
