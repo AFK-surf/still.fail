@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { DecisionSessionsUnavailable } from "../src/store/legacy-decision-session.ts";
+import { buildLegacyEntryLookups } from "../src/store/legacy-said-builder.ts";
 import { LATEST_DECISIONS, LATEST_DECISIONS_SCOPED, Store } from "../src/store/store.ts";
 
 test("a small workspace does not scan every other workspace's recent decisions", () => {
@@ -176,11 +178,13 @@ test("workspace moves, deleted sessions and out-of-order checks match the whole-
 
 for (const index of ["sessions_by_connect", "decision_checks_session", "decision_checks_lately"]) {
   for (const prepared of [false, true]) {
-    test(`a workspace read remains usable when ${index} is removed (prepared ${prepared})`, () => {
+    test(`a workspace read remains usable when ${index} is removed (prepared ${prepared})`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "policy-scoped-index-")), path = join(dir, "store.db");
       const store = Store.open(path);
       const db = store.db;
       const other = new DatabaseSync(path);
+      const builder = index === "decision_checks_session" ? buildLegacyEntryLookups(store, Promise.resolve()) : null;
+      if (builder) store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
       try {
         for (const [key, ws] of [["mine", "mine"], ["other", "elsewhere"]]) {
           store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
@@ -192,8 +196,14 @@ for (const index of ["sessions_by_connect", "decision_checks_session", "decision
         const expected = [{ id: 101, session: "mine", at: 100, detail: {} }];
         if (prepared) assert.deepEqual(store.latestDecisionsSince(50, { workspace: "mine", home: false }), expected);
         other.exec(`DROP INDEX ${index}`);
+        if (builder) {
+          // The missing index cannot answer this large window in bounded synchronous work. The caller waits for
+          // incremental preparation and retries, as the overview does for an older store.
+          assert.throws(() => store.latestDecisionsSince(50, { workspace: "mine", home: false }), DecisionSessionsUnavailable);
+          await store.prepareDecisionSessions();
+        }
         assert.deepEqual(store.latestDecisionsSince(50, { workspace: "mine", home: false }), expected);
-      } finally { other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+      } finally { await builder?.close(); other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
     });
   }
 }

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { decisionSessionIndexStep, hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex } from "../src/store/legacy-decision-session.ts";
+import { decisionSessionIndexStep, decisionSessionRepairStep, hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex } from "../src/store/legacy-decision-session.ts";
 import { decisionTimeIndexStep, installDecisionTimeIndex } from "../src/store/legacy-decision-time.ts";
 
 function database(size: number, path = ":memory:"): DatabaseSync {
@@ -191,9 +191,10 @@ for (const recursive of [false, true]) test(`old writes and rollback preserve th
   } finally { db.close(); }
 });
 
+for (const variant of ["separate", "repair", "recreated"] as const)
 for (const recursive of [false, true]) for (const installedFirst of [false, true]) for (const when of ["BEFORE", "AFTER"]) {
   for (const action of ["delete", "replace"]) test(
-    `nested ${when} ${action} keeps the session lookup exact (recursive ${recursive}, installed first ${installedFirst})`, () => {
+    `nested ${when} ${action} keeps the ${variant} lookup exact (recursive ${recursive}, installed first ${installedFirst})`, () => {
       const db = database(80);
       try {
         db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
@@ -204,16 +205,29 @@ for (const recursive of [false, true]) for (const installedFirst of [false, true
         if (!installedFirst) db.exec(nested);
         installDecisionSessionIndex(db);
         while (!decisionSessionIndexStep(db, 8).done) { /* prepare */ }
+        if (variant !== "separate") {
+          db.exec("DROP INDEX legacy_decision_session_by_session");
+          installDecisionSessionIndex(db);
+          while (!decisionSessionRepairStep(db, 8).done) { /* prepare repair */ }
+        }
+        if (variant === "recreated") {
+          db.exec("DROP INDEX legacy_decision_session_repair_by_session");
+          installDecisionSessionIndex(db);
+          while (!decisionSessionRepairStep(db, 8).done) { /* clean and prepare again */ }
+        }
         if (installedFirst) db.exec(nested);
         db.exec("INSERT OR REPLACE INTO decision_checks VALUES(1,'outer',11,'{}')");
         assert.deepEqual(db.prepare("SELECT id,session FROM legacy_decision_session ORDER BY id").all(),
+          db.prepare("SELECT id,session FROM decision_checks ORDER BY id").all());
+        if (variant !== "separate") assert.deepEqual(db.prepare("SELECT id,session FROM legacy_decision_session_repair ORDER BY id").all(),
           db.prepare("SELECT id,session FROM decision_checks ORDER BY id").all());
       } finally { db.close(); }
     });
 }
 
+for (const variant of ["separate", "repair", "recreated"] as const)
 for (const conflict of ["ABORT", "IGNORE", "REPLACE"]) for (const installedFirst of [false, true]) {
-  test(`an outer ${conflict} insert keeps the nested same-id session (installed first ${installedFirst})`, () => {
+  test(`an outer ${conflict} insert keeps the nested same-id ${variant} session (installed first ${installedFirst})`, () => {
     const db = database(80);
     try {
       const nested = `CREATE TRIGGER nested_session_update AFTER INSERT ON decision_checks WHEN NEW.id=100 BEGIN
@@ -222,9 +236,21 @@ for (const conflict of ["ABORT", "IGNORE", "REPLACE"]) for (const installedFirst
       if (!installedFirst) db.exec(nested);
       installDecisionSessionIndex(db);
       while (!decisionSessionIndexStep(db, 8).done) { /* prepare */ }
+      if (variant !== "separate") {
+        db.exec("DROP INDEX legacy_decision_session_by_session");
+        installDecisionSessionIndex(db);
+        while (!decisionSessionRepairStep(db, 8).done) { /* prepare repair */ }
+      }
+      if (variant === "recreated") {
+        db.exec("DROP INDEX legacy_decision_session_repair_by_session");
+        installDecisionSessionIndex(db);
+        while (!decisionSessionRepairStep(db, 8).done) { /* clean and prepare again */ }
+      }
       if (installedFirst) db.exec(nested);
       db.exec(`INSERT OR ${conflict} INTO decision_checks VALUES(100,'outer',11,'{}')`);
       assert.deepEqual(db.prepare("SELECT id,session FROM legacy_decision_session ORDER BY id").all(),
+        db.prepare("SELECT id,session FROM decision_checks ORDER BY id").all());
+      if (variant !== "separate") assert.deepEqual(db.prepare("SELECT id,session FROM legacy_decision_session_repair ORDER BY id").all(),
         db.prepare("SELECT id,session FROM decision_checks ORDER BY id").all());
     } finally { db.close(); }
   });
@@ -253,5 +279,22 @@ test("preparation preserves keys beyond JavaScript's exact integer range", () =>
     while (!decisionSessionIndexStep(db, 16).done) { /* prepare */ }
     assert.deepEqual(db.prepare("SELECT CAST(id AS TEXT) id,session FROM legacy_decision_session ORDER BY legacy_decision_session.id").all(),
       db.prepare("SELECT CAST(id AS TEXT) id,session FROM decision_checks ORDER BY decision_checks.id").all());
+  } finally { db.close(); }
+});
+
+test("repair and repeated repair preserve keys beyond JavaScript's exact integer range", () => {
+  const db = database(64);
+  try {
+    db.exec("INSERT INTO decision_checks VALUES(9007199254740993,'large',1,'{}')");
+    installDecisionSessionIndex(db);
+    while (!decisionSessionIndexStep(db, 16).done) { /* prepare */ }
+    db.exec("DROP INDEX legacy_decision_session_by_session");
+    for (let pass = 0; pass < 2; pass++) {
+      installDecisionSessionIndex(db);
+      while (!decisionSessionRepairStep(db, 16).done) { /* prepare or clean and prepare */ }
+      assert.deepEqual(db.prepare("SELECT CAST(id AS TEXT) id,session FROM legacy_decision_session_repair ORDER BY legacy_decision_session_repair.id").all(),
+        db.prepare("SELECT CAST(id AS TEXT) id,session FROM decision_checks ORDER BY decision_checks.id").all());
+      if (pass === 0) db.exec("DROP INDEX legacy_decision_session_repair_by_session");
+    }
   } finally { db.close(); }
 });

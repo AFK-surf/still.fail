@@ -8,10 +8,11 @@ import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsN
 import { hasLegacyEdits, legacyEditsMaintenanceStep, legacyEditsNeedsWork } from "./legacy-edits-build.ts";
 import { archivePolicyIndexNeedsWork, archivePolicyIndexStep, hasLegacyArchivePolicy } from "./archive-policy-index.ts";
 import { decisionTimeIndexNeedsWork, decisionTimeIndexStep, hasLegacyDecisionTime } from "./legacy-decision-time.ts";
-import { decisionSessionIndexNeedsWork, decisionSessionIndexStep, hasLegacyDecisionSession } from "./legacy-decision-session.ts";
+import { decisionSessionIndexNeedsWork, decisionSessionIndexStep, decisionSessionRepairNeedsWork, decisionSessionRepairStep,
+  hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex } from "./legacy-decision-session.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time" | "legacy-decision-session";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time" | "legacy-decision-session" | "legacy-decision-session-repair";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
@@ -21,13 +22,13 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
   wake: () => void; close: () => Promise<void>;
 } {
   const { promise: ready, resolve } = Promise.withResolvers<boolean>();
-  const { promise: decisionSessionsReady, resolve: resolveDecisionSessions } = Promise.withResolvers<boolean>();
+  let decisionSessionsReady = Promise.withResolvers<boolean>();
   let decisionSessionsSettled = false;
   let decisionProbeCancel: (() => void) | null = null;
   const finishDecisionSessions = (value: boolean) => {
     if (!decisionSessionsSettled) {
       decisionSessionsSettled = true;
-      resolveDecisionSessions(value);
+      decisionSessionsReady.resolve(value);
       decisionProbeCancel?.();
       decisionProbeCancel = null;
     }
@@ -53,14 +54,17 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
   if (kinds.includes("legacy-decision-session") && !store.decisionSessionsReady()
     && hasLegacyDecisionSession(store.db) && decisionSessionIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-session",
     needsWork: () => !store.decisionSessionsReady() && decisionSessionIndexNeedsWork(store.db), step: () => decisionSessionIndexStep(store.db) });
+  if (kinds.includes("legacy-decision-session") && !store.decisionSessionsReady()
+    && decisionSessionRepairNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-session-repair",
+    needsWork: () => !store.decisionSessionsReady() && decisionSessionRepairNeedsWork(store.db), step: () => decisionSessionRepairStep(store.db) });
   checkDecisionSessions();
-  if (!decisionSessionsSettled && !lookups.some((lookup) => lookup.kind === "legacy-decision-time" || lookup.kind === "legacy-decision-session"))
+  if (!decisionSessionsSettled && !lookups.some((lookup) => lookup.kind === "legacy-decision-time" || lookup.kind === "legacy-decision-session" || lookup.kind === "legacy-decision-session-repair"))
     finishDecisionSessions(false);
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
   let worker: Worker | null = null;
   let retryCancel: (() => void) | null = null, memoryCancel: (() => void) | null = null;
-  let allowed = false, closed = false, requested = false, retryMs = 250, next = 0;
+  let allowed = false, handoverFailed = false, closed = false, requested = false, retryMs = 250, next = 0;
   let off: () => void = () => {}, periodicCancel: () => void = () => {};
   // Login, policy and decision keys are kept current by their triggers and have no later reconciliation queue. Once
   // published, these scans cannot become unfinished again; stop probing them on each message and periodic wake.
@@ -70,7 +74,7 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     for (let index = lookups.length - 1; index >= 0; index--) {
       const lookup = lookups[index]!;
       if ((lookup.kind !== "legacy-login" && lookup.kind !== "legacy-policy" && lookup.kind !== "legacy-decision-time"
-        && lookup.kind !== "legacy-decision-session") || lookup.needsWork()) continue;
+        && lookup.kind !== "legacy-decision-session" && lookup.kind !== "legacy-decision-session-repair") || lookup.needsWork()) continue;
       lookups.splice(index,1);
       if (index < next) next--;
     }
@@ -192,17 +196,43 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
       }
       catch (error) { log.warn("store", "the old message lookup could not be checked", { error: (error as Error).message }); retry(); }
     });
-    void previous.then(() => { allowed = true; wake(); }, (error) => {
-      log.warn("store", "could not wait for the previous station before preparing messages", { error: (error as Error).message });
-      finishDecisionSessions(false);
-      resolve(false);
-    });
   } else resolve(true);
+  // A session index can disappear after all startup work has retired, so keep the handover state even for an idle
+  // builder. A later reader can add a bounded repair without starting a second worker.
+  void previous.then(() => { allowed = true; wake(); }, (error) => {
+    handoverFailed = true;
+    log.warn("store", "could not wait for the previous station before preparing messages", { error: (error as Error).message });
+    finishDecisionSessions(false);
+    resolve(false);
+  });
+  const ensureDecisionSessions = () => {
+    installDecisionSessionIndex(store.db);
+    const add = (lookup: Lookup) => { if (!lookups.some((existing) => existing.kind === lookup.kind)) lookups.push(lookup); };
+    if (hasSharedDecisionSession(store.db) && decisionTimeIndexNeedsWork(store.db)) add({ kind: "legacy-decision-time",
+      needsWork: () => decisionTimeIndexNeedsWork(store.db), step: () => decisionTimeIndexStep(store.db) });
+    if (hasLegacyDecisionSession(store.db) && decisionSessionIndexNeedsWork(store.db)) add({ kind: "legacy-decision-session",
+      needsWork: () => !store.decisionSessionsReady() && decisionSessionIndexNeedsWork(store.db), step: () => decisionSessionIndexStep(store.db) });
+    if (decisionSessionRepairNeedsWork(store.db)) add({ kind: "legacy-decision-session-repair",
+      needsWork: () => !store.decisionSessionsReady() && decisionSessionRepairNeedsWork(store.db), step: () => decisionSessionRepairStep(store.db) });
+    wake();
+  };
   return {
     ready, wake,
     waitForDecisionSessions: () => {
+      if (closed) return Promise.resolve(false);
+      if (store.decisionSessionsReady()) return Promise.resolve(true);
+      if (handoverFailed) return Promise.resolve(false);
+      if (decisionSessionsSettled) { decisionSessionsReady = Promise.withResolvers<boolean>(); decisionSessionsSettled = false; }
       const probe = () => {
-        try { checkDecisionSessions(); }
+        try {
+          checkDecisionSessions();
+          if (!decisionSessionsSettled) {
+            // An index can disappear between batches. Recheck while a reader is waiting so the worker can retire
+            // the now-useless lookup and start the bounded repair instead of leaving that reader waiting forever.
+            ensureDecisionSessions();
+            checkDecisionSessions();
+          }
+        }
         catch (error) {
           log.warn("store", "the decision-session lookup could not be checked", { error: (error as Error).message });
           finishDecisionSessions(false);
@@ -212,7 +242,7 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
       // Another process can finish the lookup while handover is still in progress. Probe promptly only while a
       // reader is actually waiting; the ordinary maintenance check continues at its slower interval otherwise.
       if (!decisionSessionsSettled && decisionProbeCancel === null) decisionProbeCancel = work.every(250, probe);
-      return decisionSessionsReady;
+      return decisionSessionsReady.promise;
     },
     close: async () => {
       if (closed) return;
