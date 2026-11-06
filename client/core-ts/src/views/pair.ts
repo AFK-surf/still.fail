@@ -33,7 +33,7 @@
 // code too old), `bad_share`; a trusted device from before `late` closes the stream then with no word. An `approved`
 // that signed it in nowhere (each workspace in `failed`, with why) is no approval: the new device says why.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Deferred, Effect, Queue } from "effect";
+import { Deferred, Effect, Fiber, Queue } from "effect";
 import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -208,9 +208,19 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     // An app can accept a connection while its kept signing key is still being read at startup. That is not a refusal:
     // wait for the read, unless the new device goes away, before deciding whether this device may approve it.
     const loading = signerLoading(inner);
+    let receive = () => d.next();
     if (loading !== null && arr(get(hello.value, "workspaces")).length > 0) {
-      const stillHere = yield* Effect.raceFirst(Effect.as(loading, true), Effect.as(Effect.orElseSucceed(d.next(), () => null), false));
+      // A host stream read may continue after its waiting effect is interrupted. Keep the same read alive and use its
+      // result as the first message after showing the code, so it cannot consume that message behind another read.
+      const pending = yield* Effect.forkChild(Effect.orElseSucceed(d.next(), () => null));
+      const stillHere = yield* Effect.raceFirst(Effect.as(loading, true), Effect.as(Fiber.join(pending), false));
       if (!stillHere) return;
+      let first = true;
+      receive = () => {
+        if (!first) return d.next();
+        first = false;
+        return Fiber.join(pending);
+      };
     }
     const asked = placesFor(inner, hello.value, peer, me);
     const { places } = asked;
@@ -240,7 +250,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
         const wrong = Effect.suspend(() => (tries >= PAIR_TRIES ? d.send({ t: "no", error: "tries" }) : d.send({ t: "wrong", left: PAIR_TRIES - tries })));
         for (;;) {
           const next = yield* Effect.raceAllFirst([
-            Effect.map(d.next(), (m) => ({ m }) as const),
+            Effect.map(receive(), (m) => ({ m }) as const),
             Effect.as(Deferred.await(asking.away), { away: true } as const),
             Effect.as(Effect.sleep(Math.max(0, asking.until - inner.host.nowMs())), { late: true } as const),
           ]);
