@@ -183,7 +183,7 @@ fn event_layout_read(f : MbtFile, c : Call) -> Bool {
     }
     // Starting an event action from a binding or a layout is still feedback. An actual handler registered in that
     // binding/layout runs later and is safe (notably a layout child's `owns` cleanup).
-    if outer.name == "event_action" && f.calls.iter().any(fn(binding) {
+    if (outer.name == "event_action" || outer.name == "after_event_action") && f.calls.iter().any(fn(binding) {
       (binding.name == "By" || binding.name == "layout_box") &&
       binding.args.iter().any(fn(arg) { arg.1.contains(outer.at) }) &&
       !f.calls.iter().any(fn(handler) {
@@ -199,7 +199,7 @@ fn event_layout_read(f : MbtFile, c : Call) -> Bool {
       let direct = arg.1.length() > 0 && arg.1[0] == closure && arg.1.contains(c.at)
       direct &&
       (outer.name == "on_press" || outer.name == "on_drag" || outer.name == "on_key" ||
-        outer.name == "takes_back" || outer.name == "event_action" ||
+        outer.name == "takes_back" || outer.name == "event_action" || outer.name == "after_event_action" ||
         (outer.name == "show" && arg.0 == Some("leave_by")))
     })
   })

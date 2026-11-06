@@ -497,6 +497,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   paint_clock_at.val = ""
   // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
   c.moved_place()
+  if projection_paint_dirty.val { scene.old_due = true }
   c.ninst = 0
   match fake.val {
     Some(f) => f.frame_failed_images.clear()
@@ -525,6 +526,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
   c.view_paint(root)
+  projection_paint_dirty.val = false
   let tree_end = c.ninst
   // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
   // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
@@ -575,9 +577,41 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
   c.back_told_host()
-  let hi = c.hit_ids
   // (the targets as this frame drew them: what a layer dismissed since the last drew is out of them as it was let go)
   layer_retired_ids.clear()
+  c.publish_targets()
+  // (what said its presses are another's, under a Tester: that one takes them there)
+  c.check_press_owners()
+  // (its targets published whole: what nodes yield to of them told, view_host.mbt)
+  yields_published(c)
+  // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
+  anchors_published(c)
+  // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
+  // alone, it stands)
+  if !alone {
+    c.layers_frame_end()
+    c.focus_frame_end()
+  }
+  c.desk_frame_end()
+  // (the hand as this frame left it, what it drew published, at its clock: hand_turns.mbt)
+  turns_said(c, c.clock, frame=true)
+  // (what takes a field's keys the frame no longer said so of, let go: Ctx::on_key)
+  keys_taken_built()
+  c.bars_frame_end()
+  c.sync_ime()
+  c.sync_text_menu()
+  c.sync_edit_can()
+  match frame_hook.val {
+    Some(f) if !looks_rebuilt.val => f()
+    _ => ()
+  }
+  paint_phase.val = 2
+}
+
+///|
+/// Publish the targets just found, whether by a frame or by a projection brought to an input.
+fn Ctx::publish_targets(c : Ctx) -> Unit {
+  let hi = c.hit_ids
   c.hit_ids = c.next_hit_ids
   c.next_hit_ids = hi
   let hr = c.hit_rects
@@ -609,32 +643,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_bars = bs
   // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
   old_hits_framed(c)
-  // (what said its presses are another's, under a Tester: that one takes them there)
-  c.check_press_owners()
-  // (its targets published whole: what nodes yield to of them told, view_host.mbt)
-  yields_published(c)
-  // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
-  anchors_published(c)
-  // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
-  // alone, it stands)
-  if !alone {
-    c.layers_frame_end()
-    c.focus_frame_end()
-  }
-  c.desk_frame_end()
-  // (the hand as this frame left it, what it drew published, at its clock: hand_turns.mbt)
-  turns_said(c, c.clock, frame=true)
-  // (what takes a field's keys the frame no longer said so of, let go: Ctx::on_key)
-  keys_taken_built()
-  c.bars_frame_end()
-  c.sync_ime()
-  c.sync_text_menu()
-  c.sync_edit_can()
-  match frame_hook.val {
-    Some(f) if !looks_rebuilt.val => f()
-    _ => ()
-  }
-  paint_phase.val = 2
+  projection_hits_dirty.val = false
 }
 
 ///|

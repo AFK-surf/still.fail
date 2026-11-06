@@ -81,7 +81,8 @@ priv struct SheetKept {
 /// closing it. `raised`: how far over its place it is drawn (up out of the way of another over it); closed so, it
 /// sinks from there, as far as takes it out of sight. `sinks`: closed, how far it sinks at least (with others closing
 /// at once over it, as far as they all do, sinking as one with them). Whether it is open now, whether it is drawn,
-/// what a drag came to.
+/// what a drag came to. `surface` configures the old surface box alone, not its modal scrim: a presenter can have it
+/// follow a retained projection with `Ctx::moved_with_node`.
 pub fn sheet(
   c : @ui.Ctx,
   key : String,
@@ -98,6 +99,7 @@ pub fn sheet(
   on_escape? : () -> Bool,
   raised? : Double = 0.0,
   sinks? : Double = 0.0,
+  surface? : (@ui.Ctx, Int) -> Unit,
 ) -> Sheet {
   install()
   let th = c.theme()
@@ -252,6 +254,10 @@ pub fn sheet(
         body()
       })
     })
+    match surface {
+      Some(f) => f(c, i)
+      None => ()
+    }
     c.semantics(i, Dialog, label~, modal=true)
     // (where it stands, for what is to stay clear of it: sheet_top)
     @motion.measure(c, i, sheet_measured)

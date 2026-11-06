@@ -1942,6 +1942,15 @@ pub fn View::id(self : View) -> NodeId {
 }
 
 ///|
+/// This node's own placed offset for the old-view host, after the tree is brought to a frame or input. None if it is
+/// not in that tree, has gone, or is laid out nowhere. The host uses it to carry one old surface with a `Painted`
+/// projection; it is not a layout input.
+pub fn View::host_offset(self : View, tree : Tree) -> (Double, Double)? {
+  guard physical_equal(self.tree, tree) && self.live() is Some(n) && !tree.out_at(self.at) else { return None }
+  Some((n.lx - n.flex.left, n.ly - n.flex.top))
+}
+
+///|
 /// The moment of the change being made (an event's, a due thing's: Tree::cause_now; none, the logic's): where what it
 /// tells starts, the same whatever frame takes it.
 pub fn View::cause_at(self : View) -> Double {
@@ -5664,6 +5673,31 @@ fn Tree::has_before_removal(self : Tree, root : View) -> Bool {
     }
   }
   false
+}
+
+///|
+/// An action at this cause after its signal changes and structure changes have all been committed. This is for an
+/// opening action that needs to measure a node the same event just made. It does not wait for a frame. Like
+/// `event_action`, it cannot be started by a tracked computation or layout; an owner's cleanup during layout may ask
+/// for it after layout. A disposed tree does not run the action.
+pub fn View::after_event_action(self : View, f : () -> Unit) -> Unit {
+  let tree = self.tree
+  let at = if tree.cause_at >= 0.0 { tree.cause_at } else { tree.time_now() }
+  if tree.layouts_active > 0 {
+    guard tree.cleanups_active > 0 else { abort("an event action cannot be started by layout") }
+  } else {
+    guard !@signals.tracking_underway() else {
+      abort("an event action cannot be started by a tracked computation or layout")
+    }
+  }
+  @signals.after_all_flushed(fn() {
+    if !tree.gone {
+      guard tree.layouts_active == 0 && !@signals.tracking_underway() else {
+        abort("an event action cannot be started by a tracked computation or layout")
+      }
+      tree.event(at, f)
+    }
+  })
 }
 
 ///|

@@ -1330,6 +1330,7 @@ pub fn Ctx::mouse_drags_lists(Self, Bool) -> Unit
 pub fn Ctx::move_state(Self, Array[(String, Array[String])], duration? : Double, ease? : Ease, loc~ : SourceLoc) -> Unit
 pub fn Ctx::moved(Self, String, Double) -> Double
 pub fn Ctx::moved_by(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
+pub fn Ctx::moved_with_node(Self, Int32, @view.View) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::moving(Self, Mover, &Moving, what? : String, loc~ : SourceLoc) -> Unit
 pub fn Ctx::moving_as(Self, Mover, &Moving, String, tell? : Bool) -> Unit

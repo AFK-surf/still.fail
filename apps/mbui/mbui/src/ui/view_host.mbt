@@ -371,6 +371,7 @@ fn view_forget() -> Unit {
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
+  projection_forget()
   // (each field of the tree's its editor no longer: tree_field_gone, as its node is let go)
   for id in tree_fields.keys().collect() {
     tree_field_gone(id)
@@ -701,6 +702,7 @@ fn view_brought(tree : @view.Tree) -> Unit {
   // (a press's room at least, by how the app is pointed at: what is drawn smaller reached from round it)
   tree.set_press_least(room_least())
   @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
+  g().moved_projections(tree)
   view_changes_taken(tree)
   old_place(tree)
 }
@@ -976,6 +978,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if tree.told_since() && !scene_checking() {
     view_brought(tree)
   }
+  self.moved_projections(tree)
   // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
   // drawn (Ctx::view_targets); what a still pointer is over told as they say, the tree brought so: drawn as it is now)
   let layers_from = self.view_targets(root, tree)
@@ -2657,6 +2660,7 @@ fn view_wheel(
   }
   let at = view_moment()
   tree.bring_to(at)
+  g().projected_input(tree)
   old_hits_place(g(), Some(tree))
   if old_root_hit(g(), x, y, pressed=false) {
     return false
@@ -2769,6 +2773,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   let at = view_moment()
   tree.bring_to(at)
   let held_tip = passive_hold_before(kind, x, y)
+  g().projected_input(tree)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
@@ -4056,6 +4061,7 @@ fn old_input_brought() -> Unit {
   match view_app.val {
     Some(tree) => {
       tree.bring_to(view_moment())
+      g().projected_input(tree)
       old_hits_place(g(), Some(tree))
     }
     None => ()

@@ -78,6 +78,46 @@ test "tree sheet fits its content, changes with it, and reports its visible heig
 }
 
 ///|
+test "an old sheet surface follows a retained projection and takes a touch before the next frame" {
+  let height = @signals.signal(20.0)
+  let tapped = Ref(0)
+  let button = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+    let extent = root.box(fn(v) {
+      v.over(Is(true)).width(Is(Some(1.0))).height(By(fn() { Some(height.get()) })) |> ignore
+    })
+    let projection = root.box(fn(v) {
+      v.over(Is(true)).width(Is(Some(1.0))).height(Is(Some(1.0)))
+        .offset(Painted(fn(laid) { (0.0, -laid.size(extent).unwrap_or((0.0, 0.0)).1) })) |> ignore
+    })
+    @ui.old(root, fn(c) {
+      @kit.sheet(c, "old projected", true, h=200.0,
+        surface=fn(ctx, i) { ctx.moved_with_node(i, projection) },
+        look=fn(ctx, st, body) { ctx.box(w=Fill(1.0), h=Px(st.h), bg=0x3366CCFFL, body) |> ignore },
+        fn() {
+          let id = c.id("old projected button")
+          button.val = id
+          c.on_press(id, fn() { tapped.val += 1 })
+          c.box(w=Fill(1.0), h=Px(40.0), id~, fn() {  }) |> ignore
+        },
+      ) |> ignore
+    }).over(Is(true)) |> ignore
+  })
+  t.draw()
+  t.run_for(sheet_test_late_ms)
+  assert_true(button.val != 0, msg="old sheet did not build its button")
+  let before = t.ctx().rect_of(button.val)
+  assert_true(before is Some(_), msg="sheet=\{t.drawn_rects().iter().filter(fn(r) { r.4 == 0x3366CCFFL }).to_array()}, button=\{button.val}")
+  height.set(100.0)
+  t.touch(0, 20.0, 560.0)
+  t.touch(2, 20.0, 560.0)
+  assert_eq(tapped.val, 1, msg="button before=\{before}, after=\{t.ctx().rect_of(button.val)}")
+  t.draw()
+  let surface = t.drawn_rects().iter().find_first(fn(r) { r.4 == 0x3366CCFFL }).unwrap()
+  assert_eq(surface.1, 544.0)
+}
+
+///|
 test "tree sheet traps the page, returns focus and keeps only its picture until its exit is over" {
   let (t, k) = node_sheet_case()
   t.run_for(sheet_test_late_ms)

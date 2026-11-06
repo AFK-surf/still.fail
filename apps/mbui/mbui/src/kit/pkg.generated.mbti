@@ -257,7 +257,7 @@ pub fn select_look(@ui.Ctx, SelectState) -> Unit
 
 pub fn separator(@ui.Ctx, vertical? : Bool, decorative? : Bool, thickness? : Double, color? : Int64) -> Unit
 
-pub fn sheet(@ui.Ctx, String, Bool, () -> Unit, h? : Double, share? : Double, detents? : Array[Double], close_below? : Double, drag_h? : Double, scrim? : Int64, label? : String, look? : (@ui.Ctx, SheetState, () -> Unit) -> Unit, on_escape? : () -> Bool, raised? : Double, sinks? : Double) -> Sheet
+pub fn sheet(@ui.Ctx, String, Bool, () -> Unit, h? : Double, share? : Double, detents? : Array[Double], close_below? : Double, drag_h? : Double, scrim? : Int64, label? : String, look? : (@ui.Ctx, SheetState, () -> Unit) -> Unit, on_escape? : () -> Bool, raised? : Double, sinks? : Double, surface? : (@ui.Ctx, Int32) -> Unit) -> Sheet
 
 pub fn sheet_node(@view.View, () -> Bool, () -> Unit, (@view.View) -> Unit, tall? : Double, fit? : Bool, grows? : Bool, draggable? : Bool, raised? : () -> Double, raised_painted? : (@view.Laid) -> Double, sinks? : () -> Double, dims? : () -> Bool, covered? : () -> Double, scrim? : () -> Int64, extent? : (@view.View) -> Unit, shown? : () -> Unit, gone? : () -> Unit, look? : (@view.View, () -> Double) -> Unit, label? : () -> String, initial_focus? : () -> @view.View?, within? : () -> Bool, under? : Double) -> Unit
 

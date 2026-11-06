@@ -60,6 +60,94 @@ test "event action snapshots two changed sizes before a layout-removed owner clo
 }
 
 ///|
+test "a state reaction snapshots its size at the cause even if it opens again before a frame" {
+  let open = @signals.signal(true)
+  let height = @signals.signal(120.0)
+  let seen : Array[(Double, Double)] = []
+  let tree = @view.Tree::new(fn(root) {
+    let content = root.box(fn(v) { v.height(By(fn() { Some(height.get()) })) |> ignore })
+    root.reacts(fn() { open.get() }, fn(on) {
+      if !on {
+        root.event_action(fn() { seen.push((root.cause_at(), content.laid_size().1)) })
+      }
+    })
+  }, time=fn() { 0.0 })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  tree.event(10.0, fn() { height.set(200.0); open.set(false) })
+  tree.event(20.0, fn() { open.set(true) })
+  assert_eq(seen, [(10.0, 200.0)])
+  assert_true(open.get())
+}
+
+///|
+test "after-event action measures a node opened in that event without a frame" {
+  let open = @signals.signal(false)
+  let height = @signals.signal(120.0)
+  let extent : Ref[@view.View?] = Ref(None)
+  let root_ref : Ref[@view.View?] = Ref(None)
+  let seen : Array[(Double, Double)] = []
+  let before_commit = Ref((false, false))
+  let tree = @view.Tree::new(fn(root) {
+    root_ref.val = Some(root)
+    root.show(fn() { open.get() }, fn(v) {
+      extent.val = Some(v)
+      v.height(By(fn() { Some(height.get()) })) |> ignore
+    })
+  }, time=fn() { 0.0 })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  tree.event(10.0, fn() {
+    open.set(true)
+    height.set(200.0)
+    let before = extent.val is None
+    let root : @view.View = root_ref.val.unwrap()
+    root.after_event_action(fn() {
+      let new_extent : @view.View = extent.val.unwrap()
+      seen.push((root.cause_at(), new_extent.laid_size().1))
+    })
+    before_commit.val = (before, seen.is_empty())
+  })
+  assert_eq(before_commit.val, (true, true))
+  assert_eq(seen, [(10.0, 200.0)])
+}
+
+///|
+test "after-event action waits for structures even when the reacting watcher runs first" {
+  let open = @signals.signal(false)
+  let extent : Ref[@view.View?] = Ref(None)
+  let seen : Array[(Double, Double)] = []
+  let tree = @view.Tree::new(fn(root) {
+    root.reacts(fn() { open.get() }, fn(on) {
+      if on {
+        root.after_event_action(fn() {
+          let new_extent : @view.View = extent.val.unwrap()
+          seen.push((root.cause_at(), new_extent.laid_size().1))
+        })
+      }
+    })
+    root.show(fn() { open.get() }, fn(v) {
+      extent.val = Some(v)
+      v.height(Is(Some(200.0))) |> ignore
+    })
+  }, time=fn() { 0.0 })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  tree.event(10.0, fn() { open.set(true) })
+  assert_eq(seen, [(10.0, 200.0)])
+}
+
+///|
+test "panic an after-event action cannot be started by a binding" {
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.height(By(fn() {
+        @signals.untracked(fn() { root.after_event_action(fn() { v.laid_size() |> ignore }) })
+        Some(10.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+}
+
+///|
 test "panic event action cannot be started in a tracked binding, even through untracked" {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(v) {

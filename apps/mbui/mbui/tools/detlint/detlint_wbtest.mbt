@@ -2059,12 +2059,15 @@ test "layout-read-back allows an event's size, but not a binding made by an even
         "  v.on_press(fn() { c.laid_size(id) |> ignore })\n" +
         "  fake.on_press(fn() { fake.laid_size() |> ignore })\n" +
         "  fake.event_action(fn() { fake.laid_size() |> ignore })\n" +
+        "  v.after_event_action(fn() { v.laid_size() |> ignore })\n" +
+        "  v.height(By(fn() { v.after_event_action(fn() { v.laid_size() |> ignore }); None }))\n" +
+        "  v.host_offset(tree) |> ignore\n" +
         "}\n",
       ),
     ],
     "layout-read-back",
-    10,
+    12,
     cfg~,
   )
-  assert_eq(lines(fs), [6, 7, 8, 9, 11, 12, 13, 14, 15, 16])
+  assert_eq(lines(fs), [6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 18, 19])
 }

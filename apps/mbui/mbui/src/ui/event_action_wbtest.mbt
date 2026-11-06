@@ -41,6 +41,33 @@ test "an old island's input tells a size-based event after its build" {
 }
 
 ///|
+test "an old hosted press snapshots both retained sizes at the original input time" {
+  let first = @signals.signal(120.0)
+  let second = @signals.signal(150.0)
+  let got : Ref[(Double, Double, Double)?] = Ref(None)
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0, time=0.0)
+  set_view_app(fn(root) {
+    let a : @view.View = root.box(fn(v) { v.over(Is(true)).height(By(fn() { Some(first.get()) })) |> ignore })
+    let b : @view.View = root.box(fn(v) { v.over(Is(true)).height(By(fn() { Some(second.get()) })) |> ignore })
+    old(root, fn(c) {
+      let id = c.id("snapshot")
+      c.on_press(id, fn() {
+        root.event_action(fn() { got.val = Some((root.cause_at(), a.laid_size().1, b.laid_size().1)) })
+      })
+      c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  }) |> ignore
+    }).over(Is(true)) |> ignore
+  })
+  t.draw()
+  first.set(200.0)
+  second.set(300.0)
+  let host_delivery_delay_ms = 100.0
+  t.advance(host_delivery_delay_ms)
+  t.touch_at(0, 20.0, 20.0, 30.0)
+  t.touch_at(2, 20.0, 20.0, 40.0)
+  assert_eq(got.val, Some((40.0, 200.0, 300.0)))
+}
+
+///|
 test "panic an old build cannot tell an input action without an input" {
   let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
   set_view_app(fn(root) {

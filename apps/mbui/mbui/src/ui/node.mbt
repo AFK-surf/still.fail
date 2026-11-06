@@ -183,6 +183,8 @@ struct Node {
   // moved off where its parent lays it by what this gives at the frame's time, from its own size (Ctx::moved_by: a page
   // sliding in), and where that had it as it was last placed, on the device's pixels (what it holds placed with it)
   mut moved_by : ((Double, Double) -> (Double, Double))?
+  /// A retained projection carrying only this old subtree, resolved after retained layout, never in old layout.
+  mut moved_with_node : @view.View?
   mut moved_x : Double
   mut moved_y : Double
   /// what moves it only carries it from where it is laid out to where it is drawn (Ctx::moved_carries: an old view's
@@ -475,6 +477,7 @@ fn Node::new() -> Node {
     ty: 0.0,
     place: None,
     moved_by: None,
+    moved_with_node: None,
     moved_x: 0.0,
     moved_y: 0.0,
     moved_carries: false,
@@ -627,6 +630,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.last = -1
   self.next = -1
   self.moved_by = None
+  self.moved_with_node = None
   self.moved_x = 0.0
   self.moved_y = 0.0
   self.moved_carries = false
