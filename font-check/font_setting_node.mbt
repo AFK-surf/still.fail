@@ -16,6 +16,8 @@ pub fn fonts_node(
   let place = fn() { @settings.font_places[@settings.fonts_at.get()] }
   let trying = @signals.signal("", same=fn(a, b) { a == b })
   let holding = @signals.signal(false, same=fn(a, b) { a == b })
+  let local_opened = @signals.signal(@settings.fixture_desk() == "local-fonts", same=fn(a, b) { a == b })
+  let local_find = @ui.Field::new()
   // The page's windowed list may let the preview block go while the faces remain in view. Its layout record belongs
   // to the page for that reason, and is cleared as soon as the hand leaves the faces, even between frames.
   let held_height = Ref(0.0)
@@ -56,7 +58,7 @@ pub fn fonts_node(
             },
           )
         "preview" => font_preview_node(b, core, prefs, all, place, trying, holding, held_height)
-        _ => fonts_faces_node(b, core, prefs, all, files, place, trying, holding)
+        _ => fonts_faces_node(b, core, prefs, all, files, place, trying, holding, local_opened, local_find)
       }
     },
   )
@@ -117,6 +119,8 @@ fn font_preview_node(
             @sf.t("web-pages.appearance.fonts.sampleText") + "\n\n" + fp_sample_code + "\n\n" + @sf.t("web-pages.appearance.fonts.sampleAfter")
           },
           size=fn() { body_size },
+          text_face=fn() { faces().1 },
+          code_face=fn() { faces().2 },
         ) |> ignore
       }) |> ignore
     }) |> ignore
@@ -174,12 +178,14 @@ fn fonts_faces_node(
   place : () -> String,
   trying : @signals.Signal[String],
   holding : @signals.Signal[Bool],
+  local_opened : @signals.Signal[Bool],
+  local_find : @ui.Field,
 ) -> Unit {
   let chosen = fn() { font_chosen(prefs(), place()) }
   parent.box(fn(region) {
     // Points also covers the spaces between rows, without taking a press from any row or an overlay above the list.
     region.points(Is(true)) |> ignore
-    region.reacts(fn() { @ui.pointing() is Mouse && region.pointed_in() }, fn(on) { holding.set(on) })
+    region.reacts(fn() { @sf.lit_in_node(region) }, fn(on) { holding.set(on) })
     region.owns(fn() { holding.set(false) }) |> ignore
     @sf.group_node(region, fn(g) {
     font_face_node(
@@ -213,13 +219,47 @@ fn fonts_faces_node(
       )
     })
     g.show(fn() { @ui.local_font_families() != "" }, fn(slot) {
-      let look = @sf.look_node(slot)
-      @ui.old(slot, natural=true, unlaid=fn() { 64.0 }, fn(c) {
-        @sf.with_look(look, fn() { local_face_row(c, core, place(), chosen()) })
-      }) |> ignore
+      font_local_row_node(slot, core, place, chosen, trying, local_opened, local_find)
     })
     })
   }) |> ignore
+}
+
+///|
+/// The host's own families: one choice row and an anchored, non-modal list owned by this page's row.
+fn font_local_row_node(
+  parent : @view.View,
+  core : Core,
+  place : () -> String,
+  chosen : () -> String,
+  trying : @signals.Signal[String],
+  open : @signals.Signal[Bool],
+  find : @ui.Field,
+) -> Unit {
+  let local = fn() { @sf.t("web-pages.appearance.fonts.local") }
+  let picked = fn() {
+    let id = chosen()
+    if id.has_prefix(local_prefix) { id.unsafe_substring(start=local_prefix.length(), end=id.length()) } else { "" }
+  }
+  let close = fn() { open.set(false) }
+  let target : Ref[@view.View?] = Ref(None)
+  parent.owns(fn() { close(); target.val = None }) |> ignore
+  let row = @sf.choice_row_node(parent, local, fn() { picked() != "" }, fn() {
+    find.set("")
+    open.set(!open.get())
+  }, body=fn(r) {
+    r.box(fn(lines) {
+      lines.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(2.0)) |> ignore
+      let face = fn() {
+        if picked() == "" { None } else { Some(@settings.font_places.search(place()).unwrap_or(0) + 1) }
+      }
+      font_words_node(lines, fn() { if picked() == "" { local() } else { picked() } }, fn() { face_name_words }, face, max_lines=1) |> ignore
+      font_words_node(lines, fn() { @sf.t("web-pages.appearance.fonts.sampleRow") }, fn() { face_sample_words }, face, max_lines=1) |> ignore
+    }) |> ignore
+  })
+  @sf.panel_control_node(parent, "fonts/local", fn() { open.get() }, row, fn(body, done) {
+    font_local_list_node(body, core, place, chosen, trying, find, target, done)
+  }, close, w=local_panel_w, label=local(), initial_focus=fn() { target.val }, side=Bottom, along=Start)
 }
 
 ///|
@@ -286,15 +326,17 @@ fn font_local_list_node(
   place : () -> String,
   chosen : () -> String,
   trying : @signals.Signal[String],
+  find : @ui.Field,
+  target : Ref[@view.View?],
   close : () -> Unit,
 ) -> Unit {
   parent.box(fn(search) {
     search.padding(Is((0.0, 0.0, 0.0, 6.0))) |> ignore
-    @sf.input_node(search, local_filter, placeholder_by=fn() { @sf.t("web-pages.appearance.fonts.searchLocal") }, small=true) |> ignore
+    target.val = Some(@sf.input_node(search, find, placeholder_by=fn() { @sf.t("web-pages.appearance.fonts.searchLocal") }, small=true))
   }) |> ignore
   let shown = fn() {
-    let find = local_filter.text().trim(chars=" ").to_lower()
-    let found = local_families().filter(fn(f) { find == "" || f.to_lower().contains(find) })
+    let word = find.text().trim(chars=" ").to_lower()
+    let found = local_families().filter(fn(f) { word == "" || f.to_lower().contains(word) })
     if found.length() > local_most { found[:local_most].to_array() } else { found }
   }
   parent.show(fn() { shown().is_empty() }, fn(note) {

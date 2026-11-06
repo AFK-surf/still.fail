@@ -1,0 +1,51 @@
+name: fonts-integration
+on:
+  push:
+    branches: [codex/fonts-host-check-cf8ab5ce]
+    paths: ["font-check/**", ".github/workflows/fonts-integration.yml"]
+jobs:
+  integration:
+    if: github.event.head_commit.message == 'Try the fonts page with in-flight components'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: stillfail/sfpages
+            pattern: '*font preview keeps*'
+          - package: stillfail/sfapp
+            pattern: '*pointing at*'
+          - package: stillfail/sfapp
+            pattern: '*本机字体*'
+          - package: stillfail/sfapp
+            pattern: '*字体 is opened*'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: overlay
+      - uses: actions/checkout@v4
+        with:
+          ref: ccbc88366d8a37948d1e902a941a80ee4d8777d9
+          path: repo
+      - uses: ./repo/.github/actions/mbui-moonbit
+      - name: Run the page against a temporary snapshot of the in-flight components
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+          PATTERN: ${{ matrix.pattern }}
+        run: |
+          set -eu
+          cd repo
+          gzip -dc ../overlay/font-check/product-ccbc.patch.gz | git apply -
+          cp ../overlay/font-check/linux_font_watch.h apps/mbui/mbui/src/host/linux_font_watch.h
+          cp ../overlay/font-check/linux_font_watch.c apps/mbui/mbui/test/host/linux_font_watch.c
+          cp ../overlay/font-check/font_setting_node*.mbt apps/mbui/src/sfpages/
+          cp ../overlay/font-check/trial-sf/*.mbt apps/mbui/src/sf/
+          cd apps/mbui
+          if moon test --target wasm-gc --release -p "$PACKAGE" -f "$PATTERN" > "$RUNNER_TEMP/page-test.log" 2>&1; then
+            grep 'Total tests:' "$RUNNER_TEMP/page-test.log"
+          else
+            tail -c 30000 "$RUNNER_TEMP/page-test.log"
+            exit 1
+          fi
