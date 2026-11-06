@@ -154,6 +154,13 @@ pub fn Tree::said_takes_action(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// Whether an old view's declarations hosted here can take accessibility actions, as said_order exposes them.
+/// The host need not have a declaration of its own; hiding or disabling it still hides or disables those inside.
+pub fn Tree::hosted_takes_action(self : Tree, id : NodeId) -> Bool {
+  self.acts_on(id) && self.nodes[id.at].hosted && !self.nodes[id.at].turned_off
+}
+
+///|
 /// Ask a node to do one of its declared accessibility actions at `at`. What changed by then is taken first; a node
 /// gone, hidden, disabled, leaving, under a modal, or no longer declaring the action does nothing. Whether it ran.
 pub fn Tree::said_action_at(self : Tree, id : NodeId, action : Action, at : Double) -> Bool {

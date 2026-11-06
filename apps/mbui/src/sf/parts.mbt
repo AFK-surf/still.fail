@@ -245,7 +245,10 @@ fn button_part(
   }
   // (said a button whether it takes presses or not: one that cannot is said disabled, not left out of the tree, and its
   // faded words are asked no contrast)
-  c.semantics(b, Button, id=if live { id } else { 0 }, label~, expanded?, disabled=!live)
+  // Programmatic/accessibility focus is distinct from a keyboard Tab stop. This old button has always accepted
+  // Focus and Activate; declare both without changing which keys it takes.
+  c.semantics(b, Button, id=if live { id } else { 0 }, label~, expanded?, disabled=!live,
+    actions=if live { [Activate, Focus] } else { [] })
   if live {
     tip(c, "sf-btn/" + key + label + "/tip", id, hint)
   }

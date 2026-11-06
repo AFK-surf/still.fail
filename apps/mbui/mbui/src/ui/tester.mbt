@@ -2881,6 +2881,8 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 /// What a press at (x, y) targets, as named in the semantics tree, with the same press reach and layer order as input.
 /// None for a target that says no semantics. A control's press room may extend beyond the box it draws.
 pub fn Tester::press_target_at(self : Tester, x : Double, y : Double) -> SemNode? {
+  // The same preparation as the host's pointer path; a query must not read the preceding frame's layout.
+  old_input_brought()
   let c = self.ctx()
   let old = fn() { hit_in(c.hit_ids, c.hit_rects, x, y) }
   let id = match view_tree() {

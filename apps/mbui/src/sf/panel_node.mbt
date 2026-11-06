@@ -168,7 +168,7 @@ fn panel_node(
                   None => false
                 }
               }
-              if !inside(at) && !inside(p) { cancel() }
+              if !p.window_down_within() && !inside(at) && !inside(p) { cancel() }
             }
           })
         }
