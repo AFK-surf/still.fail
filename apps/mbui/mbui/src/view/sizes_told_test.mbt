@@ -2,6 +2,29 @@
 // are laid out, as any other's.
 
 ///|
+test "a size published inside an input batch finishes its dependent binding before hover is notified" {
+  let width = @signals.signal(100.0)
+  let follower : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    let source = root.box(fn(n) {
+      n.width(By(fn() { Some(width.get()) })).height(Is(Some(10.0))) |> ignore
+    })
+    follower.val = Some(root.box(fn(n) {
+      n.width(By(fn() { source.laid_size_told().map(fn(size) { size.0 }) }))
+      .height(Is(Some(20.0))) |> ignore
+    }))
+  })
+  defer { tree.dispose() }
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  @signals.start_batch()
+  defer { @signals.end_batch() }
+  width.set(200.0)
+  tree.bring_to(10.0)
+  assert_eq(follower.val.unwrap().rect(), (0.0, 10.0, 200.0, 20.0))
+  assert_false(tree.layout_pending())
+}
+
+///|
 test "laid_size_told: a node made as another's size is told, its own size asked as it is made: told once it is laid out" {
   let wide = @signals.signal(100.0, same=fn(a, b) { a == b })
   let told : Ref[(Double, Double)?] = Ref(None)

@@ -6170,8 +6170,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
-    self.laid_out(upto)
+  if self.sized.length() > 0 && self.sizes_told() {
+    // An input can bring the tree forward before its batch has ended. Size
+    // subscribers are marked then, but their notifications have not run yet.
+    // Finish these legacy geometry bindings in their own phase; the final
+    // hover publication must not be what first pulls them.
+    self.pull()
+    if self.due { self.laid_out(upto) }
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
