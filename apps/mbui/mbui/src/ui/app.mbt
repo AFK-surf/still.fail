@@ -134,6 +134,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   let t3 = work_now()
   h_present(c.inst, c.ninst)
+  if perf_touch_at.val >= 0.0 {
+    perf_touch_submitted(work_now())
+  }
   // what the shots being taken drew read back (shot.mbt)
   c.shots_after_present()
   log_drawn(w, h, scale, t)
@@ -828,7 +831,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   // takes it (the tree's nodes, what they take presses by bound to it, or the old view) this one: view_host.mbt)
   view_event_said(fn() { pointing_said_by_host(by) }, fn() {
     pointer_in_now(kind, x, y, button, mods, by~)
-  })
+  }, what="pointer")
 }
 
 ///|
