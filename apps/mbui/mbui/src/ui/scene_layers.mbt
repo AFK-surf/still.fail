@@ -1139,7 +1139,6 @@ fn clip_put_back(level : FixedArray[Double], window : Bool, apart : Bool) -> Uni
 ///|
 /// Layer `id` not copied, for `why` (the first of the frame's said: scene_alone_why).
 fn copy_not(id : @view.NodeId, why : String) -> Bool {
-  copy_not_count(why)
   if scene.copy_why == "" {
     scene.copy_why = "\{id.at}: \{why}"
   }
@@ -1200,7 +1199,6 @@ fn Ctx::scene_copied(
     }
     None => ()
   }
-  copy_not_count(if held != now { "(put moved by an offset)" } else { "(copied)" })
   let n = l.count
   scene_work.copied = scene_work.copied + 1
   scene_work.copied_insts = scene_work.copied_insts + n
@@ -2051,10 +2049,7 @@ fn Ctx::scene_emitted(
           self.scene_emitted(p, c)
         } else {
           match self.scene_moved_by(p.tree, l, c) {
-            Some(m) => {
-              copy_not_count(if m == (0.0, 0.0) { "(put by an offset in what holds it, not moved)" } else { "(moved by an offset in what holds it)" })
-              self.scene_emitted(p, c, moved=m)
-            }
+            Some(m) => self.scene_emitted(p, c, moved=m)
             None => self.scene_redrawn_in(p, l, c)
           }
         }
@@ -2109,7 +2104,6 @@ fn insts_moved_by(
       a[b + 3] = a[b + 3] + dy
     }
   }
-  copy_nots["(instances shifted)"] = copy_nots.get_or_default("(instances shifted)", 0) + k1 - k0
   for k in k0..<k1 {
     let b = k * inst_size
     // (the frame's shapes' pieces: shares of their bands, nothing to move)
@@ -2317,10 +2311,7 @@ fn scene_copyable(l : SceneLayer) -> Bool {
 /// has it in its holder, nothing (as the walk leaves out what is out of its row).
 fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLayer) -> Unit {
   let tree = by.tree
-  guard scene_place_now(tree, c) is Some(place) else { copy_not_count("(at its reference, not in what holds it)")
-    return
-  }
-  copy_not_count("drawn anew at its reference")
+  guard scene_place_now(tree, c) is Some(place) else { return }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
   // (its outer from where it was, as far below it as it was: insts_moved_by)
   clip_say_from(if c.from_rel == scene_no_level { -1 } else { clip_top() / clip_n + c.from_rel })
@@ -2466,24 +2457,6 @@ fn scene_fades_inside() -> Unit {
     Some(l) => l.fades_inside = true
     None => ()
   }
-}
-
-///|
-/// Why layers were not copied, each why as often as it was (digits taken out), since a test cleared it: what a frame
-/// drew again, said by cause (scene_copy_nots).
-// kept across runs: a test's to read and clear
-let copy_nots : Map[String, Int] = {}
-
-///|
-/// Why layers were not copied, and how often (copy_nots), since the last clear.
-pub fn scene_copy_nots() -> Map[String, Int] {
-  copy_nots
-}
-
-///|
-fn copy_not_count(why : String) -> Unit {
-  let key = why.iter().filter(fn(c) { !(c >= '0' && c <= '9') }).collect() |> String::from_array
-  copy_nots[key] = copy_nots.get_or_default(key, 0) + 1
 }
 
 ///|

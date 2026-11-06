@@ -12,7 +12,6 @@ test "the chats' list flung on a phone: no frame of it drawn again whole, rows c
   t.record_host()
   t.host_frames() |> ignore
   let (x, y0) = (195.0, 700.0)
-  @ui.scene_copy_nots().clear()
   t.touch_at(0, x, y0, t.time())
   t.run_as_host(1000.0 / 240.0)
   for i in 1..=12 {
@@ -28,7 +27,6 @@ test "the chats' list flung on a phone: no frame of it drawn again whole, rows c
       out.push("at \{f.at}: drawn again whole (\{f.whole_why})")
     }
   }
-  println("COPY_NOTS frames=\{frames.length()} \{@ui.scene_copy_nots()}")
   assert_true(frames.length() > 100, msg="\{frames.length()} frames")
   assert_eq(out, [])
 }
