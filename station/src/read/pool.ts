@@ -24,10 +24,11 @@ import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
 import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
 import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
 import { CcIndexBuilder } from "./cc-index-builder.ts";
-import { CardPostsBuilder, ClosedCardsBuilder } from "./card-posts-builder.ts";
+import { CardPostsBuilder, ClosedCardsBuilder, PeopleSinceBuilder } from "./card-posts-builder.ts";
 import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
 import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { CLOSED_CARDS_PENDING } from "../store/legacy-closed-cards.ts";
+import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
@@ -132,6 +133,7 @@ export class Readers {
   private widgetSources: WidgetSourcesBuilder | null = null;
   private cardPosts: CardPostsBuilder | null = null;
   private closedCards: ClosedCardsBuilder | null = null;
+  private peopleSince: PeopleSinceBuilder | null = null;
   private ccIndex: CcIndexBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
@@ -304,6 +306,13 @@ export class Readers {
     return this.covered(this.closedCards.ready(threads, signal), signal);
   }
 
+  /// Prepare only the old people-time lookups requested by the read.
+  preparePeopleSince(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.peopleSince ??= new PeopleSinceBuilder(join(this.data,"stillfail.db"),this.backfill);
+    return this.covered(this.peopleSince.ready(threads,signal),signal);
+  }
+
   /// Prepare the sessions needed to choose a chat's copy destinations.
   prepareCcSessions(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -353,6 +362,13 @@ export class Readers {
           try { threads = JSON.parse(error.message.slice(CLOSED_CARDS_PENDING.length)); } catch { throw error; }
           if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
           await this.prepareClosedCards(threads, signal);
+          continue;
+        }
+        if (error.message.startsWith(PEOPLE_TIME_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(PEOPLE_TIME_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.preparePeopleSince(threads,signal);
           continue;
         }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
@@ -601,6 +617,7 @@ export class Readers {
     if (this.widgetSources !== null) void this.widgetSources.close();
     if (this.cardPosts !== null) void this.cardPosts.close();
     if (this.closedCards !== null) void this.closedCards.close();
+    if (this.peopleSince !== null) void this.peopleSince.close();
     if (this.ccIndex !== null) void this.ccIndex.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));

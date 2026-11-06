@@ -28,6 +28,7 @@ import {
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdits, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
+import { installPeopleSinceIndex } from "./legacy-people-since.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
@@ -405,6 +406,7 @@ export class Store {
         }
       }
       db.exec(SCHEMA);
+      installPeopleSinceIndex(db);
       installClosedCardsIndex(db);
       addEditIndex(db);
       addArchiveColumns(db);
