@@ -47,7 +47,9 @@ fn page_external_version_motion(hz : Int) -> (Double, Double, Double, Double, Do
   t.frame_at(at + @ui.row_size_ms)
   let end_height = (blocks.rooms.unwrap()())("a", 120.0, 300.0).height
   let end_b = nodes["b"].laid_window_now().1
-  (start_height, mid_height, end_height, mid_b, end_b, t.frame_hash())
+  let observed = (start_height, mid_height, end_height, mid_b, end_b, t.frame_hash())
+  println("page external version \{hz} Hz: \{observed}")
+  observed
 }
 
 ///|
