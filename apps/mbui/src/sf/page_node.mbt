@@ -1390,7 +1390,8 @@ pub fn link_row_node(
 ///|
 /// A controlled row's first line, its tail, its control and the lines under it, each kept as its place changes. A face
 /// puts the control beside the whole text column; the tail stays on the first line. Otherwise the lines under the first
-/// can use the row's full width. Keeping each part in one node preserves its state and focus when `face` changes.
+/// can use the row's full width. If a face and its control leave too little text room, the control moves below the
+/// words. Keeping each part in one node preserves its state and focus when the available room or `face` changes.
 fn row_controlled_content_node(
   words : @view.View,
   line : (@view.View) -> Unit,
@@ -1401,8 +1402,11 @@ fn row_controlled_content_node(
   under_visible : () -> Bool,
   wide : Bool,
 ) -> Unit {
-  words.layout_box(By(fn() { (face(), under_visible()) }), sized=true, fn(l, state) {
-    let (face_now, visible_now) = state
+  words.layout_box(By(fn() {
+    words.words_redone() |> ignore
+    (face(), under_visible(), @ui.current().sp(@ui.tree_theme().text_size(Body).0 * 7.0))
+  }), sized=true, fn(l, state) {
+    let (face_now, visible_now, readable_w) = state
     let first = l.child("line", line)
     let tail = l.child("tail", fn(e) {
       e.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
@@ -1411,14 +1415,26 @@ fn row_controlled_content_node(
     let last = l.child("end", end)
     let more = l.child("under", under)
     let (end_w, end_h) = l.fit(last, l.width)
-    let text_w = dmax(0.0, l.width - end_w - (if end_w > 0.0 { 12.0 } else { 0.0 }))
+    let beside_w = dmax(0.0, l.width - end_w - (if end_w > 0.0 { 12.0 } else { 0.0 }))
+    let (beside_tail_w, _) = l.fit(tail, beside_w)
+    let beside_line_w = dmax(0.0, beside_w - beside_tail_w - (if beside_tail_w > 0.0 { 12.0 } else { 0.0 }))
+    // Seven body ems leave room for a recognisable name or a short status at the current text scale.
+    let compact = face_now && end_w > 0.0 && beside_line_w < readable_w
+    let text_w = if compact { l.width } else { beside_w }
     let (tail_w, tail_h) = l.fit(tail, text_w)
     let line_w = dmax(0.0, text_w - tail_w - (if tail_w > 0.0 { 12.0 } else { 0.0 }))
     let (_, line_h) = l.measure(first, line_w)
     let first_h = dmax(line_h, tail_h)
     let (_, under_h) = l.measure(more, if face_now { text_w } else { l.width })
     let under_gap = if wide && visible_now { desk_list_gap } else { 0.0 }
-    if face_now {
+    if compact {
+      let text_h = first_h + under_gap + under_h
+      l.place(first, 0.0, (first_h - line_h) / 2.0)
+      l.place(tail, text_w - tail_w, (first_h - tail_h) / 2.0)
+      l.place(more, 0.0, first_h + under_gap)
+      l.place(last, l.width - end_w, text_h + 6.0)
+      l.size_to(text_h + 6.0 + end_h)
+    } else if face_now {
       let text_h = first_h + under_gap + under_h
       let total_h = dmax(text_h, end_h)
       let top = (total_h - text_h) / 2.0

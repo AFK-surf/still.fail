@@ -337,6 +337,57 @@ test "link row: a long single-line title leaves room for its chevron at a large 
 }
 
 ///|
+test "link row: a narrow face row gives its words room and keeps its independent control focused" {
+  for (look, with_tail) in [(Narrow, false), (Narrow, true), (Wide, false), (Wide, true)] {
+    let opened = Ref(0)
+    let revoked = Ref(0)
+    let t = @ui.Tester::new(fn(_c) {  }, w=650.0, h=1000.0, platform=2)
+    t.host_says_finger(Some(true))
+    @ui.set_view_app(fn(root) {
+      root.padding(Is((48.0, 0.0, 48.0, 0.0))) |> ignore
+      root.box(fn(b) {
+        look_lent(b, look)
+        group_node(b, fn(g) {
+          link_row_node(
+            g, fn() { "Alexandra Chen" }, fn() { opened.val += 1 },
+            value=fn() { "2 minutes ago" }, note=fn() { "Waiting for a device" }, face=fn() { true },
+            lead=LeadMade(fn(l) { avatar_node(l, fn() { "alexandra" }, fn() { "Alexandra Chen" }, fn() { "" }, 28.0) }),
+            tail=fn(e) { e.width(Is(Some(10.0))).height(Is(Some(10.0))).says(Is(Some(@view.said(Image, label="Status")))) |> ignore },
+            tail_shown=fn() { with_tail },
+            control=fn(e) { button_node(e, fn() { "Revoke" }, fn() { revoked.val += 1 }, tone=Ghost) |> ignore },
+          )
+        })
+      }) |> ignore
+    })
+    t.set_font_scale(2.0)
+    t.draw()
+    t.act(Button, Focus, label="Revoke")
+    let button_id = t.get(Button, label="Revoke").id
+    t.resize(320.0, 1000.0)
+    t.draw()
+    let title = controlled_word("Alexandra Chen")
+    let time = controlled_word("2 minutes ago")
+    let note = controlled_word("Waiting for a device")
+    let (bx, by, bw, bh) = t.get(Button, label="Revoke").rect
+    assert_true(by >= note.y + note.h - 0.01, msg="\{look}: button \{(bx, by, bw, bh)}, note \{(note.x, note.y, note.w, note.h)}, title \{(title.x, title.y, title.w, title.h)}, time \{(time.x, time.y, time.w, time.h)}")
+    assert_true(title.w >= @ui.current().sp(@ui.tree_theme().text_size(Body).0 * 3.5), msg="\{look}: title width \{title.w}")
+    assert_true(time.h <= @ui.current().sp(time.words_look.line) * 2.0 + 0.01, msg="\{look}: time height \{time.h}")
+    assert_eq((t.get(Button, label="Revoke").id, t.focused().map(fn(s) { s.label })), (button_id, Some("Revoke")))
+    t.enter()
+    t.tap(bx + bw - 1.0, by + bh / 2.0)
+    let (rx, _, _, _) = t.get(Link, label="Alexandra Chen").rect
+    t.tap(rx + 2.0, title.y + title.h / 2.0)
+    assert_eq((opened.val, revoked.val), (1, 2))
+    t.act(Button, Focus, label="Revoke")
+    t.resize(650.0, 1000.0)
+    t.draw()
+    assert_eq((t.get(Button, label="Revoke").id, t.focused().map(fn(s) { s.label })), (button_id, Some("Revoke")))
+    t.act(Button, Activate, label="Revoke")
+    assert_eq((opened.val, revoked.val), (1, 3))
+  }
+}
+
+///|
 test "link row: an open part below keeps its node and focus as its face or control changes" {
   for look in [Narrow, Wide] {
     let face = @signals.signal(false)
@@ -434,7 +485,7 @@ test "link row: faces and end controls are centered and adjacent member rows kee
     let second_open = Ref(0)
     let first_remove = Ref(0)
     let second_remove = Ref(0)
-    let t = @ui.Tester::new(fn(_c) {  }, w=320.0, h=400.0, platform=2)
+    let t = @ui.Tester::new(fn(_c) {  }, w=480.0, h=400.0, platform=2)
     t.host_says_finger(Some(true))
     @ui.set_view_app(fn(root) {
       root.box(fn(b) {
