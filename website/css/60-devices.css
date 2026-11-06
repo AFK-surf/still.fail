@@ -1,22 +1,109 @@
-/* ---------- Every device (folder tabs) ---------- */
-.ftabs { display: flex; gap: 6px; flex-wrap: wrap; position: relative; z-index: 1; margin-bottom: -1px; }
-.ftabs button { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 12px 12px 0 0; background: var(--mist); color: var(--graphite); font-size: 15px; font-weight: 500; cursor: pointer; box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
-.ftabs button svg { width: 18px; height: 18px; }
-.ftabs button:hover { color: var(--ink); }
-.ftabs button[aria-selected=true] { background: #fff; color: var(--ink); box-shadow: inset 1px 1px 0 var(--line), inset -1px 0 0 var(--line); }
-.ftabs button[aria-selected=true] svg { color: var(--brand-deep); }
-.ftabs button:focus-visible { outline: 2px solid var(--brand-deep); outline-offset: -2px; }
-.fpanel { background: #fff; border: 1px solid var(--line); border-radius: 0 16px 16px 16px; display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); min-height: clamp(440px, 36vw, 580px); overflow: hidden; }
-.fpanel[hidden] { display: none !important; }
-.fpanel .txt { padding: clamp(28px, 3.4vw, 56px); display: flex; flex-direction: column; gap: 16px; }
-.fpanel .txt h3 { font-size: clamp(26px, 2.4vw, 40px); letter-spacing: -.02em; line-height: 1.12; }
-.fpanel .txt p { color: var(--graphite); text-wrap: pretty; }
-.fpanel .txt ul { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
-.fpanel .txt li { display: flex; gap: 10px; align-items: flex-start; font-size: var(--t-small); color: var(--ink); }
-.fpanel .txt li svg { width: 18px; height: 18px; color: var(--ok); flex: none; margin-top: 2px; }
-.fpanel .txt .actions { margin-top: auto; padding-top: 12px; }
-.fpanel .vis { background: radial-gradient(circle, rgba(255,255,255,.28) 1.1px, transparent 1.6px) 0 0 / 11px 11px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); display: grid; place-items: center; padding: clamp(28px, 3vw, 56px); position: relative; overflow: hidden; }
+/* ---------- Every device, as a swiper (phones, tablets, and large screens without the scene) ----------
+   Native horizontal scroll that snaps card to card: the browser's own momentum and rubber-banding, one card per
+   flick (snap-stop), the next card peeking in so the row reads as swipeable. The cards are the panels' own markup;
+   on narrow screens the picture sits above the words, from 900 px beside them. */
+.dv-swipe { position: relative; }
+.dv-swipe .fpanels {
+  --peek: 32px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc(100% - var(--peek)); gap: 12px; align-items: stretch;
+  margin-left: calc(-1 * var(--gl)); margin-right: calc(-1 * var(--gr)); padding: 2px var(--gr) 2px var(--gl);
+  scroll-padding-inline: var(--gl) var(--gr); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain; /* a swipe past the last card never turns into the browser's back gesture */
+  touch-action: pan-x pan-y; scrollbar-width: none; -webkit-tap-highlight-color: transparent; outline: none;
+}
+.dv-swipe .fpanels::-webkit-scrollbar { display: none; }
+.dv-swipe .fpanels:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 22px; }
+.fpanel { scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; min-width: 0;
+  background: #fff; border-radius: 20px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); isolation: isolate; }
+.fpanel .vis { order: -1; position: relative; display: grid; place-items: center; --vis-h: clamp(260px, 72vw, 320px); height: var(--vis-h); padding: 20px; overflow: hidden;
+  background: radial-gradient(circle, rgba(255,255,255,.28) 1.1px, transparent 1.6px) 0 0 / 11px 11px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); }
 .fpanel .vis.ink { background: radial-gradient(circle, rgba(255,255,255,.09) 1.1px, transparent 1.6px) 0 0 / 11px 11px, var(--ink); }
+/* A phone stands up from the picture's bottom edge, cropped there like a product shot. */
+.fpanel .vis:has(> .mk-phone) { place-items: start center; padding-top: 32px; }
+.fpanel .vis > .mk-phone { --z: .46; box-shadow: 0 30px 60px -30px rgba(42, 11, 2, .6); }
+.fpanel .vis > .duo { width: min(100%, calc((var(--vis-h) - 40px) / .93)); } /* the whole Duo, never cropped */
+.fpanel .vis > .slack { font-size: 13px; }
+.fpanel .vis:has(> .slack) { place-items: start center; padding-top: 52px; } /* the thread starts below its tag */
+.fpanel .txt { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 24px; }
+.fpanel .txt .eyebrow { font-family: var(--mono); font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--graphite); }
+.fpanel .txt h3 { font-size: 22px; line-height: 1.22; letter-spacing: -.016em; font-weight: 600; text-wrap: balance; }
+.fpanel .txt h3 .zh { font-feature-settings: "halt"; }
+.fpanel .txt p { color: var(--graphite); font-size: 15.5px; line-height: 1.55; text-wrap: pretty; }
+.fpanel .txt .actions { margin-top: auto; padding-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+@media (max-width: 359px) {
+  .fpanel .txt h3 { font-size: 20px; }
+  .fpanel .txt p { font-size: 15px; }
+}
+@media (max-width: 639px) {
+  .fpanel .txt .actions { gap: 8px; }
+  .fpanel .txt .actions .btn { padding: 0 16px; font-size: 15px; }
+}
+/* The QR code is for a phone to scan from a screen: never shown on the phone itself. */
+@media (pointer: coarse), (max-width: 899px) { .fpanel .qr { display: none; } }
+/* The pictures' own loops (spinners, the notification sliding in) run only on the card in view, while it is on screen. */
+.dv-swipe .fpanel:not([data-on]) *, .dv-swipe:not(.play) * { animation-play-state: paused; }
+
+/* Below: dots that follow the swipe (a pill slides between them as the cards move), the count, and, for a mouse, arrows. */
+.dv-nav { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.dv-dots { position: relative; display: flex; margin-left: -10px; }
+.dv-dots button { all: unset; box-sizing: border-box; position: relative; width: 26px; height: 44px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.dv-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(26,27,30,.2);
+  transition: transform var(--dur-press) var(--ease-out); }
+.dv-dots button:active::before { transform: scale(.7); }
+.dv-dots button:focus-visible { outline: 2px solid var(--ring); outline-offset: -8px; border-radius: 10px; }
+.dv-pill { position: absolute; left: 0; top: 50%; width: 18px; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--ink); pointer-events: none;
+  transform: translateX(calc(4px + var(--p, 0) * 26px)); }
+.dv-count { font-family: var(--mono); font-size: 13px; color: var(--graphite); }
+.dv-count b { font-weight: 500; color: var(--ink); }
+.dv-arrows { display: none; margin-left: auto; gap: 8px; }
+.dv-arrows button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; color: var(--ink);
+  background: #fff; box-shadow: inset 0 0 0 1px var(--hair); -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, opacity var(--dur-ui) ease, transform var(--dur-press) var(--ease-out); }
+.dv-arrows button svg { width: 18px; height: 18px; }
+.dv-arrows [data-step="-1"] svg { transform: scaleX(-1); }
+.dv-arrows button:active:not(:disabled) { transform: scale(.94); }
+.dv-arrows button:disabled { opacity: .35; cursor: default; }
+.dv-arrows button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.dv-vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .dv-arrows { display: flex; }
+  .dv-arrows button:hover:not(:disabled) { background: var(--ink); color: #fff; }
+  .dv-dots button:hover::before { background: rgba(26,27,30,.45); }
+}
+@media (min-width: 640px) {
+  .dv-swipe .fpanels { --peek: 96px; gap: 16px; }
+  .fpanel .txt { padding: 24px 28px 28px; }
+  .fpanel .txt h3 { font-size: 26px; }
+  .fpanel .vis { --vis-h: 400px; }
+  .fpanel .vis > .mk-phone { --z: .5; }
+}
+@media (min-width: 900px) {
+  .dv-swipe .fpanels { --peek: clamp(120px, 12vw, 240px); gap: 20px; }
+  .fpanel { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); min-height: clamp(440px, 36vw, 560px); border-radius: 24px; }
+  .fpanel .vis { order: 0; height: auto; padding: clamp(28px, 3vw, 56px); }
+  .fpanel .vis:has(> .mk-phone) { padding-top: 48px; }
+  .fpanel .vis:has(> .slack) { place-items: center; padding-top: 56px; }
+  .fpanel .vis > .mk-phone { --z: .56; }
+  .fpanel .vis > .duo { width: min(100%, 520px); }
+  .fpanel .txt { padding: clamp(28px, 3.4vw, 56px); gap: 16px; justify-content: flex-start; }
+  .fpanel .txt h3 { font-size: clamp(28px, 2.4vw, 40px); line-height: 1.12; letter-spacing: -.02em; }
+  .fpanel .txt p { font-size: var(--t-body); }
+  .dv-nav { margin-top: 20px; }
+}
+/* Landscape phones: a short screen, so the picture and the words sit side by side. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 899px) {
+  .dv-swipe .fpanels { --peek: 72px; }
+  .fpanel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fpanel .vis { order: 0; height: auto; min-height: min(280px, calc(100svh - 120px)); padding: 16px; }
+  .fpanel .vis:has(> .mk-phone) { padding-top: 24px; }
+  .fpanel .vis > .mk-phone { --z: .4; }
+  .fpanel .vis > .duo { width: min(100%, 300px); }
+  .fpanel .txt { padding: 18px 20px 20px; gap: 8px; }
+  .fpanel .txt h3 { font-size: 20px; }
+  .fpanel .txt p { font-size: 14.5px; }
+}
+@media (prefers-reduced-motion: reduce) { .dv-swipe .fpanels { scroll-behavior: auto; } }
 .qr { display: flex; align-items: center; gap: 12px; font-size: var(--t-small); color: var(--graphite); }
 .qr img { width: 72px; height: 72px; padding: 6px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); background: #fff; }
 /* Slack-like thread on Ink */
@@ -31,18 +118,9 @@
 .slack .msg .mention { color: var(--brand-deep); background: #FDECE5; border-radius: 4px; padding: 0 3px; font-weight: 500; }
 .slack .msg .att { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .slack .reply { padding: 8px 16px 16px; }
-@media (max-width: 960px) {
-  .fpanel { grid-template-columns: minmax(0, 1fr); }
-  .fpanel .vis { min-height: 420px; }
-}
-@media (max-width: 640px) {
-  .ftabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--gl)); padding-inline: var(--gl); }
-  .ftabs::-webkit-scrollbar { display: none; }
-  .fpanel { border-radius: 0 0 16px 16px; }
-}
 /* ---------- Every device, as one scene played by scrolling (html.scrolly: large screens, motion allowed) ---------- */
 .dv-show { display: none; }
-.scrolly .dv-tabs { display: none; }
+.scrolly .dv-swipe { display: none; }
 .scrolly #devices { content-visibility: visible; }
 .scrolly .dv-show { display: block; height: 560vh; }
 .dv-stage { position: sticky; top: calc(var(--nav) + 16px); height: calc(100vh - var(--nav) - 32px); border-radius: 24px; overflow: hidden; isolation: isolate;
@@ -61,9 +139,11 @@
 .dv-step p { color: var(--dv-mut, var(--brand-ink)); font-size: var(--t-body); max-width: 26em; text-wrap: pretty; }
 .dv-rail { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
 .dv-rail button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 0; font-size: 15px; font-weight: 500; cursor: pointer;
-  color: var(--dv-mut, var(--brand-ink)); opacity: .62; transition: opacity .2s, transform .2s; }
+  color: var(--dv-mut, var(--brand-ink)); opacity: .62; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: opacity var(--dur-ui) ease, transform var(--dur-reveal) var(--ease-out); }
 .dv-rail button svg { width: 18px; height: 18px; flex: none; }
-.dv-rail button:hover { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .dv-rail button:hover { opacity: 1; } }
+.dv-rail li:not([data-on]) button:active { opacity: .85; transform: translateX(2px); transition-duration: var(--dur-press); }
 .dv-rail button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
 .dv-rail li[data-on] button { opacity: 1; color: var(--dv-fg, var(--ink)); transform: translateX(6px); }
 .dv-bar { height: 2px; margin-top: 14px; background: rgba(26,27,30,.14); border-radius: 2px; overflow: hidden; }
@@ -101,7 +181,9 @@
 .dv-links { position: absolute; inset: 0; width: 900px; height: 720px; pointer-events: none; }
 .dv-links path { stroke: var(--brand-tint); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
 .dv-links .l1 { stroke: #fff; }
-.dv-tags { position: absolute; right: 8px; top: 8px; display: grid; justify-items: end; }
+/* The tag names what the current step shows, level with the step number across the stage (outside the scaled scene,
+   so it keeps its size at any scale). */
+.dv-tags { position: absolute; right: clamp(32px, 3.6vw, 64px); top: clamp(32px, 3.6vw, 64px); display: grid; justify-items: end; pointer-events: none; }
 .dv-tags .mtag { position: static; grid-area: 1 / 1; opacity: 0; }
 .dv-tags .mtag:first-child { opacity: 1; }
 /* z order: the window at the back, the links, the phones, Slack in front */

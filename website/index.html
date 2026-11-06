@@ -107,7 +107,7 @@
 
 <main id="top">
 
-<!-- ============ Hero: Blue ground, the 168 Week on its bottom edge ============ -->
+<!-- ============ Hero: Blue ground, the field of the mark below ============ -->
 <section class="band hero" data-tone="brand" aria-labelledby="hero-title">
   <div class="w">
     <h1 id="hero-title" class="display">One devices</h1>
@@ -121,20 +121,16 @@
         <a class="btn btn-line lg" data-app href="https://app.monoid.build"><span class="zh">打开网页版</span><span class="en">Open the web app</span></a>
       </div>
     </div>
-    <!-- The key to the Week below: its swatches are the field's own comma, lit and unlit. -->
-    <div class="legend">
-      <b class="lg-title"><span class="zh">一周 168 小时</span><span class="en">One week, 168 hours</span></b>
-      <span class="key"><svg class="sw on" viewBox="25.6 26.6 16.4 17.4" aria-hidden="true"><path id="g-comma" d="M27.5752 30.475C29.5842 26.9956 34.0342 25.803 37.5137 27.8119C40.8501 29.7385 42.081 33.9084 40.4053 37.3158C40.4099 37.3203 40.4144 37.3251 40.4189 37.3295C40.3568 37.4447 40.2857 37.5685 40.2051 37.6977C40.1952 37.715 40.1858 37.7331 40.1758 37.7504C39.7991 38.4028 39.3363 38.9749 38.8105 39.4604C37.1152 41.2376 34.3055 43.2112 30.4131 43.7602C30.2618 43.7814 30.1769 43.5981 30.29 43.4955C30.9997 42.8536 31.8303 42.0905 32.6543 41.2846C31.8262 41.1437 31.0084 40.8571 30.2383 40.4125C26.7589 38.4036 25.5665 33.9545 27.5752 30.475Z"/></svg><span class="zh"><b>45 小时</b>你在电脑前</span><span class="en"><b>45</b> at your desk</span></span>
-      <span class="key"><svg class="sw off" viewBox="25.6 26.6 16.4 17.4" aria-hidden="true"><use href="#g-comma"/></svg><span class="zh"><b>123 小时</b>你不在，agent 照常在跑</span><span class="en"><b>123</b> away, your agents still running</span></span>
-      <span class="ctl"><span class="rate"><span class="zh">1 秒 = 1 小时</span><span class="en">1 s = 1 h</span></span><button class="tool" type="button" id="pause"><span class="zh">暂停</span><span class="en">Pause</span></button></span>
-    </div>
   </div>
-  <!-- Notes on the Week: each rings a real cell (--c: hour 0–23, --r: day, Monday 0) and a leader runs to its label. -->
+  <!-- The field: the mark taken apart, its eyes (dots) and cheeks (pills) one to a cell on the 24U grid. A ripple runs
+       out from the cell marked "you" and every cell answers in turn. Notes ring a real cell (--c column, --r row from
+       the top; --ct/--rt on a tablet; --cm/--rm on a phone, where only the first shows) and a leader runs to a label. -->
   <div class="field-wrap">
-    <canvas class="field" id="field" aria-label="一周 168 小时：横向 24 小时，纵向 7 天；工作日 9 点到 18 点亮起" data-aria-en="A week of 168 hours: 24 hours across, 7 days down; weekdays 9 to 18 lit" role="img"></canvas>
-    <span class="ftag" style="--c:10;--r:2"><span class="ft-l"><i></i><span class="zh">你在 · 周三 10:00</span><span class="en">you · Wed 10:00</span></span></span>
-    <span class="ftag" style="--c:15;--r:0"><span class="ft-l"><i></i><span class="zh">号池 · 额度到 80% · 换号</span><span class="en">pool · 80% used · next account</span></span></span>
-    <span class="ftag" style="--c:3;--r:5"><span class="ft-l"><i></i><span class="zh">station · 周六 03:00 · 3 个 agent 在跑</span><span class="en">station · Sat 03:00 · 3 agents running</span></span></span>
+    <canvas class="field" id="field" role="img" aria-label="你交代一次，波纹传到每一台设备：station 周六凌晨还在跑，号池额度用到 80% 就换号。" data-aria-en="You ask once and a ripple reaches every device: a station still running at 3 a.m. on Saturday, the pool moving to the next account at 80%."></canvas>
+    <span class="ftag" data-origin style="--c:4;--r:1;--ct:2;--rt:1;--cm:1;--rm:1" aria-hidden="true"><span class="ft-l"><i></i><span class="zh">你 · 交代一次</span><span class="en">you · ask once</span></span></span>
+    <span class="ftag" style="--c:10;--r:3;--ct:5;--rt:3" aria-hidden="true"><span class="ft-l"><i></i><span class="zh">station · 周六 03:00 · 3 个 agent 在跑</span><span class="en">station · Sat 03:00 · 3 agents running</span></span></span>
+    <span class="ftag" style="--c:16;--r:2;--ct:9;--rt:5" aria-hidden="true"><span class="ft-l"><i></i><span class="zh">号池 · 额度到 80% · 换号</span><span class="en">pool · 80% used · next account</span></span></span>
+    <button class="fpause" type="button" id="pause" aria-pressed="false" aria-label="暂停动画" data-aria-en="Pause the animation" hidden><svg viewBox="0 0 10 10" aria-hidden="true"><rect class="ps" x="1.6" y="1.2" width="2.3" height="7.6" rx=".7"/><rect class="ps" x="6.1" y="1.2" width="2.3" height="7.6" rx=".7"/><path class="pl" d="M2.6 1.7v6.6a.6.6 0 0 0 .9.5l5.3-3.3a.6.6 0 0 0 0-1L3.5 1.2a.6.6 0 0 0-.9.5Z"/></svg></button>
   </div>
 </section>
 
@@ -162,9 +158,9 @@
     <div class="split-head rv">
       <div>
         <span class="eyebrow"><svg class="ico"><use href="#i-spark"/></svg><span class="zh">产品</span><span class="en">Product</span></span>
-        <h2 id="product-title"><span class="zh">三件事，让每台电脑都接着干</span><span class="en">Three things keep every computer working</span></h2>
+        <h2 id="product-title"><span class="zh">让每台电脑上的 <span class="nb">agent 都接着干</span></span><span class="en">Keep the agents on every computer working</span></h2>
       </div>
-      <p class="lead"><span class="zh">agent 还是官方命令行，monoid 管它们之外的<span class="nb">三件事：</span>用哪个号，谁来指挥，在哪块屏幕上看。</span><span class="en">The agents stay their official command-line tools. monoid handles the rest: which account runs, who directs it, and which screen you follow it on.</span></p>
+      <p class="lead"><span class="zh">agent 仍是官方命令行。monoid 管它之外的<span class="nb">三件事：</span>用哪个号、谁来指挥、在哪块屏幕上看。</span><span class="en">The agents stay the official command-line tools. monoid handles three things around them: which account each one uses, who directs it, and which screen you follow it on.</span></p>
     </div>
 
     <div class="overview rv" data-tabs="stack">
@@ -172,21 +168,21 @@
         <li class="ov-item" data-on>
           <button type="button" data-tab id="ov-t1" aria-controls="ov-p1" aria-expanded="true"><span class="ov-l"><svg class="ico"><use href="#i-pool"/></svg><span class="zh">号池</span><span class="en">Account pool</span></span><span class="num">01</span></button>
           <div class="ov-text"><div>
-            <p><span class="zh">Claude、ChatGPT、Google AI 的订阅和 <span class="nb">API 密钥</span>放进<span class="nb">一个池子</span>。新对话交给还有余量的号，<span class="nb">5 小时额度</span>用到 80% 的<span class="nb">排到最后。</span></span><span class="en">Claude, ChatGPT and Google AI subscriptions and API keys share one pool. Each new chat goes to an account with room left; one past 80% of its 5-hour limit goes last.</span></p>
+            <p><span class="zh">Claude、ChatGPT、Google AI 的订阅和 <span class="nb">API 密钥</span>放进<span class="nb">一个池子</span>。新对话交给还有余量的号，<span class="nb">5 小时额度</span>过了 80% 的<span class="nb">排到最后。</span></span><span class="en">Claude, ChatGPT and Google AI subscriptions and API keys go into one pool. Each new chat goes to an account with room left; one past 80% of its 5-hour limit goes last.</span></p>
             <a href="#pool"><span class="zh">号池怎么分号</span><span class="en">How the pool picks</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
           </div></div>
         </li>
         <li class="ov-item">
           <button type="button" data-tab id="ov-t2" aria-controls="ov-p2" aria-expanded="false"><span class="ov-l"><svg class="ico"><use href="#i-team"/></svg><span class="zh">协同</span><span class="en">Teams</span></span><span class="num">02</span></button>
           <div class="ov-text"><div>
-            <p><span class="zh">在 Slack thread 或 App 里，整个团队和同一个 <span class="nb">agent 说话。</span>电脑之间互相派任务、借账号，构建交给<span class="nb">最空的那台。</span></span><span class="en">In a Slack thread or the app, the whole team talks to the same agent. Your computers hand each other tasks and lend each other accounts; a build goes to the least busy one.</span></p>
+            <p><span class="zh">整个团队在 Slack thread 或 App 里和同一个 <span class="nb">agent 说话。</span>电脑之间互相派任务、借账号，新任务交给<span class="nb">最空的那台。</span></span><span class="en">The whole team talks to one agent, in a Slack thread or the app. Your computers hand each other tasks and lend each other accounts; new tasks go to the least busy one.</span></p>
             <a href="#teams"><span class="zh">团队怎么一起用</span><span class="en">How teams use it</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
           </div></div>
         </li>
         <li class="ov-item">
           <button type="button" data-tab id="ov-t3" aria-controls="ov-p3" aria-expanded="false"><span class="ov-l"><svg class="ico"><use href="#i-devices"/></svg><span class="zh">多端</span><span class="en">Every device</span></span><span class="num">03</span></button>
           <div class="ov-text"><div>
-            <p><span class="zh">iPhone（含 iPhone Duo）、Android、Mac、Windows 和网页。Mac 上的任务等你审核时，手机同时收到通知，换哪块屏幕都能<span class="nb">接着看。</span></span><span class="en">iPhone (and iPhone Duo), Android, Mac, Windows and the web. When a task on your Mac needs review, your phone is notified too; pick it up on any screen.</span></p>
+            <p><span class="zh">Mac、Windows、网页、iPhone（含 iPhone Duo）和 Android。Mac 上的对话等你处理时，手机也收到通知，在哪块屏幕上都能<span class="nb">接着看。</span></span><span class="en">Mac, Windows, the web, iPhone (and iPhone Duo) and Android. When a chat on your Mac needs you, your phone is notified too; carry on from whichever screen is at hand.</span></p>
             <a href="#devices"><span class="zh">看看每一端</span><span class="en">See each device</span><svg class="ico" width="16" height="16"><use href="#i-arrow"/></svg></a>
           </div></div>
         </li>
@@ -195,77 +191,122 @@
       <div class="stage">
         <!-- 01 Account pool -->
         <div class="pane" id="ov-p1" data-on>
-          <div class="win">
-            <div class="win-bar"><i></i><i></i><i></i><span><span class="zh">号池 · Acme</span><span class="en">Account pool · Acme</span></span></div>
-            <div class="win-body">
-              <div class="pool-head"><b><span class="zh">6 个账号</span><span class="en">6 accounts</span></b><span><span class="zh">本周剩余额度</span><span class="en">Left this week</span></span></div>
-              <div>
-                <div class="acct on"><span class="logo" style="background:var(--ink)">C</span><span><b>Claude Max · Alex</b><small><span class="zh">周四重置 · 5 小时额度用了 22%</span><span class="en">Resets Thu · 22% of 5-hour limit used</span></small></span><span class="meter"><i style="width:64%"></i></span><span class="pct">64%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--ink)">C</span><span><b>Claude Max · Priya</b><small><span class="zh">5 小时额度已用 84%，先让位</span><span class="en">84% of 5-hour limit used, stepping aside</span></small></span><span class="meter"><i style="width:52%"></i></span><span class="pct">52%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--graphite)">O</span><span><b>ChatGPT Pro · <span class="zh">团队</span><span class="en">Team</span></b><small>Codex</small></span><span class="meter"><i style="width:41%"></i></span><span class="pct">41%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--graphite)">G</span><span><b>Google AI Ultra</b><small>Antigravity</small></span><span class="meter"><i style="width:88%"></i></span><span class="pct">88%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--graphite)">D</span><span><b>DeepSeek API</b><small><span class="zh">密钥 · 用前要你批准</span><span class="en">Key · needs your approval</span></small></span><span class="meter"><i style="width:73%"></i></span><span class="pct">73%</span></div>
-                <div class="acct out"><span class="logo" style="background:var(--graphite)">C</span><span><b>Claude Pro · Laptop</b><small><span class="zh">登录已失效，跳过</span><span class="en">Signed out, skipped</span></small></span><span class="meter"><i style="width:0"></i></span><span class="pct">—</span></div>
+          <!-- The Profiles place: each account's quota as chips and dials; the new chat lands on the one with room. -->
+          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win list">
+            <div class="mk-app mac">
+              <div class="mk-dock">
+                <span class="mk-tl"><i></i><i></i><i></i></span>
+                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri on"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                <div class="mk-side">
+                  <div class="mk-nav"><i class="mk-i plus"></i><span class="zh">添加 Profile</span><span class="en">Add Profile</span></div>
+                  <div class="mk-day"><span class="zh">Claude 订阅</span><span class="en">Claude subscription</span></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-lg a"></i><b>lin@acme.dev</b><span class="run beat"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:22%"></i></span><span class="zh">5 小时</span><span class="en">5h</span><span>78%</span></span><span class="mk-chip"><span class="meter"><i style="width:36%"></i></span><span class="zh">本周</span><span class="en">Week</span><span>64%</span></span></div><div class="l3"><span class="zh">Willow 可用 · 周四重置</span><span class="en">Available on Willow · resets Thu</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-lg a"></i><b>zhou@acme.dev</b></div><div class="chips"><span class="mk-chip am"><span class="meter"><i style="width:84%"></i></span><span class="zh">5 小时</span><span class="en">5h</span><span>16%</span></span><span class="mk-chip"><span class="meter"><i style="width:48%"></i></span><span class="zh">本周</span><span class="en">Week</span><span>52%</span></span></div><div class="l3"><span class="zh">5 小时额度过了 80%，排到最后</span><span class="en">Past 80% of its 5h limit, goes last</span></div></div>
+                  <div class="mk-day"><span class="zh">ChatGPT 订阅</span><span class="en">ChatGPT subscription</span></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-lg o"></i><b>zhou@acme.dev</b></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span><span class="zh">5 小时</span><span class="en">5h</span><span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:29%"></i></span><span class="zh">本周</span><span class="en">Week</span><span>71%</span></span></div><div class="l3"><span class="zh">Mini 可用 · Codex</span><span class="en">Available on Mini · Codex</span></div></div>
+                  <div class="mk-day g"><span class="zh">已在</span><span class="en">Signed in on</span><i class="mk-st laptop"><i class="mk-i laptop"></i></i><span class="zh">笔记本 上登录</span><span class="en">Laptop</span></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-lg a"></i><b>lin@acme.dev</b><span class="mk-pillr"><span class="zh">已停用</span><span class="en">Disabled</span></span></div><div class="l3"><span class="zh">登录已失效，跳过</span><span class="en">Signed out, skipped</span></div></div>
+                </div>
               </div>
-              <span class="bubble agent beat"><span class="zh">新对话交给 <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>Claude Max · Alex</span>：本周还剩 64%，周四就重置，该先用它。</span><span class="en">New chat goes to <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>Claude Max · Alex</span>: 64% left and it resets Thursday, so it goes first.</span><svg class="tail"><use href="#tail"/></svg></span>
+              <div class="mk-page">
+                <div class="mk-pg">
+                  <div class="hd"><span class="tile"><i class="mk-lg a"></i></span><div><h4>lin@acme.dev <span class="mk-cc">CC</span></h4><p><span class="zh">订阅账号 · 已启用 2 / 13 个模型</span><span class="en">Subscription · 2 / 13 models on</span></p></div><i class="mk-i more"></i></div>
+                  <h5><span class="zh">额度</span><span class="en">Quota</span><span class="r"><i class="mk-i reload"></i><span class="zh">刷新</span><span class="en">Refresh</span></span></h5>
+                  <div class="mk-dials">
+                    <div class="mk-dial"><b>78<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span class="zh">5 小时剩</span><span class="en">5-hour left</span></span><span class="sb"><span class="zh">2 小时后重置</span><span class="en">Resets in 2 h</span></span></div>
+                    <div class="mk-dial"><b>64<small>%</small></b><span class="cells" style="--n:4"></span><span class="lb"><span class="zh">本周剩</span><span class="en">Week left</span></span><span class="sb"><span class="zh">周四重置</span><span class="en">Resets Thu</span></span></div>
+                  </div>
+                  <h5><span class="zh">模型</span><span class="en">Models</span><span class="n">2 / 13</span></h5>
+                  <div class="mk-chips"><span class="mk-chipm"><i class="mk-lg a"></i>Opus 5.5</span><span class="mk-chipm"><i class="mk-lg a"></i>Sonnet 5.5</span></div>
+                </div>
+              </div>
             </div>
-          </div>
+          </div></div>
         </div>
         <!-- 02 Teams -->
         <div class="pane" id="ov-p2" inert>
-          <div class="win">
-            <div class="win-bar"><i></i><i></i><i></i><span>#eng-api · Slack</span></div>
-            <div class="win-cols">
-              <div class="side">
-                <span class="label"><span class="zh">今天</span><span class="en">Today</span></span>
-                <div class="row on"><b><i class="mk-busy"></i><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small>Server · <span class="zh">跑压测</span><span class="en">Load test</span></small></div>
-                <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
-                <div class="row"><b><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · <span class="zh">跑测试</span><span class="en">Running tests</span></small></div>
-                <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">等你决定</span><span class="en">Needs your call</span></small></div>
+          <!-- One chat, two people and one agent: zhou asks, the agent answers, you (Lin Xiao) send it on. -->
+          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win">
+            <div class="mk-app mac">
+              <div class="mk-dock">
+                <span class="mk-tl"><i></i><i></i><i></i></span>
+                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                <div class="mk-side">
+                  <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                  <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">运行 pnpm bench…</span><span class="en">Running pnpm bench…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2 ink"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                  <div class="mk-row"><div class="l1"><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">表单看着还是有点偏</span><span class="en">The form still looks a bit off-centre</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                  <div class="mk-day"><span class="zh">昨天</span><span class="en">Yesterday</span></div>
+                  <div class="mk-row"><div class="l1"><b><span class="zh">补一下部署文档</span><span class="en">Write the deploy docs</span></b></div><div class="l2"><span><span class="zh">谢谢，文档看过了</span><span class="en">Thanks, I've read the docs</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                </div>
               </div>
-              <div class="main">
-                <span class="who r">Priya <span class="av" style="background:var(--graphite)">P</span></span>
-                <span class="bubble user"><span class="zh">@monoid 看下 API p99 为什么变慢了</span><span class="en">@monoid why did API p99 get slow?</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                <span class="bubble agent"><span class="zh">orders 表少了 (user_id, created_at) 联合索引。加上后 p99 回到 120 ms，迁移在 <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>0042_orders_index.sql</span></span><span class="en">The orders table was missing a (user_id, created_at) index. With it, p99 is back to 120 ms; the migration is in <span class="chip"><svg class="ico c-ok"><use href="#i-done"/></svg>0042_orders_index.sql</span></span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                <span class="who r">Alex <span class="av" style="background:var(--ink)">A</span></span>
-                <span class="bubble user"><span class="zh">合进去，在 Server 上再跑一遍压测</span><span class="en">Merge it, and run the load test again on Server</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                <div class="act beat"><i class="ag"></i><span class="zh">在 Server 上跑压测</span><span class="en">Running the load test on Server</span><span class="t">8s</span></div>
+              <div class="mk-page">
+                <div class="mk-bar"><h4><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span><span class="zh">服务器</span><span class="en">Server</span></span></span><span class="end"><i class="mk-i more"></i><i class="mk-i panel"></i></span></div>
+                <div class="mk-msgs">
+                  <div class="mk-msg"><i class="mk-face z">Z</i><div class="hd"><b><span class="zh">zhou</span><span class="en">Zhou</span></b><span class="tm"><span class="zh">12 分钟前</span><span class="en">12 min ago</span></span></div><div class="bd"><span class="zh">API p99 变慢了，帮忙查一下</span><span class="en">API p99 got slow, can you look into it?</span></div></div>
+                  <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span class="zh">8 分钟前</span><span class="en">8 min ago</span></span></div><div class="bd md"><p><span class="zh">罪魁是 orders 表少了 (user_id, created_at) 联合索引。</span><span class="en">The orders table was missing a (user_id, created_at) index.</span></p><ul><li><span class="zh">加上后 p99 回到 120 ms</span><span class="en">With it, p99 is back to 120 ms</span></li><li><span class="zh">迁移在 </span><span class="en">Migration </span><code>0042_orders_index.sql</code></li></ul></div></div>
+                  <div class="mk-mine"><div class="bub"><span class="zh">合进去，在服务器上再跑一遍压测</span><span class="en">Merge it, and run the load test again on Server</span></div><span class="tm"><span class="zh">刚刚</span><span class="en">just now</span></span></div>
+                  <div class="act beat"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span class="zh">运行 pnpm bench</span><span class="en">Running pnpm bench</span></span><span class="t">8s</span></div>
+                </div>
+                <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
               </div>
             </div>
-          </div>
+          </div></div>
         </div>
         <!-- 03 Every device: two devices, one event -->
         <div class="pane" id="ov-p3" inert>
-          <div class="compose-2">
-            <div class="win" style="max-width:600px">
-              <div class="win-bar"><i></i><i></i><i></i><span>monoid · Willow</span></div>
-              <div class="win-body">
-                <span class="bubble user"><span class="zh">把明天发布的更新说明写好</span><span class="en">Write the release notes for tomorrow</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                <div class="task" style="align-self:flex-start;width:78%">
-                  <div class="task-t"><svg class="ico c-warn"><use href="#i-review"/></svg><span class="zh">0.1.7394 更新说明</span><span class="en">Release notes for 0.1.7394</span></div>
-                  <span class="bar-g" style="width:92%"></span><span class="bar-g" style="width:76%"></span><span class="bar-g" style="width:58%"></span>
-                  <span class="cap"><svg class="ico c-warn"><use href="#i-review"/></svg><span class="zh">待审核</span><span class="en">Needs Review</span></span>
+          <!-- Two devices, one event: the chat on the Mac waits on you, and the phone in your pocket says so. -->
+          <div class="compose-2" aria-hidden="true">
+            <div class="mk-fit"><div class="mk mk-win">
+              <div class="mk-app mac">
+                <div class="mk-dock">
+                  <span class="mk-tl"><i></i><i></i><i></i></span>
+                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                  <div class="mk-side">
+                    <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                    <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">运行 pnpm test login…</span><span class="en">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                    <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                    <div class="mk-row on unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2 ink"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                    <div class="mk-day"><span class="zh">昨天</span><span class="en">Yesterday</span></div>
+                    <div class="mk-row"><div class="l1"><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">罪魁是 orders 表少了 (user_id, created_at) 联合…</span><span class="en">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                  </div>
                 </div>
-                <span class="bar-g" style="width:40%"></span>
+                <div class="mk-page">
+                  <div class="mk-bar"><h4><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></h4><span class="mk-faces"><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i></span><span>Willow</span></span></div>
+                  <div class="mk-msgs">
+                    <div class="mk-msg"><i class="mk-face z">Z</i><div class="hd"><b><span class="zh">zhou</span><span class="en">Zhou</span></b><span class="tm"><span class="zh">1 小时前</span><span class="en">1 h ago</span></span></div><div class="bd"><span class="zh">把依赖都升到最新</span><span class="en">Update all the dependencies</span></div></div>
+                    <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span class="zh">现在</span><span class="en">now</span></span></div><div class="bd md"><span class="zh">其余 23 个包都升好了，测试通过。只剩 React Router 8：它要改路由写法，等你决定要不要升。</span><span class="en">The other 23 packages are updated and the tests pass. Only React Router 8 is left: it changes how routes are written, so it's your call.</span></div></div>
+                  </div>
+                  <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                </div>
               </div>
-            </div>
-            <div class="phone" aria-hidden="true">
-              <span class="island"></span>
-              <div class="notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em><span class="zh">现在</span><span class="en">now</span></em></b><span class="zh">更新说明写好了，等你看</span><span class="en">Release notes are ready for your review</span></div></div>
-              <div class="scr">
-                <div class="status"><span>9:41</span><span>●●●</span></div>
-                <div class="app-h" style="margin-top:72px"><span class="zh">对话</span><span class="en">Chats</span></div>
-                <div class="list">
-                  <div class="row on"><b><span class="zh">更新说明</span><span class="en">Release notes</span><em>Willow</em></b><small><span class="zh">待审核</span><span class="en">Needs Review</span></small></div>
-                  <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">API p99</span><em>Server</em></b><small><span class="zh">压测进行中</span><span class="en">Load test running</span></small></div>
-                  <div class="row"><b><span class="zh">依赖周更</span><span class="en">Dependencies</span><em>Mini</em></b><small><span class="zh">等你决定</span><span class="en">Needs your call</span></small></div>
-                </div>
+            </div></div>
+            <div class="mk-phone">
+              <span class="isl"></span><span class="home"></span>
+              <div class="notif"><img src="assets/mark.svg" alt=""><div><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span><em><span class="zh">现在</span><span class="en">now</span></em></b><span class="m"><span class="zh">Opus 5.5：其余 23 个包都升好了，只剩 React Router 8 等你决定</span><span class="en">Opus 5.5: The other 23 packages are updated; React Router 8 is your call</span></span></div></div>
+              <div class="mk mk-m">
+                <div class="mk-sb"><span>9:41</span><span class="ic"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></span></div>
+                <div class="mk-mtop"><i class="mk-i gear"></i><b>Acme</b><i class="mk-i chevd"></i><i class="mk-i filter"></i></div>
+                <div class="mk-search"><i class="mk-i search"></i><span class="zh">搜索全部内容</span><span class="en">Search everything</span></div>
+                <div class="mk-mday"><span class="zh">今天</span><span class="en">Today</span></div>
+                <div class="mk-mrow"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">运行 pnpm test login…</span><span class="en">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出，10 万…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2 ink"><span><span class="zh">其余 23 个包都升好了，测试通过。只剩 React R…</span><span class="en">The other 23 packages are updated and the te…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                <div class="mk-mday"><span class="zh">昨天</span><span class="en">Yesterday</span></div>
+                <div class="mk-mrow"><div class="l1"><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">罪魁是 orders 表少了 (user_id, created_at) 联合…</span><span class="en">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                <div class="mk-mbar"><span class="ball"></span><i class="mk-i chats on"></i><i class="mk-i folder"></i><span class="gap"></span><span class="ling"><i class="mk-i mk-ling"></i></span><i class="mk-i quota"></i><i class="mk-i glyph"></i></div>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+    <!-- Phones: the overview is a swiper, one card per item; these dots follow it and jump to a card (main.js). The
+         items' own names are the controls a keyboard or screen reader uses, so the dots stay out of both. -->
+    <div class="ov-nav" aria-hidden="true"><div class="ov-dots"><button type="button" tabindex="-1"></button><button type="button" tabindex="-1"></button><button type="button" tabindex="-1"></button><span class="ov-pill"></span></div></div>
   </div>
 </section>
 
@@ -277,42 +318,53 @@
         <span class="eyebrow"><svg class="ico"><use href="#i-pool"/></svg><span class="zh">01 号池</span><span class="en">01 Account pool</span></span>
         <h2 id="pool-title"><span class="zh">账号放进一个池子，额度一点不浪费</span><span class="en">Every account in one pool, no limit left unused</span></h2>
       </div>
-      <p class="lead"><span class="zh">每个 station 都有一个号池。新对话只在启用了所选模型的账号里挑，按「本周额度要花多快才不浪费」分摊：快重置、剩得多的号多分，但不会把所有对话压到一个号上。</span><span class="en">Every station keeps an account pool. A new chat is matched only to accounts with the chosen model, weighted by how fast each must spend its weekly limit so none is wasted: accounts that reset soon with more left get more, but no single account takes every chat.</span></p>
+      <p class="lead"><span class="zh">每台 station 有一个号池。新对话按「本周额度要花多快才不浪费」分给各个号：快重置、剩得多的多分，但不会全压在一个号上。</span><span class="en">Each station keeps a pool of accounts. New chats are shared out by how fast each account must spend its weekly limit so none goes to waste: one that resets soon with more left gets more, but no account takes them all.</span></p>
     </div>
 
     <div class="pool rv">
       <div class="callouts">
         <div class="callout">
           <h3><svg class="ico"><use href="#i-gauge"/></svg><span class="zh">自动挑号</span><span class="en">Picks the account</span></h3>
-          <p><span class="zh">跳过登录失效、密钥被拒或额度用尽的号；5 小时额度用到 80% 的排在最后。额度每 5 分钟读一次。</span><span class="en">Skips accounts that are signed out, have a refused key or are out of quota; one at 80% of its 5-hour limit goes last. Quotas are read every five minutes.</span></p>
+          <p><span class="zh">跳过登录失效、密钥被拒或额度用尽的号；5 小时额度用到 80% 的排最后。</span><span class="en">Skips accounts that are signed out, have a refused key or are out of quota. One past 80% of its 5-hour limit goes last.</span></p>
         </div>
         <div class="callout">
-          <h3><svg class="ico"><use href="#i-history"/></svg><span class="zh">换号不丢活</span><span class="en">Switches without losing work</span></h3>
-          <p><span class="zh">进行中的对话尽量留在原账号。必须换时，agent 自己读回聊天记录；后台命令还在跑时不提前换。</span><span class="en">A running chat stays on its account where it can. When it must move, the agent reads back its own history, and it never moves early while background commands are still running.</span></p>
+          <h3><svg class="ico"><use href="#i-history"/></svg><span class="zh">换号不丢活</span><span class="en">Moves without losing work</span></h3>
+          <p><span class="zh">进行中的对话尽量留在原账号。必须换时，agent 自己读回聊天记录；后台命令还在跑时不提前换。</span><span class="en">A running chat stays on its account where it can. When it has to move, the agent reads back its own history, and it never moves early while background commands still run.</span></p>
         </div>
       </div>
 
-      <div class="pool-card">
-        <svg class="iso" viewBox="-110 0 740 560" fill="none" role="img" aria-label="三层：新对话、号池、station"><path d="M86.8 418.0 L260.0 518.0 L433.2 418.0 L433.2 430.0 L260.0 530.0 L86.8 430.0 Z" fill="#ECECEE" stroke="#D3D3D6" stroke-width="1"/><g transform="matrix(0.866 0.5 -0.866 0.5 260 318)"><rect width="200" height="200" rx="14" fill="#F7F7F8" stroke="#CFCFD2" stroke-width="1.2" vector-effect="non-scaling-stroke"/><rect x="24" y="60" width="28" height="80" rx="5" fill="#fff" stroke="#D3D3D6" vector-effect="non-scaling-stroke"/><circle cx="33" cy="72" r="3" fill="#079455"/><rect x="30" y="86" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="30" y="96" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="66" y="60" width="28" height="80" rx="5" fill="#fff" stroke="#D3D3D6" vector-effect="non-scaling-stroke"/><circle cx="75" cy="72" r="3" fill="#079455"/><rect x="72" y="86" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="72" y="96" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="108" y="60" width="28" height="80" rx="5" fill="#fff" stroke="#D3D3D6" vector-effect="non-scaling-stroke"/><circle cx="117" cy="72" r="3" fill="#079455"/><rect x="114" y="86" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="114" y="96" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="150" y="60" width="28" height="80" rx="5" fill="#fff" stroke="#D3D3D6" vector-effect="non-scaling-stroke"/><circle cx="159" cy="72" r="3" fill="#A4A5A9"/><rect x="156" y="86" width="16" height="4" rx="2" fill="#E3E3E4"/><rect x="156" y="96" width="16" height="4" rx="2" fill="#E3E3E4"/></g><path d="M86.8 418 V 268 M433.2 418 V 268" stroke="#C9CACD" stroke-dasharray="3 5"/><path d="M86.8 268.0 L260.0 368.0 L433.2 268.0 L433.2 280.0 L260.0 380.0 L86.8 280.0 Z" fill="#FBD9CB" stroke="#D3D3D6" stroke-width="1"/><g transform="matrix(0.866 0.5 -0.866 0.5 260 168)"><rect width="200" height="200" rx="14" fill="#FFF3EE" stroke="#CFCFD2" stroke-width="1.2" vector-effect="non-scaling-stroke"/><path d="M25 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M50 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M75 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M100 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M125 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M150 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M175 8V192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 25H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 50H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 75H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 100H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 125H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 150H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><path d="M8 175H192" stroke="#F6C7B5" stroke-width="1" vector-effect="non-scaling-stroke"/><rect x="28" y="28" width="44" height="44" rx="6" fill="#EF6334" opacity="1"/><rect x="78" y="28" width="44" height="44" rx="6" fill="#EF6334" opacity="0.75"/><rect x="128" y="28" width="44" height="44" rx="6" fill="#C24A22" opacity="1"/><rect x="28" y="103" width="44" height="44" rx="6" fill="#EF6334" opacity="0.55"/><rect x="78" y="103" width="44" height="44" rx="6" fill="#C9CACD" opacity="1"/><rect x="128" y="103" width="44" height="44" rx="6" fill="none" stroke="#A4A5A9" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><rect x="30" y="160" width="12" height="12" rx="2" fill="#EF6334"/><rect x="55" y="160" width="12" height="12" rx="2" fill="#FFB599"/><rect x="155" y="150" width="12" height="12" rx="2" fill="#EF6334"/><rect x="130" y="170" width="12" height="12" rx="2" fill="#F68B64"/><rect x="105" y="155" width="12" height="12" rx="2" fill="#1A1B1E"/></g><path d="M86.8 268 V 118 M433.2 268 V 118" stroke="#C9CACD" stroke-dasharray="3 5"/><path d="M86.8 118.0 L260.0 218.0 L433.2 118.0 L433.2 130.0 L260.0 230.0 L86.8 130.0 Z" fill="#EEEEEF" stroke="#D3D3D6" stroke-width="1"/><g transform="matrix(0.866 0.5 -0.866 0.5 260 18)"><rect width="200" height="200" rx="14" fill="#FFFFFF" stroke="#CFCFD2" stroke-width="1.2" vector-effect="non-scaling-stroke"/><rect x="22" y="26" width="156" height="40" rx="8" fill="#fff" stroke="#C24A22" stroke-width="1.6" vector-effect="non-scaling-stroke"/><rect x="34" y="38" width="70" height="6" rx="3" fill="#1A1B1E"/><rect x="34" y="50" width="110" height="5" rx="2.5" fill="#E3E3E4"/><rect x="22" y="84" width="156" height="40" rx="8" fill="#fff" stroke="#D3D3D6" stroke-width="1" vector-effect="non-scaling-stroke"/><rect x="34" y="96" width="90" height="6" rx="3" fill="#D3D3D6"/><rect x="34" y="108" width="60" height="5" rx="2.5" fill="#E3E3E4"/><rect x="22" y="142" width="156" height="40" rx="8" fill="#fff" stroke="#D3D3D6" stroke-width="1" vector-effect="non-scaling-stroke"/><rect x="34" y="154" width="90" height="6" rx="3" fill="#D3D3D6"/><rect x="34" y="166" width="60" height="5" rx="2.5" fill="#E3E3E4"/></g><path d="M433 118 H470" stroke="#A4A5A9" stroke-width="1"/><circle cx="433" cy="118" r="3" fill="#1A1B1E"/><g transform="translate(470 107)"><rect width="112" height="22" rx="4" fill="#fff" stroke="#D3D3D6"/><rect x="7" y="7" width="8" height="8" rx="1.5" fill="none" stroke="#4A4C50" stroke-width="1.2"/><text x="21" y="15" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="11.5" fill="#1A1B1E">new chats ×3</text></g><path d="M87 268 H50.0" stroke="#A4A5A9" stroke-width="1"/><circle cx="87" cy="268" r="3" fill="#1A1B1E"/><g transform="translate(-98 257)"><rect width="148" height="22" rx="4" fill="#fff" stroke="#D3D3D6"/><rect x="7" y="7" width="8" height="8" rx="1.5" fill="none" stroke="#4A4C50" stroke-width="1.2"/><text x="21" y="15" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="11.5" fill="#1A1B1E">pool · 6 accounts</text></g><path d="M433 418 H470" stroke="#A4A5A9" stroke-width="1"/><circle cx="433" cy="418" r="3" fill="#1A1B1E"/><g transform="translate(470 407)"><rect width="112" height="22" rx="4" fill="#fff" stroke="#D3D3D6"/><rect x="7" y="7" width="8" height="8" rx="1.5" fill="none" stroke="#4A4C50" stroke-width="1.2"/><text x="21" y="15" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="11.5" fill="#1A1B1E">stations · 4</text></g></svg>
-      </div>
+      <figure class="pool-fig" aria-label="三层：新对话落进号池，各自分到一个账号，在 station 上运行" data-aria-en="Three layers: new chats drop into the pool, each gets an account, and runs on a station">
+        <div class="iso-box">
+          <svg class="iso" viewBox="0 0 324 596" fill="none" stroke-linejoin="round" aria-hidden="true"><path d="M6.1 108V294" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 108V294" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M6.1 304V490" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 304V490" stroke="#B9BABE" stroke-dasharray="2 4" stroke-linecap="round"/><polygon points="6.1,490 162,580 162,590 6.1,500" fill="#ECECEE" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="317.9,490 162,580 162,590 317.9,500" fill="#E2E2E5" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="162,400 317.9,490 162,580 6.1,490" fill="#F7F7F8" stroke="#CFCFD2" stroke-width="0.75"/><path d="M182.8 418L37.3 502" stroke="#E6E6E8" stroke-width=".75"/><path d="M141.2 418L286.7 502" stroke="#E6E6E8" stroke-width=".75"/><path d="M208.8 433L63.3 517" stroke="#E6E6E8" stroke-width=".75"/><path d="M115.2 433L260.7 517" stroke="#E6E6E8" stroke-width=".75"/><path d="M234.7 448L89.3 532" stroke="#E6E6E8" stroke-width=".75"/><path d="M89.3 448L234.7 532" stroke="#E6E6E8" stroke-width=".75"/><path d="M260.7 463L115.2 547" stroke="#E6E6E8" stroke-width=".75"/><path d="M63.3 463L208.8 547" stroke="#E6E6E8" stroke-width=".75"/><path d="M286.7 478L141.2 562" stroke="#E6E6E8" stroke-width=".75"/><path d="M37.3 478L182.8 562" stroke="#E6E6E8" stroke-width=".75"/><g class="pl-run" data-n="1"><ellipse cx="155.1" cy="438" rx="36.7" ry="21.2" stroke="#DC5929" stroke-width="1.5"/></g><g class="pl-run" data-n="0"><ellipse cx="130.8" cy="508" rx="36.7" ry="21.2" stroke="#DC5929" stroke-width="1.5"/></g><g class="pl-run" data-n="2"><ellipse cx="179.3" cy="536" rx="36.7" ry="21.2" stroke="#DC5929" stroke-width="1.5"/></g><polygon points="120.4,420 155.1,440 155.1,458 120.4,438" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="189.7,420 155.1,440 155.1,458 189.7,438" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="155.1,400 189.7,420 155.1,440 120.4,420" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="155.1,415 163.7,420 155.1,425 146.4,420" fill="#3B82D6"/><polygon points="168.9,448 203.6,468 203.6,486 168.9,466" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="238.2,448 203.6,468 203.6,486 238.2,466" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="203.6,428 238.2,448 203.6,468 168.9,448" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="203.6,443 212.2,448 203.6,453 194.9,448" fill="#2F8F5B"/><polygon points="96.2,490 130.8,510 130.8,528 96.2,508" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="165.5,490 130.8,510 130.8,528 165.5,508" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="130.8,470 165.5,490 130.8,510 96.2,490" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="130.8,485 139.5,490 130.8,495 122.2,490" fill="#DC5929"/><polygon points="144.7,518 179.3,538 179.3,556 144.7,536" fill="#ECECEE" stroke="#C9CACD" stroke-width="0.75"/><polygon points="214,518 179.3,538 179.3,556 214,536" fill="#DEDEE1" stroke="#C9CACD" stroke-width="0.75"/><polygon points="179.3,498 214,518 179.3,538 144.7,518" fill="#FFFFFF" stroke="#C9CACD" stroke-width="0.75"/><polygon points="179.3,513 188,518 179.3,523 170.7,518" fill="#8B5CC6"/><path class="pl-run" data-n="0" d="M130.8 312V487" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="1" d="M155.1 242V417" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="2" d="M179.3 340V515" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><polygon points="6.1,294 162,384 162,394 6.1,304" fill="#FBDCCF" stroke="#EBC3B3" stroke-width="0.75"/><polygon points="317.9,294 162,384 162,394 317.9,304" fill="#F6CDBD" stroke="#EBC3B3" stroke-width="0.75"/><polygon points="162,204 317.9,294 162,384 6.1,294" fill="#FFF3EE" stroke="#EBC3B3" stroke-width="0.75"/><polygon points="96.2,247 137.8,271 137.8,276 96.2,252" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="203.6,233 137.8,271 137.8,276 203.6,238" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><g class="pl-lit" data-n="1"><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFE1D4" stroke="#EF6334" stroke-width="1.5"/></g><ellipse cx="162" cy="220" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="113.5,241 119.6,244.5 112.6,248.5 106.6,245" fill="#2F8F5B"/><polygon points="120.6,245.1 126.7,248.6 119.7,252.6 113.7,249.1" fill="#2F8F5B"/><polygon points="127.7,249.2 133.8,252.7 126.8,256.7 120.8,253.2" fill="#2F8F5B"/><polygon points="134.8,253.3 140.9,256.8 133.9,260.8 127.9,257.3" fill="#2F8F5B"/><polygon points="141.9,257.4 148,260.9 141,264.9 135,261.4" fill="#E2E1E0"/><polygon points="144.7,275 186.2,299 186.2,304 144.7,280" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="252.1,261 186.2,299 186.2,304 252.1,266" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="210.5,237 252.1,261 186.2,299 144.7,275" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><ellipse cx="210.5" cy="248" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="162,269 168.1,272.5 161.1,276.5 155.1,273" fill="#2F8F5B"/><polygon points="169.1,273.1 175.2,276.6 168.2,280.6 162.2,277.1" fill="#2F8F5B"/><polygon points="176.2,277.2 182.3,280.7 175.3,284.7 169.3,281.2" fill="#E2E1E0"/><polygon points="183.3,281.3 189.4,284.8 182.4,288.8 176.4,285.3" fill="#E2E1E0"/><polygon points="190.4,285.4 196.5,288.9 189.5,292.9 183.5,289.4" fill="#E2E1E0"/><polygon points="23.4,289 65,313 65,318 23.4,294" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="130.8,275 65,313 65,318 130.8,280" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="89.3,251 130.8,275 65,313 23.4,289" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><ellipse cx="89.3" cy="262" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="40.8,283 46.8,286.5 39.9,290.5 33.8,287" fill="#E6A23C"/><polygon points="47.9,287.1 53.9,290.6 47,294.6 40.9,291.1" fill="#E2E1E0"/><polygon points="55,291.2 61,294.7 54.1,298.7 48,295.2" fill="#E2E1E0"/><polygon points="62.1,295.3 68.1,298.8 61.2,302.8 55.1,299.3" fill="#E2E1E0"/><polygon points="69.2,299.4 75.2,302.9 68.3,306.9 62.2,303.4" fill="#E2E1E0"/><polygon points="259,270 300.6,294 234.7,332 193.2,308" fill="#FFF8F5" stroke="#A4A5A9" stroke-width="1" stroke-dasharray="3 3"/><ellipse cx="259" cy="281" rx="4.3" ry="2.5" stroke="#A4A5A9" stroke-width="1"/><polygon points="210.5,302 216.6,305.5 209.6,309.5 203.6,306" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="217.6,306.1 223.7,309.6 216.7,313.6 210.7,310.1" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="224.7,310.2 230.8,313.7 223.8,317.7 217.8,314.2" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="231.8,314.3 237.9,317.8 230.9,321.8 224.9,318.3" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="238.9,318.4 245,321.9 238,325.9 232,322.4" fill="none" stroke="#C9CACD" stroke-width=".75"/><polygon points="71.9,317 113.5,341 113.5,346 71.9,322" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="179.3,303 113.5,341 113.5,346 179.3,308" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><g class="pl-lit" data-n="0"><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFE1D4" stroke="#EF6334" stroke-width="1.5"/></g><ellipse cx="137.8" cy="290" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="89.3,311 95.3,314.5 88.4,318.5 82.3,315" fill="#2F8F5B"/><polygon points="96.4,315.1 102.4,318.6 95.5,322.6 89.4,319.1" fill="#2F8F5B"/><polygon points="103.5,319.2 109.5,322.7 102.6,326.7 96.5,323.2" fill="#2F8F5B"/><polygon points="110.6,323.3 116.6,326.8 109.7,330.8 103.6,327.3" fill="#2F8F5B"/><polygon points="117.7,327.4 123.7,330.9 116.8,334.9 110.7,331.4" fill="#2F8F5B"/><polygon points="120.4,345 162,369 162,374 120.4,350" fill="#F1E6E1" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="227.8,331 162,369 162,374 227.8,336" fill="#E9DAD3" stroke="#E2C9BE" stroke-width="0.75"/><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFFFFF" stroke="#E2C9BE" stroke-width="0.75"/><g class="pl-lit" data-n="2"><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFE1D4" stroke="#EF6334" stroke-width="1.5"/></g><ellipse cx="186.2" cy="318" rx="4.3" ry="2.5" fill="#1A1B1E"/><polygon points="137.8,339 143.8,342.5 136.9,346.5 130.8,343" fill="#2F8F5B"/><polygon points="144.9,343.1 150.9,346.6 144,350.6 137.9,347.1" fill="#2F8F5B"/><polygon points="152,347.2 158,350.7 151.1,354.7 145,351.2" fill="#2F8F5B"/><polygon points="159.1,351.3 165.1,354.8 158.2,358.8 152.1,355.3" fill="#E2E1E0"/><polygon points="166.2,355.4 172.2,358.9 165.3,362.9 159.2,359.4" fill="#E2E1E0"/><polygon points="6.1,98 162,188 162,198 6.1,108" fill="#ECECEE" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="317.9,98 162,188 162,198 317.9,108" fill="#E2E2E5" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="162,8 317.9,98 162,188 6.1,98" fill="#FFFFFF" stroke="#CFCFD2" stroke-width="0.75"/><polygon points="96.2,80 127.4,98 96.2,116 65,98" fill="#F7F7F8" stroke="#C9CACD" stroke-width="1" stroke-dasharray="3 3"/><polygon points="162,80 193.2,98 162,116 130.8,98" fill="#F7F7F8" stroke="#C9CACD" stroke-width="1" stroke-dasharray="3 3"/><polygon points="227.8,80 259,98 227.8,116 196.6,98" fill="#F7F7F8" stroke="#C9CACD" stroke-width="1" stroke-dasharray="3 3"/><path class="pl-route" data-n="0" d="M96.2 98L130.8 305" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="1" d="M162 98L155.1 235" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="2" d="M227.8 98L179.3 333" stroke="#DC5929" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><g class="pl-chat" data-n="0" style="--dx:-34.6px;--dy:-209px"><polygon points="106.6,303 130.8,317 130.8,321 106.6,307" fill="#2C2D31" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="155.1,303 130.8,317 130.8,321 155.1,307" fill="#0E0F11" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="130.8,289 155.1,303 130.8,317 106.6,303" fill="#1A1B1E" stroke="#1A1B1E" stroke-width="0.5"/><path d="M133.4 296.5L120.4 304" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M140.3 300.5L131.7 305.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="1" style="--dx:6.9px;--dy:-139px"><polygon points="130.8,233 155.1,247 155.1,251 130.8,237" fill="#2C2D31" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="179.3,233 155.1,247 155.1,251 179.3,237" fill="#0E0F11" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="155.1,219 179.3,233 155.1,247 130.8,233" fill="#1A1B1E" stroke="#1A1B1E" stroke-width="0.5"/><path d="M157.7 226.5L144.7 234" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M164.6 230.5L155.9 235.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="2" style="--dx:48.5px;--dy:-237px"><polygon points="155.1,331 179.3,345 179.3,349 155.1,335" fill="#2C2D31" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="203.6,331 179.3,345 179.3,349 203.6,335" fill="#0E0F11" stroke="#1A1B1E" stroke-width="0.5"/><polygon points="179.3,317 203.6,331 179.3,345 155.1,331" fill="#1A1B1E" stroke="#1A1B1E" stroke-width="0.5"/><path d="M181.9 324.5L168.9 332" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M188.8 328.5L180.2 333.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g></svg>
+          <span class="mtag pt" style="--x:98.1%;--y:16.4%" aria-hidden="true"><i></i><span class="zh">新对话 · 3</span><span class="en">new chats · 3</span></span>
+          <span class="mtag pt pt-l" style="--x:1.9%;--y:49.3%;--xm:98.1%" aria-hidden="true"><i></i><span class="zh">号池 · 6 个账号</span><span class="en">pool · 6 accounts</span></span>
+          <span class="mtag pt" style="--x:98.1%;--y:82.2%" aria-hidden="true"><i></i><span class="zh">station · 4</span><span class="en">stations · 4</span></span>
+        </div>
+        <figcaption class="pool-key">
+          <span class="k-pick"><i></i><span class="zh">分到对话</span><span class="en">given a chat</span></span>
+          <span class="k-ok"><i></i><span class="zh">还有余量</span><span class="en">room left</span></span>
+          <span class="k-low"><i></i><span class="zh">过了 80%，排最后</span><span class="en">past 80%, goes last</span></span>
+          <span class="k-out"><i></i><span class="zh">登录失效，跳过</span><span class="en">signed out, skipped</span></span>
+        </figcaption>
+      </figure>
 
       <div class="callouts">
         <div class="callout">
           <h3><svg class="ico"><use href="#i-swap"/></svg><span class="zh">station 之间共享</span><span class="en">Shared between stations</span></h3>
-          <p><span class="zh">一台 station 可以把登录好的账号借给同一 workspace 的其他 station，没登录的电脑也能用团队的号。</span><span class="en">A station can lend its signed-in accounts to the other stations in its workspace, so a computer with no sign-in can still use the team's accounts.</span></p>
+          <p><span class="zh">一台 station 登录的账号可以分享给同一 workspace 的其他 station，别的电脑不用再登录。</span><span class="en">A station can share its signed-in accounts with the rest of its workspace, so the other computers don't sign in again.</span></p>
         </div>
         <div class="callout">
-          <h3><svg class="ico"><use href="#i-key"/></svg><span class="zh">密钥要你批准</span><span class="en">Keys need your approval</span></h3>
-          <p><span class="zh">API 密钥加密存在密钥库里，agent 要用时，你在手机上点一下批准才交出去。</span><span class="en">API keys are kept encrypted in the vault. When an agent needs one, it's handed over only after you approve it on your phone.</span></p>
+          <h3><svg class="ico"><use href="#i-review"/></svg><span class="zh">停下的活会告诉 agent</span><span class="en">Stopped work is reported</span></h3>
+          <p><span class="zh">换号时若停了后台任务，下一轮开头告诉 agent 停了哪些；Claude 的 subagent 能从停下的地方接着跑。</span><span class="en">If a switch stops background work, the agent is told what stopped at the start of its next turn, and Claude's subagents carry on from where they were.</span></p>
         </div>
       </div>
     </div>
 
     <div class="formula rv">
-      <div><b>80%</b><span><span class="zh">5 小时额度用到这里，就把新对话让给别的号</span><span class="en">of a 5-hour limit, and new chats go to another account</span></span></div>
-      <div><b><span class="zh">5 分钟</span><span class="en">5 min</span></b><span><span class="zh">有人在看或有对话在跑时，每 5 分钟读一次额度</span><span class="en">between quota reads while someone is watching or a turn is running</span></span></div>
-      <div><b>75%</b><span><span class="zh">上下文到压缩点的 75% 时才提前换号，少丢上下文</span><span class="en">of the compaction point before a chat moves early, so it loses little</span></span></div>
-      <div><b>64</b><span><span class="zh">每个 workspace 最多 64 台 station，共用一个号池</span><span class="en">stations per workspace can draw on the same accounts</span></span></div>
+      <div><b>80%</b><span><span class="zh">5 小时额度用到这里，新对话先给别的号</span><span class="en">of a 5-hour limit, and new chats go to other accounts first</span></span></div>
+      <div><b><span class="zh">5 分钟</span><span class="en">5 min</span></b><span><span class="zh">有人在看或有对话在跑时，每 5 分钟读一次额度</span><span class="en">between quota reads while someone is watching or a chat is running</span></span></div>
+      <div><b>75%</b><span><span class="zh">上下文到压缩点的 75% 才提前换号，少丢上下文</span><span class="en">of the way to compaction before a chat moves early, so little is lost</span></span></div>
+      <div><b>64</b><span><span class="zh">每个 workspace 最多 64 台 station，账号可以互相分享</span><span class="en">stations per workspace at most, each able to share its accounts</span></span></div>
     </div>
   </div>
 </section>
@@ -325,89 +377,119 @@
         <span class="eyebrow"><svg class="ico"><use href="#i-team"/></svg><span class="zh">02 协同</span><span class="en">02 Teams</span></span>
         <h2 id="teams-title"><span class="zh">一个人开口，整个团队接着干</span><span class="en">One person asks, the whole team carries on</span></h2>
       </div>
-      <p class="lead"><span class="zh">在团队已经在用的地方工作。同一个 thread 里每个人都和同一个 agent 说话，同一个 workspace 里的电脑像一台一样分工。</span><span class="en">Work where your team already talks. Everyone in a thread talks to the same agent, and the computers in a workspace split the work as if they were one.</span></p>
+      <p class="lead"><span class="zh">团队在哪儿聊，就在哪儿用：在 Slack 里提到它，对话里的每个人都和同一个 agent 一起干。同一个 workspace 的电脑像一台一样分工。</span><span class="en">Use it where your team already talks: mention it in Slack, and everyone in the conversation works with the same agent. The computers in a workspace split the work as one.</span></p>
     </div>
 
     <div class="rails rv">
-      <div class="cells">
-        <article class="cell">
+      <div class="cells" role="region" aria-label="团队怎么一起用" data-aria-en="How teams use it">
+        <article class="cell" data-seq="900 1000 2000 2600 1000 2800" data-still="5">
           <div class="vis">
-            <div class="sk-slack" aria-hidden="true">
-              <div class="sk-rail"><svg class="sk-logo"><use href="#b-slack"/></svg><i class="on"></i><i></i><i></i></div>
-              <div class="sk-side"><b># eng-api</b><span class="sk-b" style="width:72%"></span><span class="sk-b" style="width:52%"></span><span class="sk-b" style="width:64%"></span><span class="sk-b" style="width:44%"></span></div>
-              <div class="sk-main">
-                <div class="sk-head"># eng-api <em>thread</em></div>
-                <div class="sk-msg a1"><span class="sk-av" style="background:var(--graphite)">P</span><div><b>Priya</b><p><span class="mention">@monoid</span> <span class="zh">把这个 bug 修了</span><span class="en">fix this bug</span></p></div></div>
-                <div class="sk-msg a2"><span class="sk-av" style="background:var(--ink)">A</span><div><b>Alex</b><p><span class="sk-b" style="width:70%;display:block"></span></p></div></div>
-                <div class="sk-msg a3"><span class="sk-av bot"><img src="assets/mark.svg" alt="" width="18" height="18"></span><div><b>monoid <em>APP</em></b>
-                  <p class="typing"><i></i><i></i><i></i></p>
-                  <p class="reply"><span class="zh">修好了，边界情况补了测试</span><span class="en">Fixed, edge case tested</span> <span class="cap"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span></p></div></div>
+            <div class="tp tp-sl" aria-hidden="true">
+              <div class="sl-rail"><span class="sl-ws">A</span><i></i><i></i></div>
+              <div class="sl-pane">
+                <div class="sl-head"><b><span class="zh">消息列</span><span class="en">Thread</span></b><span># eng-web</span></div>
+                <div class="sl-msgs" data-follow>
+                  <div class="sl-m" data-in="1"><i class="sl-av"><span class="zh">林</span><span class="en">L</span></i><div><p class="h"><b><span class="zh">林晓</span><span class="en">Lin Xiao</span></b><time>10:42</time></p><p><span class="sl-at">@monoid</span> <span class="zh">登录页在手机上显示不对，帮我修一下</span><span class="en">the login page looks wrong on phones, can you fix it?</span></p></div></div>
+                  <div class="sl-slot">
+                    <p class="sl-st" data-in="2" data-out="3"><img src="assets/mark.svg" alt="" width="14" height="14"><span>monoid · <span class="zh">截图 登录页 375px…</span><span class="en">Screenshot of /login at 375px…</span></span></p>
+                    <div class="sl-m" data-in="3"><img class="sl-av" src="assets/mark.svg" alt="" width="30" height="30"><div><p class="h"><b>monoid</b><em>APP</em><time>10:44</time></p><p><span class="zh">按钮写死了 320px 宽，改成撑满容器了，375px 下截图核对过。</span><span class="en">The button was fixed at 320px wide on phones. It now fills its container; checked at 375px.</span></p></div></div>
+                  </div>
+                  <div class="sl-m" data-in="4"><i class="sl-av z"><span class="zh">周</span><span class="en">Z</span></i><div><p class="h"><b><span class="zh">周宁</span><span class="en">Zhou Ning</span></b><time>10:45</time></p><p><span class="zh">深色模式下登录按钮也看不见</span><span class="en">In dark mode the login button can't be seen either</span></p></div></div>
+                  <p class="sl-st" data-in="5"><img src="assets/mark.svg" alt="" width="14" height="14"><span>monoid · <span class="zh">思考中…</span><span class="en">Thinking…</span></span></p>
+                </div>
               </div>
             </div>
-            <span class="mtag"><i></i>#eng-api · thread</span>
+            <span class="mtag"><i></i>#eng-web · thread</span>
           </div>
-          <h3><svg class="ico"><use href="#i-chat"/></svg><span class="zh">在 Slack 里 @ 它</span><span class="en">@ it in Slack</span></h3>
-          <p><span class="zh">在 thread 或群里提到 bot 就开工，回复留在 thread 里。thread 里每个人说的话它都听。</span><span class="en">Mention the bot in a thread or group and it starts; replies stay in the thread, and it hears everyone in it.</span></p>
+          <h3><svg class="ico"><use href="#i-chat"/></svg><span class="zh">在 Slack 里 @ 它</span><span class="en">Mention it in Slack</span></h3>
+          <p><span class="zh">在 thread 里 @ 它就开工，回复留在 thread 里；之后 thread 里谁说话它都听。</span><span class="en">Mention it in a thread and it starts; replies stay in the thread, and from then on it hears everyone there.</span></p>
         </article>
-        <article class="cell">
+        <article class="cell" data-seq="1500 4200">
           <div class="vis">
-            <div class="ws" aria-hidden="true">
-              <div class="avs"><span class="av" style="background:var(--ink)">A</span><span class="av" style="background:var(--graphite)">P</span><span class="av" style="background:var(--brand-deep)">M</span><span class="av" style="background:var(--brand-haze)">S</span></div>
-              <span class="cap"><i class="live"></i><span class="zh">4 位成员 · 6 台 station 在线</span><span class="en">4 members · 6 stations online</span></span>
+            <div class="tp frame mk tp-ws" aria-hidden="true">
+              <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span></div>
+              <div class="ws-side">
+                <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                <div class="ws-clip"><div class="ws-list" data-in="1">
+                  <div class="mk-row unread ws-new"><div class="l1"><i class="mk-busy"></i><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">昨天开始 /api/orders 的 p99 从 150ms 涨到快 2 秒了</span><span class="en">Since yesterday /api/orders p99 went from 150ms to almost 2 s</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span class="zh">周</span><span class="en">Z</span></i></span></div></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">写回复…</span><span class="en">Writing a reply…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z"><span class="zh">周</span><span class="en">Z</span></i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams with the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                  <div class="mk-row"><div class="l1"><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span class="zh">周</span><span class="en">Z</span></i></span></div></div>
+                </div></div>
+              </div>
             </div>
             <span class="mtag"><i></i>workspace · Acme</span>
           </div>
-          <h3><svg class="ico"><use href="#i-team"/></svg><span class="zh">一个 workspace，一起看</span><span class="en">One workspace, one view</span></h3>
-          <p><span class="zh">邀请同事进 workspace，看到同样的对话、station 和后台任务。分享链接能把一段对话发给不在 workspace 的人。</span><span class="en">Invite teammates to the workspace to see the same chats, stations and background jobs. A share link sends one chat to someone outside it.</span></p>
+          <h3><svg class="ico"><use href="#i-team"/></svg><span class="zh">一个 workspace，同一份列表</span><span class="en">One workspace, one list</span></h3>
+          <p><span class="zh">邀请同事进 workspace，大家看到同样的对话、station 和后台任务。不在 workspace 的人，发一条分享链接就能看某段对话。</span><span class="en">Invite teammates and everyone sees the same chats, stations and background jobs. A share link shows one chat to someone outside the workspace.</span></p>
         </article>
-        <article class="cell">
+        <article class="cell" data-seq="900 1000 2600 1000 1400" data-still="2">
           <div class="vis">
-            <div class="handoff" aria-hidden="true">
-              <div class="st"><b><i></i>Mini</b><small>CPU 88%</small></div>
-              <div class="lane"><span class="pkt"></span><span class="pkt d2"></span></div>
-              <div class="st"><b><i></i>Server</b><small>pnpm test</small><span class="prog"><i></i></span></div>
+            <div class="tp frame mk tp-st" aria-hidden="true">
+              <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>612G</span></span></div><div class="l3"><span class="zh">直连 · 12 ms</span><span class="en">Direct · 12 ms</span></div></div>
+              <div class="st-lane"><i class="pk dn" data-in="1" data-out="2"></i><i class="pk up" data-in="3" data-out="4"></i><span class="st-say" data-in="1" data-out="3">pnpm test login</span><span class="st-say" data-in="3"><span class="zh">↑ 结果和改动</span><span class="en">↑ results, changes</span></span></div>
+              <div class="mk-row st-srv"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span class="zh">服务器</span><span class="en">Server</span></b><span class="st-swap"><span class="ok a"></span><span class="run b"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></span></div><div class="chips"><span class="mk-chip"><span class="meter cpu"><i style="width:37%"></i></span>CPU<span class="st-swap"><span class="a">63%</span><span class="b">24%</span></span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>71G</span></span><span class="mk-chip"><span class="meter"><i style="width:99%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>1.4G</span></span></div><div class="l3"><span class="zh">中继 · 46 ms</span><span class="en">Relay · 46 ms</span></div></div>
             </div>
-            <span class="mtag"><i></i>station_task · start</span>
+            <span class="mtag"><i></i>station_task</span>
           </div>
           <h3><svg class="ico"><use href="#i-server"/></svg><span class="zh">station 互相派活</span><span class="en">Stations hand off work</span></h3>
-          <p><span class="zh">一台电脑上的 agent 能把构建和测试派给另一台：同步工作目录，跑完把产物带回对话。</span><span class="en">An agent on one computer can send a build or test to another: it syncs the working directory and brings the results back to the chat.</span></p>
+          <p><span class="zh">一台电脑上的 agent 可以把构建和测试交给另一台去跑：只同步改动过的文件，跑完把结果带回对话。</span><span class="en">An agent on one computer can run a build or test on another: only the changed files are synced, and the results come back to the chat.</span></p>
         </article>
-        <article class="cell">
+        <article class="cell" data-seq="1300 500 1300 3200" data-still="3">
           <div class="vis">
-            <div class="lend" aria-hidden="true">
-              <span class="cap l1"><svg class="ico c-ui"><use href="#i-key"/></svg>ChatGPT Pro · Server → Willow</span>
-              <span class="cap l2"><svg class="ico c-ui"><use href="#i-key"/></svg>Claude Max · Alex → Mini</span>
-              <span class="cap l3"><svg class="ico c-sil"><use href="#i-cancel"/></svg><span class="zh">Laptop：未共享</span><span class="en">Laptop: not shared</span></span>
+            <div class="tp frame mk tp-pf" aria-hidden="true">
+              <div class="pf-hd"><span class="tile"><i class="mk-lg a"></i></span><div><b>lin@acme.dev</b><small><span class="zh">Claude 订阅</span><span class="en">Claude subscription</span></small></div></div>
+              <div class="pf-sw"><div><b><span class="zh">分享给其他 station</span><span class="en">Share with other stations</span></b><span class="pf-desc"><span data-in="0" data-out="2"><span class="zh">目前仅在 Willow 上使用</span><span class="en">Currently used only on Willow</span></span><span data-in="2"><span class="zh">其他 station 借用这里的登录</span><span class="en">Other stations borrow this station's login</span></span></span></div><i class="pf-tg" data-in="1"></i></div>
+              <div class="pf-card" data-in="2">
+                <div class="r"><b><span class="zh">登录在</span><span class="en">Signed in on</span></b><span class="v"><i class="dot"></i>Willow</span><span class="pf-btn"><span class="zh">更换</span><span class="en">Move</span></span></div>
+                <div class="r"><b><span class="zh">可用的 station</span><span class="en">Stations that can use it</span><small data-in="3"><span class="zh">使用中：Mini、服务器</span><span class="en">In use on Mini, Server</span></small></b><span class="v"><span class="zh">全部</span><span class="en">All</span></span><span class="pf-btn"><span class="zh">更改</span><span class="en">Change</span></span></div>
+              </div>
             </div>
             <span class="mtag"><i></i>profile · shared</span>
           </div>
-          <h3><svg class="ico"><use href="#i-key"/></svg><span class="zh">借账号、借技能</span><span class="en">Lend accounts and skills</span></h3>
-          <p><span class="zh">station 之间能互相借订阅账号和技能。团队买一份订阅，所有电脑都能用。</span><span class="en">Stations lend each other subscriptions and skills. The team buys one subscription and every computer can use it.</span></p>
+          <h3><svg class="ico"><use href="#i-key"/></svg><span class="zh">借账号，借 skill</span><span class="en">Lend accounts and skills</span></h3>
+          <p><span class="zh">给 Profile 或 skill 打开「分享给其他 station」，别的电脑直接借用，不用再配、再登录。一份订阅，整个 workspace 都能用。</span><span class="en">Turn on Share with other stations for a Profile or a skill, and the other computers use it as is, with nothing to set up or sign in to again. One subscription serves the whole workspace.</span></p>
         </article>
-        <article class="cell">
+        <article class="cell" data-seq="1100 500 900 700 700 500 1900" data-still="3">
           <div class="vis">
-            <div class="screen-mini" aria-hidden="true">
-              <div class="bar"><b>Willow · Chrome</b><span class="watch"><svg class="ico" width="14" height="14"><use href="#i-eye"/></svg> Priya</span></div>
-              <div class="view"><span class="t1"></span><span class="t2"></span><span class="t3" style="grid-column:1/-1"></span>
-                <svg class="cursor" viewBox="0 0 16 16"><path d="M2 1.5 13 8l-5 1.2L5.6 14 2 1.5Z" fill="#1A1B1E" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+            <div class="tp frame mk tp-sc" aria-hidden="true">
+              <div class="sc-bar"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="t"><span class="zh">登录 · Acme</span><span class="en">Sign in · Acme</span></span><span class="sc-seg"><i class="knob" data-in="1" data-out="6"></i><span><span class="zh">只看</span><span class="en">Watch</span></span><span><span class="zh">控制</span><span class="en">Control</span></span></span></div>
+              <div class="sc-stage">
+                <div class="sc-page"><i></i><span class="sc-f mail"><span data-in="0" data-out="3"><span class="zh">邮箱</span><span class="en">Email</span></span><span class="tx" data-in="3">lin@acme.dev</span></span><span class="sc-f pw"><i></i></span><span class="sc-go"><span class="zh">登录</span><span class="en">Sign in</span></span></div>
+                <svg class="sc-cur" data-in="2" data-out="6" viewBox="0 0 16 16"><path d="M2 1.5 13 8l-5 1.2L5.6 14 2 1.5Z" fill="#24272B" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>
+              </div>
             </div>
-            <span class="mtag"><i></i>screen · view-only</span>
+            <span class="mtag"><i></i>screen · Willow</span>
           </div>
-          <h3><svg class="ico"><use href="#i-screen"/></svg><span class="zh">一起看屏幕</span><span class="en">Watch the screen together</span></h3>
-          <p><span class="zh">浏览器、远程桌面和 iOS 模拟器开在对话旁边。能看到屏幕正被谁占着，可以断开，或改成只看。</span><span class="en">The browser, remote desktop and iOS Simulator open beside the chat. You can see who holds a screen, and disconnect them or switch them to view-only.</span></p>
+          <h3><svg class="ico"><use href="#i-screen"/></svg><span class="zh">一起看屏幕</span><span class="en">Share a screen</span></h3>
+          <p><span class="zh">浏览器、桌面和 iOS 模拟器开在对话旁边，大家一起看。谁在控制一目了然，可以断开，或转为只看。</span><span class="en">The browser, desktop and iOS Simulator open beside the chat for everyone to watch. You see who is in control, and can disconnect them or switch them to watching.</span></p>
         </article>
-        <article class="cell">
+        <article class="cell" data-seq="1000 4400" data-still="1">
           <div class="vis">
-            <div class="task lendphone" aria-hidden="true">
-              <div class="task-t"><svg class="ico c-mut spin"><use href="#i-run"/></svg><span class="zh">Pixel 9 借给了 Willow</span><span class="en">Pixel 9 lent to Willow</span></div>
-              <small><span class="zh">「登录页适配手机」在用 · 10 分钟不用自动关</span><span class="en">In use by “Login page on phones” · closes after 10 idle minutes</span></small>
-              <span class="prog"><i></i></span>
+            <div class="tp tp-ph" aria-hidden="true">
+              <div class="mk-phone droid">
+                <span class="isl"></span>
+                <div class="notif" data-in="1"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span class="zh">现在</span><span class="en">now</span></span><b><span class="zh">正在将调试共享给 Willow</span><span class="en">Sharing debugging with Willow</span></b><span class="m"><span class="zh">「登录页手机适配」正在后台使用虚拟屏</span><span class="en">“Login page on phones” is using a virtual screen in the background</span></span><span class="acts"><span class="zh">停止</span><span class="en">Stop</span></span></div></div>
+                <div class="mk mk-m">
+                  <div class="mk-sb"><span>9:41</span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
+                  <div class="mk-mtop"><i class="mk-i gear"></i><b>Acme</b><i class="mk-i chevd"></i><i class="mk-i filter"></i></div>
+                  <div class="mk-search"><i class="mk-i search"></i><span class="zh">搜索全部内容</span><span class="en">Search everything</span></div>
+                  <div class="mk-mday"><span class="zh">今天</span><span class="en">Today</span></div>
+                  <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams with the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                  <div class="mk-mrow"><div class="l1"><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span class="zh">周</span><span class="en">Z</span></i></span></div></div>
+                </div>
+              </div>
             </div>
-            <span class="mtag"><i></i>adb · virtual display</span>
+            <span class="mtag top"><i></i>adb · virtual screen</span>
           </div>
           <h3><svg class="ico"><use href="#i-phone"/></svg><span class="zh">把手机借给 agent</span><span class="en">Lend your phone to an agent</span></h3>
-          <p><span class="zh">Android 手机开一块虚拟屏幕给 agent 测 App，你照常用手机。通知里写明是哪个对话在用。</span><span class="en">Your Android phone opens a virtual screen for the agent to test the app, while you keep using the phone. The notification names the chat using it.</span></p>
+          <p><span class="zh">安卓手机给 agent 开一块虚拟屏测 App，你照常用手机。通知写明哪个对话在用，10 分钟没动静就收回。</span><span class="en">Your Android phone opens a virtual screen for the agent to test the app while you keep using it. The notification names the chat using it; after 10 idle minutes the screen closes.</span></p>
         </article>
+      </div>
+      <div class="tm-nav">
+        <div class="tm-dots"><i class="tm-pill" aria-hidden="true"></i><button type="button" aria-current="true"><span class="dv-vh">Slack</span></button><button type="button"><span class="dv-vh">workspace</span></button><button type="button"><span class="dv-vh">station</span></button><button type="button"><span class="dv-vh"><span class="zh">借账号</span><span class="en">Lend accounts</span></span></button><button type="button"><span class="dv-vh"><span class="zh">屏幕</span><span class="en">Screen</span></span></button><button type="button"><span class="dv-vh"><span class="zh">手机</span><span class="en">Phone</span></span></button></div>
+        <span class="tm-count tnum" aria-hidden="true"><b>01</b> / 06</span>
       </div>
     </div>
   </div>
@@ -436,12 +518,12 @@
         <div class="dv-copy">
           <p class="dv-no tnum" aria-hidden="true"><b>01</b><span> / 06</span></p>
           <div class="dv-steps">
-          <article class="dv-step" data-i="0"><span class="eyebrow">iPhone Duo · <span class="zh">合上</span><span class="en">folded</span></span><h3><span class="zh">合上，外屏照样回消息</span><span class="en">Folded, the cover screen still answers</span></h3><p><span class="zh">iPhone 原生 App 即将上架。合上的 Duo 照样收通知、回消息、批准密钥。</span><span class="en">The native iPhone app is coming to the App Store. Folded, the Duo still gets notifications, answers messages and approves keys.</span></p></article>
-          <article class="dv-step" data-i="1"><span class="eyebrow">iPhone Duo · <span class="zh">展开</span><span class="en">open</span></span><h3><span class="zh">展开，就是两块屏</span><span class="en">Unfold it: two screens</span></h3><p><span class="zh">左屏是对话列表，右屏是正在跑的对话。station 上的 iOS 模拟器也能把 Duo 的两块屏和折叠姿态传过来。</span><span class="en">Chats on the left, the running chat on the right. The iOS Simulator on a station brings the Duo's two screens and its fold across too.</span></p></article>
-          <article class="dv-step" data-i="2"><span class="eyebrow">Android</span><h3><span class="zh">手机还能借给 agent</span><span class="en">Lend your phone to the agent</span></h3><p><span class="zh">Android App 已上线。agent 在手机上开一块自己的虚拟屏幕测 App，你照常用手机。</span><span class="en">The Android app is out. The agent opens a virtual screen of its own on your phone to test the app, while you keep using it.</span></p></article>
-          <article class="dv-step" data-i="3"><span class="eyebrow">Mac · Windows</span><h3><span class="zh">每台电脑的负载，都在一个窗口</span><span class="en">Every computer's load, in one window</span></h3><p><span class="zh">桌面 App 看得最全：CPU、内存、磁盘、文件和屏幕。新任务排给最空的那台。</span><span class="en">The desktop app shows the most: CPU, memory, disk, files and screens. New tasks go to the least busy machine.</span></p></article>
-          <article class="dv-step" data-i="4"><span class="eyebrow"><span class="zh">网页</span><span class="en">Web</span></span><h3><span class="zh">打开浏览器就能用</span><span class="en">Open a browser and go</span></h3><p><span class="zh">网页版和 App 是同一套界面，什么都不用装；Linux 和 iPad 也一样。</span><span class="en">The web app is the same interface as the apps, with nothing to install, on Linux and iPad too.</span></p></article>
-          <article class="dv-step" data-i="5"><span class="eyebrow">Slack</span><h3><span class="zh">在 Slack 里 @ 它，每块屏幕一起更新</span><span class="en">Mention it in Slack, every screen updates</span></h3><p><span class="zh">回复留在 thread 里；手机、电脑和网页上的同一个对话，同时显示已完成。</span><span class="en">Replies stay in the thread, and the same chat shows Done on your phone, computer and the web at once.</span></p></article>
+          <article class="dv-step" data-i="0"><span class="eyebrow">iPhone Duo · <span class="zh">合上</span><span class="en">folded</span></span><h3><span class="zh">合上，外屏照样回消息</span><span class="en">Folded, the cover screen still replies</span></h3><p><span class="zh">收通知、回消息、批准密钥，外屏上就能做完。iPhone 原生 App 即将上架。</span><span class="en">Notifications, replies and key approvals, all on the cover screen. The native iPhone app is coming to the App Store.</span></p></article>
+          <article class="dv-step" data-i="1"><span class="eyebrow">iPhone Duo · <span class="zh">展开</span><span class="en">open</span></span><h3><span class="zh">展开，就是两块屏</span><span class="en">Unfold it: two screens</span></h3><p><span class="zh">左屏是对话列表，右屏是正在跑的对话。在 station 的 iOS 模拟器里测 App，两块屏和折叠姿态也一起传过来。</span><span class="en">Chats on the left, the running chat on the right. Test on a station's iOS Simulator, and both screens and the fold come across too.</span></p></article>
+          <article class="dv-step" data-i="2"><span class="eyebrow">Android</span><h3><span class="zh">手机还能借给 agent</span><span class="en">Lend your phone to the agent</span></h3><p><span class="zh">agent 在手机上开一块自己的虚拟屏幕测 App，你照常用手机。Android App 已上线。</span><span class="en">The agent tests on a virtual screen of its own while you keep using the phone. The Android app is out.</span></p></article>
+          <article class="dv-step" data-i="3"><span class="eyebrow">Mac · Windows</span><h3><span class="zh">每台电脑的负载，一个窗口看全</span><span class="en">Every computer's load, in one window</span></h3><p><span class="zh">桌面 App 显示每台 station 的 CPU、内存和磁盘，新任务交给最空的那台。</span><span class="en">The desktop app shows each station's CPU, memory and disk, and new tasks go to the least busy one.</span></p></article>
+          <article class="dv-step" data-i="4"><span class="eyebrow"><span class="zh">网页</span><span class="en">Web</span></span><h3><span class="zh">打开浏览器就能用</span><span class="en">Open a browser and go</span></h3><p><span class="zh">和 App 是同一套界面，什么都不用装，Linux 和 iPad 上也一样。</span><span class="en">The same interface as the apps, with nothing to install, on Linux and iPad too.</span></p></article>
+          <article class="dv-step" data-i="5"><span class="eyebrow">Slack</span><h3><span class="zh">在 Slack 里 @ 它，每块屏幕一起更新</span><span class="en">Mention it in Slack, every screen updates</span></h3><p><span class="zh">回复留在 thread 里，手机、电脑和网页上的同一个对话同时标为已完成。</span><span class="en">Replies stay in the thread; the same chat turns Done on your phone, computer and the web at once.</span></p></article>
           </div>
           <ol class="dv-rail" aria-label="Devices">
             <li data-i="0"><button type="button"><svg class="ico"><use href="#i-duo"/></svg>iPhone</button></li>
@@ -453,29 +535,66 @@
           <div class="dv-bar" aria-hidden="true"><i></i></div>
         </div>
         <div class="dv-view" aria-hidden="true">
+          <div class="dv-tags">
+            <span class="mtag"><i></i>pose · closed · cover screen</span>
+            <span class="mtag"><i></i>pose · open · 2 panels</span>
+            <span class="mtag"><i></i>virtual display · 2m</span>
+            <span class="mtag"><i></i>load → least busy</span>
+            <span class="mtag"><i></i>app.monoid.build</span>
+            <span class="mtag"><i></i>sync · 4 screens · 1 chat</span>
+          </div>
           <div class="dv-scene">
-            <div class="dv-tags">
-              <span class="mtag"><i></i>pose · closed · cover screen</span>
-              <span class="mtag"><i></i>pose · open · 2 panels</span>
-              <span class="mtag"><i></i>virtual display · 2m</span>
-              <span class="mtag"><i></i>load → least busy</span>
-              <span class="mtag"><i></i>app.monoid.build</span>
-              <span class="mtag"><i></i>sync · 4 screens · 1 chat</span>
-            </div>
             <div class="d d-laptop">
-              <div class="win">
-                <div class="win-bar"><i></i><i></i><i></i><span class="t-desk">Station · Acme</span><span class="t-url">app.monoid.build</span></div>
-                <div class="win-stack">
-                  <div class="win-body body-desk">
-                    <div class="acct on"><span class="logo" style="background:var(--ink)">W</span><span><b>Willow</b><small>Apple M4 Max · <span class="zh">1 个 agent 在跑</span><span class="en">1 agent running</span></small></span><span class="meter"><i style="width:81%"></i></span><span class="pct">81%</span></div>
-                    <div class="acct"><span class="logo" style="background:var(--graphite)">M</span><span><b>Mini</b><small>Apple M4 · <span class="zh">直连 18 ms</span><span class="en">Direct 18 ms</span></small></span><span class="meter"><i style="width:88%"></i></span><span class="pct">88%</span></div>
-                    <div class="acct"><span class="logo" style="background:var(--graphite)">L</span><span><b>Laptop</b><small>Apple M3 Pro · <span class="zh">直连 9 ms</span><span class="en">Direct 9 ms</span></small></span><span class="meter"><i style="width:92%"></i></span><span class="pct">92%</span></div>
-                    <div class="acct"><span class="logo" style="background:var(--graphite)">S</span><span><b>Server</b><small>AMD EPYC · <span class="zh">中继 46 ms</span><span class="en">Relay 46 ms</span></small></span><span class="meter"><i style="width:63%"></i></span><span class="pct">63%</span></div>
+              <!-- The Mac app on the station overview; then the same app in a browser, open on the chat. -->
+              <div class="mk mk-win">
+                <div class="mk-browser t-url"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
+                <div class="mk-stack">
+                  <div class="mk-app mac body-desk">
+                    <div class="mk-dock">
+                      <span class="mk-tl t-desk"><i></i><i></i><i></i></span>
+                      <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri on"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                      <div class="mk-side">
+                        <div class="mk-nav"><i class="mk-i plus"></i><span class="zh">添加 station</span><span class="en">Add station</span></div>
+                        <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>612G</span></span></div><div class="l3"><span class="zh">直连 · 12 ms</span><span class="en">Direct · 12 ms</span></div></div>
+                        <div class="mk-row"><div class="l1"><i class="mk-st mini"><i class="mk-i mini"></i></i><b>Mini</b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:12%"></i></span>CPU<span>88%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>6.2G</span></span><span class="mk-chip"><span class="meter"><i style="width:58%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>214G</span></span></div><div class="l3"><span class="zh">直连 · 18 ms</span><span class="en">Direct · 18 ms</span></div></div>
+                        <div class="mk-row"><div class="l1"><i class="mk-st laptop"><i class="mk-i laptop"></i></i><b><span class="zh">笔记本</span><span class="en">Laptop</span></b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span>CPU<span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>14.1G</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>388G</span></span></div><div class="l3"><span class="zh">直连 · 9 ms</span><span class="en">Direct · 9 ms</span></div></div>
+                        <div class="mk-row"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span class="zh">服务器</span><span class="en">Server</span></b><span class="run"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:37%"></i></span>CPU<span>63%</span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>71G</span></span><span class="mk-chip"><span class="meter"><i style="width:99%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>1.4G</span></span></div><div class="l3"><span class="zh">中继 · 46 ms</span><span class="en">Relay · 46 ms</span></div></div>
+                      </div>
+                    </div>
+                    <div class="mk-page">
+                      <div class="mk-pg">
+                        <div class="hd"><span class="tile mk-st willow"><i class="mk-i monitor"></i></span><div><h4>Willow</h4><p><span class="dot"></span><span class="zh">空闲 · Apple M4 Max · 64 GB · macOS 26.6.2</span><span class="en">Idle · Apple M4 Max · 64 GB · macOS 26.6.2</span></p></div><i class="mk-i more"></i></div>
+                        <div class="mk-seg"><span class="on"><span class="zh">概览</span><span class="en">Overview</span></span><span><span class="zh">进程</span><span class="en">Processes</span></span><span><span class="zh">设置</span><span class="en">Settings</span></span><span><span class="zh">软件与设备</span><span class="en">Software &amp; devices</span></span></div>
+                        <h5><span class="zh">资源</span><span class="en">Resources</span></h5>
+                        <div class="mk-dials">
+                          <div class="mk-dial"><b>81<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span class="zh">CPU 空闲</span><span class="en">CPU idle</span></span><span class="sb"><span class="zh">负载 3.1</span><span class="en">Load 3.1</span></span></div>
+                          <div class="mk-dial"><b>36.6<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span class="zh">内存剩</span><span class="en">Memory free</span></span><span class="sb"><span class="zh">共 64 GB</span><span class="en">of 64 GB</span></span></div>
+                          <div class="mk-dial"><b>612<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span class="zh">磁盘剩</span><span class="en">Disk free</span></span><span class="sb"><span class="zh">共 994 GB</span><span class="en">of 994 GB</span></span></div>
+                        </div>
+                        <div class="mk-kv"><span><span class="zh">直连 · 当前延迟</span><span class="en">Direct · latency</span> <b>12 ms</b></span><span>↑ <b>0.4 KB/s</b></span><span>↓ <b>1.2 KB/s</b></span></div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="win-body body-web">
-                    <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                    <span class="bubble agent"><span class="zh">改好了，在你手机的虚拟屏幕上点了一遍，按钮不再被挡住</span><span class="en">Fixed, and checked on your phone's virtual screen: the button shows</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                    <div class="act"><i class="ag"></i><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span><span class="t">12s</span></div>
+                  <div class="mk-app body-web">
+                    <div class="mk-dock">
+                      <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                      <div class="mk-side">
+                        <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                        <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                        <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">运行 pnpm test login…</span><span class="en">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                        <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                        <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                      </div>
+                    </div>
+                    <div class="mk-page">
+                      <div class="mk-bar"><h4><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                      <div class="mk-msgs">
+                        <div class="mk-msg"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><div class="hd"><b><span class="zh">林晓</span><span class="en">Lin Xiao</span></b><span class="tm"><span class="zh">9 分钟前</span><span class="en">9 min ago</span></span></div><div class="bd"><span class="zh">登录页在手机上显示不对，帮我修一下</span><span class="en">The login page looks wrong on phones, can you fix it?</span></div></div>
+                        <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span class="zh">6 分钟前</span><span class="en">6 min ago</span></span></div><div class="bd md"><p><span class="zh">登录按钮在手机上写死了 320px 宽，超出了屏幕。</span><span class="en">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span class="zh">改成撑满容器，375px 宽下截图看过了，不再超出</span><span class="en">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span class="zh">分支 </span><span class="en">Branch </span><code>fix/login-button</code></li></ul></div></div>
+                        <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span></span><span class="t">12s</span></div>
+                      </div>
+                      <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -483,46 +602,57 @@
             </div>
             <svg class="dv-links" viewBox="0 0 900 720" fill="none">
               <path class="l1" pathLength="1" d="M445 320 C 520 280, 590 290, 625 340"/>
-              <path class="l2" pathLength="1" d="M556 140 C 420 116, 262 118, 178 146"/>
-              <path class="l3" pathLength="1" d="M556 128 C 380 64, 92 84, 74 388"/>
-              <path class="l4" pathLength="1" d="M782 214 C 800 262, 798 304, 784 344"/>
+              <path class="l2" pathLength="1" d="M543 104 C 420 86, 236 104, 156 160"/>
+              <path class="l3" pathLength="1" d="M543 118 C 360 52, 72 112, 86 364"/>
+              <path class="l4" pathLength="1" d="M792 212 C 802 250, 778 290, 722 310"/>
             </svg>
             <div class="d d-duo">
+              <!-- Folded, the cover screen is the right panel (its status bar down the right edge); unfolding swings
+                   the left panel in on the hinge (main.js: inner screen first). -->
               <div class="duo">
-                <div class="scr">
-                  <div class="status"><span>9:41</span><span>●●●</span></div>
-                  <div class="app-h"><span class="zh">对话</span><span class="en">Chats</span></div>
-                  <div class="list">
-                    <div class="row on"><b><i class="mk-busy"></i><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
-                    <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
-                    <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">只剩 React Router 8</span><span class="en">Only React Router 8 left</span></small></div>
-                    <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small><span class="zh">回到 120 ms</span><span class="en">Back to 120 ms</span></small></div>
+                <div class="scr"><div class="mk mk-m">
+                  <div class="mk-sbd">9:41</div>
+                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                  <div class="mk-side">
+                    <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                    <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                    <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">运行 pnpm test login…</span><span class="en">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                    <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                    <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                    <div class="mk-day"><span class="zh">昨天</span><span class="en">Yesterday</span></div>
+                    <div class="mk-row"><div class="l1"><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">罪魁是 orders 表少了 (user_id, created_at) 联合…</span><span class="en">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
                   </div>
-                </div>
-                <div class="scr">
-                  <div class="status"><span></span><span>100%</span></div>
-                  <div class="app-h"><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></div>
-                  <div class="chatv">
-                    <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                    <span class="bubble agent"><span class="zh">改好了，正在 Willow 上跑测试</span><span class="en">Fixed, running the tests on Willow</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                    <div class="act"><i class="ag"></i><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span><span class="t">12s</span></div>
+                </div></div>
+                <div class="scr"><div class="mk mk-m">
+                  <div class="mk-sbd"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></div>
+                  <div class="mk-sbv"><span>9:41</span><i class="bat"></i></div>
+                  <div class="mk-page">
+                    <div class="mk-bar"><h4><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                    <div class="mk-msgs">
+                      <div class="mk-msg"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><div class="hd"><b><span class="zh">林晓</span><span class="en">Lin Xiao</span></b><span class="tm"><span class="zh">9 分钟前</span><span class="en">9 min ago</span></span></div><div class="bd"><span class="zh">登录页在手机上显示不对，帮我修一下</span><span class="en">The login page looks wrong on phones, can you fix it?</span></div></div>
+                      <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span class="zh">6 分钟前</span><span class="en">6 min ago</span></span></div><div class="bd md"><p><span class="zh">登录按钮在手机上写死了 320px 宽，超出了屏幕。</span><span class="en">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span class="zh">改成撑满容器，375px 宽下截图看过了，不再超出</span><span class="en">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span class="zh">分支 </span><span class="en">Branch </span><code>fix/login-button</code></li></ul></div></div>
+                      <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span></span><span class="t">12s</span></div>
+                    </div>
+                    <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
                   </div>
-                </div>
+                </div></div>
               </div>
-              <div class="cover-notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em><span class="zh">现在</span><span class="en">now</span></em></b><span class="zh">测试跑完了，等你看</span><span class="en">Tests passed, ready for you</span></div></div>
+              <div class="cover-notif"><img src="assets/mark.svg" alt=""><div><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span><em><span class="zh">现在</span><span class="en">now</span></em></b><span class="zh">Opus 5.5：改成撑满容器，375px 宽下截图看过了</span><span class="en">Opus 5.5: It now fills its container; checked at 375px</span></div></div>
               <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
             </div>
             <div class="d d-android">
-              <div class="phone android">
-                <span class="island"></span>
-                <div class="notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em>2m</em></b><span class="zh">「登录页适配手机」正在用这台手机的虚拟屏幕</span><span class="en">“Login page on phones” is using a virtual screen on this phone</span></div></div>
-                <div class="scr">
-                  <div class="status"><span>9:41</span><span>●●●</span></div>
-                  <div class="app-h below"><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></div>
-                  <div class="chatv">
-                    <span class="bubble agent"><span class="zh">在你手机的虚拟屏幕上点了一遍登录流程，按钮不再被挡住</span><span class="en">I ran the login flow on your phone's virtual screen; the button shows</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
+              <div class="mk-phone droid">
+                <span class="isl"></span><span class="gest"></span>
+                <div class="notif"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span class="zh">2 分钟</span><span class="en">2 min</span></span><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b><span class="m"><span class="zh">正在用这台手机的虚拟屏幕</span><span class="en">Using a virtual screen on this phone</span></span></div></div>
+                <div class="mk mk-m">
+                  <div class="mk-sb"><span>9:41</span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
+                  <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i></span><span>Willow</span></span><i class="mk-i more"></i></div>
+                  <div class="mk-mmsgs">
+                    <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><b><span class="zh">林晓</span><span class="en">Lin Xiao</span></b><span class="tm"><span class="zh">9 分钟前</span><span class="en">9 min ago</span></span></div><div class="bd"><span class="zh">登录页在手机上显示不对，帮我修一下</span><span class="en">The login page looks wrong on phones, can you fix it?</span></div></div>
+                    <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span class="zh">6 分钟前</span><span class="en">6 min ago</span></span></div><div class="bd"><span class="zh">登录按钮在手机上写死了 320px 宽，超出了屏幕。改成撑满容器了，在这台手机的虚拟屏幕上再看一遍。</span><span class="en">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
+                    <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span class="zh">截图 登录页 375px</span><span class="en">Screenshot: login page at 375px</span></span><span class="t">4s</span></div>
                   </div>
-                  <div class="composer"><span><span class="zh">回复…</span><span class="en">Reply…</span></span><i><svg class="ico"><use href="#i-up"/></svg></i></div>
+                  <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
                 </div>
               </div>
               <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
@@ -538,100 +668,90 @@
         </div>
       </div>
     </template>
-    <!-- Small screens and reduced motion: the devices as tabs. -->
-    <div class="dv-tabs rv" data-tabs>
-      <div class="ftabs" role="tablist" aria-label="Devices">
-        <button role="tab" id="dv-t1" aria-controls="dv-p1" aria-selected="true"><svg class="ico"><use href="#i-duo"/></svg>iPhone · iPhone Duo</button>
-        <button role="tab" id="dv-t2" aria-controls="dv-p2" aria-selected="false"><svg><use href="#b-android"/></svg>Android</button>
-        <button role="tab" id="dv-t3" aria-controls="dv-p3" aria-selected="false"><svg class="ico"><use href="#i-screen"/></svg><span class="zh">桌面端</span><span class="en">Desktop</span></button>
-        <button role="tab" id="dv-t4" aria-controls="dv-p4" aria-selected="false"><svg class="ico"><use href="#i-globe"/></svg><span class="zh">网页</span><span class="en">Web</span></button>
-        <button role="tab" id="dv-t5" aria-controls="dv-p5" aria-selected="false"><svg class="ico"><use href="#i-chat"/></svg>Slack</button>
-      </div>
-
-      <div class="fpanels">
+    <!-- Small screens, and large ones without the scene: the devices as cards on a native horizontal scroller that snaps
+         card to card (the browser's own momentum), the next card peeking in. Dots below jump to a card and follow the
+         swipe; on a mouse, arrows step through (main.js: the devices swiper). -->
+    <div class="dv-swipe rv">
+      <div class="fpanels" id="dv-track" role="region" aria-roledescription="carousel" aria-labelledby="devices-title" tabindex="0">
       <!-- iPhone · Duo -->
-      <div class="fpanel" id="dv-p1" role="tabpanel" aria-labelledby="dv-t1">
+      <div class="fpanel" id="dv-p1" role="group" aria-roledescription="slide" aria-labelledby="dv-h1">
         <div class="txt">
-          <span class="eyebrow"><span class="zh">iOS</span><span class="en">iOS</span></span>
-          <h3><span class="zh">iPhone 原生 App，iPhone Duo 展开就是两块屏</span><span class="en">A native iPhone app, and two screens when an iPhone Duo opens</span></h3>
-          <p><span class="zh">在 iPhone Duo 上展开：左屏是对话列表，右屏是正在跑的对话。合上，外屏照样回消息、批准密钥。</span><span class="en">Unfold an iPhone Duo: chats on the left, the running chat on the right. Fold it, and the cover screen still answers messages and approves keys.</span></p>
-          <ul>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">agent 做完、要你拍板时推送通知</span><span class="en">Notifications when an agent is done or needs your call</span></span></li>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">station 上的 iOS 模拟器能在对话旁远程操作，iPhone Duo 的两块屏和折叠姿态一起传过来</span><span class="en">Drive the iOS Simulator on a station beside the chat, with both of the iPhone Duo's screens and its fold</span></span></li>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">App Store 即将上架；现在用网页版，添加到主屏幕像 App 一样打开</span><span class="en">Coming to the App Store; until then, add the web app to your home screen</span></span></li>
-          </ul>
+          <span class="eyebrow">iPhone · iPhone Duo</span>
+          <h3 id="dv-h1"><span class="zh">展开是两块屏，合上照样回消息</span><span class="en">Two screens open; folded, it still replies</span></h3>
+          <p><span class="zh">左屏是对话列表，右屏是正在跑的对话。原生 App 即将上架，现在可以把网页版添加到主屏幕。</span><span class="en">Chats on the left, the running chat on the right. The native app is coming; for now, add the web app to your home screen.</span></p>
           <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span class="zh">在 iPhone 上打开</span><span class="en">Open on iPhone</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
         </div>
         <div class="vis">
           <span class="mtag on-vis pose-open"><i></i>pose · open · 2 panels</span>
+          <!-- Open, the Duo runs the desktop structure in the phone's colours: rail and chats on the left panel,
+               the sidebar's edge on the fold, the open chat on the right. -->
           <div class="duo" aria-hidden="true">
-            <div class="scr">
-              <div class="status"><span>9:41</span><span>●●●</span></div>
-              <div class="app-h"><span class="zh">对话</span><span class="en">Chats</span></div>
-              <div class="list">
-                <div class="row on"><b><i class="mk-busy"></i><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
-                <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
-                <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">只剩 React Router 8</span><span class="en">Only React Router 8 left</span></small></div>
-                <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small><span class="zh">回到 120 ms</span><span class="en">Back to 120 ms</span></small></div>
-                <div class="row"><b><span class="zh">写部署文档</span><span class="en">Write the deploy docs</span></b><small><span class="zh">已完成</span><span class="en">Done</span></small></div>
+            <div class="scr"><div class="mk mk-m">
+              <div class="mk-sbd">9:41</div>
+              <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+              <div class="mk-side">
+                <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">运行 pnpm test login…</span><span class="en">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                <div class="mk-day"><span class="zh">昨天</span><span class="en">Yesterday</span></div>
+                <div class="mk-row"><div class="l1"><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">罪魁是 orders 表少了 (user_id, created_at) 联合…</span><span class="en">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                <div class="mk-row"><div class="l1"><b><span class="zh">补一下部署文档</span><span class="en">Write the deploy docs</span></b></div><div class="l2"><span><span class="zh">谢谢，文档看过了</span><span class="en">Thanks, I've read the docs</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
               </div>
-            </div>
-            <div class="scr">
-              <div class="status"><span></span><span>100%</span></div>
-              <div class="app-h"><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></div>
-              <div class="chatv">
-                <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                <span class="bubble agent"><span class="zh">改好了，正在 Willow 上跑测试</span><span class="en">Fixed, running the tests on Willow</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                <div class="act"><i class="ag"></i><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span><span class="t">12s</span></div>
+            </div></div>
+            <div class="scr"><div class="mk mk-m">
+              <div class="mk-sbd"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></div>
+              <div class="mk-page">
+                <div class="mk-bar"><h4><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                <div class="mk-msgs">
+                  <div class="mk-msg"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><div class="hd"><b><span class="zh">林晓</span><span class="en">Lin Xiao</span></b><span class="tm"><span class="zh">9 分钟前</span><span class="en">9 min ago</span></span></div><div class="bd"><span class="zh">登录页在手机上显示不对，帮我修一下</span><span class="en">The login page looks wrong on phones, can you fix it?</span></div></div>
+                  <div class="mk-msg"><i class="mk-av"><i class="mk-lg a"></i></i><div class="hd"><b>Opus 5.5</b><span class="tm"><span class="zh">6 分钟前</span><span class="en">6 min ago</span></span></div><div class="bd md"><p><span class="zh">登录按钮在手机上写死了 320px 宽，超出了屏幕。</span><span class="en">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span class="zh">改成撑满容器，375px 宽下截图看过了，不再超出</span><span class="en">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span class="zh">分支 </span><span class="en">Branch </span><code>fix/login-button</code></li></ul></div></div>
+                  <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span class="zh">运行 pnpm test login</span><span class="en">Running pnpm test login</span></span><span class="t">12s</span></div>
+                </div>
+                <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
               </div>
-            </div>
+            </div></div>
           </div>
         </div>
       </div>
 
       <!-- Android -->
-      <div class="fpanel" id="dv-p2" role="tabpanel" aria-labelledby="dv-t2" hidden>
+      <div class="fpanel" id="dv-p2" role="group" aria-roledescription="slide" aria-labelledby="dv-h2">
         <div class="txt">
           <span class="eyebrow">Android</span>
-          <h3><span class="zh">Android App 已上线，还能把手机借给 agent</span><span class="en">The Android app is here, and your phone can help the agent</span></h3>
-          <p><span class="zh">对话、通知、批准密钥，都在手机上。测 App 时，手机给 agent 开一块自己的虚拟屏幕，不打扰你用手机。</span><span class="en">Chats, notifications and key approvals, on your phone. To test an app, your phone gives the agent a virtual screen of its own, without getting in your way.</span></p>
-          <ul>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">通知里写明是哪个对话在用手机，10 分钟不用自动关</span><span class="en">The notification names the chat using the phone; it closes after 10 idle minutes</span></span></li>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">借给一台 station，或同时借给几台</span><span class="en">Lend it to one station, or to several</span></span></li>
-          </ul>
-          <div class="actions" style="align-items:center">
+          <h3 id="dv-h2"><span class="zh">手机也能借给 agent 测 App</span><span class="en">Lend your phone to the agent</span></h3>
+          <p><span class="zh">agent 在手机上开一块自己的虚拟屏幕，不打扰你用手机；10 分钟不用自动关。</span><span class="en">The agent tests on a virtual screen of its own, out of your way, and it closes after 10 idle minutes.</span></p>
+          <div class="actions">
             <a class="btn btn-ink" href="https://app.monoid.build/releases/latest/android"><span class="zh">下载 Android 版</span><span class="en">Download for Android</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>
             <span class="qr"><img src="assets/android-qr.svg" alt="" width="72" height="72"><span class="zh">扫码下载</span><span class="en">Scan to download</span></span>
           </div>
         </div>
         <div class="vis">
           <span class="mtag on-vis"><i></i>virtual display · 2m</span>
-          <div class="phone android" aria-hidden="true">
-            <span class="island"></span>
-            <div class="notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em>2m</em></b><span class="zh">「登录页适配手机」正在用这台手机的虚拟屏幕</span><span class="en">“Login page on phones” is using a virtual screen on this phone</span></div></div>
-            <div class="scr">
-              <div class="status"><span>9:41</span><span>●●●</span></div>
-              <div class="app-h below"><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></div>
-              <div class="chatv">
-                <span class="bubble agent"><span class="zh">在你手机的虚拟屏幕上点了一遍登录流程，按钮不再被挡住</span><span class="en">I ran the login flow on your phone's virtual screen; the button is no longer hidden</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                <span class="cap" style="font-size:11px"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
+          <div class="mk-phone droid" aria-hidden="true">
+            <span class="isl"></span><span class="gest"></span>
+            <div class="notif"><img src="assets/mark.svg" alt=""><div><span class="app">monoid · <span class="zh">2 分钟</span><span class="en">2 min</span></span><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b><span class="m"><span class="zh">正在用这台手机的虚拟屏幕，10 分钟不用自动关</span><span class="en">Using a virtual screen on this phone; it closes after 10 idle minutes</span></span></div></div>
+            <div class="mk mk-m">
+              <div class="mk-sb"><span>9:41</span><span class="ic"><i class="wifi"></i><i class="bat"></i></span></div>
+              <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i></span><span>Willow</span></span><i class="mk-i more"></i></div>
+              <div class="mk-mmsgs">
+                <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><b><span class="zh">林晓</span><span class="en">Lin Xiao</span></b><span class="tm"><span class="zh">9 分钟前</span><span class="en">9 min ago</span></span></div><div class="bd"><span class="zh">登录页在手机上显示不对，帮我修一下</span><span class="en">The login page looks wrong on phones, can you fix it?</span></div></div>
+                <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span class="zh">6 分钟前</span><span class="en">6 min ago</span></span></div><div class="bd"><span class="zh">登录按钮在手机上写死了 320px 宽，超出了屏幕。改成撑满容器了，在这台手机的虚拟屏幕上再看一遍。</span><span class="en">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
+                <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span class="zh">截图 登录页 375px</span><span class="en">Screenshot: login page at 375px</span></span><span class="t">4s</span></div>
               </div>
-              <div class="composer"><span><span class="zh">回复…</span><span class="en">Reply…</span></span><i><svg class="ico"><use href="#i-up"/></svg></i></div>
+              <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Desktop -->
-      <div class="fpanel" id="dv-p3" role="tabpanel" aria-labelledby="dv-t3" hidden>
+      <div class="fpanel" id="dv-p3" role="group" aria-roledescription="slide" aria-labelledby="dv-h3">
         <div class="txt">
-          <span class="eyebrow"><span class="zh">Mac · Windows</span><span class="en">Mac · Windows</span></span>
-          <h3><span class="zh">每台电脑的负载、文件和屏幕，都在一个窗口里</span><span class="en">Every computer's load, files and screen in one window</span></h3>
-          <p><span class="zh">桌面 App 看得最全：每台 station 的 CPU、内存和磁盘，对话旁开着浏览器和远程桌面，任务按负载排队。</span><span class="en">The desktop app shows the most: each station's CPU, memory and disk, the browser and remote desktop beside the chat, and tasks queued by load.</span></p>
-          <ul>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">Mac（Apple 芯片）和 Windows x64</span><span class="en">Mac (Apple silicon) and Windows x64</span></span></li>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">每晚自动更新</span><span class="en">Updates itself every night</span></span></li>
-          </ul>
+          <span class="eyebrow">Mac · Windows</span>
+          <h3 id="dv-h3"><span class="zh">每台电脑的负载，一个窗口看全</span><span class="en">Every computer's load, in one window</span></h3>
+          <p><span class="zh">每台 station 的 CPU、内存和磁盘都在这里，任务按负载排队。支持 Mac（Apple 芯片）和 Windows x64，每晚自动更新。</span><span class="en">Each station's CPU, memory and disk in one place, with tasks queued by load. Mac (Apple silicon) and Windows x64, updated every night.</span></p>
           <div class="actions">
             <a class="btn btn-ink" href="https://app.monoid.build/releases/latest/mac"><svg><use href="#b-apple"/></svg><span class="zh">下载 Mac 版</span><span class="en">Download for Mac</span></a>
             <a class="btn btn-line" href="https://app.monoid.build/releases/latest/win"><svg><use href="#b-windows"/></svg>Windows</a>
@@ -639,63 +759,83 @@
         </div>
         <div class="vis">
           <span class="mtag on-vis"><i></i>load → least busy</span>
-          <div class="laptop" aria-hidden="true">
-            <div class="win">
-              <div class="win-bar"><i></i><i></i><i></i><span>Station · Acme</span></div>
-              <div class="win-body" style="gap:8px">
-                <div class="acct on"><span class="logo" style="background:var(--ink)">W</span><span><b>Willow</b><small>Apple M4 Max · <span class="zh">1 个 agent 在跑</span><span class="en">1 agent running</span></small></span><span class="meter"><i style="width:81%"></i></span><span class="pct">81%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--graphite)">M</span><span><b>Mini</b><small>Apple M4 · <span class="zh">直连 18 ms</span><span class="en">Direct 18 ms</span></small></span><span class="meter"><i style="width:88%"></i></span><span class="pct">88%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--graphite)">L</span><span><b>Laptop</b><small>Apple M3 Pro · <span class="zh">直连 9 ms</span><span class="en">Direct 9 ms</span></small></span><span class="meter"><i style="width:92%"></i></span><span class="pct">92%</span></div>
-                <div class="acct"><span class="logo" style="background:var(--graphite)">S</span><span><b>Server</b><small>AMD EPYC · <span class="zh">中继 46 ms</span><span class="en">Relay 46 ms</span></small></span><span class="meter"><i style="width:63%"></i></span><span class="pct">63%</span></div>
-                <p class="note" style="font-size:12px;margin-top:6px"><span class="zh">CPU 占用 · 新任务排给最空的那台</span><span class="en">CPU load · new tasks go to the least busy</span></p>
+          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win list">
+            <div class="mk-app mac">
+              <div class="mk-dock">
+                <span class="mk-tl"><i></i><i></i><i></i></span>
+                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri on"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                <div class="mk-side">
+                  <div class="mk-nav"><i class="mk-i plus"></i><span class="zh">添加 station</span><span class="en">Add station</span></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>612G</span></span></div><div class="l3"><span class="zh">直连 · 12 ms</span><span class="en">Direct · 12 ms</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-st mini"><i class="mk-i mini"></i></i><b>Mini</b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:12%"></i></span>CPU<span>88%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>6.2G</span></span><span class="mk-chip"><span class="meter"><i style="width:58%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>214G</span></span></div><div class="l3"><span class="zh">直连 · 18 ms</span><span class="en">Direct · 18 ms</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-st laptop"><i class="mk-i laptop"></i></i><b><span class="zh">笔记本</span><span class="en">Laptop</span></b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span>CPU<span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>14.1G</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>388G</span></span></div><div class="l3"><span class="zh">直连 · 9 ms</span><span class="en">Direct · 9 ms</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span class="zh">服务器</span><span class="en">Server</span></b><span class="run"><span class="zh">1 个运行中</span><span class="en">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:37%"></i></span>CPU<span>63%</span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span class="zh">内存</span><span class="en">Mem</span><span>71G</span></span><span class="mk-chip"><span class="meter"><i style="width:99%"></i></span><span class="zh">磁盘</span><span class="en">Disk</span><span>1.4G</span></span></div><div class="l3"><span class="zh">中继 · 46 ms</span><span class="en">Relay · 46 ms</span></div></div>
+                </div>
+              </div>
+              <div class="mk-page">
+                <div class="mk-pg">
+                  <div class="hd"><span class="tile mk-st willow"><i class="mk-i monitor"></i></span><div><h4>Willow</h4><p><span class="dot"></span><span class="zh">空闲 · Apple M4 Max · 64 GB · macOS 26.6.2</span><span class="en">Idle · Apple M4 Max · 64 GB · macOS 26.6.2</span></p></div><i class="mk-i more"></i></div>
+                  <div class="mk-seg"><span class="on"><span class="zh">概览</span><span class="en">Overview</span></span><span><span class="zh">进程</span><span class="en">Processes</span></span><span><span class="zh">设置</span><span class="en">Settings</span></span><span><span class="zh">软件与设备</span><span class="en">Software &amp; devices</span></span></div>
+                  <h5><span class="zh">资源</span><span class="en">Resources</span></h5>
+                  <div class="mk-dials">
+                    <div class="mk-dial"><b>81<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span class="zh">CPU 空闲</span><span class="en">CPU idle</span></span><span class="sb"><span class="zh">负载 3.1</span><span class="en">Load 3.1</span></span></div>
+                    <div class="mk-dial"><b>36.6<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span class="zh">内存剩</span><span class="en">Memory free</span></span><span class="sb"><span class="zh">共 64 GB</span><span class="en">of 64 GB</span></span></div>
+                    <div class="mk-dial"><b>612<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span class="zh">磁盘剩</span><span class="en">Disk free</span></span><span class="sb"><span class="zh">共 994 GB</span><span class="en">of 994 GB</span></span></div>
+                  </div>
+                  <div class="mk-kv"><span><span class="zh">直连 · 当前延迟</span><span class="en">Direct · latency</span> <b>12 ms</b></span><span>↑ <b>0.4 KB/s</b></span><span>↓ <b>1.2 KB/s</b></span></div>
+                  <h5>Profile<span class="n">1</span></h5>
+                  <div class="mk-card"><i class="mk-lg a" style="--s:18px"></i><span class="t"><span>lin@acme.dev <span class="mk-cc">CC</span></span><small><span class="zh">订阅账号 · 已启用 2 / 13 个模型</span><span class="en">Subscription · 2 / 13 models on</span></small></span><i class="mk-i chevr"></i></div>
+                </div>
               </div>
             </div>
-          </div>
+          </div></div>
         </div>
       </div>
 
       <!-- Web -->
-      <div class="fpanel" id="dv-p4" role="tabpanel" aria-labelledby="dv-t4" hidden>
+      <div class="fpanel" id="dv-p4" role="group" aria-roledescription="slide" aria-labelledby="dv-h4">
         <div class="txt">
           <span class="eyebrow"><span class="zh">网页</span><span class="en">Web</span></span>
-          <h3><span class="zh">打开浏览器就能用，Linux 也一样</span><span class="en">Open a browser and go, on Linux too</span></h3>
-          <p><span class="zh">网页版和 App 是同一套界面，什么都不用装。添加到主屏幕后，在 iPhone 和 iPad 上也像 App 一样打开。</span><span class="en">The web app is the same interface as the apps, with nothing to install. Added to the home screen, it opens like an app on iPhone and iPad.</span></p>
+          <h3 id="dv-h4"><span class="zh">打开浏览器就能用</span><span class="en">Open a browser and go</span></h3>
+          <p><span class="zh">和 App 是同一套界面，什么都不用装，Linux 和 iPad 上也一样。</span><span class="en">The same interface as the apps, with nothing to install, on Linux and iPad too.</span></p>
           <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span class="zh">打开网页版</span><span class="en">Open the web app</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
         </div>
         <div class="vis">
           <span class="mtag on-vis"><i></i>app.monoid.build</span>
-          <div class="laptop" aria-hidden="true">
-            <div class="win">
-              <div class="win-bar"><i></i><i></i><i></i><span style="flex:1;margin-left:14px;background:#fff;border-radius:99px;padding:3px 12px;font-size:12px;color:var(--graphite)">app.monoid.build</span></div>
-              <div class="win-cols">
-                <div class="side">
-                  <span class="label"><span class="zh">今天</span><span class="en">Today</span></span>
-                  <div class="row on"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small>26 min</small></div>
-                  <div class="row"><b><span class="zh">依赖周更</span><span class="en">Dependency updates</span></b><small>58 min</small></div>
-                  <span class="label"><span class="zh">昨天</span><span class="en">Yesterday</span></span>
-                  <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">API p99</span></b><small>20 h</small></div>
-                </div>
-                <div class="main" style="min-height:280px">
-                  <span class="bubble user"><span class="zh">订单导出支持 CSV</span><span class="en">Add CSV export for orders</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
-                  <span class="bubble agent"><span class="zh">做好了：按当前筛选流式写出，10 万行约 2.3 秒，已合进 main（a3f9c21）。</span><span class="en">Done: it streams rows by the current filters, 100k rows in about 2.3 s, merged into main (a3f9c21).</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
-                  <span class="cap"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
+          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win web">
+            <div class="mk-browser"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
+            <div class="mk-app">
+              <div class="mk-dock">
+                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                <div class="mk-side">
+                  <div class="mk-nav"><i class="mk-i compose"></i><span class="zh">新建对话</span><span class="en">New chat</span><i class="mk-i filter"></i></div>
+                  <div class="mk-day"><span class="zh">今天</span><span class="en">Today</span></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-busy"></i><b><span class="zh">登录页手机适配</span><span class="en">Login page on phones</span></b></div><div class="l2"><span><span class="zh">运行 pnpm test login…</span><span class="en">Running pnpm test login…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i><i class="mk-face z">Z</i></span></div></div>
+                  <div class="mk-row on"><div class="l1"><b><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></b></div><div class="l2"><span><span class="zh">做好了：导出按当前筛选条件走流式写出…</span><span class="en">Done: the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span class="zh">每周依赖升级</span><span class="en">Weekly dependency updates</span></b></div><div class="l2"><span><span class="zh">其余 23 个包都升好了，测试通过…</span><span class="en">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z">Z</i></span></div></div>
+                  <div class="mk-day"><span class="zh">昨天</span><span class="en">Yesterday</span></div>
+                  <div class="mk-row"><div class="l1"><b><span class="zh">排查 API p99 变慢</span><span class="en">Why API p99 got slow</span></b></div><div class="l2"><span><span class="zh">罪魁是 orders 表少了 (user_id, created_at) 联合…</span><span class="en">The orders table was missing a (user_id, created_at)…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span></div></div>
                 </div>
               </div>
+              <div class="mk-page">
+                <div class="mk-bar"><h4><span class="zh">订单导出支持 CSV</span><span class="en">CSV export for orders</span></h4><span class="mk-faces"><i class="mk-face"><span class="zh">林</span><span class="en">L</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg o"></i></span><span>Mini</span></span><span class="end"><i class="mk-i more"></i><i class="mk-i panel"></i></span></div>
+                <div class="mk-msgs">
+                  <div class="mk-mine"><div class="bub"><span class="zh">订单列表加一个导出 CSV</span><span class="en">Add a CSV export to the orders list</span></div><span class="tm"><span class="zh">26 分钟前</span><span class="en">26 min ago</span></span></div>
+                  <div class="mk-msg"><i class="mk-av"><i class="mk-lg o"></i></i><div class="hd"><b>Codex</b><span class="tm"><span class="zh">3 分钟前</span><span class="en">3 min ago</span></span></div><div class="bd md"><span class="zh">做好了：导出按当前筛选条件走流式写出，10 万行约 2.3 秒，已合进 main（<code>a3f9c21</code>）。</span><span class="en">Done: the export streams rows by the current filters, 100k rows in about 2.3 s, merged into main (<code>a3f9c21</code>).</span></div></div>
+                </div>
+                <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span class="zh">发消息</span><span class="en">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+              </div>
             </div>
-          </div>
+          </div></div>
         </div>
       </div>
 
       <!-- Slack -->
-      <div class="fpanel" id="dv-p5" role="tabpanel" aria-labelledby="dv-t5" hidden>
+      <div class="fpanel" id="dv-p5" role="group" aria-roledescription="slide" aria-labelledby="dv-h5">
         <div class="txt">
           <span class="eyebrow">Slack</span>
-          <h3><span class="zh">团队在哪聊，就在哪指挥</span><span class="en">Direct it wherever your team talks</span></h3>
-          <p><span class="zh">把 bot 连到一台 station，在 thread 里 @ 它就开工，回复留在 thread 里。</span><span class="en">Connect a bot to a station and mention it in a thread: it starts, and its replies stay in the thread.</span></p>
-          <ul>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">thread 里每个人都和同一个 agent 说话</span><span class="en">Everyone in the thread talks to the same agent</span></span></li>
-            <li><svg class="ico"><use href="#i-check"/></svg><span><span class="zh">登录卡片直接在聊天里打开，附设备码</span><span class="en">Sign-in cards open from the chat, with a device code</span></span></li>
-          </ul>
+          <h3 id="dv-h5"><span class="zh">在 thread 里 @ 它，就开工</span><span class="en">Mention it in a thread, and it starts</span></h3>
+          <p><span class="zh">把 bot 连到一台 station。thread 里每个人都和同一个 agent 说话，回复也留在 thread 里。</span><span class="en">Connect a bot to a station. Everyone in the thread talks to the same agent, and its replies stay in the thread.</span></p>
         </div>
         <div class="vis ink">
           <span class="mtag on-vis"><i></i>thread → 1 session</span>
@@ -709,6 +849,21 @@
         </div>
       </div>
       </div>
+      <div class="dv-nav">
+        <div class="dv-dots">
+          <i class="dv-pill" aria-hidden="true"></i>
+          <button type="button" aria-controls="dv-p1" aria-current="true"><span class="dv-vh">iPhone</span></button>
+          <button type="button" aria-controls="dv-p2"><span class="dv-vh">Android</span></button>
+          <button type="button" aria-controls="dv-p3"><span class="dv-vh"><span class="zh">桌面</span><span class="en">Desktop</span></span></button>
+          <button type="button" aria-controls="dv-p4"><span class="dv-vh"><span class="zh">网页</span><span class="en">Web</span></span></button>
+          <button type="button" aria-controls="dv-p5"><span class="dv-vh">Slack</span></button>
+        </div>
+        <span class="dv-count tnum" aria-hidden="true"><b>01</b> / 05</span>
+        <div class="dv-arrows">
+          <button type="button" data-step="-1" aria-controls="dv-track" disabled><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><span class="dv-vh"><span class="zh">上一个</span><span class="en">Previous</span></span></button>
+          <button type="button" data-step="1" aria-controls="dv-track"><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><span class="dv-vh"><span class="zh">下一个</span><span class="en">Next</span></span></button>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -721,76 +876,86 @@
         <span class="eyebrow"><svg class="ico"><use href="#i-shield"/></svg><span class="zh">安全</span><span class="en">Security</span></span>
         <h2 id="security-title"><span class="zh">对话留在你的电脑上</span><span class="en">Your chats stay on your own computers</span></h2>
       </div>
-      <p class="lead"><span class="zh">手机和电脑点对点连到你的 station，连不通时经加密中继转发。云端只管账号和中继，看不到内容。</span><span class="en">Phones and computers reach your stations peer to peer, and through an encrypted relay when they can't. The cloud only handles accounts and relays, and can't read your content.</span></p>
+      <p class="lead"><span class="zh">手机和电脑直接连到你的 station，连不通时走加密中继。云端只管账号和中继，读不到内容。</span><span class="en">Your phones and computers connect straight to your stations, or through an encrypted relay when they can’t. The cloud runs accounts and relays, and can’t read your content.</span></p>
     </div>
 
     <div class="sec-grid rv">
-      <div class="callouts">
-        <div class="callout">
-          <h3><svg class="ico"><use href="#i-route"/></svg><span class="zh">点对点连接</span><span class="en">Peer to peer</span></h3>
-          <p><span class="zh">设备之间先直接连接，连不通再走中继。不用配端口、VPN 或内网穿透。</span><span class="en">Devices connect directly first, and through a relay only when they can't. No ports, VPN or tunnels to set up.</span></p>
-        </div>
-        <div class="callout">
-          <h3><svg class="ico"><use href="#i-server"/></svg><span class="zh">数据在你的电脑上</span><span class="en">Data on your machines</span></h3>
-          <p><span class="zh">对话、文件和记录存在 station 本地，不存在云端数据库里。</span><span class="en">Chats, files and history are stored on the station, not in a cloud database.</span></p>
-        </div>
-      </div>
+      <ul class="sec-notes">
+        <li>
+          <h3><svg class="ico" aria-hidden="true"><use href="#i-route"/></svg><span class="zh">点对点连接</span><span class="en">Peer to peer</span></h3>
+          <p><span class="zh">先直连，连不通再走中继。不用开端口、配 VPN 或内网穿透。</span><span class="en">Direct first, a relay only when that fails. No ports to open, no VPN, no tunnels.</span></p>
+        </li>
+        <li>
+          <h3><svg class="ico" aria-hidden="true"><use href="#i-server"/></svg><span class="zh">数据在你的电脑上</span><span class="en">Data on your machines</span></h3>
+          <p><span class="zh">对话、文件和记录存在 station 本地，不进云端数据库。</span><span class="en">Chats, files and history live on the station, not in a cloud database.</span></p>
+        </li>
+      </ul>
 
-      <div class="net-wrap">
-        <svg class="net" viewBox="0 0 520 440" fill="none" role="img" aria-label="iPhone、Laptop、Mini 直连 Willow；Server 经加密中继">
-          <defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1.2" fill="rgba(255,255,255,.12)"/></pattern></defs>
-          <rect x="4" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="22" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="40" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="58" y="4" width="10" height="10" rx="2" fill="#EF6334"/><rect x="76" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="94" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="112" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="130" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="148" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="166" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="184" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="202" y="4" width="10" height="10" rx="2" fill="#FFB599"/><rect x="220" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="238" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="256" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="274" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="292" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="310" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="328" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="346" y="4" width="10" height="10" rx="2" fill="#FFFFFF"/><rect x="364" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="382" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="400" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="418" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="436" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="454" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="472" y="4" width="10" height="10" rx="2" fill="#EF6334"/><rect x="490" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="508" y="4" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="22" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="40" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="58" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="76" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="94" width="10" height="10" rx="2" fill="#FFB599"/><rect x="502" y="112" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="130" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="148" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="166" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="184" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="202" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="220" width="10" height="10" rx="2" fill="#FFFFFF"/><rect x="502" y="238" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="256" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="274" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="292" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="310" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="328" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="346" width="10" height="10" rx="2" fill="#EF6334"/><rect x="502" y="364" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="382" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="400" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="502" y="418" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="484" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="466" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="448" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="430" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="412" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="394" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="376" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="358" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="340" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="322" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="304" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="286" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="268" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="250" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="232" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="214" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="196" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="178" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="160" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="142" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="124" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="106" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="88" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="70" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="52" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="34" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="16" y="424" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="406" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="388" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="370" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="352" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="334" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="316" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="298" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="280" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="262" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="244" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="226" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="208" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="190" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="172" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="154" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="136" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="118" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="100" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="82" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="64" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="46" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="4" y="28" width="10" height="10" rx="2" fill="rgba(255,255,255,.07)"/><rect x="20" y="20" width="480" height="400" rx="16" fill="url(#dots)"/><circle cx="260" cy="220" r="150" stroke="rgba(255,255,255,.12)" stroke-dasharray="4 6"/><circle cx="260" cy="220" r="96" stroke="rgba(255,255,255,.10)" stroke-dasharray="2 6"/><path d="M20 220H500M260 20V420" stroke="rgba(255,255,255,.06)"/>
-          <rect x="20.5" y="20.5" width="479" height="399" rx="15.5" stroke="rgba(255,255,255,.14)"/>
-          <!-- links -->
-          <path d="M260 220 L120 100" stroke="#EF6334" stroke-width="2"/>
-          <path d="M260 220 L400 100" stroke="#EF6334" stroke-width="2"/>
-          <path d="M260 220 L100 330" stroke="#EF6334" stroke-width="2"/>
-          <path d="M260 220 L340 360" stroke="#B0705A" stroke-width="2" stroke-dasharray="5 6"/>
-          <path d="M340 360 L440 300" stroke="#B0705A" stroke-width="2" stroke-dasharray="5 6"/>
-          <!-- labels -->
-          <g font-family="Suisse Intl, Inter, sans-serif" font-size="12" font-weight="500">
-            <text x="150" y="168" fill="#FFB599">P2P · 9 ms</text>
-            <text x="322" y="168" fill="#FFB599">P2P · 18 ms</text>
-            <text x="120" y="268" fill="#FFB599">P2P · 12 ms</text>
-            <text x="388" y="352" fill="#D49A84">Relay · 46 ms</text>
+      <figure class="sec-net">
+        <svg viewBox="0 0 358 358" fill="none" aria-hidden="true">
+          <defs>
+            <pattern id="sec-cell" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="8" height="8" rx="1.5" fill="rgba(255,255,255,.08)"/></pattern>
+            <pattern id="sec-dot" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r=".9" fill="rgba(255,255,255,.13)"/></pattern>
+          </defs>
+          <!-- frame: a ring of cells, a few lit -->
+          <path d="M0 0h358v8H0zM0 350h358v8H0zM0 14h8v330H0zM350 14h8v330h-8z" fill="url(#sec-cell)"/>
+          <rect x="56" width="8" height="8" rx="1.5" fill="#EF6334"/><rect x="196" width="8" height="8" rx="1.5" fill="#FFB599"/><rect x="350" y="98" width="8" height="8" rx="1.5" fill="#fff"/><rect x="350" y="266" width="8" height="8" rx="1.5" fill="#EF6334"/><rect x="126" y="350" width="8" height="8" rx="1.5" fill="#FFB599"/><rect y="210" width="8" height="8" rx="1.5" fill="#fff"/>
+          <rect x="16.5" y="16.5" width="325" height="325" rx="12" fill="url(#sec-dot)" stroke="rgba(255,255,255,.14)"/>
+          <!-- construction: every station on one circle, the relay on the half-radius one -->
+          <path d="M16.5 179h325M179 16.5v325" stroke="rgba(255,255,255,.06)"/>
+          <circle cx="179" cy="179" r="152" stroke="rgba(255,255,255,.13)" stroke-dasharray="3 5"/>
+          <circle cx="179" cy="179" r="76" stroke="rgba(255,255,255,.11)" stroke-dasharray="1 5" stroke-linecap="round"/>
+          <!-- links: three direct, one through the relay -->
+          <g class="sn-direct" stroke="#EF6334" stroke-width="1.5">
+            <path d="M179 179L82 62"/><path d="M179 179L276 62"/><path d="M179 179L82 296"/>
           </g>
-          <!-- center station -->
-          <rect x="196" y="186" width="128" height="68" rx="14" fill="#EF6334"/>
-          <g font-family="Suisse Intl, Inter, sans-serif">
-            <text x="260" y="215" fill="#1A1B1E" font-size="15" font-weight="600" text-anchor="middle">Willow</text>
-            <text x="260" y="236" fill="#4A1606" font-size="11.5" text-anchor="middle">station · SQLite</text>
+          <path class="sn-relay" d="M179 179L276 296" stroke="rgba(255,181,153,.55)" stroke-width="1.5" stroke-dasharray="4 5"/>
+          <!-- packets: all leave the phone together; each arrives after its own round trip -->
+          <g class="sn-pkts" fill="#FFB599">
+            <circle class="p1" cx="179" cy="179" r="3"/><circle class="p2" cx="179" cy="179" r="3"/><circle class="p3" cx="179" cy="179" r="3"/><circle class="p4" cx="179" cy="179" r="3"/>
           </g>
-          <!-- nodes -->
-          <g font-family="Suisse Intl, Inter, sans-serif" font-size="13" font-weight="500" fill="#fff">
-            <rect x="72" y="72" width="96" height="44" rx="12" fill="#26272B" stroke="rgba(255,255,255,.18)"/><text x="120" y="99" text-anchor="middle">Laptop</text>
-            <rect x="352" y="72" width="96" height="44" rx="12" fill="#26272B" stroke="rgba(255,255,255,.18)"/><text x="400" y="99" text-anchor="middle">Mini</text>
-            <rect x="52" y="308" width="96" height="44" rx="12" fill="#26272B" stroke="rgba(255,255,255,.18)"/><text x="100" y="335" text-anchor="middle">iPhone</text>
-            <rect x="392" y="278" width="96" height="44" rx="12" fill="#26272B" stroke="rgba(255,255,255,.18)"/><text x="440" y="305" text-anchor="middle">Server</text>
-            <circle cx="340" cy="360" r="22" fill="#1A1B1E" stroke="#B0705A" stroke-width="2"/>
-            <path d="M333 357v-3a7 7 0 0 1 14 0v3M331 357h18v11h-18z" stroke="#EF6334" stroke-width="2" stroke-linejoin="round" fill="none"/>
+          <!-- stations: name, then how this phone reaches it (the app's own words and demo data) -->
+          <g class="sn-nodes">
+            <g class="n1"><rect x="30.5" y="40.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="30.5" y="40.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="82" y="58">Willow</text><text class="sn-via" x="82" y="74"><tspan class="zh">直连 · 12 ms</tspan><tspan class="en">Direct · 12 ms</tspan></text></g>
+            <g class="n2"><rect x="224.5" y="40.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="224.5" y="40.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="276" y="58">Mini</text><text class="sn-via" x="276" y="74"><tspan class="zh">直连 · 18 ms</tspan><tspan class="en">Direct · 18 ms</tspan></text></g>
+            <g class="n3"><rect x="30.5" y="274.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="30.5" y="274.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="82" y="292"><tspan class="zh">笔记本</tspan><tspan class="en">Laptop</tspan></text><text class="sn-via" x="82" y="308"><tspan class="zh">直连 · 9 ms</tspan><tspan class="en">Direct · 9 ms</tspan></text></g>
+            <g class="n4"><rect x="224.5" y="274.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="224.5" y="274.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="276" y="292"><tspan class="zh">服务器</tspan><tspan class="en">Server</tspan></text><text class="sn-via" x="276" y="308"><tspan class="zh">中继 · 46 ms</tspan><tspan class="en">Relay · 46 ms</tspan></text></g>
           </g>
+          <!-- the relay: it passes data on, locked -->
+          <g class="sn-lock">
+            <circle cx="227.5" cy="237.5" r="16" fill="#1A1B1E" stroke="rgba(255,181,153,.55)" stroke-width="1.5"/>
+            <path class="sn-shackle" d="M224 236v-3a3.5 3.5 0 0 1 7 0v3" stroke="#EF6334" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="221.5" y="236" width="12" height="9" rx="2" fill="#EF6334"/>
+          </g>
+          <!-- this phone -->
+          <rect x="127" y="157" width="104" height="44" rx="11" fill="#EF6334"/>
+          <text class="sn-me" x="179" y="183.5"><tspan class="zh">你的手机</tspan><tspan class="en">Your phone</tspan></text>
         </svg>
-      </div>
+        <figcaption class="sec-vh"><span class="zh">示意图：你的手机直连 Willow、Mini 和笔记本，经加密中继连到服务器。</span><span class="en">Diagram: your phone reaches Willow, Mini and the laptop directly, and the server through an encrypted relay.</span></figcaption>
+      </figure>
 
-      <div class="callouts">
-        <div class="callout">
-          <h3><svg class="ico"><use href="#i-lock"/></svg><span class="zh">安全模式</span><span class="en">Security mode</span></h3>
-          <p><span class="zh">打开后，成员、设备和 station 只有经可信设备签名才被接受，光靠云端放不进任何人。</span><span class="en">When on, members, devices and stations are accepted only when signed by trusted devices, so the cloud alone can't let anyone in.</span></p>
-        </div>
-        <div class="callout">
-          <h3><svg class="ico"><use href="#i-key"/></svg><span class="zh">密钥库</span><span class="en">Vault</span></h3>
-          <p><span class="zh">agent 用的凭据加密保存，有人批准后才交出去。</span><span class="en">Credentials agents use are kept encrypted and handed out only after a person approves.</span></p>
-        </div>
-      </div>
+      <ul class="sec-notes">
+        <li>
+          <h3><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg><span class="zh">安全模式</span><span class="en">Security mode</span></h3>
+          <p><span class="zh">开启后，成员、设备和 station 须经可信设备签名才被接受，单凭云端加不进任何人。</span><span class="en">Once on, members, devices and stations need a trusted device’s signature. The cloud alone can’t add anyone.</span></p>
+        </li>
+        <li>
+          <h3><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><span class="zh">密钥库</span><span class="en">Vault</span></h3>
+          <p><span class="zh">安全模式下，agent 用的凭据加密保存，经人批准才交出。</span><span class="en">In security mode, the keys agents use stay encrypted until a person approves.</span></p>
+        </li>
+      </ul>
     </div>
 
-    <div class="trust rv">
-      <div class="items">
-        <span><b><span class="zh">开源</span><span class="en">Open source</span></b> · MIT</span>
-        <span><b><span class="zh">官方 CLI</span><span class="en">Official CLIs</span></b> · <span class="zh">不改 agent，不绕过它们的限制</span><span class="en">agents unchanged, their limits respected</span></span>
-        <span><b><span class="zh">加密中继</span><span class="en">Encrypted relays</span></b> · <span class="zh">只转发，看不到内容</span><span class="en">they pass data on without reading it</span></span>
-      </div>
-      <a class="btn btn-line sm" href="https://github.com/AFK-surf/still.fail"><svg><use href="#b-github"/></svg><span class="zh">在 GitHub 上看代码</span><span class="en">Read the code on GitHub</span></a>
+    <div class="sec-trust rv">
+      <ul>
+        <li><b><span class="zh">开源</span><span class="en">Open source</span></b><span>MIT</span></li>
+        <li><b><span class="zh">官方 CLI</span><span class="en">Official CLIs</span></b><span><span class="zh">不改 agent，不绕过它们的限制</span><span class="en">Agents run unmodified, within their own limits</span></span></li>
+      </ul>
+      <a class="btn btn-line sm" href="https://github.com/AFK-surf/still.fail"><svg aria-hidden="true"><use href="#b-github"/></svg><span class="zh">在 GitHub 上看代码</span><span class="en">Read the code on GitHub</span></a>
     </div>
   </div>
 </section>
@@ -836,7 +1001,7 @@
     </div>
     <div class="posts rv">
       <article class="post feature">
-        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="640" height="352" fill="#EF6334"/><rect x="128" y="288" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="112" y="240" width="14" height="14" rx="2" fill="#F68B64" opacity="1"/><rect x="384" y="96" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="16" y="192" width="14" height="14" rx="2" fill="#F68B64" opacity="0.35"/><rect x="224" y="288" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="16" y="0" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="384" y="336" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="16" y="256" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="496" y="272" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="224" y="336" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="288" y="0" width="14" height="14" rx="2" fill="#F68B64" opacity="0.35"/><rect x="176" y="320" width="14" height="14" rx="2" fill="#1A1B1E" opacity="0.35"/><rect x="336" y="256" width="14" height="14" rx="2" fill="#F68B64" opacity="0.6"/><rect x="592" y="240" width="14" height="14" rx="2" fill="#F68B64" opacity="0.35"/><rect x="560" y="336" width="14" height="14" rx="2" fill="#1A1B1E" opacity="0.35"/><rect x="448" y="336" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.6"/><rect x="528" y="192" width="14" height="14" rx="2" fill="#1A1B1E" opacity="1"/><rect x="16" y="240" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="624" y="288" width="14" height="14" rx="2" fill="#F68B64" opacity="0.6"/><rect x="160" y="256" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="192" y="272" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="512" y="176" width="14" height="14" rx="2" fill="#1A1B1E" opacity="1"/><rect x="272" y="336" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="512" y="64" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="48" y="240" width="14" height="14" rx="2" fill="#1A1B1E" opacity="0.6"/><rect x="512" y="208" width="14" height="14" rx="2" fill="#F68B64" opacity="1"/><rect x="0" y="272" width="14" height="14" rx="2" fill="#1A1B1E" opacity="1"/><rect x="608" y="0" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><rect x="560" y="288" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="560" y="128" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="80" y="0" width="14" height="14" rx="2" fill="#F68B64" opacity="0.35"/><rect x="272" y="48" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="288" y="32" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><rect x="256" y="256" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="480" y="48" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="416" y="96" width="14" height="14" rx="2" fill="#1A1B1E" opacity="0.35"/><rect x="256" y="256" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="16" y="112" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="144" y="16" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="512" y="336" width="14" height="14" rx="2" fill="#F68B64" opacity="0.6"/><rect x="528" y="224" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="400" y="336" width="14" height="14" rx="2" fill="#1A1B1E" opacity="1"/><rect x="48" y="144" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><rect x="48" y="144" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="576" y="128" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="560" y="16" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="160" y="304" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="96" y="96" width="14" height="14" rx="2" fill="#F68B64" opacity="0.6"/><rect x="496" y="48" width="14" height="14" rx="2" fill="#F68B64" opacity="1"/><rect x="512" y="240" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="624" y="192" width="14" height="14" rx="2" fill="#1A1B1E" opacity="0.35"/><rect x="160" y="96" width="14" height="14" rx="2" fill="#1A1B1E" opacity="0.6"/><rect x="96" y="192" width="14" height="14" rx="2" fill="#1A1B1E" opacity="1"/><rect x="544" y="112" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="80" y="64" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><text x="320" y="196" text-anchor="middle" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="76" letter-spacing="-3" fill="#1A1B1E">0.1.7394</text></svg></div>
+        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cva1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cva2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#F68B64"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#EF6334"/><rect y="320" width="640" height="32" fill="url(#cva12)"/><rect y="288" width="640" height="32" fill="url(#cva9)"/><rect y="256" width="640" height="32" fill="url(#cva6)"/><rect y="224" width="640" height="32" fill="url(#cva4)"/><rect y="192" width="640" height="32" fill="url(#cva2)"/><rect y="176" width="640" height="16" fill="url(#cva1)"/><rect x="529" y="49" width="14" height="14" rx="2" fill="#FFFFFF"/><rect x="577" y="97" width="14" height="14" rx="2" fill="#FFFFFF"/><rect x="465" y="17" width="14" height="14" rx="2" fill="#FFFFFF"/><text x="48" y="112" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="72" letter-spacing="-2.5" fill="#1A1B1E">0.1.7394</text></svg></div>
         <div class="post-body">
           <div class="post-meta"><span class="tag"><span class="zh">最新版本</span><span class="en">Latest</span></span><span class="tnum"><span class="zh">2026 年 11 月 6 日</span><span class="en">November 6, 2026</span></span></div>
           <h3><span class="zh">昨晚修了 12 个问题，加了 5 项新功能</span><span class="en">Last night: 12 fixes and 5 new features</span></h3>
@@ -853,7 +1018,7 @@
         </div>
       </article>
       <article class="post">
-        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="640" height="352" fill="#1A1B1E"/><rect x="48" y="32" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="160" y="336" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="608" y="96" width="14" height="14" rx="2" fill="#EF6334" opacity="0.6"/><rect x="432" y="320" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="544" y="224" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="16" y="176" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="528" y="80" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><rect x="224" y="0" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="176" y="64" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.6"/><rect x="528" y="176" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="448" y="80" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="528" y="112" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="496" y="256" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="576" y="272" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="160" y="304" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="512" y="272" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="512" y="176" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="0" y="96" width="14" height="14" rx="2" fill="#EF6334" opacity="0.35"/><rect x="576" y="320" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="592" y="112" width="14" height="14" rx="2" fill="#EF6334" opacity="0.6"/><rect x="208" y="16" width="14" height="14" rx="2" fill="#4A4C50" opacity="0.35"/><rect x="48" y="176" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.6"/><rect x="240" y="336" width="14" height="14" rx="2" fill="#EF6334" opacity="0.35"/><rect x="112" y="32" width="14" height="14" rx="2" fill="#EF6334" opacity="0.35"/><rect x="16" y="176" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.6"/><rect x="160" y="80" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="592" y="16" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><rect x="32" y="0" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="496" y="0" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="560" y="304" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="400" y="304" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="224" y="32" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="16" y="224" width="14" height="14" rx="2" fill="#FFB599" opacity="1"/><rect x="496" y="256" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.6"/><rect x="256" y="304" width="14" height="14" rx="2" fill="#4A4C50" opacity="0.35"/><rect x="560" y="64" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="32" y="64" width="14" height="14" rx="2" fill="#FFB599" opacity="0.6"/><rect x="96" y="224" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="448" y="32" width="14" height="14" rx="2" fill="#FFFFFF" opacity="0.35"/><rect x="592" y="112" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="528" y="0" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="160" y="48" width="14" height="14" rx="2" fill="#EF6334" opacity="0.6"/><rect x="96" y="48" width="14" height="14" rx="2" fill="#EF6334" opacity="0.6"/><rect x="224" y="48" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="528" y="336" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="304" y="272" width="14" height="14" rx="2" fill="#4A4C50" opacity="0.6"/><rect x="432" y="256" width="14" height="14" rx="2" fill="#EF6334" opacity="0.35"/><rect x="416" y="256" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="16" y="256" width="14" height="14" rx="2" fill="#EF6334" opacity="1"/><rect x="304" y="0" width="14" height="14" rx="2" fill="#4A4C50" opacity="0.35"/><rect x="96" y="144" width="14" height="14" rx="2" fill="#FFB599" opacity="0.35"/><rect x="448" y="16" width="14" height="14" rx="2" fill="#4A4C50" opacity="1"/><rect x="464" y="96" width="14" height="14" rx="2" fill="#EF6334" opacity="0.35"/><rect x="288" y="0" width="14" height="14" rx="2" fill="#FFFFFF" opacity="1"/><rect x="64" y="112" width="14" height="14" rx="2" fill="#4A4C50" opacity="0.6"/><text x="320" y="196" text-anchor="middle" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="76" letter-spacing="-3" fill="#fff">0.1.7190</text></svg></div>
+        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cvb1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cvb2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cvb4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cvb6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cvb9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cvb12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#3A3B3F"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#1A1B1E"/><rect x="592" width="48" height="352" fill="url(#cvb12)"/><rect x="560" width="32" height="352" fill="url(#cvb9)"/><rect x="512" width="48" height="352" fill="url(#cvb6)"/><rect x="480" width="32" height="352" fill="url(#cvb4)"/><rect x="432" width="48" height="352" fill="url(#cvb2)"/><rect x="400" width="32" height="352" fill="url(#cvb1)"/><rect x="481" y="65" width="14" height="14" rx="2" fill="#EF6334"/><rect x="529" y="145" width="14" height="14" rx="2" fill="#EF6334"/><text x="48" y="304" font-family="Suisse Intl, Inter, sans-serif" font-weight="600" font-size="72" letter-spacing="-2.5" fill="#FFFFFF">0.1.7190</text></svg></div>
         <div class="post-body">
           <div class="post-meta"><span class="tag"><span class="zh">新功能</span><span class="en">New</span></span><span class="tnum"><span class="zh">11 月 4 日</span><span class="en">Nov 4</span></span></div>
           <h3><span class="zh">在等 CI 的对话会放掉闲着的 agent 进程，到点再唤起</span><span class="en">Chats waiting on CI let their idle agent go, and wake it when it's time</span></h3>
@@ -944,12 +1109,15 @@
   </div>
 </section>
 
-<!-- ============ End: Blue, the Week on its bottom edge ============ -->
+<!-- ============ End: Blue, the mark put together, the field below ============ -->
 <section class="band end" data-tone="brand" aria-labelledby="end-title">
   <div class="w end-in">
+    <!-- The mark put together: its four parts come in from empty cells of the grid (--x/--y: where each starts, in px
+         from its place) and land in the tile; the loose parts, one to a cell like the field's, drift in to their cells.
+         --c/--r: the part's centre on the 12 px lattice (cell centres are 2 + 4n). -->
     <div class="tile-wrap rv" aria-hidden="true">
-      <div class="pixels"><i style="--c:7;--r:5;--d:0.00s"></i><i class="t" style="--c:6;--r:6;--d:0.08s"></i><i style="--c:11;--r:3;--d:0.04s"></i><i class="t" style="--c:15;--r:2;--d:0.16s"></i><i style="--c:20;--r:11;--d:0.02s"></i><i class="d" style="--c:21;--r:12;--d:0.10s"></i><i style="--c:16;--r:16;--d:0.06s"></i><i class="t" style="--c:12;--r:17;--d:0.14s"></i><i class="d" style="--c:7;--r:13;--d:0.12s"></i><i style="--c:20;--r:6;--d:0.18s"></i><i style="--c:4;--r:4;--d:0.20s"></i><i class="t" style="--c:3;--r:9;--d:0.26s"></i><i style="--c:23;--r:9;--d:0.22s"></i><i class="t" style="--c:24;--r:15;--d:0.28s"></i><i style="--c:0;--r:13;--d:0.32s"></i><i class="t" style="--c:27;--r:5;--d:0.30s"></i><i class="k" style="--c:25;--r:18;--d:0.24s"></i></div>
-      <div class="tile"><img src="assets/mark.svg" alt="" width="120" height="120"></div>
+      <div class="parts"><i style="--c:2;--r:2;--d:.04s"></i><i class="p" style="--c:10;--r:2;--d:.16s"></i><i style="--c:22;--r:2;--d:.1s"></i><i class="p" style="--c:6;--r:6;--d:.22s"></i><i class="k" style="--c:26;--r:6;--d:.06s"></i><i style="--c:6;--r:10;--d:.28s"></i><i class="p" style="--c:22;--r:10;--d:.12s"></i><i style="--c:2;--r:14;--d:.18s"></i><i style="--c:26;--r:14;--d:.24s"></i><i class="p" style="--c:6;--r:18;--d:.08s"></i><i style="--c:14;--r:18;--d:.2s"></i><i class="p" style="--c:22;--r:18;--d:.3s"></i></div>
+      <div class="tile"><i class="eye" style="--x:-75px;--y:-93px"></i><i class="eye" style="--x:27px;--y:-93px"></i><i class="cheek" style="--x:-109px;--y:70px"></i><i class="cheek" style="--x:109px;--y:-26px"></i></div>
     </div>
     <h2 id="end-title"><span class="zh">加一台电脑，剩下的交给它</span><span class="en">Add a computer, it does the rest</span></h2>
     <p class="lead"><span class="zh">交代一次，你的电脑一直干到完。</span><span class="en">Ask once. Your computers work until it’s done.</span></p>
@@ -958,7 +1126,7 @@
       <a class="btn btn-line lg" href="#download"><span class="zh">下载</span><span class="en">Download</span></a>
     </div>
   </div>
-  <canvas class="field" id="field-end" aria-hidden="true"></canvas>
+  <div class="field-wrap"><canvas class="field" id="field-end" aria-hidden="true"></canvas></div>
 </section>
 
 </main>

@@ -1,85 +1,83 @@
 /* ---------- Hero ----------
-   Base ground, the open sentence, its lead and two calls to action; under a hairline, the key to the 168 Week that
-   fills the band's bottom edge. Vertical spacing steps in fractions of 1U (the 24-unit grid), clamped for small
-   screens. */
-.hero .top { display: flex; justify-content: space-between; gap: 8px var(--gap); flex-wrap: wrap; align-items: baseline;
-  padding-block: clamp(24px, calc(var(--u) * .8), 56px) clamp(20px, calc(var(--u) * .55), 40px);
-  font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); font-weight: 500; }
-.hero .top .mut { color: var(--mut); font-weight: 400; }
+   Base ground: the open sentence, its lead and two calls to action, then the field of the mark filling the rest of the
+   first screen. Vertical spacing steps in fractions of 1U (the 24-unit grid), clamped for small screens. */
+.hero {
+  /* The field's cell: 1U on the 24-unit grid; 1.5U on a tablet and 2U on a phone, so a dot stays a dot, not a speck. */
+  --cols: 24; --fc: calc(100cqw / var(--cols));
+  container-type: inline-size; display: flex; flex-direction: column; min-height: calc(100svh - var(--nav));
+}
+/* With no label row above it, the headline takes the top air itself: a little more than the air under the lead. */
+.hero > .w { width: 100%; padding-top: clamp(32px, calc(var(--u) * 1.2), 96px); } /* a column flex item: full width, still centred at 1920 */
 .hero h1 { max-width: 15ch; }
 /* The lead holds about 11U (two lines in Chinese, three in English at 1440); the calls to action end on the right margin,
    their bottom on the lead's last line. */
 .hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px var(--u); align-items: end;
-  padding-block: clamp(20px, calc(var(--u) * .7), 52px) clamp(28px, calc(var(--u) * .8), 60px); }
+  padding-block: clamp(20px, calc(var(--u) * .7), 52px) clamp(24px, calc(var(--u) * .7), 52px); }
 .hero .lead { max-width: max(calc(var(--u) * 11), 20em); color: var(--brand-ink); }
 .hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
 .hero .actions { justify-content: flex-end; }
 
-/* The key: a title, the two kinds of cell with the field's own comma as swatch, and the clock with its pause. */
-.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px clamp(20px, 2.4vw, 40px);
-  padding-block: 14px clamp(16px, calc(var(--u) * .35), 24px); border-top: 1px solid var(--hair);
-  font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); color: var(--mut); }
-.legend b { color: var(--ink); font-weight: 500; }
-.legend .key { display: inline-flex; align-items: center; gap: 8px; }
-.legend .key b { margin-right: .35em; }
-:root[data-lang=en] .legend .key b { margin-right: 0; }
-.legend .sw { width: 15px; height: 16px; flex: none; margin-top: -1px; }
-.legend .sw.on { fill: #fff; }
-.legend .sw.off { fill: var(--brand-haze); }
-.legend .ctl { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; }
-.legend .tool {
-  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px 0 9px; border: 0; border-radius: 999px;
-  background: transparent; box-shadow: inset 0 0 0 1px var(--hair); color: var(--ink); font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer;
-  -webkit-user-select: none; user-select: none; touch-action: manipulation;
-  transition: background-color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
-}
-.legend .tool::before { content: ""; position: absolute; inset: -8px -4px; } /* a 44 px target on touch */
-.legend .tool svg { width: 10px; height: 10px; flex: none; fill: currentColor; }
-.legend .tool svg.play { margin-right: -1px; transform: translateX(1px); } /* optical centre of the triangle */
-.legend .tool:active { transform: scale(.96); }
-@media (hover: hover) and (pointer: fine) {
-  .legend .tool:hover { box-shadow: inset 0 0 0 1px var(--ink); background: rgba(255,255,255,.18); }
-}
-
-/* ---------- The 168 Week ---------- */
-.field { display: block; width: 100%; height: auto; }
-.end .field { background: var(--brand); }
+/* ---------- The field ----------
+   The mark taken apart: its eyes (white dots) and cheeks (peach pills), one to a cell, in diagonal runs of dot, dot,
+   pill. main.js draws whole rows from the top; in the hero the field takes what the first screen leaves (4 to 14 rows),
+   so the gap above it is the same on every screen and the leftover, under a cell, falls to the band's bottom edge. */
 .field-wrap { position: relative; }
-/* A note rings a real cell (1U square: the field is 24 cells across and 7 down wherever notes show) and a leader runs
-   from the ring to a mono label. */
-.ftag { position: absolute; left: calc(var(--c) / 24 * 100%); top: calc(var(--r) / 7 * 100%); width: calc(100% / 24); aspect-ratio: 1; pointer-events: none; }
-.ftag::before { content: ""; position: absolute; inset: 5%; border-radius: 6px; box-shadow: 0 0 0 1px #fff; }
-.ftag::after { content: ""; position: absolute; top: 50%; left: 95%; width: 45%; height: 1px; margin-top: -.5px; background: #fff; transform-origin: 0 50%; }
+.hero .field-wrap { flex: 1 0 auto; min-height: calc(var(--fc) * 4); max-height: calc(var(--fc) * 14); }
+.field { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+
+/* A note rings a real cell, with the corners of the mark's own square, and a leader runs from the ring to a mono label.
+   main.js leaves the cells under each label empty, so a label sits in a clean lane. */
+.ftag { position: absolute; left: calc(var(--c) * var(--fc)); top: calc(var(--r) * var(--fc)); width: var(--fc); aspect-ratio: 1; pointer-events: none; }
+.ftag::before { content: ""; position: absolute; inset: 6%; border-radius: 22.5%; box-shadow: 0 0 0 1px #fff; }
+.ftag::after { content: ""; position: absolute; top: 50%; left: 94%; width: 46%; height: 1px; margin-top: -.5px; background: #fff; transform-origin: 0 50%; }
 .ft-l { position: absolute; left: 140%; top: 50%; display: inline-flex; align-items: center; gap: 7px; height: 24px; margin-top: -12px; padding: 0 9px 0 8px;
   border-radius: 4px; background: #fff; color: var(--ink); font-family: var(--mono); font-size: 12px; line-height: 1; letter-spacing: 0; white-space: nowrap;
   box-shadow: 0 6px 16px -8px rgba(42,11,2,.45); }
 .ft-l i { width: 8px; height: 8px; flex: none; border-radius: 1.5px; background: var(--brand); }
-@media (max-width: 960px) {
-  .ftag { display: none; }
+
+/* Pause: the field moves on its own, so it can be stopped. It takes a cell of its own, the second from the right on the
+   top row, a ring like the notes' (32 px; 44 px to a finger). main.js shows it only where the field moves. */
+.fpause {
+  position: absolute; z-index: 1; top: calc(var(--fc) / 2 - 16px); right: max(calc(var(--fc) * 1.5 - 16px), env(safe-area-inset-right, 0px));
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.75); color: #fff; cursor: pointer;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.fpause[hidden] { display: none; }
+.fpause::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+.fpause svg { width: 10px; height: 10px; fill: currentColor; }
+.fpause .pl { display: none; }
+.fpause[aria-pressed=true] .ps { display: none; }
+.fpause[aria-pressed=true] .pl { display: inline; }
+.fpause[aria-pressed=true] svg { transform: translateX(.5px); } /* the triangle's optical centre */
+.fpause:active { transform: scale(.94); }
+.fpause:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .fpause:hover { background: rgba(255,255,255,.18); box-shadow: inset 0 0 0 1px #fff; }
 }
 
 /* ---------- Entrance, once, on load ----------
    The words are painted at the first frame and rise into place on a strong ease-out, one after another; the headline
    and the lead (the largest text, what LCP measures) start fading at once, so their paint is never held back. The
-   Week fades in once main.js has drawn it (the canvas is blank until then), and its notes follow: ring, leader, label. */
+   field fades in once main.js has drawn it (the canvas is blank until then), and its notes follow: ring, leader, label. */
 @keyframes hero-fade { from { opacity: 0; } }
 @keyframes hero-dim { from { opacity: .25; } } /* never 0: an element painted transparent is not an LCP candidate */
 @keyframes hero-rise { from { transform: translateY(14px); } }
 @keyframes ft-ring { from { opacity: 0; transform: scale(.88); } }
 @keyframes ft-lead { from { transform: scaleX(0); } }
 @keyframes ft-label { from { opacity: 0; transform: translateX(-6px); } }
-.hero :is(.top, h1, .lead, .actions, .legend) {
+.hero :is(h1, .lead, .actions) {
   animation: hero-fade 560ms var(--ease-out) both, hero-rise 900ms var(--ease-out) both;
-  animation-delay: var(--fd, 0ms), calc(var(--hi, 0) * 60ms);
+  animation-delay: var(--fd, 0ms), calc(var(--hi, 0) * var(--stagger));
 }
-.hero .top { --hi: 0; }
-.hero h1 { --hi: 1; }
-.hero .lead { --hi: 2; }
+.hero h1 { --hi: 0; }
+.hero .lead { --hi: 1; }
 .hero :is(h1, .lead) { animation-name: hero-dim, hero-rise; }
-.hero .actions { --hi: 3; --fd: 120ms; }
-.hero .legend { --hi: 4; --fd: 180ms; }
-.hero .field:not([data-drawn]), .field:not([data-drawn]) ~ .ftag { visibility: hidden; }
+.hero .actions { --hi: 2; --fd: 120ms; }
+.field:not([data-drawn]), .field:not([data-drawn]) ~ :is(.ftag, .fpause) { visibility: hidden; }
 .hero .field[data-drawn] { animation: hero-fade 800ms var(--ease-out) 120ms both; }
+.hero .field[data-drawn] ~ .fpause { animation: hero-fade 420ms var(--ease-out) 900ms both; }
 .field[data-drawn] ~ .ftag::before { animation: ft-ring 420ms var(--ease-out) both; animation-delay: calc(560ms + var(--n) * 160ms); }
 .field[data-drawn] ~ .ftag::after { animation: ft-lead 360ms var(--ease-out) both; animation-delay: calc(700ms + var(--n) * 160ms); }
 .field[data-drawn] ~ .ftag .ft-l { animation: ft-label 420ms var(--ease-out) both; animation-delay: calc(820ms + var(--n) * 160ms); }
@@ -88,7 +86,7 @@
 .ftag:nth-of-type(3) { --n: 2; }
 /* Reduced motion: nothing moves; the words, the field and its notes only fade in, briefly. */
 @media (prefers-reduced-motion: reduce) {
-  .hero :is(.top, h1, .lead, .actions, .legend), .hero .field[data-drawn] { animation: hero-fade 300ms ease both !important; }
+  .hero :is(h1, .lead, .actions), .hero .field[data-drawn] { animation: hero-fade 300ms ease both !important; }
   .field[data-drawn] ~ .ftag::before, .field[data-drawn] ~ .ftag::after, .field[data-drawn] ~ .ftag .ft-l { animation: hero-fade 300ms ease 200ms both !important; }
 }
 
@@ -97,9 +95,15 @@
   .hero-body { grid-template-columns: minmax(0, 1fr); }
   .hero .actions { justify-content: flex-start; }
 }
+/* A tablet: 16 cells across (a dot of 1U would be a speck), the notes re-placed on them (--ct/--rt). */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .hero { --cols: 16; }
+  .hero .ftag { left: calc(var(--ct, var(--c)) * var(--fc)); top: calc(var(--rt, var(--r)) * var(--fc)); }
+}
+/* A phone: 12 cells across, the calls to action in reach of a thumb, one note (where the ripple starts). */
 @media (max-width: 640px) {
+  .hero { --cols: 12; }
   .hero .actions .btn { flex: 1 1 0; min-width: max-content; } /* equal halves, or full width each when they don't fit */
-  .legend { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .legend .lg-title { margin-bottom: 2px; }
-  .legend .ctl { margin: 6px 0 0; }
+  .hero .ftag { left: calc(var(--cm, var(--c)) * var(--fc)); top: calc(var(--rm, var(--r)) * var(--fc)); }
+  .hero .ftag:not([data-origin]) { display: none; }
 }

@@ -184,6 +184,37 @@
       });
       tabs.forEach((t) => t.addEventListener("click", () => { stopped = true; sync(); }));
       sync();
+
+      // Phones: the overview is a swiper, one card per item (30-overview.css). The browser owns the gesture and its
+      // momentum; the script only follows it. The card at the snap line is the active item (its event lands, its loops
+      // run), the dots' pill tracks the scroll (a custom property, once a frame while scrolling), and an item's name or
+      // a dot scrolls its card in.
+      const car = matchMedia("(max-width: 760px) and (min-height: 501px)"); // the same query as the CSS
+      const nav = group.nextElementSibling?.classList.contains("ov-nav") ? group.nextElementSibling : null;
+      const dots = nav ? $$("button", nav) : [], pill = nav && $(".ov-pill", nav);
+      const panes = tabs.map((t) => document.getElementById(t.getAttribute("aria-controls")));
+      const at = () => Math.max(0, tabs.findIndex((t) => t.getAttribute("aria-expanded") === "true"));
+      const slide = (i, smooth = true) => {
+        const pad = parseFloat(getComputedStyle(group).scrollPaddingLeft) || 0;
+        const x = group.scrollLeft + panes[i].getBoundingClientRect().left - group.getBoundingClientRect().left - pad;
+        group.scrollTo({ left: x, behavior: smooth && !reduce ? "smooth" : "auto" });
+      };
+      let frame = 0;
+      const follow = () => {
+        frame = 0;
+        if (!car.matches) return;
+        // The last card cannot reach the snap line (the row ends), so position is read against the full scroll range.
+        const max = group.scrollWidth - group.clientWidth;
+        const p = max > 0 ? Math.min(1, Math.max(0, group.scrollLeft / max)) * (tabs.length - 1) : 0;
+        pill?.style.setProperty("--p", p.toFixed(3));
+        const i = Math.round(p);
+        if (i !== at()) pick(i);
+      };
+      group.addEventListener("scroll", () => { frame ||= requestAnimationFrame(follow); }, { passive: true });
+      tabs.forEach((t, i) => t.addEventListener("click", () => { if (car.matches) slide(i); }));
+      dots.forEach((d, i) => d.addEventListener("click", () => slide(i)));
+      // Turning into a swiper (a phone rotated back upright), it opens on the item that was active.
+      car.addEventListener("change", () => { if (car.matches) { slide(at(), false); follow(); } });
     }
     tabs.forEach((t, i) => {
       t.addEventListener("click", () => pick(i));
@@ -196,6 +227,44 @@
         if (e.key === "End") { e.preventDefault(); pick(tabs.length - 1, true); }
       });
     });
+  }
+
+  // ---- Every device, as a swiper (wherever the scene below does not play) ----
+  // The track is native scroll with snapping, so the browser owns the gesture and its momentum; the script only
+  // follows it. The dots' pill tracks the scroll position continuously (a transform, once a frame while scrolling);
+  // the card in view is marked [data-on] (its picture's loops run, the others pause), and the dots and arrows jump.
+  {
+    const swipe = $(".dv-swipe"), track = $("#dv-track"), cards = $$(".fpanel", track);
+    const dots = $$(".dv-dots button", swipe), pill = $(".dv-pill", swipe), count = $(".dv-count b", swipe);
+    const [prev, next] = $$(".dv-arrows button", swipe);
+    let on = -1, frame = 0;
+    const left = (card) => card.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).scrollPaddingLeft || 0);
+    const go = (i) => track.scrollTo({ left: left(cards[Math.max(0, Math.min(cards.length - 1, i))]), behavior: reduce ? "auto" : "smooth" });
+    const follow = () => {
+      frame = 0;
+      // The last card cannot reach the snap line (the track ends), so position is read against the scroll's full range.
+      const max = track.scrollWidth - track.clientWidth;
+      const p = max > 0 ? Math.max(0, Math.min(1, track.scrollLeft / max)) * (cards.length - 1) : 0;
+      pill.style.setProperty("--p", p.toFixed(3));
+      const i = Math.round(p);
+      if (i === on) return;
+      on = i;
+      cards.forEach((c, k) => c.toggleAttribute("data-on", k === i));
+      dots.forEach((d, k) => d.toggleAttribute("aria-current", k === i));
+      count.textContent = String(i + 1).padStart(2, "0");
+      prev.disabled = i === 0;
+      next.disabled = i === cards.length - 1;
+    };
+    track.addEventListener("scroll", () => { frame ||= requestAnimationFrame(follow); }, { passive: true });
+    dots.forEach((d, k) => d.addEventListener("click", () => go(k)));
+    for (const b of [prev, next]) b.addEventListener("click", () => go(on + Number(b.dataset.step)));
+    track.addEventListener("keydown", (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (step && e.target === track) { e.preventDefault(); go(on + step); }
+    });
+    new IntersectionObserver(([e]) => swipe.classList.toggle("play", e.isIntersecting)).observe(swipe);
+    new ResizeObserver(follow).observe(track);
+    follow();
   }
 
   // ---- Every device, as one scene played by scrolling (large screens with motion allowed: html.scrolly, set in the head) ----
@@ -219,8 +288,9 @@
     const L = (n) => $(`.dv-links .l${n}`, scene);
     const navH = () => $("#nav").offsetHeight;
 
-    // The scene is drawn at 900 × 720 and scaled to fit what is left of the stage beside the words.
-    const fit = () => scene.style.setProperty("--k", Math.min(view.clientWidth / 900, view.clientHeight / 720, 1.15).toFixed(3));
+    // The scene is drawn at 900 × 720 and scaled to fit what is left of the stage beside the words, with a margin so no
+    // device ever touches the stage's edge.
+    const fit = () => scene.style.setProperty("--k", Math.min((view.clientWidth - 72) / 900, (view.clientHeight - 96) / 720, 1.15).toFixed(3));
     fit();
     ScrollTrigger.addEventListener("refreshInit", fit);
 
@@ -274,9 +344,9 @@
     words(3, t);
     tl.to(L(1), { autoAlpha: 0, duration: 0.3 }, t)
       // The phones sit over the window's corners, never its content (the VI's "two devices, one event").
-      .to(duoBox, { ...at(150, 505, 0.46), duration: 1 }, t)
-      .to(droid, { ...at(808, 505, 0.62), duration: 1 }, t)
-      .to(laptop, { ...at(450, 265, 0.92), autoAlpha: 1, duration: 1, ease: "power3.out" }, t + 0.1)
+      .to(duoBox, { ...at(205, 480, 0.5), duration: 1 }, t)
+      .to(droid, { ...at(762, 430, 0.62), duration: 1 }, t)
+      .to(laptop, { ...at(450, 300, 0.92), autoAlpha: 1, duration: 1, ease: "power3.out" }, t + 0.1)
       .fromTo($$(".body-desk .meter i", laptop), { scaleX: 0 }, { scaleX: 1, transformOrigin: "0% 50%", stagger: 0.08, duration: 0.5, immediateRender: true }, t + 0.7);
     stop("desktop");
     tl.to({}, { duration: 0.4 });
@@ -295,8 +365,9 @@
     words(5, t);
     tl.to($(".dv-ink", stage), { opacity: 1, duration: 0.7 }, t)
       .to(stage, { "--dv-fg": "#FFFFFF", "--dv-mut": "#C9CACD", duration: 0.7 }, t)
-      .to(laptop, { ...at(395, 305, 0.84), duration: 0.9 }, t)
-      .to(slack, { ...at(712, 122, 0.9), autoAlpha: 1, duration: 0.9, ease: "power3.out" }, t + 0.1)
+      .to(laptop, { ...at(400, 330, 0.84), duration: 0.9 }, t)
+      .to(droid, { ...at(705, 455, 0.62), duration: 0.9 }, t)
+      .to(slack, { ...at(705, 128, 0.9), autoAlpha: 1, duration: 0.9, ease: "power3.out" }, t + 0.1)
       .fromTo($$(".slack .msg", slack), { x: -14, autoAlpha: 0 }, { x: 0, autoAlpha: 1, stagger: 0.18, duration: 0.4, immediateRender: true }, t + 0.5)
       .to([L(2), L(3), L(4)], { strokeDashoffset: 0, stagger: 0.1, duration: 0.5 }, t + 0.9)
       .to([$(".done", laptop), $(".done", duoBox), $(".done", droid)], { scale: 1, stagger: 0.12, duration: 0.35, ease: "back.out(2)" }, t + 1.25);
@@ -335,7 +406,7 @@
     // The rail scrolls to its device.
     rail.forEach((li) => $("button", li).addEventListener("click", () => {
       const i = Number(li.dataset.i);
-      scrollTo({ top: st.start + (st.end - st.start) * pos(labels[i === 0 ? 1 : i]), behavior: "smooth" });
+      scrollTo({ top: st.start + (st.end - st.start) * pos(labels[i]), behavior: "smooth" });
     }));
   }
   if (root.classList.contains("scrolly")) {
@@ -391,14 +462,67 @@
     }
   }
 
-  // ---- The teams grid's pictures move only while they are on screen ----
-  // The packets' lane is measured as its cell comes on screen (not before: the band is not laid out until then).
-  const sizeLanes = (el) => { for (const l of $$(".lane", el)) l.style.setProperty("--lane", l.clientWidth + "px"); };
-  if (!reduce) {
-    const play = new IntersectionObserver((entries) => {
-      for (const e of entries) { if (e.isIntersecting) sizeLanes(e.target); e.target.classList.toggle("play", e.isIntersecting); }
-    }, { rootMargin: "60px" });
-    for (const c of $$(".cell")) play.observe(c);
+  // ---- The teams grid: each picture tells its story in steps, only while its cell is on screen ----
+  // data-seq: how long each step holds (ms). An element with data-in="n" is .is-in from step n until its data-out
+  // (else to the end); the cell carries data-step for the moves that depend on it. Step 0 is the rest that also clears
+  // the last loop, so wrapping round plays the exits. CSS says how each thing enters and leaves (50-teams.css).
+  // A list marked data-follow scrolls, as a chat does, to keep its newest message in view.
+  // Reduced motion: the picture stands at its data-still step, the story told in one frame.
+  const cells = $$("#teams .cell[data-seq]");
+  for (const cell of cells) {
+    const hold = cell.dataset.seq.split(" ").map(Number), parts = $$("[data-in]", cell), follow = $("[data-follow]", cell);
+    let step = -1, timer = 0;
+    const set = (s) => {
+      step = s; cell.dataset.step = s;
+      for (const p of parts) p.classList.toggle("is-in", s >= +p.dataset.in && s < +(p.dataset.out ?? hold.length));
+      if (follow) {
+        let end = 0;
+        for (const p of parts) if (p.classList.contains("is-in") && follow.contains(p)) end = Math.max(end, p.offsetTop + p.offsetHeight);
+        follow.style.transform = `translateY(${-Math.max(0, follow.offsetTop + end + 12 - follow.parentElement.clientHeight)}px)`;
+      }
+    };
+    cell.show = set;
+    const tick = () => { set((step + 1) % hold.length); timer = setTimeout(tick, hold[step]); };
+    const still = +(cell.dataset.still ?? hold.length - 1);
+    cell.play = (on) => {
+      if (reduce) { if (on) set(still); return; } // laid out only now (content-visibility), so a list can follow
+      cell.classList.toggle("play", on);
+      if (!on) { clearTimeout(timer); timer = 0; } else if (!timer) timer = setTimeout(tick, hold[step] / 2);
+    };
+    set(reduce ? still : 0);
+  }
+  const play = new IntersectionObserver((entries) => { for (const e of entries) e.target.play(e.isIntersecting); }, { threshold: .35 });
+  for (const c of cells) play.observe(c);
+  // On a phone the grid is a swiper (native scroll, 50-teams.css). The script only follows it: the dots' pill tracks the
+  // scroll once a frame while it moves, the count names the card at the snap line, and a dot or an arrow key jumps.
+  {
+    const track = $("#teams .cells"), dots = $$("#teams .tm-dots button"), pill = $("#teams .tm-pill"), count = $("#teams .tm-count b");
+    let on = -1, frame = 0;
+    const swiper = () => track.scrollWidth > track.clientWidth + 1;
+    const go = (i) => {
+      const c = cells[Math.max(0, Math.min(cells.length - 1, i))];
+      track.scrollTo({ left: c.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).scrollPaddingLeft || 0), behavior: reduce ? "auto" : "smooth" });
+    };
+    const follow = () => {
+      frame = 0;
+      if (swiper()) track.tabIndex = 0; else track.removeAttribute("tabindex");
+      const max = track.scrollWidth - track.clientWidth; // the last card cannot reach the snap line: read the full range
+      const p = max > 1 ? Math.max(0, Math.min(1, track.scrollLeft / max)) * (cells.length - 1) : 0;
+      pill.style.setProperty("--p", p.toFixed(3));
+      const i = Math.round(p);
+      if (i === on) return;
+      on = i;
+      dots.forEach((d, k) => d.toggleAttribute("aria-current", k === i));
+      count.textContent = String(i + 1).padStart(2, "0");
+    };
+    track.addEventListener("scroll", () => { frame ||= requestAnimationFrame(follow); }, { passive: true });
+    dots.forEach((d, k) => d.addEventListener("click", () => go(k)));
+    track.addEventListener("keydown", (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (step && e.target === track && swiper()) { e.preventDefault(); go(on + step); }
+    });
+    new ResizeObserver(follow).observe(track);
+    follow();
   }
 
   // ---- Copy the install command ----
@@ -419,97 +543,129 @@
   const mine = $(`#dl [data-for="${platform}"]`);
   if (mine) { mine.classList.add("primary"); mine.parentElement.prepend(mine); }
 
-  // ---- The 168 Week (Comma VI): 24 hours across, 7 days down; each comma turns 15° an hour ----
-  // Mon–Fri 9–18 are lit (45 cells): your hours at the desk. The other 123 are your stations working on.
-  const COMMA = new Path2D("M27.5752 30.475C29.5842 26.9956 34.0342 25.803 37.5137 27.8119C40.8501 29.7385 42.081 33.9084 40.4053 37.3158C40.4099 37.3203 40.4144 37.3251 40.4189 37.3295C40.3568 37.4447 40.2857 37.5685 40.2051 37.6977C40.1952 37.715 40.1858 37.7331 40.1758 37.7504C39.7991 38.4028 39.3363 38.9749 38.8105 39.4604C37.1152 41.2376 34.3055 43.2112 30.4131 43.7602C30.2618 43.7814 30.1769 43.5981 30.29 43.4955C30.9997 42.8536 31.8303 42.0905 32.6543 41.2846C31.8262 41.1437 31.0084 40.8571 30.2383 40.4125C26.7589 38.4036 25.5665 33.9545 27.5752 30.475Z");
-  const CENTER = [33.9, 34.1];
-  const lit = (r, c) => r < 5 && c >= 9 && c < 18;
+  // ---- The field: the mark taken apart ----
+  // Each cell holds one of the mark's parts, an eye (a white dot) or a cheek (a peach pill), in diagonal runs of dot,
+  // dot, pill. A ripple runs out from one cell and, as it reaches each cell, that cell turns to the next part of its
+  // run: a dot closes to a pill, a pill opens to a dot. One ask, every device answering in turn. The ripple is an
+  // explanation, so it takes its time to cross (about 3 s), but each cell's own change is a blink of about 250 ms.
+  const EYE = [255, 255, 255], CHEEK = [246, 188, 159]; // the mark's own white and peach
+  const DOT = .26, PILL_W = .44, PILL_H = .154; // in cells; the pill is the mark's cheek (.59 of an eye high), a little longer
+  const SPEED = 9, BAND = 2.2, GAP = 3.4; // cells a second; cells over which one cell changes; seconds between ripples
+  const part = (c, r, s) => ((c + 2 * r + s) % 3 === 2 ? 1 : 0); // 0 an eye, 1 a cheek
+  const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+  const pill = (p, x, y, pw, ph) => { // into a path or a context; a dot when pw = ph
+    const r = ph / 2, dx = (pw - ph) / 2;
+    p.moveTo(x - dx, y - r);
+    p.arc(x + dx, y, r, -Math.PI / 2, Math.PI / 2);
+    p.arc(x - dx, y, r, Math.PI / 2, Math.PI * 1.5);
+    p.closePath();
+  };
 
-  function week(canvas, { animate, shift = 15 }) {
-    const ctx = canvas.getContext("2d");
-    let cell = 0, offset = 0, w = 0, phase = 0, running = animate && !reduce, inView = false, last = 0, raf = 0;
+  function field(wrap, { loop, delay }) {
+    const canvas = $("canvas", wrap), ctx = canvas.getContext("2d");
+    const origin = $("[data-origin]", wrap);
+    let w = 0, h = 0, cols = 24, cell = 0, rows = 0, oc = 0, or = 0, far = 0;
+    // at: seconds into the ripple under way, or null between ripples; wait: seconds until the next one.
+    let shift = 0, at = null, wait = loop ? delay : Infinity;
+    let running = !reduce, inView = false, ready = false, raf = 0, timer = 0, last = 0, drawn = 0;
+    const empty = new Set();
     function size() {
-      w = canvas.clientWidth;
-      if (!w) return;
-      // On a phone the field crops to the working day instead of shrinking past legibility.
-      cell = Math.max(w / 24, 30);
-      offset = cell === w / 24 ? 0 : w / 2 - 13.5 * cell;
-      const h = cell * 7, d = Math.min(devicePixelRatio || 1, 2);
-      canvas.style.height = h + "px";
-      canvas.width = Math.round(w * d);
-      canvas.height = Math.round(h * d);
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      if (!w || !h) return;
+      cols = parseInt(getComputedStyle(wrap).getPropertyValue("--cols"), 10) || 24;
+      cell = w / cols;
+      rows = Math.max(1, Math.floor(h / cell + .01));
+      const d = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = Math.round(w * d); canvas.height = Math.round(h * d);
       ctx.setTransform(d, 0, 0, d, 0, 0);
-      clear();
+      measure();
       // Drawn: the hero fades the field in and brings its notes after it (CSS); until now the canvas was blank.
       canvas.dataset.drawn = "";
     }
-    // The notes on the field (.ftag): the cells under each label are left empty, so a label sits in a clean lane
-    // instead of on top of half-hidden commas. Measured again when a label changes width (the language).
-    const notes = $$(".ftag", canvas.parentElement);
-    const empty = new Set();
-    function clear() {
+    // The cells under each note's label and under the pause button are left empty, so they sit in a clean lane. The
+    // ripple starts at the note marked data-origin, or, with none showing, in the middle of the top row.
+    function measure() {
+      if (!cell) return;
       empty.clear();
-      for (const t of notes) {
-        const label = t.firstElementChild;
-        if (offset || !cell || !label?.offsetWidth) continue; // hidden, or the field is cropped (a phone)
-        const r = Math.round(t.offsetTop / cell), x = t.offsetLeft + label.offsetLeft;
-        for (let c = Math.floor(x / cell); c <= Math.floor((x + label.offsetWidth - 1) / cell) && c < 24; c++) empty.add(r * 24 + c);
+      const box = wrap.getBoundingClientRect();
+      for (const el of $$(".ft-l, .fpause", wrap)) {
+        const b = el.getBoundingClientRect();
+        if (!b.width) continue;
+        for (let r = Math.floor((b.top - box.top) / cell); r <= Math.floor((b.bottom - box.top - 1) / cell); r++)
+          for (let c = Math.floor((b.left - box.left) / cell); c <= Math.floor((b.right - box.left - 1) / cell); c++) empty.add(r * cols + c);
       }
+      if (origin?.offsetWidth) { oc = Math.round(origin.offsetLeft / cell); or = Math.round(origin.offsetTop / cell); }
+      else { oc = (cols - 1) / 2; or = 0; }
+      far = Math.max(Math.hypot(oc, or), Math.hypot(cols - 1 - oc, or), Math.hypot(oc, rows - 1 - or), Math.hypot(cols - 1 - oc, rows - 1 - or));
       draw();
     }
-    if (notes.length) { const ro = new ResizeObserver(() => cell && clear()); for (const t of notes) ro.observe(t.firstElementChild); }
+    if (origin) new ResizeObserver(() => measure()).observe($(".ft-l", origin)); // a label changes width with the language
     function draw() {
-      ctx.clearRect(0, 0, w, cell * 7);
-      const k = cell / 26;
-      for (let r = 0; r < 7; r++) for (let c = 0; c < 24; c++) {
-        const x = offset + c * cell + cell / 2;
-        if (x < -cell || x > w + cell || empty.has(r * 24 + c)) continue;
-        ctx.save();
-        ctx.translate(x, r * cell + cell / 2);
-        ctx.rotate(((c * 15 + r * shift + phase) * Math.PI) / 180);
-        ctx.scale(k, k);
-        ctx.translate(-CENTER[0], -CENTER[1]);
-        ctx.fillStyle = lit(r, c) ? "#FFFFFF" : "#F68B64";
-        ctx.fill(COMMA);
-        ctx.restore();
+      ctx.clearRect(0, 0, w, h);
+      const front = at === null ? -1 : at * SPEED;
+      // As the ripple reaches a cell, the cell swells a little and settles (k: 0 before, 1 after) while it changes part.
+      // Cells in one colour go into one path; only the few between colours are filled one by one.
+      const still = [new Path2D(), new Path2D()];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if (empty.has(r * cols + c)) continue;
+        const a = part(c, r, shift), b = part(c, r, shift + 1);
+        const k = front < 0 ? 0 : Math.min(1, Math.max(0, (front - Math.hypot(c - oc, r - or)) / BAND));
+        const t = a + (b - a) * smooth(k), s = cell * (1 + .32 * Math.sin(Math.PI * k));
+        const x = (c + .5) * cell, y = (r + .5) * cell;
+        const pw = s * (DOT + (PILL_W - DOT) * t), ph = s * (DOT + (PILL_H - DOT) * t);
+        if (t === 0 || t === 1) { pill(still[t], x, y, pw, ph); continue; }
+        ctx.beginPath();
+        pill(ctx, x, y, pw, ph);
+        ctx.fillStyle = `rgb(${EYE.map((v, i) => Math.round(v + (CHEEK[i] - v) * t))})`;
+        ctx.fill();
       }
+      ctx.fillStyle = "#FFFFFF"; ctx.fill(still[0]);
+      ctx.fillStyle = "#F6BC9F"; ctx.fill(still[1]);
     }
-    // At most 30 frames a second: at 15° a second, that is half a degree a frame, which reads as smooth.
-    let drawn = 0;
-    function tick(t) {
+    // At most 30 frames a second, only while a ripple is under way; between ripples nothing runs but one timer.
+    const active = () => running && inView && ready && !document.hidden;
+    function tick(now) {
       raf = 0;
-      if (!running || !inView || document.hidden || !ready) { last = 0; return; }
-      if (last) phase = (phase + (t - last) * 0.015) % 360; // 1 s = 1 hour = 15°
-      last = t;
-      if (t - drawn >= 32) { drawn = t; draw(); }
+      if (!active()) { last = 0; return; }
+      const dt = last ? Math.min((now - last) / 1000, .1) : 0;
+      last = now;
+      if (at === null) {
+        if (wait === Infinity) { last = 0; return; }
+        wait -= dt;
+        if (wait > 0) { last = 0; timer = setTimeout(() => { timer = 0; wait = 0; start(); }, wait * 1000); return; }
+        at = 0;
+      } else at += dt;
+      if (at * SPEED > far + BAND) { shift = (shift + 1) % 3; at = null; wait = loop ? GAP : Infinity; draw(); }
+      else if (now - drawn >= 32) { drawn = now; draw(); }
       raf = requestAnimationFrame(tick);
     }
-    const start = () => { if (running && inView && ready && !document.hidden && !raf) raf = requestAnimationFrame(tick); };
-    // The field is drawn still at once; it starts turning only once the page has loaded and the browser is idle, so
-    // the animation never competes with the first paint or the first tap.
-    let ready = false;
+    const start = () => { if (active() && !raf && !timer) raf = requestAnimationFrame(tick); };
+    // The field is drawn still at once; the first ripple waits for the page to load and the browser to be idle, so it
+    // never competes with the first paint or the first tap.
     const go = () => { ready = true; start(); };
     const idle = () => ("requestIdleCallback" in window ? requestIdleCallback(go, { timeout: 2500 }) : setTimeout(go, 1200));
-    if (animate) document.readyState === "complete" ? idle() : addEventListener("load", idle, { once: true });
-    new IntersectionObserver(([e]) => { inView = e.isIntersecting; start(); }).observe(canvas);
+    if (running) document.readyState === "complete" ? idle() : addEventListener("load", idle, { once: true });
+    new IntersectionObserver(([e]) => {
+      // The closing band ripples once each time it comes on screen.
+      if (e.isIntersecting && !inView && !loop && at === null) wait = delay;
+      inView = e.isIntersecting; start();
+    }, { threshold: .4 }).observe(wrap);
     document.addEventListener("visibilitychange", start);
     new ResizeObserver(size).observe(canvas);
     return {
-      get running() { return running; },
-      toggle() { running = !running; start(); return running; },
+      toggle() {
+        running = !running; last = 0;
+        if (running) start(); else { cancelAnimationFrame(raf); clearTimeout(timer); raf = timer = 0; }
+        return running;
+      },
     };
   }
 
-  const hero = week($("#field"), { animate: true });
-  week($("#field-end"), { animate: false, shift: 45 });
+  // Pause: the hero's field moves on its own, so it can be stopped. Under reduced motion it never moves, and the button
+  // stays hidden. It is shown before the field is measured, so its cell is left empty.
   const pause = $("#pause");
-  const syncPause = () => {
-    pause.innerHTML = hero.running
-      ? '<svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1" width="2.4" height="8" rx=".6"/><rect x="6.1" y="1" width="2.4" height="8" rx=".6"/></svg><span class="zh">暂停</span><span class="en">Pause</span>'
-      : '<svg class="play" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1.6v6.8a.6.6 0 0 0 .9.5l5.6-3.4a.6.6 0 0 0 0-1L2.9 1.1a.6.6 0 0 0-.9.5Z"/></svg><span class="zh">继续</span><span class="en">Play</span>';
-  };
-  // Still under reduced motion: the clock and its pause have nothing to say.
-  if (reduce) pause.parentElement.hidden = true;
-  pause.addEventListener("click", () => { hero.toggle(); syncPause(); });
-  syncPause();
+  if (!reduce) pause.hidden = false;
+  const hero = field($(".hero .field-wrap"), { loop: true, delay: 1.2 });
+  field($(".band.end .field-wrap"), { loop: false, delay: .5 });
+  pause.addEventListener("click", () => pause.setAttribute("aria-pressed", String(!hero.toggle())));
 })();

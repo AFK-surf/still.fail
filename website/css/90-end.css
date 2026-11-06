@@ -1,49 +1,68 @@
 /* ---------- End: the back cover ----------
-   Base, on a fine 48 px grid; everything centred (the one band the VI sets centred). The tile and its pixels sit on that
-   grid: the band's top padding is a whole number of cells, the tile with its ring is 3 × 3 cells, its frame 7 × 5, and
-   each pixel is a quarter cell on the quarter-cell lattice. The Week runs along the bottom edge (main.js draws it). */
-.end { --cell: 48px; }
+   Base, on a fine 48 px grid; everything centred (the one band the VI sets centred). The tile and the loose parts sit
+   on that grid: the band's top padding is a whole number of cells, the tile with its ring is 3 × 3 cells, its frame
+   7 × 5, and each loose part sits in the middle of a cell, one to a cell as in the field. The hero's field closes the
+   band (main.js draws it, and ripples it once as it comes on screen). */
+.band.end { --cell: 48px; --cols: 24; --fc: calc(100cqw / var(--cols)); container-type: inline-size; }
 .end-in { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; text-align: center;
-  padding-top: calc(var(--cell) * 3); padding-bottom: clamp(64px, 6.4vw, 104px); }
-/* The grid runs edge to edge from the top of the band and fades out just above the Week, so no cut cell meets it. */
+  padding-top: calc(var(--cell) * 3); padding-bottom: clamp(56px, calc(var(--u) * 1.2), 96px); }
+/* The grid runs edge to edge from the top of the band and fades out just above the field, so no cut cell meets it. */
 .end-in::before {
   content: ""; position: absolute; z-index: -1; inset: 0 calc(50% - 50vw);
   background-image: linear-gradient(rgba(74,22,6,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(74,22,6,.09) 1px, transparent 1px);
   background-size: var(--cell) var(--cell); background-position: center top;
   -webkit-mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent); mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent);
 }
-.end h2 { font-size: var(--t-display); line-height: var(--lh-display); letter-spacing: var(--tr-display); max-width: 13ch; margin-inline: auto; }
-.end .lead { color: var(--brand-ink); margin: clamp(16px, 1.6vw, 24px) auto 0; text-wrap: balance; }
-.end .actions { justify-content: center; margin-top: clamp(28px, 2.6vw, 40px); }
+.band.end h2 { font-size: var(--t-display); line-height: var(--lh-display); letter-spacing: var(--tr-display); max-width: 13ch; margin-inline: auto; }
+.band.end .lead { color: var(--brand-ink); margin: clamp(16px, 1.6vw, 24px) auto 0; text-wrap: balance; }
+.band.end .actions { justify-content: center; margin-top: clamp(28px, 2.6vw, 40px); }
+.band.end .field-wrap { height: calc(var(--fc) * 3); }
 
-/* The tile: 120 px with a 12 px ring, 3 × 3 cells in all, so the ring meets the grid lines. */
+/* The tile: 120 px with a 12 px ring, 3 × 3 cells in all, so the ring meets the grid lines. It is the mark itself,
+   drawn here in its parts (mark.svg, 32 units to 120 px: corner 7.2, eyes 4.22 across, cheeks 4.61 × 2.49). */
 .tile-wrap { position: relative; flex: none; width: calc(var(--cell) * 7); height: calc(var(--cell) * 5); margin-bottom: clamp(24px, 2.4vw, 40px); }
-.tile { position: absolute; left: calc(var(--cell) * 2 + 12px); top: calc(var(--cell) + 12px); width: 120px; height: 120px; border-radius: 27px; background: var(--ink);
-  display: grid; place-items: center; box-shadow: 0 0 0 12px rgba(255,255,255,.18), 0 28px 56px -24px rgba(42,11,2,.6); }
-/* The mark is itself the tile (its own rounded square, rx 7.2 of 32 = 27 px at 120), so no inner square shows. */
-.tile img { width: 120px; height: 120px; border-radius: 27px; }
+.band.end .tile { position: absolute; left: calc(var(--cell) * 2 + 12px); top: calc(var(--cell) + 12px); width: 120px; height: 120px; border-radius: 27px; background: #1C1D20;
+  box-shadow: 0 0 0 12px rgba(255,255,255,.18), 0 28px 56px -24px rgba(42,11,2,.6); }
+.band.end .tile i { position: absolute; }
+.band.end .tile .eye { top: 49.2px; width: 15.8px; height: 15.8px; border-radius: 50%; background: #fff; }
+.band.end .tile .eye:nth-child(1) { left: 31px; }
+.band.end .tile .eye:nth-child(2) { left: 73.2px; }
+.band.end .tile .cheek { top: 81.4px; width: 17.3px; height: 9.3px; border-radius: 9px; background: #F6BC9F; }
+.band.end .tile .cheek:nth-child(3) { left: 16.8px; }
+.band.end .tile .cheek:nth-child(4) { left: 85.9px; }
 
-/* The pixels: --c and --r place each on the 12 px lattice (28 × 20 across the frame). */
-.pixels i { position: absolute; left: calc(var(--c) * 12px); top: calc(var(--r) * 12px); width: 12px; height: 12px; border-radius: 2px; background: #fff; }
-.pixels .t { background: var(--brand-tint); }
-.pixels .d { background: var(--brand-ink); }
-.pixels .k { background: var(--ink); }
+/* The loose parts, the field's own dots and pills at the tile's scale; --c and --r place each centre on the 12 px
+   lattice (28 × 20 across the frame). */
+.band.end .parts i { position: absolute; left: calc(var(--c) * 12px - 8px); top: calc(var(--r) * 12px - 8px); width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.band.end .parts .p { left: calc(var(--c) * 12px - 9px); top: calc(var(--r) * 12px - 5px); width: 18px; height: 10px; border-radius: 5px; background: #F6BC9F; }
+.band.end .parts .k { background: var(--ink); }
 
-/* Assembling, once, as the band comes on screen: the pixels start half as far out again from the tile and faded, and
-   drift in to their places on the grid, a little apart (--d). A marketing explanation, so longer than UI motion; it
-   moves only transforms and opacity. The frame uses the page's reveal hook (.rv: main.js sets .rv-wait while it is
-   below the fold and lifts it on entry); the frame itself stays put. Without JS, or above the fold, nothing waits. */
-.end .tile-wrap.rv-wait { opacity: 1; transform: none; }
-.pixels i { transition: transform 1100ms var(--ease-out) var(--d, 0s), opacity 700ms var(--ease-out) var(--d, 0s); }
-.tile-wrap.rv-wait .pixels i {
+/* Coming together, once, as the band comes on screen: the loose parts start half as far out again from the tile and
+   faded, and drift in to their places a little apart (--d); then the mark's own four parts come in from the field and
+   land in the tile, eyes first. An explanation, so longer than UI motion; only transforms and opacity move. The frame
+   uses the page's reveal hook (.rv: main.js sets .rv-wait while it is below the fold and lifts it on entry); the frame
+   itself stays put. Without JS, or above the fold, nothing waits. */
+.band.end .tile-wrap.rv-wait { opacity: 1; transform: none; }
+.band.end .parts i { transition: transform 1100ms var(--ease-out) var(--d, 0s), opacity 700ms var(--ease-out) var(--d, 0s); }
+.band.end .tile i { transition: transform 900ms var(--ease-out) var(--td), opacity 500ms var(--ease-out) var(--td); }
+.band.end .tile .eye:nth-child(1) { --td: .36s; }
+.band.end .tile .eye:nth-child(2) { --td: .44s; }
+.band.end .tile .cheek:nth-child(3) { --td: .56s; }
+.band.end .tile .cheek:nth-child(4) { --td: .64s; }
+.tile-wrap.rv-wait .parts i {
   opacity: 0;
-  transform: translate(calc((var(--c) * 12px - 162px) * .5), calc((var(--r) * 12px - 114px) * .5));
+  transform: translate(calc((var(--c) * 12px - 168px) * .5), calc((var(--r) * 12px - 120px) * .5));
 }
-/* Reduced motion: the pixels are simply there. */
+.tile-wrap.rv-wait .tile i { opacity: 0; transform: translate(var(--x), var(--y)); }
+/* Reduced motion: the parts are simply there. */
 @media (prefers-reduced-motion: reduce) {
-  .tile-wrap.rv-wait .pixels i { opacity: 1; transform: none; }
+  .tile-wrap.rv-wait :is(.parts, .tile) i { opacity: 1; transform: none; }
 }
 
+@media (min-width: 641px) and (max-width: 1023px) {
+  .band.end { --cols: 16; }
+}
 @media (max-width: 640px) {
-  .end-in { padding-top: calc(var(--cell) * 2); padding-bottom: 56px; }
+  .band.end { --cols: 12; }
+  .end-in { padding-top: calc(var(--cell) * 2); padding-bottom: 48px; }
 }

@@ -1,29 +1,120 @@
-/* ---------- Account pool deep-dive ---------- */
-.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 11fr) minmax(0, 5fr); gap: clamp(20px, 3vw, 56px); align-items: center; }
-.callouts { display: flex; flex-direction: column; gap: clamp(28px, 4vw, 64px); }
-.callout h3 { display: flex; align-items: center; gap: 10px; font-size: clamp(17px, 1.35vw, 21px); }
-.callout h3 svg { width: 22px; height: 22px; color: var(--brand-deep); flex: none; }
-.callout p { color: var(--graphite); margin-top: 8px; font-size: var(--t-small); line-height: 1.6; text-wrap: pretty; }
-.pool-card { position: relative; }
-.iso { width: 100%; height: auto; overflow: visible; }
-.pool-card .win { max-width: none; }
-.pool-card .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-.pool-sessions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.pool-sessions .task { padding: 10px; gap: 4px; }
-.pool-sessions .task b { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pool-sessions .task small { font-size: 11px; }
-.formula { margin-top: clamp(40px, 5vw, 72px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
-.formula > div { border-top: 1px solid var(--line); padding-top: 14px; }
-.formula b { display: block; font-size: clamp(28px, 2.6vw, 44px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; font-feature-settings: "tnum"; }
-.formula > div > span { display: block; color: var(--graphite); font-size: var(--t-small); margin-top: 6px; }
+/* ---------- 01 Account pool ----------
+   Desktop: two callouts | the picture | two callouts, on the 22-unit content width (5U | 12U | 5U).
+   The picture is three isometric plates: new chats, the pool's six accounts, four stations. Each chat drops onto the
+   account it is given (lit), and a dotted line runs down to the station it runs on (ringed). The tags are HTML, so
+   they keep a readable size however small the plates are drawn. */
+.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 12fr) minmax(0, 5fr); align-items: center; }
+.callouts { display: flex; flex-direction: column; gap: clamp(32px, 3.4vw, 56px); }
+.callout h3 { display: flex; align-items: center; gap: 10px; font-size: clamp(17px, 1.3vw, 20px); line-height: 1.3; }
+.callout h3 svg { width: 20px; height: 20px; color: var(--brand-deep); flex: none; }
+.callout p { color: var(--graphite); margin-top: 8px; font-size: var(--t-small); line-height: 1.62; text-wrap: pretty; }
+
+/* The figure: the svg box plus room for the tags on both sides. */
+.pool-fig { margin: 0; display: flex; flex-direction: column; align-items: center; --lead: 22px; --tagw: 168px; }
+.iso-box { position: relative; width: min(360px, calc(100% - 2 * var(--tagw)), 50svh); }
+.iso { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Tags: a dot on the plate's corner, a short leader, the mono label. */
+.pool-fig .pt { left: calc(var(--x) + var(--lead)); right: auto; top: var(--y); bottom: auto; transform: translateY(-50%); z-index: 1; }
+.pool-fig .pt::before { content: ""; position: absolute; right: 100%; top: 50%; width: var(--lead); height: 1px; background: var(--silver); }
+.pool-fig .pt::after { content: ""; position: absolute; left: calc(-1 * var(--lead) - 3px); top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--ink); }
+.pool-fig .pt-l { left: auto; right: calc(100% - var(--x) + var(--lead)); }
+.pool-fig .pt-l::before { right: auto; left: 100%; }
+.pool-fig .pt-l::after { left: auto; right: calc(-1 * var(--lead) - 3px); }
+
+/* The key under the picture. */
+.pool-key { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; margin-top: clamp(20px, 2vw, 28px); font-size: 13px; line-height: 1.4; color: var(--graphite); }
+.pool-key > span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.pool-key i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.k-pick i { background: #FFE1D4; box-shadow: inset 0 0 0 1.5px var(--brand); }
+.k-ok i { background: #2F8F5B; }
+.k-low i { background: #E6A23C; }
+.k-out i { outline: 1px dashed var(--silver); outline-offset: -1px; }
+
+/* ---------- Motion: an explanation, so it takes its time (7.2 s a round), but only while on screen ----------
+   At rest (before it plays, and under reduced motion) the picture shows the outcome: every chat on its account,
+   the account lit, a dotted line down to the station it runs on, the station ringed. A round: everything lifts off
+   together (0.5 s), three new chats appear on the top plate, and they drop one after another (0.8 s apart), each
+   along its dotted route onto the account it is given; the account lights as the chat lands, then the line to its
+   station and the station's ring follow. The round ends where it began. Three rounds play once the band is revealed
+   (.pool.in), then it rests on the outcome. With the on-screen observer (.pool-fig.play) it loops while visible; off
+   screen it goes no further than those three rounds. */
+.pool-fig [data-n] { animation-duration: 7.2s; animation-iteration-count: infinite; animation-play-state: paused; animation-fill-mode: both; }
+.pool.in .pool-fig [data-n] { animation-play-state: running; animation-iteration-count: 3; }
+.pool .pool-fig.play [data-n] { animation-play-state: running; animation-iteration-count: infinite; }
+.pl-chat[data-n="0"] { animation-name: pl-chat-0; } .pl-chat[data-n="1"] { animation-name: pl-chat-1; } .pl-chat[data-n="2"] { animation-name: pl-chat-2; }
+.pl-route[data-n="0"] { animation-name: pl-route-0; } .pl-route[data-n="1"] { animation-name: pl-route-1; } .pl-route[data-n="2"] { animation-name: pl-route-2; }
+.pl-lit[data-n="0"] { animation-name: pl-lit-0; } .pl-lit[data-n="1"] { animation-name: pl-lit-1; } .pl-lit[data-n="2"] { animation-name: pl-lit-2; }
+.pl-run[data-n="0"] { animation-name: pl-run-0; } .pl-run[data-n="1"] { animation-name: pl-run-1; } .pl-run[data-n="2"] { animation-name: pl-run-2; }
+@keyframes pl-chat-0 {
+  0% { opacity: 1; transform: none; animation-timing-function: ease; }
+  7% { opacity: 0; transform: none; }
+  8% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) - 8px)); animation-timing-function: var(--ease-out); }
+  14%, 18% { opacity: 1; transform: translate(var(--dx), var(--dy)); animation-timing-function: var(--ease-in-out); }
+  34%, 100% { opacity: 1; transform: none; }
+}
+@keyframes pl-route-0 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 13% { opacity: 0; animation-timing-function: var(--ease-out); } 18%, 100% { opacity: 1; } }
+@keyframes pl-lit-0 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 32% { opacity: 0; animation-timing-function: var(--ease-out); } 37%, 100% { opacity: 1; } }
+@keyframes pl-run-0 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 36% { opacity: 0; animation-timing-function: var(--ease-out); } 42%, 100% { opacity: 1; } }
+@keyframes pl-chat-1 {
+  0% { opacity: 1; transform: none; animation-timing-function: ease; }
+  7% { opacity: 0; transform: none; }
+  8% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) - 8px)); animation-timing-function: var(--ease-out); }
+  14%, 29% { opacity: 1; transform: translate(var(--dx), var(--dy)); animation-timing-function: var(--ease-in-out); }
+  45%, 100% { opacity: 1; transform: none; }
+}
+@keyframes pl-route-1 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 24% { opacity: 0; animation-timing-function: var(--ease-out); } 29%, 100% { opacity: 1; } }
+@keyframes pl-lit-1 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 43% { opacity: 0; animation-timing-function: var(--ease-out); } 48%, 100% { opacity: 1; } }
+@keyframes pl-run-1 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 47% { opacity: 0; animation-timing-function: var(--ease-out); } 53%, 100% { opacity: 1; } }
+@keyframes pl-chat-2 {
+  0% { opacity: 1; transform: none; animation-timing-function: ease; }
+  7% { opacity: 0; transform: none; }
+  8% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) - 8px)); animation-timing-function: var(--ease-out); }
+  14%, 40% { opacity: 1; transform: translate(var(--dx), var(--dy)); animation-timing-function: var(--ease-in-out); }
+  56%, 100% { opacity: 1; transform: none; }
+}
+@keyframes pl-route-2 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 35% { opacity: 0; animation-timing-function: var(--ease-out); } 40%, 100% { opacity: 1; } }
+@keyframes pl-lit-2 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 54% { opacity: 0; animation-timing-function: var(--ease-out); } 59%, 100% { opacity: 1; } }
+@keyframes pl-run-2 { 0% { opacity: 1; animation-timing-function: ease; } 7%, 58% { opacity: 0; animation-timing-function: var(--ease-out); } 64%, 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .pool-fig [data-n] { animation: none !important; }
+}
+
+/* ---------- The figures ---------- */
+.formula { margin-top: clamp(48px, 5.6vw, 88px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
+.formula > div { border-top: 1px solid var(--hair); padding-top: 16px; }
+.formula b { display: block; font-size: clamp(30px, 2.6vw, 44px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; font-feature-settings: "tnum"; }
+.formula > div > span { display: block; color: var(--graphite); font-size: var(--t-small); line-height: 1.55; margin-top: 8px; max-width: 22em; text-wrap: pretty; }
+
+/* ---------- Narrower: the picture on its own row, the callouts in two columns under it ---------- */
 @media (max-width: 1180px) {
-  .pool { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .pool .pool-card { grid-column: 1 / -1; order: -1; max-width: 720px; justify-self: center; width: 100%; }
+  .pool { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gap); row-gap: clamp(40px, 5vw, 56px); align-items: start; }
+  .pool-fig { grid-column: 1 / -1; order: -1; }
+  .iso-box { width: min(380px, calc(100% - 2 * var(--tagw)), 50svh); }
+  .callouts { gap: clamp(28px, 4vw, 40px); }
 }
 @media (max-width: 960px) {
-  .formula { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .formula { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 32px; }
 }
+
+/* ---------- Phones: the plates to the left, every tag on the right; callouts as a list ---------- */
 @media (max-width: 640px) {
-  .pool { grid-template-columns: minmax(0, 1fr); }
-  .pool-sessions { grid-template-columns: minmax(0, 1fr); }
+  .pool { grid-template-columns: minmax(0, 1fr); row-gap: 36px; }
+  .pool-fig { --lead: 12px; --tagw: 150px; align-items: stretch; }
+  .iso-box { --iw: min(240px, calc(100% - var(--tagw)), 50svh); width: var(--iw); margin-left: max(0px, calc((100% - var(--iw) - var(--tagw)) / 2)); }
+  .pool-fig .mtag { font-size: 10.5px; gap: 5px; padding: 0 7px 0 5px; }
+  .pool-fig .pt-l { left: calc(var(--xm) + var(--lead)); right: auto; }
+  .pool-fig .pt-l::before { left: auto; right: 100%; }
+  .pool-fig .pt-l::after { right: auto; left: calc(-1 * var(--lead) - 3px); }
+  .pool-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; justify-content: stretch; margin-top: 24px; font-size: 13px; }
+  .callouts { gap: 0; }
+  .pool > .callouts:last-child { margin-top: -36px; }
+  .callout:last-child { border-bottom: 1px solid var(--hair); }
+  .pool > .callouts:first-child .callout:last-child { border-bottom: 0; }
+  .callout { padding-block: 20px; border-top: 1px solid var(--hair); }
+  .callout h3 { font-size: 17px; }
+  .callout p { font-size: 15px; margin-top: 6px; }
+  .formula { margin-top: 48px; gap: 28px 16px; }
+  .formula b { font-size: 30px; }
+  .formula > div > span { font-size: 14px; }
 }

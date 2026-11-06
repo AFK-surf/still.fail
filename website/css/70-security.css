@@ -1,16 +1,93 @@
-/* ---------- Security (Ink) ---------- */
-.sec-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 9fr) minmax(0, 6fr); gap: clamp(20px, 3vw, 56px); align-items: center; }
-[data-tone=ink] .callout h3 svg { color: var(--brand); }
-[data-tone=ink] .callout p { color: var(--mut); }
-[data-tone=ink] .callout + .callout { border-top: 1px dashed rgba(255,255,255,.18); padding-top: clamp(28px, 4vw, 64px); }
-.net { width: 100%; height: auto; }
-.trust { display: flex; flex-wrap: wrap; gap: 12px 40px; align-items: center; justify-content: space-between; margin-top: clamp(48px, 6vw, 96px); padding-top: 24px; border-top: 1px solid var(--hair); font-size: var(--t-small); color: var(--mut); }
-.trust b { color: #fff; font-weight: 500; }
-.trust .items { display: flex; flex-wrap: wrap; gap: 10px 32px; }
-@media (max-width: 1180px) {
-  .sec-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .sec-grid .net-wrap { grid-column: 1 / -1; order: -1; max-width: 720px; justify-self: center; width: 100%; }
+/* ---------- Security (Ink) ----------
+   Desktop, on the 22-unit content width: two notes | the network | two notes (5U | 10U | 5U, 1U gutters).
+   The network is drawn from this phone's side, with the app's own demo data: three stations it reaches directly, one
+   through a relay. Every station sits on one construction circle, the relay on the half-radius one.
+   Motion explains, once the band comes in (the reveal's .rv-wait, then .in): the relay's lock shuts, then a packet leaves the phone for
+   every station at once and each arrives after its own round trip, the relayed one last; the relay's dashes drift the
+   way the data goes. Reduced motion: the drawing stands still, lock shut. */
+.sec-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 10fr) minmax(0, 5fr); column-gap: var(--u); align-items: center; }
+
+/* ---- Notes ---- */
+.sec-notes { display: flex; flex-direction: column; }
+.sec-notes li { padding-block: clamp(24px, 2.4vw, 36px); }
+.sec-notes li:first-child { padding-top: 0; }
+.sec-notes li:last-child { padding-bottom: 0; }
+.sec-notes li + li { border-top: 1px dashed rgba(255,255,255,.2); }
+.sec-notes h3 { display: flex; align-items: center; gap: 10px; font-size: clamp(17px, 1.3vw, 20px); line-height: 1.3; letter-spacing: -.01em; color: #fff; }
+.sec-notes h3 svg { width: 20px; height: 20px; flex: none; color: var(--brand); }
+.sec-notes p { margin-top: 8px; padding-left: 30px; font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); color: var(--mut); text-wrap: pretty; }
+
+/* ---- The network ---- */
+.sec-net { margin: 0; justify-self: center; width: 100%; max-width: 480px; }
+.sec-net svg { width: 100%; height: auto; overflow: visible; }
+.sec-net .sn-nodes rect { fill: #26272B; stroke: rgba(255,255,255,.18); }
+.sec-net .sn-nodes .sn-hit { fill: none; stroke: var(--brand-tint); stroke-width: 1.5; opacity: 0; }
+.sec-net text { text-anchor: middle; }
+.sec-net .sn-name { font: 600 13px/1 var(--font); letter-spacing: -.005em; fill: #fff; }
+.sec-net .sn-via { font: 400 11px/1 var(--font); font-feature-settings: "tnum"; letter-spacing: .01em; fill: #A4A5A9; }
+.sec-net .sn-me { font: 600 13px/1 var(--font); letter-spacing: -.005em; fill: var(--ink); }
+.sec-net .sn-shackle { transition: transform 360ms var(--ease-out) 450ms; }
+.sec-vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sec-grid.rv-wait .sn-shackle { transform: translateY(-3.5px); }
+  .sec-grid.in .sn-relay { animation: sn-dash .9s linear infinite; }
+  /* One 3.6 s cycle for all; each packet's run is its round trip scaled (9, 12, 18, 46 ms), constant speed. */
+  .sec-grid.in .sn-pkts circle { animation: 3.6s linear .9s infinite; }
+  .sec-grid.in .sn-pkts .p1 { animation-name: sn-p1; }
+  .sec-grid.in .sn-pkts .p2 { animation-name: sn-p2; }
+  .sec-grid.in .sn-pkts .p3 { animation-name: sn-p3; }
+  .sec-grid.in .sn-pkts .p4 { animation-name: sn-p4; }
+  /* Arrival: the station's outline lights and fades. */
+  .sec-grid.in .sn-hit { animation: sn-hit 3.6s var(--ease-out) infinite; }
+  .sec-grid.in .n1 .sn-hit { animation-delay: 1.6s; }
+  .sec-grid.in .n2 .sn-hit { animation-delay: 1.85s; }
+  .sec-grid.in .n3 .sn-hit { animation-delay: 1.45s; }
+  .sec-grid.in .n4 .sn-hit { animation-delay: 3s; }
+  /* Off screen (main.js may mark it): everything holds where it is. */
+  .sec-net.off * { animation-play-state: paused !important; }
 }
+@keyframes sn-dash { to { stroke-dashoffset: -9; } }
+@keyframes sn-p1 { 0% { transform: none; } 19.4%, 100% { transform: translate(-97px, -117px); } }
+@keyframes sn-p2 { 0% { transform: none; } 26.4%, 100% { transform: translate(97px, -117px); } }
+@keyframes sn-p3 { 0% { transform: none; } 15.3%, 100% { transform: translate(-97px, 117px); } }
+@keyframes sn-p4 { 0% { transform: none; } 58.3%, 100% { transform: translate(97px, 117px); } }
+@keyframes sn-hit { 0% { opacity: 1; } 22%, 100% { opacity: 0; } }
+
+/* ---- Trust row ---- */
+.sec-trust { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: center; justify-content: space-between; margin-top: clamp(56px, 6vw, 96px); padding-top: 24px; border-top: 1px solid var(--hair); }
+.sec-trust ul { display: flex; flex-wrap: wrap; gap: 8px 40px; font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); color: var(--mut); }
+.sec-trust li { display: flex; gap: 10px; }
+.sec-trust b { color: #fff; font-weight: 500; }
+
+/* ---- Narrower: the network on its own row, the notes in two columns under it ---- */
+@media (max-width: 1180px) {
+  .sec-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(32px, 5vw, 64px); row-gap: clamp(48px, 6vw, 72px); align-items: start; }
+  .sec-net { grid-column: 1 / -1; order: -1; max-width: 520px; }
+}
+
+/* ---- Phones: the network fills the column; notes and trust become one list of rows ---- */
 @media (max-width: 640px) {
-  .sec-grid { grid-template-columns: minmax(0, 1fr); }
+  .sec-grid { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
+  .sec-net { max-width: 420px; margin-bottom: 36px; }
+  .sec-notes li, .sec-notes li:first-child, .sec-notes li:last-child { padding-block: 20px; }
+  .sec-notes li, .sec-notes li + li { border-top: 1px solid var(--hair); }
+  .sec-notes + .sec-net + .sec-notes li:last-child { border-bottom: 1px solid var(--hair); }
+  .sec-notes h3 { font-size: 17px; }
+  .sec-notes p { margin-top: 6px; font-size: 15px; }
+  .sec-trust { flex-direction: column; align-items: stretch; gap: 20px; margin-top: 40px; padding-top: 0; border-top: 0; }
+  .sec-trust ul { flex-direction: column; gap: 0; font-size: 15px; }
+  .sec-trust li { display: grid; grid-template-columns: 7.2em minmax(0, 1fr); gap: 12px; padding-block: 14px; }
+  .sec-trust li + li { border-top: 1px solid var(--hair); }
+  .sec-trust .btn { height: 48px; font-size: 16px; }
+}
+
+/* ---- Small screens (a phone either way up): the drawing's words step up to stay readable at its smaller scale;
+   held sideways, the drawing fits the screen's height ---- */
+@media (max-width: 640px), (max-height: 500px) {
+  .sec-net .sn-name, .sec-net .sn-me { font-size: 14.5px; }
+  .sec-net .sn-via { font-size: 12px; letter-spacing: 0; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .sec-net { max-width: min(520px, calc(100svh - 40px)); }
 }
