@@ -392,6 +392,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.at\",\"text\":\"从切换器打开后发出 082939\",\"caret\":16}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"作为文件\",\"caret\":4}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"作为文件发送 082940\",\"caret\":13}",{"at":null}]
+  #|["words","{\"call\":\"ref.at\",\"text\":\"你\",\"caret\":1}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"你好\",\"caret\":2}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"你好\\n\",\"caret\":3}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"你好\\n第二行 085022\",\"caret\":13}",{"at":null}]
