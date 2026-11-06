@@ -2,6 +2,36 @@
 // made while its title, note and value change.
 
 ///|
+/// The blocks of a page's settings. Wide pages put the settings on one list card; narrow pages keep each setting as
+/// its own block, and omit `wide_only` settings. Use the same keys and callback with `settings_node_block`.
+pub fn settings_node_keys(width : () -> Double, keys : () -> Array[String], wide_only : Array[String]) -> Array[String] {
+  if look_for(width()) is Wide {
+    ["@settings"]
+  } else {
+    keys().filter(fn(k) { !wide_only.contains(k) })
+  }
+}
+
+///|
+/// Make one of `settings_node_keys`' blocks, `make` making the setting named by each key.
+pub fn settings_node_block(
+  parent : @view.View,
+  key : String,
+  keys : () -> Array[String],
+  make : (@view.View, String) -> Unit,
+) -> Unit {
+  if key == "@settings" {
+    group_node(parent, fn(g) {
+      for item in @signals.untracked(keys) {
+        make(g, item)
+      }
+    })
+  } else {
+    make(parent, key)
+  }
+}
+
+///|
 /// A setting's title, control and optional note. On a wide page its control is at the end of a row; on a narrow page
 /// it stands under the heading, with the note under it. On a narrow card the setting is a row within that card.
 pub fn setting_node(
@@ -14,7 +44,7 @@ pub fn setting_node(
   match at.look {
     Wide => {
       let row = fn(r : @view.View) {
-        r.row(Is(true)).gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
+        r.row(Is(true)).gap(Is(16.0)).lines_up(Is(Some(Middle))).lends(part_at, { ..at, section: true }) |> ignore
         r.box(fn(words) {
           words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
           words.box(fn(w) { styled_words(w, title, fn() { setting_title() }) |> ignore }) |> ignore
@@ -72,7 +102,7 @@ pub fn setting_link_node(
   note? : () -> String = fn() { "" },
 ) -> Unit {
   if look_node(parent) is Wide {
-    link_row_node(parent, title, press, value~, note~)
+    link_row_node(parent, title, press, value~, note~, title_style=fn() { setting_title() })
   } else {
     heading_node(parent, title)
     group_node(parent, fn(g) { link_row_node(g, value, press) })

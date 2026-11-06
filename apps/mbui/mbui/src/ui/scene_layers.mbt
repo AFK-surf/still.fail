@@ -1798,6 +1798,11 @@ fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
 /// shapes' pieces as it was, put in its place; nothing else of the frame gone through. False (nothing changed of what
 /// was kept) where one does not: the old frame paints it.
 fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -> Bool {
+  // The reveal changes the clip of the whole page each frame, even where no individual node changed.
+  if reveal_spreading() {
+    scene.alone_why = "the theme's reveal"
+    return false
+  }
   guard scene_alone_may() else { return false }
   // (held by another drawn again: drawn by that one's walk where the tree has it now)
   let under = fn(id : @view.NodeId) {

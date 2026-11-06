@@ -1027,6 +1027,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   old_cuts.clear()
   tree_over_scrim.clear()
   let p = TreePaint::new(tree, root, false)
+  let circle = self.reveal_tree_circle()
+  p.reveal_circle = circle
+  match circle {
+    Some((x, y, r)) => {
+      let was = self.ninst
+      self.insts_replay(reveal.insts, reveal.floats, reveal.segs)
+      self.scene_old_drawn(None, was)
+      push_circle_clip(x, y, r)
+    }
+    None => ()
+  }
   // (the root's layer, drawn whole each frame the old frame paints: what it holds each a layer copied or drawn; the
   // old frame's layers under what it holds in their places; what it reads followed by the old frame's paint)
   // (where the root is drawn: its node's own place, as a walk from the window's top left composes it)
@@ -1042,11 +1053,21 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     fn() {
       self.tree_walk(p, 0, at_root, 0, None) |> ignore
       let k = self.ninst
+      if circle is Some(_) {
+        pop_clip()
+      }
       self.paint_layers_under(p, 0, true)
+      match circle {
+        Some((x, y, r)) => push_circle_clip(x, y, r)
+        None => ()
+      }
       self.scene_old_drawn(None, k)
     },
   )
   |> ignore
+  if circle is Some(_) {
+    pop_clip()
+  }
   tree_over_scrim.clear()
   dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
@@ -1102,6 +1123,8 @@ priv struct TreePaint {
   mut moved_open : Int
   /// how deep the node being drawn now is: what it opens, as deep
   mut depth : Int
+  /// The page's reveal clip, temporarily lifted for the window's stacked overlays.
+  mut reveal_circle : (Double, Double, Double)?
 }
 
 ///|
@@ -1127,6 +1150,7 @@ fn TreePaint::new(tree : @view.Tree, root : Int, alone : Bool) -> TreePaint {
     open_depth: [],
     moved_open: 0,
     depth: 0,
+    reveal_circle: None,
   }
 }
 
@@ -1390,11 +1414,16 @@ fn Ctx::tree_step(
     let place = (ox + x, oy + y, a, s, oux + ux, ouy + uy)
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none
     // of its, out of the way by now; the old layers under it first, the root's)
+    let mut over_reveal = false
     if from == 0 && !p.alone && a > 0.002 && !(c.bones != 0L && c.bone_as == 2) && tree.root_holds(c.id) {
       let stack = tree.stack_of(c.id)
       if stack >= 0 {
         self.tree_close_to(p, tree_all_out)
         self.tree_raise_close(p, tree_all_out)
+        if p.reveal_circle is Some(_) {
+          pop_clip()
+          over_reveal = true
+        }
         self.paint_layers_under(p, stack, false)
       }
     }
@@ -1408,6 +1437,12 @@ fn Ctx::tree_step(
       }
     } else {
       self.scene_layer_drawn(p, c, outer, place, d)
+    }
+    if over_reveal {
+      match p.reveal_circle {
+        Some((x, y, r)) => push_circle_clip(x, y, r)
+        None => ()
+      }
     }
     // (how far it reaches, what holds it's)
     let n = p.open.length()

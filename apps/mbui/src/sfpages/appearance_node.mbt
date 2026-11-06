@@ -12,10 +12,10 @@ pub fn appearance_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let wide = fn() {
+  let page_width = fn() {
     match width {
-      Some(w) => @sf.look_for(w()) is Wide
-      None => false
+      Some(w) => w()
+      None => 0.0
     }
   }
   let keys = fn() {
@@ -26,25 +26,15 @@ pub fn appearance_node(
     if @ui.takes_drops() {
       out.push("drop")
     }
-    if wide() {
-      out.push("rail")
-    }
+    out.push("rail")
     out
   }
   @sf.page_node(
     v,
     fn() { @sf.t("web-pages.appearance.title") },
-    fn() { if wide() { ["settings"] } else { keys() } },
+    fn() { @sf.settings_node_keys(page_width, keys, ["rail"]) },
     fn(b, key) {
-      if key == "settings" {
-        @sf.group_node(b, fn(g) {
-          for item in @signals.untracked(keys) {
-            appearance_setting_node(g, core, item)
-          }
-        })
-      } else {
-        appearance_setting_node(b, core, key)
-      }
+      @sf.settings_node_block(b, key, keys, fn(p, item) { appearance_setting_node(p, core, item) })
     },
     on_back~,
     frame~,
@@ -147,11 +137,7 @@ fn appearance_choice_node(
       }
     }
   }
-  if @sf.look_node(v) is Wide {
-    @sf.seg_node(v, labels, at, choose) |> ignore
-  } else {
-    @sf.page_choice_node(v, labels, at, choose)
-  }
+  @sf.page_choice_node(v, labels, at, choose)
 }
 
 ///|

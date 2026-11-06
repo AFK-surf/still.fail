@@ -406,10 +406,17 @@ fn wide_link_row_node(
   folds : (() -> Bool)?,
   tail : ((@view.View) -> Unit)?,
   tail_shown : () -> Bool,
+  title_style : (() -> @ui.TextStyle)?,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
-  let titled = if strong { desk_list_title.then(row_strong) } else { desk_list_title }
+  let titled = fn() {
+    let style = match title_style {
+      Some(f) => f()
+      None => desk_list_title
+    }
+    if strong { style.then(row_strong) } else { style }
+  }
   // (in a panel's card, pressed: its ground reaching `link_pane_out` past the row over and under, to the card's rows'
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
@@ -473,7 +480,7 @@ fn wide_link_row_node(
           t.box(fn(w) {
             w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
             styled_words(w, title, fn() {
-              if title_after is Some(_) && title_after_shown() { titled.then(cut_words) } else { titled }
+              if title_after is Some(_) && title_after_shown() { titled().then(cut_words) } else { titled() }
             })
             |> ignore
             if acts {
