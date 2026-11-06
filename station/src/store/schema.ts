@@ -1241,7 +1241,20 @@ export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS sessions_put_away ON sessions (archived_at, key) WHERE archived_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");
-  db.exec("CREATE INDEX IF NOT EXISTS sessions_efforts ON sessions (created_by, runtime, model, created_at, effort)");
+  addEffortIndex(db);
+}
+
+/// A new or small store can install this at once. An older large store keeps the existing creator/time lookup for
+/// effort choices: building a native index over its whole sessions table would hold up the previous writer.
+function addEffortIndex(db: DatabaseSync): void {
+  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
+  const small = () => db.prepare("SELECT 1 FROM sessions LIMIT 1 OFFSET 64").get() === undefined;
+  if (installed() || !small()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!installed() && small()) db.exec("CREATE INDEX IF NOT EXISTS sessions_efforts ON sessions (created_by, runtime, model, created_at, effort)");
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
 
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
