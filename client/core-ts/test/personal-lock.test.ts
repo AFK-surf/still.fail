@@ -178,7 +178,7 @@ test("the phone lends on a signed grant alone, and no more once it is taken back
   const c = cloud();
   const a = device(c, "a");
   const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: 4_000_000_000 }), "why"));
-  const p = phone({ personal: a.lock, subOf: () => SUB, sub: () => SUB });
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
   const grant = (id: string, s: unknown) => ({ ...grantOf(s), id, exp: 4_000_000_000 });
   const STATION_ID = STATION;
   try {
@@ -203,7 +203,7 @@ test("a phone started anew reads the lock it pinned, and lends for its grants be
   const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: 4_000_000_000 }), "why"));
   // The same device's storage, the process gone and back, the cloud out of reach.
   const again = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
-  const p = phone({ personal: again, subOf: () => SUB, sub: () => SUB });
+  const p = phone({ personal: again, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
   try {
     p.adb.heard(STATION, { ...grantOf(signed), exp: 4_000_000_000 });
     assert.deepEqual(p.adb.wanted(), [], "not read yet");
@@ -228,6 +228,45 @@ test("a lock begun anew, the key there already, asks the person once", async () 
     assert.equal(c.kept.entries.length, 1);
     assert.equal(a.lock.standing(SUB), "member");
   } finally {
+    a.runner.shutdown();
+  }
+});
+
+test("grants from before signatures are signed at one go, the person asked once, and lend once a station has them", async () => {
+  const c = cloud();
+  const a = device(c, "a");
+  await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+  const said: Record<string, unknown>[] = [];
+  const answer = (o: unknown) => {
+    let sent = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(o));
+    return { status: 200, body: { take: Effect.sync(() => { if (sent) return null; sent = true; return bytes; }) } };
+  };
+  const old = (id: string, chat: string) => ({ id, session: `s-${id}`, chat, scope: "hour", status: "granted", exp: 4_000_000_000, at: 1 });
+  const link = {
+    adb: (_h: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+      said.push(ask);
+      if (ask.op === "grants") return answer({ grants: [old("g1", "c1"), old("g2", "c2")], signs: true });
+      return answer({ request: { ...old(ask.request as string, ask.request === "g1" ? "c1" : "c2"), signed: ask.signed } });
+    }),
+  };
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const store = new Store(host, runner);
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const adb = new Adb({ ...personalStub(), personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => true });
+  try {
+    await runner.run(adb.readGrants(STATION));
+    assert.deepEqual(adb.wanted(), [], "unsigned: lends nothing yet");
+    assert.equal((adb.value() as { toConfirm: number }).toConfirm, 2);
+    const before = a.asks.n;
+    await runner.run(adb.run({ kind: "personalConfirm" }));
+    assert.equal(a.asks.n, before + 1, "asked once for both");
+    assert.equal(said.filter((x) => x.op === "sign").length, 2);
+    assert.deepEqual(adb.wanted(), [STATION]);
+    assert.equal((adb.value() as { toConfirm: number }).toConfirm, 0);
+  } finally {
+    runner.shutdown();
     a.runner.shutdown();
   }
 });

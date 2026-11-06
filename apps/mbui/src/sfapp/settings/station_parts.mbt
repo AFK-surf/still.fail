@@ -796,6 +796,8 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         })
       }
     }
+    // the grants from before signatures, one tap from lending again
+    confirm_row(c, core, view, blocks, keys)
     // the chats it is lent to now, each taken back here
     keys.push("live-heading")
     blocks.push(fn() { section_header(c, tr("android-misc.adb.chats.live"), start=S6) })
@@ -817,7 +819,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           let ago = stamp(g, "lastUsedAt", "ago")
           // (on the phone itself: granted, and not signed by a device on the person's own lock: it lends nothing on it)
           let when = if flag(phone, "supported") && field(g, "held") == Some(Json::boolean(false)) {
-            tr("android-misc.personal.unsigned")
+            tr("android-misc.personal.toConfirm.row")
           } else if ago == "" {
             tr("android-misc.adb.chats.noUsage")
           } else {

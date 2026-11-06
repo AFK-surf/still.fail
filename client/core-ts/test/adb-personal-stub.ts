@@ -3,15 +3,16 @@
 import { Effect } from "effect";
 import type { AdbEnv } from "../src/adb.ts";
 
-export const personalStub = (): Pick<AdbEnv, "personal" | "subOf" | "sub" | "pair"> => ({
+export const personalStub = (): Pick<AdbEnv, "personal" | "subOf" | "subs" | "pair"> => ({
   personal: {
     chain: () => ({ devices: new Map(), hash: null }),
     refresh: () => Effect.void,
-    view: () => ({ standing: "member", devices: [] }),
+    view: () => ({ standing: "member", sub: "s", devices: [] }),
+    standing: () => "member",
     signGrant: () => Effect.succeed({ body: {}, sig: {} }),
   } as unknown as AdbEnv["personal"],
   subOf: () => "s",
-  sub: () => "s",
+  subs: () => [{ sub: "s", email: "s@x" }],
   pair: { begin: () => Effect.succeed(null), code: () => Effect.succeed(null), cancel: () => {}, state: () => null },
 });
 

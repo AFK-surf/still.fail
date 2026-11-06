@@ -1723,9 +1723,10 @@ android-settings.vault.timeout.custom
 android-settings.vault.timeout.method
 android-settings.vault.timeout.nDays
 android-misc.personal.about
-android-misc.personal.ask
 android-misc.personal.back
 android-misc.personal.code
+android-misc.personal.codeOn
+android-misc.personal.confirm
 android-misc.personal.finding
 android-misc.personal.forget
 android-misc.personal.heading
@@ -1733,11 +1734,13 @@ android-misc.personal.join
 android-misc.personal.me
 android-misc.personal.none
 android-misc.personal.none.found
-android-misc.personal.outside
 android-misc.personal.outside.note
 android-misc.personal.remove
 android-misc.personal.replaced
 android-misc.personal.replaced.note
 android-misc.personal.restart
 android-misc.personal.restart.note
-android-misc.personal.unsigned
+android-misc.personal.toConfirm
+android-misc.personal.toConfirm.note
+android-misc.personal.toConfirm.row
+android-misc.personal.updateStation

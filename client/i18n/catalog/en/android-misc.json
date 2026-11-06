@@ -654,7 +654,6 @@
   "android-misc.personal.none": "This device creates your personal lock the first time you allow phone debugging",
   "android-misc.personal.me": "This device",
   "android-misc.personal.remove": "Remove",
-  "android-misc.personal.outside": "This device isn't on your personal lock",
   "android-misc.personal.outside.note": "Join to allow phone debugging. A phone that hasn't joined lends itself to no chat.",
   "android-misc.personal.join": "Join personal lock",
   "android-misc.personal.finding": "Looking for your other devices. Open still.fail on one of them",
@@ -665,6 +664,10 @@
   "android-misc.personal.replaced": "The cloud's personal lock differs from the one this device remembers",
   "android-misc.personal.replaced.note": "This happens only if you started a new lock yourself. If you didn't, stop here: your account may be compromised.",
   "android-misc.personal.forget": "I started it: use the new one",
-  "android-misc.personal.unsigned": "This grant has no personal key signature, so the phone won't lend itself. Take it back and have the agent ask again",
-  "android-misc.personal.ask": "Add this device to your personal lock"
+  "android-misc.personal.updateStation": "Update this station",
+  "android-misc.personal.toConfirm": "{n} chats' grants need confirming",
+  "android-misc.personal.toConfirm.note": "Grants from before the update have no personal key signature. Your phone lends itself again once they're confirmed, with one check.",
+  "android-misc.personal.toConfirm.row": "To confirm",
+  "android-misc.personal.confirm": "Confirm",
+  "android-misc.personal.codeOn": "Read the code shown on “{device}”"
 }

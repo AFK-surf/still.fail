@@ -414,22 +414,17 @@ test "共享调试 of a station a grant lends the phone to: no switch that canno
 }
 
 ///|
-test "an agent's request on a phone not on the person's own lock: joined first, and 允许 is not there" {
-  let t = phone_chat("chat-phone-outside", adb_phone_of(wireless=true))
-  assert_true(t.find("需要先把这台设备加入个人锁") is Some(_))
-  assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
-  t.tap_text("查看步骤")
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("加入个人锁") is Some(_))
-}
-
-///|
-test "a computer outside the person's own lock is sent to join it, with no 共享调试 of its own" {
-  let t = phone_chat("chat-phone-outside", adb_phone_of(supported=false))
-  assert_true(t.find("需要先把这台设备加入个人锁") is Some(_))
-  assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
-  t.tap_text("查看步骤")
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("加入个人锁") is Some(_))
-  assert_true(t.find("默认最长授权") is None)
+test "allowing on a device outside the person's own lock: the code right on the card, on a phone and on a computer alike" {
+  for phone in [adb_phone_of(wireless=true), adb_phone_of(supported=false)] {
+    let t = phone_chat("chat-phone-outside", phone)
+    assert_true(t.find("查看步骤") is None)
+    // (the button, not the title that asks 允许…)
+    let allow = t.words().filter(fn(x) { x.0 == "允许" })[0]
+    t.press_at(allow.1, allow.2)
+    t.release(allow.1, allow.2)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("看「MacBook Pro」上显示的安全码") is Some(_))
+    assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
+    assert_true(t.find("默认最长授权") is None)
+  }
 }

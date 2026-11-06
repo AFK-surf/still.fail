@@ -410,6 +410,20 @@ export class PhoneGrants {
     return null;
   }
 
+  /// What the owner's device signed for a grant live from before signatures (docs/personal-lock.md): carried from now on.
+  sign(email: string, id: string, signed: unknown, workspace: string): string | null {
+    const r = this.get(id);
+    if (r === null || this.#workspace(r) !== workspace) return "no such request";
+    if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for signs its grants";
+    if (r.status !== "granted") return `the request is ${r.status}`;
+    const s = signed as PhoneRequest["signed"] | undefined;
+    if (s == null || typeof s !== "object" || JSON.stringify(s).length > SIGNED_MAX) return "not a signature";
+    r.signed = { body: s.body, sig: s.sig };
+    // (told to their devices, not to the chat: nothing changed for it)
+    this.#settle(r, "granted", undefined, false);
+    return null;
+  }
+
   /// The owner takes a grant (or a request) of theirs back.
   revoke(email: string, id: string, workspace: string): string | null {
     const r = this.get(id);

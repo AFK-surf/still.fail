@@ -243,6 +243,18 @@ export class PersonalLock {
     });
   }
 
+  /// Grants signed at one go, the person asked once; refused on a device not on the lock.
+  signGrants(sub: string, bodies: Omit<GrantBody, "v" | "sub">[], reason: string): Effect.Effect<SignedGrant[], CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const seed = yield* this.#unseal(reason);
+      return bodies.map((body) => {
+        const whole: GrantBody = { v: 1, sub, ...body };
+        return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
+      });
+    });
+  }
+
   /// A new device let in here, face to face: the whole lock then, for it to pin.
   addDevice(sub: string, device: Device, reason: string): Effect.Effect<Entry[], CoreError> {
     return Effect.gen({ self: this }, function* () {
@@ -299,6 +311,7 @@ export class PersonalLock {
     const pinned = this.chain(sub);
     return {
       standing: this.standing(sub),
+      sub,
       devices: [...(pinned?.devices.values() ?? [])].map((d) => ({ key: d.key, label: d.label, me: d.key === this.#myKey })),
     };
   }
