@@ -1028,7 +1028,18 @@ pub fn Ctx::layer_ended(self : Ctx, id : Int) -> Unit {
 fn Ctx::layer_takes(self : Ctx, l : Layer) -> Bool {
   // (one dismissed since: none, though this frame's build has read its dismissal and let its opening go before the frame
   // publishes it inert or gone, layers_frame_end)
-  !l.inert && !self.layer_retired_now(l.id) && !self.layers_gone.contains(l.id)
+  !l.inert && !self.layer_retired_now(l.id) && !self.layers_gone.contains(l.id) &&
+  layer_owner_here(l.owner)
+}
+
+///|
+/// A portal keeps the lifetime of the old view that created it. Another modal may cover that view without
+/// closing its portals; leaving, removal or explicitly giving up input ends them at that cause.
+fn layer_owner_here(owner : @view.NodeId?) -> Bool {
+  match (view_app.val, owner) {
+    (Some(tree), Some(id)) => tree.presses_here(id)
+    _ => true
+  }
 }
 
 ///|

@@ -266,7 +266,8 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
     // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
     let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
     // (and what a page's bones are made of, wherever it was built: bones.mbt)
-    let parent_hid = (p >= 0 && hid[p]) || n.sem_hid || left || n.bones != 0L
+    let parent_hid = (p >= 0 && hid[p]) || n.sem_hid || left || n.bones != 0L ||
+      (n.portal && n.portal_id != 0 && self.layer_inert(n.portal_id))
     let parent_named = p >= 0 && named[p]
     if p >= 0 && in_modal[p] {
       in_modal[i] = true

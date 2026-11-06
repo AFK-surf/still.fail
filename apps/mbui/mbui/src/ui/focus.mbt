@@ -8,9 +8,9 @@
 // focus (as its widget says: a checkbox only takes Space). The focus shows (a ring) only once it came by the keyboard,
 // as a browser's :focus-visible; a press lets it go from anything but a field, unless what was pressed takes it.
 //
-// The keys are dealt with as the frame starts, from what the last frame built, before the view builds this one: what
-// they did (a focus moved, a press) is there for the widgets as they are built, and a key used so is taken (the
-// view's Ctx::key_pressed does not see it, as a field's keys).
+// A focused widget with an on_press callback takes its accepted Enter/Space at the input's own moment. The remaining
+// old-view keys are dealt with as the frame starts, from what the last frame built: what they did is there for the
+// widgets as they are built, and a key used so is taken (Ctx::key_pressed does not see it, as a field's keys).
 
 ///|
 /// How a roving group's items lie: the arrows that move along it.

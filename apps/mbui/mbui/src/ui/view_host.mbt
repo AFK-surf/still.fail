@@ -3928,6 +3928,13 @@ let view_modals_version : Ref[Int] = Ref(0)
 /// take no press): what an old view that may take input no more holds let go of then, at that cause (view_captures_off).
 fn view_modals_told() -> Unit {
   view_modals_version.val += 1
+  // Portals drawn outside an old island still belong to it. Retire their openings at the owner's change,
+  // returning focus and cancelling a held press through the same path as a layer ended by its own action.
+  let c = g()
+  let gone = c.last_layers.filter(fn(l) { !layer_owner_here(l.owner) }).rev()
+  if !gone.is_empty() {
+    c.layers_dismissed(gone.map(fn(l) { (l.id, Escape) }), tell=false)
+  }
   view_captures_off(view_moment(), fn(owner) { !old_owner_open(owner) }, back_gone=fn(owner) { !held_back_open(owner) })
   // (whether the app takes back: what of the tree takes it may have changed)
   g().back_told_host()
@@ -4965,6 +4972,7 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
     // (of a layer the old frame put over all of it: where none over it in the window's stack of layers is modal, the
     // tree's or the old frame's own; Ctx::layer_stack_at)
     -2 => {
+      if c.layer_inert(c.layer_of(node)) { return false }
       let at = c.root_layer_stack(node)
       return at >= tree.modal_stack() && at >= c.old_modal_stack()
     }
@@ -5307,11 +5315,17 @@ fn view_focus_kept_under(t : @view.Tree, island : @view.NodeId, id : Int) -> Boo
 
 ///|
 /// The node of the window's tree what Ctx's focus names `id` is in: the node itself, or the old view a stop of an old
-/// view's (as the last frame built it) is in; none where it is neither (a layer of the old frame's own).
+/// view's (as the last frame built it) is in. A portal drawn outside the old view still belongs to that view for
+/// focus lifetimes; a layer made by the old frame alone has no tree owner.
 fn focus_node_of(id : Int) -> @view.NodeId? {
   match tree_said_ids.get(id) {
     Some(n) => Some(n)
-    None => g().last_focusables.iter().find_first(fn(f) { f.id == id }).bind(fn(f) { f.island })
+    None => g().last_focusables.iter().find_first(fn(f) { f.id == id }).bind(fn(f) {
+      match f.island {
+        Some(n) => Some(n)
+        None => g().last_layer(f.layer).bind(fn(l) { l.owner })
+      }
+    })
   }
 }
 
