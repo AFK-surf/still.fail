@@ -196,15 +196,15 @@ test "sideways: a finger landing on one stops the list flinging by under it, as 
 
 ///|
 test "a node drawn as its top only: its bottom cut, its taps whole" {
-  let cut = Ref::new(-1.0)
+  let cut = @signals.signal(-1.0)
   let t = @ui.Tester::new(
     fn(c) {
       let b = c.box(w=Px(100.0), h=Px(100.0), fn() {
         c.box(w=Px(100.0), h=Px(30.0), fn() {  }) |> ignore
         c.box(w=Px(100.0), h=Px(30.0), bg=0x55667788L, fn() {  }) |> ignore
       })
-      if cut.val >= 0.0 {
-        c.cut_to_top(b, cut.val)
+      if cut.get() >= 0.0 {
+        c.cut_to_top(b, cut.get())
       }
     },
     w=300.0,
@@ -212,7 +212,7 @@ test "a node drawn as its top only: its bottom cut, its taps whole" {
   )
   t.frame()
   assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x55667788L }).length(), 1)
-  cut.val = 20.0
+  cut.set(20.0)
   t.frame()
   assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x55667788L }).length(), 0)
 }

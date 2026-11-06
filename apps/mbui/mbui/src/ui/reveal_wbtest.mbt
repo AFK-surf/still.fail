@@ -32,25 +32,25 @@ fn ground_drawn(v : Int) -> Bool {
 
 ///|
 /// A window drawn in the theme `dark` says, with a box of its ground.
-fn themed_page(dark : Ref[Bool]) -> (Ctx) -> Unit {
+fn themed_page(dark : @signals.Signal[Bool]) -> (Ctx) -> Unit {
   fn(c) {
-    c.with_theme(if dark.val { Theme::dark() } else { Theme::light() }, fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), bg=if dark.val { 0x111111FFL } else { 0xEEEEEEFFL }, fn() {  }) |> ignore
+    c.with_theme(if dark.get() { Theme::dark() } else { Theme::light() }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=if dark.get() { 0x111111FFL } else { 0xEEEEEEFFL }, fn() {  }) |> ignore
     })
   }
 }
 
 ///|
 test "a change of theme spreads from where it was asked, from the frame first drawn in it" {
-  let dark = Ref(false)
+  let dark = @signals.signal(false)
   let t = Tester::new(themed_page(dark), w=400.0, h=300.0)
   t.frame()
-  g().reveal_from(100.0, 50.0, dark=fn() { dark.val })
+  g().reveal_from(100.0, 50.0, dark=fn() { dark.get() })
   // (the theme the app's settings take a frame later)
   t.frame()
   assert_eq(reveal.start, -1.0)
   assert_eq(circle_radius(), -1.0)
-  dark.val = true
+  dark.set(true)
   t.frame()
   assert_true(reveal.start >= 0.0)
   let first = circle_radius()
@@ -79,10 +79,10 @@ test "a change of theme spreads from where it was asked, from the frame first dr
 
 ///|
 test "while it spreads, what is outside the circle yet is pressed as it is laid out" {
-  let dark = Ref(false)
+  let dark = @signals.signal(false)
   let presses = Ref(0)
   let t = Tester::new(fn(c) {
-    c.with_theme(if dark.val { Theme::dark() } else { Theme::light() }, fn() {
+    c.with_theme(if dark.get() { Theme::dark() } else { Theme::light() }, fn() {
       let b = c.id("far")
       c.box(w=Fill(1.0), h=Fill(1.0), bg=0xEEEEEEFFL, fn() {
         c.box(id=b, w=Px(60.0), h=Px(40.0), tx=300.0, ty=240.0, bg=0x336699FFL, fn() {  }) |> ignore
@@ -94,9 +94,9 @@ test "while it spreads, what is outside the circle yet is pressed as it is laid 
     })
   }, w=400.0, h=300.0)
   t.frame()
-  g().reveal_from(10.0, 10.0, dark=fn() { dark.val })
+  g().reveal_from(10.0, 10.0, dark=fn() { dark.get() })
   t.frame()
-  dark.val = true
+  dark.set(true)
   t.frame()
   assert_true(circle_radius() > 0.0 && circle_radius() < 100.0)
   t.tap(330.0, 260.0)
@@ -105,10 +105,10 @@ test "while it spreads, what is outside the circle yet is pressed as it is laid 
 
 ///|
 test "a reveal asked with no change of theme is let go" {
-  let dark = Ref(false)
+  let dark = @signals.signal(false)
   let t = Tester::new(themed_page(dark), w=400.0, h=300.0)
   t.frame()
-  g().reveal_from(100.0, 50.0, dark=fn() { dark.val })
+  g().reveal_from(100.0, 50.0, dark=fn() { dark.get() })
   assert_true(reveal.on)
   t.run_for(reveal_wait_most + 100.0)
   t.frame()
@@ -118,11 +118,11 @@ test "a reveal asked with no change of theme is let go" {
 
 ///|
 test "at a large window's size too, the old window is drawn again under the circle from the frame it sets out" {
-  let dark = Ref(false)
+  let dark = @signals.signal(false)
   let t = Tester::new(themed_page(dark), w=1512.0, h=982.0)
   t.frame()
-  g().reveal_from(700.0, 300.0, dark=fn() { dark.val })
-  dark.val = true
+  g().reveal_from(700.0, 300.0, dark=fn() { dark.get() })
+  dark.set(true)
   t.frame()
   assert_true(reveal.start >= 0.0)
   assert_true(ground_drawn(0xEE) && ground_drawn(0x11))

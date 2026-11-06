@@ -366,35 +366,35 @@ test "a keyed node on its way, moved by what holds it, goes on with its own move
 
 ///|
 test "a keyed node driven to its place, moved again on the way, goes on from where it is drawn" {
-  let above = Ref::new(40.0)
-  let drive = Ref::new(-1.0)
+  let above = @signals.signal(40.0)
+  let drive = @signals.signal(-1.0)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
-      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      c.box(w=Px(50.0), h=Px(above.get()), fn() {  }) |> ignore
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
-      @motion.layout(c, i, "driven", drive=drive.val)
+      @motion.layout(c, i, "driven", drive=drive.get())
     })
     |> ignore
   })
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
   // put up by 40: drawn where it was, half way there as the app's progress goes
-  above.val = 0.0
-  drive.val = 0.0
+  above.set(0.0)
+  drive.set(0.0)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
-  drive.val = 0.5
+  drive.set(0.5)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
   // its place moves down 10 on the way (what is over it grown back a little): drawn where it was, not put by the move
   // as if it began there
-  above.val = 10.0
+  above.set(10.0)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
   // the rest of its way to its new place by what is left of the progress
-  drive.val = 0.75
+  drive.set(0.75)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 15.0)
-  drive.val = 1.0
+  drive.set(1.0)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 10.0)
 }
@@ -471,11 +471,11 @@ fn trans_ms(tr : @motion.Trans) -> Double {
 
 ///|
 test "a list's row gone leaves by a copy; the rest close over it, late" {
-  let keys = Ref::new(["a", "b", "c", "d"])
+  let keys = @signals.signal(["a", "b", "c", "d"])
   let ids : Map[String, Int] = {}
   let t = @ui.Tester::new(
     fn(c) {
-      let ks = keys.val
+      let ks = keys.get()
       @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
       c.list("rows", ks.length(), 40.0, fn(i) {
         let k = ks[i]
@@ -498,7 +498,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
     h=400.0,
   )
   let before = t.instances()
-  keys.val = ["a", "c", "d"]
+  keys.set(["a", "c", "d"])
   t.frame()
   // the copy of b drawn as the rest: more drawn than the three rows
   assert_true(t.instances() > before - 1, msg="\{t.instances()} \{before}")
@@ -515,7 +515,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   assert_eq(t.drawn_of("c").unwrap().1, 40.0)
   assert_eq(@motion.layout_rest("row/d"), -1.0)
   // a row new to the list comes in
-  keys.val = ["e", "a", "c", "d"]
+  keys.set(["e", "a", "c", "d"])
   t.frame()
   // (their motions start in that frame) to the end of e's entrance and of a's move
   let e_end = @motion.layout_rest("row/e")
@@ -524,7 +524,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   assert_eq(t.drawn_of("a").unwrap().1, 40.0)
   // one going ahead of the others goes from where it was and comes in where it is, never across them: drawn at its
   // place from the first frame (coming in there), a copy of it leaving where it was
-  keys.val = ["d", "e", "a", "c"]
+  keys.set(["d", "e", "a", "c"])
   t.frame()
   assert_eq(@motion.lifted(t.ctx(), t.ctx().id("rows"), "row/d"), -1.0)
   // (its copy leaving and its coming in, by its key)
@@ -591,10 +591,10 @@ test "a list held at its end, a row gone: what is over it comes down over its pl
 
 ///|
 test "a list's rows alike at its start and its end are none of its change: only those between come, go and go ahead" {
-  let keys = Ref::new(["p", "q", "x", "y", "r", "s"])
+  let keys = @signals.signal(["p", "q", "x", "y", "r", "s"])
   let t = @ui.Tester::new(
     fn(c) {
-      let ks = keys.val
+      let ks = keys.get()
       @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
       c.list("rows", ks.length(), 40.0, fn(i) {
         let k = ks[i]
@@ -617,7 +617,7 @@ test "a list's rows alike at its start and its end are none of its change: only 
   let list = t.ctx().id("rows")
   // y goes ahead of x: it alone comes in anew where it is (at its place at once, never across x), x alone moves; none
   // before them nor after
-  keys.val = ["p", "q", "y", "x", "r", "s"]
+  keys.set(["p", "q", "y", "x", "r", "s"])
   t.frame()
   assert_true(@motion.layout_rest("row/x") > t.time())
   for k in ["p", "q", "r", "s"] {
@@ -632,7 +632,7 @@ test "a list's rows alike at its start and its end are none of its change: only 
   t.run_for((if x_end > y_end { x_end } else { y_end }) - t.time())
   t.assert_idle()
   // between them x goes and n comes: n comes in, x's copy leaves, the rest stay where they are
-  keys.val = ["p", "q", "y", "n", "r", "s"]
+  keys.set(["p", "q", "y", "n", "r", "s"])
   t.frame()
   assert_true(@motion.layout_rest("row/n") > t.time())
   assert_true(@motion.layout_rest("row/x") > t.time())
@@ -673,14 +673,14 @@ test "an action can take a measured node from where it was drawn with its parent
 
 ///|
 test "a node flown from a rect is drawn there first, then at its place" {
-  let p = Ref::new(0.0)
+  let p = @signals.signal(0.0)
   let mut id = 0
   let t = @ui.Tester::new(fn(c) {
     id = c.id("flown")
     c.column(fn() {
       c.box(h=Px(100.0), fn() {  }) |> ignore
       let i = c.box(w=Px(30.0), h=Px(10.0), id~, bg=0x00FF00FFL, fn() {  })
-      @motion.fly(c, i, 5.0, 300.0, px=p.val, py=p.val)
+      @motion.fly(c, i, 5.0, 300.0, px=p.get(), py=p.get())
     })
     |> ignore
   })
@@ -689,11 +689,11 @@ test "a node flown from a rect is drawn there first, then at its place" {
   // tapped where it is laid out, not where it flies
   let (lx, ly, _, _) = t.ctx().rect_of(id).unwrap()
   assert_eq((lx, ly), (0.0, 100.0))
-  p.val = 0.5
+  p.set(0.5)
   t.frame()
   let (x2, y2) = drawn_xy(t, 0x00FF00FFL)
   assert_eq((x2, y2), (2.5, 200.0))
-  p.val = 1.0
+  p.set(1.0)
   t.frame()
   let (x3, y3) = drawn_xy(t, 0x00FF00FFL)
   assert_eq((x3, y3), (0.0, 100.0))
@@ -1009,15 +1009,15 @@ let just_after_ms : Double = 50.0
 
 ///|
 test "a list's row moved by something else just after its rows changed is in its new place at once" {
-  let keys = Ref::new(["a", "b", "c"])
-  let tall_a = Ref::new(false)
+  let keys = @signals.signal(["a", "b", "c"])
+  let tall_a = @signals.signal(false)
   let t = @ui.Tester::new(
     fn(c) {
-      let ks = keys.val
+      let ks = keys.get()
       @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
       c.list("rows", ks.length(), 40.0, fn(i) {
         let k = ks[i]
-        let h = if k == "a" && tall_a.val { 80.0 } else { 40.0 }
+        let h = if k == "a" && tall_a.get() { 80.0 } else { 40.0 }
         let n = c.box(w=Fill(1.0), h=Px(h), bg=if k == "c" { 0xFF0000FFL } else { 0x202020FFL }, fn() {
           c.text(k) |> ignore
         })
@@ -1030,16 +1030,16 @@ test "a list's row moved by something else just after its rows changed is in its
   )
   assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
   // b goes: c closes over it, on its way for the list's change
-  keys.val = ["a", "c"]
+  keys.set(["a", "c"])
   t.draw()
   t.run_for(@motion.layout_rest("row/c") - t.time())
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
   // the rows change again, and just after a row over c grows (its words came, not the list's change): c is pushed
   // down by those 40 at once
-  keys.val = ["a", "c", "d"]
+  keys.set(["a", "c", "d"])
   t.draw()
   t.run_for(just_after_ms)
-  tall_a.val = true
+  tall_a.set(true)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
   assert_eq(@motion.layout_rest("row/c"), -1.0)

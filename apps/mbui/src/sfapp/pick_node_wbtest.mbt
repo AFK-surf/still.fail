@@ -306,11 +306,15 @@ test "pick, long, 大屏 keyboard and mouse: words typed in its search, the lang
   t.type_text("第1")
   let before = t.get(TextField, label="搜索")
   lang.val = "en"
+  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
+  // signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let after = t.focused()
   let words = t.field_words()
   lang.val = ""
   @sf.set_language(None)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let back = t.focused().map(fn(s) { s.label })
   assert_eq(

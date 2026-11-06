@@ -2325,9 +2325,10 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       n.props[prop] = stop
     }
     Roomed(of, f) => {
+      // (what layout reads, or what it reads and is drawn by as well (a field's words measured: Both))
       match phase {
-        Layout => ()
-        _ => abort("view: Roomed is for what layout reads alone; what is drawn or placed by layout is Painted")
+        Layout | Both => ()
+        _ => abort("view: Roomed is for what layout reads; what is drawn or placed by layout alone is Painted")
       }
       // (by what holds it: worked out as that is laid out, before it is)
       let mut i = n.parent
@@ -2339,8 +2340,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       }
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
-      // (what else it reads, followed: changed, what holds it laid out again)
-      let watch = @signals.watch(fn() { tree.layout_marked_at(at) })
+      // (what else it reads, followed: changed, what holds it laid out again (and it drawn again, Both))
+      let watch = @signals.watch(fn() { marked() })
       let run = fn(w : Double, h : Double) {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
@@ -2350,6 +2351,10 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         if last.val != Some(v) {
           last.val = Some(v)
           apply(v)
+          // (drawn by it as well: drawn again)
+          if phase is Both {
+            tree.look_marked_at(at)
+          }
           // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
           let mut j = at
           while j >= 0 && j != of.at {
@@ -4189,7 +4194,9 @@ pub fn View::left_out(self : View) -> Bool {
 /// that is as it changes: `size` given it and the width it is offered (None: none offered, as wide as it comes to),
 /// answering how wide and tall; offered exactly a width, as wide as that. `size` reads nothing that changes but what
 /// `content` gives it (run with nothing followed): measured again only as `content` comes out otherwise, as the room
-/// offered changes, or as all words are measured anew (Tree::words_again). Laid out by what holds it as words are.
+/// offered changes, or as all words are measured anew (Tree::words_again). Laid out by what holds it as words are. What
+/// it hosts drawn again as `content` changes as well: what is measured is what is drawn (a field's words and their
+/// colours), changed where its size is not.
 pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?) -> (Double, Double)) -> View {
   guard self.live() is Some(n) else { return self }
   let tree = self.tree
@@ -4212,7 +4219,7 @@ pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?
       None => (0.0, 0.0)
     }
   })
-  self.bind(Measured, content, Layout, fn(v) { k.val = Some(v) })
+  self.bind(Measured, content, Both, fn(v) { k.val = Some(v) })
   self
 }
 

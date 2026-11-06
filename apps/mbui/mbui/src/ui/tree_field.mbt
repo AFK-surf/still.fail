@@ -224,7 +224,7 @@ pub fn field(
     f
     // (laid out as what it shows, a secret's dots, what its look makes of its words, worked out here anew as they or what
     // the look reads change: the one working out its layout and its drawing take (EditorState::look_of's, kept);
-    // where only its look's colours change, a frame for them all the same)
+    // where only its look's colours change, drawn again all the same: View::measured)
     .measured(
       {
         let laid_of = fn(lines : Int) {

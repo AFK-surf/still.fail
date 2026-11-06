@@ -117,8 +117,6 @@ pub fn rest_of(name : String) -> Double {
 /// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
 /// frame after, a host's event) is drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
-  // (what the test changed before it shows at its first frame: a step of the test's, frame_watch.mbt)
-  test_stepped()
   // (on the display's frame where it falls on one, to the bit: the same moment however it was summed)
   let end = self.on_grid(self.fake.time + ms)
   // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)

@@ -167,6 +167,9 @@ test "大屏 关于 made once over 更新日志, the language changed: its back 
   let back_node = tree_node_of(back)
   assert_true(page is Some(_) && back_node is Some(_), msg="its back the tree's: \{tree_words_drawn()}")
   lang.val = "en"
+  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
+  // signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let back_en = @sf.t("web-pages.settings.nav.changelog")
   let title_en = @sf.t("web-pages.settings.nav.about")
@@ -432,12 +435,16 @@ test "大屏 一台 station 的记忆 made once, the language changed and the st
   let title = tree_node_of("Willow")
   assert_true(section is Some(_) && row is Some(_) && title is Some(_), msg="the tree's own: \{tree_words_drawn()}")
   lang.val = "en"
+  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
+  // signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let global_en = @sf.t("web-main.memory.global")
   assert_true(global_en != global, msg="in English: \{global_en}")
   assert_true(tree_node_of(global_en) == section && tree_node_of("发布流程") == row, msg="the same nodes")
   lang.val = ""
   @sf.set_language(None)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   @settings.fixture_call("workspace.renameStation", { "station": Json::string("st1"), "name": Json::string("工作室") }) |> ignore
   t.run_for(@ui.move_most_ms)

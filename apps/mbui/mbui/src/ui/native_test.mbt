@@ -594,8 +594,8 @@ test "native views are stacked on the host as they are painted: the one painted 
   let chat : Ref[@ui.NativeView?] = { val: None }
   let file : Ref[@ui.NativeView?] = { val: None }
   // the file's page opened first, the chat's visualization after it: opened in the other order than they are painted
-  let file_shown : Ref[Bool] = { val: false }
-  let file_under : Ref[Bool] = { val: false }
+  let file_shown = @signals.signal(false)
+  let file_under = @signals.signal(false)
   let t = @ui.Tester::new(
     fn(c) {
       let f = once(file, fn() { @ui.NativeView::page("<p>file</p>") })
@@ -603,11 +603,11 @@ test "native views are stacked on the host as they are painted: the one painted 
       // (painted in the order built: the later one is what shows where both are)
       let page = fn() { c.native(f, h=Px(400.0)) |> ignore }
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        if file_shown.val && file_under.val {
+        if file_shown.get() && file_under.get() {
           page()
         }
         c.native(v, h=Px(200.0)) |> ignore
-        if file_shown.val && !file_under.val {
+        if file_shown.get() && !file_under.get() {
           page()
         }
       })
@@ -622,14 +622,14 @@ test "native views are stacked on the host as they are painted: the one painted 
   // one shown: over nothing, nothing told
   assert_eq(raises(), [])
   // the file's page over the chat: the chat's view raised, then the page's over it
-  file_shown.val = true
+  file_shown.set(true)
   t.frame()
   assert_eq(raises(), ["raise \{v}", "raise \{f}"])
   // the same order: nothing told again
   t.frame()
   assert_eq(raises().length(), 2)
   // painted the other way round: told again
-  file_under.val = true
+  file_under.set(true)
   t.frame()
   let r = raises()
   assert_eq([r[2], r[3]], ["raise \{f}", "raise \{v}"])

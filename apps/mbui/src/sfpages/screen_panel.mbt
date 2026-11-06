@@ -403,7 +403,7 @@ fn net_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// Whether 全屏 is on: the screen alone on a phone (ScreenUi's), the window filling the screen with keyboard and mouse.
 fn full_now(u : ScreenUi) -> Bool {
-  u.full || @ui.full_screen()
+  u.full.get() || @ui.full_screen()
 }
 
 ///|
@@ -411,7 +411,7 @@ fn full_now(u : ScreenUi) -> Bool {
 /// keyboard and mouse the window made to fill the screen, the bar kept (as the web's page in its browser's full screen).
 fn full_asked(c : @ui.Ctx, u : ScreenUi) -> Unit {
   if @sf.soft_keyboard() {
-    u.full = !u.full
+    u.full.set(!u.full.get())
   } else {
     let on = !@ui.full_screen()
     c.set_full_screen(on)

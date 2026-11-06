@@ -78,14 +78,14 @@ test "Enter in an empty field hands it on too: whether there is anything to send
 }
 
 ///|
-fn chat_view(items : Array[String]) -> (@ui.Ctx) -> Unit {
+fn chat_view(items : @signals.Signal[Array[String]]) -> (@ui.Ctx) -> Unit {
   fn(c) {
     c.list(
       "msgs",
-      items.length(),
+      items.get().length(),
       40.0,
       fn(i) {
-        c.box(pad=6.0, fn() { c.text(items[i], size=14.0) |> ignore }) |> ignore
+        c.box(pad=6.0, fn() { c.text(items.get()[i], size=14.0) |> ignore }) |> ignore
       },
       stick_end=true,
     )
@@ -95,13 +95,13 @@ fn chat_view(items : Array[String]) -> (@ui.Ctx) -> Unit {
 
 ///|
 test "a list pinned to its end stays there as rows are measured and added" {
-  let items = Array::makei(500, fn(i) {
+  let items = @signals.signal(Array::makei(500, fn(i) {
     if i % 3 == 0 {
       "message \{i} that is quite a bit longer so that it wraps onto several lines in a narrow window"
     } else {
       "message \{i}"
     }
-  })
+  }))
   let t = @ui.Tester::new(chat_view(items), w=240.0, h=400.0)
   t.draw()
   let rows = t.rows()
@@ -109,7 +109,9 @@ test "a list pinned to its end stays there as rows are measured and added" {
   assert_eq(last, 499)
   assert_eq((y + h).round(), 400.0)
   // a new message while at the end: still at the end
-  items.push("new message")
+  let more = items.get().copy()
+  more.push("new message")
+  items.set(more)
   t.frame()
   t.draw()
   let rows2 = t.rows()
@@ -120,7 +122,7 @@ test "a list pinned to its end stays there as rows are measured and added" {
 
 ///|
 test "scrolling up keeps the row under the finger in place" {
-  let items = Array::makei(300, fn(i) { "row \{i}" })
+  let items = @signals.signal(Array::makei(300, fn(i) { "row \{i}" }))
   let t = @ui.Tester::new(chat_view(items), w=240.0, h=400.0)
   t.draw()
   t.wheel(100.0, 200.0, -300.0)

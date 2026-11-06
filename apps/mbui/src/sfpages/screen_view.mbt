@@ -22,7 +22,7 @@ priv struct ScreenUi {
   zoom : @kit.Zoom
   pad : PadPointer
   held : HeldKeys
-  mut full : Bool
+  full : @signals.Signal[Bool]
   /// the window made to fill the screen by its 全屏 (keyboard and mouse's), put back as it closes
   mut fulled : Bool
   /// shown as a tab beside its chat, whose tab closes it: no close of its own (the same thing twice)
@@ -105,7 +105,7 @@ fn screen_ui(key : String) -> ScreenUi {
         zoom: screen_zoom(),
         pad: { x: 0.5, y: 0.5, moves: 0 },
         held: { mods: 0 },
-        full: false,
+        full: @signals.signal(false),
         fulled: false,
         in_tab: false,
         own_bar: None,
@@ -242,19 +242,19 @@ pub fn screen_page(
   }
   // over (ended, gone…): out of 全屏, the bar's × and what happened in sight
   let over = !s.open_now()
-  if over && u.full {
-    u.full = false
+  if over && u.full.get() {
+    u.full.set(false)
   }
-  if u.full != u.sideways_told {
-    let on = u.full
+  if u.full.get() != u.sideways_told {
+    let on = u.full.get()
     c.after_build("screen-sideways/" + key, fn() {
       u.sideways_told = on
       @hostapi.set_sideways(on)
     })
   }
   // back in 全屏 leaves it first
-  if u.full {
-    c.on_back(fn() { u.full = false })
+  if u.full.get() {
+    c.on_back(fn() { u.full.set(false) })
   }
   screen_count(c, s, u)
   screen_copies(c, s, u)
@@ -276,22 +276,22 @@ pub fn screen_page(
   // (while it is the page shown, or the window it has of its own: its part kept or built again)
   let lone = on_close is Some(_) && !in_tab
   let native = !in_tab &&
-    @sf.native_over_up(if u.full { "" } else { title }, alive=fn() { lone || @sfbase.app.nav.top() == Screen(at) }) &&
-    !u.full
+    @sf.native_over_up(if u.full.get() { "" } else { title }, alive=fn() { lone || @sfbase.app.nav.top() == Screen(at) }) &&
+    !u.full.get()
   if native {
     screen_native(c, s, u, typing, catcher, close)
   }
   // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
   // (full, edge to edge: no room kept for what its frame keeps it from)
   let room = fn(h : Double) {
-    if h > 0.0 && (!u.full || native) {
+    if h > 0.0 && (!u.full.get() || native) {
       c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
     }
   }
-  c.box(style=if u.full { screen_whole } else { screen_page_box }, fn() {
+  c.box(style=if u.full.get() { screen_whole } else { screen_page_box }, fn() {
   room(frame.top)
   let within = if native { screen_within.then(@ui.style(pr=@sf.room_of(@sf.native_clear()))) } else { screen_within }
-  c.box(style=within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
+  c.box(style=within, fn() { c.box(style=if u.full.get() { screen_page_full } else { screen_page_box }, fn() {
     if native {
       c.box(style=screen_fill, fn() {
         screen_content(c, s, u, key)
@@ -302,7 +302,7 @@ pub fn screen_page(
           c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore }) |> ignore
         }
       }) |> ignore
-    } else if u.full {
+    } else if u.full.get() {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
         if s.can_take_over() {
@@ -438,7 +438,7 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
     @sf.native_over_act("screen-stats", @sf.t("web-pages.screen.stats"), "chart", fn() {
       net_panel_open(s, u, screen_native_anchor(c))
     }, active=screen_native_panel_on(u, "stats"))
-    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full = true })
+    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full.set(true) })
     let line = text(s.state, "line")
     if line != "" {
       @sf.native_over_act("screen-people", line, "users", fn() {
@@ -854,9 +854,9 @@ fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// 全屏 (on) or not.
 fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
-  let label = @sf.t(if u.full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-  if round_button(c, "screen-full", "landscape", label, on=u.full) {
-    u.full = !u.full
+  let label = @sf.t(if u.full.get() { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
+  if round_button(c, "screen-full", "landscape", label, on=u.full.get()) {
+    u.full.set(!u.full.get())
   }
 }
 

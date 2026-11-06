@@ -63,9 +63,9 @@ test "presence: shown comes in; not shown, built until its exit has played, then
 ///|
 test "a button: pressed by a tap, by Enter, by Activate; disabled, by none of them" {
   let n = Ref(0)
-  let disabled = Ref(false)
+  let disabled = @signals.signal(false)
   let t = @ui.Tester::new(fn(c) {
-    if button(c, "Go", disabled=disabled.val).clicked {
+    if button(c, "Go", disabled=disabled.get()).clicked {
       n.val = n.val + 1
     }
   })
@@ -74,7 +74,7 @@ test "a button: pressed by a tap, by Enter, by Activate; disabled, by none of th
   t.press("Enter")
   t.act(Button, Activate, label="Go")
   assert_eq(n.val, 3)
-  disabled.val = true
+  disabled.set(true)
   t.frame()
   assert_eq(t.get(Button, label="Go").disabled, true)
   t.click(Button, label="Go")

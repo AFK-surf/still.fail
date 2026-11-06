@@ -368,10 +368,11 @@ pub async fn stagger(
 // ── presence ────────────────────────────────────────────────────────────
 
 ///|
-/// One showing of what `animate_presence` shows: its scope, and whether it has gone.
+/// One showing of what `animate_presence` shows: its scope, and whether it has gone (a signal: what builds it is
+/// built again as its exit ends, as by any change it reads)
 priv struct Showing {
   scope : @effect.Scope
-  mut gone : Bool
+  gone : @signals.Signal[Bool]
 }
 
 ///|
@@ -419,7 +420,7 @@ pub fn animate_presence(
       let s = rt.scope()
       s.add_finalizer(exit)
       ignore(s.fork(enter, name="enter " + key))
-      p.cur = Some({ scope: s, gone: false })
+      p.cur = Some({ scope: s, gone: @signals.signal(false) })
     }
     (false, Some(cur)) => {
       p.cur = None
@@ -427,7 +428,7 @@ pub fn animate_presence(
       ignore(
         rt.fork(name="exit " + key, async fn() {
           cur.scope.close()
-          cur.gone = true
+          cur.gone.set(true)
         }),
       )
     }
@@ -435,7 +436,7 @@ pub fn animate_presence(
   }
   let mut i = 0
   while i < p.leaving.length() {
-    if p.leaving[i].gone {
+    if p.leaving[i].gone.get() {
       ignore(p.leaving.remove(i))
     } else {
       i += 1
