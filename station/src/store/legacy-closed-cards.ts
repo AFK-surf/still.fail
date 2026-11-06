@@ -72,9 +72,23 @@ CREATE TRIGGER legacy_closed_delete AFTER DELETE ON closed_cards BEGIN
   ${add(candidates("OLD"))}
 END;`;
 
+const CLOSED_DROP_THREAD = `CREATE TRIGGER legacy_closed_drop_thread AFTER DELETE ON threads
+  WHEN NOT EXISTS (SELECT 1 FROM closed_cards WHERE thread=OLD.id LIMIT 1) BEGIN
+    DELETE FROM legacy_closed_scopes WHERE thread=OLD.id;
+  END;`;
+
+// Stores that already prepared this lookup need the cleanup trigger too. A native index can coexist with metadata
+// from a different version; leave that metadata alone if it is not a version this station understands.
+function needsClosedCleanup(db: DatabaseSync): boolean {
+  if (!exists(db, "table", "legacy_closed_meta") || exists(db, "trigger", "legacy_closed_drop_thread") ||
+      !exists(db, "table", "threads") || !exists(db, "table", "legacy_closed_scopes")) return false;
+  const row = db.prepare("SELECT version FROM legacy_closed_meta WHERE id=1").get() as { version: number } | undefined;
+  return row?.version === VERSION;
+}
+
 /// Keep the native index on small or already upgraded stores. Recheck both choices under the writer lock.
 export function installClosedCardsIndex(db: DatabaseSync): void {
-  if (hasNativeClosedCards(db) || hasLegacyClosedCards(db)) return;
+  if ((hasNativeClosedCards(db) || hasLegacyClosedCards(db)) && !needsClosedCleanup(db)) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!hasNativeClosedCards(db) && !hasLegacyClosedCards(db)) {
@@ -82,6 +96,7 @@ export function installClosedCardsIndex(db: DatabaseSync): void {
         db.exec("CREATE INDEX IF NOT EXISTS closed_cards_thread_at ON closed_cards (thread, at)");
       else db.exec(LEGACY_CLOSED_SCHEMA);
     }
+    if (needsClosedCleanup(db)) db.exec(CLOSED_DROP_THREAD);
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
@@ -110,8 +125,15 @@ export function closedCardsStep(db: DatabaseSync, thread: number, limit = BATCH)
     // An older connection may change the schema between the installation and this writer lock.
     if (hasNativeClosedCards(db)) { db.exec("COMMIT"); return { done: true, visited: 0 }; }
     if (!hasLegacyClosedCards(db)) { db.exec("COMMIT"); return { done: false, visited: 0 }; }
-    if (!scope(db, thread)) db.prepare(`INSERT INTO legacy_closed_scopes(thread,last_n,end_n,complete)
-      VALUES(?1,NULL,(SELECT n FROM closed_cards WHERE thread=?1 ORDER BY n DESC LIMIT 1),0)`).run(thread);
+    if (!scope(db, thread)) {
+      // A queued request may finish after the chat is deleted; do not recreate its empty scope.
+      if (exists(db, "table", "threads") && db.prepare("SELECT 1 FROM threads WHERE id=?").get(thread) === undefined &&
+          db.prepare("SELECT 1 FROM closed_cards WHERE thread=? LIMIT 1").get(thread) === undefined) {
+        db.exec("COMMIT"); return { done: true, visited: 0 };
+      }
+      db.prepare(`INSERT INTO legacy_closed_scopes(thread,last_n,end_n,complete)
+        VALUES(?1,NULL,(SELECT n FROM closed_cards WHERE thread=?1 ORDER BY n DESC LIMIT 1),0)`).run(thread);
+    }
     const s = scope(db, thread)!;
     if (s.complete === 1) { db.exec("COMMIT"); return { done: true, visited: 0 }; }
     const rows = s.end_n === null ? [] : (s.last_n === null
