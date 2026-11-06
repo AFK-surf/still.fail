@@ -422,7 +422,7 @@ pub fn emit_ended(Emits, String) -> Double
 
 pub fn emit_flight(@ui.Ctx, String, Emits, Array[String]) -> (Double, Double, Double, Double)?
 
-pub fn emit_flight_by(String, Emits, Array[String], (String) -> (Double, Double, Double, Double)?) -> (Double, Double, Double, Double)?
+pub fn emit_flight_by(String, Emits, Array[String], (String) -> (Double, Double, Double, Double)?, at? : Double) -> (Double, Double, Double, Double)?
 
 pub fn emit_folded(Emits, String) -> Bool
 

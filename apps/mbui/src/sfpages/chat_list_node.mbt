@@ -1330,13 +1330,12 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
   layer.show(fn() { flying() is Some(_) }, fn(f) {
     // (where it is as this frame draws it, from the layer's corner: its 18 face's top left, the ring round it)
     let at = fn(laid : @view.Laid) {
-      laid.at() |> ignore
       let agents = match view() {
         Some(v) => v.agents.map(fn(a) { a.key })
         None => []
       }
       // The flight's clock and both endpoints belong to this frame: where they are as it is painted.
-      @sfbase.emit_flight_by(rk, em, agents, fn(k) { @sfbase.emit_place_drawn(laid, k) })
+      @sfbase.emit_flight_by(rk, em, agents, fn(k) { @sfbase.emit_place_drawn(laid, k) }, at=laid.at())
     }
     let a = fn() { flying() }
     f

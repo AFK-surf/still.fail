@@ -700,12 +700,13 @@ fn hermite_slope(p0 : Double, m0 : Double, p1 : Double, m1 : Double, s : Double)
 /// Where the flying avatar's 18 face is (its top left, in the window) and how it is scaled about its middle, or None
 /// when none flies (ChatMotion.flight): between where it set out and where it is going, each where `place` finds it (by
 /// its emit_places key: as this frame is painted, emit_place_drawn; as laid out now, emit_place_now). Reads, sets
-/// nothing: where it is is a function of the time and of where those are.
+/// nothing: where it is is a function of the time (`at`, the moment painted for) and of where those are.
 pub fn emit_flight_by(
   key : String,
   e : Emits,
   agents : Array[String],
   place : (String) -> (Double, Double, Double, Double)?,
+  at? : Double,
 ) -> (Double, Double, Double, Double)? {
   e.read()
   let t = match e.current {
@@ -758,7 +759,11 @@ pub fn emit_flight_by(
     (None, None, Some(f)) => f
     _ => return None
   }
-  let u = emit_clock_of(t)
+  // (at `at`, the moment the frame is painted for, where given: else as its clock is read now)
+  let u = match at {
+    Some(at) => turn_value_at(t, turn_share_at(t, at))
+    None => emit_clock_of(t)
+  }
   match t.pose {
     Float => {
       // from its activity's avatar, or on from the message before it (where it let that one out)
