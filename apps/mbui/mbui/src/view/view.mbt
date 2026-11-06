@@ -838,8 +838,8 @@ pub struct Tree {
   mut last_h : Double
   /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
   room : @signals.Signal[(Double, Double)]
-  /// Each window press, with its number and window coordinates (Tree::went_down).
-  pressed_anywhere : @signals.Signal[(Int, Double, Double)]
+  /// Each window press, with its number, coordinates and logical target (Tree::went_down).
+  pressed_anywhere : @signals.Signal[(Int, Double, Double, NodeId?)]
   /// how many taps there have been anywhere in the window, as the host tells each (Tree::tapped): what a tap anywhere
   /// lets go of follows it
   tapped_anywhere : @signals.Signal[Int]
@@ -943,6 +943,8 @@ pub struct Tree {
   keys_said_at : Set[Int]
   mut focused : NodeId?
   mut focus_visible : Bool
+  /// changed by focus decisions and a loss of input, but not by a node going away for a structural replacement
+  mut focus_epoch : Int64
   /// the node that had the focus as it was laid out nowhere (and whether it showed), given it back as it is laid out again
   /// where nothing has taken it meanwhile (Tree::outs_told), as an old view's focus waits for its node
   mut focus_parked : (NodeId, Bool)?
@@ -1103,7 +1105,7 @@ pub fn Tree::new(
     resident_readers: {},
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
-    pressed_anywhere: @signals.signal((0, -1.0, -1.0), same=fn(a, b) { a == b }),
+    pressed_anywhere: @signals.signal((0, -1.0, -1.0, None), same=fn(a, b) { a == b }),
     tapped_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -1187,6 +1189,7 @@ pub fn Tree::new(
     focused: None,
     focus_parked: None,
     focus_visible: false,
+    focus_epoch: 0L,
     on_focus_lost: fn(_) {  },
     on_focus_asked: None,
     focus_opened: [],
@@ -5729,7 +5732,7 @@ fn View::let_go(self : View) -> Unit {
   n.on_pointer_moved = None
   n.pointed_in_cell = None
   // (the focus on it: let go of with it, what has it told so)
-  self.tree.focus_lost_in(self.at)
+  self.tree.focus_lost_in(self.at, replacement=true)
   n.focusable = false
   n.focus_typing = false
   n.focus_keys = 0
@@ -6191,7 +6194,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
   self.tree.hold_lost_in(v.at)
-  self.tree.focus_lost_in(v.at)
+  self.tree.focus_lost_in(v.at, replacement=true)
   self.tree.back_lost_in(v.at)
   self.tree.modals_told()
   self.tree.due_leaving(v.id())

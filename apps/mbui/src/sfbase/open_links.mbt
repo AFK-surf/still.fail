@@ -364,13 +364,17 @@ pub fn open_slack(app : String, web : String) -> Bool {
 ///|
 /// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one of still.fail's opens here as the core
 /// says (open_link_in); any other is handed to the system (its browser, or the app that takes it: mbui's open_url), said
-/// when nothing took it.
+/// when nothing took it. Kept as a one-argument callback for the viewer and message widgets.
 pub fn open_link(href : String) -> Unit {
+  open_link_from(link_src.val, href)
+}
+
+///|
+/// A retained control opens a link from the source that owns it, with the same external-link fallback as open_link.
+pub fn open_link_from(src : Source?, href : String) -> Unit {
   let elsewhere = fn() { if !@ui.open_url(href) { toast_later(@sf.t("android-misc.link.cantOpen")) } }
-  match link_src.val {
+  match src {
     Some(src) => open_link_in(src, href, or_else=elsewhere)
     None => elsewhere()
   }
 }
-
-

@@ -8,9 +8,9 @@
 // focus (as its widget says: a checkbox only takes Space). The focus shows (a ring) only once it came by the keyboard,
 // as a browser's :focus-visible; a press lets it go from anything but a field, unless what was pressed takes it.
 //
-// The keys are dealt with as the frame starts, from what the last frame built, before the view builds this one: what
-// they did (a focus moved, a press) is there for the widgets as they are built, and a key used so is taken (the
-// view's Ctx::key_pressed does not see it, as a field's keys).
+// Focus navigation and activation take place in input order, from what the last build declared and what may take
+// input now. A frame only exposes the resulting presses and actions to old widgets; it never moves focus for a
+// queued key after a later input has already used it.
 
 ///|
 /// How a roving group's items lie: the arrows that move along it.
@@ -209,8 +209,7 @@ pub fn Ctx::focused_id(self : Ctx) -> Int {
 }
 
 ///|
-/// As the frame starts: the keys since the last one that move or use the focus, and the actions asked (see the file's
-/// head).
+/// As the frame starts: expose the actions already asked, and the layers' remaining input (see the file's head).
 fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   // (the keys, what a reader asked and the focus, read so: hand.mbt)
   hand_presses_read()
@@ -218,51 +217,10 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   self.actions.clear()
   for a in self.asked_actions {
     self.actions.push(a)
-    if a.1 == Focus {
-      self.focus_moved(a.0)
-    }
   }
   self.asked_actions.clear()
   // a layer's own keys first (Escape: overlay.mbt)
   self.layer_keys()
-  // (the focus where a modal layer of the window's tree lets it take input; else, for these keys, none's:
-  // Ctx::focus_allowed)
-  let focus = self.focus_allowed()
-  let field = self.editors.contains(focus)
-  // (the keys a field focused leaves to the app: Tab there picks from what it offers, the focus stays)
-  let left = match self.editors.get(focus) {
-    Some(st) => st.leaves
-    None => []
-  }
-  for k in 0..<desk.keys.length() {
-    let (code, mods, taken) = desk.keys[k]
-    if taken || (mods == 0 && left.contains(code)) {
-      continue
-    }
-    let used = if code == key_tab && (mods | mod_shift_key) == mod_shift_key {
-      self.tab((mods & mod_shift_key) != 0)
-      true
-    } else if field {
-      false
-    } else if mods == 0 &&
-      (
-        code == key_left ||
-        code == key_right ||
-        code == key_up ||
-        code == key_down ||
-        code == key_home ||
-        code == key_end
-      ) {
-      self.rove(code)
-    } else if mods == 0 && (code == key_enter || code == key_space) {
-      self.press_focused(if code == key_enter { press_enter } else { press_space })
-    } else {
-      false
-    }
-    if used {
-      desk.keys[k] = (code, mods, true)
-    }
-  }
 }
 
 ///|
@@ -318,7 +276,7 @@ fn Ctx::group_stop(self : Ctx, gid : Int) -> Focusable {
 ///|
 /// Group `gid`'s items as the last frame built them.
 fn Ctx::group_items(self : Ctx, gid : Int) -> Array[Focusable] {
-  self.last_focusables.filter(fn(f) { f.group == gid && island_allows(f.island) })
+  self.last_focusables.filter(fn(f) { f.group == gid && !self.layer_inert(f.layer) && island_allows(f.island) })
 }
 
 ///|
@@ -378,19 +336,7 @@ fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
 }
 
 ///|
-/// An arrow, Home or End with the focus in a roving group: the focus along it. False when it is not the group's.
-fn Ctx::rove(self : Ctx, code : Int) -> Bool {
-  match self.roved_to(code) {
-    Some(id) => {
-      self.move_focus(id, roved=true)
-      true
-    }
-    None => false
-  }
-}
-
-///|
-/// Where an arrow, Home or End takes the focus along its roving group (Ctx::rove), if it is the group's: none where it
+/// Where an arrow, Home or End takes the focus along its roving group, if it is the group's: none where it
 /// is not, or the focus is in no group, or where a modal layer of the window's tree keeps it from input.
 fn Ctx::roved_to(self : Ctx, code : Int) -> Int? {
   // (none where a modal layer of the window's tree keeps the focus from input: Ctx::focus_allowed)
@@ -412,12 +358,13 @@ fn Ctx::roved_to(self : Ctx, code : Int) -> Int? {
   }
   let items = self.group_items(gid)
   let n = items.length()
-  let mut at = 0
+  let mut at = -1
   for k, f in items {
     if f.id == self.focus {
       at = k
     }
   }
+  guard at >= 0 else { return None }
   let rtl = self.direction == Rtl
   let horizontal = gr.orientation != Vertical
   let vertical = gr.orientation != Horizontal
@@ -456,12 +403,14 @@ fn Ctx::roved_to(self : Ctx, code : Int) -> Int? {
 
 ///|
 /// Enter or Space (`key`: press_enter, press_space) on what has the focus: pressed, if it takes that key.
-fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
+fn Ctx::press_focused(self : Ctx, key : Int, taken? : () -> Unit) -> Bool {
   if self.focus == 0 {
     return false
   }
   for f in self.last_focusables {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
+      // Record the key once its route is known, before its application callback can stop the run.
+      match taken { Some(tell) => tell(); None => () }
       self.clicked.push(f.id)
       made_pressed(f.id)
       self.focus_moved(self.focus, visible=true)
@@ -469,6 +418,54 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
     }
   }
   false
+}
+
+///|
+/// Whether Tab is the focus's to move, at a key's moment (Ctx::focus_key_now): not where a field with the focus leaves it to the
+/// app with none held (it picks from what it offers there), nor a key catcher with the focus (it takes every key).
+fn focus_tab_ours(c : Ctx, mods : Int) -> Bool {
+  let focus = c.focus_allowed()
+  if c.dev.catchers.contains(focus) {
+    return false
+  }
+  match c.editors.get(focus) {
+    Some(st) => !(mods == 0 && st.leaves.contains(key_tab))
+    None => true
+  }
+}
+
+///|
+/// Move focus or press its old stop at this input, in the same order as later keys. Fields and catchers keep their
+/// own keys; a modal or retained host that excludes the focus keeps its group and press from receiving them.
+fn Ctx::focus_key_now(self : Ctx, code : Int, mods : Int) -> Bool {
+  let focus = self.focus_allowed()
+  if code == key_tab && (mods | mod_shift_key) == mod_shift_key && focus_tab_ours(self, mods) {
+    if view_app.val is Some(_) {
+      input_taped("key", h_event_time(), [code.to_double(), mods.to_double()])
+    } else {
+      took_input("key", h_event_time(), [code.to_double(), mods.to_double()])
+      hand_event()
+    }
+    self.tab((mods & mod_shift_key) != 0)
+    return true
+  }
+  guard mods == 0 && focus != 0 else { return false }
+  guard !self.editors.contains(focus) && !self.dev.catchers.contains(focus) &&
+    self.keys_reach(focus) else { return false }
+  match self.roved_to(code) {
+    Some(id) => {
+      took_input("key", h_event_time(), [code.to_double(), mods.to_double()])
+      self.move_focus(id, roved=true)
+      hand_event()
+      return true
+    }
+    None => ()
+  }
+  guard code == key_enter || code == key_space else { return false }
+  let used = self.press_focused(if code == key_enter { press_enter } else { press_space },
+    taken=fn() { took_input("key", h_event_time(), [code.to_double(), mods.to_double()]) })
+  if used { hand_event() }
+  used
 }
 
 ///|
@@ -546,6 +543,10 @@ fn Ctx::focus_frame_end(self : Ctx) -> Unit {
   self.last_focusables = self.focusables
   last.clear()
   self.focusables = last
+  self.last_focus_ids.clear()
+  for f in self.last_focusables {
+    self.last_focus_ids[f.id] = f
+  }
   // groups not built for a while are forgotten
   if self.frame_no % 120 == 0 {
     let old : Array[Int] = []
@@ -586,7 +587,7 @@ fn Ctx::focus_takes(self : Ctx, code : Int) -> Bool {
 
 ///|
 /// Whether what has the focus (where it may take input: Ctx::focus_allowed) takes key `code` (`mods` held) as its own,
-/// as the keys are taken (Ctx::focus_frame_start: no modifier; an arrow, Home or End along its roving group, Ctx::rove;
+/// as the keys are taken (Ctx::focus_key_now: no modifier; an arrow, Home or End along its roving group;
 /// Enter or Space it is pressed by, Ctx::press_focused; the arrows, Home, End, PageUp and PageDown of what says they are
 /// its own, own_arrows): what else would have the key first leaves it to it.
 fn Ctx::focus_keeps(self : Ctx, code : Int, mods : Int) -> Bool {

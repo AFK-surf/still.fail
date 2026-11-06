@@ -402,6 +402,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.layers_focus()
     // (and into the first of what a layer of the window's tree holds that takes it, as this pass built it: view_host.mbt)
     view_layers_first(c)
+    // A label may name a field built after it. Resolve that request from the complete declarations of this pass,
+    // before leaving the build for callbacks or later host input, with the same visibility and modal checks.
+    c.focus_built()
     hand_focus_said(c)
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
@@ -1923,11 +1926,17 @@ fn window_key_taken(code : Int, mods : Int) -> Bool {
 
 ///|
 fn on_key_now(code : Int, mods : Int) -> Unit {
+  // Focus and modal ownership are read at this input's layout, as for a pointer or an accessibility action.
+  old_input_brought()
   // what the part over the field with the focus said it takes of its keys, at their moment, before the field, the
   // tree's Tab or the frame (Ctx::on_key): the one place a key is handed it or not
   if keys_taken_now(g().focus_allowed(), code, mods) {
     took_input("key", h_now(), [code.to_double(), mods.to_double()])
     hand_event()
+    h_request_frame()
+    return
+  }
+  if g().focus_key_now(code, mods) {
     h_request_frame()
     return
   }

@@ -21,11 +21,11 @@ priv enum WideItem {
 /// head (wide_head_node) where the frame's bar does not name it, else what it is for alone (barred_page's), its blocks (each made by `block` in the column, at its
 /// edges: desk_block's 16 in; the first 16 under the head), then 80 at its foot and the frame's room; each part in its
 /// lane (lane_node) and made only while it shows (as desk_lanes' old list builds only the rows in view).
-fn wide_page_node(
+fn[T] wide_page_node(
   v : @view.View,
   title : () -> String,
-  blocks : () -> Array[String],
-  block : (@view.View, String) -> Unit,
+  blocks : PageBlocks[T],
+  block : (@view.View, () -> T) -> Unit,
   on_back : () -> Unit,
   frame : () -> PageFrame,
   lead : () -> String,
@@ -33,6 +33,7 @@ fn wide_page_node(
   scroll : @view.Scroll,
   about : () -> String,
   tips : TipLayer,
+  wait : PageWaitingNode?,
   seen : ((Array[String]) -> Unit)?,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
@@ -46,7 +47,7 @@ fn wide_page_node(
     } else if lead() != "" {
       out.push(WideLead)
     }
-    for k in blocks() {
+    for k in (blocks.keys)() {
       out.push(WideBlock(k))
     }
     out.push(WideFoot)
@@ -63,31 +64,46 @@ fn wide_page_node(
         }
       }
     })
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, seen?=seen, fn(s, item) {
+    let rooms : (() -> (WideItem, Double, Double) -> @view.ListRoom)? = blocks.rooms.map(fn(f) {
+      fn() {
+        let room = f()
+        fn(item, h, width) { match item { WideBlock(k) => room(k, h, width); _ => @view.list_room(h) } }
+      }
+    })
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est,
+      rooms?, seen?, fn(s, item) {
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
-        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions, about, tips) })
+        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions, about, tips, wait) })
         // what it is for under the frame's bar that names it (barred_page's: desk_barred_lead, 16 in, 12 under)
         WideLead =>
           lane_node(s, fn(col) {
             col.padding(Is((head_in(col), 0.0, head_in(col), desk_head_foot))) |> ignore
-            words_node(col, lead, fn() { desk_muted }) |> ignore
+            page_waiting_part(col, wait, fn(b) { words_node(b, lead, fn() { desk_muted }) |> ignore })
           })
         // what it holds, at the column's edges, the first 28 under the head (its own 12 and these 16)
         WideBlock(k) =>
-          lane_node(s, fn(col) {
-            col.box(fn(room) {
-              room
-              .padding(By(fn() {
-                let first = blocks().get(0) == Some(k)
-                (desk_column_in, if first { desk_first_top } else { 0.0 }, desk_column_in, 0.0)
-              }))
-              |> ignore
-              block(room, k)
-            })
-            |> ignore
-          })
+          match @signals.untracked(fn() { (blocks.item)(k) }) {
+            Some(initial) => {
+              (blocks.lend)(s, k)
+              lane_node(s, fn(col) {
+                col.box(fn(room) {
+                  room
+                  .padding(By(fn() {
+                    let first = (blocks.first)(k)
+                    (desk_column_in, if first { desk_first_top } else { 0.0 }, desk_column_in, 0.0)
+                  }))
+                  |> ignore
+                  page_waiting_block(room, wait, fn() { (blocks.first)(k) }, fn(b) {
+                    block(b, fn() { (blocks.item)(k).unwrap_or(initial) })
+                  })
+                })
+                |> ignore
+              })
+            }
+            None => ()
+          }
         WideFoot => s.height(By(fn() { Some(desk_foot_h + frame().foot) })) |> ignore
       }
     })
@@ -130,6 +146,7 @@ fn wide_head_node(
   actions : ((@view.View) -> Unit)?,
   about : () -> String,
   tips : TipLayer,
+  wait : PageWaitingNode?,
 ) -> Unit {
   col
   .padding(By(fn() {
@@ -170,7 +187,7 @@ fn wide_head_node(
   |> ignore
   col.show(fn() { lead() != "" }, fn(l) {
     l.padding(Is((0.0, desk_lead_top, 0.0, 0.0))) |> ignore
-    words_node(l, lead, fn() { desk_muted }) |> ignore
+    page_waiting_part(l, wait, fn(b) { words_node(b, lead, fn() { desk_muted }) |> ignore })
   })
 }
 
@@ -205,6 +222,7 @@ fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) 
   parent.box(fn(b) {
     b.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))) |> ignore
     presses_node(b, back)
+    page_focus_register(b, PageBackFocus) |> ignore
     b.says(By(fn() { Some(@view.said(Link, label=label())) })) |> ignore
     let ink = fn() { if lit_node(b) { theme().p.text } else { theme().p.muted } }
     icon_node(b, "chevron-left", desk_back_icon, By(ink)) |> ignore

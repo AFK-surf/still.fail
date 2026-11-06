@@ -750,6 +750,13 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 /// Where each old view of `tree` is placed now (as it was last laid out), and whether the one is the whole window.
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
+  // A portal's opening belongs to the live host, not to the layout that currently draws it. Keep that host's
+  // room while it is omitted, so an ordinary old-frame build still says its layers and focus stops. Only its
+  // portals need this: the omitted host itself is absent from the tree's paint walk.
+  let parked = old_placed.filter(fn(p) {
+    tree.lives(p.0) && tree.drawn_of(p.0) is None &&
+    g().last_layers.iter().any(fn(l) { l.owner == Some(p.0) })
+  })
   old_placed.clear()
   old_placed_off.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
@@ -765,8 +772,9 @@ fn old_place(tree : @view.Tree) -> Unit {
       old_placed_off[c.id] = (ux - ox, uy - oy)
     }
   }
+  old_placed.append(parked)
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
-  old_whole.val = old_placed.length() == 1 &&
+  old_whole.val = parked.is_empty() && old_placed.length() == 1 &&
     (match old_placed[0] {
       (id, x, y, iw, ih, a, _, _, _) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
     }) &&
@@ -1248,7 +1256,7 @@ fn Ctx::paint_layers_under(self : Ctx, p : TreePaint, stack : Int, rest : Bool) 
   let mut ch = self.nodes[p.root].first
   while ch >= 0 {
     let n = self.nodes[ch]
-    if (n.layer || n.portal) &&
+    if (n.layer || n.portal) && self.old_layer_drawn(ch) &&
       !p.painted.contains(ch) &&
       !old_boxes.values().any(fn(i) { i == ch }) &&
       (rest || self.old_layer_stack(p.root, ch) < stack) {
@@ -2773,7 +2781,19 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   old_hits_place(g(), Some(tree))
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
-    tree.went_down(at, x~, y~)
+    // Resolve its logical owner before outside-press reactions can close a panel and its hosted portals.
+    let k = old_root_target(g(), x, y)
+    let owner = if k >= 0 {
+      layer_hits.iter().find_first(fn(h) { k >= h.0 && k < h.1 })
+        .bind(fn(h) { g().last_layer(h.3).bind(fn(l) { l.owner }) })
+    } else {
+      match tree.target_at(x, y) {
+        Hosted(id) => old_press_owner(g(), x, y, id)
+        Pressed(id) | Dragged(id) | TopRow(id) | Off(id) => Some(id)
+        Nothing => None
+      }
+    }
+    tree.went_down(at, x~, y~, owner?)
   }
   // (a press on nothing a tap no more: another press, a second finger, moved past a gesture's slop from where it went
   // down, come back or not)
@@ -3357,13 +3377,20 @@ fn view_input_taken() -> Int {
 /// view's (what it put over all of it at its root: its overlays, a modal's ground among them), as a press finds one, and
 /// nothing of the window's tree over that layer in the window's stack of layers takes it there first (old_layer_takes).
 fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool {
+  old_root_target(c, x, y, pressed~) >= 0
+}
+
+///|
+/// The old root target that takes this input, or -1. Its portal supplies the logical owner when the window press
+/// is announced, while routing still respects the same hit, reach and layer order as old_root_hit.
+fn old_root_target(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Int {
   let k = if pressed {
     let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
     press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
   } else {
     hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
   }
-  k >= 0 && old_hit_owner(k) is None && old_layer_takes(old_hit_stack(k), x, y)
+  if k >= 0 && old_hit_owner(k) is None && old_layer_takes(old_hit_stack(k), x, y) { k } else { -1 }
 }
 
 ///|
@@ -3963,6 +3990,18 @@ let view_modals_version : Ref[Int] = Ref(0)
 /// take no press): what an old view that may take input no more holds let go of then, at that cause (view_captures_off).
 fn view_modals_told() -> Unit {
   view_modals_version.val += 1
+  // Portals drawn outside an old island still belong to it. Only the owner's exit ends their openings;
+  // temporarily taking no input or being omitted by layout does not end that lifetime.
+  let c = g()
+  let gone = c.last_layers.filter(fn(l) {
+    match (view_app.val, l.owner) {
+      (Some(tree), Some(id)) => !tree.lives(id) || tree.leaving(id)
+      _ => false
+    }
+  }).rev()
+  if !gone.is_empty() {
+    c.layers_dismissed(gone.map(fn(l) { (l.id, Escape) }), tell=false)
+  }
   view_captures_off(view_moment(), fn(owner) { !old_owner_open(owner) }, back_gone=fn(owner) { !held_back_open(owner) })
   // (whether the app takes back: what of the tree takes it may have changed)
   g().back_told_host()
@@ -4022,7 +4061,11 @@ fn view_captures_off(at : Double, gone : (@view.NodeId?) -> Bool, back_gone? : (
 /// under it found none the less).
 fn old_hit_open(k : Int) -> Bool {
   // (and not what a layer dismissed since drew: overlay.mbt layer_retired_ids)
-  old_owner_open(old_hit_owner(k)) && !layer_retired_ids.contains(g().hit_ids[k])
+  old_owner_open(old_hit_owner(k)) && !layer_retired_ids.contains(g().hit_ids[k]) &&
+  (match layer_hits.iter().find_first(fn(h) { k >= h.0 && k < h.1 }) {
+    Some(h) => !g().layer_inert(h.3)
+    None => true
+  })
 }
 
 ///|
@@ -4051,11 +4094,15 @@ fn old_owner_open(owner : @view.NodeId?) -> Bool {
 ///|
 /// An input from outside at its own moment that finds what is at a place among the old frame's hit targets (words or
 /// files let go there): the window's tree brought to that moment first, and what the old views take placed where it
-/// has them then, as a pointer's event is (view_pointer).
+/// has them then, as a pointer's event is (view_pointer). Inside an event, only its current layout is needed: what
+/// became due during that change must wait until the whole event has been told.
 fn old_input_brought() -> Unit {
   match view_app.val {
     Some(tree) => {
-      tree.bring_to(view_moment())
+      match tree.moment() {
+        Some(_) => tree.laid_as_now()
+        None => tree.bring_to(view_moment())
+      }
       old_hits_place(g(), Some(tree))
     }
     None => ()
@@ -4215,15 +4262,6 @@ fn view_key(code : Int, mods : Int) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return false
-  }
-  let c = g()
-  // (Tab and Shift+Tab, at the key's moment, among what can take the focus as the tree is then (Ctx::tab_stops), the
-  // old views' as their last build said: where a field with the focus does not leave them to the app, a key catcher
-  // with it takes none)
-  if code == key_tab && (mods | mod_shift_key) == mod_shift_key && view_tab_ours(c, mods) {
-    tree.event(view_moment(), fn() { c.tab((mods & mod_shift_key) != 0) })
-    h_frame_owed()
-    return true
   }
   let c = g()
   let focus = c.focus_allowed()
@@ -4761,12 +4799,12 @@ fn tree_said_id(id : @view.NodeId) -> Int {
 /// `action` asked of what is read out as `id` (a screen reader's, a test's), where it is a node of the window's tree:
 /// done as it is done by hand, at the moment it is asked (Activate: its on_press, as a press on it runs it; one let go
 /// or taking no presses, nothing). Whether it was one.
-fn tree_said_action(id : Int, action : Action) -> Bool {
+fn tree_said_action(id : Int, action : Action, built? : Bool = false) -> Bool {
   match (tree_said_ids.get(id), view_app.val) {
     (Some(nid), Some(tree)) => {
       // (what the old frame put over all of it, modal, keeps it from input as from being read out; not what is over all
       // else of the window, View::over_all)
-      let free = tree.stack_of(nid) > g().old_modal_stack()
+      let free = tree.stack_of(nid) > g().old_modal_stack(built~)
       match action {
         Activate if free => {
           // (taken, its press found and done as one event of this moment: Tree::activate_at)
@@ -4812,6 +4850,9 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
 /// root (its layers) last, as it is drawn over the rest. What a modal layer of the tree keeps from input hidden; a node
 /// taking no presses disabled, read out so.
 fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
+  // Whether a host is omitted is layout's. Read it after applying the current cause's layout, as a pointer
+  // does, before the old portal's visibility and the retained nodes' semantics are combined.
+  tree.laid_as_now()
   let (old, nodes_of) = self.semantics_old()
   // (each old widget's old view: its box's node, -1 the whole window, -2 what is over all of it at its root)
   let owner = nodes_of.map(fn(i) { self.said_owner(i) })
@@ -4974,41 +5015,30 @@ fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
 /// in: Ctx::ask_action): the node hosting the old view it says itself in (by what it said of its node:
 /// Ctx::said_owner) read out and taking presses (Tree::acts_on); what the old frame put over all of it, always (its
 /// own). Where there is no tree, or nothing said by that id, as ever.
-fn old_said_allowed(c : Ctx, id : Int) -> Bool {
+fn old_said_allowed(c : Ctx, id : Int, built? : Bool = false) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return true
   }
   // (what said it of its node, else the node it is: a box taking presses read out by its id)
-  let node = match c.sems.iter().find_first(fn(s) { s.id == id }) {
-    Some(s) => s.node
-    None => {
-      let mut found = -1
-      for i in 0..<c.count {
-        if c.nodes[i].id == id {
-          found = i
-          break
-        }
-      }
-      if found < 0 {
-        return true
-      }
-      found
-    }
+  let node = match c.said_node(id) {
+    Some(i) => i
+    None => return true
   }
   let host = match c.said_owner(node) {
     // (of a layer the old frame put over all of it: where none over it in the window's stack of layers is modal, the
     // tree's or the old frame's own; Ctx::layer_stack_at)
     -2 => {
+      if c.layer_inert(c.layer_of(node), built~) { return false }
       let at = c.root_layer_stack(node)
-      return at >= tree.modal_stack() && at >= c.old_modal_stack()
+      return at >= tree.modal_stack() && at >= c.old_modal_stack(built~)
     }
     -1 => tree.hosting()
     at => old_boxes.keys().find_first(fn(k) { k.at == at })
   }
   match host {
-    Some(h) => tree.acts_on(h)
-    None => true
+    Some(h) => tree.hosted_takes_action(h)
+    None => false
   }
 }
 
@@ -5342,11 +5372,17 @@ fn view_focus_kept_under(t : @view.Tree, island : @view.NodeId, id : Int) -> Boo
 
 ///|
 /// The node of the window's tree what Ctx's focus names `id` is in: the node itself, or the old view a stop of an old
-/// view's (as the last frame built it) is in; none where it is neither (a layer of the old frame's own).
+/// view's (as the last frame built it) is in. A portal drawn outside the old view still belongs to that view for
+/// focus lifetimes; a layer made by the old frame alone has no tree owner.
 fn focus_node_of(id : Int) -> @view.NodeId? {
   match tree_said_ids.get(id) {
     Some(n) => Some(n)
-    None => g().last_focusables.iter().find_first(fn(f) { f.id == id }).bind(fn(f) { f.island })
+    None => g().last_focusables.iter().find_first(fn(f) { f.id == id }).bind(fn(f) {
+      match f.island {
+        Some(n) => Some(n)
+        None => g().last_layer(f.layer).bind(fn(l) { l.owner })
+      }
+    })
   }
 }
 
@@ -5398,8 +5434,11 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     Some(b) => {
       // A kept page can come back from laid_nowhere in this same change. Its nodes still carry the last layout's
       // out flags until it is laid out again; return the focus against the page this change actually leaves shown.
+      let before_layout = c.focus
       if tree_said_ids.contains(b) { t.laid_as_now() }
-      c.focus_moved(b)
+      // That layout can also make a newly opened page and give its field the initial cursor. Its request belongs
+      // to this change; closing the old layer must not replace it with the old page's return target.
+      if c.focus == 0 || c.focus == before_layout { c.focus_moved(b) }
     }
     None => ()
   }
@@ -5458,20 +5497,6 @@ fn view_focus_lost(n : @view.NodeId) -> Unit {
       h_frame_owed()
     }
     _ => ()
-  }
-}
-
-///|
-/// Whether Tab is the focus's to move, at a key's moment (view_key): not where a field with the focus leaves it to the
-/// app with none held (it picks from what it offers there), nor a key catcher with the focus (it takes every key).
-fn view_tab_ours(c : Ctx, mods : Int) -> Bool {
-  let focus = c.focus_allowed()
-  if c.dev.catchers.contains(focus) {
-    return false
-  }
-  match c.editors.get(focus) {
-    Some(st) => !(mods == 0 && st.leaves.contains(key_tab))
-    None => true
   }
 }
 
@@ -5674,14 +5699,32 @@ fn Ctx::waited_at(self : Ctx) -> Double {
 
 ///|
 /// Each of the old frame's layers' place among the frame's targets as they were last given out, and where it is in the
-/// window's stack of layers (Ctx::old_layer_stack): from, to, its place.
+/// window's stack of layers (Ctx::old_layer_stack): from, to, its place, and the portal's id (0 for a plain layer).
 // kept across runs: put back as a run begins (view_forget)
-let layer_hits : Array[(Int, Int, Int)] = []
+let layer_hits : Array[(Int, Int, Int, Int)] = []
 
 ///|
 /// The same as this frame finds them (Ctx::targets_found).
 // kept across runs: put back as a run begins (view_forget)
-let next_layer_hits : Array[(Int, Int, Int)] = []
+let next_layer_hits : Array[(Int, Int, Int, Int)] = []
+
+///|
+/// A portal is drawn only while its host is drawn; an omitted host keeps the opening, but shows none of it.
+/// Leaving is different: its owner's exit can still draw it, even though it takes no input.
+fn Ctx::old_layer_drawn(self : Ctx, at : Int) -> Bool {
+  let n = self.nodes[at]
+  if !n.portal {
+    return true
+  }
+  let layer = match self.layers.iter().find_first(fn(l) { l.id == n.portal_id }) {
+    Some(l) => Some(l)
+    None => self.last_layer(n.portal_id)
+  }
+  match (view_app.val, layer.bind(fn(l) { l.owner })) {
+    (Some(tree), Some(owner)) => tree.drawn_of(owner) is Some(_)
+    _ => true
+  }
+}
 
 ///|
 /// Where the layer whose own node is `i` is in the window's stack of layers as said of it: its place (Ctx::stacked); else,
@@ -5753,8 +5796,8 @@ fn old_hit_stack(k : Int) -> Int {
 ///|
 /// Where the old frame's topmost modal layer is in the window's stack of layers (Ctx::old_layer_stack), -2 none: what of
 /// the tree is not over it takes no input (Tree::hold_under).
-fn Ctx::old_modal_stack(self : Ctx) -> Int {
-  let m = self.modal_node()
+fn Ctx::old_modal_stack(self : Ctx, built? : Bool = false) -> Int {
+  let m = self.modal_node(built~)
   if m < 0 {
     return -2
   }
