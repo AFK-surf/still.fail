@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { Store } from "../src/store/store.ts";
 import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
+import { keyPart, sandboxName } from "../src/agents/sandbox-name.ts";
 
 // The release's main.js loads and answers: a module importing createRequire as the bundle's banner did declared it
 // twice, and every station updated to 0.1.7119 kept its old one (the new one exited with 1 before it was ready).
@@ -60,6 +61,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/workspace-activity-worker.js", { kind: "recovery" }],
+      ["sessions/workspace-activity-worker.js", { kind: "sandbox" }],
       ["sessions/session-count-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
@@ -95,6 +97,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT said_other_n FROM thread_state WHERE thread=?").get(saidThread)?.said_other_n, 1);
     assert.equal(store.db.prepare("SELECT n FROM session_turns WHERE session='old-turn'").get()?.n, 70);
     assert.deepEqual(store.recoveryWaits()?.map(({ row }) => row.key), ["old-count"]);
+    assert.equal(store.db.prepare("SELECT name FROM sandbox_name_rows WHERE session=?").get("old-count")?.name, sandboxName(keyPart("old-count")));
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
     assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");

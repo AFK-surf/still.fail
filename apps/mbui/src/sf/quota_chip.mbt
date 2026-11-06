@@ -250,18 +250,20 @@ fn quota_left(w : Json?) -> String {
 
 ///|
 /// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
-/// `brief`, the figure alone with its unit's first letter, small (a station's row); `drop`, the turn it is left out of
-/// a line short of room in (Ctx::box's), `keep` never squeezed there.
+/// `brief`, the figure alone with its unit's first letter, small (a station's row); `figure`, the same words at the
+/// chip's own size (meter_line's shorter way); `drop`, the turn it is left out of a line short of room in (Ctx::box's),
+/// `keep` never squeezed there.
 pub fn meter_chip(
   c : @ui.Ctx,
   m : Json?,
   brief? : Bool = false,
+  figure? : Bool = false,
   drop? : Int = 0,
   keep? : Bool = false,
   key? : String = "meter",
 ) -> Unit {
   let unit = chip_str(m, "unit")
-  let words = if brief && chip_str(m, "big") != "" {
+  let words = if (brief || figure) && chip_str(m, "big") != "" {
     chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
   } else {
     chip_str(m, "remaining")
@@ -308,6 +310,28 @@ pub fn meter_chips(c : @ui.Ctx, meters : Array[Json], brief? : Bool = false, key
   })
   |> ignore
 }
+
+///|
+/// A machine's chips in a line as wide as what holds it (a station's card, its peek), 8 apart, each whole: in words
+/// where the line has the room for all of them (内存剩 9.2 G), else all by their figures (内存 9.2G), one way for all
+/// of them (Ctx::box one_of), never one cut short with an ellipsis.
+pub fn meter_line(c : @ui.Ctx, meters : Array[Json], key? : String = "meter") -> Unit {
+  c.box(style=quota_chips_line, one_of=true, fn() {
+    for figure in [false, true] {
+      c.box(style=meter_line_way, fn() {
+        for m in meters {
+          meter_chip(c, Some(m), figure~, key=key + (if figure { "/figure" } else { "" }))
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let meter_line_way : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

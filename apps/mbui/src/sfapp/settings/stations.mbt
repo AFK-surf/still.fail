@@ -181,11 +181,8 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       // the boxes of what runs low; not read yet, grey bars over their room
       c.box(style=@sf.full_width, fn() {
         c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
-          for m in items(host, "meters") {
-            if text(Some(m), "level") != "ok" {
-              @sf.meter_chip(c, Some(m), key="station-body/" + text(s, "station"))
-            }
-          }
+          let low = items(host, "meters").filter(fn(m) { text(Some(m), "level") != "ok" })
+          @sf.meter_line(c, low, key="station-body/" + text(s, "station"))
         })
         |> ignore
         if online && host is None && !unreadable(s) {
@@ -289,14 +286,9 @@ fn clamp(n : Int) -> Int {
 /// `alerts`: only those running low. 8 apart.
 pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bool = false) -> Unit {
   c.box(style=peek_meters, fn() {
-    for m in meters {
-      let mv = Some(m)
-      if alerts && text(mv, "level") == "ok" {
-        continue
-      }
-      // (what it is in the chip's own tip)
-      @sf.meter_chip(c, mv, key=key + "/meter")
-    }
+    // (what it is in the chip's own tip)
+    let shown = if alerts { meters.filter(fn(m) { text(Some(m), "level") != "ok" }) } else { meters }
+    @sf.meter_line(c, shown, key=key + "/meter")
   })
   |> ignore
 }

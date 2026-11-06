@@ -23,6 +23,13 @@
 >   (`ANDROID_ADB_SERVER_PORT`); the phone's tunnel listener takes connections from that server's process alone (the
 >   peer of a loopback TCP connection, found by its ports in the processes' sockets). Another chat's agent, knowing the
 >   port, is not let in.
+>   The port it is given is a door (2026-11-05, user: 「修这个洞」: the listener lets the grant's server in, and that
+>   server serves any client, so another chat's `adb -P <port> shell`, the port in `ps`, went through it): the server
+>   listens on a socket in a directory of its own, named only in its environment, and `station/src/adb/door.ts` puts a
+>   connection through only from under the session's agent, a job of its, the station's own adb, or else (a runtime
+>   sessions share, a script on its own) a process working in the chat's own directory; anyone else's adb shows why it
+>   is refused. It keeps honest agents apart, and is no wall against one set on getting in: agents are one system user,
+>   so it can find the socket with `lsof` or change the station's database. Windows has no door: its processes are not read.
 > - **Nothing here connects by itself** (2026-11-03): on the phone's network, with its Wireless debugging on and this
 >   machine's key trusted, adb's server connects to it directly, not through the tunnel and whatever is granted (seen on
 >   the default server and in a grant's). The station runs with `ADB_MDNS_AUTO_CONNECT=0`, which what it starts inherits. A
