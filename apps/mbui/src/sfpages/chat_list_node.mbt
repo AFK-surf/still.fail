@@ -1407,4 +1407,5 @@ let field_held_room : Double = 16.0
 ///|
 /// How far past its column a chat's row lets what it holds scroll across (a message's tables): the row, worked out from
 /// how wide it is laid out (row_side_in), as it is laid out (TableBleed's BleedBy).
+// kept across runs: the key each row lends; its value belongs to that row and is let go with it
 let chat_row_bleed : @view.Lent[(@view.View, (Double) -> Double)] = @view.Lent::new()
