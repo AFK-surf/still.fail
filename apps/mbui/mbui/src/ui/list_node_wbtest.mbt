@@ -4,7 +4,7 @@ test "a retained list measures the same moving room before and after an old fram
   let t = Tester::new(fn(_) { }, w=300.0, h=300.0, stable=false)
   set_view_app(fn(root) {
     let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(x) { x.0 }, fn(x) { x.2 })
-    root.height(Is(Some(300.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
       room=rows.room, fn(row, k) {
         row.height(By(fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).map(fn(x) { x.1 }) }))
         .ground(Is(0x3366CCFFL)) |> ignore
@@ -35,7 +35,7 @@ test "a row kept for a flight is measured outside the reading window without mov
   set_view_app(fn(root) {
     root.height(Is(Some(300.0))).scrolls_window(@view.Scroll::list(),
       fn() { Array::makei(20, fn(i) { i }) }, est=60.0,
-      kept=fn(k) { needed.get() == Some(k) }, fn(row, k) {
+      kept_keys=fn() { needed.get().map(fn(k) { [k] }).unwrap_or([]) }, fn(row, k) {
         nodes[k] = row
         row.owns(fn() { nodes.remove(k) }) |> ignore
         row.height(Is(Some(60.0))) |> ignore
@@ -89,7 +89,7 @@ test "a retained row changes its content in the cause that replaces it, keeping 
   let made = Ref(0)
   set_view_app(fn(root) {
     let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(x) { x.0 }, fn(x) { x.2 })
-    root.height(Is(Some(300.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
       room=rows.room, fn(row, k) {
         made.val += 1
         let item = fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).unwrap() }
@@ -118,7 +118,7 @@ fn node_rows_test(
   set_view_app(fn(root) {
     let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(x) { x.0 }, fn(x) { x.2 }, middle=fn(_) { false })
     out.val = Some(rows)
-    root.height(Is(Some(300.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
       room=rows.room, fn(row, k) {
         made.val += 1
         nodes[k] = row
@@ -196,7 +196,7 @@ test "a glide to a retained list's end follows the room that opens on its way" {
   let t = Tester::new(fn(_) { }, w=300.0, h=300.0)
   set_view_app(fn(root) {
     let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(x) { x.0.to_string() }, fn(_) { "1" }, middle=fn(_) { false })
-    root.height(Is(Some(300.0))).scrolls_window(scroll, fn() { (rows.read)().1 }, from_end=true, follows~,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(scroll, fn() { (rows.read)().1 }, from_end=true, follows~,
       room=rows.room, fn(row, k) {
         row.height(By(fn() { (rows.read)().0.iter().find_first(fn(x) { x.0.to_string() == k }).map(fn(x) { x.1 }) })) |> ignore
       }) |> ignore
@@ -225,7 +225,7 @@ test "a retained list being wheeled away from its end keeps the hand's destinati
   set_view_app(fn(root) {
     let items = Array::makei(10, fn(i) { i })
     let rows = ListRows::new().in_node(root, fn() { items }, fn(i) { i.to_string() }, fn(_) { "1" })
-    root.height(Is(Some(300.0))).scrolls_window(scroll, fn() { (rows.read)().1 }, from_end=true, follows~,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(scroll, fn() { (rows.read)().1 }, from_end=true, follows~,
       room=rows.room, fn(row, k) {
         row.height(Is(Some(if k == "4" { 160.0 } else { 80.0 }))) |> ignore
       }) |> ignore
@@ -335,7 +335,7 @@ test "a tall retained row opening at the end is read from its top under the cove
   let t = Tester::new(fn(_) { }, w=300.0, h=300.0)
   set_view_app(fn(root) {
     let rows = ListRows::new().in_node(root, fn() { items.get() }, fn(x) { x.0 }, fn(_) { "1" }, middle=fn(_) { false })
-    root.height(Is(Some(300.0))).scrolls_window(scroll, fn() { (rows.read)().1 }, from_end=true, follows~,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(scroll, fn() { (rows.read)().1 }, from_end=true, follows~,
       fresh=fn(k) { k == "new" }, cover=fn() { 50.0 }, room=rows.room, fn(row, k) {
         row.height(By(fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).map(fn(x) { x.1 }) })) |> ignore
       }) |> ignore

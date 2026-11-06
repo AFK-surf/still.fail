@@ -45,6 +45,8 @@ priv struct AnchoredIn[K] {
   passage_n : Int
   /// said to follow its end again while short of it, not there yet (Scroll::to_end_told)
   to_end : Bool
+  /// how many device pixels a point its rows are set on where they are (Tree::set_rows_grid; 0: anywhere)
+  grid : Double
 }
 
 ///|
@@ -65,7 +67,8 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.tucked == b.tucked &&
   a.reveal == b.reveal &&
   a.passage_n == b.passage_n &&
-  a.to_end == b.to_end
+  a.to_end == b.to_end &&
+  a.grid == b.grid
 }
 
 ///|
@@ -139,7 +142,9 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
 }
 
 ///|
-/// The legacy window adapter can retain fixed estimates for rows it has not measured.
+/// View::scrolls_anchored, and a page's windowed list (View::scrolls_window) laid out the same way: `fixed_estimate`
+/// counts each row it has not measured as `est` (not as the mean of those it has), `on_grid` lays each row's room on
+/// its host's pixels where it sets a page's list's rows on them (Tree::set_rows_grid).
 fn[K : Hash + Eq] View::scrolls_anchored_impl(
   self : View,
   s : Scroll,
@@ -165,6 +170,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   foot_cover? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
   fixed_estimate? : Bool = false,
+  on_grid? : Bool = false,
   sighted? : (Sighted[K]) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
@@ -427,6 +433,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           tucked: tucked(),
           reveal: reveal_said.get(),
           to_end: s.to_end.get(),
+          grid: if on_grid { self.tree.rows_grid_said.get() } else { 0.0 },
         }
       }),
       fn(l, c) {
@@ -560,7 +567,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
           let slot = slot_of(k)
           self.tree.nodes[slot.at].row_index = Some(i)
-          let natural = l.measure(slot, l.width).1
+          // (as tall as whole pixels where its host sets a page's list's rows on them (Tree::set_rows_grid): its row's
+          // room so, what it holds as tall as it is laid out in it)
+          let on_grid = fn(x : Double) { if c.grid > 0.0 { (x * c.grid - 0.000001).ceil() / c.grid } else { x } }
+          let measured = l.measure(slot, l.width).1
+          let natural = on_grid(measured)
           naturals[k] = natural
           if fixed_estimate {
             fixed_add(i, natural - heights.get(k).unwrap_or(est))
@@ -572,10 +583,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           heights[k] = natural
           let r = (c.rooms.v)(k, natural, l.width)
           rooms_laid[k] = r
-          if (r.height - natural).abs() > 0.001 {
-            l.measure(slot, l.width, height=r.height) |> ignore
+          let room_h = on_grid(r.height)
+          if (room_h - measured).abs() > 0.001 {
+            l.measure(slot, l.width, height=room_h) |> ignore
           }
-          r.height
+          room_h
         }
         // (shown nowhere yet: no room to show anything in, as a page pushed on is before it is laid out where it goes.
         // Nothing of this one kept as how it was laid out, no put taken: laid out where it shows, it lays its rows out
@@ -587,14 +599,22 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
           return
         }
+        // (where the top of a row put `off` under the window's top is, the row `hk` tall as measured now: a point inside
+        // it (`off` under nothing) no further in than leaves a part of it in sight, till it is measured as tall as that.
+        // A row's first measurement may be its heading alone, what it hosts measured after (an old view's island): put
+        // out of sight, it would be let go before that could say the rest of its height)
+        let put_top = fn(off : Double, hk : Double) { if off < 0.0 { -dmin(-off, dmax(0.0, hk - 0.5)) } else { off } }
         // (put at a row, its top that far under the window's top)
         let putting = c.put_n > put_laid.val && c.put is Some(_)
         match c.put {
           Some((k, off)) if putting =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
               Some(i) => {
-                anchor.val = Some({ key: k, under: if from_end { off + measure(i) - h } else { -off }, near: i })
-                pinned.val = if from_end { Some((k, off)) } else { None }
+                let hk = if from_end || off < 0.0 { measure(i) } else { 0.0 }
+                let top = put_top(off, hk)
+                anchor.val = Some({ key: k, under: if from_end { top + hk - h } else { -top }, near: i })
+                // (from its start too while it is put short of where it was asked: held there as it is measured)
+                pinned.val = if from_end || top != off { Some((k, off)) } else { None }
               }
               None => ()
             }
@@ -764,9 +784,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           Some((k, off)) if glide is None && !read_held.val =>
             for q in 0..<r.keys.length() {
               if r.keys[q] == k {
-                if (r.tops[q] - off).abs() > 0.01 {
+                let top = put_top(off, r.heights[q])
+                if (r.tops[q] - top).abs() > 0.01 {
                   match find(k, r.first + q) {
-                    Some(i) => r = lay(Some({ key: k, under: off + r.heights[q] - h, near: i }), 0.0)
+                    Some(i) =>
+                      r = lay(Some({ key: k, under: if from_end { top + r.heights[q] - h } else { -top }, near: i }), 0.0)
                     None => ()
                   }
                 }
