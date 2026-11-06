@@ -1145,7 +1145,6 @@ fn Ctx::scene_copied(
     return copy_not(id, "who drew it not kept")
   }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked, told \{l.told}") }
-  guard !scene.holding.contains(id) else { return copy_not(id, "holds one marked") }
   // (placed otherwise: what its node's place draws of it (turned, its ground drawn in a box of its own, what it holds
   // faded, stretched, glyphed by it) may be another where it is drawn in the same place; drawn as it keeps how it is
   // drawn, its node's place as it is now)
@@ -1923,7 +1922,9 @@ fn Ctx::scene_emitted(self : Ctx, l : SceneLayer) -> Unit {
     let (ri, rs, cid) = r
     put(ri, rs)
     match scene.layers.get(cid) {
-      Some(c) => self.scene_emitted(c)
+      // (as kept where nothing of it changed; else drawn anew where its reference is, the rest of what holds it as kept:
+      // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
+      Some(c) => if scene_copyable(c) { self.scene_emitted(c) } else { self.scene_redrawn_in(l, c) }
       None => ()
     }
   }
@@ -1935,5 +1936,64 @@ fn Ctx::scene_emitted(self : Ctx, l : SceneLayer) -> Unit {
   l.seen = scene.frame
   for i in l.images {
     @signals.untracked(fn() { self.image_for(i.0, i.1) |> ignore })
+  }
+}
+
+///|
+/// Whether layer `l`, held by one put into the frame as kept, is put in as kept too (what Ctx::scene_copied asks of a
+/// layer the walk reaches, but what it is drawn in: as its holder kept it, its holder's own drawing kept).
+fn scene_copyable(l : SceneLayer) -> Bool {
+  !scene.fresh &&
+  l.seen >= 0 &&
+  l.seen >= scene.frame - 1 &&
+  !l.own_only &&
+  !l.each &&
+  (!inst_owners_kept() || l.block_owners is Some(_)) &&
+  !l.told &&
+  !scene.marked.contains(l.id) &&
+  !scene.moved_layers.contains(l.id)
+}
+
+///|
+/// Layer `c`, held by `l` put into the frame as kept, drawn anew where its reference in `l`'s block is: where the tree
+/// has its node now (scene_place_now), in the clip, fades, stretches and glyph looks it was drawn in (its holder's, as
+/// kept), as it keeps how it is drawn where that stands, else by a walk of the tree from it. Where the tree no longer
+/// has it in its holder, nothing (as the walk leaves out what is out of its row).
+fn Ctx::scene_redrawn_in(self : Ctx, l : SceneLayer, c : SceneLayer) -> Unit {
+  guard view_app.val is Some(tree) && scene_place_now(tree, c) is Some(place) else { return }
+  clip_put_back(c.clip, c.clip_window, c.clip_apart)
+  let p = TreePaint::new(tree, -1, true)
+  for f in c.fading {
+    p.fading.push(f)
+    p.fade_depth.push(-1)
+  }
+  for s in c.stretching {
+    p.stretching.push(s)
+    p.stretch_depth.push(-1)
+  }
+  for g in c.glyphing {
+    p.glyphing.push(g)
+    p.glyph_depth.push(-1)
+  }
+  let was = scene.drawing
+  scene.drawing = Some(l)
+  match scene_entries_kept(c.id, place) {
+    Some(k) => self.scene_replayed(p, k, None, place, 0)
+    None => {
+      let entries : Ref[Array[SceneEntry]] = Ref([])
+      let m = self.scene_drawn(c.id, None, place, c.fading, c.stretching, c.glyphing, fn() {
+        entries.val = self.tree_walk(p, c.id.at, place, 0, None)
+      })
+      scene_entries_keep(m, entries.val, place)
+    }
+  }
+  scene.drawing = was
+  pop_clip()
+  // (what holds it as own only, as drawn each frame, as it now is: put in as kept no more)
+  if c.own_only {
+    l.own_only = true
+  }
+  if c.each {
+    l.each = true
   }
 }

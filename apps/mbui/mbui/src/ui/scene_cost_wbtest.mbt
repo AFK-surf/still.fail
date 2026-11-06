@@ -73,13 +73,13 @@ fn spinner_over(n : Int) -> (SceneWork, Array[(Double, Double, Double, Double)])
 test "a spinner turning over a chat's 3000 messages costs what it costs over an empty page: its own drawing, its own part" {
   let (empty, empty_parts) = spinner_over(0)
   let (long, long_parts) = spinner_over(3000)
-  // (it turned, each step a frame of the tree alone; what the old frame painted meanwhile copied the rest as kept)
-  assert_true(empty.alone > 0, msg="\{empty}: \{scene_alone_why()}")
+  // (it turned, each step drawn anew where its reference is, the list beside it copied as kept)
+  assert_true(long.copied > 0, msg="\{long}: \{scene_alone_why()}")
   // (the same work each way: the layers drawn, their instances, what was reached of where the window changed)
   // (the instances copied as kept by what the old frame painted meanwhile: an adapter's, as many as there are, no work
   // of the scene's)
   // (what the old frame painted meanwhile, for its own, aside: what the spinner's own frames drew and worked out)
-  let work = fn(w : SceneWork) { (w.alone, w.alone_recorded, w.alone_parts) }
+  let work = fn(w : SceneWork) { (w.recorded, w.parts) }
   assert_eq(work(long), work(empty), msg="over the list \{long}, over nothing \{empty}; last frame: \{scene_alone_why()}")
   // (and its step drawn again where the spinner reaches, before and now: its turn's circle, its edge's reach, nothing
   // of the list)

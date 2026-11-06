@@ -60,15 +60,15 @@ test "a conditional child comes and goes beside another layer: the scene's own f
   for on in [false, true, false] {
     shown.set(on)
     t.clock_frame()
-    // A following paint-only change lets the scene splice this layer beside the conditional one.
-    let was = scene_done().alone
+    // (a following paint-only change: the sibling drawn anew where its reference is, the card beside it copied as kept)
+    let was = scene_done().copied
     light.val = !light.val
     other.set(if light.val { 0x339955FFL } else { 0xAA5533FFL })
     t.clock_frame()
-    let alone = scene_done().alone > was
+    let copied = scene_done().copied > was
     let kept = t.drawn_instances_keyed()
     g().scene_check(-1)
-    assert_true(alone, msg="a scene frame after shown=\{on}: \{scene_alone_why()}")
+    assert_true(copied, msg="a scene frame after shown=\{on}: \{scene_alone_why()}")
     assert_eq(t.drawn_instances_keyed(), kept, msg="shown=\{on}: a scene frame matches every layer drawn")
   }
 }
