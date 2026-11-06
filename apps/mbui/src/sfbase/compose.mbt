@@ -848,19 +848,8 @@ pub fn drafts_given_read() -> Unit {
 let draft_takers : Map[String, Array[(@view.View, () -> Unit)]] = {}
 
 ///|
-/// Whether anything put into draft `key` from elsewhere waits to be taken.
-fn draft_waiting(key : String) -> Bool {
-  shared_into.contains(key) ||
-  quoted_into.contains(key) ||
-  followed_into.contains(key) ||
-  marked_into.contains(key) ||
-  files_put.iter().any(fn(x) { x.0 == key })
-}
-
-///|
 /// Node `v` (a composer of the tree's) takes what is put into draft `key` from elsewhere with `take`, at once, as it is
-/// put there (draft_given_to), while it is there. Let go with what still waits for the draft, another of the draft's
-/// still there takes it at that moment (draft_take_at).
+/// put there (draft_given_to), while it is there.
 pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit {
   let list = draft_takers.get(key).unwrap_or([])
   list.push((v, take))
@@ -871,8 +860,6 @@ pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit
         list.retain(fn(t) { !physical_equal(t.1, take) })
         if list.is_empty() {
           draft_takers.remove(key)
-        } else if draft_waiting(key) {
-          draft_take_at(key)
         }
       }
       None => ()
@@ -894,8 +881,9 @@ pub fn draft_given_to(key : String) -> Unit {
 
 ///|
 /// The same as an event of the tree's at this moment (where nothing may be written yet: what the host hands on as a
-/// frame begins), by the draft's last taker's node; that node let go before it, the next of the draft's takes it then
-/// (draft_taker_said); none, an old view's composer as it next builds.
+/// frame begins), by the draft's last taker's node; none, an old view's composer as it next builds. Done before any
+/// change of the tree's structure after it (Tree::at_cause advances to its moment first, what is due by then done): a
+/// change letting that node go comes after it has taken it.
 pub fn draft_take_at(key : String) -> Unit {
   match draft_takers.get(key) {
     Some(list) if list.length() > 0 => {

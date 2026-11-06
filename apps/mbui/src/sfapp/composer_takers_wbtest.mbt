@@ -110,3 +110,50 @@ test "a file picked for one chat, another opened before the picker answers: neve
     assert_eq(a.files.get().length(), a_before + 1, msg="\{width}: not again")
   }
 }
+
+///|
+test "a file picked for a chat, the picker answering as the frame begins and the chat left for another as that frame begins too, after: in its own draft once, never in the other's" {
+  for at in [(1280.0, 0), (390.0, 2)] {
+    let (width, platform) = at
+    new_run()
+    let src = fixture("chat")
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+    let root : Ref[@view.View?] = Ref(None)
+    let t = @ui.Tester::new(
+      fn(c) { view(c, src) },
+      tree=fn(v) {
+        app_tree(src)(v)
+        root.val = Some(v)
+      },
+      w=width,
+      h=844.0,
+      platform~,
+    )
+    t.run_for(@ui.move_most_ms)
+    let a = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
+    let a_before = a.files.get().length()
+    // (what the host has once, held after the composer's: said as the same frame begins, after the picker's answer is
+    // taken, another chat opened at that moment, as what the host hands on does: nothing written as it is handed on)
+    let armed = Ref(false)
+    let r = root.val.unwrap()
+    @ui.on_host_said(r, kind="test-another", fn() { if armed.val { Some(()) } else { None } }, fn(_) {
+      armed.val = false
+      r.at_moment(r.cause_at(), fn() {
+        open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
+      })
+      |> ignore
+    })
+    t.picks([("a.png", b"\x89PNG\r\n\x1a\n")])
+    @sfpages.pick_files(a)
+    armed.val = true
+    t.frame()
+    assert_eq(a.files.get().length(), a_before + 1, msg="\{width}: in its own draft, by the frame it was answered")
+    assert_true(!@sfbase.shared_into.contains("ws1/st1:s-c1"), msg="\{width}: nothing left waiting")
+    t.run_for(@ui.move_most_ms * 2.0)
+    let b_files = @sfbase.writings.get("ws1/st1:s-c2").map(fn(w) { w.files.get().length() }).unwrap_or(0)
+    assert_eq(b_files, 0, msg="\{width}: none of it in the other chat's draft")
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+    t.run_for(@ui.move_most_ms * 2.0)
+    assert_eq(a.files.get().length(), a_before + 1, msg="\{width}: once, back on it")
+  }
+}
