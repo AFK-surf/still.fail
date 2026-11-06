@@ -274,9 +274,9 @@ priv struct Scene {
   /// what the whole was drawn by (the window, its scale, its ground, the atlas): another, drawn whole, nothing kept
   mut drawn_by : DrawnBy
   /// the captures of glass in the frame (@damage.capture_of: each group's together), and its instances showing a
-  /// stream's picture (drawn again each frame: their reach)
+  /// stream's picture (its number and reach, drawn again when that texture is latched)
   captures : Array[(Double, (Double, Double, Double, Double))]
-  streams : Array[(Double, Double, Double, Double)]
+  streams : Array[(Int, (Double, Double, Double, Double))]
   /// what the old frame drew, by the old view it is in (the old frame's own: none), as far as it reaches: the frame
   /// before's and this one's
   old_before : Map[@view.NodeId?, (Double, Double, Double, Double)]
@@ -1050,7 +1050,8 @@ fn Ctx::scene_end(self : Ctx) -> Unit {
       None => ()
     }
     if @damage.shows_stream(a, k) {
-      scene.streams.push(scene.parts.reach_of(a, k, k + 1))
+      let id = a[k * inst_size + 20].to_int() - @hostapi.stream_tex_base
+      scene.streams.push((id, scene.parts.reach_of(a, k, k + 1)))
     }
   }
 }
@@ -1741,11 +1742,14 @@ fn scene_anew(atlas_gone : Bool) -> Unit {
 
 ///|
 /// The parts the frame presented now is drawn again in, said by its causes (h_present): what showed a stream's picture
-/// too (it changes under the same numbers), the captures of glass a part reaches taken in whole.
+/// too where its texture changed (it changes under the same numbers), the captures of glass a part reaches taken in whole.
 fn Ctx::scene_parts_taken(self : Ctx) -> Array[(Double, Double, Double, Double)] {
-  for r in scene.streams {
-    scene.parts.add(r)
+  for (id, r) in scene.streams {
+    if changed_streams.contains(id) {
+      scene.parts.add(r)
+    }
   }
+  changed_streams.clear()
   let parts = scene.parts.take(self.window_w, self.window_h, scene.captures.map(fn(c) { c.1 }))
   if !parts.is_empty() {
     scene.told_parts = parts

@@ -536,10 +536,13 @@ test "an Android device's preview: H.264 where the host decodes it, drawn from t
   t.frame()
   assert_eq(acks().length(), 2)
   assert_eq(number(Some(acks()[1].params), "ts"), 102.0)
+  assert_true(t.drawlist().contains("stream 320x640 ts=102"), msg="the card shows the next decoded frame")
   // gone from view: its decoder stopped, its place given back
   t.app_state(false, false)
   assert_eq(running(streams, cancelled).length(), 0)
   assert_eq(@sfbase.video_peeks.val, 0)
+  t.frame()
+  assert_false(t.drawlist().contains("stream 320x640"), msg="the stopped decoder is no longer drawn")
 }
 
 ///|

@@ -4,6 +4,132 @@
 let wb_avcc : Bytes = b"\x01\x42\xc0\x1f\xff\xe1\x00\x06\x67\x42\xc0\x1f\xda\x01\x01\x00\x04\x68\xce\x3c\x80"
 
 ///|
+test "a tree stream draws decoded frames locally and goes when its node is let go" {
+  let shown = @signals.signal(true)
+  let t = Tester::new(fn(_) {  }, w=400.0, h=300.0, h264=true)
+  let acks = []
+  let s = Stream::new(shown=fn(ts) { acks.push(ts) }, broken=fn() {  })
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(pic) {
+      pic.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      stream_node(pic, fn() { Some(s) }, fit=FitCoverAt(0.0))
+    })
+  })
+  t.draw()
+  s.h264(wb_avcc, 320, 640)
+  s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  t.stream_shows(s.id(), 1.0, 320, 640)
+  t.frame()
+  assert_true(t.drawlist().contains("stream 320x640 ts=1"), msg=t.drawlist())
+  assert_eq(acks, [1.0])
+  t.measure_as_host()
+  t.record_host()
+  s.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  t.stream_shows(s.id(), 2.0, 320, 640)
+  t.frame()
+  assert_true(t.drawlist().contains("stream 320x640 ts=2"), msg=t.drawlist())
+  assert_eq(acks, [1.0, 2.0])
+  let frames = t.host_frames()
+  assert_true(frames.iter().any(fn(f) { !f.damage.is_empty() && f.damage_share < 0.5 }), msg="the changed picture is presented locally: \{frames}")
+  assert_true(frames.iter().all(fn(f) { f.missed.is_empty() }), msg="the presented parts cover the change: \{frames}")
+  shown.set(false)
+  t.frame()
+  assert_false(t.drawlist().contains("stream 320x640"), msg="the removed node draws nothing")
+  s.frame(b"\x00\x00\x00\x01\x41", false, 3.0)
+  t.stream_shows(s.id(), 3.0, 320, 640)
+  t.frame()
+  assert_eq(acks, [1.0, 2.0, 3.0])
+  assert_false(t.drawlist().contains("stream 320x640"), msg="a later frame does not bring back the removed node")
+  s.close()
+}
+
+///|
+test "a new frame in one tree stream does not damage another stream" {
+  let t = Tester::new(fn(_) {  }, w=400.0, h=300.0, h264=true)
+  let left_acks = []
+  let right_acks = []
+  let left = Stream::new(shown=fn(ts) { left_acks.push(ts) }, broken=fn() {  })
+  let right = Stream::new(shown=fn(ts) { right_acks.push(ts) }, broken=fn() {  })
+  set_view_app(fn(root) {
+    root.show(fn() { true }, fn(pic) {
+      pic.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      stream_node(pic, fn() { Some(left) })
+    })
+    root.show(fn() { true }, fn(pic) {
+      pic.over(Is(true)).offset(Is((260.0, 20.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      stream_node(pic, fn() { Some(right) })
+    })
+  })
+  t.draw()
+  for s in [left, right] {
+    s.h264(wb_avcc, 320, 640)
+    s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+    t.stream_shows(s.id(), 1.0, 320, 640)
+  }
+  t.frame()
+  assert_eq(left_acks, [1.0])
+  assert_eq(right_acks, [1.0])
+  t.measure_as_host()
+  t.record_host()
+  left.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  t.stream_shows(left.id(), 2.0, 320, 640)
+  t.frame()
+  let frames = t.host_frames()
+  assert_true(frames.iter().any(fn(f) { !f.damage.is_empty() }), msg="the changed picture is presented: \{frames}")
+  assert_true(frames.iter().all(fn(f) { f.damage.iter().all(fn(r) { r.2 >= 0.0 && r.0 + r.2 < 200.0 }) }), msg="the other picture remains kept: \{frames}")
+  assert_true(frames.iter().all(fn(f) { f.missed.is_empty() }), msg="the changed picture is covered: \{frames}")
+  assert_eq(left_acks, [1.0, 2.0])
+  assert_eq(right_acks, [1.0])
+  right.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  t.stream_shows(right.id(), 2.0, 320, 640)
+  t.frame()
+  let frames = t.host_frames()
+  assert_true(frames.iter().any(fn(f) { !f.damage.is_empty() }), msg="the other changed picture is presented: \{frames}")
+  assert_true(frames.iter().all(fn(f) { f.damage.iter().all(fn(r) { r.2 >= 0.0 && r.0 >= 200.0 }) }), msg="the first picture remains kept: \{frames}")
+  assert_true(frames.iter().all(fn(f) { f.missed.is_empty() }), msg="the other changed picture is covered: \{frames}")
+  assert_eq(right_acks, [1.0, 2.0])
+  left.close()
+  right.close()
+}
+
+///|
+test "one decoded stream drawn in two tree nodes damages both places once shown" {
+  let t = Tester::new(fn(_) {  }, w=400.0, h=300.0, h264=true)
+  let acks = []
+  let stream = Stream::new(shown=fn(ts) { acks.push(ts) }, broken=fn() {  })
+  set_view_app(fn(root) {
+    for x in [20.0, 260.0] {
+      root.show(fn() { true }, fn(pic) {
+        pic.over(Is(true)).offset(Is((x, 20.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+        stream_node(pic, fn() { Some(stream) })
+      })
+    }
+  })
+  t.draw()
+  stream.h264(wb_avcc, 320, 640)
+  stream.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  t.stream_shows(stream.id(), 1.0, 320, 640)
+  t.frame()
+  t.measure_as_host()
+  t.record_host()
+  stream.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  t.stream_shows(stream.id(), 2.0, 320, 640)
+  t.frame()
+  let frames = t.host_frames()
+  assert_true(frames.iter().any(fn(f) { f.damage.iter().any(fn(r) { r.2 >= 0.0 && r.0 <= 20.0 && r.0 + r.2 >= 120.0 }) }), msg="the first place is presented: \{frames}")
+  assert_true(frames.iter().any(fn(f) { f.damage.iter().any(fn(r) { r.2 >= 0.0 && r.0 <= 260.0 && r.0 + r.2 >= 360.0 }) }), msg="the second place is presented: \{frames}")
+  assert_true(frames.iter().all(fn(f) { f.missed.is_empty() }), msg="both pictures are covered: \{frames}")
+  assert_eq(acks, [1.0, 2.0])
+  stream.frame(b"\x00\x00\x00\x01\x41", false, 3.0)
+  t.stream_drops(stream.id(), 3.0)
+  t.frame()
+  let frames = t.host_frames()
+  assert_true(frames.iter().all(fn(f) { f.damage.is_empty() }), msg="a dropped frame changes neither picture: \{frames}")
+  assert_eq(acks, [1.0, 2.0, 3.0])
+  stream.close()
+}
+
+///|
 test "a frame let go in a frame that took its events already: the next frame is owed, takes it and says it shown" {
   let cell : Ref[Stream?] = Ref::new(None)
   let feed : Ref[Bool] = Ref::new(false)

@@ -392,6 +392,7 @@ fn view_forget() -> Unit {
   }
   passive_hold_cancel()
   passive_holds.clear()
+  tree_streams.clear()
   // (what was said of its nodes' corners its own: tree_corners_linked)
   tree_links.clear()
   view_app.val = None
@@ -1860,6 +1861,28 @@ fn Ctx::tree_draw_own(
       inst_owners.painting = was
       inst_owners.tree_painting = was_tree
     }
+    _ => ()
+  }
+  // A stream's decoded picture belongs to its node and follows the layer that draws it.
+  match tree_streams.get(c.id) {
+    Some(st) if c.bones == 0L =>
+      match (st.source)() {
+        Some(picture) => {
+          picture.read_picture()
+          let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+          inst_owners.painting = -1
+          inst_owners.tree_painting = Some(c.id)
+          let before = self.ninst
+          self.draw_stream(picture, x, y, c.w * s, c.h * s, st.fit, c.radius * s, a)
+          match c.corners {
+            Some((tl, tr, br, bl)) if self.ninst > before => self.corners_last_each(tl * s, tr * s, br * s, bl * s)
+            _ => ()
+          }
+          inst_owners.painting = was
+          inst_owners.tree_painting = was_tree
+        }
+        None => ()
+      }
     _ => ()
   }
   // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and

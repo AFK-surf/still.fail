@@ -490,6 +490,12 @@ pub let video_peeks : Ref[Int] = Ref(0)
 
 ///|
 pub fn peeks_reset() -> Unit {
+  for _, p in peeks {
+    match p.stream {
+      Some(st) => st.close()
+      None => ()
+    }
+  }
   peeks.clear()
   peeks_built.clear()
   peeks_node_held.clear()
@@ -636,6 +642,7 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
               },
             )
             p.stream = Some(st)
+            peeks_told.set(@signals.untracked(fn() { peeks_told.get() }) + 1)
             st
           }
         }
@@ -716,11 +723,15 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
 /// Its video's decoder stopped and its place among the app's video previews given back (its last picture goes with it:
 /// a JPEG one, kept, shows until the next).
 fn peek_drop_video(p : Peek) -> Unit {
-  match p.stream {
-    Some(st) => st.close()
+  let stream = p.stream
+  p.stream = None
+  match stream {
+    Some(st) => {
+      st.close()
+      peeks_told.set(@signals.untracked(fn() { peeks_told.get() }) + 1)
+    }
     None => ()
   }
-  p.stream = None
   if p.video {
     p.video = false
     video_peeks.val = if video_peeks.val > 0 { video_peeks.val - 1 } else { 0 }
