@@ -104,6 +104,12 @@ priv struct SceneLayer {
   /// whether it is left out whole where all it reached as last drawn lies wholly outside what it is drawn in and the
   /// window, put where it is (nothing of it drawn moved after it is drawn: scene_layer_skippable)
   mut skippable : Bool
+  /// whether it is drawn from a place of its own (`origin`, where that is in what holds it): its block in its own
+  /// terms, put where it is as it is closed or put together (Ctx::scene_origin_put); and the level of clip_stack its own
+  /// drawing begins on (its own place's, or what holds it's), what its instances' levels are told from
+  mut has_origin : Bool
+  mut origin : (Double, Double)
+  mut base_lvl : Int
   /// how far what it drew itself reached as drawn (`own_reach`, in its block's terms), and all it and what it holds reach
   /// now, where it is put (`now_reach`): whether it is left out, the same whether drawn or put together of what is kept
   own_reach : @damage.Rect
@@ -1190,6 +1196,8 @@ fn Ctx::scene_copied(
   guard !l.own_only else { return copy_not(id, "own only") }
   guard !l.each else { return copy_not(id, "drawn each frame") }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked or told") }
+  // (drawn from a place of its own: drawn again, its block not yet put together so)
+  guard !l.has_origin else { return copy_not(id, "drawn from its own place") }
   // (what it was drawn in, as it is drawn in now, but where: its key; another, drawn anew)
   guard scene_began_same(l, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
   // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
@@ -1340,6 +1348,9 @@ fn Ctx::scene_drawn(
         inner_cuts: @damage.Rect::none(),
         fades_inside: false,
         skippable: false,
+        has_origin: false,
+        origin: (0.0, 0.0),
+        base_lvl: 0,
         own_reach: @damage.Rect::none(),
         now_reach: @damage.Rect::none(),
       }
@@ -1539,6 +1550,10 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
   l.seen = scene.frame
   // (all it drew kept as its own, what it is copied from where it is kept)
   self.scene_block_kept(l, k0, s0)
+  // (drawn from a place of its own: put where that is in what holds it)
+  if l.has_origin {
+    scene_origin_put(self.inst, k0, self.ninst, l.origin, l.base_lvl - 1, l.clip)
+  }
   // (the host's controls it drew, each by its instance from its first: where it is put, the same)
   for i, a in l.anchors {
     l.anchors[i] = (a.0, a.1 - k0)
@@ -2349,6 +2364,7 @@ fn Ctx::scene_offset_ok(
 ///|
 /// Whether layer `l` is kept as it was drawn but for where it is (Ctx::scene_copied's asks but its place's).
 fn scene_kept_but_place(l : SceneLayer) -> Bool {
+  !l.has_origin &&
   !scene.fresh &&
   l.seen >= 0 &&
   l.seen >= scene.frame - 1 &&
@@ -2410,6 +2426,7 @@ fn scene_reach_moved(l : SceneLayer, dx : Double, dy : Double) -> Unit {
 /// Whether layer `l`, held by one put into the frame as kept, is put in as kept too (what Ctx::scene_copied asks of a
 /// layer the walk reaches, but what it is drawn in: as its holder kept it, its holder's own drawing kept).
 fn scene_copyable(l : SceneLayer) -> Bool {
+  !l.has_origin &&
   !scene.fresh &&
   l.seen >= 0 &&
   l.seen >= scene.frame - 1 &&
@@ -2486,8 +2503,23 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
 /// everything (Ctx::raise_tops; Chromium's top layer, Flutter's Overlay): the layer's own block whole, nothing of it
 /// parted by what is raised.
 fn Ctx::scene_tops_taken(self : Ctx, l : SceneLayer, from : Int) -> Unit {
+  let t0 = l.tops.length()
   for q in (from * inst_size)..<(self.ninst * inst_size) {
     l.tops.push(self.inst[q])
+  }
+  // (in the window's terms: put where what is over everything is raised, in no layer's place of its own)
+  let (fx, fy) = scene_frame_origin.val
+  if fx != 0.0 || fy != 0.0 {
+    let mut q = t0
+    while q < l.tops.length() {
+      l.tops[q] = l.tops[q] + fx
+      l.tops[q + 1] = l.tops[q + 1] + fy
+      if l.tops[q + 32] != 0.0 {
+        l.tops[q + 33] = l.tops[q + 33] + fx
+        l.tops[q + 34] = l.tops[q + 34] + fy
+      }
+      q = q + inst_size
+    }
   }
   if inst_owners_kept() {
     let r = owners_run(from, self.ninst)
@@ -2706,8 +2738,10 @@ fn Ctx::scene_reach_out(
 ) -> Bool {
   let (x0, y0, x1, y1) = l.now_reach.rect()
   guard x1 > x0 && y1 > y0 else { return false }
-  let (ax0, ay0) = (dmax(cx0, 0.0), dmax(cy0, 0.0))
-  let (ax1, ay1) = (dmin(cx1, self.width), dmin(cy1, self.height))
+  // (the clip in the terms of what is drawn now, told in the window's, where all it reached is told)
+  let (fx, fy) = scene_frame_origin.val
+  let (ax0, ay0) = (dmax(cx0 + fx, 0.0), dmax(cy0 + fy, 0.0))
+  let (ax1, ay1) = (dmin(cx1 + fx, self.width), dmin(cy1 + fy, self.height))
   x0 + mx >= ax1 || y0 + my >= ay1 || x1 + mx <= ax0 || y1 + my <= ay0
 }
 
@@ -2837,3 +2871,153 @@ fn scene_check_begin() -> Unit {
 /// A Tester's: how far a layer's own instances reach, worked out from them as its block is kept (Ctx::scene_block_kept).
 // kept across runs: cleared as each block is kept
 let own_reach_checked : @damage.Rect = @damage.Rect::none()
+
+///|
+/// Where the terms what is being drawn now is drawn in begin, in the window's: the places of their own of the layers
+/// being drawn, added (Ctx::tree_walk). What is told the window (where a node reaches) is told in its terms.
+// kept across runs: put back as each layer drawn from its own place is closed
+let scene_frame_origin : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// Whether layer `l`, its node where `at` says in what holds it, is drawn from a place of its own there: its place on
+/// the window's pixels (what it draws on them, its glyphs, set on them in its own terms as they would be in the
+/// window's), nothing of what holds it fading, stretching it or setting its glyphs (what those do is where they are, in
+/// what holds it's terms), nothing in it drawn otherwise than by the tree (an old view, glass, a native view's anchor:
+/// drawn in the window's terms, Tree::holds_own_only), and somewhere else than where what holds it begins.
+fn Ctx::scene_origin_may(self : Ctx, p : TreePaint, l : SceneLayer, at : (Double, Double, Double, Double, Double, Double)) -> Bool {
+  let (x, y, _, _, _, _) = at
+  let sc = self.scale
+  (x != 0.0 || y != 0.0) &&
+  (x * sc).round() == x * sc &&
+  (y * sc).round() == y * sc &&
+  p.fading.is_empty() &&
+  p.stretching.is_empty() &&
+  p.glyphing.is_empty() &&
+  !p.tree.holds_own_only(l.id)
+}
+
+///|
+/// The clip painted in now pushed again in the terms of a place (`x`, `y`) in it: what is drawn from that place cut as
+/// it is, in its own terms (Ctx::tree_walk). Its outer from where the one it is pushed again of has it.
+fn scene_origin_push(x : Double, y : Double) -> Unit {
+  let k = clip_top()
+  let level = clip_n
+  let from = clip_from_of(k / clip_n)
+  let window = clip_is_window(k)
+  let apart = clip_is_apart(k)
+  for j in 0..<level {
+    clip_stack.push(clip_stack[k + j])
+  }
+  let t = clip_top()
+  let outer = clip_stack[t + 16] > 0.0 || clip_stack[t + 17] > 0.0 || clip_stack[t + 18] > 0.0 || clip_stack[t + 19] > 0.0
+  for at in [0, 12] {
+    if at == 0 || outer {
+      clip_stack[t + at] = clip_stack[t + at] - x
+      clip_stack[t + at + 1] = clip_stack[t + at + 1] - y
+      clip_stack[t + at + 2] = clip_stack[t + at + 2] - x
+      clip_stack[t + at + 3] = clip_stack[t + at + 3] - y
+    }
+  }
+  clip_say_apart(apart)
+  clip_say_window(window)
+  clip_say_from(from)
+}
+
+///|
+/// Instances `k0` to `k1` of `a`, drawn from a place of their own (`o`) in what holds them, its clip at level `b` of
+/// clip_stack (`clip`, as clip_kept keeps it) pushed again in their terms at `b` + 1 (scene_origin_push): put where that
+/// place is, in what holds them's terms, the same whether drawn so now or put together of what was kept (every number
+/// worked out the same way). Their places, where they are turned about and their own soft cuts moved by it; their clip
+/// and its outer where those are the clip they began in, or its outer, those as what holds them has them; the clips
+/// they pushed themselves moved by it. Each instance's levels (inst_levels, inst_froms) told so.
+fn scene_origin_put(a : FixedArray[Double], k0 : Int, k1 : Int, o : (Double, Double), b : Int, clip : FixedArray[Double]) -> Unit {
+  let (ox, oy) = o
+  let t = b + 1
+  let outer_from = clip_from_of(b)
+  let mv = fn(at : Int) {
+    if a[at] > -1.0e9 && a[at] < 1.0e9 {
+      a[at] = a[at] + ox
+    }
+    if a[at + 1] > -1.0e9 && a[at + 1] < 1.0e9 {
+      a[at + 1] = a[at + 1] + oy
+    }
+    if a[at + 2] > -1.0e9 && a[at + 2] < 1.0e9 {
+      a[at + 2] = a[at + 2] + ox
+    }
+    if a[at + 3] > -1.0e9 && a[at + 3] < 1.0e9 {
+      a[at + 3] = a[at + 3] + oy
+    }
+  }
+  for k in k0..<k1 {
+    let q = k * inst_size
+    if a[q + 5] == 12.0 {
+      continue
+    }
+    a[q] = a[q] + ox
+    a[q + 1] = a[q + 1] + oy
+    if a[q + 32] != 0.0 {
+      a[q + 33] = a[q + 33] + ox
+      a[q + 34] = a[q + 34] + oy
+    }
+    if a[q + 53] > 0.0 {
+      a[q + 52] = a[q + 52] + oy
+    }
+    if a[q + 55] > 0.0 {
+      a[q + 54] = a[q + 54] + oy
+    }
+    if a[q + 57] > 0.0 {
+      a[q + 56] = a[q + 56] + ox
+    }
+    if a[q + 59] > 0.0 {
+      a[q + 58] = a[q + 58] + ox
+    }
+    let lv = if k < inst_levels.length() { inst_levels[k] } else { t }
+    let fr = if k < inst_froms.length() { inst_froms[k] } else { -1 }
+    // (its clip: the one it began in, as what holds it has it; one of its own moved)
+    if lv <= t {
+      for j in 0..<4 {
+        a[q + 16 + j] = clip[j]
+      }
+      for j in 0..<8 {
+        a[q + 24 + j] = clip[4 + j]
+      }
+      if k < inst_levels.length() {
+        inst_levels[k] = b
+      }
+    } else {
+      mv(q + 16)
+    }
+    // (its outer: none; the clip it began in or that one's outer, as what holds it has them; one of its own moved)
+    if fr >= 0 {
+      if fr == t {
+        for j in 0..<12 {
+          a[q + 40 + j] = clip[j]
+        }
+        if k < inst_froms.length() {
+          inst_froms[k] = b
+        }
+      } else if fr < t {
+        for j in 0..<12 {
+          a[q + 40 + j] = clip[12 + j]
+        }
+        if k < inst_froms.length() {
+          inst_froms[k] = outer_from
+        }
+      } else {
+        mv(q + 40)
+      }
+    }
+  }
+}
+
+///|
+/// How far something reaches, worked out in the terms of what is drawn now (from the places of their own of the layers
+/// drawn so: scene_frame_origin), told in the window's.
+fn scene_reach_in_window(r : @damage.Rect) -> Unit {
+  let (fx, fy) = scene_frame_origin.val
+  let (x0, y0, x1, y1) = r.rect()
+  if (fx != 0.0 || fy != 0.0) && x1 > x0 {
+    r.clear()
+    r.add(x0 + fx, y0 + fy, x1 + fx, y1 + fy)
+  }
+}
