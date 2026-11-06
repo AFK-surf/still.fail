@@ -918,6 +918,10 @@ pub struct Tree {
   mut modals_at : Double
   /// the change whose modal state will be published, including its layout work if notification is deferred
   mut modals_budget : (Ref[Int], Ref[Bool])?
+  /// The current modal telling's descendants share its pass ancestry until that signal drain finishes.
+  mut modal_telling_life : Ref[Bool]?
+  /// The lifetime of the telling that produced the pending notification, if any.
+  mut modal_life : Ref[Bool]?
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
@@ -1235,6 +1239,8 @@ pub fn Tree::new(
     modals_telling: 0,
     modals_at: -1.0,
     modals_budget: None,
+    modal_telling_life: None,
+    modal_life: None,
     held: None,
     gesture_tapped: false,
     taps_withheld: false,
@@ -1967,6 +1973,8 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.modals.clear()
   self.modals_due = false
   self.modals_budget = None
+  self.modal_telling_life = None
+  self.modal_life = None
   self.back_said_at.clear()
   self.keys_said_at.clear()
   // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
@@ -4239,6 +4247,19 @@ fn Tree::modals_told(self : Tree) -> Unit {
   self.modals_due = true
   self.modals_at = self.cause_now()
   self.modals_budget = self.brought_budget
+  if self.modals_telling > 0 {
+    let life = match self.modal_telling_life {
+      Some(life) => life
+      None => {
+        let life = Ref(true)
+        self.modal_telling_life = Some(life)
+        life
+      }
+    }
+    self.modal_life = Some(life)
+  } else {
+    self.modal_life = None
+  }
   self.modals_settled()
 }
 
@@ -4267,18 +4288,37 @@ fn Tree::modals_settled(self : Tree) -> Unit {
         return
       }
       if self.modals_due {
-        // Another change may have replaced the one that scheduled this callback. Use the latest notification's
-        // budget, including when it has none, rather than the caller's or the original notification's.
+        // A notification held in a signal batch may outlive the operation that asked for it. It belongs to the
+        // operation dispatching it, except for a descendant of another modal telling: that chain retains its pass
+        // ancestry even when the signal queue tells it after its parent callback returns.
         let was_budget = self.brought_budget
-        self.brought_budget = self.modals_budget
+        self.brought_budget = match (self.modals_budget, was_budget) {
+          (Some((_, said_stop)), Some((_, telling_stop))) if physical_equal(said_stop, telling_stop) => self.modals_budget
+          (_, Some(_)) => was_budget
+          (Some(_), None) if self.modal_life is Some(life) && life.val => self.modals_budget
+          _ => Some((Ref(0), Ref(false)))
+        }
         defer { self.brought_budget = was_budget }
         self.modals_due = false
         self.modals_budget = None
+        self.modal_life = None
         let was = self.cause_at
         self.cause_at = self.modals_at
+        let was_life = self.modal_telling_life
+        self.modal_telling_life = None
         self.modals_telling += 1
         self.modals_now()
         self.modals_telling -= 1
+        let life = self.modal_telling_life
+        self.modal_telling_life = was_life
+        if life is Some(life) {
+          if @signals.batch_depth() > 0 {
+            // A batch opened by the callback outlived it. Its notifications belong to a later operation.
+            life.val = false
+          } else {
+            @signals.after_all_flushed(fn() { life.val = false })
+          }
+        }
         self.cause_at = was
       }
     })

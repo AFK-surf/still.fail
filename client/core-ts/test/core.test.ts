@@ -370,6 +370,40 @@ test("back_on_screen_is_said_with_how_long_it_was_away", async () => {
   core.close();
 });
 
+test("UI fault spans never include an arbitrary fault message", async () => {
+  const { host, core } = await cloudCore();
+  const spans: { name: string; at: Record<string, unknown> }[] = [];
+  core.inner.tracer.setExport((body) => Effect.sync(() => {
+    for (const r of (JSON.parse(new TextDecoder().decode(body)) as { resourceSpans: { scopeSpans: { spans: { name: string; attributes: { key: string; value: Record<string, unknown> }[] }[] }[] }[] }).resourceSpans)
+      for (const sc of r.scopeSpans)
+        for (const sp of sc.spans) spans.push({ name: sp.name, at: Object.fromEntries(sp.attributes.map((a) => [a.key, Object.values(a.value)[0]])) });
+  }));
+  try {
+    const ui = core.connect();
+    call(core, ui, 1, "client.error", { source: "ui_fault", message: "Ctx::editor: /sentinel-private-folder/secret.txt" });
+    call(core, ui, 2, "client.error", { source: "ui_fault", message: "editor field reused" });
+    call(core, ui, 3, "client.error", { source: "android.decode", message: "a safe unrelated diagnostic" });
+    call(core, ui, 4, "client.error", { source: "ui_fault", message: "editor field reused /another-secret" });
+    call(core, ui, 5, "client.error", { source: "ui_fault", message: "editor field already in tree" });
+    call(core, ui, 6, "client.error", { source: "ui_fault", message: "tree field reused" });
+    call(core, ui, 7, "client.error", { source: "ui_fault", message: "scene layer conflict" });
+    call(core, ui, 8, "client.error", { source: "ui_fault", message: "panel cannot be presented" });
+    await host.time.pass(0);
+    core.inner.tracer.flush();
+    await host.time.pass(0);
+    assert.deepEqual(spans.filter((s) => s.name === "client.error").map((s) => [s.at["stillfail.source"], s.at["exception.message"]]), [
+      ["ui_fault", "UI fault"],
+      ["ui_fault", "editor field reused"],
+      ["android.decode", "a safe unrelated diagnostic"],
+      ["ui_fault", "editor field already in tree"],
+      ["ui_fault", "tree field reused"],
+      ["ui_fault", "scene layer conflict"],
+      ["ui_fault", "panel cannot be presented"],
+    ]);
+    assert.ok([...core.inner.reported.keys()].every((key) => !key.includes("sentinel-private-folder") && !key.includes("another-secret")));
+  } finally { core.close(); }
+});
+
 test("a_socket_that_answered_pings_and_went_silent_is_opened_again", async () => {
   const { host, core } = await cloudCore();
   const ui = core.connect();

@@ -200,6 +200,7 @@ export const AgentsLive = (control: Control) =>
         data,
         incompleteInstallation: () => codexIncomplete(),
         takenUp: takenUp.promise,
+        taking: () => control.taking(),
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
           borrowed: (p) => borrowed(p) || lentToSandbox(p),
@@ -214,6 +215,7 @@ export const AgentsLive = (control: Control) =>
       const cold = new ColdRooms(() => hub);
       const hub = new Hub({
         config: settings,
+        taking: () => control.taking(),
         store,
         previous,
         // The connects' chats (Slack's: slack/module.ts, which says them below); the station's own chat is the hub's.

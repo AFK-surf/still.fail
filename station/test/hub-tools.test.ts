@@ -13,6 +13,7 @@ import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { handedOf } from "../src/store/rows.ts";
+import { DecisionSessionsUnavailable } from "../src/store/legacy-decision-session.ts";
 import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
@@ -24,7 +25,7 @@ import { roomOf } from "../src/sessions/footprint.ts";
 import { claudeProject } from "../src/read/transcript.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
-import { review, reviewUndecided } from "../src/sessions/review.ts";
+import { review, reviewUndecided, startReview } from "../src/sessions/review.ts";
 import { cleanTitle, nameChat } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/adb/tool.ts";
 import { archiveTools } from "../src/tools/archive.ts";
@@ -1500,6 +1501,65 @@ test("turning the rule on reviews the done chats no decision has answered, once 
   await reviewUndecided(r.hub);
   assert.equal(r.store.recentDecisions().length, 1);
   await r.close();
+});
+
+test("a review waiting for old checks rechecks the rule and model before scanning chats again", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> explain retention");
+  await r.accept(m);
+  await settle();
+  const key = `cl:C1:${m.threadTs}`;
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Done", kind: "all_done", done: "Explained retention" });
+  r.claude.last().complete();
+  await settle();
+  installDecisionProfile(r, "http://127.0.0.1:1/systemone");
+  const ready = Promise.withResolvers<void>(), entered = Promise.withResolvers<void>();
+  const readyAgain = Promise.withResolvers<void>(), enteredAgain = Promise.withResolvers<void>();
+  let scans = 0;
+  const liveSessions = r.store.liveSessions.bind(r.store);
+  r.store.liveSessions = () => { scans++; return liveSessions(); };
+  r.store.lastDecision = () => { throw new DecisionSessionsUnavailable(); };
+  r.store.prepareDecisionSessions = async () => { entered.resolve(); await ready.promise; };
+  try {
+    const sweep = reviewUndecided(r.hub);
+    await entered.promise;
+    assert.equal(scans, 1);
+    r.edit((raw) => { raw.automaticDecisions.completion.enabled = false; });
+    ready.resolve();
+    await sweep;
+    assert.equal(scans, 1);
+
+    r.edit((raw) => { raw.automaticDecisions.completion.enabled = true; });
+    r.store.prepareDecisionSessions = async () => { enteredAgain.resolve(); await readyAgain.promise; };
+    const requested = startReview(r.hub);
+    await enteredAgain.promise;
+    r.edit((raw) => { raw.automaticDecisions.completion.model = "not-the-verified-model"; });
+    readyAgain.resolve();
+    assert.equal(await requested, null);
+    assert.equal(scans, 2);
+  } finally { ready.resolve(); readyAgain.resolve(); await r.close(); }
+});
+
+test("a review can use a decision in the bounded tail while the old lookup is preparing", async (t) => {
+  const r = new Rig();
+  const m = say("<@UBOT> explain retention");
+  await r.accept(m);
+  await settle();
+  const key = `cl:C1:${m.threadTs}`;
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Done", kind: "all_done", done: "Explained retention" });
+  r.claude.last().complete();
+  await settle();
+  const { url, server } = await provider(true);
+  t.after(() => server.close());
+  installDecisionProfile(r, url);
+  r.store.recordDecision(key, { purpose: "archive", policyAt: 0, result: null, error: "an earlier failure" });
+  r.store.decisionSessionsReady = () => false;
+  r.store.prepareDecisionSessions = async () => { throw new Error("the bounded tail should answer"); };
+  try {
+    await reviewUndecided(r.hub);
+    assert.ok(r.store.archiveSuggested(r.thread("C1", m.threadTs).id));
+    assert.equal(r.store.recentDecisions().length, 2);
+  } finally { await r.close(); }
 });
 
 test("the archive policy decides by the option picked; an agent changing it is kept by its session and asks again", async (t) => {
