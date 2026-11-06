@@ -1990,6 +1990,7 @@ pub fn View::laying_out(self : View) -> Bool {
 /// what that makes is laid out at once, in a pass of its own (Tree::owed_passes: "made after its layout"). Not done
 /// once it is let go.
 pub fn View::made_after_layout(self : View, f : () -> Unit) -> Unit {
+  guard self.alive() else { return }
   guard self.laying_out() else { f(); return }
   let id = self.id()
   let tree = self.tree
