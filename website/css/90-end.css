@@ -1,17 +1,49 @@
-/* ---------- End ---------- */
-.end { padding-top: clamp(72px, 8vw, 140px); }
-.end h2 { font-size: var(--t-display); line-height: 1.04; letter-spacing: -.03em; max-width: 14ch; }
-.end .row { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; flex-wrap: wrap; padding-bottom: clamp(40px, 5vw, 80px); }
-.end .lead { color: var(--brand-ink); margin-top: 20px; }
-/* ---------- End: the back cover ---------- */
-.end { background-image: linear-gradient(rgba(74,22,6,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(74,22,6,.09) 1px, transparent 1px); background-size: 48px 48px; background-position: center top; }
-.end-in { display: flex; flex-direction: column; align-items: center; text-align: center; padding-bottom: clamp(56px, 6vw, 96px); }
-.end-in h2 { margin-inline: auto; }
-.end-in .lead { margin-inline: auto; }
-.end-in .actions { justify-content: center; margin-top: 32px; }
-.tile-wrap { position: relative; width: 340px; max-width: 100%; height: 200px; margin-bottom: 28px; }
-.tile { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; transform: translate(-50%, -50%); border-radius: 22px; background: var(--ink); display: grid; place-items: center;
-  box-shadow: 0 0 0 10px rgba(255,255,255,.18), 0 24px 48px -20px rgba(42,11,2,.6); }
-.tile img { width: 72px; height: 72px; border-radius: 0; }
-.pixels i { position: absolute; width: 12px; height: 12px; border-radius: 2px; transform: translate(-50%, -50%); animation: blink 3.2s ease-in-out var(--d) infinite; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+/* ---------- End: the back cover ----------
+   Base, on a fine 48 px grid; everything centred (the one band the VI sets centred). The tile and its pixels sit on that
+   grid: the band's top padding is a whole number of cells, the tile with its ring is 3 × 3 cells, its frame 7 × 5, and
+   each pixel is a quarter cell on the quarter-cell lattice. The Week runs along the bottom edge (main.js draws it). */
+.end { --cell: 48px; }
+.end-in { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding-top: calc(var(--cell) * 3); padding-bottom: clamp(64px, 6.4vw, 104px); }
+/* The grid runs edge to edge from the top of the band and fades out just above the Week, so no cut cell meets it. */
+.end-in::before {
+  content: ""; position: absolute; z-index: -1; inset: 0 calc(50% - 50vw);
+  background-image: linear-gradient(rgba(74,22,6,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(74,22,6,.09) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell); background-position: center top;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent); mask-image: linear-gradient(#000 calc(100% - 2 * var(--cell)), transparent);
+}
+.end h2 { font-size: var(--t-display); line-height: var(--lh-display); letter-spacing: var(--tr-display); max-width: 13ch; margin-inline: auto; }
+.end .lead { color: var(--brand-ink); margin: clamp(16px, 1.6vw, 24px) auto 0; text-wrap: balance; }
+.end .actions { justify-content: center; margin-top: clamp(28px, 2.6vw, 40px); }
+
+/* The tile: 120 px with a 12 px ring, 3 × 3 cells in all, so the ring meets the grid lines. */
+.tile-wrap { position: relative; flex: none; width: calc(var(--cell) * 7); height: calc(var(--cell) * 5); margin-bottom: clamp(24px, 2.4vw, 40px); }
+.tile { position: absolute; left: calc(var(--cell) * 2 + 12px); top: calc(var(--cell) + 12px); width: 120px; height: 120px; border-radius: 27px; background: var(--ink);
+  display: grid; place-items: center; box-shadow: 0 0 0 12px rgba(255,255,255,.18), 0 28px 56px -24px rgba(42,11,2,.6); }
+/* The mark is itself the tile (its own rounded square, rx 7.2 of 32 = 27 px at 120), so no inner square shows. */
+.tile img { width: 120px; height: 120px; border-radius: 27px; }
+
+/* The pixels: --c and --r place each on the 12 px lattice (28 × 20 across the frame). */
+.pixels i { position: absolute; left: calc(var(--c) * 12px); top: calc(var(--r) * 12px); width: 12px; height: 12px; border-radius: 2px; background: #fff; }
+.pixels .t { background: var(--brand-tint); }
+.pixels .d { background: var(--brand-ink); }
+.pixels .k { background: var(--ink); }
+
+/* Assembling, once, as the band comes on screen: the pixels start half as far out again from the tile and faded, and
+   drift in to their places on the grid, a little apart (--d). A marketing explanation, so longer than UI motion; it
+   moves only transforms and opacity. The frame uses the page's reveal hook (.rv: main.js sets .rv-wait while it is
+   below the fold and lifts it on entry); the frame itself stays put. Without JS, or above the fold, nothing waits. */
+.end .tile-wrap.rv-wait { opacity: 1; transform: none; }
+.pixels i { transition: transform 1100ms var(--ease-out) var(--d, 0s), opacity 700ms var(--ease-out) var(--d, 0s); }
+.tile-wrap.rv-wait .pixels i {
+  opacity: 0;
+  transform: translate(calc((var(--c) * 12px - 162px) * .5), calc((var(--r) * 12px - 114px) * .5));
+}
+/* Reduced motion: the pixels are simply there. */
+@media (prefers-reduced-motion: reduce) {
+  .tile-wrap.rv-wait .pixels i { opacity: 1; transform: none; }
+}
+
+@media (max-width: 640px) {
+  .end-in { padding-top: calc(var(--cell) * 2); padding-bottom: 56px; }
+}

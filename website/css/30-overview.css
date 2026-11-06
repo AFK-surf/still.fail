@@ -90,7 +90,7 @@
 .overview.rv-wait .stage > .pane[data-on] :is(.beat, .notif) { opacity: 0; translate: 0 var(--from); }
 .overview.rv-in .stage > .pane[data-on] :is(.beat, .notif) { transition-delay: 520ms; }
 /* The pictures' small loops (the agent's ring, the busy spinner) run only in the picture shown, while on screen. */
-.stage .ag::after, .stage .mk-busy { animation-play-state: paused; }
+.stage .act .ag::after, .stage .mk-busy { animation-play-state: paused; }
 .overview.play .pane[data-on] .ag::after, .overview.play .pane[data-on] .mk-busy { animation-play-state: running; }
 
 /* Two devices, one event: the phone sits over the window's right margin, never its content. */
