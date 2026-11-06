@@ -6729,6 +6729,15 @@ pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
 /// the event's moment their cause), then `f` taken as Tree::event takes it, finding things as they are with it. Inside
 /// another event, both in that one's, as one change.
 pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
+  // An event can advance the timeline and then ask for geometry itself. A layout fault while advancing must still
+  // stop reentrant layout during the rest of that event; independent deadlines keep separate pass counts.
+  let was_budget = self.brought_budget
+  let budget = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  self.brought_budget = Some(budget)
+  defer { self.brought_budget = was_budget }
   // (in an event already: its moment, settled as it began)
   if self.cause_at >= 0.0 {
     @signals.start_batch()

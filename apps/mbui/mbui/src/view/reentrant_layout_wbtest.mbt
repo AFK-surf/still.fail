@@ -86,7 +86,7 @@ test "a host that draws while being told is told again for work made after that 
 }
 
 ///|
-test "a before-deadline self-mark stops layouts in that frame, then the next frame can finish" {
+test "a before-deadline self-mark stops layouts in that frame or event, then the next frame can finish" {
   let faults : Array[String] = []
   faults_stop.val = false
   fault_told.val = Some(fn(s) { faults.push(s) })
@@ -94,39 +94,52 @@ test "a before-deadline self-mark stops layouts in that frame, then the next fra
     faults_stop.val = true
     fault_told.val = None
   }
-  let armed = Ref(false)
-  let marked = Ref(false)
-  let callback_layouts = Ref(-1)
-  let t = Tree::new(fn(root) {
-    root.box(fn(v) {
-      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
-        if armed.val && !marked.val {
-          marked.val = true
-          v.tree.layout_marked_at(0)
-        }
-        (0.0, 0.0)
-      })) |> ignore
+  for event in [false, true] {
+    faults.clear()
+    let armed = Ref(false)
+    let marked = Ref(false)
+    let callback_layouts = Ref(-1)
+    let event_layouts = Ref(-1)
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+          if armed.val && !marked.val {
+            marked.val = true
+            v.tree.layout_marked_at(0)
+          }
+          (0.0, 0.0)
+        })) |> ignore
+      }) |> ignore
+    })
+    t.frame(200.0, 100.0, now=0.0) |> ignore
+    t.root().laid_before_due(fn(at) { at == 10.0 })
+    t.root().at_moment(10.0, fn() {
+      let before = t.work.computes
+      t.laid_as_now()
+      callback_layouts.val = t.work.computes - before
     }) |> ignore
-  })
-  defer { t.dispose() }
-  t.frame(200.0, 100.0, now=0.0) |> ignore
-  t.root().laid_before_due(fn(at) { at == 10.0 })
-  t.root().at_moment(10.0, fn() {
+    t.layout_marked_at(0)
+    armed.val = true
     let before = t.work.computes
-    t.laid_as_now()
-    callback_layouts.val = t.work.computes - before
-  }) |> ignore
-  t.layout_marked_at(0)
-  armed.val = true
-  let before = t.work.computes
-  t.frame(200.0, 100.0, now=10.0) |> ignore
-  assert_true(marked.val)
-  assert_eq(faults.length(), 1, msg="\{faults}")
-  assert_true(faults[0].contains("marked in its own layout"), msg=faults[0])
-  assert_eq(callback_layouts.val, 0, msg="the same deadline did not reenter layout")
-  assert_eq(t.work.computes - before, 1, msg="the enclosing frame did not reenter layout")
-  assert_true(t.due && t.layout_due, msg="the fault left work for the next independent frame")
-  t.frame(200.0, 100.0, now=11.0) |> ignore
-  assert_eq(t.work.computes - before, 2)
-  assert_false(t.due)
+    if event {
+      t.event(10.0, fn() {
+        let was = t.work.computes
+        t.laid_as_now()
+        event_layouts.val = t.work.computes - was
+      })
+      assert_eq(event_layouts.val, 0, msg="the enclosing event did not reenter layout")
+    } else {
+      t.frame(200.0, 100.0, now=10.0) |> ignore
+    }
+    assert_true(marked.val)
+    assert_eq(faults.length(), 1, msg="\{faults}")
+    assert_true(faults[0].contains("marked in its own layout"), msg=faults[0])
+    assert_eq(callback_layouts.val, 0, msg="the same deadline did not reenter layout")
+    assert_eq(t.work.computes - before, 1, msg="the enclosing call did not reenter layout")
+    assert_true(t.due && t.layout_due, msg="the fault left work for the next independent frame")
+    t.frame(200.0, 100.0, now=11.0) |> ignore
+    assert_eq(t.work.computes - before, 2)
+    assert_false(t.due)
+    t.dispose()
+  }
 }
