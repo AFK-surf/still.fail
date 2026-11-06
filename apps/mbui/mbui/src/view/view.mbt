@@ -761,6 +761,9 @@ pub struct Tree {
   /// what is told once the frame is painted (Tree::take_after_paint: the host's side runs it then): a list's rows
   /// sighted, a node first drawn
   after_paint : Array[() -> Unit]
+  /// what a layout found to tell of its moment, told as it is done (Tree::said_after_laid): a windowed list's blocks
+  /// come in sight
+  after_laid : Array[() -> Unit]
   /// the nodes waiting to be first drawn (View::on_first_drawn): node, making, what is then told
   first_drawn : Array[(Int, Int, () -> Unit)]
   /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
@@ -1073,6 +1076,7 @@ pub fn Tree::new(
     places_due: [],
     painted: [],
     after_paint: [],
+    after_laid: [],
     first_drawn: [],
     bindings_due: [],
     pulls_held: 0,
@@ -1786,6 +1790,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.timeline.clear()
   self.changed.clear()
   self.composed.clear()
+  self.after_laid.clear()
   self.hosting = -1
   self.modals.clear()
   self.back_said_at.clear()
@@ -6674,6 +6679,11 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
+  // (what that layout found to tell, told now, of this moment, whether a frame is painted before what comes next or
+  // not: once, by the outermost)
+  if was < 0.0 {
+    self.tell_laid()
+  }
   self.bringing_at = was
 }
 
@@ -9188,6 +9198,28 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
   let out = self.after_paint.copy()
   self.after_paint.clear()
   out
+}
+
+///|
+/// `f` told as the layout being done is done, of its moment (Tree::brought: a frame's, an input's), before anything
+/// after it is handled, whether a frame is painted between or not: what starts a page's own work (a windowed list's
+/// blocks come in sight, View::scrolls_window's `seen`), never what asks the host for something only once it is drawn
+/// (Tree::said_after_paint).
+fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
+  self.after_laid.push(f)
+}
+
+///|
+/// What layouts said to tell of their moments (Tree::said_after_laid), told, in order; what that telling says so told
+/// too.
+fn Tree::tell_laid(self : Tree) -> Unit {
+  while !self.after_laid.is_empty() {
+    let now = self.after_laid.copy()
+    self.after_laid.clear()
+    for f in now {
+      f()
+    }
+  }
 }
 
 ///|
