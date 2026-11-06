@@ -393,6 +393,9 @@ fn under_node(
   })
   parent.owns(fn() { @sfbase.under_goes.remove(n) |> ignore }) |> ignore
   let was_on = Ref(first)
+  let kept = @signals.signal(first)
+  let stop_leaving : Ref[() -> Unit] = Ref(fn() { })
+  parent.owns(fn() { (stop_leaving.val)() }) |> ignore
   let was_way : Ref[(Double, Double)?] = Ref(None)
   parent.reacts(fn() { (shown(), @ui.row_way_node(parent)) }, fn(now) {
     let (on, way) = now
@@ -429,8 +432,17 @@ fn under_node(
       }
       was_on.val = on
     }
+    // The room's last moment owns its release. A predicted picture may show it shut before that moment;
+    // it cannot drop the node ahead of an input that opens it again.
+    (stop_leaving.val)()
+    stop_leaving.val = if !on && room.goes_at(at) {
+      parent.at_moment(room.end(), fn() { kept.set(false) })
+    } else {
+      kept.set(on)
+      fn() { }
+    }
   })
-  parent.show(fn() { shown() || way_shown(room, parent) > 0.0 }, fn(r) {
+  parent.show(fn() { kept.get() }, fn(r) {
     // (cut at both ends as it opens and closes, fading out to them: under_post's reveal)
     r.opens(By(fn() { Some(dmin(1.0, way_shown(room, r))) })).clips(By(fn() { way_shown(room, r) < 1.0 }))
     .cuts_softly(By(fn() { way_shown(room, r) < 1.0 })) |> ignore

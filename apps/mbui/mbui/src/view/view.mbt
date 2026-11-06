@@ -1049,7 +1049,7 @@ pub struct Tree {
   before_due : Map[Int, (Double) -> Bool]
   mut before_due_told : Int
   mut due_asked_at : Double
-  /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
+  /// sampling or laying out the tree: its output notifications do not advance input deadlines or start another settlement
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
   mut settle_asked : Bool
@@ -1820,10 +1820,15 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
   // (what the clock set so tells, of its moment: Tree::brought)
   let was = self.bringing_at
+  let was_standing = self.standing
   self.bringing_at = ms
+  self.standing = true
+  defer {
+    self.bringing_at = was
+    self.standing = was_standing
+  }
   self.clock_to(ms)
   self.beat_set(ms)
-  self.bringing_at = was
 }
 
 ///|
@@ -2221,7 +2226,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = self.time_now()
+      told_at.val = if self.standing { self.cause_now() } else { self.time_now() }
       self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
@@ -2373,7 +2378,9 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   // (in a layout (what it builds as it lays out: a list's rows, a part picked by its room): of that layout's moment,
   // nothing due done in it nor the clocks moved on, never anything outside what it lays out set going from it)
-  let in_layout = (self.laying > 0 && !self.making_after) || self.layout_owner >= 0
+  let laying = (self.laying > 0 && !self.making_after) || self.layout_owner >= 0
+  // (and while a layout or a view of a moment stands, the clock not moved on either: Tree::standing)
+  let in_layout = laying || self.standing
   let at = if self.cause_at >= 0.0 {
     self.cause_at
   } else if in_layout {
@@ -2402,7 +2409,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   // (what it said waits for its change committed whole: in a layout, once the outermost layout is over, at its moment,
   // as Tree::queued's)
   if was < 0.0 {
-    if in_layout {
+    if laying {
       self.afters_laid.append(self.afters)
       self.afters.clear()
     } else {
@@ -2793,9 +2800,10 @@ pub fn View::basis(self : View, b : Live[Double?]) -> View {
 /// How big it is laid out as of the logic's moment (Tree::logic_at): what was told before it laid out first (what an event
 /// changed before it asks, laid out as a frame would), as of the window's size its last frame gave (0 by 0 before the
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
+/// Inside a sample already under way, it measures at that sample's clock without changing its moment.
 pub fn View::laid_size(self : View) -> (Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0) }
-  // (laid out as of the logic's moment, what the change under way set so far counted, nothing of the logic run; read,
+  // (laid out at the active sample or logic's moment, what the change under way set so far counted, nothing of the logic run; read,
   // not placed by: each node where it stood till the change is placed, Tree::measured_now)
   self.tree.measured_now()
   (n.flex.width, n.flex.height)
@@ -3679,13 +3687,15 @@ pub fn View::placed_window_last(self : View) -> (Double, Double, Double, Double)
 /// What was told worked out and laid out as of the logic's moment, nothing placed by it (each node where it was placed
 /// till a frame or a change's end places things, by this same layout): where a change under way lays things out, read
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
-/// that change.
+/// that change. A measurement inside an active sample inherits its clock instead of entering another moment.
 fn Tree::measured_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
-  let at = self.logic_at()
   let shown = @signals.untracked(fn() { self.clock.get() })
+  // A measure requested by the sampling already under way belongs to that sample. Rewinding it to the input
+  // clock and restoring it can notify the same visual threshold again, asking for this measure without end.
+  let at = if self.standing { shown } else { self.logic_at() }
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
   let was_standing = self.standing
   self.standing = true
@@ -7123,6 +7133,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     Some(n) => n
     None => @signals.untracked(fn() { self.clock.get() })
   }
+  let was = self.bringing_at
+  self.bringing_at = upto
+  defer { self.bringing_at = was }
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
@@ -7179,6 +7192,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
+  let was = self.bringing_at
+  self.bringing_at = at
+  defer { self.bringing_at = was }
   // (its logic first, to the moment, then what it draws drawn as of it (a frame to be shown later drawn ahead of it:
   // drawn again as of now, for where a press finds things), then what it marked)
   self.advance(at)
@@ -7204,10 +7220,10 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // deep as a chat was left on an emulator, its GL thread out of stack, 2026-11-05)
   let was = self.bringing_at
   self.bringing_at = upto
+  defer { self.bringing_at = was }
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
-  self.bringing_at = was
 }
 
 ///|
@@ -7431,6 +7447,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.laying == 0 {
     self.moment_passes = 0
   }
+  let was_standing = self.standing
+  self.standing = true
+  defer { self.standing = was_standing }
   self.laying += 1
   let mut placing = false
   let mut ordered = false

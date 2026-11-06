@@ -23,6 +23,7 @@ import { chatMarks, chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 import { UsageCounter, claudeProject } from "../src/usage/counter.ts";
 import { keepCounted } from "../src/usage/module.ts";
 
@@ -907,7 +908,7 @@ test("the cards answered in some chats are those the whole station's say, read b
     r.store.insertMessage(card("c4", "Four?"));
     const store = openStore(r.data);
     const said = (a: any[]) => a.filter((x) => x.answer !== null && x.question.thread === id).map((x) => [x.question.text, x.answer.text]);
-    const whole = answersSince(store, 0);
+    const whole = referenceAnswersSince(r.store, 0);
     const scoped = answersSince(store, 0, [id]);
     assert.deepEqual(said(scoped), [["One?", "Yes"], ["Three?", "Three it is"]]);
     assert.deepEqual(said(scoped), said(whole));

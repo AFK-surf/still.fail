@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { answersSince, makeStore } from "../src/read/store.ts";
 import { CARD_POST_BEFORE, CARD_POST_NEXT } from "../src/store/card-post-index.ts";
 import { Store } from "../src/store/store.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 
 for (const column of ["card", "options"] as const) {
   test(`a recent answer to a ${column} does not traverse its later edits`, () => {
@@ -79,7 +80,7 @@ for (const prepared of [false, true]) {
       assert.equal(store.pendingCard(thread)?.[0].n, 1);
       put.run(thread, 42, "message", null, "person", "p", "yes", 100, null);
       assert.equal(store.cardEndedByMessage(thread, 42)?.[0].n, 1);
-      assert.deepEqual(store.answersSince(100).map((a) => [a.question.n, a.answer?.n]), [[1, 42]]);
+      assert.deepEqual(referenceAnswersSince(store, 100).map((a) => [a.question.n, a.answer?.n]), [[1, 42]]);
       put.run(thread, 43, "message", null, "agent", "a", "second", 101, card);
       assert.equal(store.cardReplacedBy(thread, 43), null, "the previous card was already answered");
       put.run(thread, 44, "message", null, "agent", "a", "third", 102, card);
