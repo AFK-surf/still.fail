@@ -38,6 +38,7 @@ on:
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"
       - "apps/mbui/mbui/scripts/linux.sh"
+      - "apps/mbui/mbui/scripts/linux-host-packages.*"
       - "apps/mbui/mbui/scripts/host_contract.sh"
       - "apps/mbui/mbui/tools/chk/textrec.mbt"
       - "apps/mbui/mbui/test/host/**"
@@ -58,19 +59,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - id: host-packages
+        run: printf 'names=%s\n' "$(tr '\n' ' ' < apps/mbui/mbui/scripts/linux-host-packages.txt)" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/apt
         with:
           name: mbui-host-linux
-          packages: >-
-            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
-            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth xdotool fonts-noto-cjk fonts-noto-color-emoji
-            fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
-      - name: Stage the package archives
-        run: |
-          mkdir -p out/host-linux-packages
-          find .ci/apt -maxdepth 1 -name '*.deb' -exec cp '{}' out/host-linux-packages/ \;
-          printf 'Archives prepared for the host contracts.\n' > out/host-linux-packages/README
+          packages: ${{ steps.host-packages.outputs.names }}
+      - name: Stage the package archives and their indexes
+        run: bash apps/mbui/mbui/scripts/linux-host-packages.sh snapshot "$PWD/.ci/apt" "$PWD/out/host-linux-packages"
       - uses: actions/upload-artifact@v4
         with:
           name: host-linux-packages
@@ -92,19 +88,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: host-linux-packages
-          path: .ci/apt
+          path: .ci/host-linux-packages
       # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
       # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji); D-Bus's daemon, for a
       # session bus of the links' run; WebKitGTK 6.0, poppler's GLib face and GStreamer (its base and good plugins, and
       # gst-libav's H.264), which the host loads for its web views, its PDFs and its player
-      - uses: ./.github/actions/apt
-        with:
-          name: mbui-host-linux
-          packages: >-
-            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
-            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth xdotool fonts-noto-cjk fonts-noto-color-emoji
-            fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: Install the prepared packages without downloads
+        run: bash scripts/linux-host-packages.sh install "$GITHUB_WORKSPACE/.ci/host-linux-packages"
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
@@ -169,14 +159,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: host-linux-packages
-          path: .ci/apt
-      - uses: ./.github/actions/apt
-        with:
-          name: mbui-host-linux
-          packages: >-
-            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
-            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+          path: .ci/host-linux-packages
+      - name: Install the prepared packages without downloads
+        run: bash scripts/linux-host-packages.sh install "$GITHUB_WORKSPACE/.ci/host-linux-packages"
       - uses: ./.github/actions/mbui-moonbit
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
         run: |
