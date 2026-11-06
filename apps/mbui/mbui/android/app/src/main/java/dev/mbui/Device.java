@@ -65,9 +65,35 @@ final class Device {
 
     /** What is held with a key, as the framework's modifiers (src/ui/desktop.mbt: Shift 1, Ctrl 2, Alt 4, Meta 8). */
     static int keyMods(KeyEvent e) {
-        int meta = e.getMetaState();
+        return modsOfMeta(e.getMetaState());
+    }
+
+    /** The modifiers attached to a keyboard or pointer event. */
+    static int modsOfMeta(int meta) {
+        meta = KeyEvent.normalizeMetaState(meta);
         return ((meta & KeyEvent.META_SHIFT_ON) != 0 ? 1 : 0) | ((meta & KeyEvent.META_CTRL_ON) != 0 ? 2 : 0)
                 | ((meta & KeyEvent.META_ALT_ON) != 0 ? 4 : 0) | ((meta & KeyEvent.META_META_ON) != 0 ? 8 : 0);
+    }
+
+    /** A modifier's state after this event, including when its left and right keys are both held. */
+    static int keyModsAfter(KeyEvent e) {
+        int mods = keyMods(e), bit = 0, other = 0;
+        switch (e.getKeyCode()) {
+            case KeyEvent.KEYCODE_SHIFT_LEFT:  bit = 1; other = KeyEvent.META_SHIFT_RIGHT_ON; break;
+            case KeyEvent.KEYCODE_SHIFT_RIGHT: bit = 1; other = KeyEvent.META_SHIFT_LEFT_ON; break;
+            case KeyEvent.KEYCODE_CTRL_LEFT:   bit = 2; other = KeyEvent.META_CTRL_RIGHT_ON; break;
+            case KeyEvent.KEYCODE_CTRL_RIGHT:  bit = 2; other = KeyEvent.META_CTRL_LEFT_ON; break;
+            case KeyEvent.KEYCODE_ALT_LEFT:    bit = 4; other = KeyEvent.META_ALT_RIGHT_ON; break;
+            case KeyEvent.KEYCODE_ALT_RIGHT:   bit = 4; other = KeyEvent.META_ALT_LEFT_ON; break;
+            case KeyEvent.KEYCODE_META_LEFT:   bit = 8; other = KeyEvent.META_META_RIGHT_ON; break;
+            case KeyEvent.KEYCODE_META_RIGHT:  bit = 8; other = KeyEvent.META_META_LEFT_ON; break;
+            default: break;
+        }
+        if (bit != 0) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN || (e.getMetaState() & other) != 0) mods |= bit;
+            else if (e.getAction() == KeyEvent.ACTION_UP) mods &= ~bit;
+        }
+        return mods;
     }
 
     /**

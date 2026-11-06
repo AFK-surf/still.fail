@@ -603,6 +603,10 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             Unsized => ()
           }
         })
+        // A file can be dragged between the sidebar, split panes and a chat. Its chip follows the shell in draw order.
+        @sfdesk.drive_drag_window_node(v, src, fn() {
+          workspace_in_view(src).0.map(fn(w) { w.id }).unwrap_or("")
+        })
         }
       }
     },

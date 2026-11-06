@@ -82,6 +82,8 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
     if taken.val { 1 } else { 0 }
   })
   @hostapi.set_app_state(fn(s) { on_app_state(s) })
+  modifiers_said(host_modifiers_now())
+  @hostapi.set_modifiers(fn(mods) { on_modifiers(mods) })
   outside_told.val = @hostapi.set_outside(fn(k, id, st) { on_outside(k, id, st) })
   @hostapi.run(
     title,
@@ -847,6 +849,8 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
+  // A host may hand the pointer back after its window regains focus with a modifier already held.
+  on_modifiers(host_modifiers_now())
   // a touch screen's finger as the host has it, by the system's id for it (touches.mbt)
   if kind >= 10 && kind <= 13 {
     touch_in(kind - 10, button, x, y)
@@ -2285,10 +2289,17 @@ fn on_app_state_now(s : Int) -> Unit {
 ///|
 /// The app's state as `s` says it (1 shown, 2 in front, 4 going on not shown): who is told of it told, a frame asked.
 fn app_state_taken(s : Int) -> Unit {
-  if s == @signals.untracked(fn() { app_state.get() }) {
+  let was = @signals.untracked(fn() { app_state.get() })
+  if s == was {
     return
   }
   app_state.set(s)
+  if (s & 2) == 0 {
+    match fake.val { Some(f) => f.mods = 0; None => () }
+    modifiers_said(0)
+  } else if (was & 2) == 0 {
+    modifiers_said(host_modifiers_now())
+  }
   // (no longer in front: the fingers down called off, all of it (touches.mbt); a finger held on the window's tree let
   // go of now)
   if (s & 2) == 0 {

@@ -357,6 +357,8 @@ pub fn set_host(&Host) -> Unit
 
 pub fn set_ime(Bool, Double, Double, Double, Double, String, Int32, Int32) -> Unit
 
+pub fn set_modifiers(FuncRef[(Int32) -> Unit]) -> Unit
+
 pub fn set_outside(FuncRef[(Int32, Int32, Int32) -> Unit]) -> Bool
 
 pub fn set_perf(Bool) -> Unit
@@ -790,6 +792,7 @@ pub(open) trait Host {
   fn local_station(Self) -> String = _
   fn local_station_act(Self, String) -> Unit = _
   fn mods_held(Self) -> Int32 = _
+  fn set_modifiers(Self, FuncRef[(Int32) -> Unit]) -> Unit = _
   fn run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int32, Double, Double, Int32) -> Unit], FuncRef[(Double, Double, Double, Double, Int32) -> Unit], FuncRef[(Int32, Int32) -> Unit], FuncRef[(Int32, String, Int32, Int32) -> Unit]) -> Unit = _
   fn now(Self) -> Double = _
   fn wall_ms(Self) -> Double = _
