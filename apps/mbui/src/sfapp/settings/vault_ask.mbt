@@ -123,7 +123,6 @@ fn vault_ask_reset() -> Unit {
   vault_timeout_minutes.clear()
   vault_picked.clear()
   vault_pending.clear()
-  phone_joining.clear()
   vault_typed.clear()
   vault_files.clear()
   vault_file_picks.clear()

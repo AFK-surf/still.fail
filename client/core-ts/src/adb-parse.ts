@@ -23,6 +23,7 @@ export type AdbCall =
   /// The person's own lock (docs/personal-lock.md): this device asks to join it, types the code shown on one on it, stops
   /// asking; a device taken off; the lock pinned here left, and one begun anew.
   /// (`sub`: whose: a device may be signed in to several accounts, each with a lock of its own.)
+  | { kind: "personalOpen"; sub: string }
   | { kind: "personalJoin"; sub: string }
   | { kind: "personalCode"; code: string }
   | { kind: "personalCancel" }
@@ -71,6 +72,8 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
       return { kind: "on", on };
     }
+    case "adb.personalOpen":
+      return { kind: "personalOpen", sub: text("sub") };
     case "adb.personalJoin":
       return { kind: "personalJoin", sub: text("sub") };
     case "adb.personalCode":

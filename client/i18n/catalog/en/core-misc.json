@@ -294,5 +294,6 @@
   "core-misc.personal.reason.forget": "Stop trusting this device's personal lock",
   "core-misc.personal.reason.restart": "Start a new personal lock",
   "core-misc.personal.oldStation": "This station is too old: even if allowed, your phone won't lend itself. Update the station first",
-  "core-misc.personal.reason.confirm": "Confirm these chats may debug your phone"
+  "core-misc.personal.reason.confirm": "Confirm these chats may debug your phone",
+  "core-misc.personal.reason.open": "Turn on your personal lock"
 }

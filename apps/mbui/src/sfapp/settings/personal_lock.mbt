@@ -1,6 +1,6 @@
 // 个人锁 (docs/personal-lock.md), a page of settings' 安全: which devices of the person's sign for them, on any app (a phone
-// or a computer alike). Joining it is one step wherever it comes up (`personal_join`: a request's card too); this page is
-// where the devices are seen and taken off. What it has to say comes on the core's `adbShare`.
+// or a computer alike). It is turned on here, and what asks for it (a request for the person's phone) sends people here. What
+// it has to say comes on the core's `adbShare`.
 
 ///|
 pub fn personal_lock_page(c : @ui.Ctx, core : Core) -> Unit {
@@ -104,7 +104,7 @@ fn personal_join(c : @ui.Ctx, core : Core, p : Json?, at : String) -> Unit {
 /// The lock as this device has it: the devices on it, or how this one joins it.
 fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
   let sub = text(view, "sub")
-  let doing = is_doing(core, ["adb.personalJoin", "adb.personalCode", "adb.personalRemove", "adb.personalForget", "adb.personalRestart"], [])
+  let doing = is_doing(core, ["adb.personalOpen", "adb.personalJoin", "adb.personalCode", "adb.personalRemove", "adb.personalForget", "adb.personalRestart"], [])
   let said = str(sub)
   list_card(c, fn() {
     match text(view, "standing") {
@@ -128,7 +128,7 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
       "outside" => {
         let state = text(field(view, "pair"), "state")
         if state == "" || state == "none" || state == "failed" || state == "done" {
-          if @sf.link_row(c, "personal-join/" + sub, tr("android-misc.personal.join"), note=if state == "" { tr("android-misc.personal.outside.note") } else { "" }, lacks=true) && !doing {
+          if @sf.link_row(c, "personal-join/" + sub, tr("android-misc.personal.open"), note=if state == "" { tr("android-misc.personal.outside.note") } else { "" }, lacks=true) && !doing {
             (core.call)("adb.personalJoin", obj([("sub", said)]), fn(_) {  })
           }
         }
@@ -155,10 +155,9 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
         }
       }
       _ =>
-        list_row(c, key="personal-none/" + sub, fn() {
-          c.box(style=fill_words, fn() { row_lines(c, tr("android-misc.personal.heading"), tr("android-misc.personal.none"), wrap_sub=true) }) |> ignore
-        })
-        |> ignore
+        if @sf.link_row(c, "personal-open/" + sub, tr("android-misc.personal.open"), note=tr("android-misc.personal.open.note"), lacks=true) && !doing {
+          act(core, tr("android-misc.personal.open"), "adb.personalOpen", obj([("sub", said)]))
+        }
     }
   })
 }
