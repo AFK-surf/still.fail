@@ -246,7 +246,7 @@ fn rail(
     |> ignore
     c.spacer()
     // what comes and goes (transfers.mbt), over the workspaces
-    rail_transfers(c, src, w.id)
+    rail_transfers(c, src, w.id, looks)
     // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
     c.capped("rail/workspaces", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
       @sfpages.workspace_squares(c, src, w, all, {

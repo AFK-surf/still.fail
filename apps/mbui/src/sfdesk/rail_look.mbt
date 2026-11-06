@@ -38,28 +38,35 @@ fn rail_looks(parent : @view.View, src : Source) -> Map[String, RailLook] {
           }
         }
       }
-      let initial = if @signals.untracked(selected) { 1.0 } else { 0.0 }
-      let look : RailLook = {
-        id: @signals.signal(0, same=fn(a, b) { a == b }),
-        on: @motion.Way::new(initial),
-        hover: @motion.Way::new(0.0),
-        ink: @motion.Way::new(initial),
-      }
+      let look = rail_look(n, selected)
       looks[key] = look
       n.owns(fn() { looks.remove(key) |> ignore }) |> ignore
-      n.reacts(fn() {
-        let id = look.id.get()
-        (selected(), id != 0 && @ui.current().lit(id))
-      }, fn(state) {
-        let (on, hover) = state
-        let at = n.cause_at()
-        rail_look_go(look.on, on, at)
-        rail_look_go(look.hover, hover, at)
-        rail_look_go(look.ink, on || hover, at)
-      })
     })
+    rail_transfers_keeps(owner, src, looks)
   }) |> ignore
   looks
+}
+
+///|
+fn rail_look(n : @view.View, selected : () -> Bool) -> RailLook {
+  let initial = if @signals.untracked(selected) { 1.0 } else { 0.0 }
+  let look : RailLook = {
+    id: @signals.signal(0, same=fn(a, b) { a == b }),
+    on: @motion.Way::new(initial),
+    hover: @motion.Way::new(0.0),
+    ink: @motion.Way::new(initial),
+  }
+  n.reacts(fn() {
+    let id = look.id.get()
+    (selected(), id != 0 && @ui.current().lit(id))
+  }, fn(state) {
+    let (on, hover) = state
+    let at = n.cause_at()
+    rail_look_go(look.on, on, at)
+    rail_look_go(look.hover, hover, at)
+    rail_look_go(look.ink, on || hover, at)
+  })
+  look
 }
 
 ///|

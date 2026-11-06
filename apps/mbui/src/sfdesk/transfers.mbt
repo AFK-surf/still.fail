@@ -141,22 +141,24 @@ fn transfers_rows(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -> Unit
 /// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
 /// comes and goes, as far as it has come (@sf.coming_mark in its mark's place), red's dot when one failed; pressed, their list beside
 /// it. Nothing while there is none.
-fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
+fn rail_transfers(c : @ui.Ctx, src : Source, ws : String, looks : Map[String, RailLook]) -> Unit {
   let all = coming(src, ws)
   let id = c.id("rail/transfers")
-  let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, Of(id), go, true, side=Right, along=End)
     return
   }
   let (n, percent, failed) = all.going()
-  if c.clicked(id) {
-    ftransfers.open.set(!ftransfers.open.get())
-  }
+  c.on_press(id, fn() {
+    // A retained old callback cannot open a workspace's list after that workspace or its last transfer has gone.
+    match @sfbase.workspace_in_view(src).0 {
+      Some(w) if w.id == ws && !coming(src, ws).none() => ftransfers.open.set(!ftransfers.open.get())
+      _ => ()
+    }
+  })
   rail_ground(
     c,
     id,
-    ftransfers.open.get(),
+    looks.get("transfers/" + ws).unwrap(),
     fn(color) {
       // (as the small screen's key's: @sf.progress_key)
       @sf.coming_mark(c, "rail/transfers", Some(percent.to_double() / 100.0), rail_icon_size, color)
@@ -166,7 +168,75 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     },
     label=coming_words(n, percent),
   )
-  transfers_list(c, src, ws, Of(id), go, false, side=Right, along=End)
+}
+
+///|
+/// The rail's transfer key, its look and the list it opens share a workspace's lifetime. As with transfers_key_node,
+/// the list follows its open state at the cause, not when the key is next drawn. The old key lends only its anchor.
+fn rail_transfers_keeps(parent : @view.View, src : Source, looks : Map[String, RailLook]) -> Unit {
+  let workspace = fn() {
+    if @sf.native_on() { return None }
+    match @sfbase.workspace_in_view(src).0 {
+      Some(w) if !coming(src, w.id).none() => Some(w.id)
+      _ => None
+    }
+  }
+  parent.reacts(workspace, fn(ws) { if ws is None { ftransfers.open.set(false) } })
+  parent.each(fn() {
+    match workspace() {
+      Some(ws) => [ws]
+      None => []
+    }
+  }, fn(ws) { ws }, fn(n, ws) {
+    let w = ws.get()
+    let key = "transfers/" + w
+    let look = rail_look(n, fn() { ftransfers.open.get() })
+    looks[key] = look
+    let own = Ref(0)
+    let close = fn() {
+      let serial = own.val
+      own.val = 0
+      if serial != 0 {
+        if ftransfers.shown == serial {
+          ftransfers.shown = 0
+          ftransfers.open.set(false)
+        }
+        @sf.close_presented_of(serial)
+      }
+    }
+    n.owns(fn() {
+      looks.remove(key) |> ignore
+      close()
+    }) |> ignore
+    n.reacts(fn() { (ftransfers.open.get(), look.id.get()) }, fn(state) {
+      let (open, id) = state
+      if !open {
+        close()
+      } else if id != 0 && ftransfers.shown == 0 {
+        // A closing panel can finish after another one opens. Its gone callback belongs to that opening only.
+        let opened = Ref(0)
+        @sf.panel(
+          @sf.t("web-pages.files.transfers"),
+          fn(c, _) { transfers_rows(c, src, w, fn(at) { open_page(Drive(at)) }) },
+          from=Of(id),
+          w=ftransfers_w,
+          side=Right,
+          along=End,
+          offset=rail_menu_off,
+          gone=fn() {
+            if own.val == opened.val { own.val = 0 }
+            if ftransfers.shown == opened.val {
+              ftransfers.shown = 0
+              ftransfers.open.set(false)
+            }
+          },
+        )
+        opened.val = @sf.last_presented()
+        own.val = opened.val
+        ftransfers.shown = opened.val
+      }
+    })
+  })
 }
 
 ///|
