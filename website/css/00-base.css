@@ -45,6 +45,15 @@
   --gap: clamp(16px, 1.7vw, 24px);
   --nav: 60px;
 
+  /* Motion (Emil Kowalski's curves): strong ease-out for things that enter or answer a press, ease-in-out for things
+     moving on screen, the iOS drawer curve for sheets. UI stays under 300 ms; press feedback 100–160 ms. Never ease-in. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 140ms;
+  --dur-ui: 200ms;
+  --dur-reveal: 600ms;
+
   /* Tone of the band an element sits in (overridden by [data-tone]) */
   --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep);
   color-scheme: light;
