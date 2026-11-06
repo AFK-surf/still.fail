@@ -51,7 +51,7 @@ station 记着每条个人锁听到过的最长链：拿旧链来的设备（已
 ## 开启和加设备
 
 1. 第一次批准手机调试时，这台设备生成钥匙，签 `genesis`，交给 cloud，自己钉住。
-2. 别的设备在共享调试页点「加入个人锁」：读 cloud 上的锁，拨上面每台设备（沿用 `views/pair.ts`，`hello` 带 `personal: {sub, key}`，`workspaces` 为空）。
+2. 别的设备在 设置 › 安全 › 个人锁 点「加入个人锁」：读 cloud 上的锁，拨上面每台设备（沿用 `views/pair.ts`，`hello` 带 `personal: {sub, key}`，`workspaces` 为空）。
 3. 锁里的设备显示安全码，新设备输入，CPace 证明（`pair.ts`）。对方过一次生物识别，签 `device`，把整条链经这条已证明的连接交给新设备钉住。
 4. 新设备不能只凭 cloud 的话把自己钉上：cloud 可以塞一条假链，但它拿不到人眼看到的安全码。
 

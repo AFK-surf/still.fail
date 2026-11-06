@@ -553,7 +553,8 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" | "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" => "adb:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" => "adb:"
+    "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" => "personal-lock:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>

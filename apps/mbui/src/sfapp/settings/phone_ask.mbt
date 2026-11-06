@@ -53,14 +53,13 @@ fn adb_outside(view : Json?) -> Bool {
 /// and 查看步骤 (`how`) in 允许's place.
 fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit) -> Unit {
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
-  let lacks = match adb_ready(c) {
+  // (outside the person's own lock, phone or computer: allowed, it could sign nothing; joined on its page)
+  let lacks = if adb_outside((core.topic)("adbShare", Map([])).value) { Some(tr("android-misc.personal.ask")) } else { match adb_ready(c) {
     AdbLacks(step) => Some(step)
     // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
     AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
-    // (on a person's own lock it does not know: allowed, it could sign nothing; joined on its page)
-    AdbLends if adb_outside((core.topic)("adbShare", Map([])).value) => Some(tr("android-misc.adb.ask.personal"))
     _ => None
-  }
+  } }
   // (up to its owner's 默认最长授权, starting at the longest)
   let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
   let scope = match vault_picked.get("phone/" + request) {
@@ -195,6 +194,7 @@ pub fn phone_link(core : Core?, station : String, said : String) -> String {
 /// (2026-10-30: it opened settings' page, which has nothing of any station, its pairing nowhere to be found).
 pub fn phone_steps(core : Core?, station : String) -> Route {
   match core {
+    Some(core) if adb_outside((core.topic)("adbShare", Map([])).value) => PersonalLock
     Some(core) if flag((core.topic)("adbShare", Map([])).value, "on") => AdbShare(station)
     _ => AdbShare("")
   }

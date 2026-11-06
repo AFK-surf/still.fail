@@ -418,5 +418,18 @@ test "an agent's request on a phone not on the person's own lock: joined first, 
   let t = phone_chat("chat-phone-outside", adb_phone_of(wireless=true))
   assert_true(t.find("需要先把这台设备加入个人锁") is Some(_))
   assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
-  assert_true(t.find("查看步骤") is Some(_))
+  t.tap_text("查看步骤")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("加入个人锁") is Some(_))
+}
+
+///|
+test "a computer outside the person's own lock is sent to join it, with no 共享调试 of its own" {
+  let t = phone_chat("chat-phone-outside", adb_phone_of(supported=false))
+  assert_true(t.find("需要先把这台设备加入个人锁") is Some(_))
+  assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
+  t.tap_text("查看步骤")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("加入个人锁") is Some(_))
+  assert_true(t.find("默认最长授权") is None)
 }

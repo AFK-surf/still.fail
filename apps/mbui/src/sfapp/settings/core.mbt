@@ -136,6 +136,8 @@ pub(all) enum Route {
   Archive
   /// this device's adb lent to a station's agents (AdbShare.kt), by the station's address
   AdbShare(String)
+  /// the person's own lock (docs/personal-lock.md), from 安全
+  PersonalLock
   /// a new profile on a station (NewProfileScreen), by its address
   NewProfile(String)
   /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
@@ -664,6 +666,7 @@ pub fn route_of(name : String) -> Route? {
           match what {
             "station" => Some(Station(arg))
             "adb" => Some(AdbShare(arg))
+            "personal-lock" => Some(PersonalLock)
             "new-profile" => Some(NewProfile(arg))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))
