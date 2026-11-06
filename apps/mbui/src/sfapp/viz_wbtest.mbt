@@ -215,6 +215,11 @@ test "what a visualization's widget keeps is kept, given back as it is shown aga
 
 ///|
 test "words a visualization asks to send go into the composer, said so; the person sends them" {
+  // (what takes them in follows what is asked in, not the draft's words it puts them after: no effect run again by
+  // what it set itself, @signals.effect_round)
+  let rounds : Array[String] = []
+  let said = @signals.effect_round_said.val
+  @signals.effect_round_said.val = fn(s) { rounds.push(s) }
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
@@ -226,6 +231,8 @@ test "words a visualization asks to send go into the composer, said so; the pers
   assert_eq(d.field.text(), "把周五的发布挪到周四")
   t.frame()
   assert_true(t.find("已添加到输入框，确认后发送") is Some(_))
+  @signals.effect_round_said.val = said
+  assert_eq(rounds, [], msg="taken in by no effect going round: \{rounds}")
 }
 
 ///|

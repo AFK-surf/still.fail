@@ -302,6 +302,8 @@ pub let choice_gap : Double
 
 pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : String, lead? : () -> Unit, tag? : () -> Unit, trail? : () -> Unit, ink? : Int64, disabled? : Bool, busy? : Bool) -> Bool
 
+pub fn choice_row_node(@view.View, () -> String, () -> Bool, () -> Unit, body? : (@view.View) -> Unit, note? : () -> String, lead? : (@view.View) -> Unit, tag? : (@view.View) -> Unit, trail? : (@view.View) -> Unit, ink? : () -> Int64, disabled? : () -> Bool, busy? : () -> Bool) -> @view.View
+
 pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? : String, icon? : (String) -> Unit, extra? : (String) -> (() -> Unit)?, disabled? : Array[String], note? : (String) -> Unit) -> String
 
 pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool) -> @kit.Menu
@@ -794,6 +796,8 @@ pub fn group_row(@ui.Ctx, Bool, Bool, () -> Unit, id? : Int32) -> Unit
 
 pub let group_row_end_radius : @ui.Radius
 
+pub fn group_row_node(@view.View, () -> Bool, () -> Bool, (@view.View) -> Unit) -> Unit
+
 pub fn group_rows(@ui.Ctx, String, Array[(String, () -> Unit)]) -> Unit
 
 pub fn group_rows_reset() -> Unit
@@ -862,7 +866,7 @@ pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
 
-pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, linked? : () -> @paint.CornerOf?) -> @view.View
+pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, linked? : () -> @paint.CornerOf?, disabled? : () -> Bool, on? : () -> Bool, ink? : () -> Int64, quiet? : () -> Int64, shortcut? : () -> String, selected_alpha? : Double, hover_alpha? : Double, drag_through? : Bool) -> @view.View
 
 pub let icon_button_side : Double
 
