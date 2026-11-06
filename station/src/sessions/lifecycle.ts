@@ -20,6 +20,7 @@ import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment
 import { sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { archiveMarksReady } from "../store/archive-mark-index.ts";
 import type { SessionChange } from "./accounts.ts";
+import { runChanged, runShown } from "./run-change.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
@@ -238,6 +239,16 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
   // one takes it.
   await hub.changed(key, movedRuntime || recapped);
+  // Another runtime, model, effort or speed: said in its chat, before and after.
+  const now = hub.store.getSession(key);
+  if (now) {
+    const named = (id: string) => {
+      const name = hub.accounts.profile(id)?.name;
+      return typeof name === "string" ? name : null;
+    };
+    const change = { was: runShown(row, named), now: runShown(now, named) };
+    if (runChanged(change)) await hub.actor(now).runChanged(change);
+  }
   if (recapped && over) await hub.actor(hub.store.getSession(key) ?? row).compactToCap();
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort, context: hub.store.getSession(key)?.context ?? "" });
   // Its last turn stopped at the allowance, or waits to be tried again on a model at capacity: changed, it goes on by

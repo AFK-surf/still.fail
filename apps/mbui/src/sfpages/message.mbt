@@ -695,7 +695,9 @@ fn is_viz(name : String) -> Bool {
 
 ///|
 /// What still.fail itself says (SystemNotice): a pill across the chat in one line, a failure in red (the core's
-/// `notice`); pressed, all its words, what failed said of it (`detail`, as it said it), and its time under it. One about a profile: what went wrong links to that
+/// `notice`); pressed, all its words, what failed said of it (`detail`, as it said it), and its time under it. One that
+/// a chat's run changed: what changed, else (no room on the line) what it runs on now; pressed, how it ran and runs,
+/// whole (`short`, `lines`). One about a profile: what went wrong links to that
 /// profile's page; one saying the station lacks the chat's runtime ends in installing it; a failure the station takes
 /// reports of, in reporting it.
 fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
@@ -720,7 +722,17 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     c.box(style=notice_pill_of(failed, open), id~, fn() {
       c.box(style=notice_line, fn() {
         c.box(style=notice_words_room, fn() {
-          if linked {
+          if m.notice_short != "" || m.notice_lines.length() > 0 {
+            // a chat's run changed: closed, what changed on its line, else what it runs on now; opened, both runs whole
+            if open && m.notice_lines.length() > 0 {
+              for line in m.notice_lines {
+                c.text(line, style=notice_words_open.then(@ui.text_style(color=ink))) |> ignore
+              }
+            } else {
+              c.text(said, style=notice_words.then(@ui.text_style(color=ink)), shorter=[m.notice_short], allow_ellipsis=true)
+              |> ignore
+            }
+          } else if linked {
             let p = @sf.theme().p
             c.rich(
               [

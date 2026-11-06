@@ -275,6 +275,8 @@ export const SHAPES: Record<string, Shape> = {
     ["retrySession", opt("String"), { doc: "The session waiting to retry at capacity, while this exact notice can cancel its retry." }],
     ["linkAt", opt("i64"), { client: opt("I54"), doc: "One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that\nprofile's page. Absent otherwise." }],
     ["detail", opt("String"), { said: true, doc: "A failure's own words, as what failed said them (a provider's, a process's): shown when the notice is\nopened, under `words`. Absent otherwise." }],
+    ["short", opt("String"), { said: true, doc: "A chat's run changed (run-change.ts): what it runs on now in what changed alone (换成 Codex · GPT-6), said in\nplace of `words` where they have not the room on their line. Absent otherwise." }],
+    ["lines", opt(vec("String")), { said: true, doc: "A chat's run changed: how it ran and how it runs, whole (之前：…, 现在：…), shown in place of `words` once\nthe notice is opened. Absent otherwise." }],
     ["md", opt("Value"), { doc: "`words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is\na link to it). Absent where a view reads none of its messages' words (a decision's)." }],
   ], { doc: "still.fail's notice as a chat shows it (core views.ts noticeOf)." }),
   RuntimeInstall: struct([

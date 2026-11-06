@@ -101,7 +101,20 @@ export type EntryRow = {
   at: number;
   /// A letter's (isLetter): which way it went and the other chat. Absent on every other entry.
   letter?: Letter;
+  /// The station's notice that a session's run changed (sessions/lifecycle.ts `configure`): how it ran before and how it
+  /// runs from its next turn on. Absent on every other entry.
+  change?: RunChange;
 };
+
+/// How a session runs, as a notice of its change says it: its runtime, model, effort, speed, account (`profile`, its
+/// `account` name; `pinned`: kept to it, else the station's pick) and most context (null: as the runtime has it).
+export type RunShown = {
+  runtime: string; model: string | null; effort: string | null; fast: boolean | null; profile: string | null; account: string | null;
+  pinned: boolean; context: number | null;
+};
+
+/// A session's run before a change and after it (EntryRow `change`).
+export type RunChange = { was: RunShown; now: RunShown };
 
 /// What two chats' agents wrote each other (session_send), kept apart from what is said in a chat: `in`, another chat's
 /// agent wrote this one (delivered to its agents); `out`, this chat's agent wrote another (`author`, delivered to none
@@ -199,7 +212,7 @@ export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null; letter?: Letter;
-  agentIdentity?: Json;
+  agentIdentity?: Json; change?: RunChange;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({
@@ -457,6 +470,7 @@ export function entryColumns(e: EntryRow): Json {
     client: e.client, profile: e.profile, runtime: e.runtime, options: e.options === undefined ? null : JSON.stringify(e.options),
     card: e.card === undefined ? null : JSON.stringify(e.card), at: e.at,
     agent_identity: e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity), letter: e.letter === undefined ? null : JSON.stringify(e.letter),
+    change: e.change === undefined ? null : JSON.stringify(e.change),
   };
 }
 
@@ -469,7 +483,7 @@ export function toEntry(r: Json): EntryRow {
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
     client: r.client, profile: r.profile, runtime: r.runtime ?? null, options: parsed(r.options), card: parsed(r.card), at: r.at,
-    ...withLetter(r.letter),
+    ...withLetter(r.letter), ...withChange(r.change),
   };
 }
 
@@ -477,6 +491,12 @@ export function toEntry(r: Json): EntryRow {
 export const withLetter = (v: unknown): { letter?: Letter } => {
   const letter = letterOf(v);
   return letter === undefined ? {} : { letter };
+};
+
+/// `change` when there is one (a notice's, EntryRow `change`), to spread into a row.
+export const withChange = (v: unknown): { change?: RunChange } => {
+  const change = typeof v === "string" ? parsed(v) : v;
+  return change !== null && typeof change === "object" && change.was !== null && typeof change.was === "object" && change.now !== null && typeof change.now === "object" ? { change } : {};
 };
 
 /// A row of the letters' own log (schema.ts LETTERS) as an entry: a message, never edited, numbered in that log.

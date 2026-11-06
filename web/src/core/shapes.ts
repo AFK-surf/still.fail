@@ -2276,6 +2276,16 @@ export interface NoticeShown {
 	 */
 	detail?: string;
 	/**
+	 * A chat's run changed (run-change.ts): what it runs on now in what changed alone (换成 Codex · GPT-6), said in
+	 * place of `words` where they have not the room on their line. Absent otherwise.
+	 */
+	short?: string;
+	/**
+	 * A chat's run changed: how it ran and how it runs, whole (之前：…, 现在：…), shown in place of `words` once
+	 * the notice is opened. Absent otherwise.
+	 */
+	lines?: string[];
+	/**
 	 * `words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is
 	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
 	 */

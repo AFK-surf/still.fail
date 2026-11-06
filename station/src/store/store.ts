@@ -1570,6 +1570,7 @@ export class Store {
           card: card ?? (options === undefined ? undefined : optionsCard(options)),
           at: m.at ?? this.now(),
           ...(m.letter !== undefined ? { letter: m.letter } : {}),
+          ...(m.change !== undefined ? { change: m.change } : {}),
         },
         changes,
       );
@@ -3005,9 +3006,9 @@ export class Store {
   #insertEntry(e: EntryRow): void {
     const c = entryColumns(e);
     this.#run(
-      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       c.thread, c.n, c.kind, c.target, c.ts, c.author_kind, c.author, c.text, c.attachments, c.quotes, c.declared, c.client, c.profile, c.runtime,
-      c.options, c.card, c.at, c.agent_identity, c.letter,
+      c.options, c.card, c.at, c.agent_identity, c.letter, c.change,
     );
   }
 }
