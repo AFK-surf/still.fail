@@ -901,6 +901,8 @@ pub struct Tree {
   /// A property application or geometry read is still using the nodes; publish input ownership after it returns.
   mut modals_held : Int
   mut modals_asked : Bool
+  /// nesting of input-ownership notifications, whose layouts can schedule their next notification
+  mut modals_telling : Int
   mut modals_at : Double
   /// the change whose modal state will be published, including its layout work if notification is deferred
   mut modals_budget : (Ref[Int], Ref[Bool])?
@@ -1213,6 +1215,7 @@ pub fn Tree::new(
     modals_due: false,
     modals_held: 0,
     modals_asked: false,
+    modals_telling: 0,
     modals_at: -1.0,
     modals_budget: None,
     held: None,
@@ -4204,7 +4207,9 @@ fn Tree::modals_settled(self : Tree) -> Unit {
         self.modals_budget = None
         let was = self.cause_at
         self.cause_at = self.modals_at
+        self.modals_telling += 1
         self.modals_now()
+        self.modals_telling -= 1
         self.cause_at = was
       }
     })
@@ -5386,13 +5391,16 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 /// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
 /// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
 fn Tree::laid_now(self : Tree) -> Unit {
-  // Independent geometry reads are separate work, including reads made in a layout or modal notification after the
-  // layout has returned. Only a read nested in an active layout belongs to that layout's pass count. A fault still
-  // stops the enclosing operation and every geometry read it calls.
+  // Independent reads are separate work, even inside one notification. Start each with that notification's parent
+  // count: layouts caused by this read can carry their own count on to their notifications without adding siblings'
+  // work to one another. Reads made directly in an active layout keep its counter. A fault still stops the operation.
   let was_budget = self.brought_budget
   if self.laying == 0 {
     match was_budget {
-      Some((_, stopped)) => self.brought_budget = Some((Ref(0), stopped))
+      Some((passes, stopped)) => {
+        let parent = if self.telling_laid || self.modals_telling > 0 { passes.val } else { 0 }
+        self.brought_budget = Some((Ref(parent), stopped))
+      }
       None => ()
     }
   }
@@ -7632,11 +7640,14 @@ fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, no
 /// marks more to do, each from the start, in a loop: once it ran in itself, as deep as passes came, and a frame whose
 /// passes never stopped (what it told taken at the host's clock, gone on: Tree::brought) ran the stack out, 2000 deep.
 fn Tree::laid_out(self : Tree, upto : Double, passes? : Ref[Int] = Ref(0), stopped? : Ref[Bool] = Ref(false)) -> Unit {
-  // A geometry read nested in a modal callback is still part of the original synchronous bring.
-  let (passes, stopped) = match self.brought_budget {
+  // A layout's notifications carry its counter and stop flag even if this was a standalone geometry read.
+  let was_budget = self.brought_budget
+  let (passes, stopped) = match was_budget {
     Some(b) => b
     None => (passes, stopped)
   }
+  self.brought_budget = Some((passes, stopped))
+  defer { self.brought_budget = was_budget }
   self.modals_held += 1
   defer { self.modals_released() }
   if stopped.val || !self.due {
@@ -10052,7 +10063,16 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
 /// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
-  self.after_laid.push(f)
+  let budget = match self.brought_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  self.after_laid.push(fn() {
+    let was_budget = self.brought_budget
+    self.brought_budget = Some(budget)
+    defer { self.brought_budget = was_budget }
+    f()
+  })
 }
 
 ///|

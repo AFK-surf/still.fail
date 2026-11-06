@@ -188,3 +188,45 @@ test "separate geometry reads in a layout or modal notification each finish" {
     t.dispose()
   }
 }
+
+///|
+test "a layout notification that lays out and asks for another keeps the layout pass guard" {
+  let faults : Array[String] = []
+  faults_stop.val = false
+  fault_told.val = Some(fn(s) { faults.push(s) })
+  defer {
+    faults_stop.val = true
+    fault_told.val = None
+  }
+  for modal in [false, true] {
+    let width = @signals.signal(1.0, same=fn(a, b) { a == b })
+    let armed = Ref(false)
+    let steps = Ref(0)
+    let next : Ref[() -> Unit] = Ref(fn() {})
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        v.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))).offset(Painted(fn(_) {
+          if armed.val && steps.val < 100 {
+            if modal { v.tree.modals_told() } else { v.tree.said_after_laid(next.val) }
+          }
+          (0.0, 0.0)
+        })) |> ignore
+      }) |> ignore
+    })
+    t.frame(200.0, 100.0, now=0.0) |> ignore
+    next.val = fn() {
+      steps.val += 1
+      width.set((steps.val + 1).to_double())
+      t.laid_as_now()
+    }
+    if modal { t.on_modals(fn() { (next.val)() }) }
+    armed.val = true
+    t.event(10.0, fn() {
+      t.layout_marked_at(0)
+      t.laid_as_now()
+    })
+    assert_true(steps.val > 0 && steps.val < 100, msg="the layout feedback stopped: modal=\{modal}, steps=\{steps.val}")
+    assert_true(faults.iter().any(fn(s) { s.contains("layout passes in one") }), msg="\{faults}")
+    t.dispose()
+  }
+}
