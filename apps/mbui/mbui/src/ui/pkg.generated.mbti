@@ -168,6 +168,8 @@ pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line
 
 pub fn files_held() -> (Double, Double)?
 
+pub fn files_into_node(@view.View, (Pick) -> Unit, when? : () -> Bool) -> () -> Bool
+
 pub fn finger_target() -> Double
 
 pub fn first_difference(Array[Int64], Array[Int64]) -> Int32?

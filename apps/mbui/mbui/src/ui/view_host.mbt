@@ -659,6 +659,7 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // tree goes no further than that, whatever time its building takes)
   view_logic_at.val = h_now()
   view_brought(tree)
+  tree_files_refresh()
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
   view_pointed_again()
@@ -684,6 +685,7 @@ fn view_arrived() -> Unit {
   match view_app.val {
     Some(tree) if tree.told_since() => {
       view_brought(tree)
+      tree_files_refresh()
       // (what a still pointer is over, as what came moved it: view_pointed_again)
       view_pointed_again()
     }
@@ -3172,6 +3174,7 @@ fn view_frame_end(c : Ctx) -> Unit {
   // (where the old frame's topmost modal layer is in the window's stack of layers, as this frame built it: what of the
   // tree is not over it takes no input, Tree::hold_under)
   tree.hold_under(c.old_modal_stack())
+  tree_files_refresh()
   // (the tree's layers that gave the focus as they opened: opened before this frame ended, no longer: view_focus_kept_for)
   for l in layer_focus_open {
     l.fresh = false

@@ -17,6 +17,7 @@ on:
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/log_files.h"
       - "apps/mbui/mbui/scripts/win_logs_test.c"
+      - "apps/mbui/mbui/scripts/win_drop_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
@@ -75,6 +76,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
+      - name: "File drop and clipboard: movable CF_HDROP with Unicode paths"
+        run: |
+          mkdir -p out/host
+          cl.exe -nologo -W3 -D_CRT_SECURE_NO_WARNINGS -I"$MOON_HOME/include" -Isrc/host scripts/win_drop_test.c -Foout/host/ -Feout/host/win_drop_test.exe user32.lib shell32.lib ole32.lib uuid.lib
+          out/host/win_drop_test.exe
       - name: "A key that focuses a field and the next typed key belong to the right recipients"
         run: |
           mkdir -p out/host
