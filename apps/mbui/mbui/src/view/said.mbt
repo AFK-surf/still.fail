@@ -104,7 +104,8 @@ pub fn said(
 /// A node of the window's tree as it is read out (Tree::said_order): which, what it said (None: it said nothing, a node
 /// hosting an old view, read out as its own say), whether it hosts one, whether it takes input now (a modal layer over
 /// it says not: Tree::allows), whether its presses are off (View::presses: disabled, read out so), where it is drawn
-/// (the window's terms), the nearest of these that holds it (its index; -1 none) and how deep it is.
+/// (the window's terms), the nearest of these that holds it (its index; -1 none) and how deep it is. A Dialog or
+/// AlertDialog is modal when it is the first such semantic node within a live modal layer.
 pub(all) struct SaidNode {
   id : NodeId
   said : Said?
@@ -113,6 +114,7 @@ pub(all) struct SaidNode {
   /// kept from what is read out (View::hides, its own or what holds it's)
   hidden : Bool
   disabled : Bool
+  modal : Bool
   rect : (Double, Double, Double, Double)
   parent : Int
   depth : Int
@@ -213,7 +215,7 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
   // event, Tree::laid_now; no frame drawn for it)
   @signals.untracked(fn() { self.pull() })
   let out : Array[SaidNode] = []
-  fn walk(at : Int, parent : Int, depth : Int, hid : Bool, named : Bool) -> Unit {
+  fn walk(at : Int, parent : Int, depth : Int, hid : Bool, named : Bool, in_modal : Bool) -> Unit {
     let n = self.nodes[at]
     // (left out of its row: none of it read out, Tree::out_at)
     if !n.live || n.out {
@@ -225,6 +227,13 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
     let mut up = parent
     let mut d = depth
     let mut named = named
+    // A layer can take all input at a transparent ground while its surface, deeper in the tree, says Dialog.
+    // Attribute the layer to that first dialog, not to a non-modal dialog nested in the dialog's contents.
+    let in_modal = in_modal || (n.modal && !self.leaving_at(at))
+    let dialog = match n.said {
+      Some(s) => s.role is (Dialog | AlertDialog)
+      None => false
+    }
     let place = fn() {
       // A layout motion changes the painting alone. Accessibility actions use the same destination as a press.
       let (x, y, scale) = self.placed(at)
@@ -239,6 +248,7 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
         hidden: hid,
         // (said to take no press itself (View::turned_off): it alone, not what it holds that does on its own)
         disabled: self.pressless_at(at) || n.turned_off,
+        modal: dialog && in_modal,
         rect: place(),
         parent,
         depth,
@@ -261,6 +271,7 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
         allowed: self.allows(id),
         hidden: hid,
         disabled: false,
+        modal: false,
         rect: place(),
         parent,
         depth,
@@ -269,12 +280,12 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
       d = depth + 1
     }
     for k in self.kids_in_order(at) {
-      walk(k, up, d, hid, named)
+      walk(k, up, d, hid, named, in_modal && !dialog)
     }
   }
 
   if self.nodes.length() > 0 {
-    walk(0, -1, 0, false, false)
+    walk(0, -1, 0, false, false, false)
   }
   out
 }

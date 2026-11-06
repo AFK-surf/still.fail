@@ -122,6 +122,7 @@ test "tree sheet traps the page, returns focus and keeps only its picture until 
   let (t, k) = node_sheet_case()
   t.run_for(sheet_test_late_ms)
   assert_true(t.query(@ui.Role::Button, label="Page") is None)
+  assert_true(t.get(@ui.Role::Dialog, label="Sheet").modal)
   assert_false(t.query(@ui.Role::Dialog, label="Sheet").unwrap().actions.contains(Activate))
   t.click(@ui.Role::Button, label="Inside")
   assert_eq(k.pressed.val, 1)

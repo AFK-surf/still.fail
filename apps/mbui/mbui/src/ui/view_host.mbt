@@ -4933,7 +4933,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
           selected: s.selected,
           pressed: s.pressed,
           disabled: sn.disabled,
-          modal: false,
+          modal: sn.modal,
           range: s.range,
           actions,
           rect: sn.rect,
