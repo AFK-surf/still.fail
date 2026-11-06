@@ -1919,7 +1919,7 @@ pub fn View::box(self : View, make : (View) -> Unit) -> View {
   if self.at == 0 {
     self.tree.top_last()
   }
-  self.kids_changed(fn() { self.box_appended(v.at) })
+  self.box_appended(v.at)
   v.owning(fn() { make(v) })
   v
 }
@@ -2028,10 +2028,12 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     }
     // (only what it lays out, inside it, may be changed in its layout: itself or another branch changed there is a
     // fault, saying which; its layout is its constraints' and content's, read before it)
-    // (save what it holds made, dropped or reordered by the framework, told to it or, a slot's, to what holds it: no
-    // layout property of it written)
-    if self.box_kids_changing == self.layout_owner && c < 0 {
-      return
+    // (save the framework's one mark for what it holds made, dropped or reordered (Tree::kids_marked_at), on it or, a
+    // slot's, on what holds it: no layout property of it written; nothing told after that mark is saved by it)
+    if self.box_kids_changing == self.layout_owner {
+      let mut o = self.layout_owner
+      while o >= 0 && o != at { o = self.nodes[o].parent }
+      if o == at { return }
     }
     if c < 0 || at == self.layout_owner {
       fault("layout_box node \{self.layout_owner}: node \{at}'s layout changed in its layout, not one of what it lays out")
@@ -5906,7 +5908,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
     return
   }
   self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
-  self.tree.layout_marked_at(at)
+  self.tree.kids_marked_at(at, self.at)
   self.tree.order_marked()
   self.tree.modals_told()
 }
@@ -5959,7 +5961,7 @@ fn View::boxes_again(self : View) -> Unit {
     None => ()
   }
   self.tree.boxes_now(at)
-  self.tree.layout_marked_at(at)
+  self.tree.kids_marked_at(at, self.at)
   self.tree.order_marked()
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.tree.modals_told()
@@ -5973,7 +5975,7 @@ fn View::boxes_removed(self : View) -> Unit {
     Some(batch) if self.tree.layouts_active == 0 && batch.slot == self.id() => {
       let at = self.boxes_owner()
       batch.pending.add(self.tree.handle(at).id())
-      self.tree.layout_marked_at(at)
+      self.tree.kids_marked_at(at, self.at)
       self.tree.order_marked()
       self.tree.modals_told()
     }
@@ -6027,13 +6029,14 @@ fn View::drop(self : View, v : View) -> Unit {
 }
 
 ///|
-/// What it holds made, dropped or put in another order, told to layout: in a layout_box's own layout, the framework's
-/// change of what it holds, none of its layout properties written (Tree::layout_marked_at).
-fn View::kids_changed(self : View, tell : () -> Unit) -> Unit {
-  let was = self.tree.box_kids_changing
-  self.tree.box_kids_changing = self.at
-  tell()
-  self.tree.box_kids_changing = was
+/// `at` marked to be laid out again for what node `kids_of` holds made, dropped or put in another order (`at` that node,
+/// or, a slot's, what holds it): in a layout_box's own layout, the framework's change of what it holds, none of its
+/// layout properties written (Tree::layout_marked_at); only this one mark, nothing told after it.
+fn Tree::kids_marked_at(self : Tree, at : Int, kids_of : Int) -> Unit {
+  let was = self.box_kids_changing
+  self.box_kids_changing = kids_of
+  self.layout_marked_at(at)
+  self.box_kids_changing = was
 }
 
 ///|

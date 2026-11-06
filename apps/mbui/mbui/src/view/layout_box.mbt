@@ -225,7 +225,7 @@ pub fn[K : Eq] View::layout_box(
     if ordered != n.kids {
       n.kids.clear()
       n.kids.append(ordered)
-      self.kids_changed(fn() { self.boxes_again() })
+      self.boxes_again()
     }
     ctx.live.val = false
     self.tree.layout_owner = was_owner
