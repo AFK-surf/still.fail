@@ -23,6 +23,7 @@ fn setting_tester(
   h? : Double = 900.0,
   ready? : () -> Unit = fn() {  },
   host? : (@ui.Tester) -> Unit = fn(_) {  },
+  layout_width? : () -> Double,
 ) -> @ui.Tester {
   @sfbase.reset()
   reset()
@@ -38,7 +39,11 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
+  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | Permissions | AutoCompletion)
+  let page_width = match layout_width {
+    Some(read) => read
+    None => fn() { w }
+  }
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -69,7 +74,7 @@ fn setting_tester(
         root.pick(fn() { app.nav.top() }, fn(p, page) {
           @ui.words_picked(p)
           match page {
-            Setting(r) => setting_made(p, src, r, fn() { w })
+            Setting(r) => setting_made(p, src, r, page_width)
             _ => ()
           }
         })
@@ -114,6 +119,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
       shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stay }, width~)
     }
     Notifications => notify_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    Permissions => permissions_node(p, core, on_back=core.pop, frame~, width~)
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>

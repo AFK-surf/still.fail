@@ -418,7 +418,7 @@ pub let tape_side_max : Double
 
 pub fn tape_under(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace]) -> Unit
 
-pub fn tape_view(@view.View, @sfbase.Source, ready~ : (@sfbase.Page) -> Bool, most~ : Double) -> Unit
+pub fn tape_view(@view.View, @sfbase.Source, ready~ : (@sfbase.Page) -> Bool, most~ : Double, focus_page? : Bool) -> Unit
 
 pub fn tip_keys(@sfbase.Source) -> (String) -> String
 
