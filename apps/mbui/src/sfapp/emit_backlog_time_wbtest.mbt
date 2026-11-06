@@ -43,7 +43,7 @@ fn backlog_window(width : Double, ended : Ref[Bool]) -> @ui.Tester {
 ///|
 test "returning to four agents' expired replies drains beyond one pose batch without another picture" {
   for width in [390.0, 1280.0] {
-    let pictures : Array[Array[Array[Double]]] = []
+    let pictures : Array[String] = []
     let words : Array[Array[(String, Double, Double, Double, Double, Double)]] = []
     let hits : Array[Array[String]] = []
     for hz in [0, 60, 120] {
@@ -104,7 +104,9 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       t.frame_at(returned_at + linger_ms + 2.0 * @ui.move_most_ms)
       t.assert_idle()
       assert_true(tree.wake_waited() is None && t.next_wake() is None, msg="no expired reply is waiting for another callback")
-      pictures.push(t.drawn_instances())
+      // Compare glyphs by their content key, not the atlas positions assigned
+      // by earlier frames; all instances and their clipping stay in the text.
+      pictures.push(t.drawn_text())
       words.push(t.words_said())
       let targets : Array[String] = []
       for y in 0..<22 {
