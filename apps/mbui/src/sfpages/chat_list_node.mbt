@@ -25,8 +25,6 @@ pub fn chat_list_node(
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
   let scroll = @view.Scroll::list()
-  // (its width as last laid out)
-  let list_w = fn() { v.laid_size_told().map(fn(z) { z.0 }) }
   // The last row stands above the decision bell when the core says that it can cover the list's end (the old
   // list's ask_clear). The bell itself stays over the composer's room, even while its post is elsewhere in the list.
   let clear_foot = fn() {
@@ -72,13 +70,6 @@ pub fn chat_list_node(
       None => ()
     }
   })
-  // (narrow: 700 or less, as the list is laid out: 20 apart, the pictures at their heads' start)
-  let narrow = fn() {
-    list_w().map(fn(w) { w <= chat_narrow_w }).unwrap_or(true)
-  }
-  // (the same as the list was last laid out, kept where its layout reads it: a layout reads no signal)
-  let narrow_laid = Ref(true)
-  v.reacts(fn() { narrow() }, fn(now) { narrow_laid.val = now })
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
@@ -130,26 +121,23 @@ pub fn chat_list_node(
     cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
     rows_now.set(cr)
   })
-  // (in from the pane's sides to the column (row_side's): 16 narrow (as wide as the composer's words beside the
-  // system's bars), else the column 760 wide at most in its middle (48 in beside the system's bars))
-  let side = fn() {
-    let w = match list_w() { Some(w) => w; None => v.window().0 }
-    row_side_in(w)
-  }
   // (the message the unread line is over, followed as that changes alone)
   let line_seq = @signals.computed(fn(_) { view().bind(fn(cv) { cv.unread_line }) }, same=fn(a, b) { a == b })
   // (a message's row: the unread line over it where it is over it, its own gap under the line (joined, 4; else the
   // rows' gap), the message (`body`), where it was sent elsewhere under it, each the rows' gap under the one before:
   // what were rows of their own, each its own)
-  let gap_of = fn(joined : Bool) {
-    if joined { joined_gap } else if narrow() { list_gap_narrow } else { list_gap }
+  // (by the width the list is laid out at (`w`): 700 or less narrow, 20 apart; in from the pane's sides to the column
+  // by row_side_in: 16 narrow, else the column 760 wide at most in its middle)
+  let gap_of = fn(joined : Bool, w : Double) {
+    if joined { joined_gap } else if w <= chat_narrow_w { list_gap_narrow } else { list_gap }
   }
   // (`lead` the room over the first of them, the row's (the line's, else the message's); `ground` the message's, lit
   // as a row is (its menu open, gone to) over the room over it and it alone, as the row it was)
   // (in from the pane's sides to the column, `top` over it: a row's room; a message's parts each their own, the band
   // of its own part across the whole of it as the row's was)
-  let row_room = fn(node : @view.View, top : () -> Double) {
-    node.padding(By(fn() { let s = side(); (s, top(), s, 0.0) })) |> ignore
+  // (by how wide the list is laid out, in the same layout (Roomed): nothing of its width read back)
+  let row_room = fn(node : @view.View, top : (Double) -> Double) {
+    node.padding(Roomed(v, fn(w, _) { let s = row_side_in(w); (s, top(w), s, 0.0) })) |> ignore
   }
   let parts = fn(
     row : @view.View,
@@ -157,7 +145,7 @@ pub fn chat_list_node(
     joined : () -> Bool,
     elsewhere : () -> Array[Elsewhere],
     here : () -> MessageHere,
-    lead : () -> Double,
+    lead : (Double) -> Double,
     ground : () -> Int64,
     body : (@view.View) -> Unit,
   ) {
@@ -166,7 +154,7 @@ pub fn chat_list_node(
       l.box(fn(b) { unread_line_node(b) }) |> ignore
     })
     row.box(fn(said) {
-      row_room(said, fn() { if lined() { gap_of(joined()) } else { lead() } })
+      row_room(said, fn(w) { if lined() { gap_of(joined(), w) } else { lead(w) } })
       said.ground(By(ground)) |> ignore
       said.box(body) |> ignore
     })
@@ -175,7 +163,7 @@ pub fn chat_list_node(
       for i in 0..<n {
         // (the gap over it its own box's: what it draws in its margin (its picture) placed from its top, as a row's)
         sent.box(fn(g) {
-          row_room(g, fn() { gap_of(false) })
+          row_room(g, fn(w) { gap_of(false, w) })
           g.box(fn(b) {
             sent_elsewhere_node(b, src, here, fn() { elsewhere().get(i).unwrap_or_else(fn() { elsewhere()[0] }) })
           })
@@ -189,7 +177,7 @@ pub fn chat_list_node(
     row : @view.View,
     m : () -> Message,
     here : () -> MessageHere,
-    lead : () -> Double,
+    lead : (Double) -> Double,
     ground : () -> Int64,
     body : (@view.View) -> Unit,
   ) {
@@ -209,13 +197,6 @@ pub fn chat_list_node(
       1
     } else {
       2
-    }
-  }
-  let over = fn(e : Entry, i : Int) -> Double {
-    match gap_kind(e, i) {
-      0 => 0.0
-      1 => joined_gap
-      _ => if narrow() { list_gap_narrow } else { list_gap }
     }
   }
   let draft = r.station + ":" + r.session
@@ -287,13 +268,10 @@ pub fn chat_list_node(
     grown=fn(e) {
       match e { Said(m) => !emit_words_only(em, m.seq); Working(_) => false; _ => true }
     },
-    lead=over,
+    // (the room over a row, by the width the list is laid out at as it is laid out: the gap its padding has, gap_of's)
     lead_in_layout=fn(e, i) {
       let kind = gap_kind(e, i)
-      fn() {
-        if kind == 0 { 0.0 } else if kind == 1 { joined_gap }
-        else if narrow_laid.val { list_gap_narrow } else { list_gap }
-      }
+      fn(w) { if kind == 0 { 0.0 } else { gap_of(kind == 1, w) } }
     },
     own=fn(e) { e is Foot },
   )
@@ -539,21 +517,6 @@ pub fn chat_list_node(
           }
         })
         |> ignore
-        // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
-        // composer under the last)
-        slot
-        .padding(By(fn() {
-          // (a message's row: the room over it its parts', said_parts')
-          match row_of(k) {
-            Some((Said(_) | Out(_), _)) => (0.0, 0.0, 0.0, 0.0)
-            r => {
-              let gap = match r { Some((e, i)) => over(e, i); None => 0.0 }
-              let side = side()
-              (side, gap, side, 0.0)
-            }
-          }
-        }))
-        |> ignore
         // (its menu open (right clicked, its ⋯): the row in the pointer's ground, easing in and out as a row's under the
         // pointer does: the old list's band)
         let menu_lit = @sf.EdgeWay::new(0.0)
@@ -653,11 +616,11 @@ pub fn chat_list_node(
         }
         slot.ground(By(fn() { if row_of(k) is Some((Said(_) | Out(_), _)) { 0L } else { lit() } })) |> ignore
         // (the room over a message's first part: the row's gap, as gap_kind says it)
-        let said_lead = fn() {
+        let said_lead = fn(w : Double) {
           match row_of(k) {
             Some((e, i)) => {
               let kind = gap_kind(e, i)
-              if kind == 0 { 0.0 } else { gap_of(kind == 1) }
+              if kind == 0 { 0.0 } else { gap_of(kind == 1, w) }
             }
             None => 0.0
           }
@@ -665,16 +628,40 @@ pub fn chat_list_node(
         // (what it is: a message (message_node.mbt), what was sent from here, an agent at work, the line over what is new,
         // the pages coming, a chat with nothing in it, where it stands, what was said elsewhere (chat_rows_node.mbt);
         // made again as which of those it is changes)
+        // (arranged by the room the list gives it, in the same layout (by_room): narrow or wide, and in from the pane's
+        // sides as it is made (a message's pictures' bleed); made again where it goes from one to the other)
+        slot.by_room(Is(()), sized=true, fn(_, w, _) { { narrow: w <= chat_narrow_w, gutter: row_side_in(w) } }, fn(
+          holder,
+          room
+        ) {
+        // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
+        // composer under the last)
+        holder
+        .padding(Roomed(v, fn(w, _) {
+          // (a message's row: the room over it its parts', said_parts')
+          match row_of(k) {
+            Some((Said(_) | Out(_), _)) => (0.0, 0.0, 0.0, 0.0)
+            r => {
+              let gap = match r {
+                Some((e, i)) => { let kind = gap_kind(e, i); if kind == 0 { 0.0 } else { gap_of(kind == 1, w) } }
+                None => 0.0
+              }
+              let side = row_side_in(w)
+              (side, gap, side, 0.0)
+            }
+          }
+        }))
+        |> ignore
         let here = fn() {
           match view() {
-            Some(cv) => here_of(r, cv, rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=narrow(), gutter=@signals.untracked(side))
-            None => here_of(r, @sfbase.chat_view_made(Json::object({})), rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=narrow(), gutter=@signals.untracked(side))
+            Some(cv) => here_of(r, cv, rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=room.narrow, gutter=room.gutter)
+            None => here_of(r, @sfbase.chat_view_made(Json::object({})), rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=room.narrow, gutter=room.gutter)
           }
         }
         // (what it is as it was last found: a row going not found among them for a moment, as its list takes its going,
         // keeps showing what it showed)
         let kind_was = Ref(0)
-        slot.pick(fn() {
+        holder.pick(fn() {
           let kind = match row_of(k) {
             Some((Said(m), _)) => message_made_whole(m.message())
             Some((Out(_), _)) => 3
@@ -772,6 +759,8 @@ pub fn chat_list_node(
             }
           }
         })
+        })
+        |> ignore
       },
     )
     |> ignore
@@ -1073,8 +1062,7 @@ pub fn chat_list_node(
   }
   // Both actions stand six points inside the composer's end. The page supplies the same width it gives the
   // composer, including a panel's corners; a list made alone falls back to the width in its own room.
-  let float_right = fn() {
-    let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
+  let float_right = fn(w : Double) {
     let cw = composer_across.map(fn(f) { f() }).unwrap_or(composer_width(w))
     (w - cw) / 2.0 + float_in
   }
@@ -1084,9 +1072,9 @@ pub fn chat_list_node(
     .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
+    .padding(Roomed(v, fn(w, _) {
       let above = jump_shown()
-      (0.0, 0.0, float_right(), foot() + float_lift + (if above { float_above } else { 0.0 }))
+      (0.0, 0.0, float_right(w), foot() + float_lift + (if above { float_above } else { 0.0 }))
     }))
     |> ignore
     f.show(asking, fn(b) {
@@ -1140,8 +1128,8 @@ pub fn chat_list_node(
     .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
-      (0.0, 0.0, float_right(), foot() + float_lift)
+    .padding(Roomed(v, fn(w, _) {
+      (0.0, 0.0, float_right(w), foot() + float_lift)
     }))
     |> ignore
     let initial = Ref(true)
@@ -1417,3 +1405,17 @@ impl Eq for ListedFrom with equal(self, other) {
 ///|
 /// How far from what covers a chat's list a card's field in it is kept with the keyboard up (the old list's).
 let field_held_room : Double = 16.0
+
+///|
+/// How a chat's row is arranged by the width its list is laid out at (by_room's): narrow (700 or less: the pictures at
+/// their heads' start) or not, the arrangement; and how far in from the pane's sides its column is as it is made (what
+/// a message's pictures may bleed into), which goes with it.
+priv struct RowRoom {
+  narrow : Bool
+  gutter : Double
+}
+
+///|
+impl Show for RowRoom with output(self, logger) {
+  logger.write_string(if self.narrow { "narrow" } else { "wide" })
+}
