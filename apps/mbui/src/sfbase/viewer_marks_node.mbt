@@ -637,7 +637,7 @@ fn note_cards_node(r : @view.View) -> Unit {
         marks_said()
         mark_notes().filter(fn(x) {
           match cards.get(x.0) {
-            Some(v) => v.left_out()
+            Some(v) => v.owed_left_out()
             None => false
           }
         })

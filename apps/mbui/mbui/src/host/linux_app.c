@@ -19,6 +19,11 @@
 #include "done_watch.h"
 
 mb_callbacks mb_cb;
+static void (*modifiers_cb)(int32_t);
+void mb_host_set_modifiers(void (*f)(int32_t)) { modifiers_cb = f; }
+static unsigned modifier_keys;
+// While an input event is delivered, a read belongs to that event rather than the device's newer state.
+static int event_modifiers = -1;
 
 // Back (host_native.mbt `set_back`): a mouse's back button and Alt+Left, while the app takes it.
 typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
@@ -442,6 +447,44 @@ static int mods_of(GdkModifierType m) {
          ((m & GDK_SUPER_MASK) ? 8 : 0);
 }
 
+// The controller's state can still contain the key being released. Track both sides of each modifier so releasing one
+// does not clear the other; a non-modifier key still refreshes the state GTK gives with it.
+static int modifier_index(guint key) {
+  switch (key) {
+    case GDK_KEY_Shift_L: return 0;
+    case GDK_KEY_Shift_R: return 1;
+    case GDK_KEY_Control_L: return 2;
+    case GDK_KEY_Control_R: return 3;
+    case GDK_KEY_Alt_L: return 4;
+    case GDK_KEY_Alt_R: return 5;
+    case GDK_KEY_Meta_L: case GDK_KEY_Super_L: return 6;
+    case GDK_KEY_Meta_R: case GDK_KEY_Super_R: return 7;
+    default: return -1;
+  }
+}
+
+static void modifiers_from_key(guint key, GdkModifierType state, int down) {
+  int mods = mods_of(state), index = modifier_index(key);
+  if (index >= 0) {
+    unsigned side = 1u << index, pair = 3u << (index & ~1);
+    if (down) modifier_keys |= side; else modifier_keys &= ~side;
+    int bit = 1 << (index / 2);
+    if (modifier_keys & pair) mods |= bit; else mods &= ~bit;
+  }
+  if (modifiers_cb) modifiers_cb(mods);
+}
+
+static gboolean on_modifier_down(GtkEventControllerKey *k, guint keyval, guint keycode, GdkModifierType state, gpointer data) {
+  (void)k, (void)keycode, (void)data;
+  modifiers_from_key(keyval, state, 1);
+  return FALSE;
+}
+
+static void on_modifier_up(GtkEventControllerKey *k, guint keyval, guint keycode, GdkModifierType state, gpointer data) {
+  (void)k, (void)keycode, (void)data;
+  modifiers_from_key(keyval, state, 0);
+}
+
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard read
 #include "linux_device.h"
 
@@ -559,6 +602,13 @@ static void scroll(GdkEvent *ev, double x, double y) {
 // the tape at that moment and given again so. (Saying its own would need a backend's clock known to be this one.)
 static GHashTable *touch_ids;          // a sequence's id, by its pointer
 static int32_t touch_next = 1;
+static void pointer_event(GdkEvent *ev, int kind, double x, double y, int button) {
+  int prior_modifiers = event_modifiers;
+  event_modifiers = mods_of(gdk_event_get_modifier_state(ev));
+  mb_cb.pointer(kind, x, y, button);
+  event_modifiers = prior_modifiers;
+}
+
 static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
   GdkEventSequence *s = gdk_event_get_event_sequence(ev);
   int kind = t == GDK_TOUCH_BEGIN ? 10 : t == GDK_TOUCH_UPDATE ? 11 : t == GDK_TOUCH_END ? 12 : 13;
@@ -575,7 +625,7 @@ static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
     g_hash_table_insert(touch_ids, s, GINT_TO_POINTER(id));
   }
   if (kind == 10) gtk_widget_grab_focus(area);
-  mb_cb.pointer(kind, x, y, id);
+  pointer_event(ev, kind, x, y, id);
   if (kind == 12 || kind == 13) g_hash_table_remove(touch_ids, s);
 }
 
@@ -603,10 +653,10 @@ static gboolean on_event(GtkEventControllerLegacy *c, GdkEvent *ev, gpointer dat
       gtk_widget_grab_focus(area);
       if (b == 1) {
         left_down = 1;
-        mb_cb.pointer(0, x, y, 0);
+        pointer_event(ev, 0, x, y, 0);
       } else if (b == 3) {
         right_down = 1;
-        mb_cb.pointer(0, x, y, 2);
+        pointer_event(ev, 0, x, y, 2);
       }
       return TRUE;
     }
@@ -615,10 +665,10 @@ static gboolean on_event(GtkEventControllerLegacy *c, GdkEvent *ev, gpointer dat
       guint b = gdk_button_event_get_button(ev);
       if (b == 1 && left_down) {
         left_down = 0;
-        mb_cb.pointer(2, x, y, 0);
+        pointer_event(ev, 2, x, y, 0);
       } else if (b == 3 && right_down) {
         right_down = 0;
-        mb_cb.pointer(2, x, y, 2);
+        pointer_event(ev, 2, x, y, 2);
       } else if (b == 8) {
         go_back();
       } else if (b == 9) {
@@ -628,10 +678,10 @@ static gboolean on_event(GtkEventControllerLegacy *c, GdkEvent *ev, gpointer dat
     }
     case GDK_MOTION_NOTIFY:
       area_point(ev, &x, &y);
-      mb_cb.pointer(1, x, y, 0);
+      pointer_event(ev, 1, x, y, 0);
       return TRUE;
     case GDK_LEAVE_NOTIFY:
-      if (!left_down) mb_cb.pointer(7, -1, -1, 0);
+      if (!left_down) pointer_event(ev, 7, -1, -1, 0);
       return FALSE;
     case GDK_SCROLL:
       area_point(ev, &x, &y);
@@ -664,6 +714,7 @@ static void app_state(void) {
   if (!state_cb || !win) return;
   int shown = gtk_widget_get_mapped(win);
   int front = shown && gtk_window_is_active(GTK_WINDOW(win));
+  if (!front) modifier_keys = 0;
   state_cb((shown ? 1 : 0) | (front ? 2 : 0));
   schedule();
 }
@@ -889,6 +940,12 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   GtkEventController *events = gtk_event_controller_legacy_new();
   g_signal_connect(events, "event", G_CALLBACK(on_event), NULL);
   gtk_widget_add_controller(area, events);
+  // Observe without taking keys, including those delivered to an embedded native view.
+  GtkEventController *modkeys = gtk_event_controller_key_new();
+  gtk_event_controller_set_propagation_phase(modkeys, GTK_PHASE_CAPTURE);
+  g_signal_connect(modkeys, "key-pressed", G_CALLBACK(on_modifier_down), NULL);
+  g_signal_connect(modkeys, "key-released", G_CALLBACK(on_modifier_up), NULL);
+  gtk_widget_add_controller(win, modkeys);
   keys = gtk_event_controller_key_new();
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), NULL);
   gtk_widget_add_controller(area, keys);
@@ -1297,6 +1354,7 @@ int32_t mb_host_window_snap_state(void) { return 0; }
 
 // The keys held now (@hostapi.mods_held), as a key's are told.
 int32_t mb_host_mods_held(void) {
+  if (event_modifiers >= 0) return event_modifiers;
   GdkDisplay *d = gdk_display_get_default();
   GdkSeat *seat = d ? gdk_display_get_default_seat(d) : NULL;
   GdkDevice *kb = seat ? gdk_seat_get_keyboard(seat) : NULL;

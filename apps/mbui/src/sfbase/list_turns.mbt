@@ -183,6 +183,12 @@ pub fn Turns::emitting(self : Turns) -> Bool {
 }
 
 ///|
+/// Whether what comes out of avatars has a turn here, played or asked (Turns::over has one to end).
+pub fn Turns::emits_held(self : Turns) -> Bool {
+  self.emitting() || self.asks.iter().any(fn(a) { a.what == Emits })
+}
+
+///|
 /// `target` (something under a post shown or not: a decision's options, 忽略, a card asking) as it shows. What changes
 /// out of sight (`seen` false: its row not on screen the frame before, Reading::sees) changes at once, its motion over
 /// before it is seen (`started` long ago: unseen_at). On screen, what comes waits its turn among what changes the
@@ -303,7 +309,7 @@ pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 }
 
 ///|
-/// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
+/// Plays the turns on to the logic's moment (chat_play): each one whose turn has come starts, from when it came.
 /// `list_rest`: when the list's glide after what came is over (Ctx::list_info's `glide_rest`; inf: under way, its end
 /// not known), not the reader's hand on it (listQueue.ts listStill).
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {

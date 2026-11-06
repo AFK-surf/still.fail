@@ -1303,10 +1303,13 @@ fn local_station_act(a : String) -> Unit {
 }
 
 ///|
-/// (the keys held are not read here)
-fn mods_held() -> Int {
-  0
-}
+/// The current keys and who hears when they change (web/host.js).
+extern "js" fn mods_held() -> Int =
+  #|() => globalThis.__mbhost?.modsHeld?.() ?? 0
+
+///|
+extern "js" fn set_modifiers(f : FuncRef[(Int) -> Unit]) -> Unit =
+  #|(f) => { const H = globalThis.__mbhost; if (H && H.setModifiers) H.setModifiers(f); }
 
 ///|
 extern "js" fn js_word_at(text : String, off : Int) -> Double =

@@ -13,12 +13,12 @@ test "a drawn observation tells the final layout once, including a paint-only ch
         contents.each(fn() { rows.get() }, fn(h) { h }, fn(row, h) {
           row.height(By(fn() { Some(h.get()) })) |> ignore
         }) |> ignore
-        contents.reacts(fn() { contents.laid_size_told() }, fn(size) {
+        contents.reacts(fn() { contents.owed_laid_size() }, fn(size) {
           tall.set(size.map(fn(s) { s.1 }).unwrap_or(0.0))
         })
       }) |> ignore
       list.height(By(fn() { Some(tall.get()) })) |> ignore
-      read_drawn(list, fn() { list.laid_window_told() }, fn(rect) {
+      read_drawn(list, fn() { list.owed_laid_window() }, fn(rect) {
         match rect { Some((_, y, _, h)) => told.push((y, h)); None => () }
       })
     })

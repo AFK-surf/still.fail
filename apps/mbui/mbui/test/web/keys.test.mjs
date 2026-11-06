@@ -19,15 +19,18 @@ function browser(platform) {
   const canvas = { ...element(), width: 0, height: 0, getContext: () => gl,
     getBoundingClientRect: () => ({ width: 800, height: 600, left: 0, top: 0 }) };
   const ime = element();
-  const document = { createElement: () => ({ ...element(), getContext: () => ({}) }),
+  let focused = true;
+  const document = { visibilityState: 'visible', hasFocus: () => focused,
+    createElement: () => ({ ...element(), getContext: () => ({}) }),
     getElementById: (id) => id === 'c' ? canvas : ime,
     addEventListener() {} };
   const win = { ...element(), document, navigator: { platform }, location: { search: '' }, URLSearchParams, Intl,
-    devicePixelRatio: 1, performance: { now: () => 0 }, requestAnimationFrame() {} };
+    devicePixelRatio: 1, performance: { now: () => 0 }, requestAnimationFrame() {}, queueMicrotask: (f) => f() };
   win.window = win;
   vm.runInNewContext(source, win, { filename: 'host.js' });
-  const keys = [];
-  win.__mbhost.run('test', () => {}, () => {}, () => {}, (code, mods) => keys.push([code, mods]), () => {});
+  const keys = [], pointers = [];
+  win.__mbhost.run('test', () => {}, (kind) => pointers.push([kind, win.__mbhost.modsHeld()]), () => {},
+    (code, mods) => keys.push([code, mods]), () => {});
   return {
     host: win.__mbhost,
     press(target, key, mods = {}) {
@@ -39,8 +42,33 @@ function browser(platform) {
       win.dispatch('keydown', event);
       return { prevented: event.defaultPrevented, keys: [...keys] };
     },
+    release(target, key, mods = {}) {
+      win.dispatch('keyup', { target: target === 'ime' ? ime : canvas, key,
+        ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+    },
+    pointerUp(mods = {}) {
+      canvas.dispatch('pointerup', { pointerType: 'mouse', button: 0, clientX: 50, clientY: 50, timeStamp: 1,
+        ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+      return pointers.at(-1);
+    },
+    blur() { focused = false; win.dispatch('blur', {}); },
   };
 }
+
+test('modifier changes reach the host while the pointer rests and clear on blur', () => {
+  const b = browser('MacIntel');
+  const seen = [];
+  b.host.setModifiers((mods) => seen.push(mods));
+  b.host.setAppState(() => {});
+  b.press('page', 'Alt', { altKey: true });
+  b.press('ime', 'Meta', { altKey: true, metaKey: true });
+  b.release('ime', 'Alt', { metaKey: true });
+  // The release itself carries the final flags, even if a keyboard change happened outside this page.
+  assert.deepEqual(b.pointerUp({ altKey: true }), [2, 4]);
+  b.blur();
+  assert.deepEqual(seen, [4, 12, 8, 4, 0]);
+  assert.equal(b.host.modsHeld(), 0);
+});
 
 for (const [platform, command, other] of [['Win32', 'ctrlKey', 'metaKey'], ['MacIntel', 'metaKey', 'ctrlKey']]) {
   test(`${platform}: browser zoom keys pass through the page, the input and the shortcut recorder`, () => {

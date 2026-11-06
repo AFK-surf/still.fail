@@ -86,7 +86,7 @@ test "panic: what is laid out read as what the host has once is handed on aborts
   let host = OnceHad::new()
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
   set_view_app(fn(root) {
-    on_host_said(root, kind="keep-result", fn() { host.said() }, fn(_) { root.laid_size_told() |> ignore })
+    on_host_said(root, kind="keep-result", fn() { host.said() }, fn(_) { root.owed_laid_size() |> ignore })
   })
   t.draw()
   host.had.val = Some("kept")
@@ -114,7 +114,7 @@ test "what the host has once handed on writes what another node's reaction follo
     root.box(fn(b) {
       b.width(Is(Some(100.0))).height(Is(Some(40.0))) |> ignore
       // (another node's own reaction: what it follows read as told last)
-      b.reacts(fn() { (flash.get(), b.laid_window_told()) }, fn(now) { seen.push((now.0, now.1 is Some(_))) })
+      b.reacts(fn() { (flash.get(), b.owed_laid_window()) }, fn(now) { seen.push((now.0, now.1 is Some(_))) })
     })
     |> ignore
     on_host_said(root, kind="notice-opened", fn() { host.said() }, fn(_) { flash.set(1) })
@@ -133,7 +133,7 @@ test "what the host has once handed on shows a node whose binding reads its own 
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
   set_view_app(fn(root) {
     root.show(fn() { shown.get() }, fn(n) {
-      n.width(Is(Some(100.0))).height(By(fn() { n.laid_size_told().map(fn(z) { z.0 / 2.0 }) })) |> ignore
+      n.width(Is(Some(100.0))).height(By(fn() { n.owed_laid_size().map(fn(z) { z.0 / 2.0 }) })) |> ignore
     })
     on_host_said(root, kind="page-opened", fn() { host.said() }, fn(_) { shown.set(true) })
   })
@@ -154,7 +154,7 @@ test "what the host has once handed on lays the tree out as of its moment (laid_
     root.box(fn(b) {
       b.width(By(fn() { Some(wide.get()) })).height(Is(Some(40.0))) |> ignore
       // (what follows where it is placed: the tree tells it once laid out, Tree::sizes_told)
-      b.reacts(fn() { b.laid_window_told() }, fn(r) { seen.push(r is Some(_)) })
+      b.reacts(fn() { b.owed_laid_window() }, fn(r) { seen.push(r is Some(_)) })
       on_host_said(root, kind="slide-asked", fn() { host.said() }, fn(_) {
         wide.set(160.0)
         // (how wide it is and where as of now, laid out for it there and then: a slide's length said by it; reads that
@@ -172,11 +172,11 @@ test "what the host has once handed on lays the tree out as of its moment (laid_
 }
 
 ///|
-test "panic: what is laid out read by what is handed on itself, laid_window_told, aborts" {
+test "panic: what is laid out read by what is handed on itself, owed_laid_window, aborts" {
   let host = OnceHad::new()
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
   set_view_app(fn(root) {
-    on_host_said(root, kind="notice-opened", fn() { host.said() }, fn(_) { root.laid_window_told() |> ignore })
+    on_host_said(root, kind="notice-opened", fn() { host.said() }, fn(_) { root.owed_laid_window() |> ignore })
   })
   t.draw()
   host.had.val = Some("opened")
@@ -192,7 +192,7 @@ test "a run stopped in a hand-off (what is laid out shut): the Tester after it r
   set_view_app(fn(root) {
     root.box(fn(b) {
       b.width(Is(Some(100.0))).height(Is(Some(40.0))) |> ignore
-      b.reacts(fn() { b.laid_size_told() }, fn(z) { size.val = z })
+      b.reacts(fn() { b.owed_laid_size() }, fn(z) { size.val = z })
     })
     |> ignore
   })

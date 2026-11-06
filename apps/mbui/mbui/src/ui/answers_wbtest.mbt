@@ -58,6 +58,24 @@ test "what waits on a pick follows its answer, as a signal: a computed of it wor
 }
 
 ///|
+test "a reactive effect receives a pick as the fake host tells its answer" {
+  let t = Tester::new(fn(c) { c.text("files", wrap=false) |> ignore })
+  t.picks([("a.txt", b"hi")])
+  let p = pick(Files).unwrap()
+  let got : Array[String] = []
+  let stop = @signals.effect(fn() {
+    match p.files() {
+      Some(files) => for file in files { got.push(file.name) }
+      None => ()
+    }
+  })
+  assert_eq(got, [])
+  t.draw()
+  assert_eq(got, ["a.txt"])
+  stop()
+}
+
+///|
 test "marks drawn are waited on until the PNG is taken" {
   let m : Ref[MarkedImage?] = Ref(None)
   let png : Ref[Bytes?] = Ref(None)

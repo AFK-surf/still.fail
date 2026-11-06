@@ -576,8 +576,8 @@ fn run_effect(e : ReactiveNode) -> Unit {
 }
 
 ///|
-/// How deep flushes may run in each other (a batch that writes, inside an effect, flushes there and then: as deep as
-/// what it sets going goes on so; leaving a long chat, 15).
+/// How deep changes may run in each other (a batch that writes, inside an effect or structural publication,
+/// flushes there and then: as deep as what it sets going goes on so; leaving a long chat, 15).
 pub let flush_deepest : Int = 64
 
 ///|
@@ -614,19 +614,20 @@ fn effect_round(under_way : ReactiveNode) -> Unit {
 pub let flush_too_deep_said : Ref[((String) -> Unit)?] = Ref(None)
 
 ///|
-fn flush() -> Unit {
+fn change_depth_allowed() -> Bool {
   // (one inside another past flush_deepest: something set going without end what sets more going, or what is not
   // the program's (a clock read as it goes) taken into it, each round a flush deeper; said where they were set off,
   // before it runs the stack out. 2026-11-05: a frame's layout took the host's now, 2000 deep as a chat was left)
-  if run.flushing >= flush_deepest {
+  let depth = run.flushing + run.committing
+  if depth >= flush_deepest {
     let from = if run.flush_trail.length() > 8 { run.flush_trail.length() - 8 } else { 0 }
     let last = Array::makei(run.flush_trail.length() - from, fn(i) { run.flush_trail[from + i] })
-    let said = "signals: flushes \{run.flushing} deep in each other, set off from (the innermost last) \{last}"
+    let said = "signals: flushes \{depth} deep in each other (\{run.committing} structural publications), set off from (the innermost last) \{last}"
     match flush_too_deep_said.val {
       // (a test's: said, and what is queued left to the flushes under way)
       Some(f) => {
         f(said)
-        return
+        return false
       }
       None => {
         println(said)
@@ -634,6 +635,12 @@ fn flush() -> Unit {
       }
     }
   }
+  true
+}
+
+///|
+fn flush() -> Unit {
+  guard change_depth_allowed() else { return }
   run.flush_trail.push(
     match setting.val {
       Some(l) => l.to_string()
@@ -662,6 +669,8 @@ fn flush() -> Unit {
 /// Ordinary post-change observers keep their non-reentrant queue below.
 fn commits_drained() -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.afters_held > 0 { return }
+  if run.commit_index >= run.commits.length() { return }
+  guard change_depth_allowed() else { return }
   run.committing += 1
   while run.commit_index < run.commits.length() {
     let f = run.commits[run.commit_index]
@@ -712,7 +721,9 @@ fn afters_drained() -> Unit {
 pub fn after_notify(f : () -> Unit) -> Unit {
   run.commits.push(f)
   run.commits_by.push(asker())
-  afters_drained()
+  // A publication that only registers another publication extends the current queue. Only a nested set/batch's
+  // completion re-enters commits_drained: its caller must see that change's structure before continuing.
+  if run.committing == 0 { afters_drained() }
 }
 
 ///|

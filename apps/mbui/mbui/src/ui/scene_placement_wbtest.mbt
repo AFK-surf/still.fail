@@ -235,7 +235,7 @@ test "a child layer left out of its row and drawn again keeps its current positi
   assert_eq(placement_child_rect(), (60.0, 60.0))
   width.set(20.0)
   t.clock_frame()
-  assert_true(child_view.val.unwrap().left_out())
+  assert_true(child_view.val.unwrap().owed_left_out())
   // A tree-only frame can keep an unseen layer's recording. A real window resize paints the old frame too,
   // so scene_end discards layers no longer seen; the live node will later acquire a fresh layer with revision zero.
   t.resize(401.0, 300.0)

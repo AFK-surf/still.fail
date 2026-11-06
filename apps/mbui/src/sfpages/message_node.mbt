@@ -214,13 +214,15 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       })
       // (the menu belongs to the message, not the hover button: it finishes leaving where it hung when that
       // button disappears; beside keeps that last place after its anchor is gone)
-      let popup = @sf.popup_root_node(head)
-      @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
-        message_items_of(src, here(), m())
-      }, "", End, 6.0, false, false, fn(item) {
-        close()
-        (item.select)()
-      }, close, exit=true)
+      // (in the window's layer, made as it first opens: none for each row whose menu never does, popup_root_when)
+      @sf.popup_root_when(head, fn() { @sf.menu_is_open(key()) }, fn(popup) {
+        @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
+          message_items_of(src, here(), m())
+        }, "", End, 6.0, false, false, fn(item) {
+          close()
+          (item.select)()
+        }, close, exit=true)
+      })
     }
   })
   |> ignore
@@ -392,8 +394,12 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
           Some({
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
-              (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { Some(w()) }, at, @sf.message_file_corner, by, fills=true))
+              (r, fn(v : @view.View) {
+                // (filling the box the row lays out for it: fills)
+                v.box(fn(item) {
+                  ignore(media_file_node(item, src, here, fn() { a }, "image", (v, fn(_) { None }), at, @sf.message_file_corner, by, fills=true))
+                })
+                |> ignore
               })
             }),
           })
@@ -477,13 +483,18 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
   let quotes : Map[String, @sf.QuoteCardNode] = {}
   let files : Map[String, @sfbase.FileLandingNode] = {}
   let said : Ref[(String, MineLanding)?] = Ref(None)
+  // (said once the layout the row is made or let go in is over (a list's, as it comes into it), never in it: what
+  // flies to it is in the chat's layer, no part of what that layout lays out)
+  let root = col.tree.root()
   let unsay = fn() {
     match said.val {
       Some((at, l)) =>
-        match @signals.untracked(fn() { mine_landings.get(at) }) {
-          Some(now) if physical_equal(now, l) => mine_landings.remove(at)
-          _ => ()
-        }
+        root.made_after_layout(fn() {
+          match @signals.untracked(fn() { mine_landings.get(at) }) {
+            Some(now) if physical_equal(now, l) => mine_landings.remove(at)
+            _ => ()
+          }
+        })
       None => ()
     }
     said.val = None
@@ -501,7 +512,12 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
     guard anchor is Some(anchor) else { return }
     let l = { anchor, text: text.val, files: files.copy(), quotes: quotes.copy() }
     said.val = Some((place, l))
-    mine_landings[place] = l
+    root.made_after_layout(fn() {
+      // (unless let go or said again since)
+      if said.val is Some((_, now)) && physical_equal(now, l) {
+        mine_landings[place] = l
+      }
+    })
   }
   let place = fn() { @signals.untracked(row.place) }
   col.owns(unsay) |> ignore
@@ -884,11 +900,14 @@ fn quotes_node(
       }
       // (as wide as the card may be, not as its words are: what the viewer sends may be (the pane's, as the composer
       // sets it), else the message's column; less the card's own room)
-      let quote_picture_most = fn() {
+      // (by how wide the column is laid out, in the same layout: Roomed)
+      let quote_picture_most = fn(col_w : Double) {
         if mine {
           Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
+        } else if col_w >= 0.0 {
+          Some(@sf.quote_picture_room(col_w))
         } else {
-          col.laid_size_told().map(fn(z) { @sf.quote_picture_room(z.0) })
+          None
         }
       }
       let card = @sf.quote_card_node(
@@ -907,13 +926,20 @@ fn quotes_node(
             let file = fn() { quote_file(q(), files()) }
             // A non-media file keeps the quote's existing placeholder; video uses its own cover's limits.
             let kind = fn(a : Attachment) { if file_kind(a.name) == "video" { "video" } else { "image" } }
-            let most = fn() {
-              match (file(), quote_picture_most()) {
+            // (by the column's width where it is the column's card; a copy of the card flown elsewhere (flight's) is held
+            // by no column: as wide as its picture, within what holds it)
+            let held = room.tree.holds(col.id(), room.id())
+            let most = fn(col_w : Double) {
+              match (file(), quote_picture_most(col_w)) {
                 (Some(a), Some(w)) => media_box_width(a, kind(a), Some(w), false)
+                (Some(a), None) => media_box_width(a, kind(a), None, false)
                 _ => 0.0
               }
             }
-            b.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) }))
+            let most_live = fn() -> @view.Live[Double?] {
+              if held { Roomed(col, fn(w, _) { Some(most(w)) }) } else { By(fn() { Some(most(-1.0)) }) }
+            }
+            b.width(most_live()).max_width_within(most_live())
             .aspect(By(fn() { file().map(fn(a) { media_box_ratio(a, kind(a)) }).unwrap_or(0.0) }))
             |> ignore
           })
@@ -991,6 +1017,7 @@ fn emits_here(here : MessageHere, m : Message) -> (Emits, String)? {
 /// Node `v` said as where what a message flies between is (emit_places), by `key` as it is now (None: not one of them),
 /// as long as it lives; `dy` below where it is.
 fn emit_place_node(v : @view.View, key : () -> String?, dy? : Double = 0.0) -> Unit {
+  // (the node itself: where it is read where it is asked, as a frame is painted or at a pose's end, emit.mbt)
   let at : @sfbase.EmitAt = { node: v, dy }
   let room = fn() { v.list_room().map(fn(r) { r.height }) }
   let said = Ref("")

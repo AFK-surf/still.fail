@@ -298,7 +298,7 @@ Where mbui is not yet so (2026-11-04):
   (view's `scrolls_window_rooms`): it works the rows' tops out from the first and goes through them as it is scrolled;
   its end is followed and what is read held by reactions reading layout's results. It is made again as rule 11 says,
   its rooms read before the layout as `in_node_indexed`'s are, its motions as paint's.
-- Layout's results are signals (`laid_size_told`, `laid_window_told`, `sizes_told`) read where they change what is
+- Layout's results are signals (`owed_laid_size`, `owed_laid_window`, `sizes_told`) read where they change what is
   made, and `Tree::laid_out` calls itself again where what they told marked more (rule 10); a change settled as of its
   logical moment turns the clock there and back in the middle of layout. Each reader goes to paint's, the next event's,
   or into the layout of the holder of both; laid_out runs once, at the frame's moment.
@@ -324,8 +324,8 @@ the records kept to draw them; nothing finds what changed by working the tree ou
 
 ## Layout read back: how rule 10 is made so (2026-11-05)
 
-Today a size or a place layout worked out is a signal (`View::laid_size_told`, `laid_window_told`,
-`drawn_window_told`, the tree's `sizes_told`), read by bindings, `computed` and `reacts` that change the structure, a
+Today a size or a place layout worked out is a signal (`View::owed_laid_size`, `owed_laid_window`,
+`owed_drawn_window`, the tree's `sizes_told`), read by bindings, `computed` and `reacts` that change the structure, a
 property layout reads, or where a list is scrolled to; `Tree::laid_out` then calls itself until nothing more is marked
 (up to `laid_passes_most`), and a change settled in the middle of it turns the clock to its moment and back. Told a
 frame later instead, the loop is only moved between frames: the frames do not stop, and what they show depends on how
@@ -382,12 +382,30 @@ something (the keyboard, a native view); it sets nothing a build or a layout rea
 
 **The frame.** `Tree::laid_out` runs once a frame, at the frame's moment: the events due by then committed first at
 their own (rule 9), then the bindings, then layout, then paint. No settling inside it, no clock turned there and back.
-Gone with the signals: `laid_size_told`, `laid_window_told`, `drawn_window_told`, `Tree::sizes_told` and the nodes'
-size, rect and drawn-rect cells; `View::once_laid_out`; `laid_passes_most` and `laid_marked_at`; the clock turned
+Gone with the signals: `owed_laid_size`, `owed_laid_window`, `owed_drawn_window`, `Tree::sizes_told` and the nodes'
+size, rect and drawn-rect cells; `View::owed_once_laid_out`; `laid_passes_most` and `laid_marked_at`; the clock turned
 inside layout (`settle_now`'s, #4106) and each place given the frame's moment by hand (#4025, #4113); a list's rows told
 their room (#4095's `rooms_told`) and its extent held up from below (#4115's `extent_floor`); what a hand-off from the
 host shuts and opens of layout reads (`shut_layout_reads`, `reads_own`: #4105, #4109), which the rule below holds
 everywhere. An old view hosted still lays out the old way, its passes counted as owed until it is gone (rule 10).
+
+**Where it stands (2026-11-06).** `Tree::laid_out` lays the tree out once for each moment it is asked at (a frame's;
+an event's, finding where things are at its own moment: Tree::laid_now). What comes after that layout only places (a
+column brought to what is to be in sight moves what it holds); a layout more is taken only for what is owed, counted by
+what asked for it (`Tree::owed_passes`: sizes told, once laid out, rows left out told, brought into sight, what is under
+the pointer and a bar near it told after placing, what is made elsewhere for what a layout built: a window's layer for a
+popup open as its row is built, View::made_after_layout, before the layout returns), and anything else that marks the tree's layout after its own layout
+is a fault saying where it marked it (in a host's run: told, that moment drawn and hit as its one layout has it, what
+was marked laid out as the tree is next laid out, at whatever moment that is; what is drawn then is that layout's, not
+what was marked after it, and is not to be taken as one with it). Inside a layout box's own layout, only what it lays out may be changed: itself or another branch changed there is a
+fault naming it (the framework's own one mark for what it holds made, let go or reordered aside: Tree::kids_marked_at); a child it measured and then changed (what it is laid out by set after) is measured again in that
+layout, or it is a fault as the layout ends, naming it. The passes of one outermost layout and those nested in
+it (what is under the pointer told after placing lays it out once more) are bounded together; layouts asked for apart at
+the same moment (two inputs at one moment) are each their own, their order the events'. The count names what is still
+to move and proves nothing of determinism: that is what the rules above aim at, still to be shown where the lists'
+caches and kept heights differ by the frames there were. The reads
+still owed are named so (`owed_laid_size`, `owed_laid_window`, `owed_drawn_window`, `owed_went`, `owed_left_out`,
+`owed_once_laid_out`), counted by detlint's `layout-read-back`; as each is gone its count, and its passes, are.
 
 **Wrong is red,** by where a read is, not by whether it is tracked: the frame's phase says where it is (an input
 event, a hit test, a `Painted` being worked out, a layout box's `place` of its own children). `laid` read outside a `Painted`,

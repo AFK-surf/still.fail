@@ -1455,20 +1455,35 @@ pub fn composer_geometry(pane : Double, radii : FixedArray[Double]?) -> (Double,
   let width = composer_width_in(pane, d)
   let across = width >= pane - 2.0 * d - 0.5
   let foot = if across { d } else { composer_foot_wide }
-  if radii is None || !across {
-    return (width, foot, composer_alone)
-  }
+  (width, foot, composer_place_of(across, radii))
+}
+
+///|
+/// Whether the composer in a pane `pane` wide, in a panel whose corners are given, follows those corners (as wide as
+/// the pane lets it: composer_geometry's), the one thing of its shape the pane's width decides: what a page lays out by
+/// its pane's width (View::by_room) picks by.
+pub fn composer_follows(pane : Double, radii : FixedArray[Double]?) -> Bool {
+  let d = composer_side_in(radii)
+  radii is Some(_) && composer_width_in(pane, d) >= pane - 2.0 * d - 0.5
+}
+
+///|
+/// The composer's shape: alone, or (`follows`) following the given corners at its pane's foot.
+pub fn composer_place_of(follows : Bool, radii : FixedArray[Double]?) -> ComposerPlace {
+  guard follows && radii is Some(_) else { return composer_alone }
+  let side = @sf.theme().round.side
+  let d = composer_side_in(radii)
   let extra = capsule_extra()
   let h = @sf.foot_capsule_h_of(radii, side + 2.0 * (capsule_pad_alone + extra), side)
   // (an end that cannot follow its corner stands where the composer alone does, its side's `d` in, as its box does;
   // with the ladder's inset there, 8 against its 16, the chat's rows over it moved as a chat came in over a page:
   // stack_over_wbtest, 2026-11-03)
   let (l, r, b) = @sf.foot_capsule_of(radii, h, d, d)
-  (width, foot, {
+  {
     capsule_in: (l - d, r - d, b - d),
     capsule_pad: (h - side) / 2.0 - extra,
     corner: @sf.pane_foot_corner_of(radii, holds=side),
-  })
+  }
 }
 
 ///|

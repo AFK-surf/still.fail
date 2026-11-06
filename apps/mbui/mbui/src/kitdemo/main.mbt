@@ -6,6 +6,10 @@
 ///|
 fn main {
   @hostapi.window_setup(720.0, 520.0, 960.0, 720.0)
+  if @ui.env("MBUI_MODCHECK") == "1" {
+    modifier_check()
+    return
+  }
   let page = @ui.env("MBUI_SCREEN")
   // MBUI_TEXTCHECK=NAME: the kept run NAME's text asked of this host again (textcheck.mbt), in place of the gallery
   let check = @ui.env("MBUI_TEXTCHECK")
@@ -81,3 +85,24 @@ fn main {
   })
 }
 
+///|
+// A host contract's input is delivered by the window system, not by MBUI_DRIVE. Its log lets the driver wait for
+// a stationary modifier change and check the value that the app receives at mouse release.
+fn modifier_check() -> Unit {
+  let ready = Ref(false)
+  let frame = fn(c : @ui.Ctx) {
+    if !ready.val {
+      ready.val = true
+      c.after_build("modifier-check-ready", fn() { @hostapi.log("MODCHECK ready") })
+    }
+    c.text("Modifier check") |> ignore
+  }
+  @ui.run("mbui modifier check", frame, tree=fn(root) {
+    @ui.old(root, frame).grow(Is(1.0)) |> ignore
+    root.reacts(@ui.mods_held, fn(mods) { @hostapi.log("MODCHECK held \{mods}") })
+    @ui.takes_let_go(root, fn(_, _) {
+      @hostapi.log("MODCHECK release \{@ui.mods_held()}")
+      true
+    })
+  })
+}

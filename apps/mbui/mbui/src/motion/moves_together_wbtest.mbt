@@ -51,6 +51,12 @@ test "a reshape told while it grows commits its new ways and destinations togeth
 
 ///|
 test "a press that holds a growing box keeps its drawn height before pointer geometry is placed" {
+  press_holds_growing_height(false)
+  press_holds_growing_height(true)
+}
+
+///|
+fn press_holds_growing_height(with_drop_target : Bool) -> Unit raise {
   let height = @signals.signal(40.0)
   let minimum = @signals.signal(0.0)
   let box : Ref[@view.View?] = Ref(None)
@@ -59,6 +65,8 @@ test "a press that holds a growing box keeps its drawn height before pointer geo
   let t = @ui.Tester::new(fn(_) { }, w=200.0, h=300.0, stable=false)
   @ui.set_view_app(fn(root) {
     root.lies_along(Is(End)) |> ignore
+    // A window may have a drop taker even when this press is unrelated to a drag.
+    if with_drop_target { @ui.takes_let_go(root, fn(_, _) { false }) }
     root.box(fn(v) {
       box.val = Some(v)
       v.width(Is(Some(100.0))).height(By(fn() { Some(height.get()) })).min_height(By(fn() { Some(minimum.get()) }))
