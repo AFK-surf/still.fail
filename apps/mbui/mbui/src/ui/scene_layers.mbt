@@ -996,6 +996,7 @@ fn Ctx::scene_begin(self : Ctx) -> Unit {
   scene_glyphs.clear()
   scene_own_done.clear()
   scene_own_clips.clear()
+  scene_segs.clear()
 }
 
 ///|
@@ -1166,6 +1167,7 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
   runs.sort_by(fn(a, b) { a.0.compare(b.0) })
   scene_own_done.clear()
   scene_own_done.append(runs)
+  scene_segs_raised(ranges, moved_to)
   // (the bands the layers being drawn drew, where they are now)
   scene.layers.each(fn(_, l) {
     for i, k in l.bands_at {
@@ -1854,6 +1856,15 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
   self.inst.blit_to(kept, len=n * inst_size)
   // (and the shapes' pieces, each band's by where it says they are)
   let kept_pieces = self.segs.copy()
+  // (and what a host given the blocks and their runs alone would draw: the same, run for run, scene_segs_check)
+  match scene_segs_check(kept, n, self.scale) {
+    Some(said) => {
+      let s = "the frame put together again of its layers' blocks differs from the frame drawn: \{said}"
+      println(s)
+      abort(s)
+    }
+    None => ()
+  }
   let layers : Array[(@view.NodeId, Int, Int)] = []
   // (what a layer holding an old view draws of its own: the old frame's, never kept, painted where the old frame has
   // its views then (old_place), which the frame's end may have moved since; not the scene's to answer for)
@@ -2251,6 +2262,7 @@ fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom
   let mut band = band
   if to > from {
     self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
+    scene_seg_said(l, l.block_n, to - from, from, l.clip_lvl)
     // (its glyphs not yet set on the pixels, where they are in its block: set as it is put where it is, scene_glyphs)
     let mut g = scene_glyphs_from(from)
     while g < scene_glyphs.length() && scene_glyphs[g].0 < to {
@@ -2857,6 +2869,7 @@ fn Ctx::scene_tops_out(self : Ctx, c : SceneLayer) -> Unit {
   for q in 0..<c.tops.length() {
     self.inst[k * inst_size + q] = c.tops[q]
   }
+  scene_seg_tops(c, k)
   match c.tops_owners {
     Some(o) if inst_owners_kept() => owners_put(o, k)
     _ => ()
@@ -2962,6 +2975,7 @@ fn Ctx::scene_block_put(
     let k = self.ninst
     l.block.blit_to(self.inst, len=n * inst_size, src_offset=from * inst_size, dst_offset=k * inst_size)
     scene_work.put_insts = scene_work.put_insts + n
+    scene_seg_said(l, from, n, k, lvl)
     // (its glyphs not yet set on the pixels, told where they are in the frame: set as what they are in is put, scene_glyphs)
     // (put where no place of its own is: set on the pixels now, where the window has them)
     let unset = scene_own_depth.val > 0 || scene_put_in_own.val > 0
@@ -2988,6 +3002,7 @@ fn Ctx::scene_block_put(
     }
     if dx != 0.0 || dy != 0.0 {
       insts_moved_by(self.inst, k, k + n, dx, dy, l, from, depth, soft)
+      scene_seg_moved(dx, dy, depth, soft)
       scene_work.moved_insts = scene_work.moved_insts + n
     }
     while band < l.bands.length() && l.bands[band] < to {
@@ -3371,6 +3386,7 @@ fn glyph_set(a : FixedArray[Double], k : Int, oy : Double, sc : Double, f : (Dou
 ///|
 /// Of scene_glyphs, those from instance `k` on let go (what they are in left out after it was drawn).
 fn scene_glyphs_cut(k : Int) -> Unit {
+  scene_segs_cut(k)
   while scene_glyphs.length() > 0 && scene_glyphs[scene_glyphs.length() - 1].0 >= k {
     scene_glyphs.pop() |> ignore
   }
@@ -3479,6 +3495,9 @@ fn scene_origin_put(
   let done : Array[(Int, Int)] = []
   while scene_own_done.length() > 0 && scene_own_done[scene_own_done.length() - 1].0 >= k0 {
     done.push(scene_own_done.pop().unwrap())
+  }
+  if !scene_segs_composing.val {
+    scene_segs_put(k0, k1, o, b, clip, outer_from)
   }
   let mut d = done.length() - 1
   let mut k = k0
