@@ -632,23 +632,20 @@ fn view_words_rescaled() -> Unit {
 }
 
 ///|
-/// Take this frame's host moment before it publishes zoom, device, theme or room facts. Earlier deadlines finish
-/// against the preceding facts; every observer of this publication uses the same moment, not another host read.
+/// Take this frame's host moment once. Tree::frame advances it inside the resize checkpoint boundary before
+/// publishing the host facts; every observer of that publication uses this same moment.
 fn view_frame_started() -> Unit {
   view_logic_at.val = h_now()
-  match view_app.val {
-    Some(tree) => @signals.untracked(fn() { tree.advance(view_logic_at.val) })
-    None => ()
-  }
 }
 
 ///|
 /// The tree's frame of the window `w` by `h` at `t` (what was marked done: src/view), the instances it changed to be
 /// made again, where each old view is placed now.
-fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+fn view_frame(w : Double, h : Double, scale : Double, t : Double, said : () -> Unit) -> Unit {
   let tree = match view_app.val {
     Some(tree) => tree
     None => {
+      said()
       old_whole.val = true
       return
     }
@@ -660,14 +657,14 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (the theme for this width, as this frame will pick it, not the one the last frame was built in: what its nodes are
   // drawn in where the app tells its tree none; the window's corner as of now: what linked corners are worked out
   // from, with the ranges of the theme its nodes are drawn in, corner_of)
-  tree_theme_said.set(Some(g().theme_for(w)))
-  tree_window_corner.set(window_corner())
-  tree_inset_said.set(Some(window_inset()))
-  // (a page's list's rows on the pixels as this frame draws them, as an old view's list's are, before anything of it is
-  // laid out: Tree::set_rows_grid)
-  tree.set_rows_grid(g().rows_grid_of(scale))
-  // (the host moment taken before the frame's facts were published: brought again, no further than that)
-  view_brought(tree)
+  view_brought(tree, said=fn() {
+    said()
+    tree_theme_said.set(Some(g().theme_for(w)))
+    tree_window_corner.set(window_corner())
+    tree_inset_said.set(Some(window_inset()))
+    // (a page's list's rows on the pixels as this frame draws them, before it is laid out)
+    tree.set_rows_grid(g().rows_grid_of(scale))
+  })
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
   view_pointed_again()
@@ -705,11 +702,15 @@ fn view_arrived() -> Unit {
 /// the instances it changed to be made again, where each old view is placed now. As the frame begins, and again where
 /// something told it as the frame went (a message the frame took), before the old views are built and before it is
 /// painted: what a frame takes it draws.
-fn view_brought(tree : @view.Tree) -> Unit {
+fn view_brought(tree : @view.Tree, said? : () -> Unit = fn() { }) -> Unit {
   let (w, h) = view_window.val
   // (a press's room at least, by how the app is pointed at: what is drawn smaller reached from round it)
-  tree.set_press_least(room_least())
-  @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
+  @signals.untracked(fn() {
+    tree.frame(w, h, now=view_logic_at.val, said=fn() {
+      said()
+      tree.set_press_least(room_least())
+    }) |> ignore
+  })
   view_changes_taken(tree)
   old_place(tree)
 }

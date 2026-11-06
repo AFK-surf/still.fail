@@ -2228,22 +2228,41 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
-    // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
-    // of the same moment the change is committed at)
-    self.at_cause(fn() {
-      // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
-      guard live.val else { return false }
-      let v = w.read(read)
-      if last.val != Some(v) {
-        last.val = Some(v)
-        if live.val {
-          @signals.untracked(fn() { then(v) })
+    let changed = fn() {
+      self.at_cause(fn() {
+        // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
+        guard live.val else { return false }
+        let v = w.read(read)
+        if last.val != Some(v) {
+          last.val = Some(v)
+          if live.val {
+            @signals.untracked(fn() { then(v) })
+          }
+          true
+        } else {
+          false
         }
-        true
-      } else {
-        false
-      }
-    })
+      })
+    }
+    if self.cause_at < 0.0 && !self.standing && @signals.is_flushing() {
+      // A raw signal publication has no tree event around it. Enter its timed change after that publication,
+      // still before the set/batch returns. Re-arm the watch now: a preceding deadline may change this very
+      // structure, and must be able to publish its phase before the following deadline reads its geometry.
+      // This read is only a dependency read; no structure is applied until the timed entry below.
+      w.read(read) |> ignore
+      let at = self.time_now()
+      @signals.after_flush(fn() {
+        if live.val {
+          let was = self.bringing_at
+          self.bringing_at = at
+          defer { self.bringing_at = was }
+          changed()
+        }
+      })
+    } else {
+      // A tree event or deadline already owns the publication. Its structural changes stay synchronous.
+      changed()
+    }
   })
   watch.val = Some(w)
   let v = w.read(read)
@@ -2286,19 +2305,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
     self.time_now()
   }
   if !self.standing && self.committing == 0 {
-    if @signals.is_flushing() && @signals.batch_depth() == 0 && !self.advancing {
-      // This is the publication of a signal change, not another timed input. Publish at the current moment
-      // without running a deadline between its observers. A later timestamp alone needs no callback; if a
-      // deadline precedes it, the producer must enter through event before writing its facts.
-      if at > self.logic {
-        if self.wake() is Some(due) && due <= at {
-          abort("view: enter Tree::event before a signal change that crosses a deadline")
-        }
-        self.logic = at
-      }
-    } else {
-      self.advance_logic(at)
-    }
+    self.advance_logic(at)
   }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
@@ -6975,7 +6982,13 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// made again only as what it draws changed (its look, its size: Tree::changed); one placed or faded otherwise is
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
-pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
+pub fn Tree::frame(
+  self : Tree,
+  w : Double,
+  h : Double,
+  now? : Double,
+  said? : () -> Unit = fn() { },
+) -> Bool {
   // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
@@ -6993,35 +7006,51 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   let resized = w != self.last_w || h != self.last_h
   let was_using_resize_capture = self.using_resize_capture
   let captured : Array[ResizeCapture] = []
+  // The entire frame entry, including host facts, uses the resize capture boundary. Advancing outside it could
+  // report the old list's checkpoint as a painted sighting before the new room replaces that list.
+  let capture = resized && self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
+  self.preparing_resize_capture = capture
+  self.advance(upto)
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    self.preparing_resize_capture = false
+    return false
+  }
   if resized {
     // A shell can replace a list as soon as room is told below. Capture its event-time position with the old
     // window constraints first, including a scroll since the last painted frame. Nothing is captured on a first
     // frame, or where no live removal callback can need it.
-    let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
-    // Room is a fact of this host moment. Advance before publishing it, with the existing resize capture active
-    // where needed. A room observer never advances deadlines midway through the room's publication.
-    self.preparing_resize_capture = capture
-    self.advance(upto)
-    if self.nodes.length() == 0 || !self.nodes[0].live {
-      self.preparing_resize_capture = false
-      return false
-    }
     if capture {
       captured.append(self.resize_captures.copy())
       for entry in captured {
         if self.alive_id(entry.id) { @signals.untracked(entry.run) }
       }
     }
-    self.preparing_resize_capture = false
     self.using_resize_capture = capture
+  }
+  self.preparing_resize_capture = false
+  // Publish device, theme and room facts together, after earlier deadlines and before layout. Unlike a new
+  // input event, this entry does not settle a second picture: brought below lays out the frame once.
+  let cause = self.cause_at
+  self.cause_at = if cause >= 0.0 { cause } else { upto }
+  self.committing += 1
+  @signals.start_batch()
+  @signals.untracked(said)
+  if resized && self.nodes.length() > 0 && self.nodes[0].live {
     self.last_w = w
     self.last_h = h
     let s = self.nodes[0].flex.style
     s.set_width(Pt(w))
     s.set_height(Pt(h))
     self.layout_marked_at(0)
-    // (what follows it changed as of the frame's moment, before it is laid out)
     self.room.set((w, h))
+  }
+  @signals.end_batch()
+  self.committing -= 1
+  self.modals_settled()
+  self.cause_at = cause
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    self.using_resize_capture = was_using_resize_capture
+    return false
   }
   self.brought(upto)
   if resized { self.using_resize_capture = was_using_resize_capture }

@@ -162,11 +162,12 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    instead of returning before handling the input, or running several deadlines with their intermediate rows still
    unpublished. Geometry queries may still pull the current batch's property values at the current logical moment.
    Nested input in a tree event stays in that cause and keeps its synchronous return value.
-   A structure observer publishes the change being notified synchronously; it does not dispatch a deadline between
-   observers. With no earlier deadline, an outside signal change can take its producer's timestamp without running
-   timeline work. When it crosses a deadline the producer must use the timed entry before writing. A host frame
-   advances to its host moment before publishing device/theme/room facts, and holds that moment for their observers;
-   the predicted drawing sample does not advance the logic.
+   A structure notified by an unowned signal publication enters its timed change at that publication's end, before
+   the set/batch returns. Its dependency watch is re-armed before that entry so a preceding deadline can publish
+   a change of the same structure; no captured old value is applied afterwards. Structure notified inside an owned
+   event or deadline is published there synchronously. Due work at the same timestamp still precedes the new change.
+   A host frame advances inside its resize checkpoint boundary, then publishes device/theme/room facts as one change
+   at its captured host moment. The predicted drawing sample does not advance the logic.
 3. **What is done again is what the change is.** Structure, measure and place, what is drawn, how it is composed (a
    transform, an opacity, a cut), what is read out: each its own. A colour lays nothing out; a move measures no words; a
    node moved keeps what it holds where they are in it. Layout goes up to the first box that does not read what it
