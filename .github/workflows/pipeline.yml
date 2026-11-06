@@ -622,41 +622,44 @@ jobs:
           set -o pipefail
           sh scripts/release-put.sh --hand "$RUNNER_TEMP/release" | tee "$RUNNER_TEMP/hand.out"
           echo "key=$(tail -1 "$RUNNER_TEMP/hand.out")" >> "$GITHUB_OUTPUT"
+      # monoid's (build.monoid.android.beta, the same key): from the same build, in the same warm cache (its native code
+      # is this one's; only the package is made again: its id, name and links are in its manifest and resources); put by
+      # monoid-android once the check passed.
+      - name: Build and sign monoid's beta Android app from the same build
+        if: vars.MONOID_CI == 'on'
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          RELEASE_DIR: ${{ runner.temp }}/monoid
+        run: sh .github/release.sh --product monoid android
+      - if: vars.MONOID_CI == 'on'
+        uses: actions/upload-artifact@v4
+        with: { name: "monoid-android-${{ github.sha }}", path: "${{ runner.temp }}/monoid", retention-days: 1, compression-level: 0 }
 
-  # monoid's beta Android app (build.monoid.android.beta: apps/mbui's monoid-beta variant on monoid's cloud, signed with
-  # the same key), on monoid's bucket in the company's Cloudflare account (scripts/release.sh --product monoid): built as
-  # still.fail's beta is, its files and then its feed put once the check passed.
+  # monoid's beta Android app (build.monoid.android.beta), built by android from its own build, put whole in monoid's
+  # bucket once the check passed.
   monoid-android:
-    needs: [plan, natives, check, check-linux]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) }}
-    runs-on: [self-hosted, macos-ci]
+    needs: [plan, check, check-linux, android]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.android.result == 'success' }}
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 } # versionCode is the commits in the history
-      - uses: ./.github/actions/setup-mac
-      - uses: ./.github/actions/natives
-      - name: Build and sign monoid's beta Android app
-        env:
-          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
-          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
-          RELEASE_DIR: ${{ runner.temp }}/release
-        run: sh .github/release.sh --product monoid android
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "monoid-android-${{ github.sha }}", path: "${{ runner.temp }}/monoid" }
       - name: Put it in monoid's bucket (its files, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          sh scripts/release-put.sh "$RUNNER_TEMP/release"
+          sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
   # desktop/stillfail-beta-mac.yml (which moves an installed Electron beta over): built, signed and notarized on the
   # GitHub's Mac, warm from the build caches this job keeps (scripts/release.sh desktop). The beta Windows app, mbui's too, is
   # desktop-win's.
-  # monoid's beta Mac app (build.monoid.desktop.beta: apps/mbui's monoid-beta variant on monoid's cloud), built as
-  # desktop's from the same caches (restored, never saved: desktop keeps them), signed and notarized by the same team,
-  # and put whole in monoid's bucket once the check passed (.github/release-desktop.sh --product monoid).
   # monoid's beta Mac app: still.fail's (the desktop job's, handed over as an artifact) renamed, not built again: the same
   # program, Hermes, bytecode and icon, its own Info.plist, program name and updater id (apps/mbui/scripts/mac-app.sh
   # MBUI_MAC_FROM), signed and notarized as monoid.zone, put in monoid's bucket.
