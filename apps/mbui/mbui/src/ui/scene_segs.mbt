@@ -186,19 +186,12 @@ fn scene_segs_drawn(base : FixedArray[Double], sc : Double) -> FixedArray[Double
 
 ///|
 /// Whether the frame drawn (`a`, its `n` instances) is what a host given the blocks and the runs would draw
-/// (scene_segs_drawn): of what the root drew (its run of the frame, all of the tree's), every instance in one run and in
-/// no other, and the same as put together of the runs alone, each of what no run put taken for one not drawn (a
-/// number no instance has); what is outside it (what the old frame paints round the tree) handed over as it is. None
-/// where so; else where the first is not, how.
+/// (scene_segs_drawn): every instance of it in one run and in no other (the root's, what is raised after it, all), and
+/// the same as put together of the runs alone, each of what no run put taken for one not drawn (a number no instance
+/// has). None where so; else where the first is not, how.
 fn scene_segs_check(a : FixedArray[Double], n : Int, sc : Double) -> String? {
-  let mut r0 = 0
-  let mut r1 = n
-  for id, l in scene.layers {
-    if id.at == 0 && l.seen == scene.frame && l.start >= 0 {
-      r0 = l.start
-      r1 = l.start + l.count
-    }
-  }
+  // (all of the frame: what is in it but by a run is found, whatever drew it, the root's or after)
+  let (r0, r1) = (0, n)
   // (each instance of the root's in one run, no more)
   let runs = FixedArray::make(n, 0)
   for s in scene_segs {
