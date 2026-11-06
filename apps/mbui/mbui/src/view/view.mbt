@@ -715,7 +715,7 @@ priv struct BeforeRemoval {
 }
 
 ///|
-/// A live list position to capture before a window-size change can remove its owner.
+/// A list's position capture and deferred sighting during a window-size change.
 priv struct ResizeCapture {
   id : NodeId
   run : () -> Unit
@@ -728,6 +728,7 @@ pub struct Tree {
   /// Callbacks for the few nodes that need to read their subtree before any of it is removed.
   priv before_removal : Array[BeforeRemoval]
   priv resize_captures : Array[ResizeCapture]
+  priv mut resize_positions : Int
   priv mut preparing_resize_capture : Bool
   priv mut using_resize_capture : Bool
   priv mut removing_callbacks : Int
@@ -1077,6 +1078,7 @@ pub fn Tree::new(
   let t : Tree = {
     before_removal: [],
     resize_captures: [],
+    resize_positions: 0,
     preparing_resize_capture: false,
     using_resize_capture: false,
     removing_callbacks: 0,
@@ -1830,6 +1832,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   }
   self.before_removal.clear()
   self.resize_captures.clear()
+  self.resize_positions = 0
   self.drawn_marks.clear()
   // A checkpoint can lay out rows without painting them. A disposed tree must not later report those rows as drawn.
   self.after_paint.clear()
@@ -5546,16 +5549,18 @@ fn Tree::before_removing(self : Tree, root : View) -> Unit {
 
 ///|
 /// Capture event-time state before a window resize, while the old window's constraints still apply.
-fn View::capture_before_resize(self : View, f : () -> Unit, finish : () -> Unit) -> Unit {
+fn View::capture_before_resize(self : View, f : () -> Unit, finish : () -> Unit, position : Bool) -> Unit {
   guard self.alive() else { return }
   let tree = self.tree
   let entry : ResizeCapture = { id: self.id(), run: f, finish }
   tree.resize_captures.push(entry)
+  if position { tree.resize_positions += 1 }
   self.owns(fn() {
     let mut i = 0
     while i < tree.resize_captures.length() {
       if physical_equal(tree.resize_captures[i], entry) {
         tree.resize_captures.remove(i) |> ignore
+        if position { tree.resize_positions -= 1 }
         break
       }
       i += 1
@@ -6862,7 +6867,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     // A shell can replace a list as soon as room is told below. Capture its event-time position with the old
     // window constraints first, including a scroll since the last painted frame. Nothing is captured on a first
     // frame, or where no live removal callback can need it.
-    let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && !self.resize_captures.is_empty()
+    let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
     if capture {
       self.preparing_resize_capture = true
       self.advance(upto)

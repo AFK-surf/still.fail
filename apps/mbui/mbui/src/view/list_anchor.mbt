@@ -1550,6 +1550,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           resize_saved.val = Some((geometry_now(), place))
         },
         finish_resize_sighted,
+        true,
       )
       let geometry = fn() -> AnchoredGeometry[K]? {
         if self.tree.using_resize_capture && self.tree.removing_callbacks > 0 {
@@ -1572,7 +1573,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         }
       }) |> ignore
     }
-    None => if sighted is Some(_) { self.capture_before_resize(fn() { }, finish_resize_sighted) }
+    None => if sighted is Some(_) { self.capture_before_resize(fn() { }, finish_resize_sighted, false) }
   }
   let forget = fn(k : K) {
     row_ids.remove(k)
