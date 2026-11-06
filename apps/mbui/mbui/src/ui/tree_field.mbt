@@ -266,7 +266,7 @@ pub fn field(
     // rect's)
     f.reacts(fn() {
       if f.focused() {
-        Some((f.laid_window_told(), (field.composed_said(), size(), line_now(), wraps())))
+        Some((f.owed_laid_window(), (field.composed_said(), size(), line_now(), wraps())))
       } else {
         None
       }

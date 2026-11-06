@@ -38,7 +38,7 @@ impl Eq for QuoteLanding with equal(self, other) {
 /// An ordinary row can still be making way when the send hands its copy back: meet it where it is drawn. A first
 /// send carries its list on this very flight's path, so its destination excludes that path's drawing displacement.
 fn flight_target_window(f : SendFlight, v : @view.View) -> (Double, Double, Double, Double)? {
-  if f.carried { v.laid_window_told() } else { v.drawn_window_told() }
+  if f.carried { v.owed_laid_window() } else { v.owed_drawn_window() }
 }
 
 ///|
@@ -123,7 +123,7 @@ pub fn send_flight_node(
       }
     })
     slot.owns(fn() { (ends.val)() }) |> ignore
-    let origin = fn() { layer.drawn_window_told().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
+    let origin = fn() { layer.owed_drawn_window().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
     slot.pick(fn() { landing(f).map(fn(pair) { NodeLanding::{ bubble: pair.0, words: pair.1 } }) }, fn(part, at) {
       part.over(Is(true)) |> ignore
       match at {
@@ -158,7 +158,7 @@ fn flight_quote_node(
   origin : () -> (Double, Double, Double, Double),
 ) -> Unit {
   let target = fn() { landing.bind(fn(q) { flight_target_window(f, q.card) }) }
-  let natural = fn() { landing.bind(fn(q) { q.words.laid_size_told() }).map(fn(s) { s.0 }) }
+  let natural = fn() { landing.bind(fn(q) { q.words.owed_laid_size() }).map(fn(s) { s.0 }) }
   parent.reacts(fn() { (target(), natural()) }, fn(r) {
     guard r is (Some(to), Some(w)) && to.2 > 0.0 && w > 0.0 else { return }
     if !f.placed {
@@ -205,7 +205,7 @@ fn flight_quote_node(
         let g = ground()
         let to = target().unwrap_or(ff.from)
         let shift = (q.sent_shift)()
-        let h = copy.card.laid_size_told().map(fn(size) { size.1 }).unwrap_or(to.3)
+        let h = copy.card.owed_laid_size().map(fn(size) { size.1 }).unwrap_or(to.3)
         let s = scale()
         let (w, h) = if s > 0.0 { (g.2 / s - to.2, g.3 / s - h) } else { (0.0, 0.0) }
         (-shift.0 * (1.0 - across()), -shift.1 * (1.0 - up()), w, h)

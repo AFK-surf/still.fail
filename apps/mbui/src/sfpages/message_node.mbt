@@ -1002,7 +1002,7 @@ fn emits_here(here : MessageHere, m : Message) -> (Emits, String)? {
 /// as long as it lives; `dy` below where it is.
 fn emit_place_node(v : @view.View, key : () -> String?, dy? : Double = 0.0) -> Unit {
   let at = fn() -> (Double, Double, Double, Double)? {
-    v.drawn_window_told().map(fn(r) { (r.0, r.1 + dy, r.2, r.3) })
+    v.owed_drawn_window().map(fn(r) { (r.0, r.1 + dy, r.2, r.3) })
   }
   let room = fn() { v.list_room().map(fn(r) { r.height }) }
   let said = Ref("")

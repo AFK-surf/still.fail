@@ -167,7 +167,7 @@ pub fn runs_links(
       // pointed at following no pointer's place)
       if v.pointed() {
         // (its words measured again in the faces or at the size of words the window has now: Tree::words_again)
-        Some((v.pointer_here_told(), v.words_said(), v.laid_size_told(), v.words_redone()))
+        Some((v.pointer_here_told(), v.words_said(), v.owed_laid_size(), v.words_redone()))
       } else {
         None
       }

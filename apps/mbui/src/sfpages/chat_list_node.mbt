@@ -573,7 +573,7 @@ pub fn chat_list_node(
         |> ignore
         // (a quote's passage below four fifths of the pane: once its target row is placed and laid out, move the
         // anchored row so that the passage is in the middle; leave the row alone when its passage is already high)
-        slot.reacts(fn() { (flash.get().0, put.get(), slot.laid_window_told(), v.laid_window_told()) }, fn(now) {
+        slot.reacts(fn() { (flash.get().0, put.get(), slot.owed_laid_window(), v.owed_laid_window()) }, fn(now) {
           guard rd0.flash_centre && now.0 != "" && now.1 is None &&
             row_of(k).map_or(false, fn(r) { match r.0 { Said(m) => m.ts == now.0; _ => false } }) &&
             now.2 is Some((_, row_y, _, _)) && now.3 is Some((_, py, _, ph)) else { return }

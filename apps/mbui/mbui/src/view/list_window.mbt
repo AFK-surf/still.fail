@@ -227,7 +227,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
       }
     }
   })
-  self.reacts(fn() { (self.laid_size_told().map(fn(z) { z.0 }), self.words_redone()) }, fn(_) {
+  self.reacts(fn() { (self.owed_laid_size().map(fn(z) { z.0 }), self.words_redone()) }, fn(_) {
     let gone = heights.keys().filter(fn(k) { !showing.contains(k) }).collect()
     if gone.length() > 0 {
       for k in gone {
@@ -342,7 +342,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
   // (those that show: their room met by the column's, as tall as it shows, from the first down to one not laid out yet;
   // none before it is first laid out)
   let window = @signals.computed(fn(_) {
-    guard self.laid_size_told() is Some((_, vh)) else { return [] }
+    guard self.owed_laid_size() is Some((_, vh)) else { return [] }
     let x = at()
     let out = []
     let all = laid.get()
@@ -371,7 +371,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
     let all = laid.get()
     // (every block whose room meets the column's as it is counted (those that show among them, and those under one not
     // laid out yet: their slots kept as that one is laid out, not let go for a frame and made again), and those kept)
-    let room_now = self.laid_size_told().map(fn(z) { z.1 })
+    let room_now = self.owed_laid_size().map(fn(z) { z.1 })
     let x = at()
     let with_slot : Map[Int, Bool] = Map([])
     match room_now {
@@ -579,7 +579,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
     // When the hand brings unmeasured blocks in above words still in sight, those words keep their place while
     // the estimates are replaced. An estimated first block cannot yet take over as the anchor: its measurement
     // could push all the words that were being read out of the window in this same layout.
-    let vh = self.laid_size_told().map(fn(z) { z.1 }).unwrap_or(0.0)
+    let vh = self.owed_laid_size().map(fn(z) { z.1 }).unwrap_or(0.0)
     // (those in sight, from the first whose foot is past the column's top down to the first whose top is past its
     // foot: found by halving, not looked for among them all)
     let lo = first_from(all, x + d)
@@ -631,7 +631,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
     // (shorter than the column: at its foot)
     if from_end {
       held
-      .min_height(By(fn() { self.laid_size_told().map(fn(z) { z.1 }) }))
+      .min_height(By(fn() { self.owed_laid_size().map(fn(z) { z.1 }) }))
       .lies_along(Is(End))
       |> ignore
     }
@@ -696,7 +696,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
         showing[k] = true
         v.owns(fn() { showing.remove(k) }) |> ignore
         // (how tall it is told as it is laid out, kept by its key)
-        v.reacts(fn() { v.laid_size_told() }, fn(z) {
+        v.reacts(fn() { v.owed_laid_size() }, fn(z) {
           match z {
             Some((_, h)) if heights.get(k) != Some(h) => {
               heights[k] = h
@@ -728,7 +728,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
     // (shorter than the column, how far its first block's top is under the column's: the room over them at its foot)
     let lead = fn() {
       let total = laid.get().last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0)
-      match self.laid_size_told() {
+      match self.owed_laid_size() {
         Some((_, vh)) => if vh > total { vh - total } else { 0.0 }
         None => 0.0
       }
@@ -773,7 +773,7 @@ pub fn[K : Hash + Eq] View::scrolls_window_rooms(
           }
         }
       }
-      let vh = self.laid_size_told().map(fn(z) { z.1 }).unwrap_or(-1.0)
+      let vh = self.owed_laid_size().map(fn(z) { z.1 }).unwrap_or(-1.0)
       let same_room = last_vh.val < 0.0 || (vh - last_vh.val).abs() < 0.5
       last_vh.val = vh
       // (what was at its foot moves by the change in that room. A new block measured smaller than its estimate

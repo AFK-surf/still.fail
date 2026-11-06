@@ -1,4 +1,4 @@
-// What is to be done once things are laid out, a node's (View::once_laid_out): done once, every pass over and the sizes
+// What is to be done once things are laid out, a node's (View::owed_once_laid_out): done once, every pass over and the sizes
 // told; not done where its node is let go first.
 
 ///|
@@ -9,8 +9,8 @@ test "a node's once laid out: done once, its size told by then" {
     root.box(fn(n) {
       n.width(Is(Some(120.0))).height(Is(Some(30.0))) |> ignore
       // (followed from before: told as of the first layout)
-      @signals.untracked(fn() { n.laid_size_told() }) |> ignore
-      n.once_laid_out(fn() { sizes.push(n.laid_size_told()) })
+      @signals.untracked(fn() { n.owed_laid_size() }) |> ignore
+      n.owed_once_laid_out(fn() { sizes.push(n.owed_laid_size()) })
     })
     |> ignore
   })
@@ -35,7 +35,7 @@ test "a node's once laid out is not done where the node is let go before" {
     root.reacts(fn() { go.get() }, fn(now) {
       if now {
         match held.val {
-          Some(n) => n.once_laid_out(fn() { done.val = done.val + 1 })
+          Some(n) => n.owed_once_laid_out(fn() { done.val = done.val + 1 })
           None => ()
         }
         shown.set(false)

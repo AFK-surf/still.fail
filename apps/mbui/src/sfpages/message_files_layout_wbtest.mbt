@@ -32,7 +32,7 @@ test "a picture row entering at the list edge fits its own room in every layout"
       row.box(fn(head) { head.height(Is(Some(51.3846153846154))) |> ignore }) |> ignore
       message_files_node(row, src, fn() { here }, fn() { [a] }, false, landed=fn(_, landing) {
         match landing {
-          Some(l) => l.view.reacts(fn() { l.view.laid_window_told() }, fn(r) {
+          Some(l) => l.view.reacts(fn() { l.view.owed_laid_window() }, fn(r) {
             match r { Some(rect) => places.push(rect); None => () }
           })
           None => ()

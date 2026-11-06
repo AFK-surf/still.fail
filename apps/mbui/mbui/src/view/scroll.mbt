@@ -6,7 +6,7 @@
 // is asked) and, let go, flings it on, slowing; the focus come to what it holds brings that into sight once laid out
 // (View::shows). As tall as what it holds
 // where there is the room, it gives way (to nothing) where what holds it is short of room (a dialog no taller than the
-// window), how far it can go told as it is laid out (View::laid_size_told). Where it is, a function of the time while
+// window), how far it can go told as it is laid out (View::owed_laid_size). Where it is, a function of the time while
 // flung, is the column's own (Scroll), let go with the node. One made as a page's list (Scroll::list) moves as an old
 // view's list does on the platform it is on instead (scroll_list.mbt). One made to scroll across (Scroll::across) is a
 // row that scrolls sideways the same way (an old view's Ctx::sideways): along its width, the wheel and a hold across,
@@ -807,13 +807,13 @@ pub fn View::scrolls(
     match content_extent {
       Some(extent) => {
         (s.extent_told)()
-        return self.laid_size_told().map(fn(v) { extent() - (if across { v.0 } else { v.1 }) })
+        return self.owed_laid_size().map(fn(v) { extent() - (if across { v.0 } else { v.1 }) })
       }
       None => ()
     }
     match inner.val {
       Some(held) =>
-        match (held.laid_size_told(), self.laid_size_told()) {
+        match (held.owed_laid_size(), self.owed_laid_size()) {
           (Some(h), Some(v)) => Some(if across { h.0 - v.0 } else { h.1 - v.1 })
           _ => None
         }
