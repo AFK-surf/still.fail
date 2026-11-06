@@ -4,7 +4,7 @@ Crates taken from crates.io, and Swift packages the native apps build in, change
 mesh/ and client/ points at the crates. iroh is not here: still.fail's branch of it is
 [zzj3720/iroh](https://github.com/zzj3720/iroh/tree/stillfail) (`stillfail`: upstream's release and a commit for each of
 our changes, its tests in its own CI; STILLFAIL.md there), taken by commit in `[patch.crates-io]`, iroh-relay from the
-same commit (its v1.3.0, with the relay's UDP way). Each change is marked `ember:` in the source. Drop one here once upstream has
+same commit (its v1.3.0, with the relay's UDP way). Each change is marked `stillfail:` in the source. Drop one here once upstream has
 the same.
 
 - **libadb 0.7.0** (src/keys/store.rs; client/): Android's sandbox denies hard links. Publish a new private adb key
@@ -50,7 +50,7 @@ the same.
 - **iroh-mdns-address-lookup 0.4.0** (src/lib.rs)
   - Multicast goes out on, and is received from, every local IPv4 interface (swarm-discovery's `add_interface_v4`),
     not only the default route's. A machine on two networks was only announced on the first.
-  - Without advertising (ember's devices: they only look stations up), the interfaces are still joined.
+  - Without advertising (still.fail's devices: they only look stations up), the interfaces are still joined.
   - A republish (same addresses and TXT) is not a new discovery: `Peer`'s equality includes when it was seen, so
     every mDNS packet reached the endpoint as new addresses (also reported upstream-side in rayfish/rayfish#161).
 
@@ -64,7 +64,7 @@ the same.
     the error lasted (a phone's record, 2026-10-31: `n0_mainline::actor::run` → `recv_from` in every sample of the
     thread, minutes after the app came back; that iOS took the suspended app's socket away is a guess, the error not
     recorded). Upstream's 0.7.1 still returns at once.
-  - src/ember.rs: what the socket and lookups went through (failed reads, their kind and errno, the backoff, binding
+  - src/stillfail.rs: what the socket and lookups went through (failed reads, their kind and errno, the backoff, binding
     anew, reads back; each lookup of an endpoint asked, first answered, done), lines per DHT kept for the app's
     performance record while it is on (client/shell's `dht.said`), bounded and rate-limited. Ours alone.
 

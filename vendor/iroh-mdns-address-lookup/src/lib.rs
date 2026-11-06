@@ -295,7 +295,7 @@ impl MdnsAddressLookup {
                 HashMap<usize, mpsc::Sender<Result<AddressLookupItem, AddressLookupError>>>,
             > = HashMap::default();
             let mut timeouts = JoinSet::new();
-            // ember: the interfaces multicast goes out on (and is joined on), one per local IPv4 address. Without
+            // stillfail: the interfaces multicast goes out on (and is joined on), one per local IPv4 address. Without
             // them only the default route's interface is used, and a machine on two networks is found on one.
             let mut interfaces: BTreeSet<std::net::Ipv4Addr> = BTreeSet::new();
             loop {
@@ -388,7 +388,7 @@ impl MdnsAddressLookup {
                             continue;
                         }
 
-                        // ember: a republish is the same addresses and TXT, seen again; `Peer`'s equality includes
+                        // stillfail: a republish is the same addresses and TXT, seen again; `Peer`'s equality includes
                         // when it was seen, so each one counted as new and reached the endpoint (every mDNS packet,
                         // on every interface). It only refreshes what is kept.
                         if let Some(known) = endpoint_addrs.get_mut(&discovered_endpoint_id)
@@ -614,7 +614,7 @@ impl AddressLookup for MdnsAddressLookup {
     }
 
     fn publish(&self, data: &EndpointData) {
-        // ember: also without advertising: the addresses say which interfaces to query and listen on.
+        // stillfail: also without advertising: the addresses say which interfaces to query and listen on.
         self.local_addrs.set(Some(data.clone())).ok();
     }
 }

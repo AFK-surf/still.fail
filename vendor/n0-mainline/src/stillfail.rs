@@ -1,4 +1,4 @@
-//! ember: what the DHT's socket and lookups went through, for the app's performance record (client/shell's
+//! stillfail: what the DHT's socket and lookups went through, for the app's performance record (client/shell's
 //! `dht.said`, the core's `dht:` lines). Each line names its DHT (`dht#N`, one per socket made by [`crate::Dht`]'s
 //! actor) and a lookup the endpoint it is of (an iroh endpoint's id, its first 4 bytes: the record's station tag).
 //!

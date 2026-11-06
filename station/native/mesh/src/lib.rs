@@ -24,7 +24,6 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 
 const MDNS_SERVICE: &str = "stillfail";
-const FORMER_MDNS_SERVICE: &str = "ember";
 
 /// The nodes a DHT starts from: n0-mainline's defaults, with ours (cloud/dht-node, on the relays' machines) in place of relay.pkarr.org.
 fn dht() -> n0_mainline::DhtBuilder {
@@ -177,12 +176,10 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     if options.lookup.unwrap_or(false) && !relays.is_empty() {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false)))
-            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false)))
             .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish()));
     } else if options.discovery.unwrap_or(true) {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
-            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE)))
             .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).secret_key(key)));
     }
     Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), homes: relays, held: Arc::default(), accepted: Arc::default() })
