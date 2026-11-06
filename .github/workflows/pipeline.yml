@@ -190,6 +190,10 @@ jobs:
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           export STILLFAIL_AGENT_DESKTOP="$(node scripts/native.ts file agent-desktop win32-x64)"
           cd station && STILLFAIL_UI_LIVE=1 node --test --test-timeout=120000 test/ui-live.test.ts
+      - name: Configuration and state files on Windows
+        run: cd station && node --test test/config-file.test.ts test/cloud-state.test.ts test/json-startup.test.ts test/windows-handoff.test.ts
+      - name: Windows installer handover diagnostics
+        run: node --test --test-name-pattern='the Windows installer reports the new process' cloud/test/install-windows.test.ts
       # What the job started that is still running as it ends: the runner's clean-up of them took 52-237 s after the
       # last step of some runs (the rest 2-9 s), the release's job at 282 of its 300 (main 08c83003, 41537791777).
       - name: What it left running
