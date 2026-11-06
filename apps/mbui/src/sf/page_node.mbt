@@ -242,7 +242,8 @@ pub fn page_node(
 
 ///|
 /// Where a part of a page made once is (page_node's, lent to all of it): how the page is laid out, whether it is in a
-/// section of a wide page (wide_alone's), and whether on a list's card (its rows a wide list's: wide_in_list's).
+/// section of a wide page (wide_alone's), and whether on a list's card (narrow or wide: a wide list's rows use
+/// wide_in_list's).
 priv struct PartAt {
   look : Look
   section : Bool
@@ -531,9 +532,17 @@ pub fn heading_node(parent : @view.View, title : () -> String) -> Unit {
 
 ///|
 /// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
-/// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words).
+/// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words). In a presented panel other than
+/// a small popover, the panel's card at either width, regardless of `card`.
 pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false) -> Unit {
   let at = part_of(parent)
+  // A presenter's kind is fixed for the life of its body; a different kind makes a new body. Its distances can change
+  // while the body lives and are read by the card's margin binding below.
+  let panel_card = in_panel_node(parent) && !@signals.untracked(fn() { panel_row_context(parent).small })
+  if panel_card {
+    group_panel_node(parent, at, rows)
+    return
+  }
   if at.look is Wide {
     wide_group_node(parent, at, rows, card)
     return
@@ -548,10 +557,34 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
       .radius(Is(corner))
       .ground(By(fn() { @ui.tree_theme().color(Card) }))
       .clips(Is(true))
+      .lends(part_at, { ..at, list: true })
       |> ignore
       rows(card)
     })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A group's card in a presented panel (group's panel_card_group, panel_card_rows and panel_card_out): its inset and
+/// corner the panel card's, its ground the ink at 5%, and its sides on the panel's card line. The panel can change its
+/// column's distance and words' inset without remaking the card or its rows.
+fn group_panel_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit) -> Unit {
+  parent.box(fn(card) {
+    card
+    .margin(By(fn() {
+      let panel = panel_row_context(card)
+      let x = if panel.sides_in <= 0.0 && panel.words_in <= 0.0 { 0.0 } else { panel_card_in - panel.sides_in }
+      (x, 0.0, x, 0.0)
+    }))
+    .padding(Is((corner_inset, corner_inset, corner_inset, corner_inset)))
+    .radius(Is(card_corner))
+    .ground(By(fn() { @ui.tree_theme().color(A(Fg, O5)) }))
+    .clips(Is(true))
+    .lends(part_at, { ..at, list: true })
+    |> ignore
+    rows(card)
   })
   |> ignore
 }

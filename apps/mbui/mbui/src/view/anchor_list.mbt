@@ -103,7 +103,9 @@ pub fn[K : Eq] list_laid_from_end(
   while i > 0 {
     // (its top under the window's foot and what is made under it)
     let hi = passed(i)
-    if under < hi {
+    // A zero-height anchor at the window's edge still has a place there. Skipping it can leave a retained,
+    // focused row unplaced for the first frame of its move, and count it as an estimated row above the window.
+    if under < hi || (under == 0.0 && hi == 0.0) {
       break
     }
     under = under - hi
@@ -146,9 +148,15 @@ pub fn[K : Eq] list_laid_from_end(
   // (and the rows under the anchor, in the window or `ahead` under it)
   let mut last = i
   let mut top = h + under
-  while last < n - 1 && top < h + ahead {
-    last = last + 1
-    let hl = height_of(last)
+  while last < n - 1 && top <= h + ahead {
+    let next = last + 1
+    let hl = height_of(next)
+    // At the boundary, include only zero-height rows. The first nonzero row beyond it is measured to distinguish
+    // it, but is not placed or reported in sight.
+    if top == h + ahead && hl > 0.0 {
+      break
+    }
+    last = next
     keys.push(key(last))
     tops.push(top)
     heights.push(hl)
@@ -159,6 +167,11 @@ pub fn[K : Eq] list_laid_from_end(
   for q in 0..<keys.length() {
     if tops[q] + heights[q] >= h - 0.001 {
       a = q
+      // Zero-height rows at the edge are at the same place; use the last of them as the anchor so an end
+      // reached by such a row remains the list's end.
+      while a + 1 < keys.length() && heights[a + 1] == 0.0 && tops[a + 1] <= h + 0.001 {
+        a += 1
+      }
       break
     }
   }

@@ -339,7 +339,14 @@ pub fn View::lives_with(self : View, owner : View) -> View {
     guard self.live() is Some(_) else { return }
     match self.parent() {
       Some(p) => p.drop(self)
-      None => self.let_go()
+      None => {
+        // A parentless node can still own a checkpoint. Notify it while its subtree is intact, and publish
+        // any state written by the checkpoint only after the node has been let go.
+        @signals.start_batch()
+        self.tree.before_removing(self)
+        self.let_go()
+        @signals.end_batch()
+      }
     }
   })
   |> ignore
