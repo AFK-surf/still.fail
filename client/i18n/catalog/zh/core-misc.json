@@ -286,6 +286,7 @@
   "core-misc.personal.noKey": "这台设备存不了个人钥匙，请用桌面或安卓 app",
   "core-misc.personal.outside": "这台设备还不在你的个人锁里，先在设置 › 安全 › 个人锁加入",
   "core-misc.personal.replaced": "云端的个人锁和这台设备记住的不一样，先在设置 › 安全 › 个人锁确认",
+  "core-misc.personal.changed": "个人锁在操作期间发生变化，请重试",
   "core-misc.personal.noAccount": "这台设备没有登录对应的账号",
   "core-misc.personal.noRequest": "找不到这个申请，它可能已经结束了",
   "core-misc.personal.reason.grant": "允许这个对话调试你的手机",

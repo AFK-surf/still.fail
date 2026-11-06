@@ -6,7 +6,7 @@
 // The key is sealed so that each use asks the person (`user: true`: biometrics or the screen lock). Web pages have none:
 // their code is the cloud's.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Effect, Semaphore } from "effect";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
@@ -54,6 +54,11 @@ export function checkChain(entries: readonly Entry[], sub: string): Chain | null
   if (entries.length === 0) return { devices: new Map(), hash: null };
   const out = rules.person_fold_js(entries, sub, crypto) as J;
   return "error" in out ? null : { devices: new Map((out.devices as Device[]).map((d) => [d.key, d])), hash: out.head };
+}
+
+/// Both sides are already checked or locally signed; compare the entries as the hash chain does.
+function prefixOf(prefix: readonly Entry[], entries: readonly Entry[]): boolean {
+  return prefix.length <= entries.length && prefix.every((e, i) => entryHash(e) === entryHash(entries[i]!));
 }
 
 /// What a person's device signs for a chat's grant of their phone.
@@ -113,6 +118,10 @@ export class PersonalLock {
   readonly #pinned = new Map<string, Entry[]>();
   readonly #seen = new Map<string, Entry[]>();
   readonly #loaded = new Set<string>();
+  /// A device's storage writes may complete out of order; serialize each account's pin and forget.
+  readonly #writing = new Map<string, ReturnType<typeof Semaphore.makeUnsafe>>();
+  /// A pin that reached memory but whose storage write failed must be tried again even if the cloud says it unchanged.
+  readonly #dirty = new Set<string>();
   #myKey: string | null = null;
 
   constructor(env: PersonalEnv) {
@@ -162,7 +171,7 @@ export class PersonalLock {
       const grows = pinned.length > 0 && holds && entries.length >= pinned.length && pinned.every((e, i) => entryHash(e) === entryHash(entries[i]!));
       if (grows) {
         this.#seen.delete(sub);
-        if (entries.length > pinned.length) yield* this.#pin(sub, entries);
+        if (entries.length > pinned.length || this.#dirty.has(sub)) yield* this.#pin(sub, entries, { base: pinned });
       } else if (pinned.length > entries.length && holds && entries.every((e, i) => entryHash(e) === entryHash(pinned[i]!))) {
         // The cloud lost all or part of it. Restore in bounded requests, continuing after an interrupted upload.
         let batch: Entry[] = [];
@@ -201,9 +210,31 @@ export class PersonalLock {
     });
   }
 
-  #pin(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
-    this.#pinned.set(sub, entries);
-    return Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(entries))), asCoreError);
+  #writer(sub: string): ReturnType<typeof Semaphore.makeUnsafe> {
+    let writer = this.#writing.get(sub);
+    if (!writer) this.#writing.set(sub, writer = Semaphore.makeUnsafe(1));
+    return writer;
+  }
+
+  #pin(sub: string, entries: Entry[], options: { base?: Entry[]; replace?: boolean } = {}): Effect.Effect<void, CoreError> {
+    return this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+      const current = this.#pinned.get(sub) ?? [];
+      // A concurrent forget or join must not be undone by an earlier cloud response.
+      if (options.base && !prefixOf(options.base, current)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      if (options.replace && options.base?.length === 0 && current.length > 0 && !prefixOf(entries, current)) {
+        return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      }
+      // Even an explicit join or restart must keep a longer copy of that same chain heard in the meantime.
+      let next = prefixOf(entries, current) ? current : entries;
+      if (!options.replace && current.length > 0) {
+        if (next !== current && !prefixOf(current, entries)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      }
+      if (next === current && !this.#dirty.has(sub)) return;
+      this.#pinned.set(sub, next);
+      this.#dirty.add(sub);
+      yield* Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(next))), asCoreError);
+      this.#dirty.delete(sub);
+    })));
   }
 
   standing(sub: string): Standing {
@@ -247,20 +278,22 @@ export class PersonalLock {
     });
   }
 
-  #entry(sub: string, seed: Uint8Array, key: string, kind: string, body: unknown): Entry {
-    const before = this.#pinned.get(sub) ?? [];
+  #entry(sub: string, seed: Uint8Array, key: string, kind: string, body: unknown, before: Entry[]): Entry {
     const last = before[before.length - 1];
     const e = { v: 1 as const, ws: personOf(sub), seq: before.length, prev: last ? entryHash(last) : null, at: Math.floor(this.#env.host.nowMs() / 1000), kind, body };
     return { ...e, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } };
   }
 
   /// One entry more, signed here, told to the cloud and pinned once it took it.
-  #append(sub: string, seed: Uint8Array, kind: string, body: unknown): Effect.Effect<void, CoreError> {
+  #append(sub: string, seed: Uint8Array, kind: string, body: unknown, restart = false): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const e = this.#entry(sub, seed, this.#myKey!, kind, body);
+      const base = this.#pinned.get(sub) ?? [];
+      const seen = this.#seen.get(sub);
+      const before = restart ? [] : base;
+      const e = this.#entry(sub, seed, this.#myKey!, kind, body, before);
       yield* this.#env.cloud(sub, "POST", PATH, { entries: [e] });
-      yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
-      this.#seen.delete(sub);
+      yield* this.#pin(sub, [...before, e], { base, replace: restart });
+      if (this.#seen.get(sub) === seen) this.#seen.delete(sub);
       this.#env.changed();
     });
   }
@@ -271,8 +304,7 @@ export class PersonalLock {
       const { id: key, seed: made } = yield* this.#madeKey(reason);
       const id = yield* this.#env.device();
       const seed = made ?? (yield* this.#unseal(reason));
-      this.#pinned.delete(sub);
-      yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label() } });
+      yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label() } }, true);
       return seed;
     });
   }
@@ -341,7 +373,7 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       const chain = checkChain(entries, sub);
       if (chain === null || this.#myKey === null || !chain.devices.has(this.#myKey)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#pin(sub, entries);
+      yield* this.#pin(sub, entries, { replace: true });
       this.#seen.delete(sub);
       this.#env.changed();
     });
@@ -351,8 +383,16 @@ export class PersonalLock {
   forget(sub: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (this.#env.host.secureAsk) yield* Effect.mapError(this.#env.host.secureAsk(reason), asCoreError);
-      this.#pinned.delete(sub);
-      yield* Effect.mapError(this.#env.host.storageDelete(keptAs(sub)), asCoreError);
+      yield* this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+        const before = this.#pinned.get(sub);
+        this.#pinned.delete(sub);
+        const removed = yield* Effect.result(Effect.mapError(this.#env.host.storageDelete(keptAs(sub)), asCoreError));
+        if (removed._tag === "Failure") {
+          if (before) this.#pinned.set(sub, before);
+          return yield* Effect.fail(removed.failure);
+        }
+        this.#dirty.delete(sub);
+      })));
       this.#env.changed();
       return null;
     });

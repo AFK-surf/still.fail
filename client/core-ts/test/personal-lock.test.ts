@@ -271,6 +271,210 @@ test("a late local read cannot replace a newer personal lock loaded in parallel"
   } finally { a.runner.shutdown(); }
 });
 
+test("a refresh that sees an accepted device before its write returns does not corrupt the pinned lock", async () => {
+  const c = cloud(), release = Deferred.makeUnsafe<void>();
+  let held = false;
+  const delayed = {
+    ...c,
+    call: (sub: string, method: string, path: string, body: unknown) => {
+      const answer = c.call(sub, method, path, body);
+      const kind = (body as { entries?: Entry[] } | null)?.entries?.[0]?.kind;
+      if (method !== "POST" || kind !== "device") return answer;
+      return Effect.flatMap(answer, (result) => Effect.andThen(
+        Effect.sync(() => { held = true; }),
+        Effect.as(Deferred.await(release), result),
+      ));
+    },
+  };
+  const a = device(delayed, "a"), b = device(c, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const bKey = await b.runner.run(b.lock.makeKey());
+    const adding = a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "62".repeat(32), label: "b" }, "why"));
+    for (let i = 0; i < 100 && !held; i++) await a.host.time.pass(10);
+    assert.equal(held, true, "the cloud accepted the entry before its response arrives");
+    await a.runner.run(a.lock.refresh(SUB));
+    Deferred.doneUnsafe(release, Effect.void);
+    const joined = await adding;
+    assert.deepEqual(joined, c.kept.entries, "the accepted entry is pinned once");
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.equal(a.lock.chain(SUB)?.devices.has(bKey), true);
+    const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: delayed.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(restarted.load(SUB));
+    assert.equal(restarted.standing(SUB), "member", "the persisted chain survives restart");
+    assert.equal(restarted.chain(SUB)?.hash, entryHash(c.kept.entries.at(-1)!));
+    const own = await a.runner.run(restarted.makeKey());
+    const next = await a.runner.run(restarted.addDevice(SUB, { key: own, id: "61".repeat(32), label: "a again" }, "why"));
+    assert.deepEqual(next, c.kept.entries, "a later append extends the same accepted chain");
+    assert.equal(next.length, 3);
+  } finally {
+    Deferred.doneUnsafe(release, Effect.void);
+    a.runner.shutdown();
+    b.runner.shutdown();
+  }
+});
+
+test("overlapping refreshes cannot persist an older personal lock after a newer one", async () => {
+  const c = cloud(), a = device(c, "a"), release = Deferred.makeUnsafe<void>();
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const key = await a.runner.run(a.lock.makeKey());
+    const seed = await a.runner.run(a.host.secureGet!("personal-signer", { user: true }));
+    assert.ok(seed);
+    const entries = [...c.kept.entries];
+    for (let i = 0; i < 2; i++) {
+      const unsigned = { v: 1 as const, ws: `person:${SUB}`, seq: entries.length, prev: entryHash(entries.at(-1)!), at: 1, kind: "device", body: { key, id: "61".repeat(32), label: `version ${i}` } };
+      entries.push({ ...unsigned, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(unsigned)), seed)) } });
+    }
+    const set = a.host.storageSet.bind(a.host);
+    let held = false;
+    a.host.storageSet = (name, value) => {
+      if (!name.startsWith("personal-lock-") || held) return set(name, value);
+      return Effect.andThen(Effect.sync(() => { held = true; }), Effect.andThen(Deferred.await(release), set(name, value)));
+    };
+    c.kept.entries = entries.slice(0, 2);
+    const older = a.runner.run(a.lock.refresh(SUB));
+    for (let i = 0; i < 100 && !held; i++) await a.host.time.pass(10);
+    assert.equal(held, true, "the first write is still pending");
+    c.kept.entries = entries;
+    const newer = a.runner.run(a.lock.refresh(SUB));
+    await a.host.time.pass(10);
+    Deferred.doneUnsafe(release, Effect.void);
+    await Promise.all([older, newer]);
+    const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(restarted.load(SUB));
+    assert.equal(restarted.chain(SUB)?.hash, entryHash(entries.at(-1)!), "restart keeps the newest verified entry");
+  } finally {
+    Deferred.doneUnsafe(release, Effect.void);
+    a.runner.shutdown();
+  }
+});
+
+test("a failed personal lock write is retried even when the cloud has not changed", async () => {
+  const c = cloud(), a = device(c, "a"), b = device(c, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const bKey = await b.runner.run(b.lock.makeKey());
+    const set = a.host.storageSet.bind(a.host);
+    let fail = true;
+    a.host.storageSet = (name, value) => {
+      if (name.startsWith("personal-lock-") && fail) {
+        fail = false;
+        return Effect.fail(new HostError("storage failed", true));
+      }
+      return set(name, value);
+    };
+    await assert.rejects(a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "62".repeat(32), label: "b" }, "why")), /storage failed/);
+    assert.equal(c.kept.entries.length, 2, "the cloud had already accepted the entry");
+    assert.equal(a.lock.chain(SUB)?.hash, entryHash(c.kept.entries.at(-1)!));
+    await a.runner.run(a.lock.refresh(SUB));
+    const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(restarted.load(SUB));
+    assert.equal(restarted.standing(SUB), "member");
+    assert.equal(restarted.chain(SUB)?.hash, entryHash(c.kept.entries.at(-1)!), "the same snapshot is persisted on retry");
+  } finally {
+    a.runner.shutdown();
+    b.runner.shutdown();
+  }
+});
+
+test("a late pairing result cannot shorten the same personal lock", async () => {
+  const c = cloud(), a = device(c, "a"), b = device(c, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const older = [...c.kept.entries];
+    const bKey = await b.runner.run(b.lock.makeKey());
+    await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "62".repeat(32), label: "b" }, "why"));
+    await a.runner.run(a.lock.joined(SUB, older));
+    const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(restarted.load(SUB));
+    assert.equal(restarted.chain(SUB)?.hash, entryHash(c.kept.entries.at(-1)!));
+    assert.equal(restarted.chain(SUB)?.devices.has(bKey), true);
+  } finally {
+    a.runner.shutdown();
+    b.runner.shutdown();
+  }
+});
+
+test("an interrupted storage write finishes before a newer personal lock is written", async () => {
+  const c = cloud(), a = device(c, "a");
+  let finish: (() => void) | undefined;
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const key = await a.runner.run(a.lock.makeKey());
+    const seed = await a.runner.run(a.host.secureGet!("personal-signer", { user: true }));
+    assert.ok(seed);
+    const entries = [...c.kept.entries];
+    for (let i = 0; i < 2; i++) {
+      const unsigned = { v: 1 as const, ws: `person:${SUB}`, seq: entries.length, prev: entryHash(entries.at(-1)!), at: 1, kind: "device", body: { key, id: "61".repeat(32), label: `version ${i}` } };
+      entries.push({ ...unsigned, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(unsigned)), seed)) } });
+    }
+    const set = a.host.storageSet.bind(a.host);
+    let held = false;
+    a.host.storageSet = (name, value) => {
+      if (!name.startsWith("personal-lock-") || held) return set(name, value);
+      return Effect.tryPromise({
+        try: () => new Promise<void>((resolve) => {
+          held = true;
+          // A host operation can keep writing even after its Effect waiter was interrupted.
+          finish = () => { finish = undefined; a.host.storage.set(name, value); resolve(); };
+        }),
+        catch: (error) => new HostError(String(error)),
+      });
+    };
+    c.kept.entries = entries.slice(0, 2);
+    const older = a.runner.fork(a.lock.refresh(SUB));
+    for (let i = 0; i < 100 && !held; i++) await a.host.time.pass(10);
+    assert.equal(held, true);
+    a.runner.interrupt(older);
+    c.kept.entries = entries;
+    const newer = a.runner.run(a.lock.refresh(SUB));
+    await a.host.time.pass(10);
+    finish!();
+    await newer;
+    const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(restarted.load(SUB));
+    assert.equal(restarted.chain(SUB)?.hash, entryHash(entries.at(-1)!), "the old host write cannot overwrite the newer one");
+  } finally {
+    finish?.();
+    a.runner.shutdown();
+  }
+});
+
+test("forgetting a personal lock while an append is in flight is not undone by its reply", async () => {
+  const c = cloud(), release = Deferred.makeUnsafe<void>();
+  let held = false;
+  const delayed = {
+    ...c,
+    call: (sub: string, method: string, path: string, body: unknown) => {
+      const answer = c.call(sub, method, path, body);
+      const kind = (body as { entries?: Entry[] } | null)?.entries?.[0]?.kind;
+      if (method !== "POST" || kind !== "device") return answer;
+      return Effect.flatMap(answer, (result) => Effect.andThen(Effect.sync(() => { held = true; }), Effect.as(Deferred.await(release), result)));
+    },
+  };
+  const a = device(delayed, "a"), b = device(c, "b");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const bKey = await b.runner.run(b.lock.makeKey());
+    const adding = a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "62".repeat(32), label: "b" }, "why"));
+    for (let i = 0; i < 100 && !held; i++) await a.host.time.pass(10);
+    assert.equal(held, true);
+    await a.runner.run(a.lock.forget(SUB, "why"));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(adding, (error: unknown) => error instanceof CoreError && error.code === "personal_changed");
+    const restarted = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(restarted.load(SUB));
+    assert.equal(restarted.standing(SUB), "none");
+    await a.runner.run(restarted.refresh(SUB));
+    assert.equal(restarted.standing(SUB), "outside", "the cloud's copy is not pinned without approval");
+  } finally {
+    Deferred.doneUnsafe(release, Effect.void);
+    a.runner.shutdown();
+    b.runner.shutdown();
+  }
+});
+
 /// A phone's Adb over a station that says what it is told.
 function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>) {
   const host = new FakeHost();
