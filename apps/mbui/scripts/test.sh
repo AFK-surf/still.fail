@@ -98,7 +98,7 @@ for t in $targets; do
   # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
   if [ -z "${APP_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
     # Temporary integration diagnostics: include Moon's source lines and error explanations in CI.
-    tail -100 "$out.build" | cut -c1-1000
+    awk '/^Error:/ { n=20 } n>0 { print substr($0,1,1000); n-- }' "$out.build"
     rm -f "$out.build"
     exit 1
   fi
