@@ -11,7 +11,8 @@ import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, newMessage,
 } from "../src/store/store.ts";
-import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
+import { addClientColumn, addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
+import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
 import { CARD_POST_AFTER, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE } from "../src/store/card-post-index.ts";
@@ -538,6 +539,19 @@ test("a thread is a log, edits are entries of their own", () => {
   // going back over the whole thread.
   const plan = (store.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread = ? AND n = ?").all(thread.id, 1) as { detail: string }[]).map((r) => r.detail);
   assert.ok(plan.some((d) => d.includes("entries_edits (thread=? AND target=?)")), plan.join(" | "));
+});
+
+test("the prepared old edit lookup seeks one message's edits", () => {
+  const store=memory(),thread=store.openThread("ember","CHAT","old-edit-plan",null,null).id;
+  store.db.exec("CREATE INDEX entries_target ON entries(thread,target) WHERE target IS NOT NULL; DROP INDEX entries_edits");
+  installLegacyEdits(store.db);
+  while (!legacyEditStep(store.db).ready) { /* prepare */ }
+  addClientColumn(store.db);
+  const plan=store.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread=? AND n=?").all(thread,1)
+    .map((r) => String(r.detail)).join(" | ");
+  assert.match(plan,/SEARCH s USING PRIMARY KEY \(thread=\? AND target=\?/,plan);
+  assert.match(plan,/SEARCH t USING PRIMARY KEY \(thread=\? AND target=\?/,plan);
+  assert.doesNotMatch(plan,/SCAN (?:s|t)\b/,plan);
 });
 
 test("a message still pending reaches the agent as it reads at delivery", () => {
