@@ -37,6 +37,25 @@ function restartedHost(old: FakeHost): FakeHost {
   return host;
 }
 
+test("expired grant identities are kept without their old details until a complete station read", async () => {
+  const host = new FakeHost();
+  const p = phoneWith(host, []);
+  try {
+    await flush();
+    p.adb.heard("ws/st", { ...liveGrant(host, "old"), exp: Math.floor(host.nowMs() / 1000) - 1, reason: "x".repeat(16_384) });
+    await flush();
+    assert.deepEqual(p.adb.grants(), [], "an expired row is not presented as a live grant");
+    assert.deepEqual(p.adb.wanted(), [], "the retained identity cannot lend");
+    const saved = JSON.parse(new TextDecoder().decode(host.storage.get(GRANTS_KEY)!));
+    assert.deepEqual(saved, { "ws/st": [{ id: "old", status: "granted", exp: 0 }] }, "only the expired request identity is kept");
+    await p.runner.run(p.adb.readGrants("ws/st"));
+    await flush();
+    const after = JSON.parse(new TextDecoder().decode(host.storage.get(GRANTS_KEY)!));
+    assert.deepEqual(after, {}, "a complete list transfers the missing identity to the separate take-back record");
+    assert.ok(host.storage.has(REVOKED_KEY), "the missing request has a durable denial");
+  } finally { await p.runner.shutdown(); }
+});
+
 test("a remote take-back survives an earlier grant snapshot finishing last", async () => {
   const host = new FakeHost(), set = host.storageSet.bind(host), release = Deferred.makeUnsafe<void>();
   const reached = Promise.withResolvers<void>(), cleared = Promise.withResolvers<void>();

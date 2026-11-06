@@ -1405,6 +1405,121 @@ test("a station cannot revive a revoked signed grant by extending its reported e
   } finally { p.runner.shutdown(); a.runner.shutdown(); }
 });
 
+test("a station's short expiry cannot make a known signature disappear before a remote take-back", async () => {
+  const c = cloud(), a = device(c, "a");
+  const link = { adb: () => Effect.sync(() => {
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify({ grants: [], signs: true }));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) };
+  const p = phone(env);
+  let cold: ReturnType<typeof phone> | undefined;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    await flush();
+    p.adb.heard(STATION, { ...grantOf(signed), exp: now + 5 });
+    await flush();
+    assert.deepEqual(p.adb.wanted(), [STATION], "the phone has verified and used this signature");
+    await p.host.time.pass(6_000, 6_000);
+    assert.deepEqual(p.adb.wanted(), [], "the station's earlier expiry still stops lending");
+    // A later unrelated event saves a new cache, after the shorter station-reported time but before the signature ends.
+    p.adb.heard("ws/other", { id: "other", status: "pending", at: 2 });
+    await flush();
+    await p.runner.shutdown();
+    const host = new FakeHost(p.host.time);
+    for (const [key, value] of p.host.storage) host.storage.set(key, value.slice());
+    cold = phone(env, host);
+    await flush();
+    await cold.runner.run(cold.adb.readGrants(STATION));
+    await flush();
+    cold.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+    await flush();
+    assert.deepEqual(cold.adb.wanted(), [], "an omitted known grant stays ended after its signature is replayed");
+  } finally {
+    await p.runner.shutdown();
+    if (cold) await cold.runner.shutdown();
+    await a.runner.shutdown();
+  }
+});
+
+test("replacing a known signed grant with an expired unsigned row does not erase its identity", async () => {
+  const c = cloud(), a = device(c, "a");
+  const link = { adb: () => Effect.sync(() => {
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify({ grants: [], signs: true }));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) };
+  const p = phone(env);
+  let cold: ReturnType<typeof phone> | undefined;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    await flush();
+    p.adb.heard(STATION, grantOf(signed));
+    await flush();
+    assert.deepEqual(p.adb.wanted(), [STATION]);
+    p.adb.heard(STATION, { id: "p1", status: "granted", exp: now - 1, at: 1 });
+    await flush();
+    await p.runner.shutdown();
+    const host = new FakeHost(p.host.time);
+    for (const [key, value] of p.host.storage) host.storage.set(key, value.slice());
+    cold = phone(env, host);
+    await flush();
+    await cold.runner.run(cold.adb.readGrants(STATION));
+    await flush();
+    cold.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+    await flush();
+    assert.deepEqual(cold.adb.wanted(), [], "an untrusted replacement cannot erase the seen request before it ends");
+  } finally {
+    await p.runner.shutdown();
+    if (cold) await cold.runner.shutdown();
+    await a.runner.shutdown();
+  }
+});
+
+test("an expired row is remembered when the personal lock is not yet readable", async () => {
+  const c = cloud(), a = device(c, "a");
+  const link = { adb: () => Effect.sync(() => {
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify({ grants: [], signs: true }));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) };
+  const p = phone(env), ready = a.lock.ready.bind(a.lock);
+  let cold: ReturnType<typeof phone> | undefined;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    a.lock.ready = () => false;
+    await flush();
+    p.adb.heard(STATION, { ...grantOf(signed), exp: now - 1 });
+    await flush();
+    assert.deepEqual(p.adb.wanted(), [], "an unreadable lock never makes the signature lend");
+    await p.runner.shutdown();
+    a.lock.ready = ready;
+    const host = new FakeHost(p.host.time);
+    for (const [key, value] of p.host.storage) host.storage.set(key, value.slice());
+    cold = phone(env, host);
+    await flush();
+    await cold.runner.run(cold.adb.readGrants(STATION));
+    await flush();
+    cold.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+    await flush();
+    assert.deepEqual(cold.adb.wanted(), [], "the missing row remains known across an unreadable lock and restart");
+  } finally {
+    a.lock.ready = ready;
+    await p.runner.shutdown();
+    if (cold) await cold.runner.shutdown();
+    await a.runner.shutdown();
+  }
+});
+
 test("taking back a chat includes another known signature the station reports as expired", async () => {
   const c = cloud(), a = device(c, "a");
   const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });

@@ -732,7 +732,22 @@ export class Adb {
       if (!state.grantDirty) return;
       const version = state.grantVersion;
       const out: Record<string, J[]> = {};
-      for (const g of this.#allGrants()) (out[g.station as string] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
+      const kept = new Map<string, Set<string>>();
+      for (const g of this.#allGrants()) {
+        const station = g.station as string;
+        (out[station] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
+        const ids = kept.get(station) ?? new Set<string>();
+        ids.add(g.id);
+        kept.set(station, ids);
+      }
+      // An expired or unverifiable row is not lendable, but it is still a request this phone has seen. The station
+      // may have reported a shorter expiry or replaced an earlier valid signature; forgetting its id would make a
+      // later complete list miss the take-back. Keep only its identity until the station says it ended or omits it.
+      for (const [station, grants] of this.#grants) for (const id of grants.keys()) {
+        if (!kept.get(station)?.has(id) && !this.#remoteEnded(station, id)) {
+          (out[station] ??= []).push({ id, status: "granted", exp: 0 });
+        }
+      }
       const saved = yield* Effect.result(Effect.mapError(this.#env.host.storageSet(GRANTS_KEY, utf8(JSON.stringify(out))), asCoreError));
       if (saved._tag === "Failure") {
         state.grantError = saved.failure;
