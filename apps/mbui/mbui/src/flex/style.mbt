@@ -1041,6 +1041,9 @@ pub(all) struct Node {
   mut cache : FixedArray[Double]
   // how many of them hold sizes
   mut cache_n : Int
+  // whether it asked so many sizes since it last changed that some were let go (relayout_alone: not known to be
+  // answered the same)
+  mut cache_lost : Bool
   mut cache_gen : Int
   // what its style says about its box, and the containing block that was
   // for (box_for), while its caches hold
@@ -1100,6 +1103,7 @@ pub fn Node::new() -> Node {
     line: 0,
     cache: [],
     cache_n: 0,
+    cache_lost: false,
     cache_gen: -1,
     box_cbw: 0.0,
     box_cbh: 0.0,

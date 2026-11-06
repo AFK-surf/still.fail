@@ -2,7 +2,7 @@
 // the focus, never the whole tree. The same scene with 30 and with 3000 rows does the same work.
 
 ///|
-/// A long column held by its rows in sight (View::scrolls_window), each taking a press and keys, under a field with the
+/// A long column held by its rows in sight (View::scrolls_anchored), each taking a press and keys, under a field with the
 /// focus; then a press on a row, a key, and a row come at its end: what each cost (Work's hit_visited, keys_asked, and
 /// the nodes a frame visited).
 fn walk_cost(rows : Int) -> (Int, Int, Int, Int) raise {
@@ -15,7 +15,7 @@ fn walk_cost(rows : Int) -> (Int, Int, Int, Int) raise {
     fn(root) {
       root.box(fn(o) {
         o.width(Is(Some(300.0))).height(Is(Some(400.0))) |> ignore
-        o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, from_end=true, fn(b, k) {
+        o.scrolls_anchored(scroll, fn() { keys.get() }, est=40.0, from_end=true, fn(b, k) {
           b
           .height(Is(Some(40.0)))
           .on_press(fn() { pressed.val = k })

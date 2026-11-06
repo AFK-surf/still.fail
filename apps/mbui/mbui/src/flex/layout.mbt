@@ -284,6 +284,7 @@ fn touch(node : Node) -> Unit {
     node.cache_gen = generation.val
     if !reusing.val || node.dirty {
       node.cache_n = 0
+      node.cache_lost = false
       node.p_ok = false
       node.dirty = false
     }
@@ -430,6 +431,63 @@ pub fn compute(
   }
   root.root_grid = if round { -1.0 } else { grid }
   completed_generation.val = this_generation
+}
+
+///|
+/// Whether what `node` holds may be read by what holds it beyond its size: a row that wraps by its items' least
+/// (Style's `wrap_least`: least_held goes down into what each holds). What is under one is no relayout boundary.
+pub fn Node::reads_least(self : Node) -> Bool {
+  let s = self.style
+  is_row(s.direction) && s.wrap != NoWrap && s.wrap_least
+}
+
+///|
+/// `node` laid out again alone as what holds it asked it last (the size it was given, its containing block), what
+/// holds it standing as it is: what under it is marked `dirty` laid out again, the rest reused, as compute(reuse=true)
+/// does from a root; its own place in what holds it as it was. A compute of its own (Node::laid_out_at counts it).
+/// Then whether what holds it would find it the same: laid out to the same size, and every size it was asked for
+/// since it was last changed (its kept measures: its basis, its least, its cross size, as a row or a column asks them)
+/// answered the same now. Where so, nothing that holds it is laid out otherwise for what changed under it: a relayout
+/// boundary for this change (Flutter's, found by what its holder reads of it, not by a rule said beforehand: a box
+/// given its size, a column that scrolls whose holder reads no more of it than its share of the room). Where not (or
+/// it was never laid out, or it forgot what it was asked), what holds it is to be laid out too.
+pub fn relayout_alone(node : Node) -> Bool {
+  if !node.p_ok || node.cache_lost {
+    return false
+  }
+  let (kw, kh, cbw, cbh) = (node.p_kw, node.p_kh, node.p_cbw, node.p_cbh)
+  let (was_w, was_h) = (node.p_w, node.p_h)
+  // (what it was asked, kept before its layout forgets it)
+  let asked : Array[Double] = []
+  for i in 0..<node.cache_n {
+    asked.push(node.cache[i])
+  }
+  // (a compute of its own, numbered as compute numbers them: Node::laid_out_at and the views' walk read it so)
+  compute_count.val += 1
+  generation.val = compute_count.val
+  reusing.val = true
+  absolute_seen.val = false
+  // (marked dirty, it forgets its last layout as it is gone into: laid out again, what it holds by what changed)
+  node.dirty = true
+  let w = size_node(node, kw, kh, kw, kh, cbw, cbh, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  if absolute_seen.val && !kept(node) {
+    layout_static_absolute(node, node, 0.0, 0.0)
+  }
+  if !same(w, was_w) || !same(h, was_h) {
+    return false
+  }
+  let mut k = 0
+  while k + 8 <= asked.length() {
+    let aw = size_node(node, asked[k], asked[k + 1], asked[k + 2], asked[k + 3], asked[k + 4], asked[k + 5], false)
+    if !same(aw, asked[k + 6]) || !same(out_h.val, asked[k + 7]) {
+      return false
+    }
+    k = k + 8
+  }
+  true
 }
 
 ///|
@@ -678,6 +736,8 @@ fn size_node(
   let mut n = node.cache_n
   if n >= 8 * 16 {
     n = 0
+    // (what it was asked before forgotten: what holds it may have read one of those, relayout_alone cannot tell)
+    node.cache_lost = true
   }
   let mut c = node.cache
   if n + 8 > c.length() {

@@ -158,7 +158,15 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    transform, an opacity, a cut), what is read out: each its own. A colour lays nothing out; a move measures no words; a
    node moved keeps what it holds where they are in it. Layout goes up to the first box that does not read what it
    holds (a size given is not that by itself: a holder may read its intrinsic size or baseline). What is laid out tells
-   only what reads it (a popover's place, a list's window), never a whole page made again.
+   only what reads it (a popover's place, a list's window), never a whole page made again. In mbui (Flutter's relayout
+   boundary, found by what is read): a change marks the node and what holds it (which reads what is said of it); the
+   frame lays out each marked alone as it was asked last (@flex's `relayout_alone`), the deepest first, and goes on to
+   what holds it only where that would find it otherwise: another size, or any size it was asked (its basis, its least,
+   its cross size) answered otherwise; under a row that wraps by its items' least (`reads_least`), always. So a box of a
+   size its own, a list grown into the room it is given (basis 0) and anything whose holder reads no more of it than its
+   share stops what changes in it (counted: `relayout_boundary_wbtest.mbt`, a chat's page of 30 rows and of 3000, a row
+   made taller: the list laid out, not the page, the bar or the window). A list whose basis is what it holds (grown from
+   its content's height) is read by its holder through that, and is no boundary for a change of its height.
 4. **The scene is kept, not the frame.** Each node's drawing kept where it is in what holds it, in order; what composes
    it (transform, opacity, cut) kept on the node that does; the host given the records and composition that changed.
    A host taking the whole frame each time (gles_render.h's glBufferData of all of it, apple_render.m's upload) is
