@@ -39,3 +39,29 @@ test "panel rule node draws like menu_rule at both widths and themes" {
     }
   }
 }
+
+///|
+test "panel rule node follows a theme change without remaking its line" {
+  set_dark(Some(false))
+  let holder : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=240.0, h=80.0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.box(fn(panel) {
+      holder.val = Some(panel)
+      menu_rule_node(panel)
+    }) |> ignore
+  })
+  t.draw()
+  let line = holder.val.unwrap().kids()[0].kids()[0]
+  let light = t.drawn_rects().filter(fn(r) { r.3 == 1.0 })
+  set_dark(Some(true))
+  t.draw()
+  let dark = t.drawn_rects().filter(fn(r) { r.3 == 1.0 })
+  let kept = line.alive()
+  set_dark(None)
+  assert_eq((light.length(), dark.length()), (1, 1))
+  assert_eq((light[0].0, light[0].1, light[0].2, light[0].3), (dark[0].0, dark[0].1, dark[0].2, dark[0].3))
+  assert_true(light[0].4 != dark[0].4)
+  assert_true(kept)
+}
