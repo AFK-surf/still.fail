@@ -657,65 +657,34 @@ jobs:
   # monoid's beta Mac app (build.monoid.desktop.beta: apps/mbui's monoid-beta variant on monoid's cloud), built as
   # desktop's from the same caches (restored, never saved: desktop keeps them), signed and notarized by the same team,
   # and put whole in monoid's bucket once the check passed (.github/release-desktop.sh --product monoid).
+  # monoid's beta Mac app: still.fail's (the desktop job's, handed over as an artifact) renamed, not built again: the same
+  # program, Hermes, bytecode and icon, its own Info.plist, program name and updater id (apps/mbui/scripts/mac-app.sh
+  # MBUI_MAC_FROM), signed and notarized as monoid.zone, put in monoid's bucket.
   monoid-desktop:
-    needs: [plan, natives, check, check-linux]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) }}
+    needs: [plan, check, check-linux, desktop]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.desktop.result == 'success' }}
     runs-on: macos-26
     environment: production
     timeout-minutes: 5
     env:
       MBUI_FRESH: 1
-      MBUI_CACHE: ${{ github.workspace }}/.ci/release
-      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
-      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: mbui-mac-${{ github.sha }}
-          restore-keys: mbui-mac-
-      - id: hermes
-        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/Library/Caches/stillfail-build
-            apps/mbui/out/core/hermesc
-          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/natives
-      - uses: actions/cache@v4
-        with:
-          path: apps/mbui/out/mac/AppIcon-*
-          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
-      - name: The macOS shell's key
-        id: native-keys
-        run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        with:
-          path: ~/Library/Caches/stillfail-native/shell-apple
-          key: ${{ steps.native-keys.outputs.key }}
-      - uses: ./.github/actions/mbui-moonbit
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            apps/mbui/_build
-            !apps/mbui/_build/**/*.mbc
-          key: mbui-mac-moon-${{ github.sha }}
-          restore-keys: mbui-mac-moon-
-      - run: bash apps/mbui/scripts/moon-mtimes.sh
-      - name: Build, sign and notarize monoid's beta Mac app, and put it in monoid's bucket
+      - uses: actions/download-artifact@v4
+        with: { name: "mac-beta-${{ github.sha }}", path: "${{ runner.temp }}/from" }
+      - name: Rename, sign and notarize still.fail's beta Mac app as monoid's, and put it in monoid's bucket
         env:
-          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
-        run: sh .github/release-desktop.sh --product monoid
+        run: |
+          MBUI_MAC_FROM=$(find "$RUNNER_TEMP/from" -name 'stillfail-beta-*-arm64-mac.zip' | head -1)
+          [ -n "$MBUI_MAC_FROM" ] || { echo "no still.fail beta Mac app handed over" >&2; exit 1; }
+          export MBUI_MAC_FROM
+          sh .github/release-desktop.sh --product monoid
 
   desktop:
     needs: [plan, natives]
@@ -820,6 +789,15 @@ jobs:
           export STILLFAIL_RELEASE_CACHE_KEY="desktop/stillfail-beta-0.1.$build-arm64-mac.zip"
           export STILLFAIL_RELEASE_CACHE_SOURCE="$work/out/mac/stillfail-beta-$build-arm64-mac.zip"
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      # (monoid's Mac app is this one renamed: monoid-desktop)
+      - if: github.ref == 'refs/heads/main' && vars.MONOID_CI == 'on'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-beta-${{ github.sha }}
+          path: ${{ runner.temp }}/release/desktop/stillfail-beta-*-arm64-mac.zip
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
       # (handed to put through the bucket, not a run artifact: scripts/release-put.sh --hand)
       - id: hand
         if: github.ref == 'refs/heads/main'
@@ -919,64 +897,37 @@ jobs:
         run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
-
-  # monoid's beta Windows app (build.monoid.desktop.beta: apps/mbui's monoid-beta variant on monoid's cloud), built as
-  # desktop-win's and put whole in monoid's bucket once the check passed (scripts/release.sh --product monoid).
-  monoid-desktop-win:
-    needs: [plan, check, check-linux]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' }}
-    runs-on: windows-2025
-    environment: production
-    timeout-minutes: 5
-    defaults:
-      run:
-        shell: bash
-    env:
-      MSYS: winsymlinks:nativestrict
-      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
-    steps:
-      - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v5
-        with: { fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/msvc
-      - uses: ./.github/actions/mbui-moonbit
-      - name: The Windows natives' keys
-        id: native-keys
-        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        with:
-          path: ~/AppData/Local/stillfail-native
-          key: ${{ steps.native-keys.outputs.key }}
-      - name: The Windows engine and shell, prebuilt
-        run: |
-          node scripts/native.ts fetch shell win32-x64
-          node scripts/native.ts fetch engine win32-x64
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
-          key: mbui-win-build-mono-${{ github.sha }}
-          restore-keys: mbui-win-build-mono-
-      - uses: actions/cache/restore@v4
-        with:
-          path: .ci/hbc
-          key: mbui-win-hbc-${{ github.sha }}
-          restore-keys: mbui-win-hbc-
-      - name: Build, pack and sign monoid's beta Windows app
+      # monoid's (build.monoid.desktop.beta): the same program, linked again with its own resources (its id, name and
+      # environment: apps/mbui/scripts/win.sh), nothing compiled again; put by monoid-desktop-win once the check passed.
+      - name: Pack and sign monoid's beta Windows app from the same build
+        if: vars.MONOID_CI == 'on'
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-          RELEASE_DIR: ${{ runner.temp }}/release
-        run: |
-          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          sh scripts/release.sh --product monoid --beta desktop-win
+          RELEASE_DIR: ${{ runner.temp }}/monoid
+        run: sh scripts/release.sh --product monoid --beta desktop-win
+      - if: vars.MONOID_CI == 'on'
+        uses: actions/upload-artifact@v4
+        with: { name: "monoid-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/monoid", retention-days: 1 }
+
+  # monoid's beta Windows app (build.monoid.desktop.beta), packed by desktop-win from its own build, put whole in monoid's
+  # bucket once the check passed.
+  monoid-desktop-win:
+    needs: [plan, check, check-linux, desktop-win]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.desktop-win.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "monoid-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/monoid" }
       - name: Put it in monoid's bucket (its files, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          sh scripts/release-put.sh "$RUNNER_TEMP/release"
+          sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The modules' packages stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): when what one
   # packs changed. Each one's archive, named by its version, is put at once (one already out is checked to be the same
