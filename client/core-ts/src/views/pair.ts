@@ -440,7 +440,9 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
 /// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
 /// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; personalGenerations: Map<string, number>; personalFailures?: Map<string, string>; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
+/// `settling`: an approval arrived and its personal records are being saved; no further code should be sought.
+/// `dialing`: reached connections whose first answer has not arrived, so they can be closed when the try ends.
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; dialing: Set<Duplex>; run: number; personalGenerations: Map<string, number>; personalFailures?: Map<string, string>; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; settling?: boolean; lastEnds?: CoreError[] };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -472,6 +474,8 @@ function mine(inner: Inner, ws: string): J | null {
 const changed = (inner: Inner, y: Trying) => inner.store.invalidateAll((t) => t.topic === "adbShare" || (t.topic === "lock" && y.workspaces.includes(String(t.workspace))) || t.topic === "lockPrompts");
 
 function drop(y: Trying): void {
+  for (const d of y.dialing) d.close();
+  y.dialing.clear();
   for (const m of y.met.values()) m.d.close();
   y.met.clear();
 }
@@ -528,7 +532,7 @@ export const dialer = {
 
 /// Whether this device's try `y` still looks for trusted devices: the one it is on, not over (approved, ended, or
 /// given up on: none reached in PAIR_DIAL_TRIES dials each).
-const looking = (inner: Inner, y: Trying) => tryings.get(inner) === y && y.state !== "done" && y.state !== "failed" && y.state !== "none";
+const looking = (inner: Inner, y: Trying) => tryings.get(inner) === y && !y.settling && y.state !== "done" && y.state !== "failed" && y.state !== "none";
 
 /// `lock.pair`: the trusted devices dialled, each that answers asked to show a code.
 function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
@@ -685,15 +689,22 @@ function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): 
     const reached = yield* Effect.timeoutOption(dialer.open(inner, id, relays), PAIR_DIAL_MS);
     if (reached._tag === "None") return yield* Effect.fail(CoreError.plainly("pair", "not reached"));
     const d = reached.value;
-    yield* Effect.onError(d.send(hello), () => Effect.sync(() => d.close()));
-    const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
-    // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
-    if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") {
-      d.close();
+    // The request may have been approved or cancelled while the connection was opening.
+    if (!looking(inner, y)) { d.close(); return true; }
+    y.dialing.add(d);
+    let kept = false;
+    return yield* Effect.ensuring(Effect.gen(function* () {
+      yield* d.send(hello);
+      const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
+      // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
+      if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") return true;
+      keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
+      kept = true;
       return true;
-    }
-    keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
-    return true;
+    }), Effect.sync(() => {
+      // `drop` already closed it if this try ended while its answer was pending.
+      if (y.dialing.delete(d) && !kept) d.close();
+    }));
   });
 }
 
@@ -703,7 +714,7 @@ export function trying(inner: Inner, workspaces: string[]): Trying {
     const sub = place.slice("person:".length);
     return [sub, inner.adb.personal().joinGeneration(sub)] as const;
   }));
-  const y: Trying = { state: "finding", workspaces, met: new Map(), run: ++runs, personalGenerations };
+  const y: Trying = { state: "finding", workspaces, met: new Map(), dialing: new Set(), run: ++runs, personalGenerations };
   tryings.set(inner, y);
   changed(inner, y);
   return y;
@@ -817,6 +828,8 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
       if (inNow.length > 0) approved = { t: "approved", workspaces: inNow, failed: [] };
     }
     if (approved !== null) {
+      // A save may take time; stop retries and discard answers already in flight before closing shown codes.
+      y.settling = true;
       drop(y);
       const answer = approved;
       // Once an approval has been received, a cancelled caller must not strand its successfully saved accounts in
@@ -946,11 +959,18 @@ export function personalBegin(inner: Inner, subs: string[]): Effect.Effect<unkno
     const y = trying(inner, subs.map(personOf));
     const trusted = [...new Set(subs.flatMap((sub) => personal.approvers(sub).map((d) => d.id)))];
     const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: null, personal: { subs, key } };
+    // A shown code can disappear while the other personal devices are still being sought, just as for a workspace.
+    y.searching = true;
     inner.runner.fork(
       Effect.gen(function* () {
         yield* Effect.forEach(trusted, (id) => seek(inner, y, id, inner.cloudSync.relays ?? [], hello), { concurrency: "unbounded", discard: true });
+        y.searching = false;
         if (tryings.get(inner) !== y || y.state !== "finding") return;
-        y.state = y.met.size > 0 ? "code" : "none";
+        if (y.met.size > 0) y.state = "code";
+        else if (y.lastEnds) {
+          y.state = "failed";
+          y.error = endedText(y.lastEnds);
+        } else y.state = "none";
         changed(inner, y);
       }),
     );
