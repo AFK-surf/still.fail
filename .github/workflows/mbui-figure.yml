@@ -34,6 +34,11 @@ on:
         required: false
         default: ""
         type: string
+      scene_spec:
+        description: Optional JSON fixture, drives, capture time or frame, and window list
+        required: false
+        default: "{}"
+        type: string
 permissions:
   contents: read
 jobs:
@@ -84,20 +89,37 @@ jobs:
           mkdir -p apps/mbui/out/chat-evidence
           printf '%s\n%s\n%s\n' "$sha" "$key" "$PATCH_SHA256" > apps/mbui/out/chat-evidence/source.txt
           printf 'exit\n' > apps/mbui/out/chat-evidence/action.drive
-      - name: Capture attachment preview at each screen size
+      - name: Capture the specified scene at each screen size
+        env:
+          SCENE_SPEC: ${{ inputs.scene_spec }}
         run: |
           set -euo pipefail
           out="$GITHUB_WORKSPACE/apps/mbui/out/chat-evidence"
           runtime="$RUNNER_TEMP/chat-renderer/sffilm"
-          for scene in small:390x844:2 medium:700x900:2 large:1280x800:0; do
-            name=${scene%%:*}
-            rest=${scene#*:}
-            size=${rest%%:*}
-            platform=${rest#*:}
-            MBUI_MEDIA_RUNTIME="$runtime" MBUI_FIXTURE=chat-preview-md MBUI_WIN="$size" \
-              MBUI_FILM_PLATFORM="$platform" MBUI_FILM_SCALE=2 MBUI_PICTURE_AT=1000 \
-              bash apps/mbui/scripts/media.sh picture "$out/$name-md.png" "$out/action.drive"
-          done
+          spec=${SCENE_SPEC:-'{}'}
+          jq -e 'type == "object" and ((.windows // [{"name":"small"}]) | type == "array" and length > 0 and all(.[]; type == "object"))' <<< "$spec" > /dev/null
+          while IFS= read -r scene; do
+            settings=$(jq -cn --argjson common "$spec" --argjson scene "$scene" '$common + $scene')
+            name=$(jq -r '.name' <<< "$settings")
+            size=$(jq -r '.size' <<< "$settings")
+            platform=$(jq -r '.platform' <<< "$settings")
+            [[ "$name" =~ ^[a-zA-Z0-9_-]+$ && "$size" =~ ^[0-9]+x[0-9]+$ && "$platform" =~ ^[0-9]+$ ]]
+            fixture=$(jq -r '.fixture // "chat-preview-md"' <<< "$settings")
+            jq -r '.drive // "exit"' <<< "$settings" > "$out/$name.action.drive"
+            jq -r '.prepare // ""' <<< "$settings" > "$out/$name.prepare.drive"
+            frame=$(jq -r '.frame // empty' <<< "$settings")
+            at=$(jq -r 'if .frame == null then (.at_ms // 1000) else "" end' <<< "$settings")
+            capture() {
+              MBUI_MEDIA_RUNTIME="$runtime" MBUI_FIXTURE="$fixture" MBUI_WIN="$size" \
+                MBUI_FILM_PLATFORM="$platform" MBUI_FILM_SCALE=2 MBUI_PICTURE_AT="$at" MBUI_PICTURE_FRAME="$frame" \
+                bash apps/mbui/scripts/media.sh picture "$out/$name.png" "$out/$name.action.drive" "$@"
+            }
+            if [ -s "$out/$name.prepare.drive" ] && [ "$(cat "$out/$name.prepare.drive")" != "" ]; then
+              capture "$out/$name.prepare.drive"
+            else
+              capture
+            fi
+          done < <(jq -c '(.windows // [{"name":"small","size":"390x844","platform":2}, {"name":"medium","size":"700x900","platform":2}, {"name":"large","size":"1280x800","platform":0}])[]' <<< "$spec")
       - uses: actions/upload-artifact@v4
         with:
           name: chat-preview-evidence
