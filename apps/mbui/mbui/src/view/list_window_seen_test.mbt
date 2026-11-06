@@ -137,16 +137,22 @@ test "scrolls_window flung: every block it glides across told seen (each in sigh
 ///|
 /// A column 300 by 100 holding, while `there` says so, a list of `0..<400` 40 tall from its top: windowed (what it told
 /// seen pushed to `told`) or anchored (what it told sighted as come, there): its tree, and its frame `at` drawn with what
-/// it said to tell once it is painted told. `scroll`: what it scrolls by.
+/// it said to tell once it is painted told. `scroll`: what it scrolls by; `gone_at`: a moment it is let go at, come due
+/// on the timeline (its page closed then).
 fn gone_case(
   windowed : Bool,
   there : @signals.Signal[Bool],
   told : Array[Int],
   scroll? : @view.Scroll = @view.Scroll::list(),
+  gone_at? : Double,
 ) -> (@view.Tree, (Double) -> Unit) {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      match gone_at {
+        Some(at) => o.at_moment(at, fn() { there.set(false) }) |> ignore
+        None => ()
+      }
       o.show(fn() { there.get() }, fn(p) {
         p.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
         let keys = fn() { Array::makei(400, fn(i) { i }) }
@@ -357,4 +363,131 @@ test "scrolls_window: two lists' blocks come in sight in a frame's layout, the f
   }
   assert_eq(runs[0], [(1, 10), (2, 10)])
   assert_eq(runs[1], runs[0])
+}
+
+///|
+test "scrolls_window flung, let go at a moment come due on the way (its page closed then): told seen of every block it glided across up to that moment, laid out before it there alone, drawn every 16 ms or in one frame long after" {
+  let runs : Array[Array[Int]] = []
+  let settles : Array[Int] = []
+  for dt in [16.0, 6000.0] {
+    let there = @signals.signal(true)
+    let told : Array[Int] = []
+    let (tree, frame) = gone_case(true, there, told, gone_at=200.0)
+    frame(0.0)
+    let first = told.length()
+    let before = tree.work().settles
+    guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -80.0) is Some(id) else {
+      abort("nothing takes the finger")
+    }
+    // (a finger up 80 in 10 ms, let go as it moves: flung on past 200 ms)
+    tree.drag_at(id, Down, 150.0, 90.0, 1.0) |> ignore
+    tree.drag_at(id, Moved, 150.0, 50.0, 6.0) |> ignore
+    tree.drag_at(id, Moved, 150.0, 10.0, 11.0) |> ignore
+    tree.drag_at(id, Up, 150.0, 10.0, 11.0) |> ignore
+    let mut at = 0.0
+    while at < 6000.0 {
+      at = at + dt
+      frame(at)
+    }
+    runs.push(told[first:].to_array())
+    settles.push(tree.work().settles - before)
+    tree.dispose()
+  }
+  assert_eq(runs[1], runs[0])
+  assert_true(runs[0].length() > 5, msg="glided on: \{runs[0]}")
+  // (at 200 alone: none once it is let go, nothing left that moves by itself)
+  assert_eq(settles, [1, 1])
+}
+
+///|
+/// A column 300 by 100 of `0..<400` 40 tall at rest, telling seen where `seen` says so, with what is due that holds
+/// nothing of it (three at 100; one at 150 saying another there as it is done; one at 200), drawn at 0 and every `dt`
+/// till 1 s: the work its tree did after its first frame (layouts where things stood before what was due, nodes laid
+/// out again, nodes visited, computes, bindings run) and how many of what was due were done.
+fn at_rest_due(seen : Bool, dt : Double) -> (Int, Int, Int, Int, Int, Int) {
+  let keys = fn() { Array::makei(400, fn(i) { i }) }
+  let row = fn(b : @view.View, _k : Int) { b.height(Is(Some(40.0))) |> ignore }
+  let told : ((Array[Int]) -> Unit)? = if seen { Some(fn(_) {  }) } else { None }
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.scrolls_window(@view.Scroll::list(), keys, est=40.0, seen?=told, row) |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(300.0, 100.0, now=0.0) |> ignore
+  let root = tree.root()
+  let done = Ref(0)
+  let due = fn() { done.val = done.val + 1 }
+  for _ in 0..<3 {
+    root.at_moment(100.0, due) |> ignore
+  }
+  root.at_moment(150.0, fn() {
+    due()
+    root.at_moment(150.0, due) |> ignore
+  })
+  |> ignore
+  root.at_moment(200.0, due) |> ignore
+  let w0 = tree.work()
+  let mut at = 0.0
+  while at < 1000.0 {
+    at = at + dt
+    tree.frame(300.0, 100.0, now=at) |> ignore
+  }
+  let w = tree.work()
+  tree.dispose()
+  (w.settles - w0.settles, w.laid - w0.laid, w.visited - w0.visited, w.computes - w0.computes, w.bound - w0.bound, done.val)
+}
+
+///|
+test "scrolls_window at rest, telling seen: nothing laid out for it at the moments come due (three at one, one said at a moment as it comes, another), the tree's work as with nothing told seen, drawn every 16 ms or once long after" {
+  for dt in [16.0, 1000.0] {
+    let told = at_rest_due(true, dt)
+    assert_eq(told, at_rest_due(false, dt), msg="every \{dt} ms")
+    assert_eq((told.0, told.5), (0, 6), msg="every \{dt} ms")
+  }
+}
+
+///|
+test "scrolls_window: two lists, the first flung, the second at rest: laid out before what is due at a moment come on the first's way, once a moment (three at 100; one at 150 saying another there as it is done) and at its end, none for the one at rest nor once both are, drawn every 16 ms or in one frame long after" {
+  let runs : Array[(Int, Int)] = []
+  for dt in [16.0, 6000.0] {
+    let log : Array[(Int, Int, Double?)] = []
+    let there = @signals.signal(true)
+    let (tree, one, _) = two_lists(log, there, fn(_, _) {  })
+    let root = tree.root()
+    let done = Ref(0)
+    let due = fn() { done.val = done.val + 1 }
+    for _ in 0..<3 {
+      root.at_moment(100.0, due) |> ignore
+    }
+    root.at_moment(150.0, fn() {
+      due()
+      root.at_moment(150.0, due) |> ignore
+    })
+    |> ignore
+    guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -80.0) is Some(id) else {
+      abort("nothing takes the finger")
+    }
+    // (a finger up 80 in 10 ms on the first, let go as it moves: flung on past 150 ms, at rest at `rest`)
+    tree.drag_at(id, Down, 150.0, 90.0, 1.0) |> ignore
+    tree.drag_at(id, Moved, 150.0, 50.0, 6.0) |> ignore
+    tree.drag_at(id, Moved, 150.0, 10.0, 11.0) |> ignore
+    tree.drag_at(id, Up, 150.0, 10.0, 11.0) |> ignore
+    guard one.glides_till() is Some(rest) else { abort("not flung") }
+    assert_true(rest > 150.0 && rest < 5000.0, msg="at rest at \{rest}")
+    // (and two due once both are at rest)
+    root.at_moment(rest + 50.0, due) |> ignore
+    root.at_moment(rest + 80.0, due) |> ignore
+    let before = tree.work().settles
+    let mut at = 0.0
+    while at < 6000.0 {
+      at = at + dt
+      tree.frame(600.0, 100.0, now=at) |> ignore
+    }
+    runs.push((tree.work().settles - before, done.val))
+    tree.dispose()
+  }
+  // (at 100, at 150 and at its end: three; all seven done)
+  assert_eq(runs, [(3, 7), (3, 7)])
 }
