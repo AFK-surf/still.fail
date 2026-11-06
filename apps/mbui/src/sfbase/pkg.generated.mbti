@@ -1690,6 +1690,8 @@ pub fn text(@json.Json?, String) -> String
 
 pub fn this_machine() -> String
 
+pub fn thumb_moved(String, String) -> Unit
+
 pub fn thumb_occurrence(String, String, String) -> String
 
 pub fn thumb_of(@ui.Ctx, String) -> Thumb?
@@ -3713,6 +3715,7 @@ pub(all) struct Viewer {
   mut fly_lift : Double
   mut fly_to : (Double, Double, Double, Double)?
   mut fly_pic : String
+  mut thumb_as : String?
   mut start_at : Double
   mut leaving_grab : Bool
   mut left_at : Double

@@ -264,6 +264,9 @@ pub(all) struct Viewer {
   mut fly_to : (Double, Double, Double, Double)?
   /// a video's picture as it flies (its still, or the frame it goes back with)
   mut fly_pic : String
+  /// the thumbnail it opened from as it is known now, where its owner was told again under another id (thumb_moved):
+  /// None, the one its file and place name
+  mut thumb_as : String?
   /// a video opened again: where it was left (ms; -1 from its start), until its player is ready to go on from there
   mut start_at : Double
   /// a video closing into its thumbnail: the frame it shows being grabbed first (what it goes back with), and where
@@ -817,6 +820,7 @@ pub fn new_viewer(
     fly_lift: 0.0,
     fly_to: None,
     fly_pic: "",
+    thumb_as: None,
     start_at: match pv_frames.get(station + "/" + key + "/" + a.path) {
       Some((_, ms)) if drive is None && ms > 0.0 => ms
       _ => -1.0
@@ -905,6 +909,9 @@ pub fn thumb_place(file : String, station : String, session : String, at : Strin
 
 ///|
 pub fn Viewer::thumb_id(self : Viewer) -> String {
+  if self.thumb_as is Some(id) {
+    return id
+  }
   match self.steps {
     InChat(_, session) => thumb_place(self.id(), self.station, session, self.at)
     _ => self.id()
@@ -3135,4 +3142,19 @@ pub fn Viewer::set_source(self : Viewer, on : Bool) -> Unit {
     self.page = None
   }
   self.source_told.set(@signals.untracked(fn() { self.source_told.get() }) + 1)
+}
+
+///|
+/// The thumbnail of id `was` now known as `now` (its node's file told again where it is kept: note_thumb_node): the
+/// viewer open from it or going back into it follows it there, and it stays hidden while it is.
+pub fn thumb_moved(was : String, now : String) -> Unit {
+  for v in [viewer.get(), pv_leaving.get()] {
+    match v {
+      Some(v) if v.thumb_id() == was => v.thumb_as = Some(now)
+      _ => ()
+    }
+  }
+  if pv_hidden.get() == was {
+    pv_hidden.set(now)
+  }
 }

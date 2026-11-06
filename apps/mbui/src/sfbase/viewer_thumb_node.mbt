@@ -63,8 +63,11 @@ pub fn note_thumb_node(
     let k = id()
     if held.val != Some(k) {
       @signals.untracked(fn() {
-        if held.val is Some(was) { let_go(was) }
         tree_thumb_owner(k).set(Some((node, look)))
+        if held.val is Some(was) {
+          let_go(was)
+          thumb_moved(was, k)
+        }
       })
       held.val = Some(k)
     }
