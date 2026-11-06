@@ -27,6 +27,8 @@ const KEY = "personal-signer";
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
+// Kept separately so an older client can still read the pinned chain's existing array format.
+const replacedAs = (sub: string) => `personal-replaced-${hex(utf8(sub))}`;
 const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16)) : new Uint8Array());
 const asKey = (id: string) => (id.startsWith("ed25519:") ? unhex(id.slice(8)) : new Uint8Array());
 
@@ -52,8 +54,12 @@ const crypto = {
 /// not hold.
 export function checkChain(entries: readonly Entry[], sub: string): Chain | null {
   if (entries.length === 0) return { devices: new Map(), hash: null };
-  const out = rules.person_fold_js(entries, sub, crypto) as J;
-  return "error" in out ? null : { devices: new Map((out.devices as Device[]).map((d) => [d.key, d])), hash: out.head };
+  try {
+    const out = rules.person_fold_js(entries, sub, crypto) as J;
+    return "error" in out ? null : { devices: new Map((out.devices as Device[]).map((d) => [d.key, d])), hash: out.head };
+  } catch {
+    return null;
+  }
 }
 
 /// Both sides are already checked or locally signed; compare the entries as the hash chain does.
@@ -127,6 +133,9 @@ export class PersonalLock {
   /// The chain pinned here, each person's; what the cloud has where this is not it.
   readonly #pinned = new Map<string, Entry[]>();
   readonly #seen = new Map<string, Entry[]>();
+  /// A different verified chain observed after pinning, kept until the person accepts or forgets it.
+  readonly #seenKept = new Set<string>();
+  readonly #seenDirty = new Set<string>();
   readonly #loaded = new Set<string>();
   /// Forgetting or replacing a lock invalidates reads and pairing attempts started against its earlier state.
   readonly #generations = new Map<string, number>();
@@ -149,19 +158,30 @@ export class PersonalLock {
   }
 
   /// A newer verified chain must be saved before this account can sign or lend on it.
-  ready(sub: string): boolean { return !this.#dirty.has(sub); }
+  ready(sub: string): boolean { return !this.#dirty.has(sub) && !this.#seenDirty.has(sub); }
 
   /// Load the pinned chain and public key without waiting for the cloud, including when pairing arrives at startup.
   loaded(sub: string): boolean { return this.#loaded.has(sub); }
 
-  load(sub: string): Effect.Effect<void> {
+  load(sub: string): Effect.Effect<void, CoreError> {
     const env = this.#env;
     return Effect.gen({ self: this }, function* () {
       if (!this.#loaded.has(sub)) {
         const generation = this.#generation(sub);
-        const kept = yield* Effect.orElseSucceed(env.host.storageGet(keptAs(sub)), () => null);
+        const kept = yield* Effect.mapError(env.host.storageGet(keptAs(sub)), asCoreError);
         const said = kept === null ? null : (parseJson(kept) as Entry[] | null);
-        const id = yield* Effect.orElseSucceed(env.host.storageGet(KEY_ID), () => null);
+        if (kept !== null && (!Array.isArray(said) || said.length === 0 || checkChain(said, sub) === null)) {
+          return yield* Effect.fail(new CoreError("personal_lock_corrupt", t("core-misc.personal.unreadable")));
+        }
+        const id = yield* Effect.mapError(env.host.storageGet(KEY_ID), asCoreError);
+        if (id !== null && !crypto.validKeyId(fromUtf8(id))) {
+          return yield* Effect.fail(new CoreError("personal_key_mismatch", t("core-misc.personal.keyMismatch")));
+        }
+        const replacement = yield* Effect.mapError(env.host.storageGet(replacedAs(sub)), asCoreError);
+        const other = replacement === null ? null : (parseJson(replacement) as Entry[] | null);
+        if (replacement !== null && (!Array.isArray(other) || other.length === 0 || checkChain(other, sub) === null)) {
+          return yield* Effect.fail(new CoreError("personal_lock_corrupt", t("core-misc.personal.unreadable")));
+        }
         // The key is common to accounts and can still be used when this account's old read became stale.
         yield* this.#keyWriter.withPermits(1)(Effect.sync(() => {
           const key = id === null ? null : fromUtf8(id);
@@ -170,9 +190,14 @@ export class PersonalLock {
         yield* this.#writer(sub).withPermits(1)(Effect.sync(() => {
           if (this.#loaded.has(sub)) return;
           // A forget or a join can finish while the host is reading. Neither may be undone by that earlier read.
-          if (generation === this.#generation(sub) && !this.#pinned.has(sub) && Array.isArray(said) && checkChain(said, sub) !== null) {
+          const current = generation === this.#generation(sub);
+          if (current && !this.#pinned.has(sub) && Array.isArray(said)) {
             this.#pinned.set(sub, said);
             if (said.length > 0) this.#generations.set(sub, generation + 1);
+          }
+          if (current && Array.isArray(other)) {
+            this.#seen.set(sub, other);
+            this.#seenKept.add(sub);
           }
           this.#loaded.add(sub);
           env.changed();
@@ -189,7 +214,11 @@ export class PersonalLock {
       // A previous write can have failed after the cloud accepted the entry. Retry the local save even offline.
       const unsaved = this.#pinned.get(sub);
       if (unsaved && this.#dirty.has(sub)) yield* this.#pin(sub, unsaved, { base: unsaved });
+      const replacement = this.#seen.get(sub);
+      if (replacement && this.#seenDirty.has(sub)) yield* this.#rememberReplacement(sub, replacement);
+      const generation = this.#generation(sub);
       const said = (yield* env.cloud(sub, "GET", PATH, null)) as { entries?: Entry[] } | null;
+      if (generation !== this.#generation(sub)) return;
       yield* this.#heard(sub, Array.isArray(said?.entries) ? said.entries : []);
     });
   }
@@ -197,12 +226,15 @@ export class PersonalLock {
   #heard(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const pinned = this.#pinned.get(sub) ?? [];
+      const generation = this.#generation(sub);
       const holds = checkChain(entries, sub) !== null;
       const grows = pinned.length > 0 && holds && entries.length >= pinned.length && pinned.every((e, i) => entryHash(e) === entryHash(entries[i]!));
       if (grows) {
-        this.#seen.delete(sub);
+        if (!this.#seenKept.has(sub)) this.#seen.delete(sub);
         if (entries.length > pinned.length || this.#dirty.has(sub)) yield* this.#pin(sub, entries, { base: pinned });
       } else if (pinned.length > entries.length && holds && entries.every((e, i) => entryHash(e) === entryHash(pinned[i]!))) {
+        // An earlier response, or a temporarily empty cloud, cannot erase or restore over a known replacement.
+        if (this.#seenKept.has(sub)) return;
         // The cloud lost all or part of it. Restore in bounded requests, continuing after an interrupted upload.
         let batch: Entry[] = [];
         let start = entries.length;
@@ -212,7 +244,8 @@ export class PersonalLock {
           const size = toJsonBytes(entry).length;
           if (bytes + (batch.length > 0 ? 1 : 0) + size > POST_BYTES) {
             if (batch.length === 0) return yield* Effect.fail(new CoreError("personal_entry_too_large", "a personal lock entry is too large to restore"));
-            yield* this.#restoreBatch(sub, payload(batch));
+            yield* this.#restoreBatch(sub, payload(batch), generation);
+            if (generation !== this.#generation(sub)) return;
             start += batch.length;
             batch = [];
             bytes = toJsonBytes(payload([])).length;
@@ -221,18 +254,58 @@ export class PersonalLock {
           bytes += (batch.length > 0 ? 1 : 0) + size;
           batch.push(entry);
         }
-        if (batch.length > 0) yield* this.#restoreBatch(sub, payload(batch));
+        if (batch.length > 0) yield* this.#restoreBatch(sub, payload(batch), generation);
+        if (generation !== this.#generation(sub) || this.#seenKept.has(sub)) return;
         this.#seen.delete(sub);
-      } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
-      else this.#seen.delete(sub);
+      } else if (holds && entries.length > 0) {
+        if (pinned.length > 0) yield* this.#rememberReplacement(sub, entries);
+        else if (!this.#seenKept.has(sub)) this.#seen.set(sub, entries);
+      } else if (!this.#seenKept.has(sub)) this.#seen.delete(sub);
       this.#env.changed();
     });
   }
 
-  #restoreBatch(sub: string, body: { entries: Entry[]; expect: { length: number; head: string | null } }): Effect.Effect<void, CoreError> {
+  /// Block signing as soon as a different chain is heard; save the observation before allowing another operation.
+  #rememberReplacement(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const before = this.#seen.get(sub);
+      const same = before !== undefined && this.#seenKept.has(sub) && before.length === entries.length && prefixOf(before, entries);
+      if (same && !this.#seenDirty.has(sub)) return;
+      // A pairing or write begun before this observation cannot accept or sign past it.
+      if (!same) this.#generations.set(sub, this.#generation(sub) + 1);
+      this.#seen.set(sub, entries);
+      this.#seenKept.add(sub);
+      this.#seenDirty.add(sub);
+      this.#env.changed();
+      yield* this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+        if (this.#seen.get(sub) !== entries || !this.#seenKept.has(sub)) return;
+        yield* Effect.mapError(this.#env.host.storageSet(replacedAs(sub), utf8(JSON.stringify(entries))), asCoreError);
+        if (this.#seen.get(sub) === entries) this.#seenDirty.delete(sub);
+        this.#env.changed();
+      })));
+    });
+  }
+
+  /// An explicit join or restart accepts the replacement it saw, but not a newer one heard during that action.
+  #acceptSeen(sub: string, seen: Entry[] | undefined): Effect.Effect<void, CoreError> {
+    return this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+      if (this.#seen.get(sub) !== seen) return;
+      if (this.#seenKept.has(sub)) yield* Effect.mapError(this.#env.host.storageDelete(replacedAs(sub)), asCoreError);
+      if (this.#seen.get(sub) === seen) {
+        this.#seen.delete(sub);
+        this.#seenKept.delete(sub);
+        this.#seenDirty.delete(sub);
+      }
+      this.#env.changed();
+    })));
+  }
+
+  #restoreBatch(sub: string, body: { entries: Entry[]; expect: { length: number; head: string | null } }, generation: number): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       for (let attempt = 0; ; attempt++) {
+        if (generation !== this.#generation(sub)) return;
         const result = yield* Effect.result(this.#env.cloud(sub, "POST", RESTORE_PATH, body));
+        if (generation !== this.#generation(sub)) return;
         if (result._tag === "Success") return;
         if (result.failure.status !== 429 || attempt >= 2) return yield* Effect.fail(result.failure);
         yield* Effect.sleep(RATE_RETRY_MS);
@@ -364,7 +437,7 @@ export class PersonalLock {
       const e = this.#entry(sub, seed, this.#myKey!, kind, body, before);
       yield* this.#env.cloud(sub, "POST", PATH, { entries: [e] });
       yield* this.#pin(sub, [...before, e], { base, replace: restart, generation });
-      if (this.#seen.get(sub) === seen) this.#seen.delete(sub);
+      yield* this.#acceptSeen(sub, seen);
       this.#env.changed();
     });
   }
@@ -372,6 +445,7 @@ export class PersonalLock {
   /// A lock begun here, this device its first (one the cloud has already gives way to it: `restart`).
   begin(sub: string, reason: string): Effect.Effect<Uint8Array, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      yield* this.load(sub);
       const { id: key, seed: made } = yield* this.#madeKey(reason);
       const id = yield* this.#env.device();
       const seed = made ?? (yield* this.#unseal(reason));
@@ -386,10 +460,18 @@ export class PersonalLock {
       yield* this.load(sub);
       // The retry offered for a failed local save does not need the cloud, nor does it begin another lock.
       const unsaved = this.#pinned.get(sub);
+      let retried = false;
       if (unsaved && this.#dirty.has(sub)) {
         yield* this.#pin(sub, unsaved, { base: unsaved });
-        return null;
+        retried = true;
       }
+      const replacement = this.#seen.get(sub);
+      if (replacement && this.#seenDirty.has(sub)) {
+        yield* this.#rememberReplacement(sub, replacement);
+        retried = true;
+      }
+      if (retried) return null;
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       yield* this.refresh(sub);
       if (this.standing(sub) === "none") yield* this.begin(sub, reason);
       return null;
@@ -419,11 +501,16 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const valid = (now: number) => bodies.every((b) => (b.scope === "hour" || b.scope === "chat") && Number.isSafeInteger(b.exp) && b.exp > now);
+      if (!valid(Math.floor(this.#env.host.nowMs() / 1000))) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
       const seed = yield* this.#unseal(reason);
       if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const now = Math.floor(this.#env.host.nowMs() / 1000);
+      if (!valid(now)) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
       return bodies.map((body) => {
-        const whole: GrantBody = { v: 1, sub, ...body };
+        const exp = Math.min(body.exp, now + (body.scope === "hour" ? 3600 : 30 * 86400));
+        const whole: GrantBody = { v: 1, sub, ...body, exp };
         return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
       });
     });
@@ -457,11 +544,12 @@ export class PersonalLock {
   /// The lock a device that let this one in brought (the connection proved by the code shown there): pinned.
   joined(sub: string, entries: Entry[], generation: number): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const seen = this.#seen.get(sub);
       const chain = checkChain(entries, sub);
       const key = this.#myKey;
       if (chain === null || key === null || !chain.devices.has(key)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       yield* this.#pin(sub, entries, { replace: true, generation, memberKey: key });
-      this.#seen.delete(sub);
+      yield* this.#acceptSeen(sub, seen);
       this.#env.changed();
     });
   }
@@ -472,15 +560,29 @@ export class PersonalLock {
       if (this.#env.host.secureAsk) yield* Effect.mapError(this.#env.host.secureAsk(reason), asCoreError);
       yield* this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
         const before = this.#pinned.get(sub);
+        const seen = this.#seen.get(sub);
         this.#pinned.delete(sub);
+        this.#env.changed();
         const removed = yield* Effect.result(Effect.mapError(this.#env.host.storageDelete(keptAs(sub)), asCoreError));
         if (removed._tag === "Failure") {
           if (before) this.#pinned.set(sub, before);
+          this.#env.changed();
           return yield* Effect.fail(removed.failure);
         }
         this.#generations.set(sub, this.#generation(sub) + 1);
         if (this.#myKey !== null) this.#loaded.add(sub);
         this.#dirty.delete(sub);
+        const removedSeen = yield* Effect.result(Effect.mapError(this.#env.host.storageDelete(replacedAs(sub)), asCoreError));
+        if (removedSeen._tag === "Failure") {
+          this.#seenDirty.add(sub);
+          this.#env.changed();
+          return yield* Effect.fail(removedSeen.failure);
+        }
+        if (this.#seen.get(sub) === seen) {
+          this.#seen.delete(sub);
+          this.#seenKept.delete(sub);
+          this.#seenDirty.delete(sub);
+        }
       })));
       this.#env.changed();
       return null;

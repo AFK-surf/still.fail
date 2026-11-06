@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Deferred, Effect } from "effect";
-import { Adb } from "../src/adb.ts";
+import { Adb, GRANTS_KEY } from "../src/adb.ts";
 import { Core } from "../src/core.ts";
 import { CoreError, HostError } from "../src/error.ts";
 import { entryHash, signedBytes, type Entry } from "../src/lock.ts";
@@ -166,6 +166,183 @@ test("a lock the cloud says began anew is not followed by itself", async () => {
     forged.runner.shutdown();
   }
 });
+
+test("an earlier cloud reply cannot clear a replacement already observed", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  const call = c.call;
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const old = [...c.kept.entries];
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [...other.kept.entries];
+    let first = true;
+    const delayed = (sub: string, method: string, path: string, value: unknown) => {
+      if (method === "GET" && first) {
+        first = false;
+        return Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), { entries: old }));
+      }
+      return call(sub, method, path, value);
+    };
+    const lock = new PersonalLock({ host: a.host, runner: a.runner, cloud: delayed, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    const earlier = a.runner.run(lock.refresh(SUB));
+    await reached.promise;
+    const pairing = lock.joinGeneration(SUB);
+    await a.runner.run(lock.refresh(SUB));
+    assert.equal(lock.standing(SUB), "replaced");
+    await assert.rejects(a.runner.run(lock.joined(SUB, old, pairing)), /./, "a pairing started before the observation cannot clear it");
+    Deferred.doneUnsafe(release, Effect.void);
+    await earlier;
+    assert.equal(lock.standing(SUB), "replaced", "a stale reply cannot restore signing");
+    await assert.rejects(a.runner.run(lock.signGrants(SUB, [body()], "why")));
+  } finally { Deferred.doneUnsafe(release, Effect.void); a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("a seen replacement stays known after restart even when the cloud is offline", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  try {
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const old = [...c.kept.entries];
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.standing(SUB), "replaced");
+    c.kept.entries = [];
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.deepEqual(c.kept.entries, [], "an empty reply does not restore over a known replacement");
+    c.kept.entries = [null as unknown as Entry];
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.standing(SUB), "replaced", "invalid data cannot clear it either");
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: () => Effect.fail(new CoreError("offline", "offline")), device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.standing(SUB), "replaced", "the known replacement survives a restart");
+    assert.equal(cold.chain(SUB)?.hash, entryHash(old.at(-1)!), "the trusted chain stays pinned");
+    assert.equal(grantHolds(grantOf(signed), STATION, SUB, cold.chain(SUB)!.devices, NOW), 2_000_000_000, "existing signatures are checked against that chain");
+    await assert.rejects(a.runner.run(cold.signGrant(SUB, body(), "why")));
+    await assert.rejects(a.runner.run(cold.signGrants(SUB, [body()], "why")));
+  } finally { a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("a restore already in flight cannot clear a replacement heard while it waits", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+  const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [];
+    const call = (sub: string, method: string, path: string, value: unknown) => {
+      if (method === "POST" && path.endsWith("/append")) {
+        return Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), {}));
+      }
+      return c.call(sub, method, path, value);
+    };
+    const lock = new PersonalLock({ host: a.host, runner: a.runner, cloud: call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    const restoring = a.runner.run(lock.refresh(SUB));
+    await reached.promise;
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(lock.refresh(SUB));
+    assert.equal(lock.standing(SUB), "replaced");
+    Deferred.doneUnsafe(release, Effect.void);
+    await restoring;
+    assert.equal(lock.standing(SUB), "replaced", "the earlier restore cannot clear the new observation");
+    await assert.rejects(a.runner.run(lock.signGrants(SUB, [body()], "why")));
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.standing(SUB), "replaced", "the observation remains on disk as well");
+  } finally { Deferred.doneUnsafe(release, Effect.void); a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+for (const action of ["join", "restart"] as const) {
+  test(`an explicit ${action} accepts a known replacement and keeps that choice after restart`, async () => {
+    const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b");
+    try {
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      if (action === "join") {
+        const key = await a.runner.run(a.lock.makeKey());
+        await b.runner.run(b.lock.addDevice(SUB, { key, id: "61".repeat(32), label: "a" }, "why"));
+      }
+      c.kept.entries = [...other.kept.entries];
+      await a.runner.run(a.lock.refresh(SUB));
+      assert.equal(a.lock.standing(SUB), "replaced");
+      if (action === "join") await a.runner.run(a.lock.joined(SUB, c.kept.entries, a.lock.joinGeneration(SUB)));
+      else await a.runner.run(a.lock.restart(SUB, "why"));
+      assert.equal(a.lock.standing(SUB), "member");
+      assert.equal([...a.host.storage.keys()].some((key) => key.startsWith("personal-replaced-")), false);
+      const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+      await a.runner.run(cold.load(SUB));
+      assert.equal(cold.standing(SUB), "member", "the accepted chain remains pinned on a fresh core");
+    } finally { a.runner.shutdown(); b.runner.shutdown(); }
+  });
+}
+
+test("a replacement that could not be saved blocks lending until an offline retry saves it", async () => {
+  const c = cloud(), other = cloud(), request = c.call;
+  let offline = false;
+  c.call = (sub, method, path, value) => offline ? Effect.fail(new CoreError("offline", "offline")) : request(sub, method, path, value);
+  const a = device(c, "a"), b = device(other, "b"), set = a.host.storageSet.bind(a.host);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [...other.kept.entries];
+    a.host.storageSet = (key, value) => key.startsWith("personal-replaced-") ? Effect.fail(new HostError("replacement save failed", true)) : set(key, value);
+    await assert.rejects(a.runner.run(a.lock.refresh(SUB)), /replacement save failed/);
+    assert.equal(a.lock.standing(SUB), "replaced");
+    assert.equal(a.lock.ready(SUB), false);
+    await assert.rejects(a.runner.run(a.lock.signGrants(SUB, [body()], "why")));
+    a.host.storageSet = set;
+    offline = true;
+    await a.runner.run(a.lock.open(SUB, "why"));
+    assert.equal(a.lock.ready(SUB), true, "the local retry does not need the cloud");
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.standing(SUB), "replaced");
+  } finally { a.host.storageSet = set; a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("a failed removal of a replacement cannot silently restore signing after forget or restart", async () => {
+  const c = cloud(), other = cloud(), a = device(c, "a"), b = device(other, "b"), remove = a.host.storageDelete.bind(a.host);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+    c.kept.entries = [...other.kept.entries];
+    await a.runner.run(a.lock.refresh(SUB));
+    a.host.storageDelete = (key) => key.startsWith("personal-replaced-") ? Effect.fail(new HostError("replacement removal failed", true)) : remove(key);
+    await assert.rejects(a.runner.run(a.lock.forget(SUB, "why")), /replacement removal failed/);
+    assert.equal(a.lock.ready(SUB), false);
+    const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+    await a.runner.run(cold.load(SUB));
+    assert.equal(cold.standing(SUB), "outside", "the remaining observation prevents an automatic new lock");
+    await assert.rejects(a.runner.run(cold.signGrant(SUB, body(), "why")));
+    a.host.storageDelete = remove;
+    await a.runner.run(a.lock.forget(SUB, "why"));
+    assert.equal(a.lock.standing(SUB), "none", "an explicit retry completes the forget");
+  } finally { a.host.storageDelete = remove; a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+for (const problem of ["chain read", "chain contents", "chain empty", "identity read", "identity contents", "replacement read", "replacement contents"] as const) {
+  test(`a failed or corrupt ${problem} cannot be treated as an absent personal lock`, async () => {
+    const c = cloud(), a = device(c, "a");
+    const read = a.host.storageGet.bind(a.host);
+    try {
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      const pinKey = [...a.host.storage.keys()].find((key) => key.startsWith("personal-lock-"))!;
+      const pinned = a.host.storage.get(pinKey)!;
+      c.kept.entries = [];
+      a.host.storageGet = (key) => {
+        if (key === pinKey && problem === "chain read" || key === "personal-signer-id" && problem === "identity read" || key.startsWith("personal-replaced-") && problem === "replacement read") return Effect.fail(new HostError("storage read failed", true));
+        if (key === pinKey && (problem === "chain contents" || problem === "chain empty") || key === "personal-signer-id" && problem === "identity contents" || key.startsWith("personal-replaced-") && problem === "replacement contents") return Effect.succeed(new TextEncoder().encode(problem === "chain empty" ? "[]" : "invalid"));
+        return read(key);
+      };
+      const cold = new PersonalLock({ host: a.host, runner: a.runner, cloud: c.call, device: () => Effect.succeed("61".repeat(32)), label: () => "a", changed: () => {} });
+      await assert.rejects(a.runner.run(cold.signGrant(SUB, body(), "why")), /./);
+      await assert.rejects(a.runner.run(cold.open(SUB, "why")), /./);
+      assert.equal(cold.loaded(SUB), false, "a failed read can be retried");
+      assert.deepEqual(c.kept.entries, [], "no new genesis replaced an unreadable lock");
+      assert.deepEqual(a.host.storage.get(pinKey), pinned, "the old pin was not overwritten");
+    } finally { a.host.storageGet = read; a.runner.shutdown(); }
+  });
+}
 
 test("a long pinned lock restores to an empty cloud within its request limit, including after an interruption", async () => {
   const c = cloud();
@@ -1127,12 +1304,12 @@ test("grants from before signatures are signed at one go, the person asked once,
     const bytes = new TextEncoder().encode(JSON.stringify(o));
     return { status: 200, body: { take: Effect.sync(() => { if (sent) return null; sent = true; return bytes; }) } };
   };
-  const old = (id: string, chat: string) => ({ id, session: `s-${id}`, chat, scope: "hour", status: "granted", exp: 4_000_000_000, at: 1 });
+  const old = (id: string, chat: string) => ({ id, session: `s-${id}`, chat, scope: id === "g3" ? "chat" : "hour", status: "granted", exp: id === "g2" ? Math.floor(host.nowMs() / 1000) + 900 : 4_000_000_000, at: 1 });
   const link = {
     adb: (_h: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
       said.push(ask);
-      if (ask.op === "grants") return answer({ grants: [old("g1", "c1"), old("g2", "c2")], signs: true });
-      return answer({ request: { ...old(ask.request as string, ask.request === "g1" ? "c1" : "c2"), signed: ask.signed } });
+      if (ask.op === "grants") return answer({ grants: [old("g1", "c1"), old("g2", "c2"), old("g3", "c3")], signs: true });
+      return answer({ request: { ...old(ask.request as string, `c${(ask.request as string).slice(1)}`), signed: ask.signed } });
     }),
   };
   const host = new FakeHost();
@@ -1143,11 +1320,21 @@ test("grants from before signatures are signed at one go, the person asked once,
   try {
     await runner.run(adb.readGrants(STATION));
     assert.deepEqual(adb.wanted(), [], "unsigned: lends nothing yet");
-    assert.equal((adb.value() as { toConfirm: number }).toConfirm, 2);
+    assert.equal((adb.value() as { toConfirm: number }).toConfirm, 3);
     const before = a.asks.n;
     await runner.run(adb.run({ kind: "personalConfirm" }));
-    assert.equal(a.asks.n, before + 1, "asked once for both");
-    assert.equal(said.filter((x) => x.op === "sign").length, 2);
+    assert.equal(a.asks.n, before + 1, "asked once for all three");
+    const signatures = said.filter((x) => x.op === "sign");
+    assert.equal(signatures.length, 3);
+    const expiry = (x: Record<string, unknown>) => (x.signed as { body: { exp: number } }).body.exp;
+    const now = Math.floor(host.nowMs() / 1000);
+    assert.equal(expiry(signatures[0]!), now + 3600, "an old hour grant cannot last longer than an hour from confirmation");
+    assert.equal(expiry(signatures[1]!), now + 900, "confirmation never extends an earlier expiry");
+    assert.equal(expiry(signatures[2]!), now + 30 * 86400, "a chat grant lasts at most thirty days from confirmation");
+    assert.equal(adb.grants().find((g) => g.id === "g1").exp, now + 3600, "the visible expiry is the one signed");
+    await host.settle();
+    const kept = JSON.parse(new TextDecoder().decode(host.storage.get(GRANTS_KEY)!)) as Record<string, { id: string; exp: number }[]>;
+    assert.equal(kept[STATION]!.find((g) => g.id === "g1")!.exp, now + 3600, "the saved expiry cannot outlast the signature");
     assert.deepEqual(adb.wanted(), [STATION]);
     assert.equal((adb.value() as { toConfirm: number }).toConfirm, 0);
   } finally {

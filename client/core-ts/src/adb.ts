@@ -28,6 +28,8 @@ function grantChat(g: J): string {
 }
 
 const RETRY_MS = 1_000;
+// The checked expiry on a transient row: reuse it for lending without verifying the same signature twice.
+const SIGNED_UNTIL = Symbol("signed grant expiry");
 /// The grants taken back here (id → when they would have ended): a station that goes on saying one lends nothing.
 export const REVOKED_KEY = "adb-revoked";
 
@@ -676,6 +678,8 @@ export class Adb {
   /// A grant live but unsigned, on a station that can carry a signature, and an account whose lock this device is on.
   #toConfirm(g: J): boolean {
     if (g.status !== "granted" || g.signed != null || this.#revoked.has(g.id) || this.#old.has(g.station)) return false;
+    if ((g.scope !== "hour" && g.scope !== "chat") || !Number.isSafeInteger(g.exp) || g.exp <= Math.floor(this.#env.host.nowMs() / 1000)) return false;
+    if (typeof g.session !== "string" || g.session === "" || typeof g.chat !== "string" || g.chat === "") return false;
     const sub = this.#subAt(g.station);
     return sub !== null && this.#env.personal.ready(sub) && this.#env.personal.standing(sub) === "member";
   }
@@ -697,9 +701,18 @@ export class Adb {
   /// Until when grant `g` holds on this phone (null: it lends nothing on it): signed by a device on the lock pinned here.
   #holds(g: J): number | null {
     if (g.status !== "granted" || this.#revoked.has(g.id)) return null;
+    if (Object.hasOwn(g, SIGNED_UNTIL)) return g[SIGNED_UNTIL] !== null && g[SIGNED_UNTIL] > Math.floor(this.#env.host.nowMs() / 1000) ? g[SIGNED_UNTIL] : null;
     const sub = this.#subAt(g.station);
     const chain = sub === null || !this.#env.personal.ready(sub) ? null : this.#env.personal.chain(sub);
     return sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
+  }
+
+  /// A verified signed expiry, including after it has passed: the station's copy cannot lengthen it on screen or disk.
+  #signedExpiry(g: J): number | null {
+    if (g.signed == null) return null;
+    const sub = this.#subAt(g.station);
+    const chain = sub === null || !this.#env.personal.ready(sub) ? null : this.#env.personal.chain(sub);
+    return sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, 0);
   }
 
   /// The lock pinned here read, and what it lets this phone lend for, as soon as it is known whose it is: a phone started
@@ -781,8 +794,16 @@ export class Adb {
   #allGrants(): J[] {
     const now = this.#env.host.nowMs() / 1000;
     const out: J[] = [];
-    for (const [station, at] of this.#grants)
-      for (const g of at.values()) if (g.status === "pending" || (g.status === "granted" && (g.exp ?? 0) > now)) out.push({ ...g, station });
+    for (const [station, at] of this.#grants) {
+      for (const g of at.values()) {
+        const whole = { ...g, station };
+        const signed = this.#signedExpiry(whole);
+        const until = signed === null ? null : Number.isSafeInteger(g.exp) ? Math.min(signed, g.exp) : null;
+        if (whole.signed != null) Object.defineProperty(whole, SIGNED_UNTIL, { value: until });
+        if (signed !== null) whole.exp = until ?? 0;
+        if (whole.status === "pending" || (whole.status === "granted" && (whole.exp ?? 0) > now)) out.push(whole);
+      }
+    }
     return out.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
   }
 
