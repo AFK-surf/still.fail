@@ -10063,14 +10063,16 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
 /// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
-  // A standalone measure can say something before there is a layout budget. In that case it belongs to the layout
-  // which eventually tells it, including that layout's stop flag. A notification made by a layout keeps its own.
+  // A notification can wait past the operation which said it (a standalone measure can say one without a layout).
+  // Keep its pass ancestry only while it shares the dispatching operation's stop flag. Otherwise it belongs to the
+  // operation dispatching it: a former operation's stop must neither block this one nor miss a fault in it.
   let budget = self.brought_budget
   self.after_laid.push(fn() {
     let was_budget = self.brought_budget
-    match budget {
-      Some(b) => self.brought_budget = Some(b)
-      None => ()
+    match (budget, was_budget) {
+      (Some((_, said_stop)), Some((_, telling_stop))) if physical_equal(said_stop, telling_stop) =>
+        self.brought_budget = budget
+      _ => ()
     }
     defer { self.brought_budget = was_budget }
     f()

@@ -236,12 +236,59 @@ test "a layout notification that lays out and asks for another keeps the layout 
 }
 
 ///|
-test "a notification queued outside layout shares the dispatching frame's stop" {
+test "a notification queued for a later layout shares the dispatching frame's stop" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  for from_event in [false, true] {
+    let armed = Ref(false)
+    let marked = Ref(false)
+    let called = Ref(0)
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+          if armed.val && !marked.val {
+            marked.val = true
+            v.tree.layout_marked_at(0)
+          }
+          (0.0, 0.0)
+        })) |> ignore
+      }) |> ignore
+    })
+    t.frame(200.0, 100.0, now=0.0) |> ignore
+    // A standalone measurement can queue this outside an operation or inside an event; a later frame dispatches it.
+    let say = fn() {
+      t.said_after_laid(fn() {
+        called.val += 1
+        armed.val = true
+        t.layout_marked_at(0)
+        t.laid_as_now()
+      })
+    }
+    if from_event { t.event(5.0, say) } else { say() }
+    assert_eq(called.val, 0, msg="the notification waits for a layout, event=\{from_event}")
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.frame(200.0, 100.0, now=10.0) |> ignore
+    assert_eq(called.val, 1)
+    assert_true(marked.val)
+    let during = t.work.computes - before
+    assert_eq(during, 2, msg="the frame and its notification laid out once each, got \{during}, event=\{from_event}")
+    assert_true(t.due && t.layout_due, msg="the self-marked layout waits for the next operation")
+    t.frame(200.0, 100.0, now=11.0) |> ignore
+    assert_eq(t.work.computes - before, 3)
+    assert_false(t.due)
+    t.dispose()
+  }
+}
+
+///|
+test "a notification from a stopped event can lay out in the next frame" {
   faults_stop.val = false
   defer { faults_stop.val = true }
   let armed = Ref(false)
   let marked = Ref(false)
   let called = Ref(0)
+  let in_callback = Ref(-1)
   let t = Tree::new(fn(root) {
     root.box(fn(v) {
       v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
@@ -254,23 +301,24 @@ test "a notification queued outside layout shares the dispatching frame's stop" 
     }) |> ignore
   })
   t.frame(200.0, 100.0, now=0.0) |> ignore
-  // A standalone measurement may queue this before a frame has a layout budget; the next layout dispatches it.
-  t.said_after_laid(fn() {
-    called.val += 1
+  t.event(5.0, fn() {
     armed.val = true
     t.layout_marked_at(0)
     t.laid_as_now()
+    // This is registered after the fault; it will be dispatched by a later independent frame.
+    t.said_after_laid(fn() {
+      called.val += 1
+      t.layout_marked_at(0)
+      let before = t.work.computes
+      t.laid_as_now()
+      in_callback.val = t.work.computes - before
+    })
   })
-  t.layout_marked_at(0)
-  let before = t.work.computes
+  assert_true(marked.val)
+  assert_eq(called.val, 0)
   t.frame(200.0, 100.0, now=10.0) |> ignore
   assert_eq(called.val, 1)
-  assert_true(marked.val)
-  let during = t.work.computes - before
-  assert_eq(during, 2, msg="the frame and its notification laid out once each, got \{during}")
-  assert_true(t.due && t.layout_due, msg="the self-marked layout waits for the next operation")
-  t.frame(200.0, 100.0, now=11.0) |> ignore
-  assert_eq(t.work.computes - before, 3)
+  assert_eq(in_callback.val, 1, msg="the new frame's callback measured once, got \{in_callback.val}")
   assert_false(t.due)
   t.dispose()
 }
