@@ -247,16 +247,39 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   if (ask.peek && !source.peek) return refuse(501, "this screen is not previewed");
   // A viewer (read-only member) sees, and does not drive.
   const control = ask.control && !readOnly(viewer) && hub.mayDrive(id, viewer.device, ask.taken === true);
-  let view: ScreenView;
+  const opening = new AbortController();
+  let waiting = true;
+  const stopped = stream.stopped().then(() => {
+    if (waiting) opening.abort();
+    return null;
+  }, () => {
+    if (waiting) opening.abort();
+    return null;
+  });
+  let pending: Promise<ScreenView>;
+  let view: ScreenView | null;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
+    pending = source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) }, opening.signal);
+    view = await Promise.race([pending, stopped]);
   } catch (error) {
+    if (opening.signal.aborted) return;
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
       const access = accessShown(error.access, lang);
       return refuse(error.status, access?.message ?? tr(lang, error.key, error.args), access ? { access } : {});
     }
     return refuse(503, tr(lang, "station.screen.failed", { said: (error as Error).message }));
+  } finally {
+    waiting = false;
+  }
+  if (view === null) {
+    // A source that cannot cancel startup must not leave a late view running.
+    void pending.then((late) => late.close()).catch(() => {});
+    return;
+  }
+  if (opening.signal.aborted) {
+    view.close();
+    return;
   }
   // Gone while it opened.
   if (hub.get(id) !== source) {

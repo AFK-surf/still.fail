@@ -20,6 +20,7 @@ import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, HelperView, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
 import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
+import { AndroidScreen, PeekCount } from "../src/screens/android.ts";
 import { described, letGo } from "../src/tools/screen.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import { USAGES, SimInput } from "../src/screens/sim-input.ts";
@@ -40,6 +41,71 @@ const named = ({ viewers, controlledBy }: { viewers: string[]; controlledBy: str
 
 const member: Viewer = { sub: "u1", email: "pat@example.com", name: "Pat", role: "member", workspace: "w", device: "d" };
 const reader: Viewer = { sub: "u2", email: "vic@example.com", name: "Vic", role: "viewer", workspace: "w", device: "e" };
+
+test("a cancelled screen request releases an Android preview still opening", async () => {
+  const entered = Promise.withResolvers<void>(), resume = Promise.withResolvers<void>(), cleaned = Promise.withResolvers<void>();
+  const calls: string[][] = [];
+  const adb = {
+    run: async (args: string[]) => {
+      calls.push(args);
+      if (args[0] === "push") { entered.resolve(); await resume.promise; }
+      if (args[0] === "shell" && args[1]?.startsWith("rm -f ")) cleaned.resolve();
+      return "";
+    },
+    shell: () => { throw new Error("the cancelled preview must not start a server"); },
+  };
+  const peeks = new PeekCount(), hub = new ScreenHub();
+  const source = new AndroidScreen({ id: "android:emulator-5554", title: "t", size: { width: 640, height: 1280 }, panels: [], adb, file: "server", changed: () => {}, peeks });
+  hub.add(source);
+  const { conn, theirs } = await link();
+  const stream = await conn.openBi();
+  await writeLine(stream, { method: "POST", path: `/admin/api/screens/${encodeURIComponent(source.id)}/view`, headers: {}, screen: { codecs: ["h264"], peek: true } });
+  const incoming = (await theirs.acceptBi())!;
+  const heard = new Reader(incoming), head = await heard.line();
+  const served = answerScreen(hub, incoming, heard.carry, head, member, () => true);
+  void served.catch(() => {});
+  try {
+    await entered.promise;
+    assert.equal(peeks.running, 1);
+    await stream.reset(0);
+    await settle();
+    assert.equal(peeks.running, 0, "a client that stops waiting releases the preview place immediately");
+    resume.resolve();
+    await cleaned.promise;
+    await served;
+    assert.equal(calls.some((a) => a[0] === "forward"), false, "a cancelled copy does not open a tunnel");
+  } finally {
+    resume.resolve();
+    await served.catch(() => {});
+    conn.close(0, "done");
+  }
+});
+
+test("a screen source that cannot cancel startup closes a view arriving after its requester leaves", async () => {
+  const reached = Promise.withResolvers<void>(), late = Promise.withResolvers<ScreenView>();
+  const source = new FakeSource();
+  source.open = async () => { reached.resolve(); return late.promise; };
+  const hub = new ScreenHub();
+  hub.add(source);
+  const { conn, theirs } = await link();
+  const stream = await conn.openBi();
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/fake/view", headers: {}, screen: { codecs: ["h264"] } });
+  const incoming = (await theirs.acceptBi())!;
+  const heard = new Reader(incoming), head = await heard.line();
+  const served = answerScreen(hub, incoming, heard.carry, head, member, () => true);
+  const view = new FakeView();
+  try {
+    await reached.promise;
+    await stream.reset(0);
+    await served;
+    late.resolve(view);
+    await settle();
+    assert.equal(view.closed, true, "the unused late capture is closed");
+  } finally {
+    late.resolve(view);
+    conn.close(0, "done");
+  }
+});
 
 /// A source whose views give a frame each time one is asked for (the first a key frame with its config), and say what
 /// they were asked.

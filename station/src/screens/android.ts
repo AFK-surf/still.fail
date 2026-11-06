@@ -414,22 +414,33 @@ export class AndroidView implements ScreenView {
       if (!this.#ended) log.warn("screens", "an Android view's program ended", { said: said.slice(0, 500) });
       this.close();
     });
+    let timedOut = false;
+    const stopDeadline = wall.after(CONNECT_TIMEOUT, () => { timedOut = true; this.close(); });
+    try {
+      await this.#connectView(() => said, () => timedOut);
+    } finally {
+      stopDeadline();
+    }
+  }
+
+  async #connectView(said: () => string, timedOut: () => boolean) {
+    const ended = () => said().trim() || (timedOut() ? "the view's program did not start" : "the view's program ended");
     // (a forward tunnel takes a connection before anything listens: the byte the program sends first says it does)
     const until = wall.now() + CONNECT_TIMEOUT;
     while (this.#video === null) {
-      if (this.#ended) throw new Error(said.trim() || "the view's program ended");
-      if (wall.now() > until) throw new Error(said.trim() || "the view's program did not start");
+      if (this.#ended) throw new Error(ended());
+      if (wall.now() > until) throw new Error(said().trim() || "the view's program did not start");
       const socket = await connect(this.#port, this.#stopped.signal).catch(() => null);
       if (this.#ended) {
         socket?.destroy();
-        throw new Error(said.trim() || "the view's program ended");
+        throw new Error(ended());
       }
       this.#pending = socket;
       const first = socket === null ? null : await firstOf(socket);
       this.#pending = null;
       if (this.#ended) {
         socket?.destroy();
-        throw new Error(said.trim() || "the view's program ended");
+        throw new Error(ended());
       }
       if (socket === null || first === null) {
         socket?.destroy();
@@ -447,7 +458,7 @@ export class AndroidView implements ScreenView {
     const control = await connect(this.#port, this.#stopped.signal);
     if (this.#ended) {
       control.destroy();
-      throw new Error(said.trim() || "the view's program ended");
+      throw new Error(ended());
     }
     // (what it answers, a clipboard's change, nobody here asks)
     control.on("data", () => {});
@@ -603,8 +614,9 @@ export class AndroidScreen implements ScreenSource {
     return this.#size;
   }
 
-  async open(options: ViewOptions): Promise<ScreenView> {
+  async open(options: ViewOptions, signal?: AbortSignal): Promise<ScreenView> {
     if (!options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
+    if (signal?.aborted) throw new Error("the view is no longer wanted");
     const peek = options.peek === true;
     if (peek && !this.#peeks.take()) throw new ScreenRefused(503, "station.screen.failed", { said: `at most ${PEEKS_MOST} Android screens are previewed at once` });
     const view: AndroidView = new AndroidView(this.#adb, () => {
@@ -617,13 +629,19 @@ export class AndroidScreen implements ScreenSource {
       this.#changed();
     });
     this.#views.add(view);
+    const cancel = () => view.close();
+    signal?.addEventListener("abort", cancel, { once: true });
     try {
+      if (signal?.aborted) { cancel(); throw new Error("the view is no longer wanted"); }
       await view.start(this.#file, viewArgs(options));
+      if (signal?.aborted) throw new Error("the view is no longer wanted");
       return view;
     } catch (error) {
       view.close();
       log.warn("screens", "an Android view did not open", { id: this.id, error: (error as Error).message });
       throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
+    } finally {
+      signal?.removeEventListener("abort", cancel);
     }
   }
 

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { makeScreens } from "../src/screens/source.ts";
 import { ScreenRefused } from "../src/screens/hub.ts";
+import { wall } from "../src/ops/fibers.ts";
 import { AndroidScreen, AndroidScreens, AndroidInput, KEYCODES, PEEKS_MOST, PEEK_BITRATE, PEEK_FPS, PeekCount, bitrateOf, viewArgs, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
 
 const size = { width: 1000, height: 2000 };
@@ -101,13 +102,15 @@ for (const step of ["push", "forward"] as const) {
     await reached.promise;
     screen.gone();
     assert.equal(peeks.running, 0, "the preview place is released when the device goes");
+    assert.equal(peeks.take(), true, "another preview can take it");
     resume.resolve();
     await assert.rejects(opening);
     assert.equal(shells, 0, "a gone device does not start a server");
     if (step === "push") assert.equal(calls.some((a) => a[0] === "forward"), false, "no tunnel is opened after the copy");
     else assert.ok(calls.some((a) => a[0] === "forward" && a[1] === "--remove" && a[2] === "tcp:12345"), "a tunnel finishing after close is removed");
     assert.ok(calls.some((a) => a[0] === "shell" && a[1]?.startsWith("rm -f /data/local/tmp/stillfail-scrcpy-")), "the copied server is removed");
-    assert.equal(peeks.running, 0, "the place is released only once");
+    assert.equal(peeks.running, 1, "the late failure does not release the other preview's place");
+    peeks.free();
   });
 }
 
@@ -141,6 +144,40 @@ test("a device gone while a preview waits for its first byte closes the connecti
     assert.equal(killed, 1);
     assert.equal(peeks.running, 0);
     assert.ok(calls.some((a) => a[0] === "forward" && a[1] === "--remove" && a[2] === `tcp:${address.port}`));
+  } finally {
+    screen.gone();
+    socket.destroy();
+    await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("a preview whose first byte never arrives reaches its startup deadline", { timeout: 10_000 }, async (t) => {
+  const connected = Promise.withResolvers<net.Socket>();
+  const listener = net.createServer((socket) => connected.resolve(socket));
+  await new Promise<void>((resolve) => listener.listen(0, "127.0.0.1", resolve));
+  const address = listener.address();
+  assert.ok(address && typeof address !== "string");
+  const after = wall.after;
+  let deadline: (() => void) | undefined;
+  t.mock.method(wall, "after", (ms: number, f: () => void) => {
+    if (ms === 15_000) { deadline = () => void f(); return () => {}; }
+    return after(ms, f);
+  });
+  const server = Object.assign(new EventEmitter(), { stdout: null, stderr: null, kill: () => true });
+  const adb = {
+    run: async (args: string[]) => args[0] === "forward" && args[1] === "tcp:0" ? String(address.port) : "",
+    shell: () => server as any,
+  };
+  const peeks = new PeekCount();
+  const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb, file: "server", changed: () => {}, peeks });
+  const opening = assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }));
+  const socket = await connected.promise;
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.ok(deadline, "the startup deadline remains armed while awaiting the first byte");
+    deadline();
+    await opening;
+    assert.equal(peeks.running, 0, "a timed-out preview gives back its place");
   } finally {
     screen.gone();
     socket.destroy();

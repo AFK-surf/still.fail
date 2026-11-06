@@ -181,8 +181,9 @@ export interface ScreenSource {
   title(): string;
   /// Its size now, in the source's pixels.
   size(): { width: number; height: number };
-  /// Fails (with a message for the person) when it cannot be seen now: no permission to capture, no display.
-  open(options: ViewOptions): Promise<ScreenView>;
+  /// Fails (with a message for the person) when it cannot be seen now. `signal` ends an opening no longer wanted;
+  /// sources that cannot interrupt their startup may ignore it, and the caller closes a view that arrives late.
+  open(options: ViewOptions, signal?: AbortSignal): Promise<ScreenView>;
   /// Whether it can be seen and driven now; none: always.
   access?(): ScreenAccess;
   /// The clipboard types its views carry both ways while a person drives (`setClipboard`, `watchClipboard`); none: no
