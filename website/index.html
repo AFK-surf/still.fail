@@ -426,18 +426,129 @@
       <p class="lead"><span class="zh">对话和文件留在你的 station 上，每一端看到的是同一份。电脑上开的头，路上用手机审完。</span><span class="en">Chats and files stay on your stations, and every device sees the same ones. Start at your desk, review it from your phone on the way.</span></p>
     </div>
 
-    <!-- On a large screen the tabs stay on screen (sticky) while scrolling plays the devices in turn (main.js, GSAP
-         ScrollTrigger); elsewhere they are tabs to click. -->
-    <div class="dv-track"><div class="dv-sticky rv" data-tabs data-scrolly>
+    <!-- Large screens with motion allowed (html.scrolly): one scene that plays as you scroll. The same conversation
+         travels from screen to screen: the Duo folded, then open, then Android, the desktop, the web and Slack, which
+         syncs them all (main.js, GSAP ScrollTrigger). -->
+    <!-- The placeholder keeps the scene's height from the first paint; the scene itself is built from the template
+         only where it plays (main.js), so phones never parse or style it. -->
+    <div class="dv-show"></div>
+    <template id="dv-stage">
+      <div class="dv-stage">
+        <div class="dv-ink" aria-hidden="true"></div>
+        <div class="dv-copy">
+          <p class="dv-no tnum" aria-hidden="true"><b>01</b><span> / 06</span></p>
+          <div class="dv-steps">
+          <article class="dv-step" data-i="0"><span class="eyebrow">iPhone Duo · <span class="zh">合上</span><span class="en">folded</span></span><h3><span class="zh">合上，外屏照样回消息</span><span class="en">Folded, the cover screen still answers</span></h3><p><span class="zh">iPhone 原生 App 即将上架。合上的 Duo 照样收通知、回消息、批准密钥。</span><span class="en">The native iPhone app is coming to the App Store. Folded, the Duo still gets notifications, answers messages and approves keys.</span></p></article>
+          <article class="dv-step" data-i="1"><span class="eyebrow">iPhone Duo · <span class="zh">展开</span><span class="en">open</span></span><h3><span class="zh">展开，就是两块屏</span><span class="en">Unfold it: two screens</span></h3><p><span class="zh">左屏是对话列表，右屏是正在跑的对话。station 上的 iOS 模拟器也能把 Duo 的两块屏和折叠姿态传过来。</span><span class="en">Chats on the left, the running chat on the right. The iOS Simulator on a station brings the Duo's two screens and its fold across too.</span></p></article>
+          <article class="dv-step" data-i="2"><span class="eyebrow">Android</span><h3><span class="zh">手机还能借给 agent</span><span class="en">Lend your phone to the agent</span></h3><p><span class="zh">Android App 已上线。agent 在手机上开一块自己的虚拟屏幕测 App，你照常用手机。</span><span class="en">The Android app is out. The agent opens a virtual screen of its own on your phone to test the app, while you keep using it.</span></p></article>
+          <article class="dv-step" data-i="3"><span class="eyebrow">Mac · Windows</span><h3><span class="zh">每台电脑的负载，都在一个窗口</span><span class="en">Every computer's load, in one window</span></h3><p><span class="zh">桌面 App 看得最全：CPU、内存、磁盘、文件和屏幕。新任务排给最空的那台。</span><span class="en">The desktop app shows the most: CPU, memory, disk, files and screens. New tasks go to the least busy machine.</span></p></article>
+          <article class="dv-step" data-i="4"><span class="eyebrow"><span class="zh">网页</span><span class="en">Web</span></span><h3><span class="zh">打开浏览器就能用</span><span class="en">Open a browser and go</span></h3><p><span class="zh">网页版和 App 是同一套界面，什么都不用装；Linux 和 iPad 也一样。</span><span class="en">The web app is the same interface as the apps, with nothing to install, on Linux and iPad too.</span></p></article>
+          <article class="dv-step" data-i="5"><span class="eyebrow">Slack</span><h3><span class="zh">在 Slack 里 @ 它，每块屏幕一起更新</span><span class="en">Mention it in Slack, every screen updates</span></h3><p><span class="zh">回复留在 thread 里；手机、电脑和网页上的同一个对话，同时显示已完成。</span><span class="en">Replies stay in the thread, and the same chat shows Done on your phone, computer and the web at once.</span></p></article>
+          </div>
+          <ol class="dv-rail" aria-label="Devices">
+            <li data-i="0"><button type="button"><svg class="ico"><use href="#i-duo"/></svg>iPhone</button></li>
+            <li data-i="2"><button type="button"><svg><use href="#b-android"/></svg>Android</button></li>
+            <li data-i="3"><button type="button"><svg class="ico"><use href="#i-screen"/></svg><span class="zh">桌面</span><span class="en">Desktop</span></button></li>
+            <li data-i="4"><button type="button"><svg class="ico"><use href="#i-globe"/></svg><span class="zh">网页</span><span class="en">Web</span></button></li>
+            <li data-i="5"><button type="button"><svg><use href="#b-slack"/></svg>Slack</button></li>
+          </ol>
+          <div class="dv-bar" aria-hidden="true"><i></i></div>
+        </div>
+        <div class="dv-view" aria-hidden="true">
+          <div class="dv-scene">
+            <div class="dv-tags">
+              <span class="mtag"><i></i>pose · closed · cover screen</span>
+              <span class="mtag"><i></i>pose · open · 2 panels</span>
+              <span class="mtag"><i></i>virtual display · 2m</span>
+              <span class="mtag"><i></i>load → least busy</span>
+              <span class="mtag"><i></i>app.monoid.build</span>
+              <span class="mtag"><i></i>sync · 4 screens · 1 chat</span>
+            </div>
+            <div class="d d-laptop">
+              <div class="win">
+                <div class="win-bar"><i></i><i></i><i></i><span class="t-desk">Station · Acme</span><span class="t-url">app.monoid.build</span></div>
+                <div class="win-stack">
+                  <div class="win-body body-desk">
+                    <div class="acct on"><span class="logo" style="background:var(--ink)">W</span><span><b>Willow</b><small>Apple M4 Max · <span class="zh">1 个 agent 在跑</span><span class="en">1 agent running</span></small></span><span class="meter"><i style="width:81%"></i></span><span class="pct">81%</span></div>
+                    <div class="acct"><span class="logo" style="background:var(--graphite)">M</span><span><b>Mini</b><small>Apple M4 · <span class="zh">直连 18 ms</span><span class="en">Direct 18 ms</span></small></span><span class="meter"><i style="width:88%"></i></span><span class="pct">88%</span></div>
+                    <div class="acct"><span class="logo" style="background:var(--graphite)">L</span><span><b>Laptop</b><small>Apple M3 Pro · <span class="zh">直连 9 ms</span><span class="en">Direct 9 ms</span></small></span><span class="meter"><i style="width:92%"></i></span><span class="pct">92%</span></div>
+                    <div class="acct"><span class="logo" style="background:var(--graphite)">S</span><span><b>Server</b><small>AMD EPYC · <span class="zh">中继 46 ms</span><span class="en">Relay 46 ms</span></small></span><span class="meter"><i style="width:63%"></i></span><span class="pct">63%</span></div>
+                  </div>
+                  <div class="win-body body-web">
+                    <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
+                    <span class="bubble agent"><span class="zh">改好了，在你手机的虚拟屏幕上点了一遍，按钮不再被挡住</span><span class="en">Fixed, and checked on your phone's virtual screen: the button shows</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
+                    <div class="task" style="align-self:flex-start;width:70%"><div class="task-t"><svg class="ico c-mut"><use href="#i-run"/></svg>pnpm test login</div><span class="bar-g" style="width:90%"></span><span class="bar-g" style="width:62%"></span></div>
+                  </div>
+                </div>
+              </div>
+              <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
+            </div>
+            <svg class="dv-links" viewBox="0 0 900 720" fill="none">
+              <path class="l1" pathLength="1" d="M445 320 C 520 280, 590 290, 625 340"/>
+              <path class="l2" pathLength="1" d="M556 140 C 420 116, 262 118, 178 146"/>
+              <path class="l3" pathLength="1" d="M556 128 C 380 64, 92 84, 74 388"/>
+              <path class="l4" pathLength="1" d="M782 214 C 800 262, 798 304, 784 344"/>
+            </svg>
+            <div class="d d-duo">
+              <div class="duo">
+                <div class="scr">
+                  <div class="status"><span>9:41</span><span>●●●</span></div>
+                  <div class="app-h"><span class="zh">对话</span><span class="en">Chats</span></div>
+                  <div class="list">
+                    <div class="row on"><b><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></b><small>Willow · pnpm test login…</small></div>
+                    <div class="row"><b><span class="zh">订单 CSV 导出</span><span class="en">CSV export for orders</span></b><small><span class="zh">已合进 main</span><span class="en">Merged into main</span></small></div>
+                    <div class="row"><b><span class="zh">依赖周更</span><span class="en">Weekly dependency updates</span></b><small><span class="zh">只剩 React Router 8</span><span class="en">Only React Router 8 left</span></small></div>
+                    <div class="row"><b><span class="zh">API p99 变慢</span><span class="en">Why API p99 got slow</span></b><small><span class="zh">回到 120 ms</span><span class="en">Back to 120 ms</span></small></div>
+                  </div>
+                </div>
+                <div class="scr">
+                  <div class="status"><span></span><span>100%</span></div>
+                  <div class="app-h"><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></div>
+                  <div class="chatv">
+                    <span class="bubble user"><span class="zh">登录页在小屏上按钮被挡住了，修一下</span><span class="en">The login button is hidden on small screens, fix it</span><svg class="tail" style="color:var(--brand-deep)"><use href="#tail"/></svg></span>
+                    <span class="bubble agent"><span class="zh">改好了，正在 Willow 上跑测试</span><span class="en">Fixed, running the tests on Willow</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
+                    <div class="task" style="padding:9px 10px"><div class="task-t" style="font-size:12px"><svg class="ico c-mut"><use href="#i-run"/></svg>pnpm test login</div><span class="bar-g" style="width:88%"></span><span class="bar-g" style="width:60%"></span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="cover-notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em><span class="zh">现在</span><span class="en">now</span></em></b><span class="zh">测试跑完了，等你看</span><span class="en">Tests passed, ready for you</span></div></div>
+              <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
+            </div>
+            <div class="d d-android">
+              <div class="phone android">
+                <span class="island"></span>
+                <div class="notif"><img src="assets/mark.svg" alt=""><div><b>monoid <em>2m</em></b><span class="zh">「登录页适配手机」正在用这台手机的虚拟屏幕</span><span class="en">“Login page on phones” is using a virtual screen on this phone</span></div></div>
+                <div class="scr">
+                  <div class="status"><span>9:41</span><span>●●●</span></div>
+                  <div class="app-h below"><span class="zh">登录页适配手机</span><span class="en">Login page on phones</span></div>
+                  <div class="chatv">
+                    <span class="bubble agent"><span class="zh">在你手机的虚拟屏幕上点了一遍登录流程，按钮不再被挡住</span><span class="en">I ran the login flow on your phone's virtual screen; the button shows</span><svg class="tail" style="color:var(--mist)"><use href="#tail"/></svg></span>
+                  </div>
+                  <div class="composer"><span><span class="zh">回复…</span><span class="en">Reply…</span></span><i><svg class="ico"><use href="#i-up"/></svg></i></div>
+                </div>
+              </div>
+              <span class="done"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成</span><span class="en">Done</span></span>
+            </div>
+            <div class="d d-slack">
+              <div class="slack">
+                <div class="hd"><span><svg class="sl"><use href="#b-slack"/></svg># eng-web</span><small>thread</small></div>
+                <div class="msg"><span class="av" style="background:var(--graphite)">P</span><div><b>Priya <em>10:02</em></b><p><span class="mention">@monoid</span> <span class="zh">登录页修好了吗？</span><span class="en">is the login page fixed?</span></p></div></div>
+                <div class="msg"><span class="av" style="background:var(--brand-deep)"><img src="assets/mark.svg" alt="" width="32" height="32" style="border-radius:8px"></span><div><b>monoid <em>10:03</em></b><p><span class="zh">修好了，测试全过。</span><span class="en">Fixed, and the tests pass.</span></p><div class="att"><span class="cap"><svg class="ico c-ok"><use href="#i-done"/></svg><span class="zh">已完成 · 登录页适配手机</span><span class="en">Done · Login page on phones</span></span></div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+    <!-- Small screens and reduced motion: the devices as tabs. -->
+    <div class="dv-tabs rv" data-tabs>
       <div class="ftabs" role="tablist" aria-label="Devices">
         <button role="tab" id="dv-t1" aria-controls="dv-p1" aria-selected="true"><svg class="ico"><use href="#i-duo"/></svg>iPhone · iPhone Duo</button>
         <button role="tab" id="dv-t2" aria-controls="dv-p2" aria-selected="false"><svg><use href="#b-android"/></svg>Android</button>
         <button role="tab" id="dv-t3" aria-controls="dv-p3" aria-selected="false"><svg class="ico"><use href="#i-screen"/></svg><span class="zh">桌面端</span><span class="en">Desktop</span></button>
         <button role="tab" id="dv-t4" aria-controls="dv-p4" aria-selected="false"><svg class="ico"><use href="#i-globe"/></svg><span class="zh">网页</span><span class="en">Web</span></button>
         <button role="tab" id="dv-t5" aria-controls="dv-p5" aria-selected="false"><svg class="ico"><use href="#i-chat"/></svg>Slack</button>
-        <span class="dv-count tnum" aria-hidden="true"><b>01</b> / 05</span>
       </div>
-      <div class="dv-progress" aria-hidden="true"><i></i></div>
 
       <div class="fpanels">
       <!-- iPhone · Duo -->
@@ -455,7 +566,6 @@
         </div>
         <div class="vis">
           <span class="mtag on-vis pose-open"><i></i>pose · open · 2 panels</span>
-          <span class="mtag on-vis pose-closed"><i></i>pose · closed · cover screen</span>
           <div class="duo" aria-hidden="true">
             <div class="scr">
               <div class="status"><span>9:41</span><span>●●●</span></div>
@@ -604,7 +714,7 @@
         </div>
       </div>
       </div>
-    </div></div>
+    </div>
   </div>
 </section>
 

@@ -34,13 +34,17 @@ desktop, web, Slack).
 
 ## Motion
 
-- **Every device, played by scrolling** (`#devices`, on screens at least 1024 × 760 with motion allowed: `html.scrolly`,
-  set in the head before the first paint). The tabs stay on screen with CSS `position: sticky` inside a tall track that
-  is sized from the start, so nothing shifts when the script arrives. GSAP ScrollTrigger scrubs one timeline through it:
-  the iPhone Duo is folded, then unfolds (the inner screen turns in on its hinge), then Android rises with its
-  notification, then the desktop window with its load bars, then the web app, then Slack on Ink. The tabs, the
-  `01 / 05` counter and a progress line follow the scroll. The scroll snaps to each device, without inertia, so none is
-  skipped unseen, and a tab click scrolls to its device. Elsewhere, and if GSAP cannot load, they are plain tabs.
+- **Every device, as one scene played by scrolling** (`#devices`, on screens at least 1024 × 760 with motion allowed:
+  `html.scrolly`, set in the head before the first paint). One conversation travels across the screens in six steps:
+  the iPhone Duo folded, a notification landing on its cover screen; the Duo unfolding, its inner screen swinging open
+  on the hinge; Android flying in, a line tying it to the same chat; the camera pulling back to the desktop window,
+  the phones settling on its corners and its load bars filling; the window becoming the web app as an address bar
+  slides in; Slack coming in, the band turning Ink, lines running from the thread to every screen, and each marked
+  Done. The words, a `01 / 06` counter, a rail of the devices (each a link to its step) and a mono tag follow along.
+  The stage is CSS `position: sticky` in a placeholder whose height is set from the first paint; the scene is built
+  from a `<template>` only where it plays (phones never parse it), drawn at 900 × 720 and scaled to fit; devices move
+  by transforms and opacity only. GSAP ScrollTrigger scrubs one timeline and snaps to each step without inertia, so no
+  screen is skipped. Elsewhere, and if GSAP cannot load, the devices are plain tabs.
 - GSAP 3.13 (`assets/vendor/`, about 45 KB gzipped, under GreenSock's standard no-charge license; its notice is kept
   in the files) is fetched only as `#devices` comes within 1600 px, or 2.5 s after `load`.
 - The teams grid's pictures loop in CSS: a Slack skeleton whose thread plays out (mention, typing, the reply with its
@@ -96,8 +100,8 @@ scattered pixels.
 - Bands below the first screen use `content-visibility: auto`.
 - The hero's 168 Week draws once at once, and starts turning only after `load` and an idle moment, at most 30 frames a
   second, only while it is on screen and the tab is visible; still under `prefers-reduced-motion`.
-- Lighthouse, the built page on a local server. Mobile (simulated slow 4G): Performance 96–98, Accessibility 100, Best
-  practices 100, SEO 100; LCP 2.2 s, TBT 0–180 ms, CLS 0.001. Desktop: 100 / 100 / 100 / 100. Compression and cache
+- Lighthouse, the built page on a local server. Mobile (simulated slow 4G): Performance 97, Accessibility 100, Best
+  practices 100, SEO 100; LCP 2.3 s, TBT 0–10 ms, CLS 0. Desktop: 100 / 100 / 100 / 100. Compression and cache
   lifetimes come from the host (`_headers`).
 
 ## Numbers that go stale
