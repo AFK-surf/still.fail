@@ -225,8 +225,12 @@ test "a layout notification that lays out and asks for another keeps the layout 
       t.layout_marked_at(0)
       t.laid_as_now()
     })
-    assert_true(steps.val > 0 && steps.val < 100, msg="the layout feedback stopped: modal=\{modal}, steps=\{steps.val}")
-    assert_true(faults.iter().any(fn(s) { s.contains("layout passes in one") }), msg="\{faults}")
+    // A fault text is reported once for the process; the second path can reach the same fault without retelling it.
+    // Each path must independently stop at the layout limit, before the test's 100-step fallback ends the loop.
+    assert_eq(steps.val, laid_passes_most, msg="layout feedback stopped at its guard, modal=\{modal}")
+    if !modal {
+      assert_true(faults.iter().any(fn(s) { s.contains("layout passes in one") }), msg="\{faults}")
+    }
     t.dispose()
   }
 }
