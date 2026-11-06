@@ -78,6 +78,7 @@ pub fn reset() -> Unit {
   local_menu.val = false
   memory_doc_reset()
   signin_reset()
+  own_picture_reset()
   fx_policy_up.val = ""
   fx_vault_add_up.val = false
 }

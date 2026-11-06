@@ -32,6 +32,7 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 - 邀请按邮箱发出：对方用这个邮箱登录 still.fail，就会在 workspace 切换菜单里看到邀请，点「加入」即可，不需要传链接。
 - 没有 workspace 的账号登录后会自动得到一个自己的 workspace；没有单独的 workspace 列表页，切换都在左上角。
 - 客户端里每个已登录的账号各自持有会话（access / refresh token），互不影响；切换账号不需要重新登录。
+- 账号的头像默认是登录时 Google 给的那张（每次登录都会更新；只用邮箱登录的账号没有，显示首字母）。账号可以换成自己的一张（「账号」页的「更换头像」：`PUT /v1/me/picture {picture}`，客户端把选的图裁成正方形、做成 256 像素的 JPEG data URL 发来，和图标一样存进桶里，存在 `users.own_picture`），之后 `/v1/me`、成员名单和控制台都显示它，再登录也不会被换掉；`DELETE /v1/me/picture`（「恢复默认头像」）去掉它，又显示登录的那张。`/v1/me` 的 `user.own_picture` 说明现在这张是不是自己换的。
 
 ## 登录
 

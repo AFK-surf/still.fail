@@ -1333,7 +1333,7 @@ pub fn link_row(
   let acts = acts || adds
   let ink = if acts { Some(link_ink()) } else { None }
   let lead = if adds {
-    Some(fn() { icon(c, "plus", size=if look() == Narrow { pg_chevron } else { desk_chevron }, color=link_ink()) |> ignore })
+    Some(fn() { row_lead_mark(c, "plus", color=link_ink()) })
   } else {
     lead
   }
@@ -2681,6 +2681,14 @@ let pg_switch_title : @ui.TextStyle = body.then(row_title_weight).then(full_word
 ///|
 // kept across runs: a value (no field of it changes)
 pub let pg_value : @ui.TextStyle = value
+
+///|
+/// A link row's mark before its title (its `lead`): icon `name` as large as its chevron at either width, in the title's
+/// ink unless `color` says (the ＋ of one that adds, in the link's).
+pub fn row_lead_mark(c : @ui.Ctx, name : String, color? : Int64) -> Unit {
+  icon(c, name, size=if look() == Narrow { pg_chevron } else { desk_chevron }, color=color.unwrap_or(theme().p.text))
+  |> ignore
+}
 
 ///|
 pub let pg_chevron : Double = 14.0

@@ -64,6 +64,8 @@ const FEEDBACK_PER_DAY = 20;
 const FEEDBACK_LISTED = 500;
 
 const LIST: AccountEvent = { type: "workspaces" };
+/** The picture an account is shown with, of its row in users: the one it put up for itself (setOwnPicture), else its sign-in's. */
+const SHOWN_PICTURE = "COALESCE(own_picture, picture)";
 type Attachment = { station: string; at: number; dropped?: boolean } | { sub: string };
 
 export class DirectoryError extends Error {
@@ -124,10 +126,11 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS lock_requests (workspace TEXT NOT NULL, base TEXT NOT NULL, sub TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace, base));
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
-    // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
-    // the table in production gains them here.
+    // the admin blocked the account; the account's own object is what keeps it out) before the console could block,
+    // nor own_picture (the picture the account put up for itself: setOwnPicture) before it could; the table in
+    // production gains them here.
     const columns = new Set(this.#rows("PRAGMA table_info(users)").map((r) => r.name as string));
-    for (const column of ["last_seen INTEGER", "admitted TEXT", "beta INTEGER", "blocked INTEGER"]) {
+    for (const column of ["last_seen INTEGER", "admitted TEXT", "beta INTEGER", "blocked INTEGER", "own_picture TEXT"]) {
       if (!columns.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE users ADD COLUMN ${column}`);
     }
     // Nor had feedback where it was fixed (the changelog's version and parts, changelog.ts) and when its station was
@@ -293,6 +296,20 @@ export class Directory extends DurableObject<Env> {
     this.#tell([...invited, ...(old.email === identity.email ? [] : [identity.sub])], LIST);
   }
 
+  /**
+   * The picture the account put up for itself (kept here: api.ts puts one sent in the bucket), shown instead of its
+   * sign-in's wherever that was (`/v1/me`, members lists, the console); signing in again leaves it, as upsertUser
+   * changes only the sign-in's. null takes it away, the sign-in's shown again. Its own devices and its workspaces'
+   * members hear of it.
+   */
+  setOwnPicture(sub: string, picture: unknown): { picture: string } {
+    const own = picture === null ? null : cleanPicture(picture, this.env.PUBLIC_ORIGIN) ?? fail(400, "invalid_icon");
+    this.#run("UPDATE users SET own_picture = ? WHERE sub = ?", own, sub);
+    for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", sub)) this.#changed(row.workspace as string, false);
+    this.#tell([sub], LIST);
+    return { picture: own ?? (this.#one("SELECT picture FROM users WHERE sub = ?", sub)?.picture as string | undefined) ?? "" };
+  }
+
   /** An account whose email was added to workspaces: a member of each from now on. */
   #joinAdded(sub: string, email: string): void {
     const rows = this.#rows("SELECT workspace, role FROM added WHERE email = ?", email.toLowerCase());
@@ -375,9 +392,10 @@ export class Directory extends DurableObject<Env> {
   }
 
   me(sub: string): { user: MeView | null; workspaces: WorkspaceSummary[] } {
-    const row = this.#one("SELECT sub, email, name, picture, beta FROM users WHERE sub = ?", sub);
-    // beta only when set: clients from before it know no such field, and an account without it says nothing.
-    const user = row ? { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string, ...(row.beta ? { beta: true as const } : {}) } : undefined;
+    const row = this.#one(`SELECT sub, email, name, ${SHOWN_PICTURE} AS picture, own_picture, beta FROM users WHERE sub = ?`, sub);
+    // beta and own_picture only when set: clients from before them know no such field, and an account without them says
+    // nothing.
+    const user = row ? { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string, ...(row.own_picture ? { own_picture: true as const } : {}), ...(row.beta ? { beta: true as const } : {}) } : undefined;
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
         (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id) AS stations,
@@ -464,7 +482,7 @@ export class Directory extends DurableObject<Env> {
     const role = this.#role(sub, id);
     const w = this.#one("SELECT id, name, created_at, relays, ways_off, emoji, icon FROM workspaces WHERE id = ?", id)!;
     const members = this.#rows(`
-      SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
+      SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(${SHOWN_PICTURE}, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
     const stations = this.#stationViews(id).map(({ workspace: _, ...station }) => station);
     const invitations = MANAGERS.includes(role)
@@ -1155,7 +1173,7 @@ export class Directory extends DurableObject<Env> {
       list.push({ id: row.id as string, name: row.name as string, role: row.role as Role });
       memberships.set(row.sub as string, list);
     }
-    return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta, blocked FROM users ORDER BY created_at DESC").map((row) => {
+    return this.#rows(`SELECT sub, email, name, ${SHOWN_PICTURE} AS picture, created_at, last_seen, admitted, beta, blocked FROM users ORDER BY created_at DESC`).map((row) => {
       const sub = row.sub as string;
       const workspaces = memberships.get(sub) ?? [];
       const admin = isAdmin(this.env, row.email as string);
@@ -1301,7 +1319,7 @@ export class Directory extends DurableObject<Env> {
       return by;
     };
     const members = group<AdminWorkspace["members"][number]>(this.#rows(`SELECT m.workspace, m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name,
-      COALESCE(u.picture, '') AS picture, m.role, m.added_at, u.last_seen FROM members m LEFT JOIN users u ON u.sub = m.sub ORDER BY m.added_at`));
+      COALESCE(${SHOWN_PICTURE}, '') AS picture, m.role, m.added_at, u.last_seen FROM members m LEFT JOIN users u ON u.sub = m.sub ORDER BY m.added_at`));
     const stations = group<StationView>(this.#stationViews(null) as unknown as Row[]);
     const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
@@ -1309,7 +1327,7 @@ export class Directory extends DurableObject<Env> {
     // As #plan has it, in the same read.
     const plan = (w: Row): Plan => w.sub === null ? "free" : isAdmin(this.env, w.email as string) ? "admin"
       : w.admitted === "code" || w.admitted === "granted" || (w.admitted === null && w.member) ? "standard" : "free";
-    return this.#rows(`SELECT w.id, w.name, w.created_at, w.max_members, w.max_stations, u.sub, u.email, u.name AS user_name, u.picture, u.admitted,
+    return this.#rows(`SELECT w.id, w.name, w.created_at, w.max_members, w.max_stations, u.sub, u.email, u.name AS user_name, ${SHOWN_PICTURE} AS picture, u.admitted,
       EXISTS (SELECT 1 FROM members m WHERE m.sub = u.sub) AS member FROM workspaces w
       LEFT JOIN users u ON u.sub = w.created_by ORDER BY w.created_at DESC`).map((w) => ({
       id: w.id as string,
@@ -1331,7 +1349,7 @@ export class Directory extends DurableObject<Env> {
   }
 
   inviteCodes(): InviteCodeView[] {
-    return this.#rows(`SELECT c.code, c.note, c.beta, c.created_at, c.expires_at, c.revoked_at, c.used_at, u.sub, u.email, u.name, u.picture, w.id, w.name AS workspace_name
+    return this.#rows(`SELECT c.code, c.note, c.beta, c.created_at, c.expires_at, c.revoked_at, c.used_at, u.sub, u.email, u.name, ${SHOWN_PICTURE} AS picture, w.id, w.name AS workspace_name
       FROM invite_codes c LEFT JOIN users u ON u.sub = c.used_by LEFT JOIN workspaces w ON w.id = c.workspace ORDER BY c.created_at DESC, c.code`).map((row) => ({
       code: row.code as string,
       note: row.note as string,
@@ -1662,6 +1680,10 @@ function cleanIcon(value: unknown, origin: string): string | null {
   if (/^glyph:[a-z0-9-]{1,40}(:[a-z]{1,16})?$/.test(value)) return value;
   if (isIconUrl(origin, value)) return value;
   return value.length <= ICON_BYTES && /^data:image\/(png|webp|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
+}
+/** A picture an account puts up for itself: one kept here, by its address on `origin` (the clients fetch a person's by its address); else null. */
+function cleanPicture(value: unknown, origin: string): string | null {
+  return typeof value === "string" && isIconUrl(origin, value) ? value : null;
 }
 /** A workspace's emoji and icon as its views carry them: each only when set (clients from before them know neither). */
 function marks(emoji: unknown, icon: unknown): { emoji?: string; icon?: string } {

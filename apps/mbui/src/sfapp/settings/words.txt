@@ -473,6 +473,13 @@ android-settings.me.deleteText
 android-settings.me.deleteTitle
 android-settings.me.deleted
 android-settings.me.devices
+android-settings.me.picture
+android-settings.me.pictureDefault
+android-settings.me.pictureDefaultSet
+android-settings.me.pictureDefaultWhat
+android-settings.me.pictureSet
+android-settings.me.pictureUnread
+android-settings.me.pictureWhat
 android-settings.me.signOut
 android-settings.me.signOutOnly
 android-settings.me.signOutWhat

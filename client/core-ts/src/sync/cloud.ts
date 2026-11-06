@@ -99,6 +99,8 @@ export class CloudSync {
         loaded: this.mes.has(account.sub) && this.mes.get(account.sub) === null,
       };
       if (pointer(record, "/user/beta") === true) entry.beta = true;
+      // Its picture is one it put up for itself (account.setPicture), which it may take away.
+      if (pointer(record, "/user/own_picture") === true) entry.ownPicture = true;
       const error = this.mes.get(account.sub);
       if (error) {
         entry.error = error;

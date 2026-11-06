@@ -95,7 +95,8 @@ async function body(request: Request, maximum?: number): Promise<Record<string, 
   return readJson(request, maximum);
 }
 
-/** How large a change to a workspace or a station may be: it can carry a picture put up as its icon (icons.ts). */
+/** How large a change to a workspace or a station, or an account's own picture, may be: it can carry a picture put up
+ * (icons.ts). */
 const MARK_BODY = ICON_URL_CHARS + 8192;
 
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
@@ -200,13 +201,13 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/pictures" && method === "GET") return servePicture(request);
 
   // ── accounts ────────────────────────────────────────────────────────────
-  const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
+  const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path === "/v1/me/picture" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
   const claims = await account(bearerToken(request), env);
   if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
-    input = await body(request, method === "PATCH" && path.startsWith("/v1/workspaces/") ? MARK_BODY : undefined);
+    input = await body(request, (method === "PATCH" && path.startsWith("/v1/workspaces/")) || path === "/v1/me/picture" ? MARK_BODY : undefined);
   } catch {
     return reply({ error: "invalid_request" }, 400);
   }
@@ -226,6 +227,12 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       const said = await lock.appendPersonalLock(sub, input.entries);
       return "refused" in said ? reply({ error: said.refused }, STATUS[said.refused] ?? 409) : reply(said);
     }
+  }
+  // The picture the account puts up for itself, sent as a data URL and kept in the bucket as icons are (icons.ts), or
+  // taken away (its sign-in's shown again).
+  if (path === "/v1/me/picture") {
+    if (method === "PUT") return directory(async () => dir.setOwnPicture(sub, typeof input.picture === "string" && input.picture.startsWith("data:") ? await keptIcon(env, input.picture) : input.picture));
+    if (method === "DELETE") return directory(() => dir.setOwnPicture(sub, null));
   }
   // Deleting the account: the Directory first (it may refuse: 409 sole_owner), then its sessions and all of it.
   if (path === "/v1/me" && method === "DELETE") {

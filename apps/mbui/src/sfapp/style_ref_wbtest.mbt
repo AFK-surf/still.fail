@@ -145,16 +145,16 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   inspect(out.to_string(), content=(
     #|settings narrow 76417:a41cf0b3
     #|station narrow 85449:40712050
-    #|me-reading narrow 15019:a90f4e9c
-    #|settings wide 157036:f63a4178
+    #|me-reading narrow 21628:48929599
+    #|settings wide 163266:43f502f3
     #|station wide 223311:75eef3fe
-    #|me-reading wide 151749:d1072b03
+    #|me-reading wide 157913:704ab5a9
     #|settings-dark narrow 76685:a9841340
     #|station-dark narrow 85292:f6d55113
-    #|me-reading-dark narrow 15109:3c245f0d
-    #|settings-dark wide 156918:7d056968
+    #|me-reading-dark narrow 21702:479b0e5c
+    #|settings-dark wide 163132:21776ab
     #|station-dark wide 222962:53a99d6e
-    #|me-reading-dark wide 151707:310cb5c6
+    #|me-reading-dark wide 157855:1d2b7fcc
     #|
 
 

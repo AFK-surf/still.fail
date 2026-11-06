@@ -2,8 +2,9 @@
 export type Role = "owner" | "admin" | "member";
 
 export interface UserView { sub: string; email: string; name: string; picture: string }
-/** The signed-in account, as `/v1/me` has it: `beta` only when the admin let it into the test channel. */
-export interface MeView extends UserView { beta?: true }
+/** The signed-in account, as `/v1/me` has it: `beta` only when the admin let it into the test channel; `own_picture` only
+ * when `picture` is one it put up for itself (PUT /v1/me/picture), not its sign-in's. */
+export interface MeView extends UserView { beta?: true; own_picture?: true }
 /** `relays`: the workspace's own relays, used besides still.fail's (absent from a cloud from before them). `ways_off`: the
  * ways its devices do not go to its stations (relay URLs, `lan`, `tailnet`, `direct`), only when some are turned off. */
 export interface WorkspaceSummary { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; stations: number; members: number; relays?: string[]; ways_off?: string[] }
