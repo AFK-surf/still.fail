@@ -676,7 +676,7 @@ pub fn fix_attention_marks() -> Json {
     },
     "others": "done",
     "badge": 1,
-    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
+    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
   }
 }
 

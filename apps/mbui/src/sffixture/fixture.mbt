@@ -979,7 +979,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         },
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
         // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
-        "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
+        "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
       })
     // (the workspaces read slowly, the device's data not opened: with MBUI_HOLD=workspaces, the splash saying so)
     "status" if f.mode == "reading-slow" =>
