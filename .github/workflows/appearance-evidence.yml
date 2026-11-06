@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   pictures:
+    if: false
     runs-on: macos-15
     timeout-minutes: 5
     steps:
@@ -51,3 +52,29 @@ jobs:
           name: appearance-comparison-hosted
           path: ${{ runner.temp }}/appearance-evidence/
           if-no-files-found: error
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 071095a99ed460a5f0245ff8be1f47c56b59a3f2
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Run each appearance test with its full output
+        working-directory: apps/mbui
+        shell: bash
+        run: |
+          set +e
+          bad=0
+          for index in 0 1 2 3 4 5 6 7; do
+            echo "=== appearance test $index ==="
+            moon test --target wasm-gc --release src/sfpages/appearance_wbtest.mbt --index "$index"
+            result=$?
+            echo "=== result $index: $result ==="
+            if [ "$result" -ne 0 ]; then bad=1; fi
+          done
+          exit "$bad"
