@@ -191,8 +191,46 @@ pub fn draw() -> Int {
   @view.faults_stop.val = false
   @view.fault_told.val = Some(fn(said) { println("fault: " + said) })
   let source = @sffilmscene.source(scene_arg)
-  let view = fn(c : @ui.Ctx) { @sfapp.view(c, source()) }
-  let t = @ui.Tester::new(view, tree=fn(root : @view.View) { @sfapp.app_tree(source())(root) },
+  let fixture = option(0)
+  let note_fixture = fixture == "panel-note-old" || fixture == "panel-note-new"
+  let old = fixture == "panel-note-old"
+  let example = [
+    "Frame rate adapts to the network and selected quality.",
+    "推荐分辨率：1280 × 720。画面大小变化时会更新。",
+    "操作失败，请检查连接。\n再试一次。",
+  ]
+  let view = fn(c : @ui.Ctx) {
+    if note_fixture {
+      @sf.set_dark(Some(option_number(4) == 1.0))
+      let theme = @sf.begin(c)
+      c.set_clear((theme.p.bg >> 8) & 0xFFFFFFL)
+      if old {
+        c.with_theme(@sf.ui_theme(), fn() {
+          c.box(style=@ui.css("w=Full p=S4 gap=S3"), fn() {
+            for words in example { @sf.panel_note(c, words) }
+          }) |> ignore
+        })
+      }
+    } else {
+      @sfapp.view(c, source())
+    }
+  }
+  let t = @ui.Tester::new(view, tree?=if note_fixture && old { None } else { Some(fn(root : @view.View) {
+    if note_fixture {
+      if !old {
+        @sf.set_dark(Some(option_number(4) == 1.0))
+        @ui.set_tree_theme(@sf.ui_theme_now)
+        root.box(fn(panel) {
+          @sf.style_node(panel, fn() { @ui.css("w=Full p=S4 gap=S3") })
+          @sf.panel_note_node(panel, fn() { example[0] }) |> ignore
+          @sf.panel_note_node(panel, fn() { example[1] }) |> ignore
+          @sf.panel_note_node(panel, fn() { example[2] }) |> ignore
+        }) |> ignore
+      }
+    } else {
+      @sfapp.app_tree(source())(root)
+    }
+  }) },
     w=option_number(0), h=option_number(1), scale=option_number(2),
     platform=option_number(3).to_int(), dark=option_number(4) == 1.0,
     pointing?=match option(5) { "finger" => Some(@ui.Pointing::Finger); "mouse" => Some(@ui.Pointing::Mouse); _ => None },
@@ -301,6 +339,34 @@ fn main { }
 /// writer (the Node host's). The process ends as the film's run ends it.
 pub fn film() -> Unit {
   @hostapi.set_host(WasmHost::{})
+  let fixture = @film.arg("MBUI_FIXTURE")
+  if fixture == "panel-note-old" || fixture == "panel-note-new" {
+    let old = fixture == "panel-note-old"
+    let example = [
+      "Frame rate adapts to the network and selected quality.",
+      "推荐分辨率：1280 × 720。画面大小变化时会更新。",
+      "操作失败，请检查连接。\n再试一次。",
+    ]
+    @film.run(fn(c) {
+      @sf.begin(c) |> ignore
+      if old {
+        c.with_theme(@sf.ui_theme(), fn() {
+          c.box(style=@ui.css("w=Full p=S4 gap=S3"), fn() {
+            for words in example { @sf.panel_note(c, words) }
+          }) |> ignore
+        })
+      }
+    }, tree=fn(root) {
+      if !old {
+        @ui.set_tree_theme(@sf.ui_theme_now)
+        root.box(fn(panel) {
+          @sf.style_node(panel, fn() { @ui.css("w=Full p=S4 gap=S3") })
+          for words in example { @sf.panel_note_node(panel, fn() { words }) |> ignore }
+        }) |> ignore
+      }
+    })
+    return
+  }
   let source = @sffilmscene.source(@film.arg)
   @film.run(fn(c) { @sfapp.view(c, source()) }, tree=fn(root) { @sfapp.app_tree(source())(root) })
 }

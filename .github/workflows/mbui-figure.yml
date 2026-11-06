@@ -33,7 +33,7 @@ jobs:
   # pipeline's check waited 6-20 minutes for one (2026-11-03, as asked: "分支只在改到渲染器时跑"). Main runs them on
   # every change above, and publishes what it built.
   what:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository == 'AFK-surf/still.fail' && github.ref != 'refs/heads/codex/panel-note-evidence'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -97,3 +97,58 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/native.ts ensure --publish mbui-film:darwin-arm64 mbui-film-wasm:darwin-arm64
+  focused:
+    if: github.ref == 'refs/heads/codex/panel-note-evidence' && github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Dynamic behavior and old/new drawing comparison
+        shell: bash
+        run: |
+          set -eu
+          cd apps/mbui
+          for run in 1 2 3; do
+            echo "Focused test run $run"
+            moon test --target wasm-gc --release -p stillfail/sf -f '*panel note*'
+          done
+  pictures:
+    if: github.ref == 'refs/heads/codex/panel-note-evidence' && github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        width: [320, 600]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Draw old and retained notes
+        shell: bash
+        env:
+          MBUI_MEDIA_RECORD: '{"component_head":"89f0e399c26a7f5a4fd95b741b2bd60894542eb6","fixture_head":"${{ github.sha }}"}'
+          WIDTH: ${{ matrix.width }}
+        run: |
+          set -eu
+          cd apps/mbui
+          mkdir -p out/panel-note-evidence
+          printf 'until Frame rate\nexit\n' > out/panel-note-evidence/scene.drive
+          bash scripts/wasm-film-build.sh "$PWD/out/wasm-film"
+          if [ "$WIDTH" = 320 ]; then size=320x300; platform=2; input=finger; else size=600x300; platform=0; input=mouse; fi
+          for theme in light dark; do
+            if [ "$theme" = dark ]; then dark=1; else dark=0; fi
+            for mode in old new; do
+              MBUI_MEDIA_RUNTIME="$PWD/out/wasm-film/sffilm" MBUI_FIXTURE="panel-note-$mode" MBUI_WIN="$size" MBUI_FILM_PLATFORM="$platform" MBUI_NATIVE_INPUT="$input" MBUI_DARK="$dark" MBUI_FILM_SCALE=2 bash scripts/media.sh picture "$PWD/out/panel-note-evidence/$WIDTH-$theme-$mode.png" "$PWD/out/panel-note-evidence/scene.drive"
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: panel-note-evidence-${{ matrix.width }}
+          path: apps/mbui/out/panel-note-evidence/
+          if-no-files-found: warn
