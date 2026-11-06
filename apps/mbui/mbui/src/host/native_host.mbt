@@ -136,6 +136,11 @@ impl @hostapi.Host for Native with mods_held(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with set_modifiers(_, f) {
+  set_modifiers(f)
+}
+
+///|
 impl @hostapi.Host for Native with run(_, title, frame, pointer, wheel, key, text) {
   run(title, frame, pointer, wheel, key, text)
 }

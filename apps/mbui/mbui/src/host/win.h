@@ -40,6 +40,7 @@ typedef struct {
 extern mb_callbacks mb_cb;
 int32_t mb_host_window_key(int32_t code, int32_t mods);
 int32_t mb_host_mods_held(void);
+void mb_host_modifiers_changed(void);
 
 // renderer (win_render.cpp)
 int mb_render_init(void *hwnd);

@@ -37,6 +37,8 @@
 #pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
 
 mb_callbacks mb_cb;
+static void (*modifiers_cb)(int32_t);
+void mb_host_set_modifiers(void (*f)(int32_t)) { modifiers_cb = f; }
 
 // Back (host_native.mbt `set_back`): a mouse's back button and Alt+Left, while the app takes it.
 typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
@@ -311,6 +313,11 @@ static int mods_now(void) {
   return (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) |
          (GetKeyState(VK_MENU) < 0 ? 4 : 0) |
          ((GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) ? 8 : 0);
+}
+
+// Called for both downs and ups, including keys a native web view receives.
+void mb_host_modifiers_changed(void) {
+  if (modifiers_cb) modifiers_cb(mods_now());
 }
 
 // files from outside: the system's dialog, let go on the window
@@ -739,8 +746,10 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_LBUTTONUP: ReleaseCapture(); pointer(2, lp); return 0;
     case WM_MOUSEWHEEL: wheel(wp, lp, 0); return 0;
     case WM_MOUSEHWHEEL: wheel(wp, lp, 1); return 0;
-    case WM_KEYDOWN: key_down(wp); return 0;
+    case WM_KEYDOWN: mb_host_modifiers_changed(); key_down(wp); return 0;
+    case WM_KEYUP: mb_host_modifiers_changed(); break;
     case WM_SYSKEYDOWN:
+      mb_host_modifiers_changed();
       // Alt with a key: a key catcher's shortcut (win_device.h)
       if (key_catching && ime_active && catch_vk(wp)) return 0;
       if (wp == VK_LEFT && go_back()) return 0;
@@ -750,6 +759,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
       }
       break;
+    case WM_SYSKEYUP: mb_host_modifiers_changed(); break;
     case WM_XBUTTONUP:
       if (GET_XBUTTON_WPARAM(wp) == XBUTTON1) go_back();
       else if (GET_XBUTTON_WPARAM(wp) == XBUTTON2) mb_cb.key(40, 0);
