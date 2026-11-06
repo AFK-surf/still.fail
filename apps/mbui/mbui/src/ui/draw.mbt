@@ -1518,7 +1518,11 @@ fn Ctx::paint_raised(self : Ctx) -> Unit {
 /// tapped is painted (what is painted so is dropped).
 fn Ctx::paint_top(self : Ctx, from : Int) -> Unit {
   if dr.mode != mode_hits && self.ninst > from {
-    dr.tops.push((from, self.ninst))
+    // (drawn in a layer of the tree's: its tops, a block of their own, scene_layers.mbt)
+    match scene.drawing {
+      Some(l) => self.scene_tops_taken(l, from)
+      None => dr.tops.push((from, self.ninst))
+    }
   }
 }
 
@@ -1526,11 +1530,12 @@ fn Ctx::paint_top(self : Ctx, from : Int) -> Unit {
 /// Once a layer is painted (Ctx::paint; the page: app.mbt): what is over everything in it (`tops`: handles) moved
 /// after all the rest painted so far, each as it was painted and in the order it was, the rest closed up in its order.
 fn Ctx::raise_tops(self : Ctx) -> Unit {
-  if dr.tops.is_empty() {
-    return
+  if !dr.tops.is_empty() {
+    self.raise_ranges(dr.tops)
+    dr.tops.clear()
   }
-  self.raise_ranges(dr.tops)
-  dr.tops.clear()
+  // (and what the tree's layers drew over everything: scene_layers.mbt)
+  self.scene_tops_raised()
 }
 
 ///|

@@ -238,22 +238,26 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    the build before, a dev build beside the person's own. Milliseconds on a desktop's offscreen run show a step is not
    slower; they do not show a frame is in its budget, and no step is called faster by them alone (2026-11-05: the
    layers of rule 15 measured four times faster offscreen drew the whole phone screen every frame).
-15. **The scene is kept by layer.** A layer begins at the window's root, at what the root holds (a page, what is over
-   it), at what a `show`, `pick` or `each` made (a page, a sheet, a row), at a list's rows, at an old view, at what is
-   over all or over the scrim, and at what moves as it is drawn (a place property bound: a spinner turning, a row
-   sliding, a fade): `Tree::starts_layer` (Flutter's repaint boundaries, Chromium's paint chunks). Each keeps what it
-   drew, where that is among the frame's instances, what it was cut, faded and stretched by as it began, the glyphs'
-   plots it draws from (said drawn from in each frame the old frame paints: `Atlas::drawn`) and the pictures it shows, and what its
-   drawing read, by a watch of its own (src/ui/scene_layers.mbt).
+15. **The scene is kept by layer, each its own drawing.** A layer begins at the window's root, at what the root holds (a
+   page, what is over it), at what a `show`, `pick` or `each` made (a page, a sheet, a row), at a list's rows, at an old
+   view, at what is over all or over the scrim, and at what moves as it is drawn (a place property bound: a spinner
+   turning, a row sliding, a fade): `Tree::starts_layer` (Flutter's repaint boundaries, Chromium's paint chunks). Each
+   keeps a block of what it drew itself, in its own place's terms, and for each layer it holds a reference: where in its
+   block that one goes, and how it is put there (moved, faded, cut, stretched, its glyphs' looks), never what that one
+   drew (Flutter's `OffsetLayer`, `OpacityLayer`, `ClipRectLayer` and `PaintingContext.appendLayer`; Android's
+   `RenderNode` and its properties, `drawRenderNode`). Nothing of a layer says where it lies among a frame's
+   instances, nor what what holds it cuts, fades or stretches it by. It keeps the glyphs' plots it draws from (said
+   drawn from in each frame the old frame paints: `Atlas::drawn`), the pictures it shows, and what its drawing read, by
+   a watch of its own (src/ui/scene_layers.mbt).
 16. **A frame draws again only the layers something of changed, and says it at its cause.** The tree tells what changed
    as it changes (`Tree::take_changed`: content made again; `take_placed`: placed, faded, turned or cut otherwise;
    `take_removed`: let go); a layer's watch tells what its drawing read changed (an image decoded, a field's words, the
-   clock while it reads it); a moment its drawing waits for comes. Each marks the layer it is in; one placed, or cutting,
-   fading or setting the glyphs of what it holds, draws all it holds again with it. Every other layer is the instances it
-   was: copied where it is put, as the old frame paints the frame, or left where it lies, a frame of the tree alone
-   (`alone_frame`: nothing of the old frame painted, each layer to draw again drawn in a buffer of its own from what it
-   began in and put where it was, where it comes to as many instances; else the old frame paints the frame, copying
-   what is kept).
+   clock while it reads it); a moment its drawing waits for comes. Each marks the layer it is in. Each frame is put
+   together from the root's layer down by the references: a layer marked records its own block again, where its
+   reference is; every other layer is its block as kept (Flutter's `updateDisplayListIfDirty`, a parent's display list
+   kept as it was round a child drawn anew). A layer moved, faded, cut, turned or stretched otherwise is its reference
+   so: what that says is put on its block as the frame is put together, nothing of it nor of what it holds drawn or
+   gone through again (Android's `setTranslationX`, `setAlpha`, `setClipBounds`).
 17. **Where the window changed is told by what changed, never found.** Each node the tree said changed is drawn again
    where all it and what it holds reached as last drawn and where they reach once drawn (`@damage.Parts`: as far as any
    pixel reaches, merged, at most four, glass a part reaches taken in whole); a layer whose drawing read what changed,

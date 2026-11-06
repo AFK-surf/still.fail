@@ -75,7 +75,15 @@ priv struct SceneLayer {
   mut block_owners : OwnersRun?
   /// where in its block each layer it holds goes (its instance and its piece there), and which: its block its own
   /// drawing alone, what it holds each by its own block (Ctx::scene_emitted)
-  block_refs : Array[(Int, Int, @view.NodeId)]
+  block_refs : Array[(Int, Int, @view.NodeId, Bool)]
+  /// what it drew that is over everything (a field's handles, Ctx::paint_top): never among its own, a block of its own
+  /// put where the window's stack has it (what is over everything raised there, Ctx::raise_tops), who drew each where
+  /// that is kept
+  tops : Array[Double]
+  mut tops_owners : OwnersRun?
+  /// where this recording put what is over everything of others' (its instance and piece there, and whose, how many):
+  /// a reference in its block to their tops
+  tops_put : Array[(Int, Int, @view.NodeId, Int)]
 }
 
 ///|
@@ -287,6 +295,8 @@ priv struct Scene {
   /// before's and this one's
   old_before : Map[@view.NodeId?, (Double, Double, Double, Double)]
   old_now : Map[@view.NodeId?, (Double, Double, Double, Double)]
+  /// the layers whose tops are to be put where what is over everything is raised next (Ctx::raise_tops), in order
+  tops_now : Array[@view.NodeId]
   /// and its instances themselves, as it drew them the last time it painted and as it paints now (its numbers, in
   /// order): compared where it is painted again, what differs drawn again (the old frame says nothing of what changed in
   /// it: Parts::add_changed, an adapter)
@@ -357,6 +367,7 @@ let scene : Scene = {
   streams: [],
   old_before: Map([]),
   old_now: Map([]),
+  tops_now: [],
   old_insts_before: Map([]),
   old_insts_now: Map([]),
   old_due: true,
@@ -916,6 +927,7 @@ fn Ctx::scene_begin(self : Ctx) -> Unit {
   // (who drew the last frame's, where that is kept: put with what is copied of it)
   scene.owners = if inst_owners_kept() && !scene.fresh { Some(owners_run(0, scene.prev_n)) } else { None }
   scene.old_now.clear()
+  scene.tops_now.clear()
 }
 
 ///|
@@ -1257,6 +1269,9 @@ fn Ctx::scene_drawn(
         block_seg_base: 0,
         block_owners: None,
         block_refs: [],
+        tops: [],
+        tops_owners: None,
+        tops_put: [],
       }
       scene.layers[id] = l
       l
@@ -1384,6 +1399,9 @@ fn scene_drawn_begin(
   l.told = false
   l.inner.clear()
   l.anchors.clear()
+  l.tops.clear()
+  l.tops_owners = None
+  l.tops_put.clear()
   // (drawn again alone, from what it began in: what holds it as it was)
   match outer {
     Some(o) => l.outer = Some(o.id)
@@ -1817,7 +1835,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
     }
   }
   held.sort_by(fn(a, b) { a.start.compare(b.start) })
-  let own = self.ninst - k0 - held.fold(init=0, fn(n, c) { n + c.count })
+  let own = self.ninst - k0 - held.fold(init=0, fn(n, c) { n + c.count }) - l.tops_put.fold(init=0, fn(n, t) { n + t.3 })
   if l.block.length() < own * inst_size {
     l.block = FixedArray::make(own * inst_size * 2 + inst_size, 0.0)
   }
@@ -1855,13 +1873,22 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
       l.block_segs.push(self.segs[q])
     }
   }
+  // (and where it put what is over everything of others', each a reference to their tops)
+  let refs : Array[(Int, Int, Int, Int, @view.NodeId, Bool)] = held.map(fn(c) {
+    (c.start, c.count, c.seg_from, c.seg_count, c.id, false)
+  })
+  for t in l.tops_put {
+    refs.push((t.0, t.3, t.1, 0, t.2, true))
+  }
+  refs.sort_by(fn(a, b) { a.0.compare(b.0) })
   let mut at = k0
   let mut sat = s0
-  for c in held {
-    take(at, c.start, sat, c.seg_from)
-    l.block_refs.push((l.block_n, l.block_segs.length() / 4, c.id))
-    at = c.start + c.count
-    sat = c.seg_from + c.seg_count
+  for r in refs {
+    let (start, count, seg_from, seg_count, id, tops) = r
+    take(at, start, sat, seg_from)
+    l.block_refs.push((l.block_n, l.block_segs.length() / 4, id, tops))
+    at = start + count
+    sat = seg_from + seg_count
   }
   take(at, self.ninst, sat, self.segs.length() / 4)
   l.block_seg_base = s0
@@ -1916,8 +1943,16 @@ fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
     sp.val = sto
   }
   for r in l.block_refs {
-    let (ri, rs, cid) = r
+    let (ri, rs, cid, tops) = r
     put(ri, rs)
+    // (what is over everything of another's, put here as the window's stack had it as this was drawn)
+    if tops {
+      match scene.layers.get(cid) {
+        Some(c) => self.scene_tops_out(c)
+        None => ()
+      }
+      continue
+    }
     match scene.layers.get(cid) {
       // (as kept where nothing of it changed; else drawn anew where its reference is, the rest of what holds it as kept:
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
@@ -1926,6 +1961,10 @@ fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
     }
   }
   put(l.block_n, l.block_segs.length() / 4)
+  // (what it drew over everything: put where the window's stack has it next, Ctx::raise_tops)
+  if l.tops.length() > 0 {
+    scene.tops_now.push(l.id)
+  }
   l.start = at
   l.count = self.ninst - at
   l.seg_from = seg0
@@ -1995,4 +2034,78 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
   if c.each {
     l.each = true
   }
+}
+
+///|
+/// What was drawn from instance `from` on, over everything (a field's handles, Ctx::paint_top), as layer `l` is drawn:
+/// taken out of its drawing into its tops, a block of their own, put where the window's stack has what is over
+/// everything (Ctx::raise_tops; Chromium's top layer, Flutter's Overlay): the layer's own block whole, nothing of it
+/// parted by what is raised.
+fn Ctx::scene_tops_taken(self : Ctx, l : SceneLayer, from : Int) -> Unit {
+  for q in (from * inst_size)..<(self.ninst * inst_size) {
+    l.tops.push(self.inst[q])
+  }
+  if inst_owners_kept() {
+    let r = owners_run(from, self.ninst)
+    l.tops_owners = match l.tops_owners {
+      Some(o) => {
+        o.owner.append(r.owner)
+        o.cell.append(r.cell)
+        o.tree.append(r.tree)
+        o.mark.append(r.mark)
+        o.bone.append(r.bone)
+        Some(o)
+      }
+      None => Some(r)
+    }
+  }
+  self.ninst = from
+  if scene.tops_now.last() != Some(l.id) {
+    scene.tops_now.push(l.id)
+  }
+}
+
+///|
+/// What layer `c` drew over everything put into the frame here (where its reference in a block says, or where what is
+/// over everything is raised: Ctx::raise_tops), who drew each where that is kept; put so, no more to put this frame.
+fn Ctx::scene_tops_out(self : Ctx, c : SceneLayer) -> Unit {
+  let n = c.tops.length() / inst_size
+  while (self.ninst + n + 1) * inst_size > self.inst.length() {
+    self.grow()
+  }
+  let k = self.ninst
+  for q in 0..<c.tops.length() {
+    self.inst[k * inst_size + q] = c.tops[q]
+  }
+  match c.tops_owners {
+    Some(o) if inst_owners_kept() => owners_put(o, k)
+    _ => ()
+  }
+  self.ninst = k + n
+  match scene.tops_now.search(c.id) {
+    Some(i) => scene.tops_now.remove(i) |> ignore
+    None => ()
+  }
+}
+
+///|
+/// What the layers drew over everything (scene.tops_now), put here in the window's stack, each in the order drawn:
+/// where a layer is being drawn, a reference in its block to each (its tops_put).
+fn Ctx::scene_tops_raised(self : Ctx) -> Unit {
+  let now = scene.tops_now.copy()
+  for id in now {
+    match scene.layers.get(id) {
+      Some(c) => {
+        let at = self.ninst
+        let s = self.segs.length() / 4
+        self.scene_tops_out(c)
+        match scene.drawing {
+          Some(r) => r.tops_put.push((at, s, id, self.ninst - at))
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  scene.tops_now.clear()
 }
