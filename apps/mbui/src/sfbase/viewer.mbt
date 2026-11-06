@@ -1540,7 +1540,8 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
     c.blur()
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
     match v.flight_target(c, src) {
-      Some(to) =>
+      Some(to) => {
+        thumb_settle(c, v.thumb_id())
         match thumb_of(c, v.thumb_id()) {
           Some(t) => {
             v.flies = true
@@ -1561,6 +1562,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
           }
           None => ()
         }
+      }
       None => ()
     }
     // as web's: fading in (FilePreview.css.ts fp: 140 ms ease-out), when there is no thumbnail to grow from
