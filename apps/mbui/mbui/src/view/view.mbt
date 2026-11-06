@@ -7230,6 +7230,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     self.framing = was_framing
   }
   self.unsample()
+  if self.shown_owed(upto) {
+    self.marked()
+  }
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {

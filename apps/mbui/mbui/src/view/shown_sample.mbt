@@ -19,11 +19,20 @@ fn Tree::sampled_shown(self : Tree, upto : Double) -> Unit {
     }
   }
   guard drawn.length() > 0 else { return }
+  // (each watch once, however many of them it reads; all in one sample: a computed several read worked out once)
+  let once : Array[@signals.Watch] = []
+  for w in drawn {
+    if !once.iter().any(fn(o) { physical_equal(o, w) }) {
+      once.push(w)
+    }
+  }
   self.sample = Some(shown)
   @signals.untracked(fn() {
-    for w in drawn {
-      w.sample()
-    }
+    @signals.sampled(fn() {
+      for w in once {
+        w.sample()
+      }
+    })
   })
   self.sample = None
 }
@@ -69,4 +78,15 @@ fn[T : Eq] Tree::shown_set(
       None => ()
     }
   })
+}
+
+///|
+/// Whether a frame at the logic's `upto` to be shown later has anything to sample then (Tree::sampled_shown): what it
+/// lays out is marked done so, though nothing else changed (a frame shown later again at the same logic's moment).
+fn Tree::shown_owed(self : Tree, upto : Double) -> Bool {
+  let shown = self.shown
+  guard shown > upto else { return false }
+  self.clock.drawn_by().length() > 0 ||
+  self.beat.drawn_by().length() > 0 ||
+  self.drawn_marks.iter().any(fn(m) { (upto >= m.1) != (shown >= m.1) && m.2.drawn_by().length() > 0 })
 }
