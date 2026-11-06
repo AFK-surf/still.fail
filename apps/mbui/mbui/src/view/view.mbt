@@ -879,6 +879,9 @@ pub struct Tree {
   /// Work completing a published change, before the next timeline moment or input is taken (Tree::after_change).
   changes : Array[(Double, () -> Unit)]
   mut changes_running : Bool
+  /// Structural readers of one unowned signal publication, committed together after its flush.
+  structures : Array[() -> Bool]
+  mut structures_asked : Bool
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
@@ -1169,6 +1172,8 @@ pub fn Tree::new(
     afters: [],
     changes: [],
     changes_running: false,
+    structures: [],
+    structures_asked: false,
     modals_due: false,
     held: None,
     gesture_tapped: false,
@@ -1911,6 +1916,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.laid_waits.clear()
   self.afters.clear()
   self.changes.clear()
+  self.structures.clear()
   self.held_tracks.clear()
   self.thumbs.clear()
   @signals.end_batch()
@@ -2226,13 +2232,15 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   let last : Ref[T?] = Ref(None)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
+  let told = Ref(0)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
-    // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
-    // of the same moment the change is committed at)
-    self.at_cause(fn() {
-      // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
-      guard live.val else { return false }
+    told.val += 1
+    let turn = told.val
+    let changed = fn() {
+      // A deadline may already have delivered a newer notification, or let this node go. Neither makes the
+      // earlier pending notification read again. In particular, a withdrawn parent's children read nothing.
+      guard live.val && turn == told.val else { return false }
       let v = w.read(read)
       if last.val != Some(v) {
         last.val = Some(v)
@@ -2243,8 +2251,14 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
       } else {
         false
       }
-    })
-  })
+    }
+    if self.cause_at < 0.0 && !self.standing && @signals.is_flushing() {
+      self.structure_told(changed)
+    } else {
+      // A tree event or deadline already owns the publication. Its structural changes stay synchronous.
+      self.at_cause(changed)
+    }
+  }, repeated=true)
   watch.val = Some(w)
   let v = w.read(read)
   last.val = Some(v)
@@ -2260,6 +2274,33 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
     watch.val = None
     w.stop()
   }
+}
+
+///|
+/// Publish all structural readers of the same raw change together. Do not read them early to re-arm a watch:
+/// a parent can withdraw a child, and an earlier deadline can dispose either. Timed producers still enter
+/// Tree::event before writing; this compatibility path cannot restore signal values already changed by raw writes.
+fn Tree::structure_told(self : Tree, f : () -> Bool) -> Unit {
+  self.structures.push(f)
+  if self.structures_asked { return }
+  self.structures_asked = true
+  let at = self.time_now()
+  @signals.after_notify(fn() {
+    self.structures_asked = false
+    if self.gone { self.structures.clear(); return }
+    let pending = self.structures.copy()
+    self.structures.clear()
+    let was = self.bringing_at
+    self.bringing_at = at
+    defer { self.bringing_at = was }
+    self.at_cause(fn() {
+      let mut changed = false
+      for read in pending {
+        if read() { changed = true }
+      }
+      changed
+    })
+  })
 }
 
 ///|
@@ -6780,7 +6821,7 @@ pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
 ///|
 /// What was due before a new change, committed before that change reads or writes anything. The drawing clock is
 /// told separately so a structure can tell it together with its own change (Tree::at_cause).
-fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
+fn Tree::advance_logic(self : Tree, upto : Double, loc~ : SourceLoc = _) -> Unit {
   // (one thing due at a time, all it does committed before the next is chosen: asked again while one is being done (a
   // structure it changed committing), the loop doing it goes on from where it is once that one is done)
   if self.advancing {
@@ -6793,7 +6834,7 @@ fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
   }
   if (@signals.batch_depth() > 0 || @signals.is_flushing()) &&
     (upto > self.logic || self.wake() is Some(at) && at <= upto) {
-    abort("view: finish the raw signal change and its notifications before advancing the timeline; use Tree::event to batch a timed change")
+    abort("view: finish the raw signal change and its notifications before advancing the timeline; use Tree::event to batch a timed change (from \{loc}, logic \{self.logic}, upto \{upto}, committing \{self.committing}, laying \{self.laying}; signal set at \{@signals.last_set_at()})")
   }
   self.advancing = true
   self.advance_loop(upto)
@@ -6963,7 +7004,13 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// made again only as what it draws changed (its look, its size: Tree::changed); one placed or faded otherwise is
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
-pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
+pub fn Tree::frame(
+  self : Tree,
+  w : Double,
+  h : Double,
+  now? : Double,
+  said? : () -> Unit = fn() { },
+) -> Bool {
   // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
@@ -6981,29 +7028,51 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   let resized = w != self.last_w || h != self.last_h
   let was_using_resize_capture = self.using_resize_capture
   let captured : Array[ResizeCapture] = []
+  // The entire frame entry, including host facts, uses the resize capture boundary. Advancing outside it could
+  // report the old list's checkpoint as a painted sighting before the new room replaces that list.
+  let capture = resized && self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
+  self.preparing_resize_capture = capture
+  self.advance(upto)
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    self.preparing_resize_capture = false
+    return false
+  }
   if resized {
     // A shell can replace a list as soon as room is told below. Capture its event-time position with the old
     // window constraints first, including a scroll since the last painted frame. Nothing is captured on a first
     // frame, or where no live removal callback can need it.
-    let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
     if capture {
-      self.preparing_resize_capture = true
-      self.advance(upto)
       captured.append(self.resize_captures.copy())
       for entry in captured {
         if self.alive_id(entry.id) { @signals.untracked(entry.run) }
       }
-      self.preparing_resize_capture = false
     }
     self.using_resize_capture = capture
+  }
+  self.preparing_resize_capture = false
+  // Publish device, theme and room facts together, after earlier deadlines and before layout. Unlike a new
+  // input event, this entry does not settle a second picture: brought below lays out the frame once.
+  let cause = self.cause_at
+  self.cause_at = if cause >= 0.0 { cause } else { upto }
+  self.committing += 1
+  @signals.start_batch()
+  @signals.untracked(said)
+  if resized && self.nodes.length() > 0 && self.nodes[0].live {
     self.last_w = w
     self.last_h = h
     let s = self.nodes[0].flex.style
     s.set_width(Pt(w))
     s.set_height(Pt(h))
     self.layout_marked_at(0)
-    // (what follows it changed as of the frame's moment, before it is laid out)
     self.room.set((w, h))
+  }
+  @signals.end_batch()
+  self.committing -= 1
+  self.modals_settled()
+  self.cause_at = cause
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    self.using_resize_capture = was_using_resize_capture
+    return false
   }
   self.brought(upto)
   if resized { self.using_resize_capture = was_using_resize_capture }

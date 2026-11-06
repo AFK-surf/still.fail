@@ -99,15 +99,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if causes_counted.val {
     frame_outside_began.val = changes_outside_input()
   }
+  let tw = work_now()
+  frame_running.val = true
+  view_frame_started()
   let z = window_zoom_wanted.get()
-  if z != window_zoom_drawn.val {
-    let ratio = window_zoom_drawn.val / z
-    view_point.val = view_point.val.map(fn(p) { (p.0 * ratio, p.1 * ratio) })
-    view_point_seen.val = (-1, false, -1)
-    view_words_rescaled()
-  }
-  window_zoom_drawn.val = z
-  tree_window_zoom.set(z)
   let (w, h, scale) = (w / z, h / z, scale * z)
   let c = g()
   let fed = inputs_since.val
@@ -116,20 +111,26 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   inputs_taken.val = false
   frame_inputs_taken.val = taken
   in_frame.val = true
-  frame_running.val = true
   paint_phase.val = 0
-  // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
-  // run's input: envrec.mbt)
-  c.device_frame_start()
-  env_at_frame()
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
   // (what comes before the frame's own work, timed for the probe: the window's tree brought, its nodes built and laid
   // out, and what came from outside handed on as the frame begins, frame_drawn's start)
-  let tw = work_now()
-  view_frame(w, h, scale, t)
+  view_frame(w, h, scale, t, fn() {
+    if z != window_zoom_drawn.val {
+      let ratio = window_zoom_drawn.val / z
+      view_point.val = view_point.val.map(fn(p) { (p.0 * ratio, p.1 * ratio) })
+      view_point_seen.val = (-1, false, -1)
+      view_words_rescaled()
+    }
+    window_zoom_drawn.val = z
+    tree_window_zoom.set(z)
+    // The frame's host facts are published with its room, after earlier deadlines and resize capture.
+    c.device_frame_start()
+    env_at_frame()
+  })
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // (what the tree said to tell once its frame is painted, told now the frame is whole, its checks done: view_host.mbt)
