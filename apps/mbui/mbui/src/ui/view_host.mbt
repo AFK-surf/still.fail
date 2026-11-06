@@ -286,7 +286,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     measure=view_words_measure,
     measure_runs=view_runs_measure,
     measure_shorter=view_shorter_measure,
-    time=fn() { h_event_time() },
+    time=fn() { if frame_running.val { view_logic_at.val } else { h_event_time() } },
   )
   made.val = Some(t)
   // (what the old frame's topmost modal layer holds under it, as it is as an input asks: one dismissed by it, at once;
@@ -632,6 +632,17 @@ fn view_words_rescaled() -> Unit {
 }
 
 ///|
+/// Take this frame's host moment before it publishes zoom, device, theme or room facts. Earlier deadlines finish
+/// against the preceding facts; every observer of this publication uses the same moment, not another host read.
+fn view_frame_started() -> Unit {
+  view_logic_at.val = h_now()
+  match view_app.val {
+    Some(tree) => @signals.untracked(fn() { tree.advance(view_logic_at.val) })
+    None => ()
+  }
+}
+
+///|
 /// The tree's frame of the window `w` by `h` at `t` (what was marked done: src/view), the instances it changed to be
 /// made again, where each old view is placed now.
 fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
@@ -655,9 +666,7 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (a page's list's rows on the pixels as this frame draws them, as an old view's list's are, before anything of it is
   // laid out: Tree::set_rows_grid)
   tree.set_rows_grid(g().rows_grid_of(scale))
-  // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
-  // tree goes no further than that, whatever time its building takes)
-  view_logic_at.val = h_now()
+  // (the host moment taken before the frame's facts were published: brought again, no further than that)
   view_brought(tree)
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
@@ -674,7 +683,7 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
 
 ///|
 /// The moment the logic is brought to by this frame (view_frame): what it took as it went is of then, nothing later.
-// kept across runs: written as each frame begins
+// kept across runs: written by view_frame_started before any frame facts are published
 let view_logic_at : Ref[Double] = Ref(0.0)
 
 ///|

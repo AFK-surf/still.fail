@@ -2286,7 +2286,19 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
     self.time_now()
   }
   if !self.standing && self.committing == 0 {
-    self.advance_logic(at)
+    if @signals.is_flushing() && @signals.batch_depth() == 0 && !self.advancing {
+      // This is the publication of a signal change, not another timed input. Publish at the current moment
+      // without running a deadline between its observers. A later timestamp alone needs no callback; if a
+      // deadline precedes it, the producer must enter through event before writing its facts.
+      if at > self.logic {
+        if self.wake() is Some(due) && due <= at {
+          abort("view: enter Tree::event before a signal change that crosses a deadline")
+        }
+        self.logic = at
+      }
+    } else {
+      self.advance_logic(at)
+    }
   }
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
@@ -6986,15 +6998,21 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     // window constraints first, including a scroll since the last painted frame. Nothing is captured on a first
     // frame, or where no live removal callback can need it.
     let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
+    // Room is a fact of this host moment. Advance before publishing it, with the existing resize capture active
+    // where needed. A room observer never advances deadlines midway through the room's publication.
+    self.preparing_resize_capture = capture
+    self.advance(upto)
+    if self.nodes.length() == 0 || !self.nodes[0].live {
+      self.preparing_resize_capture = false
+      return false
+    }
     if capture {
-      self.preparing_resize_capture = true
-      self.advance(upto)
       captured.append(self.resize_captures.copy())
       for entry in captured {
         if self.alive_id(entry.id) { @signals.untracked(entry.run) }
       }
-      self.preparing_resize_capture = false
     }
+    self.preparing_resize_capture = false
     self.using_resize_capture = capture
     self.last_w = w
     self.last_h = h

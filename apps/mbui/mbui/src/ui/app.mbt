@@ -99,6 +99,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if causes_counted.val {
     frame_outside_began.val = changes_outside_input()
   }
+  let tw = work_now()
+  frame_running.val = true
+  view_frame_started()
   let z = window_zoom_wanted.get()
   if z != window_zoom_drawn.val {
     let ratio = window_zoom_drawn.val / z
@@ -116,7 +119,6 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   inputs_taken.val = false
   frame_inputs_taken.val = taken
   in_frame.val = true
-  frame_running.val = true
   paint_phase.val = 0
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
@@ -128,7 +130,6 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (view_host.mbt)
   // (what comes before the frame's own work, timed for the probe: the window's tree brought, its nodes built and laid
   // out, and what came from outside handed on as the frame begins, frame_drawn's start)
-  let tw = work_now()
   view_frame(w, h, scale, t)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
