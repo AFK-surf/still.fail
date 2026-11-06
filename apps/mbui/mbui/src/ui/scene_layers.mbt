@@ -1931,38 +1931,9 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
       )
     }
   }
-  // (every instance compared the same, the pieces each of their bands says are its the same: those, not where else in
-  // the frame's pieces they are nor what of them no band compared reads)
+  // (every instance compared the same, the pieces each of their bands says are its the same: bands_pieces_differ)
   let differs = match differs {
-    None => {
-      let mut said : String? = None
-      for k in 0..<n {
-        let q = k * inst_size
-        if theirs[k] || kept[q + 5] != 11.0 || said is Some(_) {
-          continue
-        }
-        let (a, b) = (kept[q + 12].to_int(), self.inst[q + 12].to_int())
-        let count = kept[q + 13].to_int()
-        // (each its pieces in the frame's, kept and drawn anew alike)
-        if a < 0 || (a + count) * 4 > kept_pieces.length() {
-          said = Some("band \{k}'s pieces \{a}+\{count} past the \{kept_pieces.length() / 4} kept")
-          continue
-        }
-        if b < 0 || (b + count) * 4 > self.segs.length() {
-          said = Some("band \{k}'s pieces \{b}+\{count} past the \{self.segs.length() / 4} drawn anew")
-          continue
-        }
-        for p in 0..<count {
-          for j in 0..<4 {
-            let (kx, fy) = (kept_pieces[(a + p) * 4 + j], self.segs[(b + p) * 4 + j])
-            if kx != fy && said is None {
-              said = Some("band \{k}'s piece \{p} differs: \{kx} kept, \{fy} anew (its first \{a} kept, \{b} anew)")
-            }
-          }
-        }
-      }
-      said
-    }
+    None => bands_pieces_differ(kept, kept_pieces, self.inst, self.segs, n, theirs)
     d => d
   }
   match differs {
@@ -1973,6 +1944,44 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// Of `n` instances kept (`kept`, the pieces `kept_pieces` its bands read) and as many drawn anew (`now`, `now_pieces`),
+/// every one but those `theirs` says the same as the other but where its band's pieces are: the first band whose pieces
+/// differ, one by one, or lie past the pieces it is read with (on either side, each told), where one does; None where
+/// none does. Where else among the pieces they are, and what of them no band compared reads, no matter.
+fn bands_pieces_differ(
+  kept : FixedArray[Double],
+  kept_pieces : Array[Double],
+  now : FixedArray[Double],
+  now_pieces : Array[Double],
+  n : Int,
+  theirs : FixedArray[Bool],
+) -> String? {
+  for k in 0..<n {
+    let q = k * inst_size
+    if theirs[k] || kept[q + 5] != 11.0 {
+      continue
+    }
+    let (a, b) = (kept[q + 12].to_int(), now[q + 12].to_int())
+    let count = kept[q + 13].to_int()
+    if a < 0 || (a + count) * 4 > kept_pieces.length() {
+      return Some("band \{k}'s pieces \{a}+\{count} past the \{kept_pieces.length() / 4} kept")
+    }
+    if b < 0 || (b + count) * 4 > now_pieces.length() {
+      return Some("band \{k}'s pieces \{b}+\{count} past the \{now_pieces.length() / 4} drawn anew")
+    }
+    for p in 0..<count {
+      for j in 0..<4 {
+        let (x, y) = (kept_pieces[(a + p) * 4 + j], now_pieces[(b + p) * 4 + j])
+        if x != y {
+          return Some("band \{k}'s piece \{p} differs: \{x} kept, \{y} anew (its first \{a} kept, \{b} anew)")
+        }
+      }
+    }
+  }
+  None
 }
 
 ///|
