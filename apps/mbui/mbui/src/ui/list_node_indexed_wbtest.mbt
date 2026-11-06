@@ -166,7 +166,7 @@ test "a brief come and go forgets a removed row's previously protected height" {
 }
 
 ///|
-test "an indexed list forgets removed rows when their source no longer has the removal history" {
+fn indexed_missing_from_source(whole : Bool) -> Double raise {
   let src = IndexedRows::new(30)
   let original = src.source()
   let expired = Ref(false)
@@ -196,6 +196,7 @@ test "an indexed list forgets removed rows when their source no longer has the r
   src.at.remove("m0")
   for i, k in src.keys { src.at[k] = i }
   expired.val = true
+  if whole { src.pending.push(Whole) }
   src.rev.set(src.rev.get() + 1)
   t.draw()
   expired.val = false
@@ -208,7 +209,17 @@ test "an indexed list forgets removed rows when their source no longer has the r
   @signals.end_batch()
   t.draw()
   assert_true(t.visible().1 < 25, msg="the replacement remains out of view: \{t.visible()}")
-  assert_eq((rows.room)("m0", 120.0).height, 120.0)
+  (rows.room)("m0", 120.0).height
+}
+
+///|
+test "an indexed list forgets removed rows when their source no longer has the removal history" {
+  assert_eq(indexed_missing_from_source(false), 120.0)
+}
+
+///|
+test "an indexed list given a whole new source forgets rows missing from it" {
+  assert_eq(indexed_missing_from_source(true), 120.0)
 }
 
 ///|
