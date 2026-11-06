@@ -16,15 +16,16 @@ Other stations' tasks (`remote_…` jobs) go through it; an agent's own jobs and
 - With none of the queue's tasks running, the first waiting starts, however busy the machine is: one always goes on.
 - Another starts only once the CPUs, looked at for at least 10 s since the last one started (while it still runs),
   were busy less than 80% (over the last 20 s when it has ended). Tasks come in one by one while there is room.
-- None starts while the system says its memory is under pressure (macOS's `kern.memorystatus_vm_pressure_level` warn
-  or critical; elsewhere under a tenth of the memory available).
+- None starts while the system says its memory is under pressure (macOS's `kern.memorystatus_vm_pressure_level`
+  critical, or warn while under a tenth of the memory is also available; elsewhere under a tenth of the memory
+  available), except a `small: true` task while it is not critical, so a machine can always be looked at (#4355).
 - A task prepared with `screen: true` starts only while no other task has the screen (below), and no command that
   asked for it before the task came still waits for it.
 - Of the sessions with tasks waiting, the one whose task last started longest ago goes first, its oldest task.
 - A task started beside others gets `STILLFAIL_CPUS`, and `MAKEFLAGS`, `CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL`
   where its environment has none, with how many CPUs were free (at least 1). One started alone gets none of them.
 - One explicitly `small: true` task may start beside busy work without waiting for a CPU sample, provided memory is
-  not under pressure. Its separate slot holds one task at a time; it is told to use one CPU. This is for brief offscreen
+  not critical. Its separate slot holds one task at a time; it is told to use one CPU. This is for brief offscreen
   work such as rendering a picture with prebuilt tools, not a build, test suite, video or task using the screen. An
   older station is checked at prepare and rejected rather than silently placing it in the ordinary queue.
 
