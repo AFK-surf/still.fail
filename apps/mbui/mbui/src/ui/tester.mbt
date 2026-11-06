@@ -100,6 +100,7 @@ fn reset_globals() -> Unit {
   anchors_reset()
   window_zoom_reset()
   run_let_go()
+  view_modals_version.val = 0
   the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
