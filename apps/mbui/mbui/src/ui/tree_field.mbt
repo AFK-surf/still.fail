@@ -133,7 +133,7 @@ pub fn field(
   let lines_now = max_lines_by.unwrap_or(fn() { max_lines })
   // (wrapping onto more lines than one: as many as said, or as many as its holder's room leaves it)
   let wraps = fn() { max_lines_in is Some(_) || lines_now() > 1 }
-  let enter_now = enter_by.unwrap_or(fn() { enter_sends.unwrap_or(enter_sends_by(if wraps() { 2 } else { 1 }, ime_action)) })
+  let enter_now = enter_by.unwrap_or(fn() { enter_sends.unwrap_or(enter_sends_wrapping(wraps(), ime_action)) })
   let limit_now = paste_limit_by.unwrap_or(fn() { paste_limit })
   // (what it says it is while empty as said once, or followed as it changes (`placeholder_by`: in the words as they
   // are now), its node and its editor kept
@@ -260,10 +260,13 @@ pub fn field(
     .owns(fn() { tree_field_gone(id) })
     |> ignore
     // A focused field can be fully transparent on the first frame of its entrance. Its input method needs the
-    // laid-out words then too; layout for input cannot wait for painting to have anything visible to draw.
+    // laid-out words then too; layout for input cannot wait for painting to have anything visible to draw. (Laid out
+    // again for it as where the field is laid out or what its words are set by changes: its words as composed, their
+    // size and line, whether they wrap: what tree_field_box and lay_out_field read; how many lines it shows is its
+    // rect's)
     f.reacts(fn() {
       if f.focused() {
-        Some((f.laid_window_told(), field.laid(font_size=size(), line=line_now(), max_lines=if wraps() { 2 } else { 1 }, trim~)))
+        Some((f.laid_window_told(), (field.composed_said(), size(), line_now(), wraps())))
       } else {
         None
       }
@@ -942,7 +945,8 @@ fn tree_field_told(tf : TreeField) -> Unit {
 ///|
 /// The same word layout for input and painting, in the field's laid-out rectangle.
 fn Ctx::tree_field_box(self : Ctx, id : @view.NodeId, tf : TreeField, rect : (Double, Double, Double, Double)) -> FieldBox {
-  let z = self.editor_sizing((tf.font_size)(), (tf.line)(), if (tf.wraps)() { 2 } else { 1 }, true, tree_theme().text_line)
+  // (its words' size, line and padding: how many lines it shows is its rect's, whether they wrap its own)
+  let z = self.editor_sizing((tf.font_size)(), (tf.line)(), 1, true, tree_theme().text_line)
   {
     id: tree_said_id(id),
     x: rect.0,
@@ -956,7 +960,7 @@ fn Ctx::tree_field_box(self : Ctx, id : @view.NodeId, tf : TreeField, rect : (Do
     font_size: z.font_size,
     weight: Node::new().weight,
     line_h: z.line,
-    wrap: z.wrap,
+    wrap: (tf.wraps)(),
     trim: tf.trim,
     hint: (tf.hint)(),
     shorter: tf.shorter,
