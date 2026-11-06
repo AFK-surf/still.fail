@@ -8,7 +8,7 @@ priv struct StickCase {
 }
 
 ///|
-fn stick_case() -> StickCase {
+fn stick_case(first_height? : () -> Double = fn() { 300.0 }, top? : () -> Double = fn() { 10.0 }) -> StickCase {
   let head : Ref[@view.NodeId?] = Ref(None)
   let scroll = @view.Scroll::new()
   let tree = @view.Tree::new(
@@ -20,11 +20,11 @@ fn stick_case() -> StickCase {
         .scrolls(scroll, fn(held) {
           for r in 0..<2 {
             held.box(fn(row) {
-              row.width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore
+              row.width(Is(Some(300.0))).height(By(fn() { Some(if r == 0 { first_height() } else { 300.0 }) })) |> ignore
               if r == 0 {
                 row.box(fn(h) {
                   head.val = Some(h.id())
-                  h.width(Is(Some(300.0))).height(Is(Some(40.0))).ground(Is(0x336699FFL)).sticks(Is(10.0)) |> ignore
+                  h.width(Is(Some(300.0))).height(Is(Some(40.0))).ground(Is(0x336699FFL)).sticks(By(top)) |> ignore
                 })
                 |> ignore
               }
@@ -88,4 +88,28 @@ test "a row's head that sticks: a layer of its own, scrolled only placed anew, n
   assert_true(placed.contains(head), msg="\{placed.length()} placed")
   let row = k.tree.holder_of(head).unwrap()
   assert_true(!placed.contains(row), msg="\{placed.length()} placed")
+}
+
+///|
+test "a sticky head follows its row's size and top inset in the frame each changes" {
+  let height = @signals.signal(300.0)
+  let top = @signals.signal(10.0)
+  let k = stick_case(first_height=fn() { height.get() }, top=fn() { top.get() })
+  let (leaving, _) = k.scrolled(280.0, 10.0)
+  assert_eq(leaving, -20.0)
+  let y = fn() { k.tree.drawn_of(k.head.val.unwrap()).unwrap().y }
+  let before = k.tree.work.computes
+  height.set(360.0)
+  k.tree.frame(300.0, 200.0, now=20.0) |> ignore
+  assert_eq(y(), 10.0)
+  assert_eq(k.tree.work.computes - before, 1, msg="the row's new size needs one layout")
+  let before = k.tree.work.computes
+  top.set(25.0)
+  k.tree.frame(300.0, 200.0, now=30.0) |> ignore
+  assert_eq(y(), 25.0)
+  assert_eq(k.tree.work.computes - before, 0, msg="the inset changes its place alone")
+  height.set(290.0)
+  k.tree.frame(300.0, 200.0, now=40.0) |> ignore
+  assert_eq(y(), -30.0, msg="the head leaves with its row's foot")
+  k.tree.dispose()
 }
