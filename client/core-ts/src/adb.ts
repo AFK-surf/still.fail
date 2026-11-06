@@ -61,7 +61,7 @@ export type AdbEnv = {
   subOf: (workspace: string) => string | null;
   /// The accounts signed in here: each has a lock of its own.
   subs: () => { sub: string; email: string }[];
-  pair: { begin(sub: string): Effect.Effect<unknown, CoreError>; code(typed: string): Effect.Effect<unknown, CoreError>; cancel(): void; state(sub: string): J };
+  pair: { begin(subs: string[]): Effect.Effect<unknown, CoreError>; code(typed: string): Effect.Effect<unknown, CoreError>; cancel(): void; state(sub: string): J };
 };
 
 function head(): RequestHead {
@@ -578,9 +578,12 @@ export class Adb {
         return this.#of(call.sub, (sub) => this.#env.personal.open(sub, t("core-misc.personal.reason.open")));
       case "personalJoin":
         return this.#of(call.sub, (sub) => Effect.gen({ self: this }, function* () {
+          yield* Effect.forEach(this.#env.subs(), (a) => Effect.ignore(this.#env.personal.refresh(a.sub), { log: "Unhandled", message: "personal lock read" }), { discard: true });
           yield* this.#env.personal.refresh(sub);
-          yield* this.#env.personal.makeKey(t("core-misc.personal.reason.join"));
-          return yield* this.#env.pair.begin(sub);
+          yield* this.#env.personal.makeKey();
+          // Every account here the other device can let it in to, on the one code.
+          const others = this.#env.personal.outside(this.#env.subs().map((a) => a.sub));
+          return yield* this.#env.pair.begin(others.includes(sub) ? others : [sub, ...others]);
         }));
       case "personalCode":
         return Effect.as(this.#env.pair.code(call.code), null);

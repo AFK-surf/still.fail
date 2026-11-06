@@ -396,17 +396,26 @@ test("a device joins its person's own lock face to face: the code shown on a dev
   const [trusted, phone] = await pipe();
   inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
   const KEY = `ed25519:${"11".repeat(32)}`;
-  const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: null, personal: { sub: "s1", key: KEY } }), phone.next()));
+  // (an account this device is not on the lock of asked too: only those it can let in to are said)
+  let asked = 0;
+  const reading = m.host.secureGet!;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => {
+    if (o.user) asked++;
+    return reading.call(m.host, k, o);
+  };
+  const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: null, personal: { subs: ["s1", "someone-else"], key: KEY } }), phone.next()));
   assert.deepEqual(said, { ok: { t: "code", workspaces: ["person:s1"] } });
+  assert.equal(asked, 1, "the person is asked as the code is shown");
   const shown = (await m.prompts()).pairing.find((p: { device: string }) => p.device === PHONE);
   assert.match(shown.code, /^[0-9]{6}$/);
   const met2 = { id: ME, d: phone, workspaces: ["person:s1"] };
   const wrong = shown.code === "000000" ? "000001" : "000000";
   assert.deepEqual(await m.run(tryOne(inner, met2, PHONE, wrong)), { ok: { left: PAIR_TRIES - 1 } });
   assert.equal(personal.chain("s1")!.devices.has(KEY), false, "a wrong code lets nobody in");
-  const right = await m.run(tryOne(inner, met2, PHONE, shown.code)) as { ok: { approved: { chain: Entry[] } } };
+  const right = await m.run(tryOne(inner, met2, PHONE, shown.code)) as { ok: { approved: { chains: Record<string, Entry[]> } } };
   assert.equal(personal.chain("s1")!.devices.has(KEY), true);
-  assert.equal(checkChain(right.ok.approved.chain, "s1")!.devices.has(KEY), true, "it brings the whole lock to pin");
+  assert.equal(asked, 1, "and not again as it is let in");
+  assert.equal(checkChain(right.ok.approved.chains.s1!, "s1")!.devices.has(KEY), true, "it brings the whole lock to pin");
 });
 
 test("a device not on the lock shows no code for it, and someone else's lock is not asked here", async () => {
@@ -416,6 +425,6 @@ test("a device not on the lock shows no code for it, and someone else's lock is 
   inner.adb.personal = () => none;
   const [trusted, phone] = await pipe();
   inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
-  const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "x", sign_key: null, personal: { sub: "s1", key: `ed25519:${"11".repeat(32)}` } }), phone.next()));
+  const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "x", sign_key: null, personal: { subs: ["s1"], key: `ed25519:${"11".repeat(32)}` } }), phone.next()));
   assert.deepEqual(said, { ok: { t: "no", error: "not_here" } });
 });

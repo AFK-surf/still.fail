@@ -113,7 +113,7 @@ test("a chain holds only as signed by a device on it; a device off it signs no m
   const b = device(c, "b");
   try {
     await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
-    const bKey = await b.runner.run(b.lock.makeKey("why"));
+    const bKey = await b.runner.run(b.lock.makeKey());
     await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "bb".repeat(32), label: "b" }, "why"));
     assert.equal(a.lock.chain(SUB)!.devices.size, 2);
     assert.notEqual(checkChain(c.kept.entries, SUB), null);
@@ -127,7 +127,7 @@ test("a chain holds only as signed by a device on it; a device off it signs no m
     await b.runner.run(b.lock.joined(SUB, c.kept.entries));
     assert.equal(b.lock.standing(SUB), "member");
 
-    const aKey = await a.runner.run(a.lock.makeKey("why"));
+    const aKey = await a.runner.run(a.lock.makeKey());
     await b.runner.run(b.lock.removeDevice(SUB, aKey, "why"));
     await a.runner.run(a.lock.refresh(SUB));
     assert.equal(a.lock.standing(SUB), "outside", "taken off");

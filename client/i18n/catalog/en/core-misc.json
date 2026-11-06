@@ -288,7 +288,6 @@
   "core-misc.personal.noAccount": "This device isn't signed in to that account",
   "core-misc.personal.noRequest": "This request can't be found. It may have ended",
   "core-misc.personal.reason.grant": "Allow this chat to debug your phone",
-  "core-misc.personal.reason.join": "Add this device to your personal lock",
   "core-misc.personal.reason.add": "Add a new device to your personal lock",
   "core-misc.personal.reason.remove": "Remove a device from your personal lock",
   "core-misc.personal.reason.forget": "Stop trusting this device's personal lock",

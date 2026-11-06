@@ -288,7 +288,6 @@
   "core-misc.personal.noAccount": "这台设备没有登录对应的账号",
   "core-misc.personal.noRequest": "找不到这个申请，它可能已经结束了",
   "core-misc.personal.reason.grant": "允许这个对话调试你的手机",
-  "core-misc.personal.reason.join": "把这台设备加入你的个人锁",
   "core-misc.personal.reason.add": "把新设备加入你的个人锁",
   "core-misc.personal.reason.remove": "把设备移出你的个人锁",
   "core-misc.personal.reason.forget": "这台设备不再相信原来的个人锁",
