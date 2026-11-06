@@ -1585,10 +1585,20 @@ fn Ctx::tree_draw_node(
         None => ()
       }
     }
-    // (and to the rect it says, as it is painted, whether or not it clips to itself: View::clip_drawn)
+    // (and to the rect it says, as it is painted, whether or not it clips to itself, its corners round as its own are:
+    // View::clip_drawn)
     match c.clip_drawn {
       Some((cx, cy, cw, ch)) => {
-        push_clip(x + cx * s, y + cy * s, x + (cx + dmax(0.0, cw)) * s, y + (cy + dmax(0.0, ch)) * s)
+        let (r0, r1, r2, r3) = match c.corners {
+          Some((tl, tr, br, bl)) => (tl * s, tr * s, br * s, bl * s)
+          None => (c.radius * s, c.radius * s, c.radius * s, c.radius * s)
+        }
+        let (x0, y0, w0, h0) = (x + cx * s, y + cy * s, dmax(0.0, cw) * s, dmax(0.0, ch) * s)
+        if r0 == 0.0 && r1 == 0.0 && r2 == 0.0 && r3 == 0.0 {
+          push_clip(x0, y0, x0 + w0, y0 + h0)
+        } else {
+          push_inset_clip_r(x0, y0, w0, h0, r0, r1, r2, r3, 0.0)
+        }
         p.clipping.push(c.id)
         p.clip_depth.push(depth)
       }

@@ -99,3 +99,34 @@ test "a node's clip as painted: what it cuts away is pressed nowhere, what it sh
   t.frame()
   assert_eq(pressed.val, 2)
 }
+
+///|
+test "a node's clip as painted rounds its corners as its own are; square where it has none" {
+  let radius = @signals.signal(8.0, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b
+      .width(Is(Some(200.0)))
+      .height(Is(Some(56.0)))
+      .radius(By(fn() { radius.get() }))
+      .clip_drawn(Is(Some((10.0, 5.0, 50.0, 20.0))))
+      |> ignore
+      b.box(fn(g) { g.width(Is(Some(300.0))).height(Is(Some(100.0))).ground(Is(0xFFFFFFFFL)) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame()
+  // (the white ground, the last drawn: its clip's corners' radii, 24 to 27)
+  let corners = fn() {
+    let all = t.drawn_instances()
+    let a = all[all.length() - 1]
+    (a[24], a[25], a[26], a[27])
+  }
+  let (tl, tr, br, bl) = corners()
+  assert_true(tl > 0.0 && tl == tr && tr == br && br == bl, msg="\{corners()}")
+  radius.set(0.0)
+  t.frame()
+  assert_eq(corners(), (0.0, 0.0, 0.0, 0.0))
+}

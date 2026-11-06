@@ -310,6 +310,8 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
         let flat = fn() {
           strip_at(p) |> ignore
           vw.bytes.get() |> ignore
+          // (landed: the thumbnail shown again, the picture flat from then: image_ends)
+          pv_hidden.get() |> ignore
           vw.picture_flat()
         }
         p
@@ -337,65 +339,77 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       // on the window, the box it is cut to, its corners round, the picture in it, as Viewer::picture_shown has it, its
       // whole picture judged ready for where it lands (View::image_for: as what draws the picture judged it,
       // Viewer::shown_picture), which of them decided as it is drawn)
-      let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
-        let t = strip_at(n)
+      let flight = fn(laid : @view.Laid, n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
+        vw.fly.said()
+        pv_strip.way.said()
+        let now = n.logic_at()
+        let t = if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) { laid.at() } else { now }
         vw.bytes.get() |> ignore
         if !vw.flight_node() {
           return None
         }
         let (w, h) = stage()
-        match (vw.flight_from(@ui.current()), vw.marks_rect_on(n)) {
+        match (vw.flight_from(@ui.current(), laid~), vw.marks_rect_on(n)) {
           (Some(from), Some(to)) => flight_box(from, vw.lifted_at(t), to, vw.flying_at(t), w, h).map(fn(f) { (f, to) })
           _ => None
         }
       }
+      // (laid out once at the size it lands at; placed and drawn where its flight has it as each frame is painted: cut to
+      // what shows of it on the window, its box round as the flight has it, the picture placed and grown from the
+      // thumbnail; nothing laid out for it as it flies)
+      let landing = fn(n : @view.View) {
+        vw.fly.said()
+        vw.bytes.get() |> ignore
+        // (landed: the thumbnail shown again, its flight gone with it: image_ends)
+        pv_hidden.get() |> ignore
+        if vw.flight_node() {
+          vw.marks_rect_on(n)
+        } else {
+          None
+        }
+      }
       canvas.box(fn(cut) {
-        cut
-        .over(Is(true))
-        .clips(Is(true))
-        .offset(By(fn() {
-          match flight(cut) {
-            Some((f, _)) => (f.cut.0, f.cut.1)
-            None => (0.0, 0.0)
-          }
-        }))
-        .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
-        .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
-        |> ignore
+        cut.over(Is(true)).clip_drawn(Painted(fn(laid) { flight(laid, cut).map(fn(f) { f.0.cut }) })) |> ignore
         cut.box(fn(b) {
           b
           .over(Is(true))
-          .clips(Is(true))
-          .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
-          .offset(By(fn() {
-            match flight(b) {
-              Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
-              None => (0.0, 0.0)
-            }
-          }))
-          .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
-          .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
+          // (none where it has nowhere to fly from: the thumbnail on the screen no more, none kept)
+          .alpha(Painted(fn(laid) { if flight(laid, b) is Some(_) { 1.0 } else { 0.0 } }))
+          .corners(Painted(fn(laid) { flight(laid, b).map(fn(f) { f.0.corners }) }))
+          .clip_drawn(Painted(fn(laid) { flight(laid, b).map(fn(f) { f.0.box }) }))
           |> ignore
           b.box(fn(p) {
             p
             .over(Is(true))
-            .offset(By(fn() {
-              match flight(p) {
-                Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
-                None => (0.0, 0.0)
-              }
-            }))
-            .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
-            .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
+            // (placed where its flight has it, as each frame is painted, on the stage's terms as it is laid out)
+            .offset(
+              Painted(fn(laid) {
+                match flight(laid, p) {
+                  Some((f, _)) => (f.picture.0, f.picture.1)
+                  None => (0.0, 0.0)
+                }
+              }),
+            )
+            .width(By(fn() { landing(p).map(fn(r) { r.2 }) }))
+            .height(By(fn() { landing(p).map(fn(r) { r.3 }) }))
+            .scale(
+              Painted(fn(laid) {
+                match flight(laid, p) {
+                  Some((f, to)) if to.2 > 0.0 => f.picture.2 / to.2
+                  _ => 1.0
+                }
+              }),
+              about=At(0.0, 0.0),
+            )
             .image(By(fn() {
-              match flight(p) {
+              match landing(p) {
                 Some(_) => vw.picture_shown(src)
-                None => None
+                _ => None
               }
             }))
             .image_for(By(fn() {
-              match (flight(p), vw.picture(src)) {
-                (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
+              match (landing(p), vw.picture(src)) {
+                (Some((_, _, w, h)), picture) if picture != "" && picture == vw.image => (w, h)
                 _ => (0.0, 0.0)
               }
             }))

@@ -2594,7 +2594,8 @@ pub fn View::cut_across(self : View, across : Live[(Double, Double)?]) -> View {
 /// The rect it cuts what it holds to, as it changes (x, y, w, h in its own terms, anywhere of it or beyond it; None: none
 /// of its own), whether or not it clips to itself (View::clips: both, where it does): what shows of a thing on its way
 /// cut as each frame is painted (a picture flying out of its thumbnail, cut where the list it was in leaves it seen),
-/// nothing laid out for it; what it cuts away pressed nowhere. Paint's: what it holds drawn again, all of it.
+/// nothing laid out for it; its corners round as its own are (View::radius, View::corners); what it cuts away pressed
+/// nowhere. Paint's: what it holds drawn again, all of it.
 pub fn View::clip_drawn(self : View, rect : Live[(Double, Double, Double, Double)?]) -> View {
   self.bind(ClipDrawn, rect, Paint, fn(r) { self.tree.nodes[self.at].look.clip_drawn = r })
   self
