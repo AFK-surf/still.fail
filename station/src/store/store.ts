@@ -24,7 +24,7 @@ import {
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STATION_AUTHOR, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  LAST_MESSAGE, LETTER_SQL, MESSAGES_BEFORE, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -59,6 +59,7 @@ import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_SMALL, SESSIO
 import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION } from "./latest-thread-index.ts";
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
+import { hasLegacySaid, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -324,6 +325,7 @@ export class Store {
   readonly db: DatabaseSync;
   readonly backfillPriority: SharedArrayBuffer;
   readonly #effortsIndex: boolean;
+  readonly #legacySaid: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -349,6 +351,7 @@ export class Store {
   private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock, backfillPriority: SharedArrayBuffer) {
     this.db = db;
     this.#effortsIndex = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
+    this.#legacySaid = hasLegacySaid(db);
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -1544,7 +1547,7 @@ export class Store {
 
   /// The thread's latest message as merged, for lists.
   lastMessage(thread: number): MessageRow | null {
-    const r = this.#one(LAST_MESSAGE, thread);
+    const r = this.#one(this.#legacySaid ? LEGACY_LAST_MESSAGE : LAST_MESSAGE, thread);
     return r ? toMessage(r) : null;
   }
 
@@ -1573,12 +1576,12 @@ export class Store {
     this.db.exec("SAVEPOINT archive_unread");
     try {
       const read = this.readPosition(viewer, thread);
-      const latest = this.#one(SAID_LATEST, thread);
+      const latest = this.#one(this.#legacySaid ? LEGACY_SAID_LATEST : SAID_LATEST, thread);
       if (!latest || latest.n <= read) return false;
       if (latest.author_kind !== "person" || latest.author !== viewer) return true;
       const boundary = saidBoundary(this.#one(SAID_STATE, thread), latest);
       if (boundary.known) return boundary.other !== null && boundary.other > read;
-      const previous = this.#all(SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
+      const previous = this.#all(this.#legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
       if (previous.some((p) => p.n > read && (p.author_kind !== "person" || p.author !== viewer))) return true;
       if (previous.length < SAID_BATCH_SIZE || previous.at(-1)!.n <= read) return false;
       return null;
@@ -1766,7 +1769,7 @@ export class Store {
   /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
   messagesBefore(thread: number, n: number | null, limit: number): MessageRow[] {
     const before = n ?? I64_MAX;
-    return this.#all(MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
+    return this.#all(this.#legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
   }
 
   // ── letters ──
@@ -2908,7 +2911,7 @@ export class Store {
     const selves = [viewer];
     if (slack) selves.push(...this.slackIdentities(viewer));
     return this.#one(
-      `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
+      this.#legacySaid ? LEGACY_UNREAD : `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
        AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
       thread, read, JSON.stringify(selves),
     ).c;
