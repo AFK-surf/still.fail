@@ -11,7 +11,8 @@ test "scrolls_anchored flung hard to its foot, what it holds changed on the way,
   let not_at_foot : Array[String] = []
   for config in [(true, 0.0), (true, 56.0), (false, 0.0), (false, 56.0)] {
   let (from_end, room) = config
-  for which in 0..<6 {
+  // (each change by its number, in `match which` below)
+  for which in [0, 1, 2, 3, 4, 5] {
     for after in [40.0, 120.0, 300.0] {
       let keys = @signals.signal(Array::makei(200, fn(i) { i }))
       let heights : Map[Int, @signals.Signal[Double]] = {}
@@ -216,7 +217,7 @@ test "scrolls_anchored counted otherwise than it is, flung, taken again in fligh
 }
 
 ///|
-test "scrolls_anchored at rest, dragged, and flung to its foot: laid out at most once a frame" {
+test "scrolls_anchored at rest, dragged, and flung to its foot: each frame laid out once at most, each finger's event once at most, none at rest" {
   let tall = fn(k : Int) { if k % 7 == 0 { 131.0 } else if k % 3 == 0 { 23.0 } else { 47.0 } }
   let scroll = Scroll::list()
   let tree = Tree::new(fn(root) {
@@ -237,50 +238,70 @@ test "scrolls_anchored at rest, dragged, and flung to its foot: laid out at most
     tree.frame(300.0, 100.0, now=t) |> ignore
     t = t + 16.0
   }
-  // (at rest: 60 frames)
-  let c0 = tree.work().computes
-  for i in 0..<60 {
-    tree.frame(300.0, 100.0, now=1500.0 + i.to_double() * 16.0) |> ignore
+  // (each frame's layouts, and each event's, apart: what is laid out as an event comes counted to it, not the frame)
+  let over : Array[String] = []
+  let mut at_rest = 0
+  let mut frames = 0
+  let mut flung_layouts = 0
+  let frame = fn(now : Double, what : String) -> Int {
+    let c = tree.work().computes
+    tree.frame(300.0, 100.0, now~) |> ignore
+    let d = tree.work().computes - c
+    if d > 1 {
+      over.push("\{what} frame at \{now}: laid out \{d} times")
+    }
+    d
   }
-  let rest = tree.work().computes - c0
+  let event = fn(id : NodeId, kind : DragIs, y : Double, now : Double) {
+    let c = tree.work().computes
+    tree.drag_at(id, kind, 150.0, y, now) |> ignore
+    let d = tree.work().computes - c
+    if d > 1 {
+      over.push("event \{kind} at \{now}: laid out \{d} times")
+    }
+  }
+  // (at rest from 1500 to 2460, a frame each 16 ms: none laid out)
+  let mut at = 1500.0
+  while at < 2460.0 {
+    at_rest = at_rest + frame(at, "at rest")
+    at = at + 16.0
+  }
   // (dragged slowly, no fling: 30 frames)
   guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -20.0) is Some(id) else { fail("not taken") }
-  let c1 = tree.work().computes
-  tree.drag_at(id, Down, 150.0, 90.0, 2500.0) |> ignore
-  for i in 1..=30 {
-    tree.drag_at(id, Moved, 150.0, 90.0 - i.to_double() * 1.0, 2500.0 + i.to_double() * 16.0) |> ignore
-    tree.frame(300.0, 100.0, now=2500.0 + i.to_double() * 16.0) |> ignore
+  event(id, Down, 90.0, 2500.0)
+  // (moved up a point each 16 ms till 2980, a frame at each move)
+  at = 2516.0
+  while at <= 2980.0 {
+    event(id, Moved, 90.0 - (at - 2500.0) / 16.0, at)
+    frame(at, "dragged") |> ignore
+    at = at + 16.0
   }
-  let dragged = tree.work().computes - c1
   // (held still 120 ms after its last move at 2980, then let go: no fling)
-  tree.drag_at(id, Moved, 150.0, 60.0, 2990.0) |> ignore
-  tree.frame(300.0, 100.0, now=2996.0) |> ignore
-  tree.drag_at(id, Moved, 150.0, 60.0, 3100.0) |> ignore
-  tree.frame(300.0, 100.0, now=3108.0) |> ignore
-  tree.drag_at(id, Up, 150.0, 60.0, 3110.0) |> ignore
-  tree.frame(300.0, 100.0, now=3124.0) |> ignore
+  event(id, Moved, 60.0, 2990.0)
+  frame(2996.0, "held") |> ignore
+  event(id, Moved, 60.0, 3100.0)
+  frame(3108.0, "held") |> ignore
+  event(id, Up, 60.0, 3110.0)
+  frame(3124.0, "let go") |> ignore
   guard @signals.untracked(fn() { scroll.fling.get() }) is None else { fail("let go held still: a fling") }
-  tree.frame(300.0, 100.0, now=3500.0) |> ignore
-  // (flung to its foot: frames till it rests)
+  frame(3500.0, "let go") |> ignore
+  // (flung to its foot: frames till it rests, it moving in them)
   guard tree.claimer_of(tree.claimers_at(150.0, 90.0), 0.0, -80.0) is Some(id2) else { fail("not taken again") }
-  tree.drag_at(id2, Down, 150.0, 90.0, 4000.0) |> ignore
-  tree.drag_at(id2, Moved, 150.0, 50.0, 4005.0) |> ignore
-  tree.drag_at(id2, Moved, 150.0, 10.0, 4010.0) |> ignore
-  tree.drag_at(id2, Up, 150.0, 10.0, 4010.0) |> ignore
-  let c2 = tree.work().computes
-  let mut frames = 0
+  event(id2, Down, 90.0, 4000.0)
+  event(id2, Moved, 50.0, 4005.0)
+  event(id2, Moved, 10.0, 4010.0)
+  event(id2, Up, 10.0, 4010.0)
+  guard scroll.glides_till() is Some(_) else { fail("flung: not moving") }
   t = 4016.0
   while t < 9000.0 {
-    tree.frame(300.0, 100.0, now=t) |> ignore
+    flung_layouts = flung_layouts + frame(t, "flung")
     frames = frames + 1
     t = t + 16.0
   }
-  let flung = tree.work().computes - c2
   tree.dispose()
-  println("LAYOUTS at rest \{rest}, dragged 30 frames \{dragged}, flung \{frames} frames \{flung}")
-  assert_eq(rest, 0, msg="at rest")
-  assert_true(dragged <= 30, msg="dragged: \{dragged} in 30 frames")
-  assert_true(flung <= frames, msg="flung: \{flung} in \{frames} frames")
+  println("LAYOUTS at rest \{at_rest} from 1500 to 2460, flung \{flung_layouts} in \{frames} frames")
+  assert_eq(at_rest, 0, msg="at rest")
+  assert_true(over.is_empty(), msg=over.iter().take(6).collect().join("; "))
 }
 
 ///|

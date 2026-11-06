@@ -195,14 +195,24 @@ fn flip_run(step : Double, up : Double, speed : Double, ahead? : Double = 0.0, t
     }
     ends.push((on, c.scroll.glides_till()))
   }
+  // (40 ms after a finger is let go: moving still, where it is, what a press finds, and when it is to rest, said)
+  let moving = fn(t : Double) {
+    run_to(t + 50.0)
+    if c.scroll.glides_till() is None {
+      missed.push("at \{t + 50.0}: flung, not moving")
+    }
+    look()
+  }
   c.tree.wheel_at(150.0, 50.0, 0.0, -up, 0, 10.0) |> ignore
   fling(-speed, 1500.0)
+  moving(1500.0)
   run_to(3500.0)
   look()
   fling(-speed, 6000.0)
   run_to(8000.0)
   look()
   fling(speed, 9000.0)
+  moving(9000.0)
   run_to(11000.0)
   look()
   run_to(20000.0)
@@ -224,8 +234,8 @@ test "scrolls_anchored flung to its foot and back, its rows not as tall as count
     assert_eq((ran60, ran144, ran30), (false, false, false), msg="up \{up} speed \{speed}: a frame's layout ran to the most")
     assert_eq(at144, at60, msg="up \{up} speed \{speed}: 144 against 60")
     assert_eq(at30, at60, msg="up \{up} speed \{speed}: 30 against 60")
-    assert_eq(end144, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 144 against 60")
-    assert_eq(end30, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 30 against 60")
+    assert_eq(end144, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 144 against 60: \{end144} \{end60}")
+    assert_eq(end30, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 30 against 60: \{end30} \{end60}")
     // (and no frame between the moments said, and each frame at 60 drawn 16 ms after its logic's moment)
     let (at0, end0, ran0) = flip_run(1.0e9, up, speed)
     let (at_ahead, end_ahead, ran_ahead) = flip_run(1000.0 / 60.0, up, speed, ahead=16.0)
