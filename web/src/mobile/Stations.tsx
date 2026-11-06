@@ -160,7 +160,7 @@ function StationBody({ s }: { s: StationView }) {
 }
 
 /**
- * Adding a station: a name, then the command to run on that machine (which installs ember and joins it); the sheet
+ * Adding a station: a name, then the command to run on that machine (which installs still.fail and joins it); the sheet
  * waits for it to join.
  */
 /// `existing`: a station of another workspace first (the first station's page asks for it).

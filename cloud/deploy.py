@@ -27,8 +27,7 @@ to app.still.fail with promote-web. `web` named deploys a new build to app.still
     python3 deploy.py --check           # only report what is missing
 
 Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR,
-else ~/stillfail-deploy, else ~/ember-deploy while only that one exists (from before the rename; move it when you
-like, nothing else changes):
+else ~/stillfail-deploy:
   --google  Google "Web application" OAuth client JSON (default <deploy>/google-oauth.json;
             its redirect URIs must include <origin>/v1/auth/google/callback for every origin still in use:
             https://app.still.fail and https://ember.3720.org)
@@ -76,9 +75,7 @@ def deploy_dir() -> Path:
     # Another cloud's keys are never still.fail's (CLOUDS below).
     if env_var("CLOUD"):
         return Path.home() / f"{env_var('CLOUD')}-deploy"
-    new, old = Path.home() / "stillfail-deploy", Path.home() / "ember-deploy"
-    # The keys in it are what every session and station trusts: never start a fresh one next to the old.
-    return old if old.exists() and not new.exists() else new
+    return Path.home() / "stillfail-deploy"
 
 
 DEPLOY = deploy_dir()

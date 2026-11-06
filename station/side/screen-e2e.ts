@@ -33,7 +33,7 @@ const RELAY = process.env.RELAY ?? "http://127.0.0.1:3340";
 const WORK = process.env.WORK ?? "/tmp/screen-e2e";
 const WAIT = Number(process.env.WAIT ?? 1800);
 const SECONDS = Number(process.env.SCREEN_SECONDS ?? 5);
-const LABEL = "dev.ember.screen-e2e";
+const LABEL = "dev.stillfail.screen-e2e";
 const native = (what: string) => execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", what], { encoding: "utf8" }).trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const say = (s: string) => console.log(`\n== ${s}`);

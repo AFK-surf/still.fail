@@ -48,7 +48,7 @@ CREATE TABLE sessions (
   archived_at INTEGER,                -- hidden from lists; deleted sessions are gone entirely
   archived_by TEXT,                   -- manual | auto (the station, after it idled)
   shown_at INTEGER,                   -- last shown again by hand: the idle clock starts over
-  cwd TEXT                            -- where its runtime runs when not the workspace (a session continued from outside ember)
+  cwd TEXT                            -- where its runtime runs when not the workspace (a session continued from outside still.fail)
 );
 
 -- A place people talk. Ids are never used again (AUTOINCREMENT), so what a client keeps of a thread stays true.
@@ -327,7 +327,7 @@ unread marks and who takes part are the viewer's:
   "unread": true,                 // messages after the viewer's read position that are not their own (the store's unreadCount)
   "mine": true,
   "lastActiveAt": 1790000000000,  // the latest message's time, else the chat's; without a chat: the session's
-  "connect": "ds" | null,         // the connect its agent came from; null for one made on ember
+  "connect": "ds" | null,         // the connect its agent came from; null for one made on still.fail
   "origin": { "teamName": "Acme", "channel": "C1", "channelName": "ops", "threadTs": "…" } | null
 }
 ```
@@ -479,7 +479,7 @@ when it is small:
 | `chat-removed` | `{ id }`: an item gone from the viewer's sidebar |
 | `made` | `{ rows: true, marks: true }`, first on a stream asked with `rows=1`; `marks`: the client makes the whole sidebar itself from the sessions' and threads' summaries it holds and `GET /chats?marks=1` (what the station keeps beside them: cards and needs waiting, answered cards, the review's marks, pins, kept chats, openers and opened chats, shares, client keys, Slack teams and the viewer's Slack users; `&session=&thread=`, repeated: those chats' alone), read again for a chat on `chat-mark`, `chat-changed`, a card posted or a person writing, and reads no rows; before it: the client makes the viewer's sidebar items from what it is told (`thread`, `session`, `read`, `pin`, `dismiss`, `kept`), and none is read and told for those; what only the station can say of them (a card waiting, an agent's need, an item new or gone, the review's marks: after a `chat-mark`) it reads, the items those touch alone (`GET /chats?session=<key>&thread=<id>`, repeated: `{ rows, scope }`, an id of `scope` not among `rows` gone); its sidebar is not read as its stream opens, nor told against |
 | `chat-changed` | `{ thread }`: what changes which sidebar items there are and what they say beside what is said in it (its sessions, its shares); `{}`: anything of them (the settings, who the viewer is on Slack): a client that makes its items reads those, or all of them |
-| `overview` | the whole overview, with the viewer and their Slack users (`slackUsers`) — sent when config, connect status, logins, profile checks, quotas, ember-mesh's state, recorded runtime processes, the running/warm counts or a viewer's Slack users change |
+| `overview` | the whole overview, with the viewer and their Slack users (`slackUsers`) — sent when config, connect status, logins, profile checks, quotas, stillfail-mesh's state, recorded runtime processes, the running/warm counts or a viewer's Slack users change |
 | `host` | host info; sampled every 10 s **only while some client asks for it** (`/events?host=1`) and sent when it changed |
 
 Changes within one turn of the event loop are gathered: one `session` event
@@ -551,8 +551,8 @@ A device keeps one WebSocket per account to the directory (hibernatable, so
 idle sockets cost nothing).
 
 - **Auth**: browsers cannot set headers on a WebSocket, so the access token
-  travels as a subprotocol: `new WebSocket(url, ["ember-events",
-  "ember-token." + accessToken])`; the answer selects `ember-events`. (A
+  travels as a subprotocol: `new WebSocket(url, ["stillfail-events",
+  "stillfail-token." + accessToken])`; the answer selects `stillfail-events`. (A
   header keeps it out of URLs and so out of request logs; query strings are
   not accepted.) The token is checked at connect only: it may expire while
   the socket stays open, since events name what changed and carry nothing a
@@ -581,9 +581,9 @@ station works without this socket (devices keep their credentials).
 `last_seen` is when it last connected or disconnected.
 
 - **Auth**: signed with the station's key at connect, in headers:
-  `x-ember-station` (its key, hex), `x-ember-ts` (unix seconds, within 5
-  minutes), `x-ember-signature` (hex Ed25519 over
-  `ember-station-connect-v1:<origin>:<station>:<ts>`), and `x-ember-version`.
+  `x-stillfail-station` (its key, hex), `x-stillfail-ts` (unix seconds, within 5
+  minutes), `x-stillfail-signature` (hex Ed25519 over
+  `stillfail-station-connect-v1:<origin>:<station>:<ts>`), and `x-stillfail-version`.
   A station that is not enrolled gets 404 and refuses clients until it is.
 - **From the cloud**: `{"type":"state","workspace","workspace_name","name","grant_keys","revocations"}`
   on connect and whenever these change (renamed, moved by re-enrolling), with

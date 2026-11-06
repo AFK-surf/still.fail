@@ -502,7 +502,7 @@ function EnvSection({ profile, onSave, busy }: { profile: Profile; onSave(input:
 }
 
 /**
- * Signing a subscription account in without a terminal: ember runs the
+ * Signing a subscription account in without a terminal: still.fail runs the
  * runtime's login on its own machine and this panel relays the browser steps.
  */
 function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {

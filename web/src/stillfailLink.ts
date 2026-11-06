@@ -29,7 +29,7 @@ export function ownOrigin(url: URL, here: string = location.origin, cloud: strin
   return cloudHost(url) && (ours(here) || ours(cloud));
 }
 
-/** What an ember link names, or null when it is not one. */
+/** What a still.fail link names, or null when it is not one. */
 export function stillfailLink(href: string): StillFailLink | null {
   let url: URL;
   try { url = new URL(href, location.href); } catch { return null; }
@@ -41,7 +41,7 @@ export function stillfailLink(href: string): StillFailLink | null {
   };
 }
 
-/** The ember link a click (a plain one: no modifier, the main button) lands on, or null. */
+/** The still.fail link a click (a plain one: no modifier, the main button) lands on, or null. */
 export function stillfailLinkClicked(event: MouseEvent | ReactMouseEvent): StillFailLink | null {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
   const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;

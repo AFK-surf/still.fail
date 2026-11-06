@@ -80,14 +80,14 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 ## 连接 station 与成员凭证
 
-设备连 station 靠一张 **成员凭证**（`POST /v1/workspaces/:ws/credential {device}`）：still.fail cloud 用 Ed25519 签的 JWT（`typ: ember-member+jwt`），写明账号、邮箱、名字、workspace、角色、设备公钥和登录会话（`sid`），30 天有效。
+设备连 station 靠一张 **成员凭证**（`POST /v1/workspaces/:ws/credential {device}`）：still.fail cloud 用 Ed25519 签的 JWT（`typ: stillfail-member+jwt`），写明账号、邮箱、名字、workspace、角色、设备公钥和登录会话（`sid`），30 天有效。
 
 - station 离线校验：签名来自登记时保存的公钥、workspace 是自己的、设备公钥等于这条 iroh 连接对端的公钥、没过期、没被吊销。同一张凭证进这个 workspace 的每一台 station。
 - 设备把凭证存在本地（`credential/<账号>/<workspace>`，记着签给哪台设备），一天内直接用，过了一天向 still.fail cloud 换新的；still.fail cloud 连不上时，旧的一直用到过期。station 拒绝时（被吊销、过期）立刻换新的。退出账号时一并删掉。
 - **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，still.fail cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 still.fail cloud 时从 `state` 里补上。
 - still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。
 
-连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: zstd` 时，512 字节以上的 JSON 和文本回应用 zstd 压缩，回应头带 `content-encoding: zstd`，SSE 每个事件后 flush 一次、窗口 1 MB（station/src/mesh/compress.ts）；preview 的回应原样转发。
+连接上优先用 ALPN `stillfail/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: zstd` 时，512 字节以上的 JSON 和文本回应用 zstd 压缩，回应头带 `content-encoding: zstd`，SSE 每个事件后 flush 一次、窗口 1 MB（station/src/mesh/compress.ts）；preview 的回应原样转发。
 
 station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在它的 Node 插件 station/native/mesh 里）：把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
@@ -125,7 +125,7 @@ relay 转发的是包，不替收方攒：一个包在发给某个客户端的�
 
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
-- **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
+- **局域网**：mDNS（服务名 `stillfail`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
 - **公网**：station 把自己所在的 relay 发布到 Mainline DHT，设备查得到它换过的 relay。
 - 浏览器（wasm）只能走 relay：still.fail 的，或下面说的 workspace 自己的。
 
@@ -177,6 +177,6 @@ still.fail cloud 由以下 Worker 组成（`cloud/wrangler*.jsonc`）：
 
 同一个域名上，路由优先于 Custom Domain，所以 API 和 relay 的路径到各自的 Worker，其余都是静态站点。域名没变，客户端不用改。
 
-`cloud/deploy.py [api relay web admin preview]`（在维护者的部署机上运行，需要 `wrangler login` 和 docker）逐个部署，不写就是全部；维护者的部署脚本只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://app.still.fail`，Google 登录用单独的 OAuth 客户端，客户端 JSON 在部署目录的 `google-oauth.json`。默认部署目录是 `~/stillfail-deploy`（`STILLFAIL_DEPLOY_DIR` 可覆盖；只有旧 `~/ember-deploy` 存在时仍沿用它）。密钥在 `keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在部署目录的 `posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在部署目录的 `axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
+`cloud/deploy.py [api relay web admin preview]`（在维护者的部署机上运行，需要 `wrangler login` 和 docker）逐个部署，不写就是全部；维护者的部署脚本只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://app.still.fail`，Google 登录用单独的 OAuth 客户端，客户端 JSON 在部署目录的 `google-oauth.json`。默认部署目录是 `~/stillfail-deploy`（`STILLFAIL_DEPLOY_DIR` 可覆盖）。密钥在 `keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在部署目录的 `posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在部署目录的 `axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
 
 本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 在 miniflare 里按线上的路由起全部 Worker（Google 用模拟），配合 `iroh-relay --dev`，步骤见 [development.md](development.md)。

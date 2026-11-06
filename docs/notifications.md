@@ -112,7 +112,7 @@ with `notice.claim`, so it is shown once however many pages are open; one not ta
 - A session signed out (`/v1/auth/logout`, revoked) takes its registrations with it.
 - `POST /v1/stations/notify`, signed by the station like its traces: headers
   `x-stillfail-station`, `x-stillfail-ts`, `x-stillfail-signature` = ed25519
-  over `ember-station-notify-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`.
+  over `stillfail-station-notify-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`.
   Body:
 
   ```jsonc

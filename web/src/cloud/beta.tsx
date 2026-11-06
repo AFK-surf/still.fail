@@ -1,4 +1,4 @@
-// The test channel (app.youdid.wtf): the same build as app.still.fail, served by ember-web-beta, which marks each page
+// The test channel (app.youdid.wtf): the same build as app.still.fail, served by stillfail-web-beta, which marks each page
 // with <meta name="stillfail-beta" content="<the stable origin>"> (cloud/src/web.ts). The core talks to the page's own
 // origin, so on that host it calls the API there, which lets in only the accounts the admin turned beta on for and
 // answers the others' calls 403 not_beta. Here the page goes by the test channel's name (youdid.wtf, which is all it

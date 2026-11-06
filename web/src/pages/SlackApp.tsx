@@ -1,5 +1,5 @@
 import type { useConnectFlow } from "../connect-flow.ts";
-// A connect's Slack app, edited from ember: name, description, colour, icon and
+// A connect's Slack app, edited from still.fail: name, description, colour, icon and
 // permissions are written into the app's manifest with the workspace's app
 // configuration token. When permissions change, Slack asks a person to approve
 // them; that is the only step left in Slack.

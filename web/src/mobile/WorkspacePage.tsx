@@ -328,7 +328,7 @@ function AddSheet({ view }: { view: WorkspaceView }) {
   );
 }
 
-/** The account's devices: where it is signed in to ember; one not recognised can be signed out from here. */
+/** The account's devices: where it is signed in to still.fail; one not recognised can be signed out from here. */
 export function Devices() {
   const app = useApp();
   const me = app.entry.account;

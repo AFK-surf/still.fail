@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
-const temp = mkdtempSync(join(tmpdir(), 'ember-video-'));
+const temp = mkdtempSync(join(tmpdir(), 'stillfail-video-'));
 const fixture = new URL('../../web/src/video-check.tsx', import.meta.url);
 const html = new URL('../../web/video-check.html', import.meta.url);
 let browser;

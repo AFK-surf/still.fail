@@ -1220,7 +1220,7 @@ export function NewProfileScreen() {
   const station = useStation();
   const overview = useOverview(station.address).value;
   const { d, edit, submit, submitting } = useProfileFlow(station.address);
-  // `?kind=`: a machine login kept in the keychain, signed in again for ember as the vendor's plan.
+  // `?kind=`: a machine login kept in the keychain, signed in again for still.fail as the vendor's plan.
   const [params, setParams] = useSearchParams();
   const kind = params.get("kind");
   useEffect(() => {

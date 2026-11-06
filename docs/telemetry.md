@@ -111,7 +111,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 When something is slow, one trace per user action shows where the time went,
 hop by hop: the client core (the web's SharedWorker or a native app), still.fail
-cloud, and ember-mesh on the station. Spans are
+cloud, and stillfail-mesh on the station. Spans are
 OpenTelemetry (OTLP JSON) and end up in Axiom, dataset `ember`.
 
 ### What is traced
@@ -132,7 +132,7 @@ Inside a trace:
 
 - **core**: a span per station request (`GET /admin/api/threads/:id/messages`),
   ending when the whole answer is read — an event stream's when it is open
-  (`ember.stream`); `station.connect` for the events stream a view asked for;
+  (`stillfail.stream`); `station.connect` for the events stream a view asked for;
   `mesh.connect` when a request has to open the link first (credential, iroh
   connection; every way dialled at once, `stillfail.via` the relay of the one
   that came through first), with the still.fail cloud requests it made. Where
@@ -185,7 +185,7 @@ Inside a trace:
   VPN's.
 - **still.fail cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
-- **ember-mesh**: a span per request stream, from the stream accepted to the
+- **stillfail-mesh**: a span per request stream, from the stream accepted to the
   answer's last byte written (an event stream's: to its head). The station's
   admin API runs in the same process (`stillfail-station`) and has no span of its
   own.
@@ -193,25 +193,25 @@ Inside a trace:
 A request without a trace (one an event caused, a stream's later reads) is a
 trace of its own, one span per hop.
 
-Every station request carries a W3C `traceparent`; ember-mesh records its span
+Every station request carries a W3C `traceparent`; stillfail-mesh records its span
 under it, so the hops nest. Requests to
 still.fail cloud carry one only inside a trace.
 
 Attributes: `http.request.method`, `url.path` (the route with ids as `:id`,
 no query), `http.response.status_code`, sizes (`http.request.body.size`,
-`http.response.body.size`), `ember.station` (the station's id), `ember.path`
-(`relay`, `direct`, or `local` for a station's own page), `ember.stream`,
-`ember.cancelled` (the span's task ended before it did: the chat was closed
+`http.response.body.size`), `stillfail.station` (the station's id), `stillfail.path`
+(`relay`, `direct`, or `local` for a station's own page), `stillfail.stream`,
+`stillfail.cancelled` (the span's task ended before it did: the chat was closed
 before it opened), `error.type`, `stillfail.cause` (what the transport said where a connection failed under it:
 people are told only 无法连接此 station or 连接中断). Never message content, titles, file names or
-emails. `service.name` says which hop: `ember-web`, `ember-native`,
-`stillfail-cloud`, `ember-mesh` (historical cloud spans use `ember-cloud`); a station's spans also carry the
-resource attribute `ember.station`, and a client's `service.version`, its app's build (`0.1.2420`) once its UI has
+emails. `service.name` says which hop: `stillfail-web`, `stillfail-native`,
+`stillfail-cloud`, `stillfail-mesh` (historical cloud spans use `ember-cloud`); a station's spans also carry the
+resource attribute `stillfail.station`, and a client's `service.version`, its app's build (`0.1.2420`) once its UI has
 said it (`client.device`).
 
 Times: the web core times with `performance.now()`, native with a monotonic
 clock (`Host::monotonic_ms`), converted to Unix nanoseconds from the wall
-clock read once when the trace started. ember-mesh does the same with its
+clock read once when the trace started. stillfail-mesh does the same with its
 own clock, so hops on different machines are only as aligned
 as their clocks; durations are exact.
 
@@ -226,10 +226,10 @@ batch), which forwards them to `https://api.axiom.co/v1/traces`:
 - a client core batches for 3 s (`EXPORT_MS`) after a span ends and sends as
   its first signed-in account (`Authorization: Bearer`); with nobody signed in
   the batch is dropped.
-- ember-mesh batches the same way and signs each batch with the
-  station's key: headers `x-ember-station`, `x-ember-ts` (unix seconds, within
-  5 minutes) and `x-ember-signature` over
-  `ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`;
+- stillfail-mesh batches the same way and signs each batch with the
+  station's key: headers `x-stillfail-station`, `x-stillfail-ts` (unix seconds, within
+  5 minutes) and `x-stillfail-signature` over
+  `stillfail-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`;
   the station must be enrolled.
 - still.fail cloud sends its own spans to Axiom directly, after answering
   (`ctx.waitUntil`).
@@ -250,7 +250,7 @@ sender (an account, a station) 60 batches a minute (`429` beyond), answers
   ```
 
   in `config.json` (off by default; read when `stillfail-station` starts, so
-  restart the station after changing it). Off, ember-mesh records nothing but
+  restart the station after changing it). Off, stillfail-mesh records nothing but
   still passes the `traceparent` on.
 - still.fail cloud records a span only for a call whose `traceparent` is sampled.
 
@@ -266,7 +266,7 @@ hop in them:
     open_ms = maxif(duration / 1ms, name == "chat.open"),
     link_ms = maxif(duration / 1ms, name == "mesh.connect"),
     cloud_ms = maxif(duration / 1ms, ['service.name'] in ("stillfail-cloud", "ember-cloud")),
-    mesh_ms = maxif(duration / 1ms, ['service.name'] == "ember-mesh")
+    mesh_ms = maxif(duration / 1ms, ['service.name'] == "stillfail-mesh")
     by trace_id
 | where open_ms > 0
 | top 10 by open_ms desc
@@ -332,7 +332,7 @@ CoreError `stamped`) failed at that second, the device's local time; its failed 
 
 The attributes above are under `attributes` (Axiom puts those OpenTelemetry
 does not define under `attributes.custom`, e.g.
-`['attributes.custom']['ember.path']`).
+`['attributes.custom']['stillfail.path']`).
 
 ### Signing out
 
