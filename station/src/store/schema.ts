@@ -38,10 +38,7 @@ CREATE TABLE IF NOT EXISTS decision_checks (
 );
 -- A session's latest check (review.ts undecided, for every done chat).
 CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
--- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
--- rows of those latest (a station: many checks of many sessions in a week). Existing decision_checks_at indexes stay
--- for older connections, but need not be created: this index also covers searches by created_at alone.
-CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
+-- The time lookup is installed after SCHEMA: an older populated table must not be indexed in one long startup write.
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
   connect TEXT NOT NULL,
