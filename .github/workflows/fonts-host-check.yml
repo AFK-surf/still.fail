@@ -5,7 +5,7 @@ on:
     paths: ["font-check/**", ".github/workflows/fonts-host-check.yml"]
 jobs:
   linux-watch:
-    if: github.event.head_commit.message != 'Check retained font preview'
+    if: github.event.head_commit.message == 'Check in-place font writes'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -34,7 +34,7 @@ jobs:
           "$RUNNER_TEMP/linux-font-watch" ../assets/fonts/jetbrains_mono.ttf
           cc -std=c11 -fsyntax-only -I "$MOON_HOME/include" $(pkg-config --cflags pangocairo pangoft2 fontconfig) src/host/linux_text.c
   ui-test:
-    if: github.event.head_commit.message != 'Check in-place font writes' && github.event.head_commit.message != 'Check retained font preview'
+    if: github.event.head_commit.message == 'Check configured and discovered font directories'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -84,3 +84,37 @@ jobs:
             tail -c 20000 "$RUNNER_TEMP/page-test.log"
             exit 1
           fi
+  baseline-pictures:
+    if: github.event.head_commit.message == 'Capture the baseline fonts screens'
+    runs-on: macos-15
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5876fa3066a681094b4b3295daefd15e87c19891
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Render the baseline at the three screen sizes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/inbox" "$RUNNER_TEMP/fonts-pictures"
+          gh run download 42193026190 -n fonts-baseline-renderer -D "$RUNNER_TEMP/inbox"
+          printf 'until 登录页在 Safari 上点了没反应\nexit\n' > "$RUNNER_TEMP/fonts.drive"
+          bash apps/mbui/scripts/media-job.sh picture "$RUNNER_TEMP/fonts.drive" "$RUNNER_TEMP/fonts-job"
+          export STILLFAIL_NATIVE_INBOX="$RUNNER_TEMP/inbox" MBUI_FIXTURE=settings-fonts MBUI_FILM_SCALE=2
+          MBUI_WIN=390x844 MBUI_FILM_PLATFORM=2 MBUI_NATIVE_INPUT=finger bash "$RUNNER_TEMP/fonts-job/run.sh" "$RUNNER_TEMP/fonts-pictures/font-before-small.png"
+          MBUI_WIN=720x900 MBUI_FILM_PLATFORM=0 MBUI_NATIVE_INPUT=mouse bash "$RUNNER_TEMP/fonts-job/run.sh" "$RUNNER_TEMP/fonts-pictures/font-before-medium.png"
+          MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0 MBUI_NATIVE_INPUT=mouse bash "$RUNNER_TEMP/fonts-job/run.sh" "$RUNNER_TEMP/fonts-pictures/font-before-large.png"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fonts-baseline-pictures
+          path: ${{ runner.temp }}/fonts-pictures/
+          if-no-files-found: error
+          retention-days: 1
