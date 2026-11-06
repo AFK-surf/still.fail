@@ -125,6 +125,12 @@ station restarts; no local polling job is needed. End `waiting`, naming the task
 `station_file` and post them to the requesting chat. Downloads create new files, never overwrite; inputs may be
 uploaded again before start.
 
+When a task changes files in a mirror, the next sync preserves those changes if the source is unchanged, and refuses
+conflicting changes on both sides. Its result must finish coming back before another task uses the mirror. If a notice
+says some results could not be saved, preserve those with `station_file` first, then use `station_task` action `release`
+with that task's key; this permits later tasks to change the remote files. A target without this protection must be
+updated before a task can sync a directory there.
+
 After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
 automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.
 
