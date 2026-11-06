@@ -20,12 +20,12 @@ priv struct SceneLayer {
   mut seg_from : Int
   mut seg_count : Int
   /// its bands of shapes (kind 11), from its first instance: their first piece told again where it is copied
-  mut bands : Array[Int]
+  bands : Array[Int]
   /// the host's controls put where it draws them (View::native_anchor): each one's number (native_anchor_number) and
   /// its instance, from its first; while it is drawn, the instance's place among the frame's (scene_anchor_drawn)
-  mut anchors : Array[(Int, Int)]
+  anchors : Array[(Int, Int)]
   /// the layers it holds, at once below it: moved with it where it is copied; and the layer it is in at once
-  mut inner : Array[@view.NodeId]
+  inner : Array[@view.NodeId]
   mut outer : @view.NodeId?
   /// what it was drawn in as it began: the clip it was cut by (clip_stack's level, whether it is the window's, its
   /// outer apart from it), the fades, stretches and glyph looks of what holds it, and where its node is drawn (where,
@@ -53,9 +53,9 @@ priv struct SceneLayer {
   /// editor has them): never copied, never drawn again alone
   mut each : Bool
   /// the glyphs' plots it draws from, held in their atlas while it is in the scene (colour or not, the plot)
-  mut plots : Array[(Bool, Int)]
+  plots : Array[(Bool, Int)]
   /// the pictures it shows, each as asked (source, pixels): asked again where it is copied, kept as shown
-  mut images : Array[(String, Double)]
+  images : Array[(String, Double)]
   /// its drawing read the clock (an image fading in): drawn again each frame the clock goes
   mut reads_clock : Bool
   /// the frame that last drew it (Scene's `frame`)
