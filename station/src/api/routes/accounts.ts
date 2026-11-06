@@ -109,7 +109,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {
-        const queued = a.reviewUndecided(r.viewer, r.lang);
+        const queued = await a.reviewUndecided(r.viewer, r.lang);
         return ok({ queued, overview: await view(r) });
       }),
     ),

@@ -102,8 +102,16 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
       const store = yield* Store;
       const previous = yield* Previous;
       yield* Effect.acquireRelease(
-        Effect.sync(() => buildLegacyEntryLookups(store, previous.exited)),
-        (builder) => Effect.promise(() => builder.close()),
+        Effect.sync(() => {
+          const builder = buildLegacyEntryLookups(store, previous.exited);
+          const wait = () => builder.waitForDecisionSessions();
+          store.waitForDecisionSessions = wait;
+          return { builder, wait };
+        }),
+        ({ builder, wait }) => Effect.promise(async () => {
+          if (store.waitForDecisionSessions === wait) store.waitForDecisionSessions = null;
+          await builder.close();
+        }),
       );
       return yield* Effect.acquireRelease(Effect.sync(() => {
         const pool = new ReaderPool(data, undefined, undefined, undefined, { previousGone: previous.exited, priority: store.backfillPriority });

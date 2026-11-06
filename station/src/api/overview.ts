@@ -11,6 +11,7 @@ import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
+import { DecisionSessionsUnavailable } from "../store/legacy-decision-session.ts";
 import { sessionChatReadable } from "../store/session-chat-index.ts";
 import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
@@ -242,8 +243,16 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
   const now = d.store.now();
   const was = kept.get(whose);
   if (was !== undefined && was.stamp === stamp && now - was.at < DECISIONS_KEPT_MS) return structuredClone(was.view);
+  const notReady = Symbol("decision sessions not ready");
+  const make = (name: (session: string) => string, visible?: Map<string, boolean>) => {
+    try { return madeDecisionsView(d, viewer, name, visible); }
+    catch (error) { if (error instanceof DecisionSessionsUnavailable) return notReady; throw error; }
+  };
   let view: unknown;
-  if (d.hub.prepareSessionChatNames == null) view = madeDecisionsView(d, viewer, (session) => chatTitleOf(d.store, session));
+  if (d.hub.prepareSessionChatNames == null) {
+    view = make((session) => chatTitleOf(d.store, session));
+    if (view === notReady) { await d.store.prepareDecisionSessions(); return decisionsView(d, viewer); }
+  }
   else {
     // The policy and checks already select the names they show. Collect those names as placeholders while making the
     // view once, prepare them together, and replace only the placeholders after their bounded reads are ready.
@@ -259,7 +268,8 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
       return placeholder as unknown as string;
     };
     const visible = new Map<string, boolean>();
-    view = madeDecisionsView(d, viewer, pendingTitle, visible);
+    view = make(pendingTitle, visible);
+    if (view === notReady) { await d.store.prepareDecisionSessions(); return decisionsView(d, viewer); }
     const names = new Map<string, string>();
     let waited = false;
     for (;;) {
