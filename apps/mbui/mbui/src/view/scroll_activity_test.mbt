@@ -130,7 +130,10 @@ test "a user coast ended by shorter content tells the listener without counting 
   tree.bring_to(50.0)
   count.set(0)
   tree.frame(200.0, 200.0, now=50.0) |> ignore
-  tree.advance(10000.0)
+  match scroll.glides_till() {
+    Some(end) => tree.advance(end)
+    None => ()
+  }
   assert_true(events.last() is Some(@view.ScrollStopped(_, true)))
   tree.dispose()
 }
