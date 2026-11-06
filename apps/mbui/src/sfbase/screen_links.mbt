@@ -464,7 +464,7 @@ pub(all) struct Peek {
   mut target : Int
   /// what its view's frames are (its config's `codec`): "jpeg" before one says otherwise
   mut codec : String
-  /// its video's decoder (an H.264 preview), made as its config comes; its frames acknowledged once each is shown
+  /// its video's decoder (an H.264 preview), made as its config comes; each frame acknowledged as it is shown
   mut stream : @ui.Stream?
   /// it holds one of the app's video previews (video_peeks_most)
   mut video : Bool
@@ -597,8 +597,8 @@ pub fn peek_picture(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// A value of a preview as it comes. A config: what its frames are; H.264's (an Android device's) to the card's Stream,
 /// if the app decodes fewer than video_peeks_most videos now, else the preview let go (asked again later). A frame:
-/// a JPEG handed over under a key of its own, its `ts` to acknowledge; an H.264 one to the Stream, acknowledged once
-/// it is shown or let go.
+/// a JPEG handed over under a key of its own, its `ts` to acknowledge peek_ms after the one before; an H.264 one to
+/// the Stream, acknowledged as soon as it is shown or let go (the station paces an Android preview itself).
 pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
   if p.view != view {
     return
@@ -620,7 +620,13 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
           Some(st) => st
           None => {
             let st = @ui.Stream::new(
-              shown=fn(ts) { if p.view == view { p.waiting.push(Json::number(ts)) } },
+              // acknowledged as it is shown or let go, not at a later frame's build (nothing may build one: the
+              // station would wait on it); its pace is the station's own (an Android preview's 2 frames a second)
+              shown=fn(ts) {
+                if p.view == view {
+                  (src.call)("screen.ack", { "view": Json::string(view), "ts": Json::number(ts) }, fn(_) {  })
+                }
+              },
               broken=fn() {
                 if p.view == view {
                   (src.call)("screen.keyframe", { "view": Json::string(view) }, fn(_) {  })

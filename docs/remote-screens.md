@@ -775,7 +775,8 @@ the list, `gone` once the list has it no more); within a sentence, its title. A 
 in its card: a preview view (about the card's width in device pixels) while the card is on the screen and the app
 shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until the
 first comes. A card asks JPEG, and H.264 where the client decodes it (web: WebCodecs; the app: its Stream, where the
-host decodes H.264): sources that have JPEG send it (a tab, a simulator), an Android device sends H.264. A client decodes
+host decodes H.264): sources that have JPEG send it (a tab, a simulator), an Android device sends H.264, its frames
+acknowledged as each is shown (the station already sends them 2 a second). A client decodes
 at most two previews as a video at once (a phone has few hardware decoders): one more is let go and its mark stays. A
 preview refused (the station runs as many as it can) or ended asks again 5 s on while its card is on the screen. In the app, a browser's preview has a fixed 16:10 shape: its changing viewport does not resize the
 message or move the rest of the list. A simulator's preview follows the screen's size within bounds. The picture fills
