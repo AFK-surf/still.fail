@@ -54,6 +54,12 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   // Kept to less context than its model's window: that is the window it fills.
   const kept = card({ ...agent, session: { context: 500_000 } }, { usage: { ...live.usage, contextTokens: 450_000, contextWindow: 1_000_000 } });
   assert.deepEqual(kept.context, { percent: 90, text: "450K / 500K", level: "amber" });
+  // Lowered under what it holds: the most it ran with till now, and said what comes, until it is compacted.
+  const lowered = card({ ...agent, attention: [], session: { context: 300_000, contextBefore: 500_000 } }, { usage: { ...live.usage, contextTokens: 450_000, contextWindow: 1_000_000 } });
+  assert.deepEqual(lowered.context, { percent: 90, text: "450K / 500K", level: "amber" });
+  assert.deepEqual(lowered.attention, [{ text: "本轮结束后压缩到 300K", level: "amber" }]);
+  const whole = card({ ...agent, attention: [], session: { context: 300_000, contextBefore: 0 } }, { usage: { ...live.usage, contextTokens: 627_800, contextWindow: 1_000_000 } });
+  assert.equal(whole.context.text, "627.8K / 1M");
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
   assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);

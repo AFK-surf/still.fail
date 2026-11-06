@@ -85,6 +85,7 @@ export type SessionStore = {
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, wait: number | null): void;
   declareTurn(id: string, declared: string, wait: number | null): void;
   setRunning(key: string, running: boolean): void;
+  setSessionContextBefore(key: string, before: number | null): void;
   setRuntimeSessionId(key: string, id: string | null): void;
   /// The runtime sessions it ran in, the first first (optional: none known without it).
   runtimeSessions?(key: string): string[];
@@ -676,6 +677,28 @@ export class SessionActor {
     }).then(() => refused);
   }
 
+  /// What it holds is over its lowered most (`contextBefore`): compacted now if nothing runs; else a turn's end or the
+  /// next message comes back here.
+  compactToCap(): Promise<void> {
+    return this.enqueue(async () => {
+      await this.compactingToCap();
+    });
+  }
+
+  /// Whether a compaction down to its most has begun, for its end to go on from. Tried once: its runtime still compacts
+  /// on its own a few calls on.
+  private async compactingToCap(): Promise<boolean> {
+    const store = this.deps.store;
+    if (store.getSession(this.key)?.contextBefore == null) return false;
+    if (this.turn || this.compacting || this.waiting !== null || this.agent?.session.busy() || this.deps.held(this.key) || this.archived()) return false;
+    const refused = await this.beginCompacting();
+    if (refused === null) return true;
+    log.info("session", "could not compact down to its most context", { session: this.key, why: refused });
+    store.setSessionContextBefore(this.key, null);
+    store.notify(this.key);
+    return false;
+  }
+
   private async beginCompacting(): Promise<string | null> {
     if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     if (this.deps.held(this.key)) return t("station.context.held");
@@ -690,7 +713,7 @@ export class SessionActor {
     // Gone on in a new runtime session (another account's): nothing in it to compact yet.
     if (this.afresh !== null) return t("station.context.empty");
     if (!agent.compact) return t("station.context.cannotCompact", { name: runtimeLabel(this.runtime) });
-    log.info("session", "compacting its context, asked by hand", { session: this.key });
+    log.info("session", "compacting its context", { session: this.key });
     this.compacting = true;
     this.deps.store.setRunning(this.key, true);
     this.deps.store.notify(this.key);
@@ -713,8 +736,9 @@ export class SessionActor {
     const stopRequested = this.stopRequested;
     this.stopRequested = false;
     store.setRunning(this.key, false);
+    store.setSessionContextBefore(this.key, null);
     store.notify(this.key);
-    log.info("session", "compaction by hand ended", { session: this.key, outcome: outcome.kind });
+    log.info("session", "compaction ended", { session: this.key, outcome: outcome.kind });
     if (outcome.kind === "completed") await this.notice(t("station.notice.compacted"));
     else if (outcome.kind === "failed") {
       log.warn("session", "compaction failed", { session: this.key, reason: outcome.reason, error: outcome.message });
@@ -932,6 +956,7 @@ export class SessionActor {
   private async pump() {
     if (this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
     const store = this.deps.store;
+    if (!store.hasPending(this.key) || (await this.compactingToCap())) return;
     const pending = store.pendingMessages(this.key);
     if (pending.length === 0) return;
     const [text, widgets] = await this.format(pending);
@@ -1524,6 +1549,7 @@ export class SessionActor {
       this.deps.idle(this.key);
       return;
     }
+    if (outcome.kind === "completed" && ends?.kind !== "waiting" && (await this.compactingToCap())) return;
     if (store.hasPending(this.key)) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;

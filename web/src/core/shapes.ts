@@ -1131,6 +1131,11 @@ export interface Session {
 	 * model's whole window.
 	 */
 	context?: number;
+	/**
+	 * What it holds is over `context`, lowered meanwhile, until it is compacted once its turn is over: the most it
+	 * ran with till then, 0 its model's whole window.
+	 */
+	contextBefore?: number;
 	runtimeSessionId?: string;
 	/** What its station can do to its context by hand: compact, clear (one from before says none). */
 	contextActions?: string[];

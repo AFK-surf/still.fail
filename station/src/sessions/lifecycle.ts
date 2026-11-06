@@ -13,6 +13,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
+import { usageNow } from "../read/usage.ts";
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
@@ -216,20 +217,28 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   const { row, runtime, model, effort, profile, pinned, repick } = hub.accounts.change(key, change, lang);
   const movedRuntime = runtime !== row.runtime && typeof profile === "string";
   const recapped = change.context !== undefined && change.context !== row.context;
+  // Its runtime compacts on its own only some calls into a new process: what it holds over a lower most is compacted
+  // once this turn is over, not sent whole again first.
+  const over = !movedRuntime && typeof change.context === "number" && (usageNow(hub.store, key)?.contextTokens ?? 0) > change.context;
   if (movedRuntime) {
     if (row.runtimeSessionId) hub.store.ranIn(key, row.runtimeSessionId, row.profile);
     hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null);
+    hub.store.setSessionContextBefore(key, null);
   } else {
     if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
     if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
     if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
-    if (recapped) hub.store.setSessionContext(key, change.context ?? null);
+    if (recapped) {
+      hub.store.setSessionContext(key, change.context ?? null);
+      hub.store.setSessionContextBefore(key, over ? (row.contextBefore ?? row.context ?? 0) : null);
+    }
     if (repick) hub.accounts.repick(key);
     else if (profile === null) hub.accounts.runOn(key);
   }
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
   // one takes it.
   await hub.changed(key, movedRuntime || recapped);
+  if (recapped && over) await hub.actor(hub.store.getSession(key) ?? row).compactToCap();
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort, context: hub.store.getSession(key)?.context ?? "" });
   // Its last turn stopped at the allowance, or waits to be tried again on a model at capacity: changed, it goes on by
   // itself (at once).
