@@ -131,16 +131,18 @@ test "panel row geometry: inherited late, updated on the same node, shadowed by 
 ///|
 test "panel card room: card line and inherited words follow the panel, with no reach outside or in a small panel" {
   let context = @signals.signal(PanelRowContext::{ sides_in: 24.0, rows_out: 8.0, words_in: 0.0, small: false })
+  let body : Ref[@view.View?] = Ref(None)
   let room : Ref[@view.View?] = Ref(None)
   let child : Ref[@view.View?] = Ref(None)
   let nested_room : Ref[@view.View?] = Ref(None)
   let nested_child : Ref[@view.View?] = Ref(None)
   let page_child : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
-    root.box(fn(body) {
-      body.width(Is(Some(240.0))).padding(Is((20.0, 0.0, 20.0, 0.0))) |> ignore
-      panel_rows_lent(body, fn() { context.get() })
-      room.val = Some(panel_card_room_node(body, fn(card_room) {
+    root.box(fn(panel) {
+      body.val = Some(panel)
+      panel.width(Is(Some(240.0))).padding(Is((20.0, 0.0, 20.0, 0.0))) |> ignore
+      panel_rows_lent(panel, fn() { context.get() })
+      room.val = Some(panel_card_room_node(panel, fn(card_room) {
         card_room.height(Is(Some(40.0))) |> ignore
         card_room.box(fn(c) { child.val = Some(c) }) |> ignore
         nested_room.val = Some(panel_card_room_node(card_room, fn(inner) {
@@ -172,6 +174,19 @@ test "panel card room: card line and inherited words follow the panel, with no r
   tree.frame(300.0, 300.0) |> ignore
   assert_eq((r.rect().0, r.rect().2), (20.0, 200.0))
   assert_true(panel_row_context(c) == { sides_in: 16.0, rows_out: 0.0, words_in: 16.0, small: true })
+  // Like View::lent, a room reads a replacement lender on its parent when next read. The old signal invalidates the
+  // binding once, and subsequent changes follow the replacement signal without remaking the room or its descendants.
+  let replacement = @signals.signal(PanelRowContext::{ sides_in: 24.0, rows_out: 8.0, words_in: 0.0, small: false })
+  panel_rows_lent(body.val.unwrap(), fn() { replacement.get() })
+  assert_true(panel_row_context(in_card) == { sides_in: 16.0, rows_out: 8.0, words_in: 8.0, small: false })
+  context.set({ sides_in: 16.0, rows_out: 1.0, words_in: 16.0, small: true })
+  tree.frame(300.0, 300.0) |> ignore
+  assert_eq((r.rect().0, r.rect().2), (12.0, 216.0))
+  replacement.set({ sides_in: 0.0, rows_out: 0.0, words_in: 24.0, small: false })
+  tree.frame(300.0, 300.0) |> ignore
+  assert_eq(r.id(), id)
+  assert_eq((r.rect().0, r.rect().2), (36.0, 168.0))
+  assert_true(panel_row_context(in_card) == { sides_in: 16.0, rows_out: 0.0, words_in: 8.0, small: false })
   tree.dispose()
   assert_true(!c.alive())
   assert_true(!in_card.alive())

@@ -54,11 +54,12 @@ pub fn in_panel_node(v : @view.View) -> Bool {
 /// A room that clips or scrolls cards, at the same line as `panel_card_out`. Its children see the panel's sides and
 /// words from that room, so a card in it does not reach out a second time. A small panel and a page keep their room.
 pub fn panel_card_room_node(parent : @view.View, body : (@view.View) -> Unit) -> @view.View {
-  // Take the lender before the room lends its adjusted value: reading the room itself would find that new lender.
+  // Read the parent, not the room: the room lends its adjusted value, and its parent's lender may be lent again.
   let inherited = parent.lent(panel_rows_at)
   parent.box(fn(room) {
     match inherited {
-      Some(read) => {
+      Some(_) => {
+        let read = fn() { panel_row_context(parent) }
         let margin = fn() {
           let at = read()
           if at.small || (at.sides_in <= 0.0 && at.words_in <= 0.0) { 0.0 } else { panel_card_in - at.sides_in }
