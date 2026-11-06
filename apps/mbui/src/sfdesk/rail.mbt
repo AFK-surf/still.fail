@@ -170,10 +170,10 @@ fn rail(
   src : Source,
   w : Workspace,
   all : Array[Workspace],
+  looks : Map[String, RailLook],
   bar : Bool,
   moving? : FoldLook? = None,
 ) -> Unit {
-  let lit = lit_place()
   let rail_id = c.id("rail")
   match c.menu_asked(rail_id) {
     Some((x, y)) if wide.rail_menu.get() is None => wide.rail_menu.set(Some(("", x, y)))
@@ -237,7 +237,7 @@ fn rail(
     c.capped("rail/places", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
       c.box(style=rail_places_col, fn() {
         for place in shown {
-          rail_place(c, src, w, place, rail_lit(src, w, place), places)
+          rail_place(c, src, w, place, looks.get(place).unwrap(), places)
         }
       })
       |> ignore
@@ -245,7 +245,7 @@ fn rail(
     |> ignore
     c.spacer()
     // what comes and goes (transfers.mbt), over the workspaces
-    rail_transfers(c, src, w.id)
+    rail_transfers(c, src, w.id, looks)
     // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
     c.capped("rail/workspaces", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
       @sfpages.workspace_squares(c, src, w, all, {
@@ -256,7 +256,10 @@ fn rail(
     |> ignore
     // settings
     let gear = c.id("rail/settings")
-    if c.clicked(gear) {
+    // Entering or leaving settings can replace this shell and release its rail looks. Do it at the input, as the
+    // other places do, never halfway through the old rail's build before it samples the gear's look below.
+    c.on_press(gear, fn() {
+      let lit = lit_place()
       // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
       // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
       if lit == "settings" && wide.crowded {
@@ -270,11 +273,11 @@ fn rail(
         open_settings()
         wide.peek_next.set(wide.crowded)
       }
-    }
+    })
     rail_ground(
       c,
       gear,
-      lit == "settings",
+      looks.get("settings").unwrap(),
       fn(color) { @sf.icon(c, "settings", size=rail_icon_size, color~) |> ignore },
       label=@sf.t("web-pages.settings.title"),
     )
@@ -417,21 +420,26 @@ let rail_icon_size : Double = 20.0
 fn rail_ground(
   c : @ui.Ctx,
   id : Int,
-  on : Bool,
+  look : RailLook,
   body : (Int64) -> Unit,
   label? : String = "",
   tipped? : Bool = true,
 ) -> Unit {
   let t = @sf.theme()
-  let hover = c.lit(id)
-  // its ground and its icon's colour moved over 140 ms (Rail.css.ts item: transition background, color)
-  let key = "rail/ground/" + id.to_string()
-  let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
+  c.lit(id) |> ignore
+  look.id.set(id)
+  // The same 140 ms curves, declared by navigation and hand input (rail_looks), only sampled by this old drawing.
+  let ink = look.ink.get()
+  let h = look.hover.get()
+  let o = look.on.get()
   let b = c.box(style=rail_item, id~, fn() {
     // (lit in the closed bar, on its floating ground: the words' colour at 12%, as plain a step above it as the
     // selected grey is above the sidebar; Rail.css.ts item, closed)
     let lit = if wide.closed.get() { @sf.alpha(t.p.text, lit_in_bar) } else { t.p.selected }
-    rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
+    let ground = if h <= 0.0 && o <= 0.0 { 0L } else {
+      @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(lit, o))
+    }
+    rail_square(c, ground, fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
   // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
@@ -574,7 +582,7 @@ fn rail_place(
   src : Source,
   w : Workspace,
   place : String,
-  on : Bool,
+  look : RailLook,
   places : Array[String],
 ) -> Unit {
   let t = @sf.theme()
@@ -664,7 +672,7 @@ fn rail_place(
     _ => ""
   }
   rail_edit_frame(c, src, w, place, moved, fn() {
-    rail_ground(c, id, on || (place == "attention" && wide.attention_open.get()), fn(color) {
+    rail_ground(c, id, look, fn(color) {
       if place == "stations" {
         // the stations at a glance (Sidebar.tsx RailStations: StationGlyph, 20)
         @sf.station_glyph(c, stations_at_glance(src, w.id).0, rail_icon_size, color, t.p.red) |> ignore

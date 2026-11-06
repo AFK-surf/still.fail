@@ -177,14 +177,26 @@ test "the avatar going home draws its movement without laying out the chat again
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let em = emits_of(emit_chat)
-  let until = t.time() + Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() / 4.0
-  ignore(host_frames_till(t, until))
+  let until = t.time() + emit_all_ms()
+  // Enter Return as the host reaches it, whose distance now decides when it starts and ends. Waiting a fixed
+  // 440 ms Float plus a quarter Return can leave fewer than three frames of the actual Return to inspect.
+  while t.time() < until && !(em.current is Some(turn) && turn.pose == Return) {
+    let wanted = t.wanted_after()
+    guard wanted != @double.infinity else { fail("no frame before Return: \{emit_said(t)}") }
+    let at = if wanted <= t.time() { t.next_frame_time() } else { t.display_frame(wanted) }
+    t.frame_at(at)
+  }
   guard em.current is Some(turn) && turn.pose == Return else {
     fail("the avatar is not on its way home: \{em.current.map(fn(c) { c.pose })}")
   }
   // Compare whole and retained frames above; inspect the next frame itself, without the comparison's rebuild.
   t.check_looks(false)
-  let at = fn() { emit_flight(t.ctx(), emit_chat, em, [turn.agent]).map(fn(r) { (r.0, r.1) }) }
+  let at = fn() raise {
+    guard emit_flight(t.ctx(), emit_chat, em, [turn.agent]) is Some((x, y, _, _)) else {
+      fail("no returning avatar at \{t.time()}, phase \{em.current.map(fn(t) { (t.pose, t.clock.end()) })}")
+    }
+    (x, y)
+  }
   for _ in 0..<3 {
     let before = at()
     t.frame_at(t.next_frame_time())

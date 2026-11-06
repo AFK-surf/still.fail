@@ -209,6 +209,10 @@ pub fn[P] nav_flat_view(
         None => @signals.untracked(fn() { nav.flat_kept_entry() })
       }
       let shows = fn() { seen.get().shown.contains(k) }
+      let outer_shown = pv.lent(nav_page_shown)
+      pv.lends(nav_page_shown, fn() {
+        outer_shown.map_or(true, fn(shown) { shown() }) && shows()
+      }) |> ignore
       pv
         .over(Is(true))
         .shift(By(fn() { if seen.get().stacked { nav.shift_of(k, fn() { pv.drawn_at() }) } else { (0.0, 0.0) } }))
@@ -259,7 +263,7 @@ pub fn[P] nav_flat_view(
                   shown.val
                 },
                 fn(m) {
-                  m.basis(Is(Some(0.0))).min_height(Is(Some(0.0))).laid_nowhere(By(fn() { !shows() })) |> ignore
+                  m.basis(Is(Some(0.0))).min_height(Is(Some(0.0))).shown(shows) |> ignore
                   // (back the stack's while it is pushed over the page in place and on the stack, down to that page)
                   let floor = fn() { if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() } }
                   let when = fn() { seen.get().stacked && nav.entry(k) is Some(_) }

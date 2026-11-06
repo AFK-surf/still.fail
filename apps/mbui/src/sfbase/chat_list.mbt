@@ -629,6 +629,9 @@ fn linger_ends(l : Lingering, em : Emits, k : String, held : Bool) -> Double {
 /// watched).
 pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
   for rk, rd in readings {
+    // The retained page already owns these inputs and deadlines. Do not make
+    // the old root follow its data or navigation before chat_play skips it.
+    if rd.shown_by is Some(_) { continue }
     // every chat kept whose data the page read: its activities linger on the time that goes by, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
@@ -639,8 +642,6 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     if chat_kept(r) is None {
       continue
     }
-    // (one whose list shows is played by its node, at its moments: chat_play_node)
-    guard rd.shown_by is None else { continue }
     match chat_view_now(src, r) {
       Some(v) => {
         chat_take(c, rk, rd, v, shown=false, in_front~)
@@ -654,7 +655,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
 ///|
 /// Take a chat's data before publishing its rows. Replies waiting for an avatar never enter the list even for an
 /// intermediate layout; the activity that just ended is still there to hand them off. Advancing their poses and
-/// lingering deadlines belongs to chat_play, at their moments.
+/// lingering deadlines belongs to the retained page's input timeline, or chat_play for an old page.
 pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
   let running : Map[String, Agent] = {}
   if !v.newer {
@@ -723,8 +724,11 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
 /// A chat's own motions played on to the logic's moment, from the moments each was declared to end, whichever frame (or
 /// none) sees it: its list's turns, what comes out of its avatars (`shown`: its list laid out somewhere), its agents'
 /// lines lingering. Said where its chat is taken (chat_take) and at the moment the next of them is due, which it gives
-/// (inf: none due): played by its list's node (chat_play_node), or, a chat not shown, as time goes by (linger_tick).
+/// (inf: none due). Retained pages use chat_timeline; this entry serves the old list_frame and linger_tick.
 pub fn chat_play(c : @ui.Ctx, rk : String, rd : Reading, shown~ : Bool) -> Double {
+  // A retained page owns its phases and lingering deadlines. An old whole-picture comparison can build that
+  // same page, but must not advance its state a second time or resume it while it is covered.
+  if rd.shown_by is Some(_) { return @double.infinity }
   let em = emits_of(rk)
   let now = c.moment()
   let mut due = @double.infinity
@@ -742,7 +746,18 @@ pub fn chat_play(c : @ui.Ctx, rk : String, rd : Reading, shown~ : Bool) -> Doubl
     // words sent from here: their landing as declared (-2: not laid out yet, -1 none), kept once they are there
     // (emit_step)
     let sending = @signals.untracked(fn() { rd.landing.get() })
-    due = dmin(due, emit_step(c, rk, em, turns, sending))
+    // This old entry has no coordinates declared at the cause; old measured boxes remain drawing-only.
+    emit_step(c, rk, em, [], turns, sending)
+    match em.current {
+      Some(t) => {
+        let at = dmax(turn_end(t), em.held_until)
+        if at > now { due = dmin(due, at) }
+      }
+      None => ()
+    }
+    for _, way in em.out_at {
+      if way.end() > now { due = dmin(due, way.end()) }
+    }
   }
   // (an agent's line stays whole while its messages still come out of its avatar (ChatMotion.keeps), then linger_ms)
   let keeps = emit_keeps(em)
@@ -1641,8 +1656,10 @@ pub fn list_frame(
   // marked again: linger_tick plays it on then)
   rd.shown_frame = c.frame_number()
   @ui.built_used(fn() { rd.shown_frame = @ui.current().frame_number() })
-  chat_take(c, ek, rd, v, shown=true, in_front~)
-  chat_play(c, ek, rd, shown=true) |> ignore
+  if rd.shown_by is None {
+    chat_take(c, ek, rd, v, shown=true, in_front~)
+    chat_play(c, ek, rd, shown=true) |> ignore
+  }
   let read = if em.queue.length() > 0 || em.current is Some(_) {
     read.filter(fn(e) {
       match e {

@@ -483,6 +483,7 @@ fn dock(
   src : Source,
   w : Workspace,
   all : Array[Workspace],
+  looks : Map[String, RailLook],
   bar : Bool,
   peek : Bool,
   s : Double,
@@ -534,7 +535,7 @@ fn dock(
         top=top + mt,
         fn() {
           if !@sf.native_on() {
-            rail(c, src, w, all, bar, moving=if moving { Some(f) } else { None })
+            rail(c, src, w, all, looks, bar, moving=if moving { Some(f) } else { None })
           }
           c.box(style=dock_side.then(@ui.style(w=Fixed(side_w))), moves="sidebar", fn() {
             if shown && s > 0.0 {

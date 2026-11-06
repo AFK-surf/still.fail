@@ -8,8 +8,8 @@
 fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
   n.show(fn() { side_made(side_place()) }, fn(cut) {
     cut
-    // (not shown, as the device waits in the lock: laid out nowhere, the same nodes, what had the focus in it given
-    // it back as it is shown again, as an old view's focus waits for its node)
+    // The owner's shown declaration controls retained activity. This is only the sampled picture's omission,
+    // including the tail of a fold; a predicted empty clip must not end a row's transition.
     .laid_nowhere(By(fn() { !at().shown }))
     .clips(Is(true))
     .width(By(fn() { Some(at().block.2) }))

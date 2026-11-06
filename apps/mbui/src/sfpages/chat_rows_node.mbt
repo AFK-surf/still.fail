@@ -149,6 +149,8 @@ fn need_card_node(
   let was = @motion.Way::new(if first { 1.0 } else { 0.0 })
   let now = @motion.Way::new(if first { 0.0 } else { 1.0 })
   parent.reacts(live, fn(on) {
+    // Making a row with its settled state starts no transition; the next change owns it.
+    if was.target() == (if on { 1.0 } else { 0.0 }) { return }
     let at = parent.cause_at()
     if on {
       was.put(1.0)

@@ -92,9 +92,8 @@ let told_held : Array[ReactiveNode] = []
 
 ///|
 // kept across runs: as told_held, what waited in the stopped run for its change told whole, asked for where something
-// owned what was made (an effect running, a scope): each with that owner, and whether it waited for all of the rest
-// too (after_all_flushed)
-let afters_kept : Array[(ReactiveNode, () -> Unit, Bool)] = []
+// owned what was made (an effect running, a scope): each with that owner and its phase (publication, observer, last)
+let afters_kept : Array[(ReactiveNode, () -> Unit, Int)] = []
 
 ///|
 /// Whether `o` is not stopped: a watch not gone; an effect or a scope following or owning something, or not let go
@@ -126,6 +125,7 @@ pub fn reset_globals() -> Unit {
   run.owner = None
   run.asked_for = None
   run.flushing = 0
+  run.committing = 0
   run.afters_held = 0
   run.draining = false
   run.flush_trail.clear()
@@ -143,17 +143,25 @@ pub fn reset_globals() -> Unit {
   // after that, it would act on what is no more. Being done (draining), which of them were done is not known: none
   // done again)
   if !draining {
+    for i in run.commit_index..<run.commits.length() {
+      if run.commits_by[i] is Some(o) {
+        afters_kept.push((o, run.commits[i], 0))
+      }
+    }
     for i, f in run.afters {
       if run.afters_by[i] is Some(o) {
-        afters_kept.push((o, f, false))
+        afters_kept.push((o, f, 1))
       }
     }
     for i, f in run.lasts {
       if run.lasts_by[i] is Some(o) {
-        afters_kept.push((o, f, true))
+        afters_kept.push((o, f, 2))
       }
     }
   }
+  run.commits.clear()
+  run.commits_by.clear()
+  run.commit_index = 0
   run.afters.clear()
   run.afters_by.clear()
   run.lasts.clear()
@@ -190,9 +198,12 @@ pub fn run_told() -> Unit {
   told_held.clear()
   // (what of what waited is still owned, done as the change it told is told whole, in the order it was asked for)
   for k in afters_kept {
-    let (o, f, last) = k
+    let (o, f, phase) = k
     if still_kept(o) {
-      if last {
+      if phase == 0 {
+        run.commits.push(f)
+        run.commits_by.push(Some(o))
+      } else if phase == 2 {
         run.lasts.push(f)
         run.lasts_by.push(Some(o))
       } else {

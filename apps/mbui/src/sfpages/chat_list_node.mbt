@@ -46,8 +46,9 @@ pub fn chat_list_node(
     }
     Some((island, Some((fy, fy + fh)), field_held_room))
   }
-  // (shown while it is laid out somewhere: what comes out of its avatars played on then, linger_tick)
-  let shown_by = fn() { !v.shown_nowhere() }
+  // Navigation is an input: returning to this retained page resumes its reply
+  // deadlines even when no picture or layout has followed the return yet.
+  let shown_by = fn() { @ui.page_shown(v) }
   @sfbase.reading_of(rk).shown_by = Some(shown_by)
   // (its reading not made again as it goes: let go with its page, the old list's way)
   v.owns(fn() {
@@ -69,21 +70,7 @@ pub fn chat_list_node(
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
-  // (the chat's own motions played on at their moments (chat_play: its list's turns, what comes out of its avatars, its
-  // agents' lines lingering): as what they read changes (its data taken, words sent laid out, a line come to linger),
-  // and at the moment the next of them is due, whichever frames are drawn, or none)
-  let next_play : Ref[() -> Unit] = Ref(fn() {  })
-  let play : Ref[() -> Unit] = Ref(fn() {  })
-  play.val = fn() {
-    (next_play.val)()
-    next_play.val = fn() {  }
-    let due = @signals.untracked(fn() { @sfbase.chat_play(@ui.current(), rk, rd0, shown=true) })
-    if due < @double.infinity {
-      next_play.val = v.at_moment(dmax(due, v.logic_at()), fn() { (play.val)() })
-    }
-  }
-  v.owns(fn() { (next_play.val)() }) |> ignore
-  v.reacts(fn() { (em.said.get(), rd0.landing.get(), rd0.linger_said.get()) }, fn(_) { (play.val)() })
+  let advance = @sfbase.chat_timeline(v, rk, rd0, view, shown_by)
   // (a row's key: the core's, else the key it was sent as from here; Reading's sent and sent_as, row_keys's)
   let id_of = fn(e : Entry) -> String {
     let k = match e {
@@ -114,11 +101,13 @@ pub fn chat_list_node(
   v.owns(fn() { @signals.untracked(fn() { rows_now.get() }).let_go() }) |> ignore
   v.reacts(fn() {
     em.read()
-    ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }
+    (ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }, shown_by(), app_in_front())
   }, fn(now) {
-    let { cv, f, .. } = now
+    let { cv, f, .. } = now.0
     guard cv is Some(cv) else { return }
-    @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=shown_by(), in_front=app_in_front())
+    // The data delivery owns its rows. Publish them in that change, before its later observers request pictures
+    // or locate a message. Geometry's landing notification below does not retake the data or rebuild these rows.
+    @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=now.1, in_front=now.2)
     // (those waiting their turn as what came is decided: emit_take's)
     let held = @signals.untracked(fn() { @sfbase.emit_held_seqs(em) })
     let tail = @sfbase.tail_taken(rd0, rk, cv, f)
@@ -131,7 +120,9 @@ pub fn chat_list_node(
     }
     cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
     rows_now.set(cr)
+    advance()
   })
+  v.reacts(fn() { rd0.landing.get() }, fn(_) { advance() })
   // (the message the unread line is over, followed as that changes alone)
   let line_seq = @signals.computed(fn(_) { view().bind(fn(cv) { cv.unread_line }) }, same=fn(a, b) { a == b })
   // (a message's row: the unread line over it where it is over it, its own gap under the line (joined, 4; else the
@@ -239,7 +230,9 @@ pub fn chat_list_node(
     }
     foot_said.val = true
   })
-  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
+  // The row rooms share the reply owner's navigation cause. Last layout's omissions can still describe the
+  // covered page when its return has already delivered replies, or the shown page before it is covered.
+  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { shown_by() && !view().map_or(false, fn(cv) { cv.newer }) },
     from=fn(_) {
       match leaving() {
         Some(f) if !f.carried => {
@@ -1038,12 +1031,14 @@ pub fn chat_list_node(
     match last_sighted.val { Some(s) => read_sighted(s); None => () }
   })
   // The old list offered the way back only after layout, more than 120 points from its end, except while gliding to it.
+  // Following the end is already the reader's intent. Newly revealed rows can temporarily put the last laid-out
+  // end outside the window; that does not offer a way back or start a fade when a later layout catches up.
   // A page short of the chat's newest page always offers it, even when the list itself is at its end.
   let newer = fn() { view().map(fn(cv) { cv.newer }).unwrap_or(false) }
   let jump_shown = fn() {
     let below = scroll.end_below_told()
     let going_to_end = scroll.to_end_told()
-    newer() || (!shown.get().is_empty() && below > 120.0 && !going_to_end)
+    newer() || (!follows.get() && !shown.get().is_empty() && below > 120.0 && !going_to_end)
   }
   v.reacts(fn() { (jump_shown(), follows.get(), newer()) }, fn(now) {
     rd0.jump = now.0
@@ -1334,8 +1329,8 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
         Some(v) => v.agents.map(fn(a) { a.key })
         None => []
       }
-      // The flight's clock and both endpoints belong to this frame: where they are as it is painted.
-      @sfbase.emit_flight_by(rk, em, agents, fn(k) { @sfbase.emit_place_drawn(laid, k) }, at=laid.at())
+      // This picture reads the rows' current placement directly. It publishes no endpoint back to the timeline.
+      @sfbase.emit_flight_by(rk, em, agents, fn(k) { @sfbase.emit_place_drawn(laid, k) }, laid.at())
     }
     let a = fn() { flying() }
     f

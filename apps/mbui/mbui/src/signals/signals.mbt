@@ -36,6 +36,12 @@ priv struct Run {
   /// how deep in flushes, and what is to be done once the outermost is over (after_flush): not this library's
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
+  /// Structural publications deferred by a watcher: finish them before observers registered with after_flush.
+  commits : Array[() -> Unit]
+  commits_by : Array[ReactiveNode?]
+  mut commit_index : Int
+  /// Nested writes may finish their publications; post-change observers wait for the outer publication to return.
+  mut committing : Int
   afters : Array[() -> Unit]
   /// what asked for each of `afters` (asker: what was reading, running or owning then): a run stopped before it was done keeps it
   /// for its owner while that owner is kept (reset_globals, run_told)
@@ -70,6 +76,10 @@ let run : Run = {
   asked_for: None,
   queued: [],
   flushing: 0,
+  commits: [],
+  commits_by: [],
+  commit_index: 0,
+  committing: 0,
   afters: [],
   afters_by: [],
   lasts: [],
@@ -265,6 +275,12 @@ fn asker() -> ReactiveNode? {
 ///|
 pub fn batch_depth() -> Int {
   run.batch_depth
+}
+
+///|
+/// Whether the current change is still notifying its readers. A new logical event waits for all of them.
+pub fn is_flushing() -> Bool {
+  run.flushing > 0
 }
 
 ///|
@@ -560,8 +576,8 @@ fn run_effect(e : ReactiveNode) -> Unit {
 }
 
 ///|
-/// How deep flushes may run in each other (a batch that writes, inside an effect, flushes there and then: as deep as
-/// what it sets going goes on so; leaving a long chat, 15).
+/// How deep changes may run in each other (a batch that writes, inside an effect or structural publication,
+/// flushes there and then: as deep as what it sets going goes on so; leaving a long chat, 15).
 pub let flush_deepest : Int = 64
 
 ///|
@@ -598,19 +614,20 @@ fn effect_round(under_way : ReactiveNode) -> Unit {
 pub let flush_too_deep_said : Ref[((String) -> Unit)?] = Ref(None)
 
 ///|
-fn flush() -> Unit {
+fn change_depth_allowed() -> Bool {
   // (one inside another past flush_deepest: something set going without end what sets more going, or what is not
   // the program's (a clock read as it goes) taken into it, each round a flush deeper; said where they were set off,
   // before it runs the stack out. 2026-11-05: a frame's layout took the host's now, 2000 deep as a chat was left)
-  if run.flushing >= flush_deepest {
+  let depth = run.flushing + run.committing
+  if depth >= flush_deepest {
     let from = if run.flush_trail.length() > 8 { run.flush_trail.length() - 8 } else { 0 }
     let last = Array::makei(run.flush_trail.length() - from, fn(i) { run.flush_trail[from + i] })
-    let said = "signals: flushes \{run.flushing} deep in each other, set off from (the innermost last) \{last}"
+    let said = "signals: flushes \{depth} deep in each other (\{run.committing} structural publications), set off from (the innermost last) \{last}"
     match flush_too_deep_said.val {
       // (a test's: said, and what is queued left to the flushes under way)
       Some(f) => {
         f(said)
-        return
+        return false
       }
       None => {
         println(said)
@@ -618,6 +635,12 @@ fn flush() -> Unit {
       }
     }
   }
+  true
+}
+
+///|
+fn flush() -> Unit {
+  guard change_depth_allowed() else { return }
   run.flush_trail.push(
     match setting.val {
       Some(l) => l.to_string()
@@ -641,9 +664,32 @@ fn flush() -> Unit {
 }
 
 ///|
+/// Finish structural publications before returning a completed set/batch, including a set made by an after_flush
+/// observer. The shared cursor lets that nested set finish its publications without replaying the outer callback.
+/// Ordinary post-change observers keep their non-reentrant queue below.
+fn commits_drained() -> Unit {
+  if run.flushing > 0 || run.batch_depth > 0 || run.afters_held > 0 { return }
+  if run.commit_index >= run.commits.length() { return }
+  guard change_depth_allowed() else { return }
+  run.committing += 1
+  while run.commit_index < run.commits.length() {
+    let f = run.commits[run.commit_index]
+    run.commit_index += 1
+    f()
+  }
+  run.committing -= 1
+  if run.committing == 0 {
+    run.commits.clear()
+    run.commits_by.clear()
+    run.commit_index = 0
+  }
+}
+
+///|
 /// What waits for a change told whole done, in order, where nothing holds it back: no flush, batch or layout under way.
 fn afters_drained() -> Unit {
-  if run.flushing == 0 && run.batch_depth == 0 && !run.draining && run.afters_held == 0 {
+  commits_drained()
+  if run.flushing == 0 && run.batch_depth == 0 && run.committing == 0 && !run.draining && run.afters_held == 0 {
     run.draining = true
     // (taken by where each queue is up to, not removed from its head: removing the first shifted all the rest down
     // each time, a change that asked 10⁴s of them (a long page's buttons each going together) held the desktop app's
@@ -669,11 +715,23 @@ fn afters_drained() -> Unit {
 }
 
 ///|
+/// Complete a watcher's structural publication after all notifications, before post-change observers (after_flush).
+/// This is part of committing the change, not another input: a deferred reader may withdraw another queued reader.
+/// A batch or layout still holds it back, just as it holds back the observers of that completed change.
+pub fn after_notify(f : () -> Unit) -> Unit {
+  run.commits.push(f)
+  run.commits_by.push(asker())
+  // A publication that only registers another publication extends the current queue. Only a nested set/batch's
+  // completion re-enters commits_drained: its caller must see that change's structure before continuing.
+  if run.committing == 0 { afters_drained() }
+}
+
+///|
 /// `f` done once the change being told now is told whole (the outermost flush of the batch or the set under way over,
 /// every effect it set going run); none under way, now. Not alien-signals': a hook beside it, for what must see where
 /// one change left things and never half of it (where a window's tree stands as the next change comes).
 pub fn after_flush(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
+  if run.flushing > 0 || run.batch_depth > 0 || run.committing > 0 || run.draining || run.afters_held > 0 {
     run.afters.push(f)
     run.afters_by.push(asker())
   } else {
@@ -686,7 +744,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 /// what waits on that included): for what must see where the change left things after everything set going by it,
 /// whatever order its effects ran in.
 pub fn after_all_flushed(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
+  if run.flushing > 0 || run.batch_depth > 0 || run.committing > 0 || run.draining || run.afters_held > 0 {
     run.lasts.push(f)
     run.lasts_by.push(asker())
   } else {
@@ -1011,12 +1069,13 @@ let watch_reading : WatchReading = { depth: 0, sets: [] }
 
 ///|
 /// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
-/// till the next read.
-pub fn watch(changed : () -> Unit, loc~ : SourceLoc = _) -> Watch {
+/// till the next read. With `repeated`, each committed notification is delivered even while a prior read is pending:
+/// an owner that defers reading can still handle a later cause synchronously. Marking remains batched as usual.
+pub fn watch(changed : () -> Unit, repeated? : Bool = false, loc~ : SourceLoc = _) -> Watch {
   let stale = Ref(true)
   // (told once till it reads anew: what changes again meanwhile adds nothing to its being stale)
   let told : () -> Unit = fn() {
-    if !stale.val {
+    if repeated || !stale.val {
       stale.val = true
       changed()
     }

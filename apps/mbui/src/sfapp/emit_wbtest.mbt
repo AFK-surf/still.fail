@@ -179,6 +179,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let frames : Map[String, Int] = {}
+  let phases : Array[(String, Double, Double, Double)] = []
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {
@@ -186,20 +187,37 @@ test "the answer coming in does not end its own motion: float, spit and return e
     match em.current {
       Some(turn) => {
         let k = turn.pose.to_string()
+        let phase = (k, turn.clock.starts_at(), turn.clock.end(), turn.span)
+        match phases.last() {
+          Some(was) if was.0 == k =>
+            assert_eq(phase, was, msg="a phase keeps its declared route until it finishes")
+          Some(was) => {
+            assert_true(t.time() >= was.2, msg="\{was.0} ended before \{was.2}: \{t.time()}")
+            assert_eq(phase.1, was.2, msg="the next phase starts at the preceding phase's end")
+            phases.push(phase)
+          }
+          None => phases.push(phase)
+        }
+        assert_true(t.time() >= phase.1 && t.time() < phase.2, msg="phase \{phase} at \{t.time()}")
         frames[k] = frames.get(k).unwrap_or(0) + 1
         // the flying copy is drawn in every pose after the fold (emit_flyer)
         if turn.pose != Fold {
           assert_true(emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, [turn.agent]) is Some(_))
         }
       }
-      None => ()
+      None =>
+        match phases.last() {
+          Some(was) => assert_true(t.time() >= was.2, msg="\{was.0} disappeared before \{was.2}: \{t.time()}")
+          None => fail("the answer disappeared before any phase was drawn")
+        }
     }
   }
-  // 16 ms frames: Float 440 ms, Spit 380 (ChatMotion.kt), Return at least 230 (as long as its way home: 320 over a
-  // row or two, a Move's least over none), each to its end
-  assert_true(frames.get("Float").unwrap_or(0) >= 26)
-  assert_true(frames.get("Spit").unwrap_or(0) >= 22)
-  assert_true(frames.get("Return").unwrap_or(0) >= 13)
+  // In this scene the answer's row is not mounted at Float's cause, so it takes the usual 440 ms. Each phase
+  // is drawn until its declared end and hands over to the next at exactly that end.
+  assert_eq(phases.map(fn(p) { p.0 }), ["Fold", "Float", "Spit", "Return"], msg="frames \{frames}; declared phases \{phases}")
+  assert_true(frames.get("Float").unwrap_or(0) >= 26, msg="frames \{frames}; declared phases \{phases}")
+  assert_true(frames.get("Spit").unwrap_or(0) >= 22, msg="frames \{frames}; declared phases \{phases}")
+  assert_true(frames.get("Return").unwrap_or(0) >= 13, msg="frames \{frames}; declared phases \{phases}")
   assert_true(em.current is None)
   emit_restore()
 }

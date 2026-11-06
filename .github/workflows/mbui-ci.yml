@@ -155,6 +155,15 @@ jobs:
         run: |
           touch "$RUNNER_TEMP/start"
           scripts/test_native.sh
+      - name: Capture the native view failure stack
+        if: failure() && steps.tests.outcome == 'failure'
+        shell: bash
+        run: |
+          exe=_build/native/release/test/view/view.whitebox_test.exe
+          if [ -x "$exe" ]; then
+            command -v gdb || (sudo apt-get update -qq && sudo apt-get install -y gdb)
+            gdb --batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 100' --args "$exe" 'reentrant_layout_wbtest.mbt:0-17' || true
+          fi
       - name: "The same tests with the display's frames drawn on the way, at 60, 120, 24 and 7 a second (scripts/fps_check.sh): the same results, the same programs as above run again"
         shell: bash scripts/offline.sh {0}
         run: bash scripts/fps_check.sh

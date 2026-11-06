@@ -43,8 +43,11 @@ priv struct IndexedGoing[T] {
 /// Keep the rows of `rows` in `v` with the same causes as ListRows::in_node, read by position: `item` the row at a
 /// place (as `rows` is now, nothing followed), `changes` what changed since it was last read (once: what it gives is
 /// gone from it then; read as `rows` says it changed), `version` a row's content by its key (followed: what reads that
-/// row is told as it changes). What it reads of the rows grows with what changed and what is asked of it, never with
-/// how many there are: nothing of all of them is gone through, at the first reading either (that is Whole).
+/// row is told as it changes). `watched` is the owner's participation, including whether its page is shown;
+/// explicit hidden ancestors are followed through declared_nowhere, not a previous layout's omissions.
+/// What it reads of the rows grows with what
+/// changed and what is asked of it, never with how many there are: nothing of all of them is gone through, at the first
+/// reading either (that is Whole).
 pub fn[T] ListRows::in_node_indexed(
   self : ListRows[T],
   v : @view.View,
@@ -127,9 +130,14 @@ pub fn[T] ListRows::in_node_indexed(
   // Read what changed as the source says it did: in one reaction with the rows' height causes it tells, as in_node.
   v.reacts(fn() {
     // (and as the rows' way ends: what left is gone from them then)
-    (ended.get(), (rows.snapshot)(), watched() && !v.shown_nowhere())
+    // A cause's timing is also an input. Its owner can learn its distance after the new row is placed, without
+    // changing any row key or content. Follow only active causes, and re-arm this read when that set changes;
+    // reading ms/from only in the untracked application left the room on its original duration.
+    self.causes.read()
+    let timing = self.causes.by.keys().map(fn(k) { (k, ms(k), from(k)) }).collect()
+    (ended.get(), (rows.snapshot)(), watched() && !v.declared_nowhere(), timing)
   }, fn(said) {
-    let (_, _, watching) = said
+    let (_, _, watching, _) = said
     let now = v.cause_at()
     let c = self.causes
     let watching = watching && given.val
