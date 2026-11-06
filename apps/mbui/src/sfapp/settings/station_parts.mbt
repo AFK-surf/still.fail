@@ -710,6 +710,21 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
     }
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
     let keys = ["head"]
+    if flag(phone, "supported") && flag(view, "revocationsError") {
+      keys.push("revocations")
+      blocks.push(fn() {
+        list_card(c, fn() {
+          list_row(c, key="adb-revocations-error", fn() {
+            c.box(style=fill_words, fn() {
+              row_lines(c, tr("android-misc.adb.revocations.title"), tr("android-misc.adb.revocations.note"), wrap_sub=true)
+            }) |> ignore
+          }) |> ignore
+          if @sf.link_row(c, "adb-revocations-retry", tr("common.retry"), lacks=false) && !is_doing(core, ["adb.retryRevocations"], []) {
+            act(core, tr("common.retry"), "adb.retryRevocations", obj([]))
+          }
+        })
+      })
+    }
     // 默认最长授权: the longest a chat's grant of the phone may last (as the vault's: pressed, the library's choices);
     // a setting, so with the switch at the page's top, not after the lists (2026-11-06, 左子健: 设置不要放在列表后面啊)
     let lasts_row = fn() {
@@ -874,21 +889,30 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
           let session = text(g, "session")
           let title = text(g, "chatTitle")
           let ago = stamp(g, "lastUsedAt", "ago")
+          let scope = text(g, "scope")
+          let proof = text(g, "approvalProof")
+          let approve_here = flag(phone, "supported") && flag(g, "localApproval") && proof != "" && (scope == "hour" || scope == "chat")
           // (on the phone itself: granted, and not signed by a device on the person's own lock: it lends nothing on it)
-          let when = if flag(phone, "supported") && field(g, "held") == Some(Json::boolean(false)) {
+          let when = if approve_here {
+            tr("android-misc.adb.chats.approvalNeeded") + " · " + tr("android-settings.vault.scope." + scope)
+          } else if flag(phone, "supported") && field(g, "held") == Some(Json::boolean(false)) {
             tr("android-misc.personal.toConfirm.row")
           } else if ago == "" {
             tr("android-misc.adb.chats.noUsage")
           } else {
             ago
           }
-          let busy = is_doing(core, ["adb.revoke"], [("request", request)])
+          let busy = is_doing(core, ["adb.revoke", "adb.approveHere"], [("request", request)])
           // (narrow, 收回 by its title alone, the line under it as wide as the row: when it was used, and why it was asked;
           // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压; wide, the library's link_row has it by the
           // row's side)
           if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, goes=station != "" && session != "", control=fn() {
-              if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
-                act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
+              if approve_here {
+                if @sf.button(c, tr("android-misc.adb.chats.approveHere"), key="adb-approve-here/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
+                  act(core, tr("android-misc.adb.chats.approveHere"), "adb.approveHere", obj([("station", str(station)), ("request", str(request)), ("proof", str(proof))]))
+                }
+              } else if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
+                act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request)), ("chat", str(text(g, "chat")))]))
               }
             }) {
             (core.open_chat)(station, session, "")

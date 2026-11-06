@@ -162,6 +162,34 @@ test "共享调试: granted, the app turns Wireless debugging on itself; the hos
 }
 
 ///|
+test "allowing a phone request binds the decision to the chat showing its card" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("chat-phone")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  for c in t.native_calls() {
+    if c.1 == "adb.phone" { t.answer_native(c.0, adb_phone_of(wireless=true)) }
+  }
+  t.draw()
+  let allow = t.words().filter(fn(w) { w.0 == "允许" })
+  assert_eq(allow.length(), 1)
+  t.tap(allow[0].1 + allow[0].3 / 2.0, allow[0].2 + allow[0].4 / 2.0)
+  t.draw()
+  let asked = calls.filter(fn(call) { call.name == "adb.decide" })
+  assert_eq(asked.length(), 1)
+  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-1", "scope": "chat", "chat": "CHAT/123.456" })
+}
+
+///|
 test "共享调试: a host without it, nothing to lend" {
   let t = settings_tester("adb:ws1/st1")
   t.refuse_native(t.native_calls()[0].0, "unsupported")
@@ -333,7 +361,7 @@ test "settings' 共享调试: the take back button acts on its own chat" {
   t.draw()
   let asked = calls.filter(fn(call) { call.name == "adb.revoke" })
   assert_eq(asked.length(), 1)
-  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-long-1" })
+  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-long-1", "chat": "c1" })
 }
 
 ///|
@@ -475,6 +503,55 @@ test "settings' 共享调试: 开启个人锁 there turns the lock on, and a dev
       assert_eq(typed[0].1, { "code": "123456" })
     }
   }
+}
+
+///|
+test "settings' shared debugging: a failed revocation record offers a retry" {
+  new_run()
+  @settings.fixture_page("settings-adb-revocations-error") |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("adb:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("共享调试已暂停") is Some(_))
+  let retry = t.words().filter(fn(w) { w.0 == "重试" })
+  assert_eq(retry.length(), 1)
+  t.tap(retry[0].1 + retry[0].3 / 2.0, retry[0].2 + retry[0].4 / 2.0)
+  t.draw()
+  assert_true(calls.iter().any(fn(call) { call.0 == "adb.retryRevocations" && call.1 == {} }), msg="\{calls.map(fn(call) { call.0 })}")
+}
+
+///|
+test "settings' shared debugging: a taken back chat can be approved here for its shown grant" {
+  new_run()
+  @settings.fixture_page("settings-adb-local-approval") |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("adb:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("已收回，需在手机重新允许") is Some(_))
+  assert_true(t.find("1 小时内") is Some(_))
+  t.tap_text("在手机允许")
+  t.draw()
+  assert_true(calls.iter().any(fn(call) { call.0 == "adb.approveHere" && call.1 == { "station": "ws1/st1", "request": "p-local", "proof": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" } }), msg="\{calls.map(fn(call) { call.0 })}")
 }
 
 ///|

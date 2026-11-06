@@ -3,12 +3,13 @@
 // each link that takes the place of one, and every stream the station opens on that link is a tunnel to the phone's
 // own adbd. The offers kept in memory only: a core started anew offers again as its app asks (the grants it lends
 // for kept on the device: GRANTS_KEY). Only a host with TCP reaches adbd.
-import { Deferred, Effect, Fiber, Scope } from "effect";
+import { Deferred, Effect, Fiber, Scope, Semaphore } from "effect";
 import type { AdbCall, Offer } from "./adb-parse.ts";
-import { CoreError } from "./error.ts";
+import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { current, t } from "./i18n.ts";
 import type { IrohStream } from "./iroh.ts";
+import { canonical } from "./lock.ts";
 import type { CredentialSource, Link, Mesh } from "./mesh.ts";
 import type { Runner } from "./runtime.ts";
 import { PersonalLock, grantHolds } from "./personal-lock.ts";
@@ -17,7 +18,7 @@ import { Retold } from "./station/retold.ts";
 import { LANG_HEADER } from "./station/requests.ts";
 import type { RequestHead } from "./station/wire.ts";
 import type { Store } from "./store.ts";
-import { fromUtf8, parseJson, utf8 } from "./util.ts";
+import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -30,8 +31,33 @@ function grantChat(g: J): string {
 const RETRY_MS = 1_000;
 // The checked expiry on a transient row: reuse it for lending without verifying the same signature twice.
 const SIGNED_UNTIL = Symbol("signed grant expiry");
-/// The grants taken back here (id → when they would have ended): a station that goes on saying one lends nothing.
+/// The grants taken back here: a station that goes on saying one lends nothing.
 export const REVOKED_KEY = "adb-revoked";
+// Kept in the same atomic value as the old id→expiry map. Old clients ignore this field and cannot enforce it.
+const REVOKED_CHATS = "\u0000stillfail-chats-v1";
+
+const stationScope = (station: string) => JSON.stringify([station]);
+const chatScope = (station: string, chat: string) => JSON.stringify([station, chat]);
+
+/// A local approval is of these exact signed bytes, never of an id or a station-supplied timestamp alone.
+function signedFingerprint(signed: J): string | null {
+  if (!signed?.body || typeof signed?.sig?.key !== "string" || typeof signed?.sig?.sig !== "string") return null;
+  try {
+    return hex(sha256(utf8(canonical({ body: signed.body, sig: { key: signed.sig.key, sig: signed.sig.sig } }))));
+  } catch {
+    return null;
+  }
+}
+
+/// What was displayed for an explicit local approval, so an update between drawing the row and tapping it cannot
+/// silently change the grant being approved.
+function approvalProof(g: J): string | null {
+  try {
+    return hex(sha256(utf8(canonical({ station: g.station, id: g.id, session: g.session, chat: g.chat, scope: g.scope, exp: g.exp, reason: typeof g.reason === "string" ? g.reason : "", title: typeof g.chatTitle === "string" ? g.chatTitle : "", signed: signedFingerprint(g.signed) }))));
+  } catch {
+    return null;
+  }
+}
 
 /// Where this person's chats' grants of their phone are kept on the device, as the stations last said them: a core
 /// started anew (the app's process gone and back, the phone started again) lends it to them at once, not only once
@@ -47,6 +73,8 @@ type Ended = { changed: true } | { expired: true } | { refused: string } | { los
 
 export type AdbEnv = {
   host: Host;
+  /// The unwrapped host: overlapping cores on it share the same local revocations.
+  revocationsHost?: Host;
   runner: Runner;
   store: Store;
   mesh: () => Effect.Effect<Mesh, CoreError>;
@@ -465,6 +493,31 @@ class Lend {
   }
 }
 
+type Revocations = {
+  ids: Set<string>;
+  /// Scopes taken back on this phone, and only exact signatures explicitly approved again here.
+  chats: Map<string, Map<string, number>>;
+  /// A revoke made before loading must not be overwritten by an older saved scope.
+  chatsTouched: Set<string>;
+  loaded: boolean;
+  dirty: boolean;
+  version: number;
+  error: CoreError | null;
+  writer: ReturnType<typeof Semaphore.makeUnsafe>;
+  listeners: Set<() => void>;
+};
+
+// Separate cores can overlap while one closes. Share both the write order and the in-memory deny list on one host.
+const revocationsByHost = new WeakMap<Host, Revocations>();
+function revocationsOf(host: Host): Revocations {
+  let state = revocationsByHost.get(host);
+  if (!state) {
+    state = { ids: new Set(), chats: new Map(), chatsTouched: new Set(), loaded: false, dirty: false, version: 0, error: null, writer: Semaphore.makeUnsafe(1), listeners: new Set() };
+    revocationsByHost.set(host, state);
+  }
+  return state;
+}
+
 /// This phone's adb (docs/adb-share.md): while its switch is on (`adb.on`), lent to each station a chat's grant of it is live on (`wanted`), with the ports
 /// its app found (`adb.ports`); and, from an app before grants, to the one station its switch lent it to (`adb.share`).
 /// The grants, every station's, as each says them; decided and taken back here (`adb.decide`, `adb.revoke`).
@@ -485,7 +538,8 @@ export class Adb {
   /// This phone's 共享调试 switch (ON_KEY): it lends only while on.
   #on = false;
   #switched = false;
-  readonly #revoked = new Map<string, number>();
+  #defaultOn = false;
+  readonly #revocations: Revocations;
   /// The stations from before signatures.
   readonly #old = new Set<string>();
   /// What wakes #sync as the next grant ends by what was signed for it (a station that does not say so lends no longer).
@@ -494,11 +548,16 @@ export class Adb {
   constructor(env: AdbEnv) {
     this.#env = env;
     this.#legacy = new Lend(env);
-    env.runner.fork(Effect.ignore(Effect.map(env.host.storageGet(REVOKED_KEY), (bytes) => {
-      const kept = bytes === null ? null : (parseJson(bytes) as J);
-      if (kept !== null && typeof kept === "object") for (const [id, until] of Object.entries(kept)) if (typeof until === "number") this.#revoked.set(id, until);
-      this.#sync();
-    }), { log: "Unhandled", message: "debugging grants taken back read" }));
+    const host = env.revocationsHost ?? env.host;
+    this.#revocations = revocationsOf(host);
+    const changed = () => this.#revocationsChanged();
+    this.#revocations.listeners.add(changed);
+    env.runner.fork(Effect.ensuring(Effect.never, Effect.sync(() => {
+      this.#revocations.listeners.delete(changed);
+      // A call can outlive the core's root scope. Keep its writer and pending denials shared with a new core on this
+      // host until the host itself is collected, even after the last listener leaves.
+    })));
+    env.runner.fork(Effect.ignore(this.#loadRevocations(), { log: "Unhandled", message: "debugging grants taken back read" }));
     env.runner.fork(
       Effect.ensuring(
         Effect.map(Effect.all([Effect.orElseSucceed(env.host.storageGet(GRANTS_KEY), () => null), Effect.orElseSucceed(env.host.storageGet(ON_KEY), () => null)]), ([bytes, on]) => {
@@ -513,16 +572,99 @@ export class Adb {
           if (typeof said === "boolean") this.#on = said;
           else {
             // (a core from before the switch: on where a grant lent the phone, so an update does not end its lending)
-            this.#on = this.wanted().length > 0;
-            this.#keepOn();
+            this.#defaultOn = true;
           }
         }),
         Effect.sync(() => {
           this.#known = true;
-          this.#sync();
+          this.#revocationsChanged();
         }),
       ),
     );
+  }
+
+  #revocationsChanged(): void {
+    if (this.#known && this.#defaultOn && !this.#switched && this.#revocations.loaded && !this.#revocations.dirty) {
+      this.#defaultOn = false;
+      this.#on = this.wanted().length > 0;
+      this.#keepOn();
+    }
+    this.#sync();
+  }
+
+  #tellRevocations(): void {
+    for (const changed of this.#revocations.listeners) changed();
+  }
+
+  #loadRevocations(): Effect.Effect<void, CoreError> {
+    const state = this.#revocations;
+    return state.writer.withPermits(1)(Effect.gen({ self: this }, function* () {
+      if (state.loaded) return;
+      const read = yield* Effect.result(Effect.mapError(this.#env.host.storageGet(REVOKED_KEY), asCoreError));
+      if (read._tag === "Failure") {
+        state.error = read.failure;
+        this.#tellRevocations();
+        return yield* Effect.fail(read.failure);
+      }
+      const kept = read.success === null ? {} : parseJson(read.success);
+      const malformed = () => {
+        const error = new CoreError("adb_revocations_unreadable", t("core-misc.adb.revocationsUnreadable"));
+        state.error = error;
+        this.#tellRevocations();
+        return error;
+      };
+      if (kept === null || typeof kept !== "object" || Array.isArray(kept)) return yield* Effect.fail(malformed());
+      const scopes = (kept as J)[REVOKED_CHATS];
+      if (scopes !== undefined && (scopes === null || typeof scopes !== "object" || Array.isArray(scopes))) return yield* Effect.fail(malformed());
+      for (const [id, until] of Object.entries(kept)) {
+        if (id !== REVOKED_CHATS && (!Number.isSafeInteger(until) || (until as number) < 0)) return yield* Effect.fail(malformed());
+      }
+      const loadedChats = new Map<string, Map<string, number>>();
+      for (const [scope, allows] of Object.entries(scopes ?? {})) {
+        let parts: unknown;
+        try { parts = JSON.parse(scope); } catch { return yield* Effect.fail(malformed()); }
+        if (!Array.isArray(parts) || (parts.length !== 1 && parts.length !== 2) || parts.some((p) => typeof p !== "string" || p === "") ||
+            JSON.stringify(parts) !== scope || allows === null || typeof allows !== "object" || Array.isArray(allows) ||
+            Object.entries(allows).some(([h, until]) => !/^[0-9a-f]{64}$/.test(h) || !Number.isSafeInteger(until) || (until as number) < 0)) {
+          return yield* Effect.fail(malformed());
+        }
+        loadedChats.set(scope, new Map(Object.entries(allows as Record<string, number>)));
+      }
+      // Old clients stored the station's expiry. Its value cannot prove when every signed grant of this id ends.
+      for (const id of Object.keys(kept)) if (id !== REVOKED_CHATS) state.ids.add(id);
+      for (const [scope, allows] of loadedChats) if (!state.chatsTouched.has(scope)) state.chats.set(scope, allows);
+      state.chatsTouched.clear();
+      state.loaded = true;
+      state.error = null;
+      this.#tellRevocations();
+    }));
+  }
+
+  #saveRevocations(): Effect.Effect<void, CoreError> {
+    const state = this.#revocations;
+    return state.writer.withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+      if (!state.dirty) return;
+      const version = state.version;
+      // Older clients understand numbers; retaining ids indefinitely also covers older signed grants without issue time.
+      const kept: Record<string, number | Record<string, Record<string, number>>> = Object.fromEntries([...state.ids].map((id) => [id, Number.MAX_SAFE_INTEGER]));
+      if (state.chats.size > 0) kept[REVOKED_CHATS] = Object.fromEntries([...state.chats].map(([scope, allows]) => [scope, Object.fromEntries(allows)]));
+      const saved = yield* Effect.result(Effect.mapError(this.#env.host.storageSet(REVOKED_KEY, utf8(JSON.stringify(kept))), asCoreError));
+      if (saved._tag === "Failure") {
+        state.error = saved.failure;
+        this.#tellRevocations();
+        return yield* Effect.fail(saved.failure);
+      }
+      if (version === state.version) state.dirty = false;
+      state.error = null;
+      this.#tellRevocations();
+    })));
+  }
+
+  #ensureRevocations(): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.#loadRevocations();
+      while (this.#revocations.dirty) yield* this.#saveRevocations();
+    });
   }
 
   /// The grants as they stand kept on the device (the live ones and the requests waiting: those ended let go).
@@ -543,13 +685,17 @@ export class Adb {
         return this.#legacy.run(call);
       case "on":
         if (call.on && !this.#env.lends()) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
-        return Effect.sync(() => {
+        return Effect.gen({ self: this }, function* () {
+          if (call.on) yield* this.#ensureRevocations();
           this.#on = call.on;
           this.#switched = true;
+          this.#defaultOn = false;
           this.#keepOn();
           this.#sync();
           return null;
         });
+      case "retryRevocations":
+        return Effect.as(this.#ensureRevocations(), null);
       case "ports":
         // (taken whatever the app said it is so far: what lends waits for it to say it is a phone, `#sync`, `deviceTold`;
         // refused, a service started for kept grants before the app said so stopped and was not started again)
@@ -571,7 +717,7 @@ export class Adb {
       case "decide":
         return Effect.gen({ self: this }, function* () {
           // Allowed on this device's own key, the person asked; refused needs none.
-          const signed = call.scope === null ? undefined : yield* this.#signed(call.station, call.request, call.scope);
+          const signed = call.scope === null ? undefined : yield* this.#signed(call.station, call.request, call.scope, call.chat);
           const r = yield* this.#legacy.askAt(call.station, { op: "decide", request: call.request, scope: call.scope, ...(signed ? { signed } : {}) });
           this.heard(call.station, (r as J)?.request);
           return null;
@@ -605,20 +751,39 @@ export class Adb {
         return this.#of(call.sub, (sub) => this.#env.personal.restart(sub, t("core-misc.personal.reason.restart")));
       case "personalConfirm":
         return this.#confirm();
+      case "approveHere":
+        return this.#approveHere(call.station, call.request, call.proof);
       case "revoke": {
         // One list row represents the whole chat, including multiple agents' grants in that chat.
         const selected = this.#grants.get(call.station)?.get(call.request);
-        const matching = selected === undefined ? [] : this.#allGrants()
+        const matching = selected === undefined ? [] : [...(this.#grants.get(call.station)?.values() ?? [])]
+          .filter((g) => grantChat(g) === grantChat(selected))
+          .map((g) => g.id as string);
+        const live = selected === undefined ? [] : this.#allGrants()
           .filter((g) => g.station === call.station && grantChat(g) === grantChat(selected))
           .map((g) => g.id as string);
-        const ids = matching.length > 0 ? matching : [call.request];
+        // A station's expiry is not authoritative: even a row it currently says has ended can carry a longer signature.
+        const ids = [...new Set([call.request, ...matching])];
+        const remote = live.length > 0 ? live : [call.request];
         // Off this phone at once, whatever the station answers or goes on saying.
-        for (const id of ids) this.#revoked.set(id, this.#grants.get(call.station)?.get(id)?.exp ?? Math.floor(this.#env.host.nowMs() / 1000) + 30 * 86400);
-        this.#keepRevoked();
-        this.#sync();
-        return Effect.as(Effect.forEach(ids, (request) => Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request }), (r) => {
-          this.heard(call.station, (r as J)?.request);
-        }), { discard: true }), null);
+        for (const id of ids) if (id !== REVOKED_CHATS) this.#revocations.ids.add(id);
+        const chat = call.chat && selected?.chat === call.chat ? call.chat : null;
+        // If the row changed after it was shown, or an older client did not identify the chat, conservatively cover
+        // the whole station. Its next update must not be able to move a hidden grant outside the take-back.
+        const scope = chat === null ? stationScope(call.station) : chatScope(call.station, chat);
+        this.#revocations.chats.set(scope, new Map());
+        this.#revocations.chatsTouched.add(scope);
+        this.#revocations.version++;
+        this.#revocations.dirty = true;
+        this.#tellRevocations();
+        return Effect.gen({ self: this }, function* () {
+          // Do not report success or resume other grants until this device has durably recorded the revocation.
+          yield* this.#ensureRevocations();
+          yield* Effect.forEach(remote, (request) => Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request }), (r) => {
+            this.heard(call.station, (r as J)?.request);
+          }), { discard: true });
+          return null;
+        });
       }
       case "lasts": {
         // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
@@ -657,6 +822,7 @@ export class Adb {
   /// to their stations.
   #confirm(): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      yield* this.#ensureRevocations();
       const waiting = this.#allGrants().filter((g) => this.#toConfirm(g));
       const bySub = new Map<string, J[]>();
       for (const g of waiting) {
@@ -667,6 +833,8 @@ export class Adb {
         const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as "hour" | "chat", exp: g.exp as number }));
         const signed = yield* this.#env.personal.signGrants(sub, bodies, t("core-misc.personal.reason.confirm"));
         for (const [i, g] of grants.entries()) {
+          yield* this.#ensureRevocations();
+          if (this.#revocations.ids.has(g.id)) continue;
           const r = yield* this.#legacy.askAt(g.station, { op: "sign", request: g.id, signed: signed[i] });
           this.heard(g.station, (r as J)?.request);
         }
@@ -677,7 +845,7 @@ export class Adb {
 
   /// A grant live but unsigned, on a station that can carry a signature, and an account whose lock this device is on.
   #toConfirm(g: J): boolean {
-    if (g.status !== "granted" || g.signed != null || this.#revoked.has(g.id) || this.#old.has(g.station)) return false;
+    if (!this.#revocations.loaded || this.#revocations.dirty || g.status !== "granted" || g.signed != null || this.#revocations.ids.has(g.id) || this.#scopesFor(g.station, g).length > 0 || this.#old.has(g.station)) return false;
     if ((g.scope !== "hour" && g.scope !== "chat") || !Number.isSafeInteger(g.exp) || g.exp <= Math.floor(this.#env.host.nowMs() / 1000)) return false;
     if (typeof g.session !== "string" || g.session === "" || typeof g.chat !== "string" || g.chat === "") return false;
     const sub = this.#subAt(g.station);
@@ -685,26 +853,137 @@ export class Adb {
   }
 
   /// What this device signs to allow a chat a phone (docs/personal-lock.md).
-  #signed(station: string, request: string, scope: "hour" | "chat"): Effect.Effect<J, CoreError> {
+  #signed(station: string, request: string, scope: "hour" | "chat", shownChat?: string): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      yield* this.#ensureRevocations();
+      if (request === REVOKED_CHATS) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      const version = this.#revocations.version;
       const sub = this.#subAt(station);
       if (sub === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noAccount")));
       if (this.#old.has(station)) return yield* Effect.fail(new CoreError("personal_old_station", t("core-misc.personal.oldStation")));
       if (this.#grants.get(station)?.get(request) === undefined) yield* this.readGrants(station);
       const g = this.#grants.get(station)?.get(request);
       if (g === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      // A fresh answer can lift this phone's take-back for its exact signature. Bind that answer to the chat in
+      // which the person saw the card, not to a row the station could swap before the tap. Older apps without the
+      // chat identity may still refuse a request, but cannot implicitly lift a take-back on that station.
+      if ((shownChat !== undefined && shownChat !== g.chat) ||
+          (shownChat === undefined && this.#hasTakenBackAt(station)) ||
+          (this.#scopesFor(station, g).length > 0 && g.status !== "pending")) {
+        return yield* Effect.fail(new CoreError("adb_chat_changed", t("core-misc.adb.chatChanged")));
+      }
+      if (this.#revocations.ids.has(request) && this.#scopesFor(station, g).length === 0) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
       const exp = Math.floor(this.#env.host.nowMs() / 1000) + (scope === "hour" ? 3600 : 30 * 86400);
-      return yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp }, t("core-misc.personal.reason.grant"));
+      const signed = yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp }, t("core-misc.personal.reason.grant"));
+      yield* this.#ensureRevocations();
+      if (this.#revocations.version !== version || this.#grants.get(station)?.get(request) !== g || exp <= Math.floor(this.#env.host.nowMs() / 1000)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      yield* this.#allowHere(station, g, signed, exp);
+      return signed;
+    });
+  }
+
+  /// Every applicable take-back must have explicitly accepted the exact grant again on this phone.
+  #scopesFor(station: string, g: J): string[] {
+    const scopes = [stationScope(station)];
+    if (typeof g.chat === "string" && g.chat !== "") scopes.push(chatScope(station, g.chat));
+    return scopes.filter((scope) => this.#revocations.chats.has(scope));
+  }
+
+  #hasTakenBackAt(station: string): boolean {
+    for (const scope of this.#revocations.chats.keys()) if (JSON.parse(scope)[0] === station) return true;
+    return false;
+  }
+
+  #allowedUntil(station: string, g: J): number | null {
+    if (g.id === REVOKED_CHATS) return null;
+    const scopes = this.#scopesFor(station, g);
+    if (scopes.length === 0) return this.#revocations.ids.has(g.id) ? null : Number.MAX_SAFE_INTEGER;
+    const fingerprint = signedFingerprint(g.signed);
+    if (fingerprint === null) return null;
+    const limits = scopes.map((scope) => this.#revocations.chats.get(scope)!.get(fingerprint));
+    if (limits.some((until) => until === undefined)) return null;
+    return Math.min(...limits as number[]);
+  }
+
+  #locallyBlocked(station: string, g: J): boolean {
+    const until = this.#allowedUntil(station, g);
+    return until === null || until <= Math.floor(this.#env.host.nowMs() / 1000);
+  }
+
+  /// Record a locally approved signature before it can be sent or used. A later take-back clears these approvals.
+  #allowHere(station: string, g: J, signed: J, until: number): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const scopes = this.#scopesFor(station, g);
+      if (scopes.length === 0) return;
+      const fingerprint = signedFingerprint(signed);
+      if (fingerprint === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      for (const scope of scopes) this.#revocations.chats.get(scope)!.set(fingerprint, until);
+      this.#revocations.version++;
+      this.#revocations.dirty = true;
+      this.#tellRevocations();
+      yield* this.#ensureRevocations();
+      if (scopes.some((scope) => this.#revocations.chats.get(scope)?.get(fingerprint) !== until)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+    });
+  }
+
+  /// Another device may have signed after a take-back, but old signatures have no trusted order. Ask here about this
+  /// exact grant before allowing it; an already verified signed grant can be approved while its station is offline.
+  #approveHere(station: string, request: string, proof: string): Effect.Effect<null, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.#env.lends() || !this.#env.host.secureAsk) return yield* Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
+      yield* this.#ensureRevocations();
+      const version = this.#revocations.version;
+      const g = this.#grants.get(station)?.get(request);
+      const shown = this.#allGrants().find((item) => item.station === station && item.id === request);
+      const sub = this.#subAt(station);
+      const now = Math.floor(this.#env.host.nowMs() / 1000);
+      if (!g || g.status !== "granted" || (g.scope !== "hour" && g.scope !== "chat") || !Number.isSafeInteger(g.exp) || g.exp <= now ||
+          typeof g.session !== "string" || !g.session || typeof g.chat !== "string" || !g.chat || this.#scopesFor(station, g).length === 0 || sub === null ||
+          !shown || approvalProof(shown) !== proof || !this.#locallyBlocked(station, shown)) {
+        return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      }
+      if (!this.#env.personal.ready(sub) || this.#env.personal.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      let signed = g.signed;
+      if (signed == null) {
+        if (this.#old.has(station)) return yield* Effect.fail(new CoreError("personal_old_station", t("core-misc.personal.oldStation")));
+        const [made] = yield* this.#env.personal.signGrants(sub, [{ station, request, session: g.session, chat: g.chat, scope: g.scope, exp: g.exp }], t("core-misc.personal.reason.grant"));
+        signed = made;
+      } else {
+        if ((this.#signedExpiry({ ...g, station }) ?? 0) <= now) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+        yield* Effect.mapError(this.#env.host.secureAsk(t("core-misc.personal.reason.grant")), asCoreError);
+      }
+      yield* this.#ensureRevocations();
+      if (this.#revocations.version !== version || this.#grants.get(station)?.get(request) !== g ||
+          !this.#env.personal.ready(sub) || this.#env.personal.standing(sub) !== "member") {
+        return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      }
+      if (!signed?.body || !Number.isSafeInteger(signed.body.exp) ||
+          (g.signed != null && (this.#signedExpiry({ ...g, station }) ?? 0) <= Math.floor(this.#env.host.nowMs() / 1000))) {
+        return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      }
+      const until = Math.min(g.exp, signed.body.exp, now + (g.scope === "hour" ? 3600 : 30 * 86400));
+      if (until <= Math.floor(this.#env.host.nowMs() / 1000)) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      yield* this.#allowHere(station, g, signed, until);
+      if (g.signed == null) {
+        const r = yield* this.#legacy.askAt(station, { op: "sign", request, signed });
+        this.heard(station, (r as J)?.request);
+      }
+      return null;
     });
   }
 
   /// Until when grant `g` holds on this phone (null: it lends nothing on it): signed by a device on the lock pinned here.
   #holds(g: J): number | null {
-    if (g.status !== "granted" || this.#revoked.has(g.id)) return null;
-    if (Object.hasOwn(g, SIGNED_UNTIL)) return g[SIGNED_UNTIL] !== null && g[SIGNED_UNTIL] > Math.floor(this.#env.host.nowMs() / 1000) ? g[SIGNED_UNTIL] : null;
+    if (!this.#revocations.loaded || this.#revocations.dirty || g.status !== "granted" || this.#locallyBlocked(g.station, g)) return null;
+    const allowed = this.#allowedUntil(g.station, g)!;
+    if (Object.hasOwn(g, SIGNED_UNTIL)) {
+      const until = g[SIGNED_UNTIL] === null ? null : Math.min(g[SIGNED_UNTIL], allowed);
+      return until !== null && until > Math.floor(this.#env.host.nowMs() / 1000) ? until : null;
+    }
     const sub = this.#subAt(g.station);
     const chain = sub === null || !this.#env.personal.ready(sub) ? null : this.#env.personal.chain(sub);
-    return sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
+    const checked = sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
+    return checked === null ? null : Math.min(checked, allowed);
   }
 
   /// A verified signed expiry, including after it has passed: the station's copy cannot lengthen it on screen or disk.
@@ -726,12 +1005,6 @@ export class Adb {
 
   #readPersonal(sub: string): void {
     this.#env.runner.fork(Effect.ensuring(Effect.ignore(this.#env.personal.refresh(sub), { log: "Unhandled", message: "personal lock read" }), Effect.sync(() => this.#sync())));
-  }
-
-  #keepRevoked(): void {
-    const now = this.#env.host.nowMs() / 1000;
-    for (const [id, until] of this.#revoked) if (until <= now) this.#revoked.delete(id);
-    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(REVOKED_KEY, utf8(JSON.stringify(Object.fromEntries(this.#revoked)))), { log: "Unhandled", message: "debugging grants taken back kept" }));
   }
 
   /// This phone paired with its own adbd (docs/adb-share.md, 2026-10-31): once, whichever station's page or card asked,
@@ -771,6 +1044,7 @@ export class Adb {
   /// A station's grants read whole, as it is reached (one from before grants answers with none).
   readGrants(station: string): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
+      if (!this.#revocations.loaded || this.#revocations.dirty) this.#env.runner.fork(Effect.ignore(this.#ensureRevocations(), { log: "Unhandled", message: "debugging grants taken back retry" }));
       const sub = this.#subAt(station);
       if (sub !== null) this.#readPersonal(sub);
       const read = this.#retold.asked();
@@ -798,7 +1072,11 @@ export class Adb {
       for (const g of at.values()) {
         const whole = { ...g, station };
         const signed = this.#signedExpiry(whole);
-        const until = signed === null ? null : Number.isSafeInteger(g.exp) ? Math.min(signed, g.exp) : null;
+        const allowed = this.#revocations.loaded && !this.#revocations.dirty ? this.#allowedUntil(station, whole) : null;
+        // A local approval can shorten what the signer allowed. Once it expires, show the grant again as needing a
+        // fresh confirmation, rather than hiding the option to approve it.
+        const cap = allowed !== null && allowed > now ? allowed : Number.MAX_SAFE_INTEGER;
+        const until = signed === null ? null : Number.isSafeInteger(g.exp) ? Math.min(signed, g.exp, cap) : null;
         if (whole.signed != null) Object.defineProperty(whole, SIGNED_UNTIL, { value: until });
         if (signed !== null) whole.exp = until ?? 0;
         if (whole.status === "pending" || (whole.status === "granted" && (whole.exp ?? 0) > now)) out.push(whole);
@@ -814,10 +1092,13 @@ export class Adb {
       const { signed: _signed, ...shown } = whole;
       const sub = this.#subAt(whole.station);
       const standing = sub === null ? "member" : this.#env.personal.standing(sub);
+      const localApproval = whole.status === "granted" && this.#revocations.loaded && !this.#revocations.dirty && this.#scopesFor(whole.station, whole).length > 0 && this.#locallyBlocked(whole.station, whole);
+      const proof = localApproval ? approvalProof(whole) : null;
       const g = {
         ...shown,
         ...(sub !== null ? { sub } : {}),
         ...(whole.status === "granted" ? { held: this.#holds(whole) !== null, unsigned: whole.signed == null } : {}),
+        ...(localApproval && proof !== null ? { localApproval: true, approvalProof: proof } : {}),
         ...(whole.status === "pending" && standing !== "member" ? { join: true } : {}),
         ...(this.#old.has(whole.station) ? { oldStation: true } : {}),
       };
@@ -825,7 +1106,11 @@ export class Adb {
       const before = out.get(key);
       const used = typeof g.lastUsedAt === "number" ? g.lastUsedAt : 0;
       const wasUsed = typeof before?.lastUsedAt === "number" ? before.lastUsedAt : 0;
-      if (before === undefined || (before.status !== "granted" && g.status === "granted") || (before.status === g.status && (used > wasUsed || (used === wasUsed && (g.at ?? 0) > (before.at ?? 0))))) out.set(key, g);
+      // If any grant of a chat still lends, the row must retain its take-back action even when another needs local
+      // approval. Otherwise a newer blocked grant could hide the only control that stops the active one.
+      if (before === undefined || (before.status !== "granted" && g.status === "granted") ||
+          (before.status === g.status && g.held === true && before.held !== true) ||
+          (before.status === g.status && (g.held === true) === (before.held === true) && (used > wasUsed || (used === wasUsed && (g.at ?? 0) > (before.at ?? 0))))) out.set(key, g);
     }
     return [...out.values()].sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0) || (b.at ?? 0) - (a.at ?? 0));
   }
@@ -891,7 +1176,7 @@ export class Adb {
     const screens = [...new Set([this.#legacy, ...this.#lends.values()].flatMap((l) => l.value().screens as string[]))];
     const personal = this.#env.subs().map(({ sub, email }) => ({ ...this.#env.personal.view(sub), email, pair: this.#env.pair.state(sub) }));
     const toConfirm = this.#allGrants().filter((g) => this.#toConfirm(g)).length;
-    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts, screens, personal, toConfirm };
+    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known && this.#revocations.loaded && !this.#revocations.dirty, revocationsError: this.#revocations.error !== null, lends, lasts: this.#lasts, screens, personal, toConfirm };
   }
 
   card(station: string): J {

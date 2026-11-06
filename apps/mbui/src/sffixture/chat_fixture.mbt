@@ -239,7 +239,7 @@ pub fn rich_chat(older : Int) -> Json {
   {
     "archived": false,
     "me": { "email": "lin@example.com" },
-    "thread": { "id": 7, "unread": 0 },
+    "thread": { "id": 7, "unread": 0, "channel": "CHAT", "threadTs": "123.456" },
     "title": "整理发布清单",
     "people": [me, ana],
     "agents": [

@@ -2568,7 +2568,7 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [], personal: v(values, 1).personal, toConfirm: 0 });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, revocationsError: false, lasts: "chat", lends: [], screens: [], personal: v(values, 1).personal, toConfirm: 0 });
   assert.deepEqual(v(values, 1).personal.map((p: J) => [p.standing, p.devices]), [["none", []]]);
   core.close();
 });

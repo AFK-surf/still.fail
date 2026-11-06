@@ -284,6 +284,7 @@ export class Core {
       asks.follow(inner.accounts);
       inner.adb = new Adb({
         host: inner.host,
+        revocationsHost: host,
         runner: inner.runner,
         store: inner.store,
         mesh: () => inner.mesh(),

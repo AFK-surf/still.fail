@@ -1832,6 +1832,7 @@ export const SHAPES: Record<string, Shape> = {
     ["grants", vec("AdbGrant"), { default: true, doc: "This person's chats' grants of their phone live now, and their requests waiting, every station's (docs/adb-share.md)." }],
     ["wanted", vec("String"), { default: true, doc: "The stations a live grant lends this phone to now." }],
     ["known", "bool", { default: true, doc: "Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started)." }],
+    ["revocationsError", "bool", { default: true, doc: "Local revocations could not be read or saved; lending is paused until `adb.retryRevocations` succeeds." }],
     ["lasts", opt("String"), { doc: "This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`)." }],
     ["lends", vec("AdbLend"), { default: true, doc: "This phone lent to each station a grant wants it on (`adb.ports` given): how each stands." }],
     ["screens", vec("String"), { default: true, doc: "The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them." }],
@@ -1886,6 +1887,8 @@ export const SHAPES: Record<string, Shape> = {
     ["join", opt("bool"), { doc: "Waiting, and this device is not on that account's own lock: it joins as it allows." }],
     ["oldStation", opt("bool"), { doc: "Its station is from before signatures: nothing allowed there lends." }],
     ["held", opt("bool"), { doc: "Granted: whether this device, as the phone, takes it: signed by a device on the person's own lock pinned here (docs/personal-lock.md)." }],
+    ["localApproval", opt("bool"), { doc: "This chat was taken back on the phone; this grant needs explicit approval there before it can lend." }],
+    ["approvalProof", opt("String"), { doc: "The grant as displayed, passed to `adb.approveHere` so a changed row cannot be approved accidentally." }],
   ], { doc: "A chat's grant of this person's phone, or its request waiting (the `adbShare` topic's `grants`)." }),
   AdbCard: struct([
     ["title", "String", { doc: "What the link opens: the station's 共享调试." }],

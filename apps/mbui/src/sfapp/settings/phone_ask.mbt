@@ -21,6 +21,7 @@ pub fn phone_card(
   who? : String? = None,
   ended? : (String, String, String)? = None,
   how? : () -> Unit = fn() {  },
+  chat? : String = "",
 ) -> Unit {
   // (a card of words, as a vault request's: its answer in its foot corners; answered while it shows, how it went in its
   // answer's place: answered_in_place)
@@ -29,7 +30,7 @@ pub fn phone_card(
     match core {
       Some(core) if mine =>
         answered_in_place(c, "phone/" + request, ended.map(fn(e) { (e.0 == "granted", [@ui.span(phone_outcome_words(e.0, e.1, e.2))]) }), fn() {
-          phone_foot(c, core, station, request, lasts, how)
+          phone_foot(c, core, station, request, lasts, how, chat)
         })
       _ =>
         match who {
@@ -50,7 +51,7 @@ fn phone_row(core : Core, request : String) -> Json? {
 ///|
 /// Its answer: 允许 (for the length chosen), 拒绝, and the length's menu; on a phone that lacks something first, what,
 /// and 查看步骤 (`how`) in 允许's place.
-fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit) -> Unit {
+fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit, chat : String) -> Unit {
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
   let row = phone_row(core, request)
   // (a station from before signatures: allowed, nothing would lend)
@@ -87,6 +88,7 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
     let params : Array[(String, Json)] = [("station", str(station)), ("request", str(request))]
     if yes {
       params.push(("scope", str(scope)))
+      if chat != "" { params.push(("chat", str(chat))) }
     }
     (core.call)("adb.decide", obj(params), fn(r) {
       match r {

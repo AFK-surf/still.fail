@@ -119,6 +119,7 @@ fn phone_ask_card_node(v : @view.View, here : () -> MessageHere, m : () -> Messa
           }
         },
         fn() { open_page(Setting(@settings.phone_steps(here().core, here().station, request=first.request))) },
+        chat=h.view.chat_address,
       )
     })
     |> ignore

@@ -184,6 +184,7 @@ pub fn phone_card_node(
   who : String?,
   ended : () -> (String, String, String)?,
   how : () -> Unit,
+  chat? : String = "",
 ) -> Unit {
   @sf.card_node(parent, fn(k) {
     @sf.ask_words_node(k, fn() { tr("android-misc.adb.ask.chat.title") }, reason) |> ignore
@@ -191,7 +192,7 @@ pub fn phone_card_node(
       Some(core) if mine =>
         answered_in_place_node(k, fn() {
           ended().map(fn(e) { (e.0 == "granted", [@ui.span(phone_outcome_words(e.0, e.1, e.2))]) })
-        }, fn(a) { phone_foot_node(a, core, station, request, lasts, how) })
+        }, fn(a) { phone_foot_node(a, core, station, request, lasts, how, chat) })
       _ =>
         match who {
           Some(w) if w != "" => @sf.words_node(k, fn() { w }, fn() { @sf.ask_note }) |> ignore
@@ -205,7 +206,7 @@ pub fn phone_card_node(
 ///|
 /// A phone request's answer (phone_foot's) in `parent`: 允许 (for the length chosen), 拒绝, and the length's menu; on a
 /// phone that lacks something first, what, and 查看步骤 (`how`) in 允许's place.
-fn phone_foot_node(parent : @view.View, core : Core, station : String, request : String, lasts : () -> String, how : () -> Unit) -> Unit {
+fn phone_foot_node(parent : @view.View, core : Core, station : String, request : String, lasts : () -> String, how : () -> Unit, chat : String) -> Unit {
   let key = "phone/" + request
   parent.reacts(fn() { () }, fn(_) { adb_phone_ask() })
   let lacks = fn() {
@@ -246,6 +247,7 @@ fn phone_foot_node(parent : @view.View, core : Core, station : String, request :
     let params : Array[(String, Json)] = [("station", str(station)), ("request", str(request))]
     if yes {
       params.push(("scope", str(@signals.untracked(scope))))
+      if chat != "" { params.push(("chat", str(chat))) }
     }
     (core.call)("adb.decide", obj(params), fn(r) {
       match r {

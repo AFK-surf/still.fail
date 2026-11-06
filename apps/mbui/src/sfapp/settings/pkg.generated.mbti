@@ -267,9 +267,11 @@ pub fn panels_frame(Core) -> Unit
 
 pub fn pending_login(Core, String, String) -> @json.Json?
 
-pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?, how? : () -> Unit) -> Unit
+pub fn personal_lock_page(@ui.Ctx, Core) -> Unit
 
-pub fn phone_card_node(@view.View, Core?, String, String, () -> String, Bool, () -> String, String?, () -> (String, String, String)?, () -> Unit) -> Unit
+pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?, how? : () -> Unit, chat? : String) -> Unit
+
+pub fn phone_card_node(@view.View, Core?, String, String, () -> String, Bool, () -> String, String?, () -> (String, String, String)?, () -> Unit, chat? : String) -> Unit
 
 pub fn phone_lends(@ui.Ctx) -> Bool
 
@@ -283,7 +285,7 @@ pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool, link? : St
 
 pub fn phone_outcome_words(String, String, String) -> String
 
-pub fn phone_steps(Core?, String) -> Route
+pub fn phone_steps(Core?, String, request? : String) -> Route
 
 pub fn place_action(Core, Here, String) -> ((@sf.Beside) -> Unit)?
 
@@ -565,6 +567,7 @@ pub(all) enum Route {
   Usage
   Archive
   AdbShare(String)
+  PersonalLock
   NewProfile(String)
   ProfileAccount(String)
   VaultItems

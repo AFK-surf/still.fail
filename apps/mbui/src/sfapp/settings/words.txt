@@ -130,6 +130,10 @@ android-misc.adb.step.wireless
 android-misc.adb.stop
 android-misc.adb.stopWhat
 android-misc.adb.on.note
+android-misc.adb.revocations.title
+android-misc.adb.revocations.note
+android-misc.adb.chats.approvalNeeded
+android-misc.adb.chats.approveHere
 android-misc.adb.title
 android-misc.adb.typeCode
 android-misc.adb.unauthorized

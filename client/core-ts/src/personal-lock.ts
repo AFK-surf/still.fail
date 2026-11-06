@@ -150,8 +150,12 @@ export class PersonalLock {
   readonly #seenDirty = new Set<string>();
   readonly #accepting = new Map<string, PendingChoice>();
   readonly #acceptSaved = new Set<string>();
+  /// One operation carries a confirmed choice at a time; a retry cannot finish it while its first call is in flight.
+  readonly #acceptActive = new Map<string, object>();
   readonly #first = new Map<string, Entry>();
   readonly #loaded = new Set<string>();
+  /// A pin first read from disk advances the generation without being a new choice made during a pairing attempt.
+  readonly #loadedGeneration = new Map<string, { from: number; to: number }>();
   /// Forgetting or replacing a lock invalidates reads and pairing attempts started against its earlier state.
   readonly #generations = new Map<string, number>();
   /// A device's storage writes may complete out of order; serialize each account's pin and forget.
@@ -223,7 +227,10 @@ export class PersonalLock {
           const current = generation === this.#generation(sub);
           if (current && !this.#pinned.has(sub) && Array.isArray(said)) {
             this.#pinned.set(sub, said);
-            if (said.length > 0) this.#generations.set(sub, generation + 1);
+            if (said.length > 0) {
+              this.#generations.set(sub, generation + 1);
+              this.#loadedGeneration.set(sub, { from: generation, to: generation + 1 });
+            }
           }
           if (current && Array.isArray(other)) {
             this.#seen.set(sub, other);
@@ -331,24 +338,34 @@ export class PersonalLock {
 
   /// Record the person's choice before changing the pin. A crash can then distinguish an unfinished confirmation
   /// from an ordinary observation of a different lock, for which the old pin remains valid for existing grants.
-  #prepareAcceptance(sub: string, kind: Acceptance["kind"], seen: Entry[] | undefined, target: Entry[], generation: number): Effect.Effect<Acceptance, CoreError> {
+  #prepareAcceptance(sub: string, kind: Acceptance["kind"], seen: Entry[] | undefined, target: Entry[], generation: number, owner: object): Effect.Effect<Acceptance, CoreError> {
     return this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
       if (generation !== this.#generation(sub) || this.#seen.get(sub) !== seen) {
         return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       }
-      if (this.#accepting.get(sub)?.kind === "forget") return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
+      if (this.#accepting.has(sub) || this.#acceptActive.has(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       if (this.#dirty.has(sub) || this.#seenDirty.has(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       const acceptance: Acceptance = { v: 1, kind, observed: seen ? placeOf(seen).head : null, base: placeOf(seen ?? this.#pinned.get(sub) ?? []), target };
       this.#accepting.set(sub, acceptance);
       this.#acceptSaved.delete(sub);
+      this.#acceptActive.set(sub, owner);
       this.#env.changed();
-      yield* Effect.mapError(this.#env.host.storageSet(acceptingAs(sub), utf8(JSON.stringify(acceptance))), asCoreError);
+      const saved = yield* Effect.result(Effect.mapError(this.#env.host.storageSet(acceptingAs(sub), utf8(JSON.stringify(acceptance))), asCoreError));
+      if (saved._tag === "Failure") {
+        this.#releaseAcceptance(sub, owner);
+        return yield* Effect.fail(saved.failure);
+      }
       this.#acceptSaved.add(sub);
       if (generation !== this.#generation(sub) || this.#seen.get(sub) !== seen) {
+        this.#releaseAcceptance(sub, owner);
         return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       }
       return acceptance;
     })));
+  }
+
+  #releaseAcceptance(sub: string, owner: object): void {
+    if (this.#acceptActive.get(sub) === owner) this.#acceptActive.delete(sub);
   }
 
   #finishAcceptance(sub: string, acceptance: Acceptance): Effect.Effect<void, CoreError> {
@@ -387,9 +404,20 @@ export class PersonalLock {
   /// Finish an interrupted confirmation. A join carries its verified proof; a restart is retried only if the cloud
   /// still has the same chain the person saw, using its guarded route so another device cannot be overwritten.
   #recoverAcceptance(sub: string): Effect.Effect<void, CoreError> {
+    return Effect.suspend(() => {
+      const owner = {};
+      return Effect.ensuring(Effect.gen({ self: this }, function* () {
+        const choice = this.#accepting.get(sub);
+        if (!choice) return;
+        if (this.#acceptActive.has(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
+        this.#acceptActive.set(sub, owner);
+        yield* this.#recoverActive(sub, choice);
+      }), Effect.sync(() => this.#releaseAcceptance(sub, owner)));
+    });
+  }
+
+  #recoverActive(sub: string, acceptance: PendingChoice): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const acceptance = this.#accepting.get(sub);
-      if (!acceptance) return;
       if (!this.#acceptSaved.has(sub)) {
         yield* this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
           if (this.#accepting.get(sub) !== acceptance) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
@@ -426,7 +454,7 @@ export class PersonalLock {
             yield* this.#env.cloud(sub, "POST", RESTORE_PATH, { entries: target, expect: acceptance.base });
           }
         }
-        yield* this.#pin(sub, target, { replace: true, base: pinned, generation, ...(acceptance.kind === "join" ? { memberKey: this.#myKey ?? "" } : {}) });
+        yield* this.#pin(sub, target, { replace: true, base: pinned, generation, acceptance, ...(acceptance.kind === "join" ? { memberKey: this.#myKey ?? "" } : {}) });
       }
       yield* this.#finishAcceptance(sub, acceptance);
     });
@@ -481,12 +509,14 @@ export class PersonalLock {
     return writer;
   }
 
-  #pin(sub: string, entries: Entry[], options: { base?: Entry[]; replace?: boolean; generation?: number; memberKey?: string } = {}): Effect.Effect<void, CoreError> {
+  #pin(sub: string, entries: Entry[], options: { base?: Entry[]; replace?: boolean; generation?: number; memberKey?: string; acceptance?: Acceptance } = {}): Effect.Effect<void, CoreError> {
     return this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
       const current = this.#pinned.get(sub) ?? [];
       // A concurrent forget or join must not be undone by an earlier cloud response.
       if (options.generation !== undefined && options.generation !== this.#generation(sub)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      if (options.acceptance && (this.#accepting.get(sub) !== options.acceptance || !prefixOf(options.acceptance.target, entries))) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       if (options.base && !prefixOf(options.base, current)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      if (options.acceptance?.kind === "restart" && options.base && !prefixOf(current, options.base)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       if (options.replace && options.base?.length === 0 && current.length > 0 && !prefixOf(entries, current)) {
         return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       }
@@ -600,26 +630,32 @@ export class PersonalLock {
           return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
         }
       }
-      const acceptance = options.restart && !options.onlyEmpty
-        ? yield* this.#prepareAcceptance(sub, "restart", seen, [e], generation)
-        : null;
-      const write = options.onlyEmpty || acceptance
-        ? this.#env.cloud(sub, "POST", RESTORE_PATH, { entries: [e], expect: acceptance?.base ?? { length: 0, head: null } })
-        : this.#env.cloud(sub, "POST", PATH, { entries: [e] });
-      const result = yield* Effect.result(write);
-      if (result._tag === "Failure") {
-        if (options.onlyEmpty && result.failure.status === 409) {
-          // Show the lock that won, if reachable. A failed refresh must not turn this into an unguarded reset.
-          yield* Effect.result(this.refresh(sub));
-          return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+      const perform = (acceptance: Acceptance | null) => Effect.gen({ self: this }, function* () {
+        const write = options.onlyEmpty || acceptance
+          ? this.#env.cloud(sub, "POST", RESTORE_PATH, { entries: [e], expect: acceptance?.base ?? { length: 0, head: null } })
+          : this.#env.cloud(sub, "POST", PATH, { entries: [e] });
+        const result = yield* Effect.result(write);
+        if (result._tag === "Failure") {
+          if (options.onlyEmpty && result.failure.status === 409) {
+            // Show the lock that won, if reachable. A failed refresh must not turn this into an unguarded reset.
+            yield* Effect.result(this.refresh(sub));
+            return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
+          }
+          return yield* Effect.fail(result.failure);
         }
-        return yield* Effect.fail(result.failure);
-      }
-      yield* this.#pin(sub, [...before, e], { base, replace: options.restart === true, generation });
-      if (acceptance) yield* this.#finishAcceptance(sub, acceptance);
-      const first = this.#first.get(sub);
-      if (options.restart && first) yield* Effect.result(this.#clearFirst(sub, first));
-      this.#env.changed();
+        yield* this.#pin(sub, [...before, e], { base, replace: options.restart === true, generation, ...(acceptance ? { acceptance } : {}) });
+        if (acceptance) yield* this.#finishAcceptance(sub, acceptance);
+        const first = this.#first.get(sub);
+        if (options.restart && first) yield* Effect.result(this.#clearFirst(sub, first));
+        this.#env.changed();
+      });
+      if (options.restart && !options.onlyEmpty) {
+        const owner = {};
+        yield* Effect.ensuring(Effect.gen({ self: this }, function* () {
+          const acceptance = yield* this.#prepareAcceptance(sub, "restart", seen, [e], generation, owner);
+          yield* perform(acceptance);
+        }), Effect.sync(() => this.#releaseAcceptance(sub, owner)));
+      } else yield* perform(null);
     });
   }
 
@@ -731,6 +767,12 @@ export class PersonalLock {
   /// The lock a device that let this one in brought (the connection proved by the code shown there): pinned.
   joined(sub: string, entries: Entry[], generation: number): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      yield* this.load(sub);
+      // Loading the already-pinned chain is not a new confirmation. A pairing begun before that read may proceed,
+      // but any later forget, replacement or other generation change still invalidates it.
+      const loaded = this.#loadedGeneration.get(sub);
+      const current = this.#generation(sub);
+      const choiceGeneration = loaded?.from === generation && loaded.to === current ? current : generation;
       const seen = this.#seen.get(sub);
       if (checkChain(entries, sub) === null) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       if (seen && !prefixOf(seen, entries) && !prefixOf(entries, seen)) {
@@ -741,12 +783,15 @@ export class PersonalLock {
       const chain = checkChain(target, sub);
       const key = this.#myKey;
       if (chain === null || key === null || !chain.devices.has(key)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      const acceptance = yield* this.#prepareAcceptance(sub, "join", seen, target, generation);
-      yield* this.#pin(sub, target, { replace: true, generation, memberKey: key });
-      yield* this.#finishAcceptance(sub, acceptance);
-      const first = this.#first.get(sub);
-      if (first) yield* Effect.result(this.#clearFirst(sub, first));
-      this.#env.changed();
+      const owner = {};
+      yield* Effect.ensuring(Effect.gen({ self: this }, function* () {
+        const acceptance = yield* this.#prepareAcceptance(sub, "join", seen, target, choiceGeneration, owner);
+        yield* this.#pin(sub, target, { replace: true, generation: choiceGeneration, memberKey: key, acceptance });
+        yield* this.#finishAcceptance(sub, acceptance);
+        const first = this.#first.get(sub);
+        if (first) yield* Effect.result(this.#clearFirst(sub, first));
+        this.#env.changed();
+      }), Effect.sync(() => this.#releaseAcceptance(sub, owner)));
     });
   }
 
@@ -778,15 +823,19 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       if (this.#env.host.secureAsk) yield* Effect.mapError(this.#env.host.secureAsk(reason), asCoreError);
       const forgetting: Forgetting = { v: 1, kind: "forget" };
-      yield* this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
-        this.#generations.set(sub, this.#generation(sub) + 1);
-        this.#accepting.set(sub, forgetting);
-        this.#acceptSaved.delete(sub);
-        this.#env.changed();
-        yield* Effect.mapError(this.#env.host.storageSet(acceptingAs(sub), utf8(JSON.stringify(forgetting))), asCoreError);
-        this.#acceptSaved.add(sub);
-      })));
-      yield* this.#finishForget(sub, forgetting);
+      const owner = {};
+      yield* Effect.ensuring(Effect.gen({ self: this }, function* () {
+        yield* this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+          this.#generations.set(sub, this.#generation(sub) + 1);
+          this.#accepting.set(sub, forgetting);
+          this.#acceptSaved.delete(sub);
+          this.#acceptActive.set(sub, owner);
+          this.#env.changed();
+          yield* Effect.mapError(this.#env.host.storageSet(acceptingAs(sub), utf8(JSON.stringify(forgetting))), asCoreError);
+          this.#acceptSaved.add(sub);
+        })));
+        yield* this.#finishForget(sub, forgetting);
+      }), Effect.sync(() => this.#releaseAcceptance(sub, owner)));
       return null;
     });
   }

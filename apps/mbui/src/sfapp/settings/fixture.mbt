@@ -418,7 +418,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     // The grants list with long reasons is itself in view for the spacing and corner sweeps.
-    "settings-adb-chats-long" => up("", "settings/adb/", 4)
+    "settings-adb-chats-long" | "settings-adb-local-approval" => up("", "settings/adb/", 4)
     "settings-station-mark" => up("mark", "", 0)
     "settings-station-many-profiles" => fx_station_many_profiles.val = true
     "settings-station-gpu" => fx.gpus = true
@@ -554,7 +554,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" => "adb:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-local-approval" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" | "settings-adb-revocations-error" => "adb:"
     "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" | "settings-adb-lock-pending" => "personal-lock:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
@@ -3412,6 +3412,15 @@ fn fx_adb_share() -> Json {
     )
   }
   match fx_adb.val {
+    "revocations-error" => obj([("sharing", Json::boolean(false)), ("phase", str("off")), ("on", Json::boolean(true)), ("tunnels", Json::number(0.0)), ("revocationsError", Json::boolean(true))])
+    "local-approval" =>
+      obj([
+        ("sharing", Json::boolean(false)),
+        ("phase", str("idle")),
+        ("on", Json::boolean(true)),
+        ("tunnels", Json::number(0.0)),
+        ("grants", [obj([("station", str("ws1/st1")), ("id", str("p-local")), ("session", str("s-c1")), ("chat", str("CHAT/1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("记录键盘升起时的帧时间")), ("status", str("granted")), ("scope", str("hour")), ("held", Json::boolean(false)), ("localApproval", Json::boolean(true)), ("approvalProof", str("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))])]),
+      ])
     "lock-pending" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("pending", Json::boolean(true)), ("devices", Json::array([obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))])]))])]))])
     // the person's own lock on the page (docs/personal-lock.md): this device on it, outside it, or asked for a code
     "lock-member" =>
@@ -3468,7 +3477,7 @@ fn fx_adb_share() -> Json {
         ("tunnels", Json::number(0.0)),
         ("lends", [obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("tunnels", Json::number(1.0))])]),
         ("grants", [
-          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在开发版里打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
+          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chat", str("c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在开发版里打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
           obj([("station", str("ws1/st1")), ("id", str("p-long-2")), ("session", str("s-c2")), ("chatTitle", str("客户端卡顿排查")), ("reason", str("量整页重搭那一帧实际跑多久，CPU 跑在什么频率，并比较改动前后的差别")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("2 小时前"))]))]),
           obj([("station", str("ws1/st1")), ("id", str("p-long-3")), ("session", str("s-c3")), ("chatTitle", str("检查登录页面")), ("reason", str("检查登录页面")), ("status", str("granted")), ("scope", str("hour"))]),
         ]),

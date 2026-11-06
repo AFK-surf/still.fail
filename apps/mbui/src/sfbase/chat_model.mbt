@@ -603,6 +603,8 @@ pub(all) struct ChatView {
   title : String
   /// its thread's id, and how many wait past a window short of its end
   thread : Double?
+  /// The thread address used by a phone request, bound to the card the person is looking at.
+  chat_address : String
   unread : Double
   people : Array[Person]
   agents : Array[Agent]
@@ -717,6 +719,7 @@ fn chat_view_of(v : Json, messages : ChatMessages) -> ChatView {
   {
     title: text(s, "title"),
     thread: opt_number(thread, "id"),
+    chat_address: if text(thread, "channel") != "" && text(thread, "threadTs") != "" { text(thread, "channel") + "/" + text(thread, "threadTs") } else { "" },
     unread: number(thread, "unread"),
     people: items(s, "people").map(person_of),
     agents: items(s, "agents").map(agent_of),

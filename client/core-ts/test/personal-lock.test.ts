@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Deferred, Effect } from "effect";
-import { Adb, GRANTS_KEY } from "../src/adb.ts";
+import { Deferred, Effect, Fiber } from "effect";
+import { Adb, GRANTS_KEY, REVOKED_KEY } from "../src/adb.ts";
 import { Core } from "../src/core.ts";
 import { CoreError, HostError } from "../src/error.ts";
 import { entryHash, signedBytes, type Entry } from "../src/lock.ts";
@@ -13,7 +13,7 @@ import type { Mesh } from "../src/mesh.ts";
 import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store } from "../src/store.ts";
-import { FakeHost } from "../src/testing.ts";
+import { FakeHost, flush } from "../src/testing.ts";
 import { hex } from "../src/util.ts";
 import { personalStub } from "./adb-personal-stub.ts";
 
@@ -720,6 +720,77 @@ test("a restart cannot overwrite a different cloud lock created before its guard
   } finally { a.runner.shutdown(); b.runner.shutdown(); d.runner.shutdown(); }
 });
 
+test("an earlier pairing cannot replace a restart confirmation while its cloud reply waits", async () => {
+  const c = cloud(), call = c.call, reached = Promise.withResolvers<void>(), release = Deferred.makeUnsafe<void>();
+  let delay = false;
+  c.call = (sub, method, path, value) => {
+    if (delay && method === "POST" && path.endsWith("/append")) {
+      delay = false;
+      return Effect.andThen(call(sub, method, path, value), Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), {})));
+    }
+    return call(sub, method, path, value);
+  };
+  const a = device(c, "a");
+  let restarting: Promise<unknown> | null = null;
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const old = [...c.kept.entries], generation = a.lock.joinGeneration(SUB);
+    await a.host.time.pass(1_000);
+    delay = true;
+    restarting = a.runner.run(a.lock.restart(SUB, "why"));
+    await reached.promise;
+    assert.equal(a.lock.ready(SUB), false, "the restart remains pending until its pin is saved");
+    await assert.rejects(a.runner.run(a.lock.joined(SUB, old, generation)), /./, "an earlier pairing cannot replace the in-flight confirmation");
+    await assert.rejects(a.runner.run(a.lock.restart(SUB, "why")), /./, "a second restart cannot take over the first confirmation");
+    await assert.rejects(a.runner.run(a.lock.open(SUB, "why")), /./, "the retry cannot finish a confirmation still in flight");
+    assert.equal(a.lock.ready(SUB), false, "the old pairing cannot reopen lending while restart waits");
+    Deferred.doneUnsafe(release, Effect.void);
+    await restarting;
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.equal(a.lock.chain(SUB)?.hash, entryHash(c.kept.entries.at(-1)!));
+  } finally {
+    Deferred.doneUnsafe(release, Effect.void);
+    if (restarting) await restarting.catch(() => {});
+    a.runner.shutdown();
+  }
+});
+
+for (const phase of ["record", "reply"] as const) {
+  test(`an interrupted restart during its ${phase} leaves its confirmation retryable`, async () => {
+    const c = cloud(), call = c.call, reached = Promise.withResolvers<void>(), release = Deferred.makeUnsafe<void>();
+    let hold = false;
+    c.call = (sub, method, path, value) => hold && phase === "reply" && method === "POST" && path.endsWith("/append")
+      ? Effect.andThen(call(sub, method, path, value), Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), {})))
+      : call(sub, method, path, value);
+    const a = device(c, "a"), set = a.host.storageSet.bind(a.host);
+    try {
+      await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+      await a.host.time.pass(1_000);
+      a.host.storageSet = (name, value) => hold && phase === "record" && name.startsWith("personal-accepting-")
+        ? Effect.andThen(set(name, value), Effect.andThen(Effect.sync(() => reached.resolve()), Deferred.await(release)))
+        : set(name, value);
+      hold = true;
+      const restarting = a.runner.fork(a.lock.restart(SUB, "why"));
+      await reached.promise;
+      assert.equal(a.lock.ready(SUB), false);
+      const interrupted = a.runner.run(Fiber.interrupt(restarting));
+      Deferred.doneUnsafe(release, Effect.void);
+      await interrupted;
+      hold = false;
+      a.host.storageSet = set;
+      await a.runner.run(a.lock.open(SUB, "why"));
+      assert.equal(a.lock.ready(SUB), true, "the interrupted operation did not leave an active owner behind");
+      assert.equal(a.lock.standing(SUB), "member");
+      assert.equal(a.lock.chain(SUB)?.hash, entryHash(c.kept.entries.at(-1)!));
+    } finally {
+      hold = false;
+      Deferred.doneUnsafe(release, Effect.void);
+      a.host.storageSet = set;
+      await a.runner.shutdown();
+    }
+  });
+}
+
 test("an interrupted forget cannot resume the confirmation it was meant to discard", async () => {
   const c = cloud(), call = c.call;
   let loseReply = false;
@@ -1280,8 +1351,7 @@ test("forgetting while the first personal genesis is being accepted is not undon
 });
 
 /// A phone's Adb over a station that says what it is told.
-function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>) {
-  const host = new FakeHost();
+function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>, host = new FakeHost()) {
   const runner = new Runner(host.time.clock);
   const store = new Store(host, runner);
   const link = { adb: () => Effect.succeed({ status: 200, body: { take: Effect.succeed(null) } }) };
@@ -1289,6 +1359,194 @@ function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>) {
   const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => true, ...env });
   return { host, runner, adb };
 }
+
+test("a station cannot revive a revoked signed grant by extending its reported expiry", async () => {
+  const c = cloud(), a = device(c, "a");
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(signed), exp: now + 5 });
+    assert.deepEqual(p.adb.wanted(), [STATION]);
+    await p.runner.run(Effect.ignore(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" })));
+    await p.host.time.pass(6_000, 6_000);
+    await p.runner.run(Effect.ignore(p.adb.run({ kind: "revoke", station: STATION, request: "another" })));
+    p.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [], "the earlier station expiry cannot cause a valid signature to be lent again");
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("taking back a chat includes another known signature the station reports as expired", async () => {
+  const c = cloud(), a = device(c, "a");
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    const second = await a.runner.run(a.lock.signGrant(SUB, body({ request: "p2", session: "sess2", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    p.adb.heard(STATION, { ...grantOf(second), id: "p2", session: "sess2", exp: now - 1 });
+    await p.runner.run(Effect.ignore(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" })));
+    p.adb.heard(STATION, { ...grantOf(second), id: "p2", session: "sess2", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [], "the station's earlier expiry cannot hide the other signed request from the take-back");
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("taking back a chat blocks another signed request hidden by its station", async () => {
+  const c = cloud(), a = device(c, "a");
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    const hidden = await a.runner.run(a.lock.signGrant(SUB, body({ request: "p2", session: "sess2", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    await p.runner.run(Effect.ignore(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" })));
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [], "another signature for the same chat cannot undo the local take-back");
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a taken back chat requires this phone to approve the exact signature, including after restart", async () => {
+  const c = cloud(), a = device(c, "a"), b = device(c, "b");
+  const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] };
+  const p = phone(env);
+  let cold: ReturnType<typeof phone> | undefined;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    const bKey = await b.runner.run(b.lock.makeKey());
+    await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: "62".repeat(32), label: "b" }, "why"));
+    await b.runner.run(b.lock.refresh(SUB));
+    await b.runner.run(b.lock.joined(SUB, c.kept.entries, b.lock.joinGeneration(SUB)));
+    const hidden = await b.runner.run(b.lock.signGrant(SUB, body({ request: "p2", session: "sess2", exp: now + 7200 }), "why"));
+    const another = await b.runner.run(b.lock.signGrant(SUB, body({ request: "p3", session: "sess3", exp: now + 7200 }), "why"));
+    const otherChat = await a.runner.run(a.lock.signGrant(SUB, body({ request: "else", session: "other", chat: "other", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
+    p.adb.heard(STATION, { id: "p1", status: "ended" });
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [], "another trusted device's signature does not silently undo the take-back");
+    const row = p.adb.grants().find((g) => g.id === "p2");
+    assert.equal(row?.localApproval, true);
+    assert.match(row?.approvalProof, /^[0-9a-f]{64}$/);
+    await p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "p2", proof: row.approvalProof }));
+    assert.equal(p.host.secureAsked.length, 1, "this phone asks its person even for a signature made on a trusted device");
+    assert.deepEqual(p.adb.wanted(), [STATION]);
+    p.adb.heard(STATION, { ...grantOf(another), id: "p3", session: "sess3", at: 10, exp: now + 7200 });
+    assert.equal(p.adb.grants().find((g) => g.chat === "chat")?.id, "p2", "the active grant keeps the take-back action visible");
+    p.adb.heard(STATION, { id: "p2", status: "ended" });
+    assert.deepEqual(p.adb.wanted(), [], "approving one signature does not approve another");
+    p.adb.heard(STATION, { ...grantOf(otherChat), id: "else", session: "other", chat: "other", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [STATION], "a different chat is not taken back");
+    p.adb.heard(STATION, { id: "else", status: "ended" });
+    const newHost = new FakeHost();
+    for (const [key, value] of p.host.storage) newHost.storage.set(key, value.slice());
+    assert.ok(newHost.storage.has(REVOKED_KEY));
+    cold = phone(env, newHost);
+    await flush();
+    cold.adb.heard(STATION, { ...grantOf(another), id: "p3", session: "sess3", exp: now + 7200 });
+    assert.deepEqual(cold.adb.wanted(), [], "the chat take-back survives a new host and an offline restart");
+  } finally { cold?.runner.shutdown(); p.runner.shutdown(); a.runner.shutdown(); b.runner.shutdown(); }
+});
+
+test("a local approval is bound to what was shown and a later take-back wins", async () => {
+  const c = cloud(), a = device(c, "a");
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+  const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    const hidden = await a.runner.run(a.lock.signGrant(SUB, body({ request: "p2", session: "sess2", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
+    p.adb.heard(STATION, { id: "p1", status: "ended" });
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 30 });
+    const oldProof = p.adb.grants()[0].approvalProof;
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 30, reason: "a different reason" });
+    await assert.rejects(p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "p2", proof: oldProof })), /./, "a changed row is not silently approved");
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 60 });
+    const proof = p.adb.grants()[0].approvalProof;
+    p.host.secureAsk = () => Effect.andThen(Effect.sync(() => reached.resolve()), Deferred.await(release));
+    const approval = p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "p2", proof }));
+    await reached.promise;
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p2", chat: "chat" }));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(approval, /./);
+    assert.deepEqual(p.adb.wanted(), [], "a late biometric reply cannot undo a newer take-back");
+  } finally { Deferred.doneUnsafe(release, Effect.void); p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a local approval cannot be extended by a station changing its reported expiry", async () => {
+  const c = cloud(), a = device(c, "a");
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    const hidden = await a.runner.run(a.lock.signGrant(SUB, body({ request: "p2", session: "sess2", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
+    p.adb.heard(STATION, { id: "p1", status: "ended" });
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 30 });
+    await p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "p2", proof: p.adb.grants()[0].approvalProof }));
+    assert.deepEqual(p.adb.wanted(), [STATION]);
+    await p.host.time.pass(31_000, 31_000);
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [], "the phone's earlier approval keeps its own end time");
+    assert.equal(p.adb.grants()[0].localApproval, true);
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a new answer after a take-back is bound to the chat displaying its card", async () => {
+  const c = cloud(), a = device(c, "a");
+  const sent: { op: string; signed?: unknown }[] = [];
+  const link = { adb: (_head: unknown, ask: { op: string; signed?: unknown }) => {
+    sent.push(ask);
+    return Effect.succeed({ status: 200, body: { take: Effect.succeed(null) } });
+  } };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
+    p.adb.heard(STATION, { id: "p1", status: "ended" });
+    p.adb.heard(STATION, { id: "new", session: "sess2", chat: "other", status: "pending", at: 2 });
+    await assert.rejects(p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "new", scope: "hour", chat: "chat" })), /./, "a station cannot change the card's chat before the tap");
+    await assert.rejects(p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "new", scope: "hour" })), /./, "an older client cannot silently lift any take-back at this station");
+    p.adb.heard(STATION, { id: "new", session: "sess2", chat: "chat", status: "pending", at: 2 });
+    await p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "new", scope: "hour", chat: "chat" }));
+    assert.deepEqual(p.adb.wanted(), [], "a decision alone does not invent a station's granted response");
+    const signed = sent.find((ask) => ask.op === "decide")?.signed as { body: { exp: number } } | undefined;
+    assert.ok(signed, "the matching card sends the signed decision");
+    p.adb.heard(STATION, { ...grantOf(signed), id: "new", session: "sess2", exp: signed.body.exp });
+    assert.deepEqual(p.adb.wanted(), [STATION], "the exact newly approved signature is allowed");
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a take-back with no reliable chat pauses the station until each grant is approved here", async () => {
+  const c = cloud(), a = device(c, "a");
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    const hidden = await a.runner.run(a.lock.signGrant(SUB, body({ request: "p2", session: "sess2", chat: "another", exp: now + 7200 }), "why"));
+    const elsewhere = await a.runner.run(a.lock.signGrant(SUB, body({ station: "ws/else", request: "p3", session: "sess3", chat: "third", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1" }));
+    p.adb.heard(STATION, { id: "p1", status: "ended" });
+    p.adb.heard(STATION, { ...grantOf(hidden), id: "p2", session: "sess2", chat: "another", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), [], "an older caller without the displayed chat cannot leave an unprotected chat on that station");
+    p.adb.heard("ws/else", { ...grantOf(elsewhere), id: "p3", session: "sess3", chat: "third", exp: now + 7200 });
+    assert.deepEqual(p.adb.wanted(), ["ws/else"], "a different station is unaffected");
+    const row = p.adb.grants().find((g) => g.id === "p2");
+    await p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "p2", proof: row.approvalProof }));
+    assert.deepEqual(new Set(p.adb.wanted()), new Set([STATION, "ws/else"]));
+    const newHidden = await a.runner.run(a.lock.signGrant(SUB, body({ request: "p4", session: "sess4", chat: "another", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(newHidden), id: "p4", session: "sess4", chat: "another", exp: now + 7200 });
+    p.adb.heard(STATION, { id: "p2", status: "ended" });
+    assert.deepEqual(p.adb.wanted(), ["ws/else"], "the station-wide approval applies to one signature only");
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
 
 test("two accounts opening together use the same device signing key after restart", async () => {
   const clouds = new Map([["s1", cloud()], ["s2", cloud()]]);

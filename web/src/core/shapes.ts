@@ -96,6 +96,10 @@ export interface AdbGrant {
 	oldStation?: boolean;
 	/** Granted: whether this device, as the phone, takes it: signed by a device on the person's own lock pinned here (docs/personal-lock.md). */
 	held?: boolean;
+	/** This chat was taken back on the phone; this grant needs explicit approval there before it can lend. */
+	localApproval?: boolean;
+	/** The grant as displayed, passed to `adb.approveHere` so a changed row cannot be approved accidentally. */
+	approvalProof?: string;
 }
 
 /** This phone lent to one station for its chats' grants (the `adbShare` topic's `lends`): as `phase`, `adb`, `serial` and `message` are for the switch's. */
@@ -168,6 +172,8 @@ export interface AdbShareView {
 	wanted?: string[];
 	/** Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started). */
 	known?: boolean;
+	/** Local revocations could not be read or saved; lending is paused until `adb.retryRevocations` succeeds. */
+	revocationsError?: boolean;
 	/** This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`). */
 	lasts?: string;
 	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */

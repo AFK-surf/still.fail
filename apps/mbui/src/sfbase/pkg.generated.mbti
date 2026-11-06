@@ -2289,6 +2289,7 @@ pub(all) struct ChatTabs {
 pub(all) struct ChatView {
   title : String
   thread : Double?
+  chat_address : String
   unread : Double
   people : Array[Person]
   agents : Array[Agent]
