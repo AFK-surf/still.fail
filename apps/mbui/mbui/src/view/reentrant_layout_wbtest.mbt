@@ -143,3 +143,48 @@ test "a before-deadline self-mark stops layouts in that frame or event, then the
     t.dispose()
   }
 }
+
+///|
+test "separate geometry reads in a layout or modal notification each finish" {
+  let faults : Array[String] = []
+  faults_stop.val = false
+  fault_told.val = Some(fn(s) { faults.push(s) })
+  defer {
+    faults_stop.val = true
+    fault_told.val = None
+  }
+  for modal in [false, true] {
+    let width = @signals.signal(1.0, same=fn(a, b) { a == b })
+    let item : Ref[View?] = Ref(None)
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        item.val = Some(v)
+        v.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))) |> ignore
+      }) |> ignore
+    })
+    t.frame(200.0, 100.0, now=0.0) |> ignore
+    let observed : Array[Double] = []
+    // Each write and geometry read returns before the next starts, even though the host called them in one notification.
+    let requested = Array::makei(laid_passes_most + 1, fn(i) { (i + 2).to_double() })
+    let read_all = fn() {
+      for w in requested {
+        width.set(w)
+        t.laid_as_now()
+        observed.push(item.val.unwrap().laid_size().0)
+      }
+    }
+    if modal {
+      t.on_modals(read_all)
+      t.event(10.0, fn() { t.modals_told() })
+    } else {
+      t.event(10.0, fn() {
+        t.said_after_laid(read_all)
+        t.layout_marked_at(0)
+        t.laid_as_now()
+      })
+    }
+    assert_eq(observed, requested, msg="each explicitly requested width was laid out, modal=\{modal}; faults=\{faults}")
+    assert_true(faults.is_empty(), msg="\{faults}")
+    t.dispose()
+  }
+}
