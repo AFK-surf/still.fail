@@ -7119,8 +7119,14 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
-    return (placing, ordered)
+  if self.sized.length() > 0 && self.sizes_told() {
+    // In an input batch these cells have marked their dependent properties, but the watchers that queue those
+    // properties have not run yet. Pull the marked bindings before deciding that this layout is complete, as an
+    // input's initial geometry read does; effects and structural changes still wait for the batch to be told whole.
+    self.pull()
+    if self.due {
+      return (placing, ordered)
+    }
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
