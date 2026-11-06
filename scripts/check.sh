@@ -14,7 +14,8 @@
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
 # browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
 # or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
-# (station/native); core client/'s Rust (the core's native shells: iroh for the web and the apps' IO).
+# (station/native). station-js and station-native select those two halves independently; core is client/'s Rust
+# (the core's native shells: iroh for the web and the apps' IO).
 # Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
@@ -55,7 +56,15 @@ added() {
   grep -E '^\+[^+]' "$tmp/diff" | cut -c2- | grep -vxF -f "$tmp/taken" | sed 's/^/+/' || true
 }
 # Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
-part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || case " $STILLFAIL_CHECK_PART " in *" $1 "*) true ;; *) false ;; esac; }
+part() {
+  [ -z "${STILLFAIL_CHECK_PART:-}" ] && return 0
+  case " $STILLFAIL_CHECK_PART " in *" $1 "*) return 0 ;; esac
+  # The original station selection still includes both halves.
+  case "$1" in
+    station-js|station-native) case " $STILLFAIL_CHECK_PART " in *" station "*) return 0 ;; esac ;;
+  esac
+  return 1
+}
 
 failed=""
 n=0
@@ -255,6 +264,12 @@ if part ts; then
   if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
     step "CI jobs: 5 minutes at most" python3 scripts/ci-timeouts.py
   fi
+  if touches '^\.githooks/pre-push$|^scripts/(branch-base|pre_push_test)\.sh$'; then
+    step "pre-push bases" sh scripts/pre_push_test.sh
+  fi
+  if touches '^scripts/(check|check_parts_test)\.sh$|^\.github/workflows/pipeline\.yml$'; then
+    step "full-check parts" sh scripts/check_parts_test.sh
+  fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
   # the Wasm side of the native host's calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
@@ -402,7 +417,7 @@ if [ $full = 1 ]; then
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
-  if part station && touches '^station/|^vendor/|^client/i18n/|^rules/js/|^scripts/native\.ts$'; then
+  if part station-js && touches '^station/|^vendor/|^client/i18n/|^rules/js/|^scripts/native\.ts$'; then
     prep station deps station
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
     # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall. Cursor's
@@ -415,14 +430,14 @@ if [ $full = 1 ]; then
   fi
   # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
   # typecheck and prepare both sides before checking and running it, including on a fresh checkout.
-  if part station && touches '^station/(src/|integration/|test/setup-env\.mjs$)|^client/core-ts/(src/|test/(helpers|station-fixture)\.ts$)|^scripts/check\.sh$'; then
+  if part station-js && touches '^station/(src/|integration/|test/setup-env\.mjs$)|^client/core-ts/(src/|test/(helpers|station-fixture)\.ts$)|^scripts/check\.sh$'; then
     prep station deps station
     prep core deps client/core-ts
     step "tests: station and core usage stream" after station after core sh -c 'cd station && pnpm exec tsgo -p integration/tsconfig.json && node --disable-warning=ExperimentalWarning --import ./test/setup-env.mjs --test --test-timeout=30000 integration/usage-client-stream.test.ts'
   fi
   # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
   # layer (media/test): whenever it, the core or the station changed.
-  if part station && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then
+  if part station-js && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then
     prep station deps station
     prep core deps client/core-ts
     prep media-core deps media/core
@@ -432,13 +447,13 @@ if [ $full = 1 ]; then
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh screen; do
     also='^$'; [ $crate = mesh ] && also='^vendor/'
-    if part station && { touches "^station/native/$crate/" || touches "$also"; }; then
+    if part station-native && { touches "^station/native/$crate/" || touches "$also"; }; then
       inputs="station/native/$crate"; [ $crate = mesh ] && inputs="$inputs vendor"; [ $crate = launcher ] && inputs="$inputs .node-version"
       if has cargo; then remembered "Rust: station/native/$crate" "$inputs" heavy cargo_test "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
     fi
   done
   # still.fail Helper (Swift, station/native/helper and the PermissionFlow it uses): built where it changed, on a Mac.
-  if part station && touches '^station/native/helper/|^vendor/PermissionFlow/' && has swift; then step "Swift: station/native/helper" node scripts/native.ts path helper; fi
+  if part station-native && touches '^station/native/helper/|^vendor/PermissionFlow/' && has swift; then step "Swift: station/native/helper" node scripts/native.ts path helper; fi
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi

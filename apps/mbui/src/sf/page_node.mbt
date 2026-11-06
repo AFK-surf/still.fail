@@ -168,17 +168,315 @@ priv enum PageItem {
 } derive(Eq, Hash)
 
 ///|
+/// The first page made under page_waiting_node takes this, as page_waiting's next page takes page_bones.
+priv struct PageWaitingNode {
+  title : () -> String
+  error : () -> String
+  note : () -> WaitNote
+  claimed : Ref[Bool]
+}
+
+///|
+// kept across runs: each waiting page lends its own context, released with the node
+let page_waiting_lent : @view.Lent[PageWaitingNode] = @view.Lent::new()
+
+///|
+priv enum PageFocusKey {
+  PageBackFocus
+  NamedFocus(String)
+} derive(Eq, Hash)
+
+///|
+priv struct PageFocusRequest {
+  key : PageFocusKey
+  back : @view.FocusReturn
+}
+
+///|
+/// Controls of one page that can be found again when its arrangement is rebuilt. Several nodes can name the same
+/// control while a reordered block's old copy leaves; the one that can take focus is the live one.
+priv struct PageFocusNodes {
+  controls : Map[PageFocusKey, Array[@view.View]]
+  pending : Ref[PageFocusRequest?]
+}
+
+///|
+// kept across runs: each page lends its own focus registry, released with the page
+let page_focus_lent : @view.Lent[PageFocusNodes] = @view.Lent::new()
+
+///|
+// An owner that replaces the whole page can lend its own scope to the page it makes on either side.
+let page_focus_scope_lent : @view.Lent[PageFocusNodes] = @view.Lent::new()
+
+///|
+pub struct PageFocusScope {
+  lend_to : (@view.View) -> Unit
+  capture_focus : () -> Bool
+  has_pending_focus : () -> Bool
+  cancel_focus : () -> Unit
+}
+
+///|
+/// Focus registrations for one logical page. Keep this with the owner that survives a structural replacement, lend
+/// it to that page on each side, and capture before removing the old subtree. An unrelated page needs its own scope;
+/// cancel a pending return when the owner leaves this page rather than replacing it.
+pub fn PageFocusScope::new() -> PageFocusScope {
+  let focus : PageFocusNodes = { controls: {}, pending: Ref(None) }
+  {
+    lend_to: fn(parent) { parent.lends(page_focus_scope_lent, focus) |> ignore },
+    capture_focus: fn() { focus.capture() },
+    has_pending_focus: fn() { focus.has_pending() },
+    cancel_focus: fn() { focus.pending.val = None },
+  }
+}
+
+///|
+/// Lend this page's scope to `parent`, which makes the page now or later. The page still restores its own focus when
+/// its arrangement changes; a scope lent here also survives replacement of the whole page by its owner.
+pub fn PageFocusScope::lend(self : PageFocusScope, parent : @view.View) -> Unit {
+  (self.lend_to)(parent)
+}
+
+///|
+/// Remember the registered control that has focus, before its subtree is replaced. The return can only go to the same
+/// key in this scope, in the same tree, while no later focus request has succeeded. A pending capture is retained if
+/// another structural replacement happens before the control is made again. Whether a current return is available,
+/// either newly captured or still waiting from a previous replacement.
+pub fn PageFocusScope::capture(self : PageFocusScope) -> Bool {
+  (self.capture_focus)()
+}
+
+///|
+/// Whether a visible control's return is still current, including while its replacement has not been made. A later
+/// focus decision expires it. Reading this does not capture a new control or change the pending return.
+pub fn PageFocusScope::has_pending(self : PageFocusScope) -> Bool {
+  (self.has_pending_focus)()
+}
+
+///|
+fn PageFocusNodes::has_pending(self : PageFocusNodes) -> Bool {
+  match self.pending.val {
+    Some(request) => request.back.valid()
+    None => false
+  }
+}
+
+///|
+fn PageFocusNodes::capture(self : PageFocusNodes) -> Bool {
+  for key, entries in self.controls {
+    for control in entries {
+      match control.focus_return() {
+        Some(back) => {
+          self.pending.val = Some({ key, back })
+          return true
+        }
+        None => ()
+      }
+    }
+  }
+  if self.has_pending() {
+    true
+  } else {
+    self.pending.val = None
+    false
+  }
+}
+
+///|
+/// Forget a pending return when this logical page is left instead of structurally replaced.
+pub fn PageFocusScope::cancel(self : PageFocusScope) -> Unit {
+  (self.cancel_focus)()
+}
+
+/// Name a focusable control by a stable key within its page, so page_node can restore its focus when the page changes
+/// arrangement. The key identifies the control, not its displayed label, and must be unique within the page. Removed,
+/// disabled or off-screen controls cannot take the restored focus; no focus is taken after another focus request.
+pub fn page_focus_node(control : @view.View, key : String) -> @view.View {
+  page_focus_register(control, NamedFocus(key))
+}
+
+///|
+fn page_focus_register(control : @view.View, key : PageFocusKey) -> @view.View {
+  match control.lent(page_focus_lent) {
+    Some(scope) => {
+      let entries = scope.controls.get(key).unwrap_or([])
+      entries.push(control)
+      scope.controls[key] = entries
+      control.owns(fn() {
+        match scope.controls.get(key) {
+          Some(registered) => {
+            let left = registered.filter(fn(entry) { entry.id() != control.id() })
+            if left.is_empty() { scope.controls.remove(key) } else { scope.controls[key] = left }
+          }
+          _ => ()
+        }
+      }) |> ignore
+    }
+    None => ()
+  }
+  control
+}
+
+///|
+/// A page read for the first time, as nodes: `sample` makes its normal page with made-up data. Its frame and `title`
+/// remain real; the page's lead, actions and blocks become synchronized, non-interactive bones. The first block says
+/// what is being read and shows any errors, as page_waiting does. A frame that draws actions outside the page can use
+/// page_waiting_bones_node for those actions, with its default breath (the page's other bones keep breathing if the
+/// first block reports an error).
+pub fn page_waiting_node(
+  parent : @view.View,
+  title : () -> String,
+  sample : (@view.View) -> Unit,
+  text? : () -> String = fn() { "" },
+  error? : () -> String = fn() { "" },
+  note? : () -> WaitNote = fn() { { reading: true, text: "", failing: [] } },
+) -> Unit {
+  let with_text = fn() {
+    let n = note()
+    { ..n, text: if n.text == "" { text() } else { n.text } }
+  }
+  parent.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  parent.box(fn(p) {
+    p.grow(Is(1.0)).min_height(Is(Some(0.0)))
+    .lends(page_waiting_lent, { title, error, note: with_text, claimed: Ref(false) }) |> ignore
+    sample(p)
+  }) |> ignore
+}
+
+///|
+/// A page-waiting part outside its page (such as frame-bar actions), sharing the wait's breath. With `error` or a
+/// non-reading `note` it stays whole; a page's frame-bar actions use the defaults, as the page's other bones do.
+pub fn page_waiting_bones_node(
+  parent : @view.View,
+  sample : (@view.View) -> Unit,
+  error? : () -> String = fn() { "" },
+  note? : () -> WaitNote = fn() { { reading: true, text: "", failing: [] } },
+) -> Unit {
+  if parent.in_bones() {
+    sample(parent)
+    return
+  }
+  parent.box(fn(b) {
+    b.bones(By(fn() { theme().p.line })).alpha(By(fn() {
+      if error() != "" || !note().reading {
+        1.0
+      } else {
+        let f = b.cycle(breath_ms)
+        let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+        1.0 - (1.0 - wait_low) * @ui.Ease::InOut.at(way)
+      }
+    })) |> ignore
+    sample(b)
+  }) |> ignore
+}
+
+///|
+fn page_waiting_part(parent : @view.View, wait : PageWaitingNode?, make : (@view.View) -> Unit) -> Unit {
+  match wait {
+    Some(_) => page_waiting_bones_node(parent, make)
+    None => make(parent)
+  }
+}
+
+///|
+fn page_waiting_block(
+  parent : @view.View,
+  wait : PageWaitingNode?,
+  first : () -> Bool,
+  make : (@view.View) -> Unit,
+) -> Unit {
+  match wait {
+    Some(w) => parent.pick(first, fn(p, is_first) {
+      if is_first { waiting_node(p, make, error=w.error, note=w.note) }
+      else { page_waiting_bones_node(p, make) }
+    })
+    None => make(parent)
+  }
+}
+
+///|
+/// The displayed keys and values of a page's blocks, including their departing copies, and the rooms they occupy.
+priv struct PageBlocks[T] {
+  keys : () -> Array[String]
+  item : (String) -> T?
+  first : (String) -> Bool
+  rooms : (() -> (String, Double, Double) -> @view.ListRoom)?
+  lend : (@view.View, String) -> Unit
+}
+
+///|
+/// Keep a page's block data by the list's display keys (a moved copy has a different display key from its item key).
+/// Chrome belongs to the frame, not this list: only business keys decide whether two readings are continuous.
+fn[T] page_blocks(
+  v : @view.View,
+  items : () -> Array[T],
+  key : (T) -> String,
+  version : (T) -> String,
+  animated~ : Bool,
+  moves~ : Bool,
+  continuity~ : (T) -> Bool,
+) -> PageBlocks[T] {
+  // The first block's wide-page inset is part of the block's snapshot too: a first block that leaves keeps its
+  // original inset as it closes, while its successor gets the inset of its new place.
+  let placed = fn() { items().mapi(fn(i, item) { (item, i == 0) }) }
+  let (read, rooms, lend) = if animated {
+    let before : Ref[Array[String]] = Ref([])
+    let watched = Ref(false)
+    let given = fn() {
+      let now = placed()
+      let present = now.filter(fn(it) { continuity(it.0) }).map(fn(it) { key(it.0) })
+      let prior = Set::from_array(before.val)
+      watched.val = present.iter().any(fn(k) { prior.contains(k) })
+      before.val = present
+      now
+    }
+    let sizes : @ui.ListRows[(T, Bool)] = @ui.ListRows::new()
+    let rows = sizes.in_node(v, given, fn(it) { key(it.0) }, fn(it) { version(it.0) },
+      watched=fn() { watched.val }, moves=fn(_) { moves })
+    (rows.read, Some(rows.room_now), rows.lend)
+  } else {
+    let current = @signals.computed(fn(_) {
+      let now = placed()
+      (now, now.map(fn(it) { key(it.0) }))
+    })
+    (fn() { current.get() }, None, fn(_v : @view.View, _k : String) {  })
+  }
+  let displayed = @signals.computed(fn(_) {
+    let (values, keys) = read()
+    let by_key : Map[String, (T, Bool)] = {}
+    for i, k in keys {
+      by_key[k] = values[i]
+    }
+    (keys, by_key)
+  })
+  {
+    keys: fn() { displayed.get().0 },
+    item: fn(k) { displayed.get().1.get(k).map(fn(it) { it.0 }) },
+    first: fn(k) { displayed.get().1.get(k).map(fn(it) { it.1 }).unwrap_or(false) },
+    rooms,
+    lend,
+  }
+}
+
+///|
 /// A page titled `title` in node `v` (page's, as nodes), laid out as a page as wide as its frame gives it is (`width`:
 /// look_for that width, never what it holds as last laid out; none given, narrow): narrow (narrow_page_node) or wide
 /// (wide_page_node), made again only as the arrangement changes, what it shows in either bound to what it is told.
+/// `look` may say an arrangement instead (a frame's wide page in a narrow side pane); None follows `width` again. It
+/// does not change the room given to the page: that remains the actual width of its node.
 /// Its arrangement lent to all of it, what comes to be shown in it later as well (look_node, part_of): its parts take
 /// their form from where they are made, nothing said round their making. In either: back where the frame says it goes
 /// (`on_back` as it is pressed), its title, what it is for (`lead`) under it, what it does (`actions`) at its title's
 /// line's end, then its blocks, those `blocks` names now by their keys, each made by `block`, then the frame's room at
-/// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window). What it says
+/// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window: one a scroll
+/// goes past made only to be measured, so a block makes its nodes and starts nothing), the keys of the blocks that came
+/// in sight told `seen` (View::scrolls_window's: what a page keeps for a block started then). What it says
 /// of itself told `said` as that changes (a frame's bar that names it: its title, and what it is for by a mark beside
 /// it, `about`). Where its list is scrolled to its own, the same through its arrangements, or kept by whoever holds it
 /// (`scroll`: a page of parts, each part's page its own as it was left).
+/// `animated` gives keyed blocks the list's coming and going motion; `moves` also opens one that changes order in its
+/// new place and closes a copy at its old place. Only changes with a common `continuity` key animate. For blocks whose
+/// content can disappear from its source as they leave, use page_node_items and put that content in each item.
 pub fn page_node(
   v : @view.View,
   title : () -> String,
@@ -191,19 +489,123 @@ pub fn page_node(
   actions? : (@view.View) -> Unit,
   said? : (PageSaid) -> Unit,
   width? : () -> Double,
+  look? : () -> Look? = fn() { None },
+  animated? : Bool = false,
+  moves? : Bool = false,
+  continuity? : (String) -> Bool = fn(_) { true },
+  version? : (String) -> String = fn(_) { "" },
   scroll? : @view.Scroll,
   tips? : TipLayer,
+  seen? : (Array[String]) -> Unit,
 ) -> Unit {
+  page_node_build(v, title, blocks, fn(k) { k }, fn(b, item) { block(b, @signals.untracked(item)) }, on_back~, frame~, lead~, about~,
+    actions?, said?, width?, look~, animated=animated || moves, moves~, continuity~, version~, scroll?, tips?, seen?)
+}
+
+///|
+/// A page whose blocks are immutable items (page_node's frame and room). `key` identifies each item; `block` reads its
+/// current value through the supplied function, including after the node is made. A removed item's last value, or the
+/// old value at a moved item's former place, remains available while that copy closes. Mutable references inside an
+/// item must therefore be snapshotted by its caller. `version` says what changes a retained block's natural height;
+/// `continuity` picks the keys that make one reading the same list as the preceding one, excluding waiting placeholders.
+/// Coming and going use the list's row curve; `moves` also gives changed order a copy in its former place.
+pub fn[T] page_node_items(
+  v : @view.View,
+  title : () -> String,
+  items : () -> Array[T],
+  key : (T) -> String,
+  block : (@view.View, () -> T) -> Unit,
+  on_back~ : () -> Unit,
+  frame? : () -> PageFrame = fn() { no_frame },
+  lead? : () -> String = fn() { "" },
+  about? : () -> String = fn() { "" },
+  actions? : (@view.View) -> Unit,
+  said? : (PageSaid) -> Unit,
+  width? : () -> Double,
+  look? : () -> Look? = fn() { None },
+  moves? : Bool = false,
+  continuity? : (T) -> Bool = fn(_) { true },
+  version? : (T) -> String = fn(_) { "" },
+  scroll? : @view.Scroll,
+  tips? : TipLayer,
+  seen? : (Array[String]) -> Unit,
+) -> Unit {
+  page_node_build(v, title, items, key, block, on_back~, frame~, lead~, about~, actions?, said?, width?, look~,
+    animated=true, moves~, continuity~, version~, scroll?, tips?, seen?)
+}
+
+///|
+/// The two page entries share their frame, keyed blocks and scroll, including across an arrangement change.
+fn[T] page_node_build(
+  v : @view.View,
+  title : () -> String,
+  items : () -> Array[T],
+  key : (T) -> String,
+  block : (@view.View, () -> T) -> Unit,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  lead~ : () -> String,
+  about~ : () -> String,
+  actions? : (@view.View) -> Unit,
+  said? : (PageSaid) -> Unit,
+  width? : () -> Double,
+  look~ : () -> Look?,
+  animated~ : Bool,
+  moves~ : Bool,
+  continuity~ : (T) -> Bool,
+  version~ : (T) -> String,
+  scroll? : @view.Scroll,
+  tips? : TipLayer,
+  seen? : (Array[String]) -> Unit,
+) -> Unit {
+  let wait = match v.lent(page_waiting_lent) {
+    Some(w) if !w.claimed.val => { w.claimed.val = true; Some(w) }
+    _ => None
+  }
+  let title = match wait { Some(w) => w.title; None => title }
+  let actions = actions.map(fn(make) { fn(parent) { page_waiting_part(parent, wait, make) } })
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
     Some(f) => v.reacts(fn() { { title: title(), about: about() } }, f)
     None => ()
   }
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  let look = match width {
+  let focus = v.lent(page_focus_scope_lent).unwrap_or({ controls: {}, pending: Ref(None) })
+  v.lends(page_focus_lent, focus) |> ignore
+  let previous : Ref[Look?] = Ref(None)
+  let width_look = match width {
     Some(w) => fn() { look_for(w()) }
     None => fn() { Narrow }
   }
+  let arrangement = fn() {
+    let now = match look() {
+      Some(l) => l
+      None => width_look()
+    }
+    match previous.val {
+      Some(was) if was != now => {
+        // If another arrangement is requested before layout, carry the already captured control to the new one.
+        focus.capture() |> ignore
+      }
+      _ => ()
+    }
+    previous.val = Some(now)
+    now
+  }
+  let blocks = page_blocks(v, items, key, version, animated~, moves~, continuity~)
+  // A disappearing block or an old-position copy is not a newly visible business item.
+  let seen = seen.map(fn(tell) {
+    fn(displayed : Array[String]) {
+      let live = Set::from_array(@signals.untracked(fn() { items().map(key) }))
+      let keys = displayed.filter_map(fn(display_key) {
+        match @signals.untracked(fn() { (blocks.item)(display_key) }) {
+          Some(item) if key(item) == display_key && live.contains(display_key) => Some(display_key)
+          _ => None
+        }
+      })
+      if !keys.is_empty() { tell(keys) }
+    }
+  })
   // (a page's list: it moves as the platform's lists do, its slop the host's)
   let own_scroll = @view.Scroll::list()
   // (what is said of what the pointer rests on, its about's mark's: in a layer of its own over the page, past its list,
@@ -215,7 +617,7 @@ pub fn page_node(
     Some(t) => t
     None => TipLayer::new(fn() { tips_at.val })
   }
-  v.pick(look, fn(p, l) {
+  v.pick(arrangement, fn(p, l) {
     p.grow(Is(1.0)).min_height(Is(Some(0.0))).lends(part_at, { look: l, section: false, list: false }) |> ignore
     // (where its list is scrolled to, kept by whoever holds the page where it says (a part of a page a page each,
     // each as it was left), else the page's own; the same through its arrangements)
@@ -224,8 +626,27 @@ pub fn page_node(
       None => own_scroll
     }
     match l {
-      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
-      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips)
+      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, wait, seen)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips, wait, seen)
+    }
+    if focus.pending.val is Some(_) {
+      p.once_laid_out(fn() {
+        let pending = focus.pending.val
+        focus.pending.val = None
+        match pending {
+          Some(request) =>
+            match focus.controls.get(request.key) {
+              Some(entries) =>
+                for node in entries {
+                  if request.back.give(node) {
+                    break
+                  }
+                }
+              None => ()
+            }
+          None => ()
+        }
+      })
     }
   })
   // (its own layer only where it has what is for by a mark to say: nothing over a page that has none)
@@ -239,7 +660,8 @@ pub fn page_node(
 
 ///|
 /// Where a part of a page made once is (page_node's, lent to all of it): how the page is laid out, whether it is in a
-/// section of a wide page (wide_alone's), and whether on a list's card (its rows a wide list's: wide_in_list's).
+/// section of a wide page (wide_alone's), and whether on a list's card (narrow or wide: a wide list's rows use
+/// wide_in_list's).
 priv struct PartAt {
   look : Look
   section : Bool
@@ -311,16 +733,18 @@ pub fn look_node(v : @view.View) -> Look {
 /// at its end, scrolling with it, then its blocks in the page's room (page_block), and 30 under the last, then the
 /// frame's room at its foot; each part made only while it shows (as narrow_list's old list builds only the rows in
 /// view).
-fn narrow_page_node(
+fn[T] narrow_page_node(
   v : @view.View,
   title : () -> String,
-  blocks : () -> Array[String],
-  block : (@view.View, String) -> Unit,
+  blocks : PageBlocks[T],
+  block : (@view.View, () -> T) -> Unit,
   on_back : () -> Unit,
   frame : () -> PageFrame,
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
   scroll : @view.Scroll,
+  wait : PageWaitingNode?,
+  seen : ((Array[String]) -> Unit)?,
 ) -> Unit {
   let items = fn() -> Array[PageItem] {
     let f = frame()
@@ -337,7 +761,7 @@ fn narrow_page_node(
     if lead() != "" {
       out.push(Lead)
     }
-    for k in blocks() {
+    for k in (blocks.keys)() {
       out.push(Block(k))
     }
     out.push(Foot)
@@ -345,7 +769,23 @@ fn narrow_page_node(
   }
   v.box(fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    // (the blocks of those that came in sight, by their keys)
+    let seen = seen.map(fn(tell) {
+      fn(came : Array[PageItem]) {
+        let keys = came.filter_map(fn(i) { if i is Block(k) { Some(k) } else { None } })
+        if keys.length() > 0 {
+          tell(keys)
+        }
+      }
+    })
+    let rooms : (() -> (PageItem, Double, Double) -> @view.ListRoom)? = blocks.rooms.map(fn(f) {
+      fn() {
+        let room = f()
+        fn(item, h, width) { match item { Block(k) => room(k, h, width); _ => @view.list_room(h) } }
+      }
+    })
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est,
+      rooms?, seen?, fn(s, item) {
       with_look(Narrow, fn() {
         match item {
           // under what stands over it (a status bar)
@@ -398,18 +838,32 @@ fn narrow_page_node(
             })
             |> ignore
           }
-          // what it is for
-          // (a block of the page's, in its room as the rest: narrow_page's)
-          Lead =>
-            page_block(s, fn(room) {
+          // What it is for: under a pane's own bar this is chrome (barred_page), not a block in the page's card room.
+          Lead => {
+            let show_lead = fn(room : @view.View) {
               room.box(fn(l) {
                 l.padding(Is((pg_lead_x, 0.0, pg_lead_x, pg_lead_foot))) |> ignore
-                l.box(fn(w) { styled_words(w, lead, fn() { pg_lead }) |> ignore }) |> ignore
+                l.box(fn(w) { page_waiting_part(w, wait, fn(b) { styled_words(b, lead, fn() { pg_lead }) |> ignore }) }) |> ignore
               })
               |> ignore
+            }
+            s.pick(fn() { frame().named && in_pane_node(s) }, fn(p, barred) {
+              if barred { show_lead(p) } else { page_block(p, show_lead) }
             })
+          }
           // what it holds, each block in the page's room
-          Block(k) => page_block(s, fn(room) { block(room, k) })
+          Block(k) =>
+            match @signals.untracked(fn() { (blocks.item)(k) }) {
+              Some(initial) => {
+                (blocks.lend)(s, k)
+                page_block(s, fn(room) {
+                  page_waiting_block(room, wait, fn() { (blocks.first)(k) }, fn(b) {
+                    block(b, fn() { (blocks.item)(k).unwrap_or(initial) })
+                  })
+                })
+              }
+              None => ()
+            }
           // 30 under the last (in a panel of its own, its last card as far from its foot as from its sides: page_foot),
           // then the frame's room
           Foot => s.height(By(fn() { Some(page_foot(s) + frame().foot) })) |> ignore
@@ -487,6 +941,7 @@ fn nav_back_node(parent : @view.View, label : () -> String, back : () -> Unit) -
     .lines_up(Is(Some(Middle)))
     |> ignore
     pressed_node(b, back, Is(nav_back_ripple), Link, label)
+    page_focus_register(b, PageBackFocus) |> ignore
     icon_node(b, "chevron-left", nav_back_icon, By(fn() { theme().p.accent_text })) |> ignore
     b.box(fn(w) { styled_words(w, label, fn() { nav_back_words }) |> ignore }) |> ignore
   })
@@ -518,9 +973,17 @@ pub fn heading_node(parent : @view.View, title : () -> String) -> Unit {
 
 ///|
 /// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
-/// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words).
+/// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words). In a presented panel other than
+/// a small popover, the panel's card at either width, regardless of `card`.
 pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false) -> Unit {
   let at = part_of(parent)
+  // A presenter's kind is fixed for the life of its body; a different kind makes a new body. Its distances can change
+  // while the body lives and are read by the card's margin binding below.
+  let panel_card = in_panel_node(parent) && !@signals.untracked(fn() { panel_row_context(parent).small })
+  if panel_card {
+    group_panel_node(parent, at, rows)
+    return
+  }
   if at.look is Wide {
     wide_group_node(parent, at, rows, card)
     return
@@ -535,10 +998,34 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
       .radius(Is(corner))
       .ground(By(fn() { @ui.tree_theme().color(Card) }))
       .clips(Is(true))
+      .lends(part_at, { ..at, list: true })
       |> ignore
       rows(card)
     })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A group's card in a presented panel (group's panel_card_group, panel_card_rows and panel_card_out): its inset and
+/// corner the panel card's, its ground the ink at 5%, and its sides on the panel's card line. The panel can change its
+/// column's distance and words' inset without remaking the card or its rows.
+fn group_panel_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit) -> Unit {
+  parent.box(fn(card) {
+    card
+    .margin(By(fn() {
+      let panel = panel_row_context(card)
+      let x = if panel.sides_in <= 0.0 && panel.words_in <= 0.0 { 0.0 } else { panel_card_in - panel.sides_in }
+      (x, 0.0, x, 0.0)
+    }))
+    .padding(Is((corner_inset, corner_inset, corner_inset, corner_inset)))
+    .radius(Is(card_corner))
+    .ground(By(fn() { @ui.tree_theme().color(A(Fg, O5)) }))
+    .clips(Is(true))
+    .lends(part_at, { ..at, list: true })
+    |> ignore
+    rows(card)
   })
   |> ignore
 }

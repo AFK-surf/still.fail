@@ -41,7 +41,7 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
   })
   t.draw()
   let source = field.lines().unwrap()
-  flight_start_from(t.ctx(), "chat", "chat", "row", text, 100.0, [], Some(source), hold=fn(_) {  }, desk=false)
+  flight_start_from(t.ctx(), "chat", "chat", "row", text, [], Some(source), hold=fn(_) {  }, desk=false)
   if carried {
     let first = send_flight.get().unwrap()
     send_flight.set(Some({ ..first, carried: true, lines: None, ms: flight_carry_ms, from_top: first.from_y - 8.0 }))

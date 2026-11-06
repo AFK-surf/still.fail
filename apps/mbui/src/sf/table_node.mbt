@@ -192,7 +192,7 @@ pub fn table_node(
       reading.val = ""
     })
     |> ignore
-    md_table_body_node(outer, table, bleed, copy, on_link, on_link_hold)
+    md_table_body_node(outer, table, Bleed(bleed), copy, on_link, on_link_hold)
   })
   |> ignore
 }
@@ -204,13 +204,14 @@ pub fn table_node(
 fn md_table_body_node(
   outer : @view.View,
   table : () -> MdTable?,
-  bleed : Double,
+  bleed : TableBleed,
   copy : Bool,
   on_link : (String) -> Unit,
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
   files? : (String) -> PlacedNode? = fn(_) { None },
+  md? : MdNode,
 ) -> Unit {
-    outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
+    outer.margin(bleed.live(fn(b) { (-b, 0.0, -b, 0.0) })) |> ignore
     // (each cell's extent, as Md::table works them out: table_widths's, the head's row first)
     let extents_of = fn(t : MdTable) {
       let c = @ui.current()
@@ -234,7 +235,7 @@ fn md_table_body_node(
     }
     // (its key hung out in `bleed` where that has its whole room, as Md::table has it; else past the table, in its room)
     let key_w = if copy { table_key_room } else { 0.0 }
-    let hang = if copy && bleed >= table_key_room { table_key_room } else { 0.0 }
+    let hang_of = fn(bleed : Double) { if copy && bleed >= table_key_room { table_key_room } else { 0.0 } }
     // (its own key, whatever its words: two tables of the same each their own menu, copy and picture)
     table_nodes_made.val += 1
     let key = "sf-table/\{table_nodes_made.val}"
@@ -242,20 +243,24 @@ fn md_table_body_node(
     // with its key, the table as wide as the room (its columns sharing all of it) and its key past it, scrolled across to
     // (Md::table's): that room given its grid as said, the arrangement made by it (View::by_room: nothing read back);
     // else the grid shares the room it is laid out in
+    // (the bleed read as it is laid out where it is worked out from how wide what holds it is: the same final width the
+    // same arrangement whatever widths came before; what it is made with (its scroller, where it is scrolled to, a
+    // hand on it) kept as the bleed alone changes, its room, its key's hang and its least width followed as properties)
     let rooms : Map[String, Double] = {}
     outer.by_room(
       // (what the arrangement reads but the room: each cell's extent, at the system's size of words; taken before the
       // layout, followed)
-      By(fn() {
+      bleed.live(fn(bleed) {
         outer.words_redone() |> ignore
         let extents = match table() {
           Some(t) => extents_of(t)
           None => []
         }
-        (extents, @ui.current().sp(13.0))
+        (extents, @ui.current().sp(13.0), bleed)
       }),
       fn(at, w, _) {
-        let (extents, sp13) = at
+        let (extents, sp13, bleed) = at
+        let hang = hang_of(bleed)
         let room = w - 2.0 * bleed
         let narrowest = table_widths(extents, 0.0, false, fn(_) { sp13 }).1
         let widest = table_widths(extents, @double.infinity, false, fn(_) { sp13 }).1
@@ -271,10 +276,11 @@ fn md_table_body_node(
       fn(v, arrangement) {
         let given = rooms.get(arrangement)
         v.owns(fn() { rooms.remove(arrangement) }) |> ignore
-        v.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), bar_in=bleed, fn(held) {
+        v.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(),
+          bar_in_held=true, fn(held) {
           // (as wide as it shows at the least, its room in it: the table laid out by that room; wider where the table is,
           // scrolling across)
-          held.grow(Is(1.0)).padding(Is((bleed, 0.0, bleed, 0.0))) |> ignore
+          held.grow(Is(1.0)).padding(bleed.live(fn(b) { (b, 0.0, b, 0.0) })) |> ignore
           // its columns, its rows and the rules between them, and its copy key past it, from their tops (table_beside's), laid
           // out by the room it is given (View::layout_box: nothing of it read back): its columns' widths as table_widths
           // shares that room (less its key's where that is not hung out), each cell as wide as its column, a row as tall as
@@ -283,13 +289,13 @@ fn md_table_body_node(
             beside
             // (pointed at as a whole, its key with it: what shows its key; taking no press nor hold for it)
             .points(Is(copy))
-            .margin(Is((0.0, 0.0, -hang, 0.0)))
+            .margin(bleed.live(fn(b) { (0.0, 0.0, -hang_of(b), 0.0) }))
             // (never narrower than the table at its narrowest with its key: past the room, scrolled across)
-            .min_width(By(fn() {
+            .min_width(bleed.live(fn(b) {
               let c = @ui.current()
               match table() {
                 Some(t) =>
-              Some(table_widths(extents_of(t), given.unwrap_or(0.0), false, fn(x) { c.sp(x) }).1 + key_w - hang)
+              Some(table_widths(extents_of(t), given.unwrap_or(0.0), false, fn(x) { c.sp(x) }).1 + key_w - hang_of(b))
                 None => None
               }
             }))
@@ -339,45 +345,61 @@ fn md_table_body_node(
                   {
                     size,
                     weight: if head { 500 } else { 400 },
-                    line: (Float::from_double(size) * (1.65 : Float)).to_double(),
+                    line: match md {
+                      Some(style) => md_line(style, size)
+                      None => (Float::from_double(size) * (1.65 : Float)).to_double()
+                    },
                     wrap: true,
                     tracking: @view.letters_own,
                     balance: false,
                   }
                 }
-                let runs = fn() { table_cell_runs(words()) }
+                let runs = fn() {
+                  let plain = table_cell_runs(words())
+                  match md {
+                    Some(style) => {
+                      md_node_faces(style, found_weight(plain, (style.found)()))
+                    }
+                    None => plain
+                  }
+                }
                 w
-                .words_runs(By(runs), look=look())
+                .words_runs(By(runs))
+                .words_look(By(look))
                 .runs_look(By(table_runs_look))
-                .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
+                .ink(By(fn() { if head { web().muted } else { match md { Some(style) => (style.ink)(); None => theme().p.text } } }))
                 |> ignore
                 @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
               })
               |> ignore
             }
             let rule_node = fn(rule : @view.View) { rule.ground(By(fn() { theme().p.line })) |> ignore }
+            // (how far its key hangs out as it was last laid out: what a press on it reads, as it reads where it is)
+            let hang_laid = Ref(0.0)
             // (the widths its picture is taken at: the table's as it is laid out then, shown as it is pressed)
             let widths_for = fn(t : MdTable) {
               let c = @ui.current()
-              let room = given.unwrap_or(beside.rect().2 + hang - key_w)
+              let room = given.unwrap_or(beside.rect().2 + hang_laid.val - key_w)
               table_widths(extents_of(t), room, false, fn(x) { c.sp(x) })
             }
-            let key_node = fn(k : @view.View) { table_key_node(beside, k, key, fn() { table() }, widths_for) }
+            let key_node = fn(k : @view.View) { table_key_node(beside, k, key, fn() { table() }, widths_for, md) }
             beside.layout_box(
               // (what it is laid out by but its room: its rows and columns, each cell's extent, at the system's size of
               // words; taken before the layout, followed)
-              By(fn() {
+              bleed.live(fn(b) {
                 beside.words_redone() |> ignore
                 let extents = match table() {
                   Some(t) => extents_of(t)
                   None => []
                 }
-                // (and its words' size as the system has it: table_widths's least readable column is read in it)
-                (extents, @ui.current().sp(13.0))
+                // (and its words' size as the system has it: table_widths's least readable column is read in it; and
+                // how far its key hangs out in the bleed, as that is laid out)
+                (extents, @ui.current().sp(13.0), hang_of(b))
               }),
               sized=true,
               fn(l, at) {
-                let (extents, sp13) = at
+                let (extents, sp13, hang) = at
+                hang_laid.val = hang
                 let rows = extents.length()
                 // (the room said where it is given, else the room it is given less its key's)
             let (ws, total) = table_widths(extents, given.unwrap_or(l.width + hang - key_w), false, fn(_) { sp13 })
@@ -450,6 +472,7 @@ fn table_key_node(
   key : String,
   table : () -> MdTable?,
   widths_for : (MdTable) -> (Array[Double], Double),
+  md : MdNode?,
 ) -> Unit {
   let copied = @signals.signal(false)
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
@@ -526,7 +549,7 @@ fn table_key_node(
                     key + "/picture",
                     total + 2.0 * table_shot_in,
                     fn(c) {
-                      c.box(style=table_shot_paper, fn() { table_md(c).table_frame(rows, ws, total, key + "/picture-head") })
+                      c.box(style=table_shot_paper, fn() { table_md(c, md).table_frame(rows, ws, total, key + "/picture-head") })
                       |> ignore
                     },
                     fn(png) { if (picture_out_by.val)(@ui.current(), png, !album) && !album { said() } },
@@ -556,11 +579,11 @@ fn table_key_node(
 }
 
 ///|
-/// What draws a table's picture (table_frame, as its copy key takes it): a message's Markdown as @sf.markdown sets it,
+/// What draws a table's picture (table_frame, as its copy key takes it), with the current Markdown's reader settings;
 /// its links taken nowhere, its tables copied by none.
-fn table_md(c : @ui.Ctx) -> Md {
+fn table_md(c : @ui.Ctx, md : MdNode?) -> Md {
   let t = theme()
-  {
+  let base : Md = {
     c,
     size: t.t.body,
     ink: t.p.text,
@@ -583,6 +606,19 @@ fn table_md(c : @ui.Ctx) -> Md {
     copy: false,
     fit_tables: false,
   }
+  match md {
+    Some(style) => {
+      ..base,
+      size: (style.size)(),
+      ink: (style.ink)(),
+      line: (style.line)(),
+      serif: (style.serif)(),
+      found: (style.found)(),
+      text_face: (style.text_face)(),
+      code_face: (style.code_face)(),
+    }
+    None => base
+  }
 }
 
 ///|
@@ -603,3 +639,21 @@ fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Ar
   Some(out)
 }
 
+///|
+/// How far past its room either side a table scrolls across: said (`Bleed`), or worked out from how wide a node holding
+/// it is laid out (`BleedBy`: a chat's row and its column's way in from the pane's sides), as it is laid out (Roomed):
+/// nothing of a width read back nor kept from when it was made.
+pub(all) enum TableBleed {
+  Bleed(Double)
+  BleedBy(@view.View, (Double) -> Double)
+}
+
+///|
+/// What reads the bleed as a property: worked out as it is laid out where it is worked out from a holder's width (what
+/// else `f` reads followed).
+fn[T] TableBleed::live(self : TableBleed, f : (Double) -> T) -> @view.Live[T] {
+  match self {
+    Bleed(b) => By(fn() { f(b) })
+    BleedBy(of, by) => Roomed(of, fn(w, _) { f(by(w)) })
+  }
+}

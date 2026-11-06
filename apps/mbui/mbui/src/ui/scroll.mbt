@@ -562,7 +562,22 @@ pub fn Velocity::add(self : Velocity, t : Double, x : Double, y : Double) -> Uni
 }
 
 ///|
+/// The finger lifted at (x, y) at `t`: a sample only where it says a place anew (Tracker::up).
+pub fn Velocity::up(self : Velocity, t : Double, x : Double, y : Double) -> Unit {
+  self.x.up(t, x)
+  self.y.up(t, y)
+}
+
+///|
 /// How fast it goes as of its newest sample, across and down (points per ms), held to what a fling takes.
 pub fn Velocity::get(self : Velocity) -> (Double, Double) {
   (dclamp(self.x.velocity(), -max_fling, max_fling), dclamp(self.y.velocity(), -max_fling, max_fling))
+}
+
+///|
+/// How fast it goes as of a moment `t` (an event's: a move, a lift), across and down (points per ms), held to what a
+/// fling takes: none where it stood still longer than tracker_gap_ms first, nor where its own last moves do not bear
+/// it out (Tracker::velocity_at).
+pub fn Velocity::get_at(self : Velocity, t : Double) -> (Double, Double) {
+  (dclamp(self.x.velocity_at(t), -max_fling, max_fling), dclamp(self.y.velocity_at(t), -max_fling, max_fling))
 }

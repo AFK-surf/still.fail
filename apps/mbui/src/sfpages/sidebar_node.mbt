@@ -145,15 +145,10 @@ fn chats_pane_node(
   // its days in the order shown, and its rows by their names: worked out once as what is read, or the hand on it,
   // changes (held_order), what its lines and rows read
   let ordered : @signals.Signal[Array[ChatDay]] = @signals.signal([])
-  let rows : @signals.Signal[Map[String, ChatItem]] = @signals.signal({})
   // (how many times the order shown has been said: what follows it told as it changes)
   let revision : @signals.Signal[Int] = @signals.signal(0)
   let seen : Ref[Array[ChatDay]] = Ref([])
   let stamp = Ref(0)
-  // what of its rows and days comes, goes and goes ahead of others as the list changes while it is watched (ListRows'):
-  // its lines as last shown, the rows going still among them (each after the line it came after, as it was), each
-  // line coming or going and since when; told by a number as they change
-  let motion = RowsMotion::new()
   v.reacts(
     fn() {
       // (the core's days, a new array each time they change: told by a number as they do)
@@ -174,19 +169,46 @@ fn chats_pane_node(
       }
       let hold = at.1 && !@sfbase.viewer_moved(key, days)
       let shown = @sfbase.held_order(key, days, hold)
-      let by_name : Map[String, ChatItem] = {}
-      for d in shown {
-        for item in d.items {
-          by_name[@sfbase.row_name(item)] = item
-        }
-      }
-      motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched))
       ordered.set(shown)
-      rows.set(by_name)
       revision.set(@signals.untracked(fn() { revision.get() }) + 1)
     },
   )
   let days = fn() { ordered.get() }
+  // The same keyed rows as every other retained list: old-position copies and departures retain their values, while
+  // a row that stays reads its latest value. The sidebar's first nonempty reading appears at once.
+  let sizes : @ui.ListRows[SidebarLine] = @ui.ListRows::new()
+  let had = Ref(false)
+  let lines = fn() {
+    let out : Array[SidebarLine] = []
+    for d in days() {
+      out.push(Heading(d.label))
+      for item in d.items { out.push(Chat(item)) }
+    }
+    out
+  }
+  let motion = sizes.in_node(v, lines, sidebar_line_key, fn(_) { "" },
+    watched=fn() { current() && (frame.watched)() && !days().is_empty() },
+    moves=fn(line) { line is Chat(_) },
+    continuity=fn() {
+      if !days().is_empty() { had.val = true }
+      if had.val { Some("") } else { None }
+    })
+  let by_key = @signals.computed(fn(_) {
+    let (items, keys) = (motion.read)()
+    let out : Map[String, SidebarLine] = {}
+    for i, k in keys { out[k] = items[i] }
+    out
+  })
+  // A replay asks when the latest row change ends; this says the cause's declared end, not a sampled animation.
+  v.reacts(fn() {
+    let (_, keys) = (motion.read)()
+    let mut end = -1.0
+    for k in keys {
+      let at = match sizes.came(k) { Some(t) => Some(t); None => sizes.went(k) }
+      match at { Some(t) => end = dmax(end, t + row_size_ms); None => () }
+    }
+    end
+  }, fn(end) { if end > rows_rest_at.val { rows_rest_at.val = end } })
   // its lines' keys: its room under the bar, what the frame puts at its top, its states, its days, its foot
   let keys = fn() {
     let (view, _) = read()
@@ -211,14 +233,12 @@ fn chats_pane_node(
         for p in (frame.after)(filter, Some(v)) {
           out.push("part/" + p.key)
         }
-        out.append(motion.lines(days()))
+        out.append((motion.read)().1)
       }
     }
     out.push("foot")
     out
   }
-  // (each row's chat by its name, as the days have it now)
-  let item_of = fn(name : String) -> ChatItem? { rows.get().get(name) }
   // (the shown one's rows: those an archived chat's neighbour is looked for in)
   v.reacts(fn() { (current(), revision.get()) }, fn(_) {
     if @signals.untracked(current) {
@@ -314,14 +334,19 @@ fn chats_pane_node(
           }
         }
         _ if k.has_prefix("h/") => {
-          motion.line_node(line, k)
-          @sf.list_heading_node(line, fn() { k.view(start_offset=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
+          sidebar_line_node(sizes, line, k)
+          @sf.list_heading_node(line, fn() {
+            match by_key.get().get(k) { Some(Heading(label)) => label; _ => "" }
+          }, frame.at)
         }
         _ => {
-          motion.line_node(line, k)
-          let name = k.view(start_offset=2).to_owned()
+          sidebar_line_node(sizes, line, k)
           // (a row gone, or the copy of one gone ahead of others where it was: as it was, drawn only)
-          match motion.gone_item(k) {
+          let entry = fn() {
+            match by_key.get().get(k) { Some(Chat(item)) => Some(item); _ => None }
+          }
+          let gone = if @signals.untracked(fn() { sizes.went(k) is Some(_) }) { @signals.untracked(entry) } else { None }
+          match gone {
             // (swiped off: out of sight already, its room closing alone)
             Some(gone) if swiped_gone(gone) => return
             Some(gone) => {
@@ -335,10 +360,10 @@ fn chats_pane_node(
             }
             None => ()
           }
-          guard @signals.untracked(fn() { item_of(name) }) is Some(first) else { return }
+          guard @signals.untracked(entry) is Some(first) else { return }
           let last : Ref[ChatItem] = Ref(first)
           let item = fn() {
-            match item_of(name) {
+            match entry() {
               Some(i) => {
                 last.val = i
                 i
@@ -353,7 +378,7 @@ fn chats_pane_node(
             }
           }
           // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found)
-          line.show(fn() { !motion.going_now(k) }, leave=row_size_ms, fn(r) {
+          line.show(fn() { sizes.went(k) is None }, leave=row_size_ms, fn(r) {
             chat_row_node(r, src, tips, item, @signals.untracked(lead), on, frame.at, stint, list_ground=frame.ground, more=true)
             |> ignore
           })
@@ -529,191 +554,33 @@ fn search_tucked(view : ChatsView?) -> Bool {
 }
 
 ///|
-/// What a row gone ahead of others leaves by where it was is keyed by: its line's key and this (ListRows' row_moved_mark).
-let moved_mark : String = "\u{2}was"
-
-///|
-/// A list's lines coming and going as it changes while it is watched (ListRows::rows', for a list made once): a row or a
-/// day new to it comes where it is, its room opening; one gone leaves where it was, a copy of it as it was while its room
-/// closes; a row gone ahead of others both (the fewest whose order changed: in_order_most). Each over row_size_ms from
-/// its cause's moment, at the end let go. Nothing of it the first time it has rows, or while it is not the list shown.
-priv struct RowsMotion {
-  mut last : Array[String]
-  mut last_items : Map[String, ChatItem]
-  mut had : Bool
-  going : Map[String, (ChatItem?, String)]
-  moving : Map[String, (Bool, Double)]
-  told : @signals.Signal[Int]
+/// A day's heading or one of its chats, kept as it was while it leaves the list.
+priv enum SidebarLine {
+  Heading(String)
+  Chat(ChatItem)
 }
 
 ///|
-fn RowsMotion::new() -> RowsMotion {
-  { last: [], last_items: {}, had: false, going: {}, moving: {}, told: @signals.signal(0) }
-}
-
-///|
-/// The days `days` as lines (a heading and its rows each), by their keys.
-fn day_keys(days : Array[ChatDay]) -> Array[String] {
-  let out = []
-  for d in days {
-    out.push("h/" + d.label)
-    for item in d.items {
-      out.push("r/" + @sfbase.row_name(item))
-    }
-  }
-  out
-}
-
-///|
-/// The list's days now said (`shown`, its rows `by_name`) in node `v`'s timeline, `watched` whether it is the list
-/// shown: what came, went and went ahead set off from the cause's moment.
-fn RowsMotion::said(
-  self : RowsMotion,
-  v : @view.View,
-  shown : Array[ChatDay],
-  by_name : Map[String, ChatItem],
-  watched : Bool,
-) -> Unit {
-  let lines = day_keys(shown)
-  let was = self.last
-  let watched = watched && self.had && !lines.is_empty()
-  if watched && !(was == lines) {
-    let now = v.cause_at()
-    let here : Set[String] = Set::new()
-    for k in lines {
-      here.add(k)
-    }
-    let before : Map[String, Int] = {}
-    for j, k in was {
-      before[k] = j
-    }
-    // (new to it: comes where it is)
-    for k in lines {
-      if !before.contains(k) {
-        self.moving[k] = (true, now)
-      }
-      self.going.remove(k)
-    }
-    // (gone ahead of others: the fewest rows whose order changed, each leaving where it was and coming where it is)
-    let at : Array[String] = []
-    let was_at : Array[Int] = []
-    for k in lines {
-      match before.get(k) {
-        Some(b) if k.has_prefix("r/") => {
-          at.push(k)
-          was_at.push(b)
-        }
-        _ => ()
-      }
-    }
-    let kept = kept_in_order(was_at)
-    let ahead : Set[String] = Set::new()
-    for n, k in at {
-      if !kept[n] {
-        ahead.add(k)
-        self.moving[k] = (true, now)
-      }
-    }
-    // (gone, and the copies of those gone ahead where they were: each after the line it came after)
-    let mut prev = ""
-    for k in was {
-      if ahead.contains(k) {
-        let copy = k + moved_mark
-        self.going[copy] = (self.last_items.get(k.view(start_offset=2).to_owned()), prev)
-        self.moving[copy] = (false, now)
-        prev = copy
-        continue
-      }
-      if !here.contains(k) && !self.going.contains(k) {
-        let name = k.view(start_offset=2).to_owned()
-        self.going[k] = (if k.has_prefix("r/") { self.last_items.get(name) } else { None }, prev)
-        self.moving[k] = (false, now)
-      }
-      prev = k
-    }
-    // (over at the way's end: what went out of the list then, what came there whole)
-    let end = now + row_size_ms
-    if end > rows_rest_at.val {
-      rows_rest_at.val = end
-    }
-    v.at_moment(end, fn() {
-      let done = self.moving.to_array().filter(fn(m) { m.1.1 + row_size_ms <= end + 0.001 }).map(fn(m) { m.0 })
-      for k in done {
-        self.moving.remove(k)
-        self.going.remove(k)
-      }
-      self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
-    })
-    |> ignore
-    self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
-  }
-  self.had = self.had || !lines.is_empty()
-  self.last = lines
-  self.last_items = by_name
-}
-
-///|
-/// The days `days` as lines with what goes still among them, each after the line it came after (the first, before all).
-fn RowsMotion::lines(self : RowsMotion, days : Array[ChatDay]) -> Array[String] {
-  self.told.get() |> ignore
-  let out = day_keys(days)
-  if self.going.is_empty() {
-    return out
-  }
-  let order = self.going.to_array()
-  order.sort_by(fn(a, b) { a.0.compare(b.0) })
-  for g in order {
-    let (k, (_, after)) = g
-    let mut at = 0
-    if after != "" {
-      for i, kk in out {
-        if kk == after {
-          at = i + 1
-        }
-      }
-    }
-    out.insert(at, k)
-  }
-  out
-}
-
-///|
-/// Whether line `key` is on its way out of the list (gone from it, its room closing), followed.
-fn RowsMotion::going_now(self : RowsMotion, key : String) -> Bool {
-  self.told.get() |> ignore
-  self.going.contains(key)
-}
-
-///|
-/// The chat of row `key` gone (or the copy of one gone ahead of others), as it was; None for a row in the list.
-fn RowsMotion::gone_item(self : RowsMotion, key : String) -> ChatItem? {
-  match @signals.untracked(fn() { self.going.get(key) }) {
-    Some((item, _)) => item
-    None => None
+fn sidebar_line_key(line : SidebarLine) -> String {
+  match line {
+    Heading(label) => "h/" + label
+    Chat(item) => "r/" + @sfbase.row_name(item)
   }
 }
 
 ///|
-/// Line `key`'s node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
-/// moment over row_size_ms, what it holds in the middle of it, as big as it is open and faded in from row_gone_at, cut
-/// softly at both ends.
-fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : String) -> Unit {
-  let way = @sf.EdgeWay::new(1.0)
-  let state = fn() {
-    self.told.get() |> ignore
-    self.moving.get(key)
-  }
-  line.reacts(state, fn(m) {
-    match m {
-      Some((comes, _)) =>
-        way.go_from(line, if comes { 0.0 } else { 1.0 }, if comes { 1.0 } else { 0.0 }, @motion.tween(row_size_ms, ease=Out))
-      None => ()
-    }
-  })
+/// The sidebar's own row look, on the shared list's causes: its original Out curve, sampled from the change's
+/// moment even when a windowed row is made after that moment.
+fn sidebar_line_node(sizes : @ui.ListRows[SidebarLine], line : @view.View, key : String) -> Unit {
   let open = fn() {
-    match state() {
-      Some(_) => Some(dmax(0.0, dmin(1.0, way.shown(line))))
-      None => None
+    let ease : @ui.Ease = Out
+    match sizes.came(key) {
+      Some(at) => Some(ease.at((line.drawn_at() - at) / row_size_ms))
+      None =>
+        match sizes.went(key) {
+          Some(at) => Some(1.0 - ease.at((line.drawn_at() - at) / row_size_ms))
+          None => None
+        }
     }
   }
   line
@@ -742,42 +609,5 @@ pub fn rows_rest() -> Double {
 }
 
 ///|
-/// Which of `was` (the rows' places before, in their order now) are among the most still in the order they had: a
-/// longest increasing run of them (in_order_most's). The others are the fewest that moved.
-fn kept_in_order(was : Array[Int]) -> Array[Bool] {
-  let n = was.length()
-  let ends : Array[Int] = []
-  let back = Array::make(n, -1)
-  for i in 0..<n {
-    let mut lo = 0
-    let mut hi = ends.length()
-    while lo < hi {
-      let mid = (lo + hi) / 2
-      if was[ends[mid]] < was[i] {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    if lo > 0 {
-      back[i] = ends[lo - 1]
-    }
-    if lo == ends.length() {
-      ends.push(i)
-    } else {
-      ends[lo] = i
-    }
-  }
-  let kept = Array::make(n, false)
-  let mut i = if ends.is_empty() { -1 } else { ends[ends.length() - 1] }
-  while i >= 0 {
-    kept[i] = true
-    i = back[i]
-  }
-  kept
-}
-
-///|
 /// How long a row's coming or going takes (mbui's ListRows: row_size_ms).
 let row_size_ms : Double = @ui.row_size_ms
-

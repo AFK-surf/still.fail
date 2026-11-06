@@ -26,6 +26,9 @@ pub(all) struct Writing {
   mut adopted : Int
   /// what `take` took, put back by `restore`
   mut taken : (String, Array[Json], Array[Json])?
+  /// which page's composer holds its field now (where it is made, sfpages' composer_on_page): the field is one
+  /// editor's, taken by another page's as this one lets it go, in the same change
+  held_by : @signals.Signal[@view.NodeId?]
 }
 
 ///|
@@ -131,6 +134,7 @@ pub fn writing(src : Source, key : String) -> Writing {
         seen_rev: -1.0,
         adopted: -1,
         taken: None,
+        held_by: @signals.signal(None),
       }
       writings[key] = w
       w
@@ -749,7 +753,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
   let list = quoted_into.get(draft).unwrap_or([])
   list.push((author, ts, role, file))
   quoted_into[draft] = list
-  draft_given()
+  draft_given_to(draft)
 }
 
 ///|
@@ -757,7 +761,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
 /// the chat's key; taken by its composer as it is next drawn (files_taken).
 pub fn files_into(chat : String, d : Dragged) -> Unit {
   files_put.push((chat, d))
-  draft_given()
+  draft_given_to(chat)
 }
 
 ///|
@@ -838,6 +842,60 @@ pub fn draft_given() -> Unit {
 /// What is put into drafts from elsewhere, read (a composer taking what was put into its draft).
 pub fn drafts_given_read() -> Unit {
   drafts_given.get() |> ignore
+}
+
+///|
+/// What takes what is put into a draft from elsewhere as it is put there, by the draft's key: the composers of the
+/// window's tree's that say so (draft_taker_said), each with its node, the last said first, each let go with its node
+/// (what is put there after one of a draft goes, another of it still there takes; none, it waits for the next made).
+// kept across runs: each let go with its node
+let draft_takers : Map[String, Array[(@view.View, () -> Unit)]] = {}
+
+///|
+/// Node `v` (a composer of the tree's) takes what is put into draft `key` from elsewhere with `take`, at once, as it is
+/// put there (draft_given_to), while it is there.
+pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit {
+  let list = draft_takers.get(key).unwrap_or([])
+  list.push((v, take))
+  draft_takers[key] = list
+  v.owns(fn() {
+    match draft_takers.get(key) {
+      Some(list) => {
+        list.retain(fn(t) { !physical_equal(t.1, take) })
+        if list.is_empty() {
+          draft_takers.remove(key)
+        }
+      }
+      None => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Something put into draft `key` from elsewhere (its files, its quotes, words to send): taken now by the composer of
+/// the tree's said last of those that take it (draft_taker_said), in this same event; with none, by an old view's
+/// composer as it next builds (draft_given).
+pub fn draft_given_to(key : String) -> Unit {
+  match draft_takers.get(key) {
+    Some(list) if list.length() > 0 => (list[list.length() - 1].1)()
+    _ => draft_given()
+  }
+}
+
+///|
+/// The same as an event of the tree's at this moment (where nothing may be written yet: what the host hands on as a
+/// frame begins), by the draft's last taker's node; none, an old view's composer as it next builds. Done before any
+/// change of the tree's structure after it (Tree::at_cause advances to its moment first, what is due by then done): a
+/// change letting that node go comes after it has taken it.
+pub fn draft_take_at(key : String) -> Unit {
+  match draft_takers.get(key) {
+    Some(list) if list.length() > 0 => {
+      let (v, take) = list[list.length() - 1]
+      v.at_moment(v.cause_at(), take) |> ignore
+    }
+    _ => draft_given()
+  }
 }
 
 ///|

@@ -300,6 +300,12 @@ pub fn downloads_reset() -> Unit
 
 pub fn draft_given() -> Unit
 
+pub fn draft_given_to(String) -> Unit
+
+pub fn draft_take_at(String) -> Unit
+
+pub fn draft_taker_said(@view.View, String, () -> Unit) -> Unit
+
 pub fn drafts_given_read() -> Unit
 
 pub let drag_carried : @ref.Ref[() -> Dragged?]
@@ -628,9 +634,9 @@ pub fn flight_settled(Double, Bool) -> Double
 
 pub fn flight_settled_of(@ui.Ctx, SendFlight) -> Double
 
-pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_start(@ui.Ctx, String, String, String, String, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
-pub fn flight_start_from(@ui.Ctx, String, String, String, String, Double, Array[FlyingFile], @ui.FieldLines?, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_start_from(@ui.Ctx, String, String, String, String, Array[FlyingFile], @ui.FieldLines?, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
 pub fn flight_takes(String, String) -> Bool
 
@@ -1099,6 +1105,8 @@ pub fn open_in_place(Page) -> Unit
 pub fn open_item(Source, String, String, String, String?, Double?) -> Unit
 
 pub fn open_link(String) -> Unit
+
+pub fn open_link_from(Source?, String) -> Unit
 
 pub fn open_link_in(Source, String, outside? : Bool, at? : Double?, or_else? : () -> Unit) -> Unit
 
@@ -1692,7 +1700,7 @@ pub fn this_machine() -> String
 
 pub fn thumb_occurrence(String, String, String) -> String
 
-pub fn thumb_of(@ui.Ctx, String) -> Thumb?
+pub fn thumb_of(@ui.Ctx, String, laid? : @view.Laid) -> Thumb?
 
 pub fn thumb_place(String, String, String, String) -> String
 
@@ -3313,7 +3321,6 @@ pub(all) struct SendFlight {
   field_y : Double
   field_w : Double
   field_h : Double
-  room : Double
   mut hold : (Double) -> Unit
   desk : Bool
   lines : @ui.FieldLines?
@@ -3741,7 +3748,7 @@ pub fn Viewer::draft_key(Self) -> String
 pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, Bool, Double) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
-pub fn Viewer::flight_from(Self, @ui.Ctx) -> Thumb?
+pub fn Viewer::flight_from(Self, @ui.Ctx, laid? : @view.Laid) -> Thumb?
 pub fn Viewer::flight_node(Self) -> Bool
 pub fn Viewer::flight_target(Self, @ui.Ctx, Source) -> (Double, Double, Double, Double)?
 pub fn Viewer::flow_stage(Self, @ui.Ctx, Source, Flow, PKind, Int32) -> Unit
@@ -3865,6 +3872,7 @@ pub(all) struct Writing {
   mut seen_rev : Double
   mut adopted : Int32
   mut taken : (String, Array[@json.Json], Array[@json.Json])?
+  held_by : @signals.Signal[@view.NodeId?]
 }
 
 // Type aliases

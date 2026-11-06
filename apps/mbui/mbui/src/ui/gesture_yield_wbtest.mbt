@@ -1,6 +1,6 @@
 // A finger down on a row of a column that scrolls, the row's a gesture (View::gesture: a tap, a hold, a drag of a mouse
 // let go on it), moved up past the slop: the column's, scrolled by it, the row's gesture called off (no tap); a row
-// that drags by itself (its own on_drag: a slider) keeps it, the column not moved, a gesture said in its place as a
+// that drags by itself (its own on_drag) keeps it, the column not moved, a gesture said in its place as a
 // finger was held on it waiting on a tap too.
 
 ///|
@@ -61,6 +61,47 @@ test "a finger moved up past the slop on a row that drags by itself: the row's, 
   t.drag(195.0, 625.0, 195.0, 425.0)
   assert_eq(s.at(tree), 0.0)
   assert_true(slid.val > 0)
+}
+
+///|
+test "a raw drag may yield until it claims its own direction, with no restart when it wins" {
+  let t = Tester::new(fn(_c) {  }, w=200.0, h=200.0, platform=2)
+  let child : Ref[@view.View?] = Ref(None)
+  let said : Array[String] = []
+  set_view_app(fn(root) {
+    root.box(fn(parent) {
+      parent.width(Is(Some(200.0))).height(Is(Some(200.0)))
+      .claims(fn(dx, dy) { dx.abs() > 8.0 || dy.abs() > 8.0 })
+      .on_drag(fn(d) { said.push("parent \{d.kind}") }) |> ignore
+      parent.box(fn(v) {
+        child.val = Some(v)
+        v.width(Is(Some(150.0))).height(Is(Some(150.0)))
+        .claims(fn(dx, dy) { dx.abs() > 8.0 && dx.abs() > dy.abs() }, at_down=true)
+        .on_drag(fn(d) {
+          if d.kind == Down { v.yield_drag(true) }
+          said.push("child \{d.kind}")
+        }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let tree = view_tree().unwrap()
+  let id = child.val.unwrap().id()
+  t.touch_at(0, 60.0, 60.0, 10.0)
+  assert_true(tree.yields(id))
+  t.touch_at(1, 62.0, 60.0, 20.0)
+  t.touch_at(1, 80.0, 60.0, 30.0)
+  assert_false(tree.yields(id))
+  t.touch_at(1, 80.0, 100.0, 40.0)
+  t.touch_at(2, 80.0, 100.0, 50.0)
+  assert_eq(said, ["child Down", "child Moved", "child Moved", "child Moved", "child Up"])
+  assert_false(tree.yields(id))
+  said.clear()
+  t.touch_at(0, 60.0, 60.0, 60.0)
+  assert_true(tree.yields(id))
+  t.touch_at(1, 60.0, 80.0, 70.0)
+  t.touch_at(2, 60.0, 80.0, 80.0)
+  assert_eq(said, ["child Down", "child Off", "parent Down", "parent Moved", "parent Up"])
 }
 
 ///|

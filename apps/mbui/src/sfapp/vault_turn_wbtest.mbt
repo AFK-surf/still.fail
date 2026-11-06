@@ -242,7 +242,7 @@ test "an answered secret request's history is reachable and dismissible with the
 }
 
 ///|
-test "a request decided in its chat: its card closes on screen to how it went, nothing of it pressed any more" {
+test "a request decided in its chat: its card closes, its old button cannot answer again, its result is reachable" {
   new_run()
   let vc : VaultChat = { status: "", version: @signals.signal(1), vaults_asked: false, use_secret: false }
   let calls : Array[String] = []
@@ -261,9 +261,15 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   // decided: how it went in its place, the room going to it as what else changes does (docs/list-motion.md)
   t.run_for(turn_most_ms)
   assert_true(t.find("未存入 测试服务登录") is Some(_))
+  // The old button's point is now in the result's minimum touch room, just above its drawn words. It opens the
+  // result, not the old button: the room belongs to the control that is there now.
+  assert_eq(t.press_target_at(nx, ny).map(fn(s) { s.label }), Some("未存入 测试服务登录 · 详情"))
   t.press_at(nx, ny)
   t.release(nx, ny)
   assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
+  assert_true(t.find("demo-user") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms)
   t.assert_idle()
   // the chat opened again: the same, at once
   t.back()

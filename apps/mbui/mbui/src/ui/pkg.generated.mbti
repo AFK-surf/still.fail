@@ -162,7 +162,7 @@ pub let fake_passkey_asks : Array[(String, String, String, String)]
 
 pub fn feel_as(Int32) -> Unit
 
-pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, shorter? : Array[String], trim? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), submitted? : (String) -> Unit, pasted? : (String) -> Unit, files? : (Array[(String, Bytes)]) -> Unit, size_by? : () -> Double, line_by? : () -> Double, max_lines_by? : () -> Int32, max_lines_in? : (@view.View, (Double, Double) -> Int32), enter_by? : () -> Bool, paste_limit_by? : () -> Int32, files_when? : () -> Bool, colors_by? : () -> (Int64, Int64, Int64), placeholder_by? : () -> String, keys? : (Int32, Int32) -> Bool) -> @view.View
+pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, shorter? : Array[String], trim? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), submitted? : (String) -> Unit, pasted? : (String) -> Unit, files? : (Array[(String, Bytes)]) -> Unit, size_by? : () -> Double, line_by? : () -> Double, max_lines_by? : () -> Int32, max_lines_in? : (@view.View, (Double, Double) -> Int32), enter_by? : () -> Bool, paste_limit_by? : () -> Int32, files_when? : () -> Bool, colors_by? : () -> (Int64, Int64, Int64), placeholder_by? : () -> String, keys? : (Int32, Int32) -> Bool, label_by? : () -> String) -> @view.View
 
 pub fn files_held() -> (Double, Double)?
 
@@ -401,6 +401,8 @@ pub fn notice_settings() -> Bool
 pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : String, opens~ : String) -> Unit
 
 pub fn now() -> Double
+
+pub fn observe_finger_hold(@view.View, () -> Bool, () -> Unit, () -> Unit, () -> Unit) -> Unit
 
 pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, gives? : Bool, fits? : (Double, @signals.Signal[Double?]), unlaid? : () -> Double) -> @view.View
 
@@ -1225,7 +1227,7 @@ pub fn Ctx::finger_reads(Self) -> (Double, Double)?
 pub fn Ctx::fitting_width(Self, Double, Array[Double]) -> Double
 pub fn Ctx::floats_over(Self, Int32) -> Unit
 pub fn Ctx::focus_editor(Self, String) -> Unit
-pub fn Ctx::focus_field(Self, Field) -> Unit
+pub fn Ctx::focus_field(Self, Field, ask_later? : Bool) -> Unit
 pub fn Ctx::focus_gained(Self, Int32) -> Bool
 pub fn Ctx::focus_on(Self, Int32, visible? : Bool) -> Unit
 pub fn Ctx::focus_roved_to(Self, Int32) -> Bool
@@ -1901,8 +1903,8 @@ pub struct ListRows[T] {
 }
 pub fn[T] ListRows::came(Self[T], String) -> Double?
 pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double, grown? : Bool) -> Unit
-pub fn[T] ListRows::in_node(Self[T], @view.View, () -> Array[T], (T) -> String, (T) -> String, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, own? : (T) -> Bool) -> NodeRows[T]
-pub fn[T] ListRows::in_node_indexed(Self[T], @view.View, @view.AnchoredSource[String], (Int32) -> T, () -> Array[RowsChange[T]], (String) -> Int32?, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, lead_in_layout? : (T, Int32) -> () -> Double, own? : (T) -> Bool) -> NodeRowsIndexed[T]
+pub fn[T] ListRows::in_node(Self[T], @view.View, () -> Array[T], (T) -> String, (T) -> String, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, own? : (T) -> Bool, continuity? : () -> String?) -> NodeRows[T]
+pub fn[T] ListRows::in_node_indexed(Self[T], @view.View, @view.AnchoredSource[String], (Int32) -> T, () -> Array[RowsChange[T]], (String) -> Int32?, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, lead_in_layout? : (T, Int32) -> (Double) -> Double, own? : (T) -> Bool) -> NodeRowsIndexed[T]
 pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
@@ -2053,6 +2055,7 @@ type Node
 pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
+  room_now : () -> (String, Double, Double) -> @view.ListRoom
   moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool
@@ -2062,7 +2065,7 @@ pub struct NodeRowsIndexed[T] {
   source : @view.AnchoredSource[String]
   item_of : (String) -> (T, Int32)?
   room : (String, Double) -> @view.ListRoom
-  room_now : () -> (String, Double) -> @view.ListRoom
+  room_now : () -> (String, Double, Double) -> @view.ListRoom
   moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool
@@ -3111,8 +3114,10 @@ pub struct Velocity {
 }
 pub fn Velocity::add(Self, Double, Double, Double) -> Unit
 pub fn Velocity::get(Self) -> (Double, Double)
+pub fn Velocity::get_at(Self, Double) -> (Double, Double)
 pub fn Velocity::new() -> Self
 pub fn Velocity::reset(Self) -> Unit
+pub fn Velocity::up(Self, Double, Double, Double) -> Unit
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ViewPaintWork {

@@ -232,6 +232,12 @@ test("a hello brings what put this device in the lock lately, for a station that
   r.cloud.chains.set("ws", [g, old]);
   r.core.inner.data.put("lock", "ws", { head: head(old), entries: [g, old] });
   assert.equal(r.core.inner.cloudSync.carry!("ws"), null);
+  // Its person made a member lately too (their first device): a station takes no device of someone it has not heard of.
+  const made = sign(next("ws", head(g), r.host.nowMs() / 1000, "member", { sub: "s3", email: "c@x.com", role: "member" }));
+  const first = sign(next("ws", head(made), r.host.nowMs() / 1000, "device", { id: ME, sub: "s3", kind: "app", label: "this" }));
+  r.cloud.chains.set("ws", [g, made, first]);
+  r.core.inner.data.put("lock", "ws", { head: head(first), entries: [g, made, first] });
+  assert.deepEqual(r.core.inner.cloudSync.carry!("ws"), [made, first], "from the one that made them a member on");
 });
 
 test("a change the cloud answers too many requests for is asked again a while later, not failed at once", async () => {

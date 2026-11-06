@@ -1,12 +1,12 @@
 #!/bin/sh
-# Whether a commit or a push would undo what others merged into main: each commit on main of the two days before it
-# left main that touched a file this changes is looked for in what this leaves. Its change still applies backwards: it is still
+# Whether a commit or a push would undo what others merged into its base: each commit on that base of the two days before it
+# branched that touched a file this changes is looked for in what this leaves. Its change still applies backwards: it is still
 # there. It applies only forwards: the file is back as it was before it, undone. That is how a squash onto a main that
 # moved meanwhile goes wrong (`git reset --soft origin/main` after a fetch, by this or any session sharing the
 # repository's refs: the tree is the old main and this, the parent the new main, so the diff takes back everything
 # merged in between). Seen again and again (2026-09-28, 2026-10-01 twice), so it is checked, not just written down.
 #
-#   sh scripts/undone.sh <base> <commit>   what <commit> has against <base> (a push: base where it left main)
+#   sh scripts/undone.sh <base> <commit>   what <commit> has against <base> (a push: its branch base)
 #   sh scripts/undone.sh HEAD index <msg>  what is staged against HEAD (a commit; <msg> its message file)
 #
 # A commit meant to take one back says so in its message: `Reverts <sha>` (or `Undoes <sha>`), 7 or more of its hex.
@@ -43,29 +43,46 @@ moved() {
 # text: binary; its mode alone; an empty one added or deleted), there or not, its mode and its contents; or a file's
 # mode it changed, whatever its lines: where the base has that commit's still (main changed it since: not this one's).
 objects_back() {
-  git diff --numstat --no-renames "$1^" "$1" -- $files > "$work/num"
-  back=0
-  while IFS='	' read -r plus minus f; do
-    to=$f
-    if [ -s "$work/moved" ]; then
-      to=$(awk -v f="$f" '$1 == f { print $2; exit }' "$work/moved")
-      [ -n "$to" ] || to=$f
-    fi
-    was=$(git ls-tree "$1^" -- "$f" | awk '{ print $1, $3 }')
-    then_=$(git ls-tree "$1" -- "$f" | awk '{ print $1, $3 }')
-    in_base=$(git ls-tree "$base" -- "$f" | awk '{ print $1, $3 }')
-    now=$(git ls-tree "$tree" -- "$to" | awk '{ print $1, $3 }')
-    if [ "$plus" = - ] || { [ "$plus" = 0 ] && [ "$minus" = 0 ]; }; then
-      [ "$in_base" = "$then_" ] && [ "$was" = "$now" ] && back=1
-    fi
-    if [ -n "$was" ] && [ -n "$then_" ] && [ -n "$now" ] && [ "${was%% *}" != "${then_%% *}" ] &&
-       [ "${in_base%% *}" = "${then_%% *}" ] && [ "${was%% *}" = "${now%% *}" ]; then back=1; fi
-  done < "$work/num"
-  echo $back
+  git diff --numstat --no-renames "$1^" "$1" -- $files > "$work/num" || return 1
+  touched=$(awk '{ print $3 }' "$work/num") || return 1
+  [ -n "$touched" ] || { echo 0; return; }
+  # Read each tree once, rather than starting four git processes for every file in every main commit. Keep tree
+  # entries (-t) as well as files: a branch can replace a file with a directory, or the other way around.
+  git ls-tree -r -t "$1^" -- $touched > "$work/was" || return 1
+  git ls-tree -r -t "$1" -- $touched > "$work/then" || return 1
+  [ -f "$work/in-base" ] || git ls-tree -r -t "$base" -- $files > "$work/in-base" || return 1
+  [ -f "$work/now" ] || git ls-tree -r -t "$tree" -- $files > "$work/now" || return 1
+  awk -v was_file="$work/was" -v then_file="$work/then" -v base_file="$work/in-base" \
+      -v now_file="$work/now" -v moved_file="$work/moved" '
+    function read_objects(file, into,  line, tab, path, fields) {
+      while ((getline line < file) > 0) {
+        tab = index(line, "\t"); path = substr(line, tab + 1)
+        split(substr(line, 1, tab - 1), fields, " ")
+        into[path] = fields[1] " " fields[3]
+      }
+      close(file)
+    }
+    function mode(object,  fields) { split(object, fields, " "); return fields[1] }
+    BEGIN {
+      read_objects(was_file, was); read_objects(then_file, then_)
+      read_objects(base_file, in_base); read_objects(now_file, now)
+      while ((getline line < moved_file) > 0) {
+        split(line, parts, " ")
+        if (!(parts[1] in to)) to[parts[1]] = parts[2]
+      }
+      close(moved_file)
+    }
+    {
+      plus = $1; minus = $2; f = $3; target = (f in to) ? to[f] : f
+      if ((plus == "-" || (plus == "0" && minus == "0")) && in_base[f] == then_[f] && was[f] == now[target]) back = 1
+      if (was[f] != "" && then_[f] != "" && now[target] != "" && mode(was[f]) != mode(then_[f]) &&
+          mode(in_base[f]) == mode(then_[f]) && mode(was[f]) == mode(now[target])) back = 1
+    }
+    END { print back ? 1 : 0 }' "$work/num"
 }
 
 undone=""
-# A branch lives hours, a day or two: what main took in before that is not this one's to undo.
+# A branch lives hours, a day or two: older base changes are not this one's to undo.
 since=$(( $(git log -1 --format=%ct "$base") - 2 * 86400 ))
 # shellcheck disable=SC2086 # paths in this repository have no spaces
 for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); do
@@ -73,19 +90,20 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   if printf '%s\n' "$messages" | grep -qiE "(reverts|undoes) ${short}"; then continue; fi
   git diff --binary --no-renames "$m^" "$m" -- $files > "$work/patch" 2>/dev/null || continue
   [ -s "$work/patch" ] || continue
-  if [ "$(objects_back "$m")" = 1 ]; then
+  object_back=$(objects_back "$m") || { echo "could not examine objects from main commit $short" >&2; exit 2; }
+  if [ "$object_back" = 1 ]; then
     touched=$(git diff --name-only --no-renames "$m^" "$m" -- $files | tr '\n' ' ')
     undone="$undone
   $short $(git log -1 --format=%s "$m")
       $touched"
     continue
   fi
-  # Main may already have removed or superseded this old patch. Only reject
+  # The base may already have removed or superseded this old patch. Only reject
   # a loss introduced by this branch; don't blame it for the base tree's state.
   if ! GIT_INDEX_FILE="$work/base-index" git apply --cached --check -R "$work/patch" 2>/dev/null &&
      GIT_INDEX_FILE="$work/base-index" git apply --cached --check "$work/patch" 2>/dev/null; then continue; fi
   if [ -s "$work/moved" ]; then moved "$work/patch" > "$work/here"; else cp "$work/patch" "$work/here"; fi
-  # Still there, or changed again since on main (then neither way applies): fine.
+  # Still there, or changed again since on the base (then neither way applies): fine.
   GIT_INDEX_FILE="$work/index" git apply --cached --check -R "$work/here" 2>/dev/null && continue
   GIT_INDEX_FILE="$work/index" git apply --cached --check "$work/here" 2>/dev/null || continue
   # Applying forwards says no more than that its context is there: a hunk that only adds applies again wherever the
@@ -127,12 +145,12 @@ done
 
 [ -z "$undone" ] && exit 0
 cat <<MSG
-this would undo what is on main (the files are back as they were before these commits):$undone
+this would undo what is on the base (the files are back as they were before these commits):$undone
 
-Most likely squashed onto a main that moved meanwhile. Put only this branch's own changes on today's main:
+Most likely squashed onto a base that moved meanwhile. Put only this branch's own changes on today's base:
   git diff <where the branch started> HEAD > /tmp/mine.patch
-  git checkout -B <branch> origin/main && git apply --3way /tmp/mine.patch
-To squash, \`git rebase origin/main\` first, then \`git reset --soft \$(git merge-base HEAD origin/main)\`.
+  git checkout -B <branch> <base-branch> && git apply --3way /tmp/mine.patch
+To squash, first rebase onto <base-branch>, then reset softly to its merge base.
 Undoing one on purpose: say \`Reverts <sha>\` in the commit message.
 MSG
 exit 1
