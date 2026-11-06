@@ -5965,7 +5965,9 @@ fn View::drop(self : View, v : View) -> Unit {
 
 ///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
-pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0) -> Unit {
+/// `leave_by`, when given, says how long it leaves at the cause that closes it, from the node as it is then. For a
+/// way whose length depends on its size (a sheet); `leave` is for one whose length is fixed.
+pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0, leave_by? : (View) -> Double) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot()
   let had : Ref[View?] = Ref(None)
@@ -5987,9 +5989,13 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
       }
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
-        slot.leave(v, leave)
+        let duration = match leave_by {
+          Some(f) => f(v)
+          None => leave
+        }
+        slot.leave(v, duration)
         had.val = None
-        gone.val = if leave > 0.0 { Some(v) } else { None }
+        gone.val = if duration > 0.0 { Some(v) } else { None }
       }
       _ => ()
     }
@@ -6247,6 +6253,19 @@ pub fn View::leaves_at(self : View) -> Double {
   } else {
     -1.0
   }
+}
+
+///|
+/// Keep this node, already leaving, until at least `at` on the tree's timeline. A way may be sent further after it
+/// began (a sheet sinking with another); its owner extends its own leaving as it tells that new way.
+pub fn View::leaves_no_earlier_than(self : View, at : Double) -> View {
+  guard self.live() is Some(n) && n.left_at >= 0.0 else { return self }
+  if at > leave_ends(n) {
+    n.span = at - n.left_at
+    self.tree.due_leaving(self.id())
+    self.tree.marked()
+  }
+  self
 }
 
 ///|
