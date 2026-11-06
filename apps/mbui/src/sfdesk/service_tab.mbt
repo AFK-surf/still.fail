@@ -47,19 +47,16 @@ fn tab_job(tab : String) -> String? {
 ///|
 /// Its tab closed: what its page asked of the station stopped, its view gone (web: closePreview), once it is no longer
 /// drawn (the panel shows what it showed as it slides out: sv_sweep); opened again before, kept.
-fn tab_let_go(src : Source, r : ChatRef, tab : String, visible~ : Bool) -> Unit {
+fn tab_let_go(src : Source, r : ChatRef, tab : String) -> Unit {
   panel_screen_pages.remove(tabs_key(r) + "/" + tab)
   history_let_go(r, tab)
   match tab_job(tab) {
     Some(job) => {
       let key = service_key(r.station, job)
-      sv_closing[key] = (r.station, job)
-      // A tab closed while another is in front has no node whose later removal can release it. If no old or new view
-      // still shows this page, release it at the close itself, without waiting for an unrelated frame.
-      if !visible && !sv_nodes.contains(key) && !sv_drawn.contains(key) {
-        sv_closing.remove(key)
-        service_left(src, r.station, job)
-      }
+      sv_release_number.val += 1
+      sv_closing[key] = { station: r.station, job, excluding: Some((r, tab)), id: sv_release_number.val }
+      service_ownership_watch(src)
+      service_release_pending(src, r.station, job)
     }
     None => ()
   }
@@ -68,8 +65,27 @@ fn tab_let_go(src : Source, r : ChatRef, tab : String, visible~ : Bool) -> Unit 
 ///|
 fn tab_kept(r : ChatRef, tab : String) -> Unit {
   match tab_job(tab) {
-    Some(job) => sv_closing.remove(service_key(r.station, job))
+    Some(job) => {
+      sv_closing.remove(service_key(r.station, job))
+      service_ownership_idle()
+    }
     None => ()
+  }
+}
+
+///|
+// A failed close leaves the tab as an owner. Keep the release request (there may also have been a page drop), but do
+// not exclude this tab from the ownership check; a later real close or topic update can then finish the release.
+fn service_close_failed(r : ChatRef, tab : String) -> Unit {
+  guard tab_job(tab) is Some(job) else { return }
+  let key = service_key(r.station, job)
+  guard sv_closing.get(key) is Some(waiting) else { return }
+  match waiting.excluding {
+    Some((other, omitted)) if tabs_key(other) == tabs_key(r) && omitted == tab => {
+      sv_release_number.val += 1
+      sv_closing[key] = { ..waiting, excluding: None, id: sv_release_number.val }
+    }
+    _ => ()
   }
 }
 
@@ -78,12 +94,8 @@ fn tab_kept(r : ChatRef, tab : String) -> Unit {
 pub fn sv_sweep(c : @ui.Ctx, src : Source) -> Unit {
   for key, at in sv_closing {
     if !sv_drawn.contains(key) && !sv_nodes.contains(key) {
-      let (station, job) = at
       c.tell("sv-let-go/" + key, fn() {
-        if sv_closing.contains(key) && !sv_nodes.contains(key) {
-          sv_closing.remove(key)
-          service_left(src, station, job)
-        }
+        service_release_pending(src, at.station, at.job)
       })
     }
   }
@@ -91,9 +103,47 @@ pub fn sv_sweep(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The pages of tabs closed (by their service_key: station, job), not yet let go.
+/// A page left by its last stack entry or tab: wait until every other owner, including pending tab calls, lets it go.
+priv struct ServiceRelease {
+  station : String
+  job : String
+  excluding : (ChatRef, String)?
+  id : Int
+}
+
+///|
+/// The pages waiting to be released, by service_key.
 // kept across runs: put back by sv_reset (reset)
-let sv_closing : Map[String, (String, String)] = {}
+let sv_closing : Map[String, ServiceRelease] = {}
+
+///|
+// kept across runs: a unique number, never reused across reset
+let sv_release_number : Ref[Int] = Ref(0)
+
+///|
+/// A stack page has left. If another page or tab still owns the site, retain the request and check it again when that
+/// owner leaves; a tab's existing exclusion remains until its close has been reflected in the core's topic.
+pub fn service_page_drop(src : Source, station : String, job : String) -> Unit {
+  let key = service_key(station, job)
+  if !sv_closing.contains(key) {
+    sv_release_number.val += 1
+    sv_closing[key] = { station, job, excluding: None, id: sv_release_number.val }
+  }
+  service_ownership_watch(src)
+  service_release_pending(src, station, job)
+}
+
+///|
+/// Recheck after a holder leaves or a pending tab request changes; a later open can cancel this particular release.
+fn service_release_pending(src : Source, station : String, job : String) -> Unit {
+  let key = service_key(station, job)
+  guard sv_closing.get(key) is Some(waiting) else { return }
+  if service_page_kept(src, station, job, excluding=waiting.excluding) { return }
+  guard sv_closing.get(key) is Some(current) && current.id == waiting.id else { return }
+  sv_closing.remove(key)
+  service_left(src, station, job)
+  service_ownership_idle()
+}
 
 ///|
 /// The pages drawn in this build (by their service_key).
@@ -101,16 +151,18 @@ let sv_closing : Map[String, (String, String)] = {}
 let sv_drawn : Map[String, Bool] = {}
 
 ///|
-/// Service tab nodes still shown, including while their side panel slides out. A node hidden by another tab does not
-/// release the page; a closed tab releases it only once its last visible node leaves.
+/// Service page and tab nodes still shown, including while they slide out. A temporarily hidden node does not release
+/// the page; a closed page or tab releases it only once its last visible node leaves.
+// kept across runs: put back by sv_reset (reset)
 let sv_nodes : Map[String, Array[Int]] = {}
 
 ///|
 /// A unique holder also keeps a node left from before a reset from releasing a later node's page.
+// kept across runs: a unique number, never reused across reset
 let sv_node_number : Ref[Int] = Ref(0)
 
 ///|
-fn service_tab_held(v : @view.View, src : Source, station : String, job : String) -> Unit {
+pub fn service_node_held(v : @view.View, src : Source, station : String, job : String) -> Unit {
   let key = service_key(station, job)
   sv_node_number.val += 1
   let id = sv_node_number.val
@@ -125,10 +177,7 @@ fn service_tab_held(v : @view.View, src : Source, station : String, job : String
             holders.remove(i) |> ignore
             if holders.is_empty() {
               sv_nodes.remove(key)
-              if sv_closing.contains(key) {
-                sv_closing.remove(key)
-                service_left(src, station, job)
-              }
+              service_release_pending(src, station, job)
             }
           }
           None => ()
@@ -143,6 +192,7 @@ fn sv_reset() -> Unit {
   sv_closing.clear()
   sv_drawn.clear()
   sv_nodes.clear()
+  service_ownership_reset()
 }
 
 ///|
