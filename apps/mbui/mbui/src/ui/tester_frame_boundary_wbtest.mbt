@@ -97,16 +97,19 @@ test "post-frame observers see the completed record before their work is counted
 test "an automatic host reply before on_frame is counted between frames as an explicit reply is" {
   for automatic in [false, true] {
     let height = @signals.signal(40.0)
-    let t = Tester::new(fn(_) { }, images=[("boundary.jpg", 400, 300)], finish=false, tree=fn(root) {
+    let shown = @signals.signal(false)
+    let t = Tester::new(fn(_) { }, images=[("boundary.jpg", 400, 300)], finish=automatic, tree=fn(root) {
       root.box(fn(v) {
         v.width(Is(Some(100.0))).height(By(fn() { Some(height.get()) })).ground(Is(0x336699FFL)) |> ignore
       }) |> ignore
-      root.box(fn(v) {
+      root.show(fn() { shown.get() }, fn(v) {
         v.width(Is(Some(100.0))).height(Is(Some(100.0))).image(Is(Some(("boundary.jpg", "", 4096)))) |> ignore
-      }) |> ignore
+      })
     })
-    t.draw()
     t.measure_as_host()
+    // This frame asks for the image. Its reply is still pending until the following frame (or explicit finish).
+    shown.set(true)
+    t.frame_at(t.time() + 20.0)
     let pending = t.pending()
     assert_eq(pending.length(), 1)
     let tree = view_tree().unwrap()
@@ -123,7 +126,6 @@ test "an automatic host reply before on_frame is counted between frames as an ex
     })
     t.count_between("reply", fn() { replied.val })
     t.record_host()
-    t.fake.auto_finish = automatic
     let at = t.time() + 20.0
     if !automatic {
       t.fake.time = at
