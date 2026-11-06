@@ -785,6 +785,9 @@ pub struct Tree {
   /// again (View::layout_box)
   mut box_measured : Set[Int]
   mut box_stale : Set[Int]
+  // (the node whose children the framework is making, dropping or putting in another order, told to layout: in a
+  // layout_box's own layout, what it holds changed, none of its layout properties written; Tree::layout_marked_at)
+  mut box_kids_changing : Int
   // where what marked it to be laid out again came from, in the layout pass under way: said with passes that never stop
   mut laid_marked_at : String
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
@@ -1127,6 +1130,7 @@ pub fn Tree::new(
     moment_passes: 0,
     box_measured: Set::new(),
     box_stale: Set::new(),
+    box_kids_changing: -1,
     laid_marked_at: "",
     told_otherwise: [],
     measure,
@@ -1915,7 +1919,7 @@ pub fn View::box(self : View, make : (View) -> Unit) -> View {
   if self.at == 0 {
     self.tree.top_last()
   }
-  self.box_appended(v.at)
+  self.kids_changed(fn() { self.box_appended(v.at) })
   v.owning(fn() { make(v) })
   v
 }
@@ -2024,6 +2028,11 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     }
     // (only what it lays out, inside it, may be changed in its layout: itself or another branch changed there is a
     // fault, saying which; its layout is its constraints' and content's, read before it)
+    // (save what it holds made, dropped or reordered by the framework, told to it or, a slot's, to what holds it: no
+    // layout property of it written)
+    if self.box_kids_changing == self.layout_owner && c < 0 {
+      return
+    }
     if c < 0 || at == self.layout_owner {
       fault("layout_box node \{self.layout_owner}: node \{at}'s layout changed in its layout, not one of what it lays out")
       return
@@ -6015,6 +6024,16 @@ fn View::drop(self : View, v : View) -> Unit {
     None => ()
   }
   @signals.end_batch()
+}
+
+///|
+/// What it holds made, dropped or put in another order, told to layout: in a layout_box's own layout, the framework's
+/// change of what it holds, none of its layout properties written (Tree::layout_marked_at).
+fn View::kids_changed(self : View, tell : () -> Unit) -> Unit {
+  let was = self.tree.box_kids_changing
+  self.tree.box_kids_changing = self.at
+  tell()
+  self.tree.box_kids_changing = was
 }
 
 ///|
