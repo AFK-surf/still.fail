@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
 import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
-import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS } from "../src/views/pair.ts";
+import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS, personalBegin, personalPairState } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
 /// The owner's phone and computer, apps that sign: the devices that may approve this one.
@@ -54,7 +54,8 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
               hellos.push(hello);
               if (way === "mute") return;
               const hasCredential = way === "credential" && (hello as { workspaces?: { ws: string; credential: string }[] }).workspaces?.some((w) => w.ws === "ws" && w.credential === "signed-member");
-              yield* there.send(way === "code" || hasCredential ? { t: "code", workspaces: ["ws"] } : { t: "no", error: "not_here" });
+              const places = (hello as { personal?: unknown }).personal ? ["person:s1"] : ["ws"];
+              yield* there.send(way === "code" || hasCredential ? { t: "code", workspaces: places } : { t: "no", error: "not_here" });
             }),
           );
           return here;
@@ -277,6 +278,24 @@ test("cancelling after a code disappears stops looking for the remaining devices
   await w.host.time.pass(PAIR_REDIAL_MS * 2);
   assert.equal(await w.pair(), undefined);
   assert.equal(w.dials[LAPTOP_APP], 1);
+});
+
+test("a personal lock's code disappears during the search: another device can still show one", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  w.core.inner.adb.personal = () => ({
+    makeKey: () => Effect.succeed(`ed25519:${"11".repeat(32)}`),
+    approvers: () => [{ id: PHONE_APP, label: "phone" }, { id: LAPTOP_APP, label: "laptop" }],
+  }) as never;
+  await Effect.runPromise(personalBegin(w.core.inner, ["s1"]));
+  await w.host.time.pass(1_000);
+  assert.equal(personalPairState(w.core.inner, "s1").state, "code");
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(1_000);
+  assert.equal(personalPairState(w.core.inner, "s1").state, "finding");
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal(personalPairState(w.core.inner, "s1").state, "code");
+  assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [1, 2]);
 });
 
 test("a dial that hangs is given up after PAIR_DIAL_MS and made again", async () => {

@@ -448,6 +448,17 @@ function mine(inner: Inner, ws: string): J | null {
 
 const changed = (inner: Inner, y: Trying) => inner.store.invalidateAll((t) => t.topic === "adbShare" || (t.topic === "lock" && y.workspaces.includes(String(t.workspace))) || t.topic === "lockPrompts");
 
+/// All searches ended: keep a code still shown, or explain why the last one went away, or say none was found.
+function finishLooking(inner: Inner, y: Trying): void {
+  if (tryings.get(inner) !== y || y.state !== "finding") return;
+  if (y.met.size > 0) y.state = "code";
+  else if (y.lastEnd) {
+    y.state = "failed";
+    y.error = endedText([y.lastEnd]);
+  } else y.state = "none";
+  changed(inner, y);
+}
+
 function drop(y: Trying): void {
   for (const m of y.met.values()) m.d.close();
   y.met.clear();
@@ -626,13 +637,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
         yield* Deferred.await(done);
         // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials. If a code went away while the
         // others were still being sought, say why it ended once none of the remaining devices can show one.
-        if (tryings.get(inner) !== y || y.state !== "finding") return;
-        if (y.met.size > 0) y.state = "code";
-        else if (y.lastEnd) {
-          y.state = "failed";
-          y.error = endedText([y.lastEnd]);
-        } else y.state = "none";
-        changed(inner, y);
+        finishLooking(inner, y);
       }),
     );
     return null;
@@ -864,12 +869,14 @@ export function personalBegin(inner: Inner, subs: string[]): Effect.Effect<unkno
     const y = trying(inner, subs.map(personOf));
     const trusted = [...new Set(subs.flatMap((sub) => personal.approvers(sub).map((d) => d.id)))];
     const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: null, personal: { subs, key } };
+    y.searching = true;
     inner.runner.fork(
       Effect.gen(function* () {
-        yield* Effect.forEach(trusted, (id) => seek(inner, y, id, inner.cloudSync.relays ?? [], hello), { concurrency: "unbounded", discard: true });
-        if (tryings.get(inner) !== y || y.state !== "finding") return;
-        y.state = y.met.size > 0 ? "code" : "none";
-        changed(inner, y);
+        yield* Effect.ensuring(
+          Effect.forEach(trusted, (id) => seek(inner, y, id, inner.cloudSync.relays ?? [], hello), { concurrency: "unbounded", discard: true }),
+          Effect.sync(() => { y.searching = false; }),
+        );
+        finishLooking(inner, y);
       }),
     );
     return null;
