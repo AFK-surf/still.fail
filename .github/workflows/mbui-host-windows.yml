@@ -78,16 +78,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
-      - name: Real HGLOBAL contracts
-        run: |
-          mkdir -p out/host/explorer
-          cl.exe -nologo -W3 -D_CRT_SECURE_NO_WARNINGS -I"$MOON_HOME/include" -Isrc/host scripts/win_drop_test.c -Foout/host/explorer/ -Feout/host/explorer/win_drop_test.exe user32.lib shell32.lib ole32.lib uuid.lib
-          out/host/explorer/win_drop_test.exe
       - name: Build retained node probe
         run: APP=drop_probe bash scripts/win.sh build
       - name: Drag from Explorer into the app
         timeout-minutes: 2
         run: |
+          mkdir -p out/host/explorer
           printf 'hello from Explorer\n' > out/host/explorer/mbui-drag-source
           code=0
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$PWD/test/host/explorer-drop-probe.ps1")" -Executable "$(cygpath -w "$PWD/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe")" -FilePath "$(cygpath -w "$PWD/out/host/explorer/mbui-drag-source")" -LogPath "$(cygpath -w "$PWD/out/host/explorer/probe.log")" -ShotPath "$(cygpath -w "$PWD/out/host/explorer/hover.png")" || code=$?
@@ -99,6 +95,12 @@ jobs:
         with:
           name: explorer-drop-probe
           path: apps/mbui/mbui/out/host/explorer/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-drop-exe
+          path: apps/mbui/mbui/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe
           if-no-files-found: ignore
 
   contracts:
