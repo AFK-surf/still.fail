@@ -94,8 +94,12 @@ test "a chat info opener changes the page at release with the same inputs at any
     assert_false(@sfdesk.chat_pops_open().0)
     opener_open(t)
     assert_eq(app.nav.depth(), depth)
+    assert_eq(t.focused().map(fn(n) { (n.role, n.label) }), Some((TextField, "发消息")),
+      msg="the opened chat receives its writing cursor at release")
     t.run_for(@ui.move_most_ms)
     opener_open(t)
+    assert_eq(t.focused().map(fn(n) { (n.role, n.label) }), Some((TextField, "发消息")),
+      msg="closing the info must not take the new chat's cursor away")
     assert_eq(app.nav.depth(), depth, msg="drawing does not add another page")
   }
   assert_eq(release_times[0], release_times[1])

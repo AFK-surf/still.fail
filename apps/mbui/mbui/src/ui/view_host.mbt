@@ -5332,8 +5332,11 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     Some(b) => {
       // A kept page can come back from laid_nowhere in this same change. Its nodes still carry the last layout's
       // out flags until it is laid out again; return the focus against the page this change actually leaves shown.
+      let before_layout = c.focus
       if tree_said_ids.contains(b) { t.laid_as_now() }
-      c.focus_moved(b)
+      // That layout can also make a newly opened page and give its field the initial cursor. Its request belongs
+      // to this change; closing the old layer must not replace it with the old page's return target.
+      if c.focus == 0 || c.focus == before_layout { c.focus_moved(b) }
     }
     None => ()
   }
