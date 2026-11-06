@@ -5,3 +5,5 @@ out/
 /engine/target/
 # made from screens/text-mac.textrec by moon (src/sfscreens/moon.pkg: pre-build)
 /src/sfscreens/text_mac.mbt
+# a dev build tape given again (scripts/tape.sh replay): made for the run, not kept
+/src/sfapp/tape_*_wbtest.mbt
