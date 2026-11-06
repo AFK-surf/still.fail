@@ -41,6 +41,36 @@ test "an old island's input tells a size-based event after its build" {
 }
 
 ///|
+test "an old island's accessibility action tells a size-based event once" {
+  let tall = @signals.signal(120.0)
+  let measured : Array[Double] = []
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
+  set_view_app(fn(root) {
+    let extent = root.box(fn(v) {
+      v.over(Is(true)).height(By(fn() { Some(tall.get()) })) |> ignore
+    })
+    old(root, fn(c) {
+      let id = c.id("accessible snapshot")
+      if c.action_asked(id, Activate) {
+        c.tell_input("accessible snapshot", fn() {
+          root.event_action(fn() { measured.push(extent.laid_size().1) })
+        })
+      }
+      let node = c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  })
+      c.semantics(node, Button, id~, label="Snapshot", actions=[Activate])
+    }).height(Is(Some(40.0))) |> ignore
+  })
+  t.draw()
+  let id = t.get(Button, label="Snapshot").id
+  tall.set(200.0)
+  assert_false(inputs_taken.val)
+  g().ask_action(id, Activate)
+  t.draw()
+  t.draw()
+  assert_eq(measured, [200.0])
+}
+
+///|
 test "an old hosted press snapshots both retained sizes at the original input time" {
   let first = @signals.signal(120.0)
   let second = @signals.signal(150.0)

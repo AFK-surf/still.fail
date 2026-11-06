@@ -167,6 +167,7 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
   hand_event()
   input_came()
+  inputs_taken.val = true
 }
 
 ///|
