@@ -12,7 +12,8 @@ fn draw_logging() -> Bool {
   if draw_log.val < 0 {
     draw_log.val = if @hostapi.env("MBUI_DRAW_LOG") == "1" { 1 } else { 0 }
   }
-  draw_log.val == 1 && fake.val is None
+  // (a real account's run keeps no draw log: nothing it says goes on the host's log, datasource.mbt)
+  draw_log.val == 1 && fake.val is None && content_kept()
 }
 
 ///|

@@ -134,6 +134,8 @@ fn view(c : @ui.Ctx) -> Unit {
 
 ///|
 fn main {
+  // (made up: the sample's stream; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   @hostapi.window_setup(480.0, 320.0, 720.0, 480.0)
   @ui.run("mbui streams", view)
 }

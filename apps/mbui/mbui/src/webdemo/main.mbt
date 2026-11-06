@@ -173,6 +173,8 @@ fn view(c : @ui.Ctx) -> Unit {
 
 ///|
 fn main {
+  // (made up: its own pages; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   @hostapi.window_setup(640.0, 480.0, 900.0, 640.0)
   @ui.run("mbui web views", view)
 }

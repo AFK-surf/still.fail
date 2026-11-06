@@ -44,5 +44,7 @@ let source : @shelf.Source = {
 
 ///|
 fn main {
+  // (made up: made-up books; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   @ui.run("书架", fn(c) { @shelf.view(c, source) })
 }

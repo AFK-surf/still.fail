@@ -485,11 +485,13 @@ final class Host {
     }
 
     static void log(String s) {
+        // (a credential's value put as "-" on logcat as on the file: both are read by more than the app)
+        s = unsecret(s);
         java.io.Writer f = logFile;
         if (f != null) {
             synchronized (Host.class) {
                 try {
-                    f.write(unsecret(s));
+                    f.write(s);
                     f.write('\n');
                     f.flush();
                 } catch (java.io.IOException e) {

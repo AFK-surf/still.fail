@@ -3,6 +3,8 @@
 
 ///|
 fn main {
+  // (made up: the pictures its caller gives, made up for a sample; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   // A caller preparing the app's screen uses the same model's dimensions and system bars as the component.
   let info = @film.arg("MBUI_MEDIA_INFO")
   if info != "" {

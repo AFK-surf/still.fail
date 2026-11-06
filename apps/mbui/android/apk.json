@@ -49,7 +49,7 @@
     "debug": {
       "applicationId": "fail.still.android.dev",
       "debuggable": true,
-      "placeholders": {"appHost": "app.still.fail", "appLabel": "still.fail dev", "mbuiEnv": "MBUI_DRAW_LOG=1;MBUI_TEXT_RECORD=1;MBUI_LOG_FILE=tape-{start}.log"}
+      "placeholders": {"appHost": "app.still.fail", "appLabel": "still.fail dev", "mbuiEnv": ""}
     }
   }
 }

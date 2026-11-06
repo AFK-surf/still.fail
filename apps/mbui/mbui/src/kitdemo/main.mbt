@@ -5,6 +5,8 @@
 
 ///|
 fn main {
+  // (made up: the components' gallery: made-up words and pictures (the host contracts' tapes, scripts/host_contract.sh); what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   @hostapi.window_setup(720.0, 520.0, 960.0, 720.0)
   let page = @ui.env("MBUI_SCREEN")
   // MBUI_TEXTCHECK=NAME: the kept run NAME's text asked of this host again (textcheck.mbt), in place of the gallery

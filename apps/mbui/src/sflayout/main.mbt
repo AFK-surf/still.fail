@@ -16,6 +16,8 @@ let step_ms : Double = 1000.0
 
 ///|
 fn main {
+  // (made up: a web story's made-up core; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   let web_path = @film.arg("LAYOUT_WEB")
   let out = @film.arg("LAYOUT_OUT")
   if web_path == "" || out == "" {

@@ -21,6 +21,8 @@ fn picture_said(p : @ui.ClipPicture) -> String {
 
 ///|
 fn main {
+  // (made up: a try of the device: what it is given is the person trying it's own, never an account's; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   let last = Ref::new("ready")
   let typed = StringBuilder::new()
   let read : Ref[@ui.ClipboardRead?] = Ref::new(None)

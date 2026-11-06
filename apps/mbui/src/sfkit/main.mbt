@@ -4,6 +4,8 @@
 
 ///|
 fn main {
+  // (made up: still.fail's parts over made-up data; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   // no core here: the real core's answers to its pure calls, kept (src/sfkept)
   @sf.kept_call.val = Some(@sfkept.answer)
   if @ui.env("MBUI_DARK") == "1" {

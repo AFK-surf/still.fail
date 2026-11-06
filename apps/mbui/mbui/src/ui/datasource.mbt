@@ -4,6 +4,12 @@
 // `start_tape`; MBUI_TEXT_RECORD's TEXTREC lines; the app's own dumps of its core, src/stillfail) writes only of a
 // made-up one: a real account's run keeps none of it, on the log, its file or a tape, whatever its environment says.
 // Real till the main says otherwise: what runs before it says (a package's start) keeps nothing either.
+//
+// Made up is said of what the app itself shows (a fixture's chats, a gallery's words): what a person gives a made-up
+// app (what is typed or pasted into it, MBUI_FIXTURE_JSON's screen, a picture handed to it) is kept as it came, so
+// only made-up words go into one that is kept. Kept by its host alone, not by this: where a host's native views are
+// put (Android's VIEWAT, VIEWPIC lines with MBUI_DRAW_LOG: their numbers and device pixels, no words), and the host's
+// own lines on its log.
 
 ///|
 /// Where what the app shows and is told comes from.

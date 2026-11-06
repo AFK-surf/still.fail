@@ -311,6 +311,10 @@ case $CMD in
     # the system's settings the run was drawn by (ENV: motion reduced, glass, dark, inset), which the Tester is given
     grep -a "ENV {" $O/run.log | tr -d '\r' || { echo "host_contract: the run kept no ENV line (the system's settings)"; exit 1; }
     echo "the run: $(grep -c DRAWHASH $O/run.log) frames, $(grep -c 'INPUT ' $O/run.log) inputs, $(grep -c TEXTREC $O/run.log) text answers"
+    # (each of them kept: a run that kept none of one (kitdemo not said to be made up: @ui.set_data_source) fails here)
+    for k in DRAWHASH 'INPUT ' TEXTREC; do
+      [ "$(grep -ac "$k" $O/run.log)" -gt 0 ] || { echo "host_contract: the run kept no $k line"; exit 1; }
+    done
     scripts/chk textrec $KEEP $O/run.log $NAME $PAGE - - $PLATFORM
     set -o pipefail
     { moon_test_native src/kitdemo/gallery/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt

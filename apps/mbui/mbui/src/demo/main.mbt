@@ -214,5 +214,7 @@ fn view(c : @ui.Ctx) -> Unit {
 
 ///|
 fn main {
+  // (made up: the prototype's 10,000 made-up messages; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   @ui.run("MoonBit UI 原型", view)
 }

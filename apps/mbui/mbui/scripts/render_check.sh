@@ -20,6 +20,9 @@ MBUI_BENCH=-1 MBUI_SCREEN=controls MBUI_WIN=960x720 MBUI_SCRIPT=shot MBUI_SHOT_N
 # the same run drawn again in a Tester from its tape: its last frame's draw list (each frame the host's: DLFRAMES)
 MBUI_DL_PRINT=1 MBUI_DL_TAPE=$PWD/$O/host.log moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null > $O/print.txt
 grep -a '^DLFRAMES' $O/print.txt || true
+# (frames of the host's drawn again: none means its run kept no tape, kitdemo not said to be made up: @ui.set_data_source)
+n=$(grep -a '^DLFRAMES' $O/print.txt | awk '{print $2}' | tail -1)
+[ "${n:-0}" -gt 0 ] || { echo "render_check: the host's run kept no frame to draw again (DLFRAMES ${n:-none})"; exit 1; }
 awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' $O/print.txt > $O/controls.dl
 [ -s $O/controls.dl ] || { echo "render_check: no draw list"; exit 1; }
 MBUI_DL=$PWD/$O/controls.dl MBUI_DL_PNG=$PWD/$O/render.png ./_build/native/release/build/render/render.exe

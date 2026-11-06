@@ -81,5 +81,7 @@ let source : @gallery.Source = {
 
 ///|
 fn main {
+  // (made up: made-up days of pictures; what a run of it shows, is typed and is told may be kept: @ui.set_data_source)
+  @ui.set_data_source(MadeUp)
   @ui.run("照片", fn(c) { @gallery.view(c, source) })
 }
