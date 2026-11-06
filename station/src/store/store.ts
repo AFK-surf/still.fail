@@ -214,9 +214,53 @@ export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
 export { CARD_BEFORE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
-// Keep the grouping on the recent covering index, but fetch result text only after the session's workspace is known.
-export const LATEST_DECISIONS_SCOPED = `WITH latest AS MATERIALIZED (
+const LATEST_DECISIONS_SCOPED_FALLBACK = `WITH latest AS MATERIALIZED (
   SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 GROUP BY +session
+)
+SELECT d.id, d.session, d.created_at, d.result FROM latest l
+LEFT JOIN sessions s ON s.key = l.session
+CROSS JOIN decision_checks d ON d.id = l.id
+WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
+ORDER BY d.created_at, d.id`;
+// With a small non-home workspace, seek its sessions by connect and inspect only the last few checks of each. If a
+// check has an out-of-order time beyond that bound, or the workspace is large, retain the exact recent-index grouping.
+// Home also uses the grouping because it includes checks for sessions no longer in the sessions table.
+// The fallback's CROSS JOIN puts mode outside the index loop, so a disabled fallback does not traverse recent checks.
+const DECISION_SCOPE_BATCH = 64;
+export const LATEST_DECISIONS_SCOPED = `WITH RECURSIVE
+recent AS MATERIALIZED (
+  SELECT id FROM decision_checks INDEXED BY decision_checks_lately WHERE ?3 = 0 AND created_at >= ?1 LIMIT ${DECISION_SCOPE_BATCH + 1}
+),
+connects(connect, n) AS (
+  SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1), 1
+  WHERE (SELECT COUNT(*) FROM recent) = ${DECISION_SCOPE_BATCH + 1}
+  UNION ALL
+  SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1), n + 1
+  FROM connects c WHERE c.connect IS NOT NULL AND n < ${DECISION_SCOPE_BATCH + 1}
+),
+chosen AS MATERIALIZED (
+  SELECT s.key FROM connects c CROSS JOIN sessions s INDEXED BY sessions_by_connect
+  WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws = ?2 LIMIT ${DECISION_SCOPE_BATCH + 1}
+),
+lookups AS MATERIALIZED (
+  SELECT c.key, (SELECT id FROM (
+    SELECT id, created_at FROM decision_checks INDEXED BY decision_checks_session
+    WHERE session = c.key ORDER BY id DESC LIMIT ${DECISION_SCOPE_BATCH + 1}
+  ) WHERE created_at >= ?1 ORDER BY id DESC LIMIT 1) AS id
+  FROM chosen c WHERE (SELECT COUNT(connect) FROM connects) <= ${DECISION_SCOPE_BATCH} AND (SELECT COUNT(*) FROM chosen) <= ${DECISION_SCOPE_BATCH}
+),
+mode AS MATERIALIZED (
+  SELECT (SELECT COUNT(*) FROM recent) < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
+    OR (SELECT COUNT(*) FROM chosen) > ${DECISION_SCOPE_BATCH} OR EXISTS (
+      SELECT 1 FROM lookups l WHERE l.id IS NULL AND EXISTS (
+        SELECT 1 FROM decision_checks INDEXED BY decision_checks_session WHERE session = l.key ORDER BY id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}
+      )
+    ) AS use_global
+),
+latest AS MATERIALIZED (
+  SELECT MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1 GROUP BY +session
+  UNION ALL
+  SELECT id, key AS session FROM lookups WHERE id IS NOT NULL AND NOT (SELECT use_global FROM mode)
 )
 SELECT d.id, d.session, d.created_at, d.result FROM latest l
 LEFT JOIN sessions s ON s.key = l.session
@@ -1682,8 +1726,18 @@ export class Store {
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
-    const rows = viewer === undefined ? this.#all(LATEST_DECISIONS, since)
-      : this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, viewer.home !== false ? 1 : 0);
+    let rows: Json[];
+    if (viewer === undefined) rows = this.#all(LATEST_DECISIONS, since);
+    else if (viewer.home !== false) rows = this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
+    else {
+      try {
+        rows = this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately)$/.test(message)) throw error;
+        rows = this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 0);
+      }
+    }
     return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
