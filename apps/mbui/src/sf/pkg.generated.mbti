@@ -1598,6 +1598,8 @@ pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : 
 
 pub fn panel_note(@ui.Ctx, String) -> Unit
 
+pub fn panel_note_node(@view.View, () -> String) -> @view.View
+
 pub let panel_offset : Double
 
 pub fn panel_opens_up() -> Bool
