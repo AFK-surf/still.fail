@@ -382,7 +382,7 @@ pub fn mine_landing(String) -> MineLanding?
 
 pub fn model_triple(@ui.Ctx, @sfbase.Source, String, String, up? : Bool, page? : @json.Json?, small? : Bool, floating? : Bool, saved? : String) -> Unit
 
-pub fn model_triple_node(@view.View, @sfbase.Source, String, String, saved? : String, saved_live? : () -> String, page? : () -> @json.Json?, small? : Bool, floating? : Bool) -> Unit
+pub fn model_triple_node(@view.View, @sfbase.Source, String, String, saved? : String, saved_live? : () -> String, page? : () -> @json.Json?, small? : Bool, floating? : Bool, owner? : ModelTripleOwner) -> Unit
 
 pub fn model_triple_owner(@view.View) -> ModelTripleOwner
 

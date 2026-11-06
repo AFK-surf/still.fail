@@ -51,7 +51,7 @@ pub fn ModelTripleOwner::close(owner : ModelTripleOwner) -> Unit {
 /// The control for the pick of `of` on `station`. It is absent until the pick is read, as the old view's is.
 /// `page` supplies a page's own live pick instead of reading the topic; `small` and `floating` select the composer's
 /// row and glass-capsule appearances. `saved_live` supplies the current toast when it can change, such as with the
-/// language; otherwise `saved` is used. The same presenter is opened in each case.
+/// language; otherwise `saved` is used. `owner` can be shared across replacement controls on the same page.
 pub fn model_triple_node(
   parent : @view.View,
   src : Source,
@@ -62,6 +62,7 @@ pub fn model_triple_node(
   page? : () -> Json?,
   small? : Bool = false,
   floating? : Bool = false,
+  owner? : ModelTripleOwner,
 ) -> Unit {
   let pick : () -> Json? = match page {
     Some(read) => read
@@ -73,7 +74,8 @@ pub fn model_triple_node(
   }
   parent.show(fn() { pick() is Some(Object(_)) }, fn(slot) {
     slot.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-    let (control, press) = triple_control_node(slot, src, fn() { station }, of, pick, page is Some(_), small, floating, fn() { false }, saved_at_open)
+    let (control, press) = triple_control_node(slot, src, fn() { station }, of, pick, page is Some(_), small, floating,
+      fn() { false }, saved_at_open, owner?=owner)
     // A fixture can ask before the pick arrives; take the request when this control can open it.
     control.reacts(fn() { (triple.asked.get(), items(pick(), "options").length() > 0, doing("pick.save/" + station + "/" + of)) }, fn(_) {
       if @signals.untracked(fn() { triple.asked.get() }) == station + "\u{1}" + of {

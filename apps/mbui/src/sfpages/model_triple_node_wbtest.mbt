@@ -366,3 +366,38 @@ test "model triple node: shared owner outlives a replacement control and closes 
   t.draw()
   assert_false(@sf.presented_open_of(next), msg="the owner's actual lifetime closes the panel")
 }
+
+///|
+test "model triple node: the public control can share its page's owner" {
+  @sfbase.reset()
+  triple_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  let wide = @signals.signal(false)
+  let pick = triple_test_pick("Alpha", "high", "Account A")
+  let owner_at : Ref[ModelTripleOwner?] = Ref(None)
+  let calls : Array[String] = []
+  let src = @sfbase.made_source(call=fn(name, _, done) { calls.push(name); done(Ok({})) })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=1000.0, h=700.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let owner = model_triple_owner(root)
+    owner_at.val = Some(owner)
+    root.pick(fn() { wide.get() }, fn(row, _) {
+      row.offset(Is((50.0, 120.0))).width(Is(Some(600.0))).height(Is(Some(44.0))) |> ignore
+      model_triple_node(row, src, "ws/st", "session:one", page=fn() { Some(pick) }, owner~)
+    })
+    @ui.old(root, fn(c) { @sf.presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    @sf.presented_nodes(root)
+  })
+  t.draw()
+  t.click(Button, label=triple_test_label("Alpha", "high", "Account A"))
+  let serial = @sf.last_presented()
+  wide.set(true)
+  t.draw()
+  assert_true(@sf.presented_open_of(serial), msg="replacing a public control keeps its owner's panel")
+  assert_eq(calls, ["pick.set"])
+  owner_at.val.unwrap().close()
+  assert_false(@sf.presented_open_of(serial))
+}
