@@ -255,8 +255,9 @@ fn flight_quote_node(
         None => ()
       }
   }
-  // The composer's close control and empty comment hint leave with the card, on the original leave path.
-  parent.show(fn() { f.gone.shown(parent) < 1.0 }, fn(leaving) {
+  // The composer's close control and empty comment hint leave with the card, on the original leave path: let go once
+  // that way is over at its moment (the logic's), never by where a frame is drawn.
+  parent.show(fn() { !f.gone.over() }, fn(leaving) {
     leaving.over(Is(true)).alpha(By(fn() { 1.0 - f.gone.shown(leaving) })) |> ignore
     let side = @sf.corner_remove_side
     let reach = @sf.corner_remove_reach(@sf.composer_inner())
