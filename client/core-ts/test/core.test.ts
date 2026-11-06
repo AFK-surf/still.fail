@@ -388,6 +388,10 @@ test("UI fault spans never include an arbitrary fault message", async () => {
     call(core, ui, 6, "client.error", { source: "ui_fault", message: "tree field reused" });
     call(core, ui, 7, "client.error", { source: "ui_fault", message: "scene layer conflict" });
     call(core, ui, 8, "client.error", { source: "ui_fault", message: "panel cannot be presented" });
+    call(core, ui, 9, "client.error", { source: "ui_fault", message: "layout marked during layout" });
+    call(core, ui, 10, "client.error", { source: "ui_fault", message: "layout pass limit" });
+    call(core, ui, 11, "client.error", { source: "ui_fault", message: "layout box fault" });
+    call(core, ui, 12, "client.error", { source: "ui_fault", message: "layout box fault /sentinel-layout/secret.txt" });
     await host.time.pass(0);
     core.inner.tracer.flush();
     await host.time.pass(0);
@@ -399,8 +403,11 @@ test("UI fault spans never include an arbitrary fault message", async () => {
       ["ui_fault", "tree field reused"],
       ["ui_fault", "scene layer conflict"],
       ["ui_fault", "panel cannot be presented"],
+      ["ui_fault", "layout marked during layout"],
+      ["ui_fault", "layout pass limit"],
+      ["ui_fault", "layout box fault"],
     ]);
-    assert.ok([...core.inner.reported.keys()].every((key) => !key.includes("sentinel-private-folder") && !key.includes("another-secret")));
+    assert.ok([...core.inner.reported.keys()].every((key) => !key.includes("sentinel-private-folder") && !key.includes("another-secret") && !key.includes("sentinel-layout")));
   } finally { core.close(); }
 });
 

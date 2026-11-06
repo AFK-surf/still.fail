@@ -70,7 +70,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "clientError": {
         // UI fault text can contain editor keys made from file paths. Accept only the categories produced by
         // reports.mbt, including when an older app sends the original text directly to a newer core.
-        const uiFaults = ["UI fault", "editor field reused", "editor field already in tree", "tree field reused", "scene layer conflict", "panel cannot be presented"];
+        const uiFaults = ["UI fault", "editor field reused", "editor field already in tree", "tree field reused", "scene layer conflict", "layout marked during layout", "layout pass limit", "layout box fault", "panel cannot be presented"];
         const message = call.source === "ui_fault" && !uiFaults.includes(call.message) ? "UI fault" : call.message;
         const key = `${call.source}\u0000${message}`;
         const now = inner.host.nowMs();
