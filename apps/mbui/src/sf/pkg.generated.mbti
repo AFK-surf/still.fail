@@ -1326,6 +1326,10 @@ pub fn nav_back(@ui.Ctx, String, String, max_w? : Double) -> Bool
 
 pub fn nav_bar(@ui.Ctx, String, String, String, sub? : () -> Unit, trailing? : () -> Unit, back_max? : Double, bg? : Int64, top? : Double) -> Bool
 
+pub fn nav_bar_node(@view.View, () -> String, () -> String, () -> Unit, sub? : (@view.View) -> Unit, trailing? : (@view.View) -> Unit, back_max? : () -> Double, bg? : () -> Int64, top? : () -> Double) -> @view.View
+
+pub fn nav_bar_subtitle_node(@view.View, () -> String) -> @view.View
+
 pub let nav_button_side : @ui.Len
 
 pub let nav_fade : @motion.Spec
