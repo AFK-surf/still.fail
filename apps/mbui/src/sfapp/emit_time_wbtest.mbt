@@ -79,11 +79,12 @@ test "two queued answers of one agent keep their handoff and return with no inte
         }
       }
       t.touch_at(0, -100.0, -100.0, at)
-      seen.push((em.current.map(fn(p) { p.seq }), em.current.map(fn(p) { p.pose }), em.current.map(fn(p) { p.clock.end() }).unwrap_or(-1.0), em.current.bind(fn(p) { p.from })))
+      seen.push((em.current.map(fn(p) { p.seq }), em.current.map(fn(p) { p.pose }), em.current.map(fn(p) { p.clock.end() }).unwrap_or(-1.0), em.current.bind(fn(p) { p.from_at })))
       t.touch_at(2, -100.0, -100.0, at)
     }
-    println("queued answer timeline \{hz} Hz: handoff \{handed_at}, phases \{seen}, frames \{t.host_frames().map(fn(f) { f.at })}")
-    if hz == 0 { assert_eq(t.host_frames().length(), 0) }
+    let frames = t.host_frames()
+    println("queued answer timeline \{hz} Hz: handoff \{handed_at}, phases \{seen}, frames \{frames.map(fn(f) { f.at })}")
+    if hz == 0 { assert_eq(frames.length(), 0) }
     assert_true(em.current is None && em.queue.is_empty())
     assert_true(em.done.contains("171"))
     results.push(seen)
@@ -121,8 +122,9 @@ test "returning to a retained chat resumes reply deadlines without waiting for a
       }
       t.touch_at(0, -100.0, -100.0, returned_at + 1.0)
       t.touch_at(2, -100.0, -100.0, returned_at + 1.0)
-      println("answer returned at \{width}, \{hz} Hz: current \{em.current.map(fn(turn) { turn.pose })}, queued \{em.queue.length()}, revealing \{em.out_at.length()}, frames \{t.host_frames().length()}")
-      if hz == 0 { assert_eq(t.host_frames().length(), 0) }
+      let frames = t.host_frames()
+      println("answer returned at \{width}, \{hz} Hz: current \{em.current.map(fn(turn) { turn.pose })}, queued \{em.queue.length()}, revealing \{em.out_at.length()}, frames \{frames.length()}")
+      if hz == 0 { assert_eq(frames.length(), 0) }
       assert_true(em.current is None && em.queue.is_empty() && em.out_at.is_empty(),
         msg="returning to the page must finish its expired phases before any following picture, at \{width}, \{hz} Hz")
     }
