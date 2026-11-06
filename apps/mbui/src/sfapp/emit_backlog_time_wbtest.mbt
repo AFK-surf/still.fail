@@ -96,6 +96,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       }
       println("backlog returned \{width}, \{hz} Hz at \{returned_at}: current \{em.current.map(fn(turn) { (turn.seq, turn.pose, turn.clock.end()) })}, queue \{em.queue.map(fn(q) { q.0 })}, done \{em.done.length()}, revealing \{em.out_at.length()}, due \{tree.due_count()}, frames \{t.host_frames().length()}")
       if hz == 0 { assert_eq(t.host_frames().length(), 0) }
+      assert_true(t.host_frames().iter().all(fn(frame) { frame.at < returned_at }), msg="returning has no following picture in any history")
       assert_true(shown() && physical_equal(rd.shown_by.unwrap(), shown), msg="returning keeps the same retained page")
       assert_true(em.current is None && em.queue.is_empty() && em.out_at.is_empty(), msg="every expired reply finishes before the next picture")
       for i in 0..<agents.length() { assert_true(em.done.contains("\{171 + i}")) }

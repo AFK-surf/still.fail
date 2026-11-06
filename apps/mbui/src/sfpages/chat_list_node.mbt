@@ -1034,12 +1034,14 @@ pub fn chat_list_node(
     match last_sighted.val { Some(s) => read_sighted(s); None => () }
   })
   // The old list offered the way back only after layout, more than 120 points from its end, except while gliding to it.
+  // Following the end is already the reader's intent. Newly revealed rows can temporarily put the last laid-out
+  // end outside the window; that does not offer a way back or start a fade when a later layout catches up.
   // A page short of the chat's newest page always offers it, even when the list itself is at its end.
   let newer = fn() { view().map(fn(cv) { cv.newer }).unwrap_or(false) }
   let jump_shown = fn() {
     let below = scroll.end_below_told()
     let going_to_end = scroll.to_end_told()
-    newer() || (!shown.get().is_empty() && below > 120.0 && !going_to_end)
+    newer() || (!follows.get() && !shown.get().is_empty() && below > 120.0 && !going_to_end)
   }
   v.reacts(fn() { (jump_shown(), follows.get(), newer()) }, fn(now) {
     rd0.jump = now.0
