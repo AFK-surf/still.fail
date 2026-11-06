@@ -25,3 +25,32 @@ test "drawn_now in an event reads where a node moved by the clock is at the even
   assert_eq(behind, Some(40.0))
   assert_eq(ahead, behind)
 }
+
+///|
+/// What a reaction to whether the drawing is past 45 is told, a frame sampled for 50 with the host at 0, then an event
+/// at 40 asking where a node is drawn now or not asking, and then the same asked in no event.
+fn told_past_45(asks : Bool) -> Array[String] {
+  let told : Array[String] = []
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root.box(fn(v) {
+      v.width(Is(Some(100.0))).height(Is(Some(40.0))).offset(By(fn() { (v.drawn_at(), 0.0) })) |> ignore
+      v.reacts(fn() { v.drawn_past(45.0) }, fn(past) { told.push(past.to_string()) })
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.event(40.0, fn() { if asks { page.val.unwrap().drawn_now() |> ignore } })
+  told.push("event done")
+  if asks {
+    page.val.unwrap().drawn_now() |> ignore
+  }
+  told
+}
+
+///|
+test "drawn_now, in an event or in none, tells nothing to what reacts to the drawing's moment" {
+  assert_eq(told_past_45(true), told_past_45(false))
+}
