@@ -449,7 +449,6 @@
       "src/sfpages/chat_composer_node.mbt": 2,
       "src/sfpages/chat_list_node.mbt": 5,
       "src/sfpages/chat_ref.mbt": 1,
-      "src/sfpages/chat_ref_node.mbt": 1,
       "src/sfpages/composer.mbt": 1,
       "src/sfpages/decision_node.mbt": 1,
       "src/sfpages/history_steps.mbt": 1,
