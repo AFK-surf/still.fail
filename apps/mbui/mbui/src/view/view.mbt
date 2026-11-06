@@ -112,8 +112,13 @@ fn[T] not_roomed() -> T {
 
 ///|
 /// What node `at` (made `gen`) works out of how big `of` is laid out (Live's Roomed), told as `of` is (its flex node's
-/// on_room), each in the order said.
+/// on_room), each in the order said; and at once where `of` was sized already (a node made under it as it is laid out,
+/// a list's row, after it was told its room: the room it was told then, in the same layout).
 fn Tree::roomed_add(self : Tree, of : Int, at : Int, gen : Int, run : (Double, Double) -> Unit) -> Unit {
+  match self.nodes[of].flex.room_now() {
+    Some((w, h)) => run(w, h)
+    None => ()
+  }
   match self.roomed.get(of) {
     Some(all) => all.push((at, gen, run))
     None => {
@@ -2363,7 +2368,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         if !n.live || n.gen != gen {
           return
         }
-        let v = watch.read(fn() { f(w, h) })
+        // (its own binding: what it reads laid out as told last, wherever its holder is laid out from, as By's: reads_own)
+        let v = reads_own(fn() { watch.read(fn() { f(w, h) }) })
         if last.val != Some(v) {
           last.val = Some(v)
           apply(v)

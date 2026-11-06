@@ -1902,7 +1902,7 @@ pub struct ListRows[T] {
 pub fn[T] ListRows::came(Self[T], String) -> Double?
 pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double, grown? : Bool) -> Unit
 pub fn[T] ListRows::in_node(Self[T], @view.View, () -> Array[T], (T) -> String, (T) -> String, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, own? : (T) -> Bool) -> NodeRows[T]
-pub fn[T] ListRows::in_node_indexed(Self[T], @view.View, @view.AnchoredSource[String], (Int32) -> T, () -> Array[RowsChange[T]], (String) -> Int32?, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, lead_in_layout? : (T, Int32) -> () -> Double, own? : (T) -> Bool) -> NodeRowsIndexed[T]
+pub fn[T] ListRows::in_node_indexed(Self[T], @view.View, @view.AnchoredSource[String], (Int32) -> T, () -> Array[RowsChange[T]], (String) -> Int32?, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, lead_in_layout? : (T, Int32) -> (Double) -> Double, own? : (T) -> Bool) -> NodeRowsIndexed[T]
 pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
@@ -2062,7 +2062,7 @@ pub struct NodeRowsIndexed[T] {
   source : @view.AnchoredSource[String]
   item_of : (String) -> (T, Int32)?
   room : (String, Double) -> @view.ListRoom
-  room_now : () -> (String, Double) -> @view.ListRoom
+  room_now : () -> (String, Double, Double) -> @view.ListRoom
   moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool

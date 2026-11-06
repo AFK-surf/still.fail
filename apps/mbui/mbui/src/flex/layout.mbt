@@ -551,10 +551,45 @@ fn size_node(
   cb_h : Double,
   perform : Bool,
 ) -> Double {
+  // (the room it is sized in, while it is: what is said by it as what it holds is sized in this call, a probe's or
+  // not, told that; once laid out, not a probe, the room it was laid out in, told what is said by it after: Node's
+  // room_now)
+  let room_w = if known(kw) { kw } else { aw }
+  let room_h = if known(kh) { kh } else { ah }
+  let (was_in, was_w, was_h) = (node.sizing, node.sizing_w, node.sizing_h)
+  node.sizing = true
+  node.sizing_w = room_w
+  node.sizing_h = room_h
+  if perform {
+    node.room_said = true
+    node.room_w = room_w
+    node.room_h = room_h
+  }
+  let size = size_node_in(node, kw, kh, aw, ah, cb_w, cb_h, perform, room_w, room_h)
+  node.sizing = was_in
+  node.sizing_w = was_w
+  node.sizing_h = was_h
+  size
+}
+
+///|
+/// size_node's work, in the room it worked out.
+fn size_node_in(
+  node : Node,
+  kw : Double,
+  kh : Double,
+  aw : Double,
+  ah : Double,
+  cb_w : Double,
+  cb_h : Double,
+  perform : Bool,
+  room_w : Double,
+  room_h : Double,
+) -> Double {
   touch(node)
   // (what it holds said by its room: told it before what it holds is laid out, Node's on_room)
   match node.on_room {
-    Some(f) => f(if known(kw) { kw } else { aw }, if known(kh) { kh } else { ah })
+    Some(f) => f(room_w, room_h)
     None => ()
   }
   if perform {
