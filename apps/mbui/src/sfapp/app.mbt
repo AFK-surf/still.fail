@@ -18,6 +18,7 @@ fn init {
   // 浏览文件夹 of a preset's folders (sfpages presets.mbt): the files' page's picker, inside its dialog
   @sfbase.folder_browse_open.val = @sfdesk.folder_browse_open
   @sfbase.folder_browse_body.val = @sfdesk.folder_browse_body
+  @sfbase.folder_browse_node.val = @sfdesk.folder_browse_node
   @sfbase.folder_browse_here.val = @sfdesk.folder_browse_here
   @sfbase.folder_browse_close.val = @sfdesk.folder_browse_close
   // an agent's card's jobs (sfpages): the chat's services and jobs as the screen shows them

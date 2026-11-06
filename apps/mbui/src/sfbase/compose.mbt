@@ -443,6 +443,12 @@ pub let folder_browse_open : Ref[(String) -> Unit] = Ref(fn(_) {  })
 pub let folder_browse_body : Ref[(@ui.Ctx, Source, String) -> Unit] = Ref(fn(_, _, _) {  })
 
 ///|
+/// The same picker as nodes, for a panel made in the window's tree. Open its station before making the body;
+/// on a station change open the new one and make its body again, and close it as the panel is left.
+// kept across runs: what the app says once as it starts
+pub let folder_browse_node : Ref[(@view.View, Source, String) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
 // kept across runs: what the app says once as it starts
 pub let folder_browse_here : Ref[() -> String] = Ref(fn() { "" })
 

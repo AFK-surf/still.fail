@@ -662,6 +662,8 @@ pub let folder_browse_close : @ref.Ref[() -> Unit]
 
 pub let folder_browse_here : @ref.Ref[() -> String]
 
+pub let folder_browse_node : @ref.Ref[(@view.View, Source, String) -> Unit]
+
 pub let folder_browse_open : @ref.Ref[(String) -> Unit]
 
 pub let follow_margin : Double
