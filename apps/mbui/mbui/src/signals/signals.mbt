@@ -55,6 +55,16 @@ priv struct Run {
   /// how many computeds are being worked out now, one inside another: what is set meanwhile (a getter's own
   /// bookkeeping) told, but nothing that follows it run till the outermost is worked out (computed_done)
   mut computing : Int
+  /// how deep in what holds effects back (effects_held), and the effects told meanwhile, in the order told
+  mut effects_held : Int
+  held_effects : Array[ReactiveNode]
+  /// how deep in a sample (sampled): each computed read worked out anew, its value kept as it was, nothing followed
+  /// through it
+  mut sampling : Int
+  /// which sample is under way (sampled), each its own
+  mut sample : Int
+  /// the watches read in it, told again as it is over
+  sampled_reads : Array[Watch]
 }
 
 ///|
@@ -79,6 +89,11 @@ let run : Run = {
   flush_trail: [],
   running: None,
   computing: 0,
+  effects_held: 0,
+  held_effects: [],
+  sampling: 0,
+  sample: 0,
+  sampled_reads: [],
 }
 
 ///|
@@ -103,6 +118,9 @@ priv struct ComputedState[T] {
   mut value : T?
   getter : (T?) -> T
   same : ((T, T) -> Bool)?
+  /// what it came to in the sample under way (sampled): which sample, and its value there
+  mut sample : Int
+  mut sampled : T?
 }
 
 ///|
@@ -300,7 +318,7 @@ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
 ///|
 /// A computed: `getter` worked out (given what it made last) as it is read after what it read changed.
 pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
-  let state : ComputedState[T] = { value: None, getter, same }
+  let state : ComputedState[T] = { value: None, getter, same, sample: 0, sampled: None }
   Computed(
     ReactiveNode::new(
       NONE,
@@ -629,6 +647,11 @@ fn flush() -> Unit {
     let effect = run.queued[run.notify_index].unwrap()
     run.queued[run.notify_index] = None
     run.notify_index += 1
+    // (an effect told while effects are held: run once they are let go, if what it read is otherwise then)
+    if run.effects_held > 0 && effect.kind is EffectNode {
+      run.held_effects.push(effect)
+      continue
+    }
     run_effect(effect)
   }
   run.notify_index = 0
@@ -699,6 +722,20 @@ pub fn after_all_flushed(f : () -> Unit) -> Unit {
 fn[T] Computed::read_value(self : Computed[T]) -> T {
   let node = self.0
   let state = self.1
+  // (in a sample: worked out anew from what it reads as that is read then, what it keeps and who follows it as they were)
+  if run.sampling > 0 {
+    // (once in each sample, however many read it)
+    if state.sample == run.sample && state.sampled is Some(v) {
+      return v
+    }
+    let sub = run.active_sub
+    run.active_sub = None
+    let v = (state.getter)(state.value)
+    run.active_sub = sub
+    state.sample = run.sample
+    state.sampled = Some(v)
+    return v
+  }
   let flags = node.flags
   let stale = if (flags & DIRTY) != 0 {
     true
@@ -988,6 +1025,10 @@ priv struct WatchOwn {
   marked_by : Ref[SourceLoc?]
   /// where it was made (watch's caller), said where it goes round with an effect (effect_round)
   at : SourceLoc
+  /// whether it reads to draw alone (Watch::reads_to_draw): what it reads worked out as a sample asks (sampled)
+  draws : Ref[Bool]
+  /// what it draws worked out at a sampled moment and set (Watch::draws_by, Watch::sample)
+  drawn : Ref[() -> Unit]
 }
 
 ///|
@@ -1022,7 +1063,16 @@ pub fn watch(changed : () -> Unit, loc~ : SourceLoc = _) -> Watch {
     }
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None), at: loc }
+  let own : WatchOwn = {
+    told,
+    marked: Ref(None),
+    stale,
+    gone: Ref(false),
+    marked_by: Ref(None),
+    at: loc,
+    draws: Ref(false),
+    drawn: Ref(fn() { }),
+  }
   let node = ReactiveNode::new(NONE, WatchNode, own=WatchOwned(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
@@ -1043,6 +1093,10 @@ pub fn watch(changed : () -> Unit, loc~ : SourceLoc = _) -> Watch {
 /// was reading before it does not read what it reads.
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   let e = self.node
+  // (read in a sample: told again as it is over, to follow what it reads through computeds again, sampled)
+  if run.sampling > 0 {
+    run.sampled_reads.push(self)
+  }
   if watch_reading.depth == 0 {
     watch_reading.sets.clear()
   }
@@ -1242,4 +1296,123 @@ pub fn afters_held(f : () -> Unit) -> Unit {
   f()
   run.afters_held -= 1
   afters_drained()
+}
+
+///|
+/// `f` done with the effects told meanwhile held back (`effect`'s; a watch is told as ever, what is computed worked out
+/// as ever), and what waits for a change told whole after them: run as `f` is over, each that what it read is then otherwise than as it last ran, in the order told. For a
+/// look at another moment set and set back (a view's look at an event's moment: what reads it for its own sake not told
+/// of the look). An effect whose read changed and came back as it was can run again, reading it as it was.
+pub fn[T] effects_held(f : () -> T) -> T {
+  // (and what waits for a change told whole (after_flush, after_all_flushed): done once the effects held are run, as
+  // it says, after them)
+  run.effects_held += 1
+  run.afters_held += 1
+  let v = f()
+  run.effects_held -= 1
+  if run.effects_held == 0 && run.held_effects.length() > 0 {
+    let held = run.held_effects.copy()
+    run.held_effects.clear()
+    start_batch()
+    for e in held {
+      run_effect(e)
+    }
+    end_batch()
+  }
+  run.afters_held -= 1
+  afters_drained()
+  v
+}
+
+///|
+/// Said of a watch by what made it: it reads to draw alone (a property worked out from what it reads, drawn), nothing
+/// done by what it reads; what a sample tells again (Signal::drawn_by, sampled).
+pub fn Watch::reads_to_draw(self : Watch) -> Watch {
+  match self.node.own {
+    WatchOwned(o) => o.draws.val = true
+    _ => ()
+  }
+  self
+}
+
+///|
+/// It reads to draw (Watch::reads_to_draw), and what it draws is worked out at a sampled moment and set by `sample`
+/// (Watch::sample): a paint's or a place's, sampled at the moment a frame is shown.
+pub fn Watch::draws_by(self : Watch, sample : () -> Unit) -> Watch {
+  match self.node.own {
+    WatchOwned(o) => {
+      o.draws.val = true
+      o.drawn.val = sample
+    }
+    _ => ()
+  }
+  self
+}
+
+///|
+/// What it draws worked out at the moment sampled and set (Watch::draws_by); stopped, nothing.
+pub fn Watch::sample(self : Watch) -> Unit {
+  match self.node.own {
+    WatchOwned(o) if !o.gone.val => (o.drawn.val)()
+    _ => ()
+  }
+}
+
+///|
+/// The watches that read the signal to draw (Watch::reads_to_draw), now, through every computed that reads it and
+/// each that reads those: what is followed by what it read last.
+pub fn[T] Signal::drawn_by(self : Signal[T]) -> Array[Watch] {
+  let out = []
+  let seen : Array[ReactiveNode] = []
+  let todo = [self.0]
+  while todo.pop() is Some(n) {
+    let mut l = n.subs
+    while l is Some(link) {
+      let sub = link.sub
+      match (sub.kind, sub.own) {
+        (ComputedNode, _) =>
+          // (each computed once, however many ways it is reached)
+          if !seen.iter().any(fn(m) { physical_equal(m, sub) }) {
+            seen.push(sub)
+            todo.push(sub)
+          }
+        (WatchNode, WatchOwned(o)) if o.draws.val && !o.gone.val => out.push({ node: sub, stale: o.stale, set_by: [] })
+        _ => ()
+      }
+      l = link.next_sub
+    }
+  }
+  out
+}
+
+///|
+/// The watch told as what it read had changed (stale, its maker's `changed` called), whether it did or not: to be read
+/// anew. Told already and not read since: nothing more.
+pub fn Watch::tell(self : Watch) -> Unit {
+  match self.node.own {
+    WatchOwned(o) if !o.gone.val => (o.told)()
+    _ => ()
+  }
+}
+
+///|
+/// `f` done as a sample (a view's look at another moment than the one drawn): each computed read in it worked out anew
+/// from what it reads as that reads then, what it keeps, what follows it and what it follows left as they were; what
+/// reads it in `f` follows nothing through it: each watch read in `f` told again as it is over (Watch::tell), to be read
+/// anew and follow it again.
+pub fn[T] sampled(f : () -> T) -> T {
+  if run.sampling == 0 {
+    run.sample += 1
+  }
+  run.sampling += 1
+  let v = f()
+  run.sampling -= 1
+  if run.sampling == 0 && run.sampled_reads.length() > 0 {
+    let read = run.sampled_reads.copy()
+    run.sampled_reads.clear()
+    for w in read {
+      w.tell()
+    }
+  }
+  v
 }

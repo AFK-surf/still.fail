@@ -584,6 +584,16 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   self.owns(fn() { s.extent_told = fn() { } }) |> ignore
   let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
     held.height_share(Is(1.0)) |> ignore
+    // (laid out where it is scrolled at the logic's moment; a frame shown after it drawn where it is scrolled then, the
+    // way between drawn as a place, nothing laid out for it: retained.md rule 10)
+    held.drawn_off(By(fn() {
+      let d = if s.goes_on() {
+        s.where_at(self.tree.drawn_at()) - s.where_at(self.tree.clock.get())
+      } else {
+        0.0
+      }
+      (0.0, if from_end { d } else { -d })
+    })) |> ignore
     held.layout_box(
       By(fn() {
         let x = s.drawn(self.tree)

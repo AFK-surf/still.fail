@@ -773,6 +773,14 @@ pub struct Tree {
   // The moment a frame or the clock brings the tree to while it does (Tree::brought, Tree::at), -1 outside one: what
   // is told meanwhile (a size laid out otherwise, a moment come) is of it
   mut bringing_at : Double
+  // (the moment the frame being drawn is to be shown (Tree::at), at or after the logic's: what its paint and places are
+  // sampled at, never its layout (retained.md rule 10); -1: none said)
+  mut shown : Double
+  // (while paint and places are sampled at the moment shown: that moment; what each sampled set restored, the logic's)
+  mut sample : Double?
+  sample_restores : Array[() -> Unit]
+  // (a frame under way, Tree::frame: what samples at the moment shown)
+  mut framing : Bool
   // The layout pass under way in one (Tree::laid_out), 0 outside one; what it told otherwise, where noted
   // (Tree::told_noted)
   mut laid_passes : Int
@@ -1147,6 +1155,10 @@ pub fn Tree::new(
     time,
     cause_at: -1.0,
     bringing_at: -1.0,
+    shown: -1.0,
+    sample: None,
+    sample_restores: [],
+    framing: false,
     laid_passes: 0,
     owed_passes: {},
     moment_passes: 0,
@@ -1696,7 +1708,12 @@ pub fn Tree::logic_at(self : Tree) -> Double {
 /// The moment what is drawn is drawn at (a frame's, to be shown then; an input's, as it is pressed), followed: for a
 /// look worked out from the time (a fade, a place by the time), worked out again as it goes. Never for what is done.
 pub fn Tree::drawn_at(self : Tree) -> Double {
-  self.clock.get()
+  let drawn = self.clock.get()
+  // (paint and places sampled at the moment shown: that moment, the clock followed as ever)
+  match self.sample {
+    Some(t) => t
+    None => drawn
+  }
 }
 
 ///|
@@ -1704,7 +1721,8 @@ pub fn Tree::drawn_at(self : Tree) -> Double {
 /// it as long as it shows (a spinner's turn, a band of progress not known), which never ends and is no motion
 /// (Tree::cycle_read); as Ctx::cycle is an old view's.
 pub fn View::cycle(self : View, period : Double) -> Double {
-  let t = self.tree.beat.get()
+  let beat = self.tree.beat.get()
+  let t = match self.tree.sample { Some(s) => s; None => beat }
   if period <= 0.0 {
     return 0.0
   }
@@ -1818,6 +1836,14 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 ///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
+  // (a frame to be shown at `ms`: its layout of the logic's moment, what it paints and places sampled there (Tree::frame);
+  // the clock goes on only with the logic, never ahead of it and back)
+  self.shown = ms
+}
+
+///|
+/// The clock gone on to `ms` with the logic (Tree::advance).
+fn Tree::clock_on(self : Tree, ms : Double) -> Unit {
   // (what the clock set so tells, of its moment: Tree::brought)
   let was = self.bringing_at
   let was_standing = self.standing
@@ -1873,7 +1899,12 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
       c
     }
   }
-  cell.get()
+  let past = cell.get()
+  // (sampled at the moment shown: as of it, the mark followed as ever)
+  match self.tree.sample {
+    Some(s) => s >= t
+    None => past
+  }
 }
 
 ///|
@@ -2223,7 +2254,7 @@ priv enum Phase {
 /// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, sample? : (T) -> Unit) -> () -> Unit {
   // (a node's own read, of what is laid out too, as told last: wherever a write set it off, reads_own)
   let read = fn() { reads_own(read) }
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
@@ -2243,6 +2274,11 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
       self.settle_after_change(told_at.val)
     }
   })
+  // (a paint's or a place's: worked out again at the moment a frame is shown, Tree::sampled_shown)
+  match sample {
+    Some(s) => w.draws_by(fn() { if b.live { s(@signals.sampled(read)) } }) |> ignore
+    None => ()
+  }
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
@@ -2583,7 +2619,12 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         last.val = Some(v)
         apply(v)
         marked()
-      })
+      },
+      sample?=match phase {
+        Paint | Place => Some(fn(v) { tree.shown_set(at, gen, v, last, apply, marked) })
+        _ => None
+      },
+    )
       n.props[prop] = stop
     }
     Roomed(of, f) => {
@@ -2645,6 +2686,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       let gen = self.gen
       // (what it reads of signals, followed: changed, its node is to be painted again, a frame asked for)
       let watch = @signals.watch(fn() { marked() })
+      // (worked out again at the moment a frame is shown, Tree::sampled_shown)
+      watch.draws_by(fn() { tree.shown_set(at, gen, @signals.sampled(fn() { f({ tree, }) }), last, apply, marked) }) |> ignore
       let run = fn() {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
@@ -7013,7 +7056,7 @@ fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
 ///|
 fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
   if !self.advancing && upto > @signals.untracked(fn() { self.clock.get() }) {
-    self.at(upto)
+    self.clock_on(upto)
   }
 }
 
@@ -7176,11 +7219,17 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
     Some(n) => n
-    None => @signals.untracked(fn() { self.clock.get() })
+    None => dmax(self.shown, @signals.untracked(fn() { self.clock.get() }))
   }
   let was = self.bringing_at
   self.bringing_at = upto
-  defer { self.bringing_at = was }
+  let was_framing = self.framing
+  self.framing = true
+  defer {
+    self.bringing_at = was
+    self.framing = was_framing
+  }
+  self.unsample()
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
@@ -7237,6 +7286,7 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
+  self.unsample()
   let was = self.bringing_at
   self.bringing_at = at
   defer { self.bringing_at = was }
@@ -7350,6 +7400,8 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   // reading where the one said before it put its own: Laid::drawn): its place or its look set, then placed or drawn
   // again with the rest)
   self.painted_now()
+  // (a frame to be shown after the logic's moment: what it paints and places sampled then, its layout the logic's)
+  self.sampled_shown(upto)
   places_done()
   if placing {
     // (a page's list's first row on the pixels from where it is now laid out, whatever moved: Tree::rows_placed)
