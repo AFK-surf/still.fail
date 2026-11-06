@@ -13,7 +13,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
-import { ackedOffset, runnerId } from "../src/agents/process.ts";
+import { ackedOffset, outFile, runnerId } from "../src/agents/process.ts";
 import { allLeft, existingRunners, type RunnerInfo } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
@@ -1015,6 +1015,23 @@ describe("the Codex driver", { concurrency: true }, () => {
     await b.until(ended(1));
     assert.deepEqual(outcome(b.events), { kind: "completed" });
     assert.equal(starts(p.dump).length, 1, "the same app-server");
+  });
+
+  test("an app-server's output read again after a crash lets the main thread go and says it gets on with it", async () => {
+    const said: number[] = [];
+    let turns = 0;
+    const d = driver({ taking: () => { said.push(turns); setImmediate(() => turns++); } });
+    const p = profile();
+    const id = "codex-reread";
+    mkdirSync(dirname(outFile(data, id)), { recursive: true });
+    writeFileSync(outFile(data, id), '{"method":"item/started","params":{"threadId":"t"}}\n'.repeat(10_000));
+    try {
+      // No runner behind it: all the file is read, then taking it up goes no further, which is not this test's.
+      await (d as any).takeUp(p, { id, socket: join(data, "no-such.sock"), args: [] }).catch(() => {});
+    } finally {
+      await d.shutdown();
+    }
+    assert.deepEqual(said, [0, 1], "once per 4096 lines, the main thread let go after each");
   });
 
   test("shutdown ends the app-servers and their runners", async () => {

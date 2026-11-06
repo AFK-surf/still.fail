@@ -482,6 +482,8 @@ export type CodexDriverOptions = {
   /// it ever wrote read again on the main thread (131 MB on a station, 2026-11-02: held 4.8 s as devices came back after an
   /// update), and taken from the station still handing over, which let go of the turns running on it.
   takenUp?: Promise<unknown>;
+  /// Another stretch of an app-server's output read again: the launcher hears the station gets on with it.
+  taking?: () => void;
 };
 
 /// An app-server's runner keeps all it wrote (every diff and command output of every thread on it, hundreds of MB in a
@@ -491,6 +493,11 @@ const OUTPUT_LIMIT = 64 * 1024 * 1024;
 
 /// What an app-server writes most of and that says nothing of where a thread stands (LiveFromCodex keeps no state of
 /// either): not parsed again when its output is read after a crash.
+/// Lines of an app-server's output read again at a time before the main thread is let go (`takeUp`): three hosts of
+/// 172 to 291 MB held it up to 32 s at a time on a loaded station, and six starts in a row took up at most one session
+/// in the launcher's 90 s (2026-11-06).
+const TAKE_UP_LINES = 4096;
+
 const UNTOLD = ['{"method":"turn/diff/updated"', '{"method":"item/commandExecution/outputDelta"'];
 
 /// A borrowed login this close to its end is replaced in its home's auth.json, under the app-server running on it: Codex
@@ -823,7 +830,12 @@ export class CodexDriver implements AgentDriver {
     const { at, keep } = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
     const began = new Map<string, number>();
+    let read = 0;
     for (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
+      if (++read % TAKE_UP_LINES === 0) {
+        this.options.taking?.();
+        await new Promise((resolve) => setImmediate(resolve));
+      }
       if (UNTOLD.some((m) => line.startsWith(m))) continue;
       let msg: Json;
       try {
