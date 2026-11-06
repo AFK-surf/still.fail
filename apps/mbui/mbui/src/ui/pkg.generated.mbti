@@ -716,11 +716,15 @@ pub fn tree_corners_linked(@view.View, () -> FixedArray[@paint.CornerOf]?) -> Un
 
 pub let tree_menu_own : @ref.Ref[(Array[@view.NodeId]) -> Bool]
 
+pub fn tree_narrow() -> Bool
+
 pub fn tree_picked(dragged? : Bool) -> TreePicked?
 
 pub fn tree_scroll_bar() -> @view.ScrollBar
 
 pub fn tree_theme() -> Theme
+
+pub fn tree_window_corners_now() -> (Double, Double, Double, Double)
 
 pub fn update_apply(String) -> Unit
 
@@ -2277,6 +2281,7 @@ pub(all) enum Radius {
   LinkedEach(@paint.CornerOf, @paint.CornerOf, @paint.CornerOf, @paint.CornerOf)
 }
 pub fn Radius::each(Self) -> FixedArray[Double]?
+pub fn Radius::each_for_tree(Self) -> FixedArray[Double]?
 pub fn Radius::links(Self) -> FixedArray[@paint.CornerOf]?
 
 pub(all) struct RadiusScale {
@@ -2562,6 +2567,7 @@ pub(all) enum Stroke {
   B4
   B8
 }
+pub fn Stroke::px(Self) -> Double
 
 #derive(Eq)
 pub(all) struct Style {
@@ -2574,6 +2580,7 @@ pub(all) struct Style {
   pressed : Patch?
   disabled : Patch?
 }
+pub fn Style::resolve(Self, Bool, Bool, Bool, Bool, Bool, Bool, Bool) -> Patch
 pub fn Style::then(Self, Self) -> Self
 
 #derive(Eq, Show)
@@ -3108,6 +3115,7 @@ pub(all) struct Theme {
 }
 pub fn Theme::color(Self, Color) -> Int64
 pub fn Theme::corner(Self, Radius) -> Double
+pub fn Theme::corner_for_tree(Self, Radius) -> Double
 pub fn Theme::dark() -> Self
 pub fn Theme::ios_dark() -> Self
 pub fn Theme::ios_light() -> Self

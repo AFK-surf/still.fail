@@ -3,7 +3,7 @@
 ///|
 /// The row bodies and the marker after them in a page's long-list room.
 fn group_row_node_geometry(look : Look, pane : Bool, count : Int) -> Array[(Double, Double, Double, Double)] {
-  let ink = 0x987654FFL
+  let marked : Array[@view.View] = []
   let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=600.0, platform=2)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
@@ -14,17 +14,25 @@ fn group_row_node_geometry(look : Look, pane : Bool, count : Int) -> Array[(Doub
       let rows = fn(room : @view.View) {
         for i in 0..<count {
           group_row_node(room, fn() { i == 0 }, fn() { i == count - 1 }, fn(row) {
-            row.height(Is(Some(40.0))).ground(Is(ink)) |> ignore
+            row.height(Is(Some(40.0))) |> ignore
+            marked.push(row)
           })
         }
-        room.box(fn(after) { after.height(Is(Some(4.0))).ground(Is(ink)) |> ignore }) |> ignore
+        room.box(fn(after) {
+          after.height(Is(Some(4.0))) |> ignore
+          marked.push(after)
+        }) |> ignore
       }
       if look is Narrow { page_block(page, rows) } else { rows(page) }
     })
     |> ignore
   })
   t.draw()
-  t.drawn_rects().filter(fn(r) { r.4 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) })
+  let tree = @ui.view_tree().unwrap()
+  marked.map(fn(v) {
+    let d = tree.drawn_of(v.id()).unwrap()
+    (d.x, d.y, d.w, d.h)
+  })
 }
 
 ///|
@@ -203,7 +211,7 @@ fn group_row_motion_case(which : Int, coming : Bool) -> Unit raise {
           group_row_node(row, fn() { item().1 }, fn() { item().2 }, fn(body) {
             cards[k] = body.parent().unwrap().parent().unwrap().kids()[0]
             bodies[k] = body
-            body.list_room_content().height(Is(Some(40.0))).ground(Is(0x987654FFL)).owns(fn() {
+            body.list_room_content().height(Is(Some(40.0))).words(Is(k)).ink(Is(0x987654FFL)).owns(fn() {
               cards.remove(k)
               bodies.remove(k)
               slots.remove(k)
@@ -227,6 +235,7 @@ fn group_row_motion_case(which : Int, coming : Bool) -> Unit raise {
     let body = tree.drawn_of(bodies[key].id()).unwrap()
     if body.alpha > 0.0 && body.alpha < 1.0 {
       saw_motion = true
+      assert_eq((body.words, body.ink), (key, 0x987654FFL))
       assert_eq(card.corners, Some((top, top, foot, foot)))
       assert_eq(card.alpha, 1.0)
       assert_true(tree.drawn_of(slots[key].id()).unwrap().clips)

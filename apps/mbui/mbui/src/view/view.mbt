@@ -459,6 +459,20 @@ pub(all) struct Work {
 } derive(Eq, Debug)
 
 ///|
+/// A property's running binding and, for a regular property, how to restore its latest value after a style releases it.
+priv struct PropBinding {
+  stop : () -> Unit
+  refresh : (() -> Unit)?
+}
+
+///|
+priv struct StyleBinding {
+  stop : () -> Unit
+  restore : () -> Unit
+  active : () -> Bool
+}
+
+///|
 /// A node of the pool.
 struct Node {
   /// which making of this index it is (a handle on an earlier one finds it let go)
@@ -478,7 +492,21 @@ struct Node {
   /// the key the next of them is kept by
   mut drop_next : Int
   /// its properties' bindings, by property: what stops each
-  props : Map[Prop, () -> Unit]
+  props : Map[Prop, PropBinding]
+  /// Optional style bindings; a later explicit property takes its place, not the other way around.
+  mut style_props : Map[Prop, StyleBinding]?
+  mut style_watch : (() -> Unit)?
+  /// The styled size whose grow and basis also belong to it, if any.
+  mut style_axis : Prop?
+  /// The current style's corner sources, where its corners are still in force.
+  mut style_corner_links : FixedArray[@paint.CornerOf]?
+  /// The node's own edge while a style may override either of its two parts.
+  mut style_edge_base : Ref[(Double, Int64)]?
+  /// Its layout-dependent corner and its own fallback, before it is worked out.
+  mut style_corner : (StyleCornerRule, Double, (Double, Double, Double, Double)?)?
+  mut style_corner_context : (@paint.CornerRoots, (Double, Double, Double, Double))?
+  /// Whether this node's ground is present for the layout-derived corner rule.
+  mut corner_ground_on : Bool
   mut on_press : (() -> Unit)?
   /// what a declared accessibility action does (View::on_action)
   mut on_action : ((Action) -> Unit)?
@@ -801,6 +829,10 @@ pub struct Tree {
   measure_shorter : (String, Array[String], WordsLook, Double) -> Double
   nodes : Array[Node]
   free : Array[Int]
+  /// Nodes whose styled corners are worked out after layout, and the host's shared corner rule.
+  style_corners : Set[NodeId]
+  mut resolve_style_corners : (Tree) -> Unit
+  mut style_corners_due : Bool
   /// what a frame is to do: the nodes whose look changed, those whose place changed; whether any is to be laid out,
   /// whether the order is to be made again; whether any of it is (what hosts it told as it first is)
   looks_due : Array[Int]
@@ -1166,6 +1198,9 @@ pub fn Tree::new(
     rows_named: 0,
     nodes: [],
     free: [],
+    style_corners: Set::new(),
+    resolve_style_corners: fn(_) {  },
+    style_corners_due: false,
     looks_due: [],
     places_due: [],
     painted: [],
@@ -1342,6 +1377,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       self.roomed.remove(i)
       n.flex = @flex.Node::new()
       n.look.ground = 0L
+      n.corner_ground_on = false
       n.look.ink = 0L
       n.look.words = ""
       n.look.words_drawn = None
@@ -1508,6 +1544,14 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drops: {},
         drop_next: 0,
         props: {},
+        style_props: None,
+        style_watch: None,
+        style_axis: None,
+        style_corner_links: None,
+        style_edge_base: None,
+        style_corner: None,
+        style_corner_context: None,
+        corner_ground_on: false,
         on_press: None,
         on_action: None,
         top_row: false,
@@ -2520,6 +2564,8 @@ priv enum Prop {
   Aspect
   Nowhere
   Edge
+  EdgeWidth
+  EdgeColor
   EdgeDashed
   NativeAnchor
   Image
@@ -2533,14 +2579,108 @@ priv enum Prop {
 } derive(Eq, Hash)
 
 ///|
+/// Which looks can change a rounded container or a corner's geometry. Unrelated paint, such as text ink, does not
+/// make every layout-derived corner visit the scene again.
+fn Tree::style_corner_property_changed(self : Tree, at : Int, prop : Prop) -> Unit {
+  if prop == Ground {
+    // The layout rule needs to know whether a ground exists, not its colour. Opaque hover and theme tints need no
+    // whole-scene corner pass; a ground appearing or disappearing can change which container a corner follows.
+    let n = self.nodes[at]
+    let on = (n.look.ground & 0xFFL) != 0L
+    let changed = on != n.corner_ground_on
+    n.corner_ground_on = on
+    if changed && !self.style_corners.is_empty() { self.style_corners_due = true }
+    return
+  }
+  if !self.style_corners.is_empty() && prop is (
+    Edge | EdgeWidth | EdgeColor | Radius | Corners | Glass | Clips | HostedClips | Image | Picture | Alpha |
+    Offset | Shift | Scale | DrawnOff | GroundDrawn | Over | Nowhere
+  ) {
+    self.style_corners_due = true
+  }
+}
+
+///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
 /// marking what its phase does again.
 fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
+  if prop is (Radius | Corners) {
+    match n.style_corner {
+      Some((_, own, _)) => {
+        // If the caller sets each corner, its own value may still refer to the styled uniform radius.
+        if prop == Corners && self.styled(Radius) {
+          n.look.radius = own
+          self.tree.look_marked_at(self.at)
+        }
+        n.style_corner = None
+        n.style_corner_context = None
+        self.tree.style_corners.remove(self.id())
+      }
+      None => ()
+    }
+  }
+  // A property said after a style belongs to the caller from then on.
+  let takes_axis = n.style_axis == Some(prop)
+  if takes_axis { n.style_axis = None }
+  match n.style_props {
+    Some(styles) => {
+      // A styled main-axis size says grow and basis as well. A later explicit size replaces all three,
+      // restoring any earlier grow and basis; separately set grow or basis have already taken their place.
+      let replaced = if takes_axis && prop == Width {
+        [Width, Grow, Basis, Shrink]
+      } else if takes_axis {
+        [prop, Grow, Basis]
+      } else if prop == Width {
+        // Cut is part of the styled width, even when width is the cross axis of a column.
+        [Width, Shrink]
+      } else if prop == Radius {
+        // The style's radius can also set each corner. A later radius takes that whole style property.
+        [Radius, Corners]
+      } else if prop == Edge {
+        // An explicitly set edge replaces both separately styled parts.
+        [Edge, EdgeWidth, EdgeColor]
+      } else {
+        [prop]
+      }
+      for p in replaced {
+        match styles.get(p) {
+          Some(style) => {
+            styles.remove(p)
+            (style.stop)()
+            if p != prop { (style.restore)() }
+          }
+          None => ()
+        }
+      }
+    }
+    None => ()
+  }
+  self.bind_base(prop, live, phase, apply)
+}
+
+///|
+fn View::styled(self : View, prop : Prop) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  match n.style_props {
+    Some(styles) =>
+      match styles.get(prop) {
+        Some(style) => (style.active)()
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
+/// Install a property's own binding without removing a style layered over it.
+fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
+  guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
   let marked = fn() {
+    tree.style_corner_property_changed(at, prop)
     match phase {
       Layout => tree.layout_marked_at(at)
       Paint => tree.look_marked_at(at)
@@ -2553,9 +2693,9 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     }
   }
   match n.props.get(prop) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(prop)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -2581,10 +2721,17 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
           return
         }
         last.val = Some(v)
-        apply(v)
-        marked()
+        if !self.styled(prop) {
+          apply(v)
+          marked()
+        }
       })
-      n.props[prop] = stop
+      n.props[prop] = { stop, refresh: Some(fn() {
+        match last.val {
+          Some(v) => { apply(v); marked() }
+          None => ()
+        }
+      }) }
     }
     Roomed(of, f) => {
       match phase {
@@ -2612,28 +2759,37 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         let v = reads_own(fn() { watch.read(fn() { f(w, h) }) })
         if last.val != Some(v) {
           last.val = Some(v)
-          // (applied as part of the layout under way: what holds it up to `of` found again here, not marked to be laid
-          // out again)
-          let was = tree.roomed_applying
-          tree.roomed_applying = at
-          apply(v)
-          tree.roomed_applying = was
-          // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
-          let mut j = at
-          while j >= 0 && j != of.at {
-            let fl = tree.nodes[j].flex
-            fl.dirty = true
-            fl.cache_n = 0
-            fl.p_ok = false
-            j = tree.nodes[j].parent
+          if !self.styled(prop) {
+            // Applied within this layout: other changes made by `apply` must still mark their own layout.
+            let was = tree.roomed_applying
+            tree.roomed_applying = at
+            apply(v)
+            tree.roomed_applying = was
+            // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
+            let mut j = at
+            while j >= 0 && j != of.at {
+              let fl = tree.nodes[j].flex
+              fl.dirty = true
+              fl.cache_n = 0
+              fl.p_ok = false
+              j = tree.nodes[j].parent
+            }
           }
         }
       }
       tree.roomed_add(of.at, at, gen, run)
       tree.layout_marked_at(at)
-      n.props[prop] = fn() {
-        watch.stop()
-        tree.roomed_drop(of.at, at, gen)
+      n.props[prop] = {
+        stop: fn() {
+          watch.stop()
+          tree.roomed_drop(of.at, at, gen)
+        },
+        refresh: Some(fn() {
+          match last.val {
+            Some(v) => { apply(v); marked() }
+            None => ()
+          }
+        }),
       }
     }
     Painted(f) => {
@@ -2653,19 +2809,29 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         let v = watch.read(fn() { f({ tree, }) })
         if last.val != Some(v) {
           last.val = Some(v)
-          apply(v)
-          marked()
+          if !self.styled(prop) {
+            apply(v)
+            marked()
+          }
         }
       }
       // (first worked out as the frame it is said in is painted, after its layout: Tree::painted_now; a frame owed)
       tree.painted.push((at, gen, run))
       marked()
-      n.props[prop] = fn() {
-        watch.stop()
-        match tree.painted.search_by(fn(e) { e.0 == at && e.1 == gen }) {
-          Some(i) => tree.painted.remove(i) |> ignore
-          None => ()
-        }
+      n.props[prop] = {
+        stop: fn() {
+          watch.stop()
+          match tree.painted.search_by(fn(e) { e.0 == at && e.1 == gen }) {
+            Some(i) => tree.painted.remove(i) |> ignore
+            None => ()
+          }
+        },
+        refresh: Some(fn() {
+          match last.val {
+            Some(v) => { apply(v); marked() }
+            None => ()
+          }
+        }),
       }
     }
   }
@@ -3171,7 +3337,19 @@ pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double
 /// The edge drawn round its ground, inside it (how wide, its colour; 0 wide: none), as an old view's box's border is
 /// drawn with its ground (one rect, filled and edged), its corners its ground's: paint's.
 pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
-  self.bind(Edge, e, Paint, fn(e) { self.tree.nodes[self.at].look.edge = e })
+  self.bind(Edge, e, Paint, fn(e) {
+    let n = self.tree.nodes[self.at]
+    match n.style_edge_base {
+      Some(base) => {
+        base.val = e
+        n.look.edge = (
+          if self.styled(EdgeWidth) { n.look.edge.0 } else { e.0 },
+          if self.styled(EdgeColor) { n.look.edge.1 } else { e.1 },
+        )
+      }
+      None => n.look.edge = e
+    }
+  })
   self
 }
 
@@ -3862,9 +4040,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   // it or in it let go of then; said anew, what was said before let go of, as any property's binding is)
   guard self.live() is Some(n) else { return self }
   match n.props.get(Presses) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Presses)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -3887,7 +4065,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Presses] = stop
+        n.props[Presses] = { stop, refresh: None }
       })
   }
   self
@@ -3903,9 +4081,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
 pub fn View::over_all(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(OverAll) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(OverAll)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -3924,7 +4102,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[OverAll] = stop
+        n.props[OverAll] = { stop, refresh: None }
       })
   }
   self
@@ -4092,9 +4270,9 @@ pub fn Tree::over_all_takes(self : Tree, x : Double, y : Double) -> Bool {
 pub fn View::modal(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(Modal) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Modal)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -4116,7 +4294,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Modal] = stop
+        n.props[Modal] = { stop, refresh: None }
       })
   }
   self
@@ -4982,8 +5160,14 @@ fn Tree::asked_at(
 /// What a press on it does: run outside any tracking, as one change (what it writes told once it is done).
 pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
+  let was_pressable = n.on_press is Some(_)
   n.on_press = Some(f)
   self.tree.hits = self.tree.hits + 1
+  // A transparent rounded row becomes a corner container when it starts taking presses.
+  if !was_pressable && n.look.radius >= 6.0 && !self.tree.style_corners.is_empty() {
+    self.tree.style_corners_due = true
+    self.tree.look_marked_at(self.at)
+  }
   self
 }
 
@@ -4997,9 +5181,9 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   n.top_row = true
   self.tree.hits = self.tree.hits + 1
   match n.props.get(MovesWindow) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(MovesWindow)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -5014,7 +5198,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[MovesWindow] = stop
+        n.props[MovesWindow] = { stop, refresh: None }
       })
   }
   self
@@ -5914,9 +6098,31 @@ fn View::let_go(self : View) -> Unit {
   n.takes_ver = None
   let props = n.props.values().collect()
   n.props.clear()
-  for stop in props {
-    stop()
+  for binding in props {
+    (binding.stop)()
   }
+  match n.style_props {
+    Some(styles) => {
+      let bindings = styles.values().collect()
+      styles.clear()
+      for binding in bindings {
+        (binding.stop)()
+      }
+    }
+    None => ()
+  }
+  n.style_props = None
+  match n.style_watch {
+    Some(stop) => stop()
+    None => ()
+  }
+  n.style_watch = None
+  n.style_axis = None
+  n.style_corner_links = None
+  n.style_edge_base = None
+  n.style_corner = None
+  n.style_corner_context = None
+  self.tree.style_corners.remove(self.id())
   let drops = n.drops.values().collect()
   n.drops.clear()
   for f in drops {
@@ -7363,6 +7569,10 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
     // (what one laid out as wide as its anchor set off done once it is placed beside it too: Tree::laid_out_now)
     @signals.afters_held(fn() { self.besides_placed() })
   }
+  // A layout-dependent styled corner needs the current layout and the current looks of its containers. Do its shared
+  // rule after those looks have been made, and make only the corners it changed in this same pass.
+  let resolve_corners = !self.style_corners.is_empty() && (placing || self.style_corners_due || self.order_due)
+  self.style_corners_due = false
   // (what changed of its look alone: its content, nothing else)
   for at in self.looks_due {
     let n = self.nodes[at]
@@ -7372,6 +7582,17 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
     }
   }
   self.looks_due.clear()
+  if resolve_corners {
+    (self.resolve_style_corners)(self)
+    for at in self.looks_due {
+      let n = self.nodes[at]
+      if n.live && n.look_due {
+        self.work.visited = self.work.visited + 1
+        self.made_again(at)
+      }
+    }
+    self.looks_due.clear()
+  }
   // (the order changed: drawn again, nothing kept of it to make again: what is drawn is gone through down the tree,
   // Tree::walk_drawn)
   let ordered = self.order_due

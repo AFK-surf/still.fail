@@ -13,6 +13,10 @@ inputs:
   name:
     description: the cache's name (the jobs that install the same packages share it)
     required: true
+  fallback:
+    description: another Ubuntu cache with a compatible subset of these packages
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -21,7 +25,9 @@ runs:
       with:
         path: .ci/apt
         key: apt-${{ inputs.name }}-${{ github.sha }}
-        restore-keys: apt-${{ inputs.name }}-
+        restore-keys: |
+          apt-${{ inputs.name }}-
+          ${{ inputs.fallback != '' && format('apt-{0}-', inputs.fallback) || '' }}
     - shell: bash
       run: |
         d="$GITHUB_WORKSPACE/.ci/apt"

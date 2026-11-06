@@ -15,9 +15,9 @@
 pub fn View::bones(self : View, color : Live[Int64]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(Bones) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Bones)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -47,7 +47,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Bones] = stop
+        n.props[Bones] = { stop, refresh: None }
       })
   }
   self

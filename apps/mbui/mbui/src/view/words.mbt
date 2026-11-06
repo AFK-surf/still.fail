@@ -676,9 +676,9 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
   // hits found anew, nothing laid out for it; said anew, what was said before let go of)
   guard self.live() is Some(n) else { return self }
   match n.props.get(Points) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Points)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -697,7 +697,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Points] = stop
+        n.props[Points] = { stop, refresh: None }
       })
   }
   self

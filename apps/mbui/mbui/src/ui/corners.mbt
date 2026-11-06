@@ -96,6 +96,10 @@ fn Ctx::inner_row(self : Ctx, p : Int) -> Bool {
   if n.fw <= n.fh * 1.5 {
     return false
   }
+  // A node of the window's tree can also say this corner; it is temporary here, not in the old frame's index.
+  if n.corner_by == corner_inner || n.corner_by == corner_inner_or {
+    return true
+  }
   // (the inners are in the order they were built: by their numbers)
   let mut lo = 0
   let mut hi = self.inners.length()
@@ -196,7 +200,7 @@ fn corner_gaps(a : Node, b : Node, k : Int) -> (Double, Double) {
 pub fn Tester::corner_faults(self : Tester) -> Array[String] {
   ignore(self)
   let c = g()
-  c.with_tree_nodes(fn() { c.corner_faults() })
+  c.all_corner_faults()
 }
 
 ///|
@@ -211,7 +215,7 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
     None => ()
   }
   self.frame()
-  let faults = c.with_tree_nodes(fn() { c.corner_faults() })
+  let faults = c.all_corner_faults()
   c.lit_all = false
   match view_app.val {
     Some(tree) => tree.lit_all(false)
@@ -233,9 +237,23 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     Some(t) if !old_whole.val => t
     _ => return f()
   }
+  self.with_tree_nodes_for(tree, fn(_) { f() }, laid~)
+}
+
+///|
+/// The same temporary nodes for a given tree, with their identities available while `f` runs. `fallback` starts a
+/// layout-derived styled corner at its own value, so moving out of a container does not keep its previous result.
+fn[T] Ctx::with_tree_nodes_for(
+  self : Ctx,
+  tree : @view.Tree,
+  f : (Array[(@view.NodeId, Int)]) -> T,
+  laid? : Bool = false,
+  fallback? : Bool = false,
+) -> T {
   let count = self.count
   let kept : Array[Node] = []
   let reparented : Array[(Int, Int)] = []
+  let identities : Array[(@view.NodeId, Int)] = []
   let add = fn(n : Node) -> Int {
     let i = self.count
     if i < self.nodes.length() {
@@ -287,10 +305,32 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       Some((tl, tr, br, bl)) => n.set_radii(FixedArray::from_array([tl, tr, br, bl]))
       None => ()
     }
-    // (linked each where it says so: tree_corners_linked)
-    match tree_links.get(d.id) {
-      Some(links) => n.links = @signals.untracked(links)
+    match tree.style_corner(d.id) {
+      Some((rule, own, corners)) => {
+        n.corner_by = match rule {
+          FromContainer => corner_inner
+          FromContainerOrOwn => corner_inner_or
+          AroundContents => corner_around
+        }
+        if fallback {
+          n.radius = own
+          n.radii = None
+          match corners {
+            Some((tl, tr, br, bl)) => n.set_radii(FixedArray::from_array([tl, tr, br, bl]))
+            None => ()
+          }
+        }
+      }
       None => ()
+    }
+    // A style may temporarily own the corners over an earlier tree_corners_linked binding.
+    match tree.style_corner_links(d.id) {
+      Some(links) => n.links = links
+      None =>
+        match tree_links.get(d.id) {
+          Some(links) => n.links = @signals.untracked(links)
+          None => ()
+        }
     }
     n.glass = d.glass
     n.clip = d.clips
@@ -309,6 +349,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       n.id = -(k + 1)
     }
     let i = add(n)
+    identities.push((d.id, i))
     at[k] = i
     link(parent, i)
     // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
@@ -341,7 +382,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   }
   // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn; laid out, where
   // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
-  let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
+  let out = if laid {
+    self.with_old_laid(count, fn() { f(identities) })
+  } else {
+    self.with_old_drawn(fn() { f(identities) })
+  }
   tree_pictures.clear()
   for r in reparented {
     self.nodes[r.0].parent = r.1
@@ -351,6 +396,147 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   }
   self.count = count
   out
+}
+
+///|
+/// The shared corner rule's scratch frame for the window's tree. Nodes are temporary copies of the scene being laid
+/// out, never an old view wrapped around those nodes; what belongs to a tree is cleared when that tree goes away.
+// kept across runs: one scratch context reused when the window's tree is replaced (view_forget clears its contents)
+let tree_corner_context : Ref[Ctx?] = Ref(None)
+
+///|
+/// Work the tree's styled Inner / InnerOr / Around corners by the same rule as old boxes, from the current layout.
+/// Around is worked first, then inners outside in; only the resulting corners are handed back to their live nodes.
+fn tree_style_corners_after_layout(tree : @view.Tree) -> Unit {
+  let c = match tree_corner_context.val {
+    Some(c) => c
+    None => {
+      let c = Ctx::new()
+      // This context never paints; it does not need a frame's initial instance buffer.
+      c.inst = FixedArray::make(inst_size, 0.0)
+      tree_corner_context.val = Some(c)
+      c
+    }
+  }
+  let (w, h) = view_window.val
+  c.width = w
+  c.height = h
+  c.window_w = w
+  c.window_h = h
+  let theme = @signals.untracked(fn() { tree_theme() })
+  c.corner_fit = theme.corner_fit
+  c.corner_ladder = theme.corner_ladder
+  c.window_corner = tree_window_corner.get()
+  let (tl, tr, br, bl) = tree_window_corners_now()
+  c.window_corners[0] = tl
+  c.window_corners[1] = tr
+  c.window_corners[2] = br
+  c.window_corners[3] = bl
+  // The old frame records layout reads for its own rebuilds; this pass belongs to the retained tree instead.
+  let old_read = layout_read_at.val
+  c.with_tree_nodes_for(tree, fn(ids) {
+    c.inner_faults.clear()
+    c.corners_found()
+    c.arounds_after_layout()
+    let grounds = c.layer_grounds()
+    let hung = c.hung_marks()
+    for i in c.inners { c.inner_after_layout(i, grounds, hung) }
+    for (id, i) in ids {
+      if tree.style_corner(id) is Some(_) {
+        let n = c.nodes[i]
+        let corners = n.radii.map(fn(r) { (r[0], r[1], r[2], r[3]) })
+        tree.style_corner_worked(id, n.radius, corners)
+      }
+    }
+  }, laid=true, fallback=true)
+  layout_read_at.val = old_read
+  // The scratch context must not retain copies of the first scene's content after the layout pass.
+  c.nodes.clear()
+}
+
+///|
+/// Once hosted old views have been laid out, include their boxes in the same corner rule. The tree's first pass runs
+/// before those views are built; Around in particular must see the contents, not just the empty hosting node.
+fn tree_style_corners_after_old_layout(c : Ctx) -> Unit {
+  let tree = match view_app.val {
+    Some(tree) if !old_whole.val && !old_boxes.is_empty() && tree.has_style_corners() => tree
+    _ => return
+  }
+  if !old_boxes.keys().any(fn(id) { tree.style_corners_hold(id) }) { return }
+  let old_count = c.count
+  let saved_inners = c.inners.copy()
+  let saved_inners_or = c.inners_or.copy()
+  let saved_arounds = c.arounds.copy()
+  let old_faults : Array[String] = []
+  let tree_faults : Array[String] = []
+  let old_read = layout_read_at.val
+  let old_fit = c.corner_fit
+  let old_ladder = c.corner_ladder
+  let theme = @signals.untracked(fn() {
+    if tree_theme_of.get() is Some(_) { Some(tree_theme()) } else { None }
+  })
+  let tree_fit = match theme { Some(t) => t.corner_fit; None => old_fit }
+  let tree_ladder = match theme { Some(t) => t.corner_ladder; None => old_ladder }
+  c.with_tree_nodes_for(tree, fn(ids) {
+    c.corners_found()
+    c.inner_faults.clear()
+    let theme_of = fn(i : Int) {
+      c.corner_fit = if i < old_count { old_fit } else { tree_fit }
+      c.corner_ladder = if i < old_count { old_ladder } else { tree_ladder }
+    }
+    let take_faults = fn(i : Int) {
+      if i < old_count { old_faults.append(c.inner_faults) } else { tree_faults.append(c.inner_faults) }
+      c.inner_faults.clear()
+    }
+    for i in c.arounds {
+      theme_of(i)
+      c.around_after_layout(i)
+      take_faults(i)
+    }
+    let grounds = c.layer_grounds()
+    let hung = c.hung_marks()
+    // Old nodes have lower indices than temporary tree nodes, although a tree node can hold an old node.
+    // Work inner corners in hierarchy order so every container is resolved before its contents.
+    let ordered = c.inners.map(fn(i) {
+      let mut depth = 0
+      let mut parent = c.nodes[i].parent
+      while parent >= 0 {
+        depth += 1
+        parent = c.nodes[parent].parent
+      }
+      (depth, i)
+    })
+    ordered.sort_by(fn(a, b) { a.compare(b) })
+    for (_, i) in ordered {
+      theme_of(i)
+      c.inner_after_layout(i, grounds, hung)
+      take_faults(i)
+    }
+    c.corner_fit = old_fit
+    c.corner_ladder = old_ladder
+    c.corners_in_corners(grounds, inners_done=true)
+    for (id, i) in ids {
+      if tree.style_corner(id) is Some(_) {
+        let n = c.nodes[i]
+        let corners = n.radii.map(fn(r) { (r[0], r[1], r[2], r[3]) })
+        tree.style_corner_worked(id, n.radius, corners)
+      }
+    }
+  }, laid=true, fallback=true)
+  layout_read_at.val = old_read
+  c.corner_fit = old_fit
+  c.corner_ladder = old_ladder
+  c.inners.clear(); c.inners.append(saved_inners)
+  c.inners_or.clear(); c.inners_or.append(saved_inners_or)
+  c.arounds.clear(); c.arounds.append(saved_arounds)
+  c.inner_faults.clear(); c.inner_faults.append(old_faults)
+  match tree_corner_context.val {
+    Some(scratch) => {
+      scratch.inner_faults.clear()
+      scratch.inner_faults.append(tree_faults)
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -415,17 +601,40 @@ pub fn Tester::corner_pairs(self : Tester) -> Array[String] {
 }
 
 ///|
+/// Check both old and retained nodes using each one's theme.
+fn Ctx::all_corner_faults(self : Ctx) -> Array[String] {
+  let old_count = self.count
+  self.with_tree_nodes(fn() { self.corner_faults(old_count) })
+}
+
+///|
 /// Where the frame just built breaks the corner rule (Tester::corner_faults; a scripted run's `corners`).
-fn Ctx::corner_faults(self : Ctx) -> Array[String] {
+fn Ctx::corner_faults(self : Ctx, old_count : Int) -> Array[String] {
   let c = self
   // the corners said `Inner` that could not be worked out (corners_after_layout), first
   let out : Array[String] = c.inner_faults.copy()
+  // The retained tree works its own layout-derived corners after its layout. Keep the same diagnostics as an old
+  // box, and discard them as soon as its last styled corner has gone.
+  match (view_app.val, tree_corner_context.val) {
+    (Some(tree), Some(worked)) if !old_whole.val && tree.has_style_corners() =>
+      for fault in worked.inner_faults { out.push(fault) }
+    _ => ()
+  }
   let grounds = c.layer_grounds()
   let pictures = c.pictures()
-  let ladder = c.corner_ladder
+  let old_fit = c.corner_fit
+  let old_ladder = c.corner_ladder
+  let theme = @signals.untracked(fn() {
+    if tree_theme_of.get() is Some(_) { Some(tree_theme()) } else { None }
+  })
+  let tree_fit = match theme { Some(t) => t.corner_fit; None => old_fit }
+  let tree_ladder = match theme { Some(t) => t.corner_ladder; None => old_ladder }
   let off_ladder : Set[Int] = Set::new()
-  let holds = c.round_held(grounds, pictures)
+  let holds = c.round_held(grounds, pictures, old_count, tree_fit)
   for i in 0..<c.count {
+    c.corner_fit = if i < old_count { old_fit } else { tree_fit }
+    c.corner_ladder = if i < old_count { old_ladder } else { tree_ladder }
+    let ladder = c.corner_ladder
     let b = c.nodes[i]
     if !(b.shows_ground() || b.lit_ground()) || b.layer {
       continue
@@ -677,6 +886,8 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       }
     }
   }
+  c.corner_fit = old_fit
+  c.corner_ladder = old_ladder
   out
 }
 
@@ -696,7 +907,13 @@ fn Ctx::too_square(self : Ctx, ra : Double, rb : Double) -> Bool {
 /// then round it) and how round it is (its half). One in its corner as far from both its edges, where what follows a
 /// corner may stand (Theme::corner_fit far), whether the box is round enough for it there or not (a composer's send
 /// 10 in, its corner following a window's 6).
-fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> Map[Int, Array[(Int, Double)]] {
+fn Ctx::round_held(
+  self : Ctx,
+  grounds : Map[Int, Int],
+  pictures : Set[Int],
+  old_count : Int,
+  tree_fit : CornerFit?,
+) -> Map[Int, Array[(Int, Double)]] {
   let out : Map[Int, Array[(Int, Double)]] = {}
   for j in 0..<self.count {
     let b = self.nodes[j]
@@ -716,7 +933,8 @@ fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> 
     let t = b.y - a.y
     let r = a.x + a.fw - (b.x + b.fw)
     let d = a.y + a.fh - (b.y + b.fh)
-    let far = match self.corner_fit {
+    let fit = if j < old_count { self.corner_fit } else { tree_fit }
+    let far = match fit {
       Some(f) => f.far
       None => 0.0
     }
@@ -733,7 +951,10 @@ fn Ctx::round_held(self : Ctx, grounds : Map[Int, Int], pictures : Set[Int]) -> 
         continue
       }
       let (dx, dy) = corner_gaps(a, b, k)
-      let near_both = (dx < ra && dy < ra) || ((dx - dy).abs() <= 0.5 && dx <= far + 0.5)
+      // A circle beyond the theme's following range stands on its own: it cannot require the containing card to
+      // change its corner. Still check one within range even where the current corner is too square to reach it.
+      let in_range = match fit { Some(_) => dmax(dx, dy) <= far + 0.5; None => true }
+      let near_both = in_range && ((dx < ra && dy < ra) || ((dx - dy).abs() <= 0.5 && dx <= far + 0.5))
       // (a circle there: one whose corner there is its half; one round elsewhere but following the corner there, a
       // block in it, InnerOr's, is no circle there)
       if b.corner_at(k) >= half - 0.5 && dx >= -0.5 && dy >= -0.5 && near_both && nearest_corner(k, l, t, r, d) {
@@ -1538,7 +1759,7 @@ fn alike(rs : FixedArray[Double]) -> Bool {
 /// or a circle (its corner half its shorter side) is round by its shape: where it stands is what makes it concentric
 /// (ui-panels.md: 外圆角 = 距离 + 半高), which corner_faults checks; so is one too small for the corner it would have
 /// there, and one at different distances from the two edges: each keeps its own.
-fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
+fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int], inners_done? : Bool = false) -> Unit {
   let inner : Set[Int] = Set::new()
   for i in self.inners {
     inner.add(i)
@@ -1551,13 +1772,15 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
   let hung = self.hung_marks()
   for i in 0..<self.count {
     if inner.contains(i) {
-      self.inner_after_layout(i, grounds, hung)
+      if !inners_done { self.inner_after_layout(i, grounds, hung) }
       continue
     }
     let b = self.nodes[i]
     // (nor one linked: its corners come from where its links say, and the rule holds it to them, corner_faults)
     if b.kind != kind_box ||
       b.layer ||
+      // A tree node's layout-derived corner is already worked out by the tree before the old frame sees it.
+      b.corner_by != 0 ||
       b.radius < 0.5 ||
       b.fw <= 0.0 ||
       b.fh <= 0.0 ||
@@ -1750,58 +1973,63 @@ let half_pi : Double = 1.5707963267948966
 /// or one whose corner is `Inner` itself (each worked out from the other) is drawn square, and said so.
 fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
   for p in self.arounds {
-    let a = self.nodes[p]
-    a.radius = 0.0
-    a.radii = None
-    // (corner index, the box, its distances from the corner's two edges)
-    let mut best : (Int, Int, Double, Double)? = None
-    let mut best_d = 1.0e9
-    for i in 0..<self.count {
-      let b = self.nodes[i]
-      if i == p ||
-        b.kind != kind_box ||
-        b.layer ||
-        (b.radius < 0.5 && !self.inners.contains(i)) ||
-        b.fw <= 0.0 ||
-        b.fh <= 0.0 {
+    self.around_after_layout(p)
+  }
+}
+
+///|
+/// Work one Around corner, including its diagnostic, using the boxes in this layout.
+fn Ctx::around_after_layout(self : Ctx, p : Int) -> Unit {
+  let a = self.nodes[p]
+  a.radius = 0.0
+  a.radii = None
+  let mut best : (Int, Int, Double, Double)? = None
+  let mut best_d = 1.0e9
+  for i in 0..<self.count {
+    let b = self.nodes[i]
+    if i == p ||
+      b.kind != kind_box ||
+      b.layer ||
+      (b.radius < 0.5 && !self.inners.contains(i)) ||
+      b.fw <= 0.0 ||
+      b.fh <= 0.0 {
+      continue
+    }
+    if !self.lies_in_bare(i, p) {
+      continue
+    }
+    for k in 0..<4 {
+      let (dx, dy) = corner_gaps(a, b, k)
+      if dx < -inner_even || dy < -inner_even {
         continue
       }
-      if !self.lies_in_bare(i, p) {
-        continue
-      }
-      for k in 0..<4 {
-        let (dx, dy) = corner_gaps(a, b, k)
-        if dx < -inner_even || dy < -inner_even {
-          continue
-        }
-        let far = dmax(dx, dy)
-        if far < best_d {
-          best_d = far
-          best = Some((k, i, dx, dy))
-        }
+      let far = dmax(dx, dy)
+      if far < best_d {
+        best_d = far
+        best = Some((k, i, dx, dy))
       }
     }
-    match best {
-      None => self.inner_faults.push("\{self.named(p)}: radius=Around, nothing with a corner in its corners")
-      Some((k, i, dx, dy)) => {
-        let corner = corner_names[k]
-        if self.inners.contains(i) {
-          self.inner_faults.push(
-            "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, whose corner is Inner: each worked out from the other",
-          )
-          continue
-        }
-        if (dx - dy).abs() > inner_even {
-          self.inner_faults.push(
-            "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, at different distances from its edges: \{dx} and \{dy}",
-          )
-          continue
-        }
-        let b = self.nodes[i]
-        let rb = b.corner_at(k)
-        let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
-        a.radius = if round { round_like_out(dx + rb, room=dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
+  }
+  match best {
+    None => self.inner_faults.push("\{self.named(p)}: radius=Around, nothing with a corner in its corners")
+    Some((k, i, dx, dy)) => {
+      let corner = corner_names[k]
+      if self.inners.contains(i) {
+        self.inner_faults.push(
+          "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, whose corner is Inner: each worked out from the other",
+        )
+        return
       }
+      if (dx - dy).abs() > inner_even {
+        self.inner_faults.push(
+          "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, at different distances from its edges: \{dx} and \{dy}",
+        )
+        return
+      }
+      let b = self.nodes[i]
+      let rb = b.corner_at(k)
+      let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
+      a.radius = if round { round_like_out(dx + rb, room=dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
     }
   }
 }

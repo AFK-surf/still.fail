@@ -617,7 +617,7 @@ pub(all) enum Stroke {
 } derive(Eq, Show, Debug)
 
 ///|
-fn Stroke::px(self : Stroke) -> Double {
+pub fn Stroke::px(self : Stroke) -> Double {
   match self {
     B0 => 0.0
     B0_5 => 0.5

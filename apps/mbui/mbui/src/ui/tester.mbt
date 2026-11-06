@@ -3012,7 +3012,14 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   if faults.is_empty() {
     return
   }
-  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
+  let ladders = @signals.untracked(fn() {
+    match (view_app.val, tree_theme_of.get()) {
+      (Some(_), Some(_)) if !old_whole.val =>
+        "the frame's ladder \{c.corner_ladder}, the tree's ladder \{tree_theme().corner_ladder}"
+      _ => "the theme's ladder \{c.corner_ladder}"
+    }
+  })
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (\{ladders}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
     faults.join("\n")
   println(said)
   abort(said)
@@ -3023,10 +3030,19 @@ fn Tester::hold_corners(self : Tester) -> Unit {
 /// and nothing on it moves (Ctx's `motion_left`, the window's tree's drawn as moving too: view_frame_end), the frame's
 /// and the window's tree's nodes (Ctx::with_tree_nodes); none otherwise.
 fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
-  if self.corner_ladder.is_empty() || self.frame_by is Some(_) || self.motion_left || self.page_in_hand {
+  if self.frame_by is Some(_) || self.motion_left || self.page_in_hand {
     return []
   }
-  self.with_tree_nodes(fn() { self.corner_faults() })
+  if self.corner_ladder.is_empty() {
+    let tree_has_ladder = match view_app.val {
+      Some(_) if !old_whole.val => @signals.untracked(fn() {
+        tree_theme_of.get() is Some(_) && !tree_theme().corner_ladder.is_empty()
+      })
+      _ => false
+    }
+    if !tree_has_ladder { return [] }
+  }
+  self.all_corner_faults()
 }
 
 ///|

@@ -383,6 +383,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       c.covers_after_layout()
       // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
       c.corners_after_layout()
+      // Tree corners around hosted old views need the old boxes, which only exist after this layout.
+      tree_style_corners_after_old_layout(c)
       // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
       c.drawing_after_layout()
       // what words marked as selectable hold, as laid out (words.mbt)

@@ -35,17 +35,17 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   guard self.live() is Some(n) else { return self }
   let typing = typing.unwrap_or(n.focus_typing)
   match n.props.get(Focusable) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Focusable)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
   // (its `tab` the last said of Tab's stop on it: View::tab_stop said before let go of)
   match n.props.get(TabStop) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(TabStop)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -84,7 +84,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[Focusable] = stop
+        n.props[Focusable] = { stop, refresh: None }
       })
   }
   self
@@ -574,9 +574,9 @@ fn Tree::layers_focus_told(self : Tree) -> Unit {
 pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(TabStop) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(TabStop)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -600,7 +600,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[TabStop] = stop
+        n.props[TabStop] = { stop, refresh: None }
       })
   }
   self

@@ -214,12 +214,16 @@ test "choice rows in either kind of panel group keep their own inset" {
 ///|
 test "choice row keeps its lead and end on the first line above a note and gives its title room beside a tag" {
   for look in [Narrow, Wide] {
+    let lead_node : Ref[@view.View?] = Ref(None)
     let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=320.0, h=300.0, platform=2)
     @ui.set_view_app(fn(root) {
       @ui.set_tree_theme(ui_theme_now)
       look_lent(root, look)
       choice_row_node(root, fn() { "A long model name" }, fn() { true }, fn() {  }, note=fn() { "A note under the title" },
-        lead=fn(l) { l.width(Is(Some(18.0))).height(Is(Some(18.0))).ground(Is(0x123456FFL)) |> ignore },
+        lead=fn(l) {
+          lead_node.val = Some(l)
+          l.width(Is(Some(18.0))).height(Is(Some(18.0))) |> ignore
+        },
         tag=fn(v) { words_node(v, fn() { "Station" }, fn() { row_tag }) |> ignore },
         trail=fn(v) { button_node(v, fn() { "Repick" }, fn() {  }, tone=Ghost) |> ignore }) |> ignore
     })
@@ -228,7 +232,7 @@ test "choice row keeps its lead and end on the first line above a note and gives
     let title = tree.drawn().iter().find_first(fn(d) { d.words == "A long model name" }).unwrap()
     let note = tree.drawn().iter().find_first(fn(d) { d.words == "A note under the title" }).unwrap()
     let tag = tree.drawn().iter().find_first(fn(d) { d.words == "Station" }).unwrap()
-    let lead = tree.drawn().iter().find_first(fn(d) { d.ground == 0x123456FFL }).unwrap()
+    let lead = tree.drawn_of(lead_node.val.unwrap().id()).unwrap()
     let end = t.get(Button, label="Repick").rect
     assert_true(lead.x + lead.w <= title.x, msg="\{look}: lead precedes title")
     assert_true(title.x + title.w <= tag.x, msg="\{look}: tag follows title")

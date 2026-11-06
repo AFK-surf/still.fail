@@ -14,6 +14,19 @@ pub fn corner_roots() -> CornerRoots {
 let tree_window_corner : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
+/// Each system window corner, followed independently (a window can have unlike corners).
+// kept across runs: set as each frame begins
+let tree_window_corners : @signals.Signal[(Double, Double, Double, Double)] = @signals.signal(
+  (0.0, 0.0, 0.0, 0.0), same=fn(a, b) { a == b },
+)
+
+///|
+/// The window's four corners as the current tree frame began, followed as the system changes them.
+pub fn tree_window_corners_now() -> (Double, Double, Double, Double) {
+  tree_window_corners.get()
+}
+
+///|
 /// The content zoom of the frame being drawn, followed along with the window's corner.
 // kept across runs: set as each frame begins
 let tree_window_zoom : @signals.Signal[Double] = @signals.signal(1.0, same=fn(a, b) { a == b })
@@ -46,6 +59,18 @@ let tree_theme_said : @signals.Signal[Theme?] = @signals.signal(None, same=fn(a,
     _ => false
   }
 })
+
+///|
+/// The window's narrow-theme choice as the frame begins, followed independently of the theme's identity: the same
+/// theme may be used for both widths while a style still has a `narrow` block.
+// kept across runs: set as each frame begins and forgotten with the window's tree
+let tree_narrow_said : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
+
+///|
+/// Whether the window's tree is drawn under the narrow-theme rule, followed as its width or theme selection changes.
+pub fn tree_narrow() -> Bool {
+  tree_narrow_said.get().unwrap_or(g().narrow)
+}
 
 ///|
 /// The theme a node of the window's tree is drawn in now: the app's, as it tells it (set_tree_theme: what its old

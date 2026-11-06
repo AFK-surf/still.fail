@@ -314,7 +314,7 @@ pub fn Style::then(self : Style, o : Style) -> Style {
 
 ///|
 /// The look of `s` for a node in these states, its blocks laid on in their order.
-fn Style::resolve(
+pub fn Style::resolve(
   self : Style,
   narrow : Bool,
   dark : Bool,

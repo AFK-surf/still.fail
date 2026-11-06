@@ -289,6 +289,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     time=fn() { h_event_time() },
   )
   made.val = Some(t)
+  t.style_corners_by(tree_style_corners_after_layout)
   // (what the old frame's topmost modal layer holds under it, as it is as an input asks: one dismissed by it, at once;
   // Tree::held_under_by)
   t.held_under_by(fn() { g().old_modal_stack() })
@@ -399,8 +400,20 @@ fn view_forget() -> Unit {
   // it, no tree laid out again as it goes)
   @signals.untracked(fn() {
     tree_theme_of.set(None)
+    tree_narrow_said.set(None)
     tree_inset_said.set(None)
   })
+  match tree_corner_context.val {
+    Some(c) => {
+      c.nodes.clear()
+      c.inners.clear()
+      c.inners_or.clear()
+      c.arounds.clear()
+      c.inner_faults.clear()
+      c.corner_ladder = []
+    }
+    None => ()
+  }
   view_held.val = None
   view_nothing_down.val = None
   view_down.val = None
@@ -650,7 +663,9 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // drawn in where the app tells its tree none; the window's corner as of now: what linked corners are worked out
   // from, with the ranges of the theme its nodes are drawn in, corner_of)
   tree_theme_said.set(Some(g().theme_for(w)))
+  tree_narrow_said.set(Some(g().theme_narrow is Some(_) && w < g().narrow_below))
   tree_window_corner.set(window_corner())
+  tree_window_corners.set((window_corner_at(0), window_corner_at(1), window_corner_at(2), window_corner_at(3)))
   tree_inset_said.set(Some(window_inset()))
   // (a page's list's rows on the pixels as this frame draws them, as an old view's list's are, before anything of it is
   // laid out: Tree::set_rows_grid)
