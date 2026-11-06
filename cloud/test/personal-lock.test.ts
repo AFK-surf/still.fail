@@ -247,6 +247,26 @@ test("a restore does not replace a different lock created after its empty read",
   }
 });
 
+test("two guarded first locks cannot replace one another", async () => {
+  const h = await harness();
+  try {
+    const tokens = await h.login("alice"), alice = h.as(tokens);
+    const path = "/v1/me/personal-lock", guarded = `${path}/append`, sub = tokens.subject, ws = `person:${sub}`;
+    const a = key(), b = key();
+    const first = entry(a, 0, null, "genesis", { sub, device: device(a) }, ws);
+    const second = entry(b, 0, null, "genesis", { sub, device: device(b) }, ws);
+    const expect = { length: 0, head: null };
+    const results = await Promise.all([
+      alice("POST", guarded, { entries: [first], expect }),
+      alice("POST", guarded, { entries: [second], expect }),
+    ]);
+    assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+    const saved = (await (await alice("GET", path)).json() as { entries: PersonalEntry[] }).entries;
+    assert.equal(saved.length, 1);
+    assert.ok(hashOf(saved[0]!) === hashOf(first) || hashOf(saved[0]!) === hashOf(second));
+  } finally { await h.close(); }
+});
+
 test("an enrolled station reads only the current personal locks of its workspace's members", async () => {
   const h = await harness();
   try {
