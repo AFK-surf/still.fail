@@ -1449,9 +1449,16 @@ export class Remote {
         this.usedMirror(workspace, peer, session, mirror!);
         const manifest = readManifest(manifestPath);
         const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
+        const base = { ...(manifest?.files ?? {}) };
+        // Refresh the stat only where the content is still the source's: old manifests lacked ctime and must be hashed
+        // once, not at every subsequent sync. A changed file keeps the original content as its conflict base.
+        for (const [path, current] of Object.entries(files)) {
+          const before = base[path];
+          if (before && before[0] === current[0] && before[1] === current[1]) base[path] = current;
+        }
         const id = randomBytes(12).toString("hex");
         writeJson(join(syncing, "actual.json"), files);
-        writeJson(join(syncing, "base.json"), manifest?.files ?? {});
+        writeJson(join(syncing, "base.json"), base);
         writeJson(join(syncing, "state.json"), { id, key, version: manifest?.version ?? 0 });
         if (field(request, "safe") === 1) {
           meta.safe = true;
@@ -1494,8 +1501,9 @@ export class Remote {
         const base = readJson(join(syncing, "base.json"));
         const root = join(work, mirror!);
         // Re-read at commit: a task's output may have changed while the source sent its files.
-        const files = await actual(root, base);
-        const untracked: Record<string, [string, string, number, number, number]> = {};
+        const verify = new Set([...plan.set.map(([path]) => path), ...plan.remove]);
+        const files = await actual(root, base, verify);
+        const untracked: Record<string, [string, string, number, number, number, number?]> = {};
         if (existsSync(root)) for (const [path] of plan.set) {
           if (base[path] !== undefined || files[path] !== undefined) continue;
           let abs: string;

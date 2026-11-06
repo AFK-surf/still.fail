@@ -291,6 +291,46 @@ describe("dirsync", { concurrency: true }, () => {
     assert.equal(readFileSync(join(dir, "trace"), "utf8"), "local\n");
   });
 
+  test("sync detects a remote change even when the task restored the file's mtime", async () => {
+    const p = await pair();
+    const dir = join(p.home, "same-mtime");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "trace"), "before\n");
+    await p.run("record", dir, "cp -p trace ../trace-stamp && printf 'remote\\n' > trace && touch -r ../trace-stamp trace");
+    const manifestPath = join(p.b.remote.room("ws", p.A, "s1"), "mirrors", "same-mtime.json");
+    const manifest = readJson(manifestPath);
+    const st = statSync(join(p.mirror("same-mtime"), "trace"));
+    assert.deepEqual([st.size, st.mtimeMs, st.ino], manifest.files.trace.slice(2, 5), "size, mtime and inode all match the synced file");
+    // Even if a filesystem's ctime has the same coarse resolution, a path about to be overwritten is hashed again.
+    manifest.files.trace[5] = st.ctimeMs;
+    writeJson(manifestPath, manifest);
+    writeFileSync(join(dir, "trace"), "source\n");
+    await p.use("station_task", { key: "next", action: "prepare", command: "true", dir });
+    await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /conflict.*trace|trace.*conflict/i);
+    assert.equal(readFileSync(join(p.mirror("same-mtime"), "trace"), "utf8"), "remote\n");
+    assert.match(p.a.told.find(([, text]) => text.startsWith("Remote task record on "))![1], /changes\.patch/);
+  });
+
+  test("an older mirror manifest is rechecked without losing remote-only changes", async () => {
+    const p = await pair();
+    const dir = join(p.home, "old-manifest");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "input"), "input\n");
+    writeFileSync(join(dir, "trace"), "before\n");
+    await p.run("record", dir, "cp -p trace ../old-stamp && printf 'remote\\n' > trace && touch -r ../old-stamp trace");
+    const manifestPath = join(p.b.remote.room("ws", p.A, "s1"), "mirrors", "old-manifest.json");
+    const manifest = readJson(manifestPath);
+    for (const entry of Object.values(manifest.files) as unknown[][]) entry.length = 5;
+    writeJson(manifestPath, manifest);
+    await p.run("again", dir, "true");
+    assert.equal(readFileSync(join(p.mirror("old-manifest"), "trace"), "utf8"), "remote\n");
+    assert.equal(readJson(manifestPath).files.input.length, 6, "unchanged files are upgraded for the next sync");
+    writeFileSync(join(dir, "trace"), "source\n");
+    await p.use("station_task", { key: "next", action: "prepare", command: "true", dir });
+    await assert.rejects(p.use("station_task", { key: "next", action: "start" }), /conflict.*trace|trace.*conflict/i);
+    assert.equal(readFileSync(join(p.mirror("old-manifest"), "trace"), "utf8"), "remote\n");
+  });
+
   test("sync refuses to overwrite a new result made in the mirror with a different new source file", async () => {
     const p = await pair();
     const dir = join(p.home, "new-results");

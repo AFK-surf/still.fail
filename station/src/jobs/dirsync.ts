@@ -431,8 +431,8 @@ async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[], bulk:
 
 // ── the target: the mirror ──
 
-/// A file the mirror has: its id, mode, and the size, mtime and inode it was left with.
-export type Entry = [hash: string, mode: string, size: number, mtime: number, ino: number];
+/// A file the mirror has: its id, mode, size, mtime, inode and ctime. Older manifests have no ctime.
+export type Entry = [hash: string, mode: string, size: number, mtime: number, ino: number, ctime?: number];
 export type Manifest = { dir: string; name: string; version: number; files: Record<string, Entry> };
 
 export function readManifest(path: string): Manifest | null {
@@ -445,12 +445,12 @@ export function readManifest(path: string): Manifest | null {
 
 const entryOf = (hash: string, mode: string, path: string): Entry => {
   const st = lstatSync(path);
-  return [hash, mode, st.size, st.mtimeMs, st.ino];
+  return [hash, mode, st.size, st.mtimeMs, st.ino, st.ctimeMs];
 };
 
 /// What the mirror has of the files it was given, now: one a command changed is hashed again, one it removed (or made
-/// something else) is no longer there.
-export async function actual(mirror: string, files: Record<string, Entry>): Promise<Record<string, Entry>> {
+/// something else) is no longer there. Paths about to be overwritten are checked by content even if their stat matches.
+export async function actual(mirror: string, files: Record<string, Entry>, verify: ReadonlySet<string> = new Set()): Promise<Record<string, Entry>> {
   const out: Record<string, Entry> = {};
   for (const [path, e] of Object.entries(files)) {
     const abs = join(mirror, ...path.split("/"));
@@ -460,12 +460,12 @@ export async function actual(mirror: string, files: Record<string, Entry>): Prom
     } catch {
       continue;
     }
-    const same = st.size === e[2] && st.mtimeMs === e[3] && st.ino === e[4];
+    const same = !verify.has(path) && st.size === e[2] && st.mtimeMs === e[3] && st.ino === e[4] && st.ctimeMs === e[5];
     if (st.isSymbolicLink()) {
-      out[path] = e[1] === LINK && same ? e : [blobId(Buffer.from(readlinkSync(abs))), LINK, st.size, st.mtimeMs, st.ino];
+      out[path] = e[1] === LINK && same ? e : [blobId(Buffer.from(readlinkSync(abs))), LINK, st.size, st.mtimeMs, st.ino, st.ctimeMs];
     } else if (st.isFile()) {
       const mode = modeOf(st.mode);
-      out[path] = e[1] === mode && same ? e : [await fileId(abs, st.size), mode, st.size, st.mtimeMs, st.ino];
+      out[path] = e[1] === mode && same ? e : [await fileId(abs, st.size), mode, st.size, st.mtimeMs, st.ino, st.ctimeMs];
     }
   }
   return out;
