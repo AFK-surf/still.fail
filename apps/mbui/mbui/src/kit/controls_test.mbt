@@ -426,6 +426,89 @@ test "label: a tap on it turns its control, or gives its field the focus" {
 }
 
 ///|
+test "a field label gives its field the next input before a frame and does not steal a newer focus" {
+  let first = @ui.Field::new()
+  let second = @ui.Field::new()
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=8.0, fn() {
+      label(c, "First label", for_id=c.id("first"), field=true) |> ignore
+      c.editor("first", field=first, placeholder="First field") |> ignore
+      label(c, "Second label", for_id=c.id("second"), field=true) |> ignore
+      c.editor("second", field=second, placeholder="Second field") |> ignore
+    }) |> ignore
+  })
+  t.ctx().focus_field(first, ask_later=false)
+  t.draw()
+  let (x, y, w, h) = t.rect_of("Second label").unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.text_told("B", t.time())
+  assert_eq((first.text(), second.text()), ("", "B"), msg="the next input uses the label's field")
+  t.ctx().focus_field(first, ask_later=false)
+  t.draw()
+  assert_eq(t.ctx().focused_id(), t.ctx().id("first"), msg="the label does not replay focus over a newer request")
+}
+
+///|
+test "a field label does not focus a disabled or hidden target, even if it becomes available before the next frame" {
+  for hidden in [false, true] {
+    let unavailable = @signals.signal(true)
+    let first = @ui.Field::new()
+    let t = @ui.Tester::new(fn(c) {
+      c.column(gap=8.0, fn() {
+        c.editor("first", field=first, placeholder="First field") |> ignore
+        let id = c.id("blocked")
+        label(c, "Blocked label", for_id=id, field=true) |> ignore
+        let target = fn() {
+          c.focusable(id)
+          let n = c.box(id~, w=Px(100.0), h=Px(40.0), fn() {  })
+          c.semantics(n, TextField, id~, label="Blocked field", disabled=!hidden && unavailable.get(), actions=[Focus])
+        }
+        if hidden && unavailable.get() { c.hidden_from_semantics(target) } else { target() }
+      }) |> ignore
+    })
+    t.ctx().focus_field(first, ask_later=false)
+    t.draw()
+    let (x, y, w, h) = t.rect_of("Blocked label").unwrap()
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+    assert_eq(t.ctx().focused_id(), t.ctx().id("first"))
+    unavailable.set(false)
+    t.draw()
+    assert_eq(t.ctx().focused_id(), t.ctx().id("first"), msg="no later focus, hidden=\{hidden}")
+  }
+}
+
+///|
+test "an old field label gives a retained field the next input before a frame" {
+  let target = @signals.signal(0)
+  let first = @ui.Field::new()
+  let second = @ui.Field::new()
+  let t = @ui.Tester::new(fn(_) {  })
+  @ui.set_view_app(fn(root) {
+    @ui.old(root, fn(c) {
+      c.column(gap=8.0, fn() {
+        c.editor("first", field=first, placeholder="First field") |> ignore
+        label(c, "Retained field label", for_id=target.get(), field=true) |> ignore
+      }) |> ignore
+    }).height(Is(Some(80.0))) |> ignore
+    root.box(fn(holder) { @ui.field(holder, second, placeholder="Retained field") |> ignore }) |> ignore
+  })
+  t.draw()
+  target.set(t.get(TextField, label="Retained field").id)
+  t.draw()
+  t.ctx().focus_field(first, ask_later=false)
+  let (x, y, w, h) = t.rect_of("Retained field label").unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.text_told("N", t.time())
+  assert_eq((first.text(), second.text()), ("", "N"))
+  t.ctx().focus_field(first, ask_later=false)
+  t.draw()
+  assert_eq(t.ctx().focused_id(), t.ctx().id("first"))
+}
+
+///|
 test "label forwards a tap to an old input callback once" {
   let presses = Ref(0)
   let clicked = Ref(false)

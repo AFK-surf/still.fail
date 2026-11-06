@@ -490,13 +490,13 @@ pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
 }
 
 ///|
-/// Forward a source control's press to another control. A callback-backed Activate runs at the source's input;
-/// older controls that read an action in their build receive it at the source's normal clicked frame. A forwarded
-/// input is remembered until that click is taken so an immediate callback cannot also be queued by the build.
+/// Forward a source control's press to another control. Focus and a callback-backed Activate run at the source's
+/// input; older controls that read Activate in their build receive it at the source's normal clicked frame. A
+/// forwarded input is remembered until that click is taken so it cannot also be queued by the build.
 pub fn Ctx::forward_press(self : Ctx, source : Int, target : Int, action : Action, clicked : Bool) -> Unit {
   if source == 0 || target == 0 || source == target { return }
   self.on_press(source, fn() {
-    if action == Activate && (made_presses.contains(target) || tree_said_ids.contains(target)) {
+    if action == Focus || (action == Activate && (made_presses.contains(target) || tree_said_ids.contains(target))) {
       self.forwarded_presses.push(source)
       self.ask_action(target, action)
     }
