@@ -117,14 +117,15 @@ test "a station meter follows the window's light and dark themes" {
   let meters = @signals.signal([meter_reading("Memory", "amber", "left 5 G", "27 / 32 G", 16)], same=fn(a, b) { a == b })
   let t = meter_row_tester(meters, false, 0)
   let light = t.drawn_instances()
-  t.set_dark(true)
+  @sf.set_dark(Some(true))
   t.draw()
   let dark = t.drawn_instances()
   assert_true(dark != light)
   assert_true(t.find("Memory") is Some(_) && t.find("left 5 G") is Some(_))
-  t.set_dark(false)
+  @sf.set_dark(Some(false))
   t.draw()
   assert_eq(t.drawn_instances(), light)
+  @sf.set_dark(None)
 }
 
 ///|
@@ -157,12 +158,19 @@ test "reordering station meters does not transfer an open tip to a different rea
   let meters = @signals.signal([memory, disk], same=fn(a, b) { a == b })
   let t = meter_row_tester(meters, true, 0)
   guard t.find("Memory") is Some((x, y)) else { fail("no meter: \{t.drawn_text()}") }
+  let before = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == "Memory" })[0].id
   t.move(x, y)
   t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
   assert_true(t.semantics().any(fn(s) { s.role == Tooltip && s.label == "Memory 27 / 32 G" && !s.hidden }))
   meters.set([disk, memory])
   t.draw()
-  assert_false(t.semantics().any(fn(s) { s.role == Tooltip && s.label == "Disk 99 / 100 G" && !s.hidden }))
+  let after = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == "Memory" })[0].id
+  assert_true(before == after, msg="the memory reading keeps its node as it moves")
+  // The disk is now under the stationary pointer, so it can acquire its own tip. Point to memory at its new position.
+  guard t.find("Memory") is Some((new_x, new_y)) else { fail("no moved meter: \{t.drawn_text()}") }
+  t.move(new_x, new_y)
+  t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
+  assert_true(t.semantics().any(fn(s) { s.role == Tooltip && s.label == "Memory 27 / 32 G" && !s.hidden }))
 }
 
 ///|
@@ -177,11 +185,67 @@ test "a station meter lets its row be tapped and shows its tip on a finger's hol
   t.touch(0, x, y)
   t.run_for(@ui.long_press_ms + @ui.move_most_ms)
   assert_true(t.semantics().any(fn(s) { s.role == Tooltip && s.label == "Memory 27 / 32 G" && !s.hidden }))
+  t.touch(2, x, y)
+  t.draw()
+  assert_eq(pressed.val, 1, msg="a hold does not also activate the row")
+  t.touch(0, x, y)
+  t.run_for(@ui.long_press_ms + @ui.move_most_ms)
+  t.touch(3, x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_false(t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden }), msg="a cancelled touch closes the tip")
+  t.touch(0, x, y)
+  t.run_for(@ui.long_press_ms + @ui.move_most_ms)
   // If the reading stops being an alert while held, its tip and its ownership leave with it.
   meters.set([meter_reading("Memory", "ok", "left 20 G", "12 / 32 G", 63)])
   t.draw()
   assert_false(t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden }))
   t.touch(2, x, y)
+}
+
+///|
+/// Drag a scroll from a meter, before or after holding its tip open.
+fn meter_row_scroll_touch(hold : Bool) -> (Bool, Double, Int, Bool) raise {
+  let scroll = @view.Scroll::new()
+  let pressed = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=400.0, h=200.0, platform=1)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let tips = @sf.TipLayer::new(fn() { Some(root) })
+    root.box(fn(view) {
+      view.width(Is(Some(200.0))).height(Is(Some(100.0))) |> ignore
+      view.scrolls(scroll, slop=@ui.touch_slop(), fn(content) {
+        content.box(fn(row) {
+          row.row(Is(true)).height(Is(Some(60.0))).padding(Is((20.0, 20.0, 0.0, 0.0))) |> ignore
+          @sf.presses_node(row, fn() { pressed.val += 1 })
+          meter_chips_node(row, fn() { [meter_reading("Memory", "amber", "left 5 G", "27 / 32 G", 16)] }, tips~)
+        }) |> ignore
+        content.box(fn(space) { space.height(Is(Some(300.0))) |> ignore }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  guard t.find("Memory") is Some((x, y)) else { fail("no meter: \{t.drawn_text()}") }
+  t.touch(0, x, y)
+  if hold { t.run_for(@ui.long_press_ms + @ui.move_most_ms) }
+  let shown = t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden })
+  t.touch(1, x, y - 25.0)
+  t.touch(1, x, y - 50.0)
+  t.draw()
+  let offset = scroll.at(@ui.view_tree().unwrap())
+  t.touch(2, x, y - 50.0)
+  t.run_for(@ui.move_most_ms)
+  (shown, offset, pressed.val, t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden }))
+}
+
+///|
+test "a station meter lets its row scroll before or after a finger holds its tip" {
+  for hold in [false, true] {
+    let (shown, offset, pressed, remains) = meter_row_scroll_touch(hold)
+    assert_eq(shown, hold)
+    assert_true(offset > 0.0, msg="the scroll takes the drag")
+    assert_eq(pressed, 0)
+    assert_false(remains, msg="a drag closes the tip")
+  }
 }
 
 ///|

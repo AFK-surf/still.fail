@@ -110,5 +110,7 @@ test "a meter node's tip follows its label, value and optional note" {
   assert_true(t.semantics().any(fn(s) { s.role == Tooltip && s.label == "Memory 28 / 32 G" && !s.hidden }))
   meter.set(Some({ "short": "Memory", "remaining": "left 4 G", "left": 13, "level": "amber" }))
   t.draw()
+  assert_false(t.semantics().any(fn(s) { s.role == Tooltip && s.label.contains("Memory 28") && !s.hidden }))
+  t.run_for(@kit.pop_out_ms * 2.0)
   assert_false(t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden }))
 }

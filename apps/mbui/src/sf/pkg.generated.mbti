@@ -1274,6 +1274,8 @@ pub fn meter_chip_node(@view.View, () -> @json.Json?, brief? : Bool, tips? : Tip
 
 pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
 
+pub fn meter_chips_node(@view.View, () -> Array[@json.Json], brief? : Bool, tips? : TipLayer) -> Unit
+
 pub fn mix(Int64, Double, Int64) -> Int64
 
 pub fn mix_seen(Int64, Double, Int64) -> Int64

@@ -74,7 +74,10 @@ pub fn fill_chip_node(
     })
     |> ignore
     match tips {
-      Some(t) => tip_node(t, b, said) |> ignore
+      Some(t) => {
+        b.points(By(fn() { said() != "" })) |> ignore
+        tip_node(t, b, said, passive_hold=true) |> ignore
+      }
       None => ()
     }
   })
