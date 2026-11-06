@@ -712,3 +712,62 @@ test "a modal descendant held past its stopped telling can lay out" {
   assert_eq(callback_layouts.val, 1, msg="the later modal telling can lay out, got \{callback_layouts.val}")
   t.dispose()
 }
+
+///|
+test "an independent event between modal notifications cannot stop their layout" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let source_armed = Ref(false)
+  let source_said = Ref(false)
+  let fault_armed = Ref(false)
+  let faulted = Ref(false)
+  let calls = Ref(0)
+  let after_fault = Ref(-1)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if source_armed.val && !source_said.val {
+          source_said.val = true
+          v.tree.modals_told()
+        }
+        if fault_armed.val && !faulted.val {
+          faulted.val = true
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  t.on_modals(fn() {
+    calls.val += 1
+    if calls.val == 1 {
+      // The independent event is ahead of the descendant modal callback in the same after-flush queue.
+      @signals.after_flush(fn() {
+        t.event(15.0, fn() {
+          fault_armed.val = true
+          t.layout_marked_at(0)
+          t.laid_as_now()
+          fault_armed.val = false
+        })
+      })
+      source_armed.val = true
+      t.layout_marked_at(0)
+      t.laid_as_now()
+    } else {
+      t.layout_marked_at(0)
+      let before = t.work.computes
+      t.laid_as_now()
+      after_fault.val = t.work.computes - before
+    }
+  })
+  @signals.start_batch()
+  // A raw batch may notify at the current moment without starting another timed event.
+  t.modals_told()
+  @signals.end_batch()
+  assert_true(source_said.val)
+  assert_true(faulted.val, msg="the separate event self-marked its layout")
+  assert_eq(calls.val, 2)
+  assert_eq(after_fault.val, 1, msg="the descendant's layout is not stopped by the intervening event")
+  t.dispose()
+}
