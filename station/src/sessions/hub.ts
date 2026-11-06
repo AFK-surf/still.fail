@@ -56,6 +56,7 @@ import { shownFacts } from "./image-size.ts";
 import { sandboxIndexEnabled } from "../store/sandbox-index.ts";
 import { SandboxNameBuilder } from "./sandbox-name-builder.ts";
 import { SessionDirectoryBuilder } from "./session-directory-builder.ts";
+import { ProcessJobsBuilder } from "../jobs/process-jobs-builder.ts";
 
 type Json = any;
 
@@ -187,6 +188,7 @@ export class Hub {
   private awaitingWorkspaceActivity = new Set<string>();
   private sandboxNames: SandboxNameBuilder | null = null;
   private sessionDirectories: SessionDirectoryBuilder | null = null;
+  private processJobs: ProcessJobsBuilder | null = null;
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
   /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
@@ -830,6 +832,10 @@ export class Hub {
     return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).findArguments(lines, home);
   }
 
+  processJobLookup(): ProcessJobsBuilder {
+    return this.processJobs ??= new ProcessJobsBuilder(this.store, this.options?.previous ?? Promise.resolve());
+  }
+
   /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
   /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
   /// station runs things in sandboxes (agents.ts).
@@ -1040,6 +1046,7 @@ export class Hub {
     this.live.close();
     await this.sandboxNames?.close();
     await this.sessionDirectories?.close();
+    await this.processJobs?.close();
     await Promise.all([...this.actors.values()].map((a) => a.dispose()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
   }

@@ -63,6 +63,7 @@ import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, RU
   SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
 import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_ARGUMENTS, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_INITIAL, SESSION_DIR_LIVE_FEW, SESSION_DIR_LIVE_MANY, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
 import { installChatShareIndex, SHARE_DIRTY, SHARE_DUE, SHARE_FIRST, SHARE_LAPSED_WORKSPACE, SHARE_LIVE, SHARE_NEXT, SHARE_NEXT_TIME } from "../src/store/chat-share-index.ts";
+import { installProcessJobs, PROCESS_JOBS, PROCESS_JOB_CONFLICT, PROCESS_JOB_END, PROCESS_JOB_FIRST, PROCESS_JOB_NEXT, PROCESS_JOB_NULL_ID } from "../src/store/process-jobs.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -102,6 +103,25 @@ function assertSessionJobPlans() {
   assert.ok(watches.some((s) => /^SCAN w\b/.test(s)), watchDetail); // Only running watches are in this lookup.
   assert.ok(watches.some((s) => s.startsWith("SEARCH j ") && s.includes("id=?")), watchDetail);
   assert.ok(watches.every((s) => !/^SCAN (j|jobs)\b/.test(s)), watchDetail);
+}
+
+function assertProcessJobPlans() {
+  const db = memory().db;
+  installProcessJobs(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  const groups = plan(PROCESS_JOBS);
+  assert.match(groups, /SCAN p\b/); // This table contains only running process groups.
+  assert.match(groups, /SEARCH j USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  assert.doesNotMatch(groups, /SCAN (j|jobs)\b/);
+  assert.match(plan(PROCESS_JOB_END), /SEARCH jobs USING COVERING INDEX jobs_state .*state=\?/);
+  assert.match(plan(PROCESS_JOB_FIRST, "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid</);
+  assert.match(plan(PROCESS_JOB_NEXT, "1", "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid>/);
+  assert.match(plan(PROCESS_JOB_NULL_ID), /SEARCH jobs USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  const conflicts = plan(PROCESS_JOB_CONFLICT, "a", "token", 1);
+  assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
+  assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
+  assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
 }
 
 function assertSandboxPlans() {
@@ -1573,6 +1593,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
   assertSessionJobPlans();
+  assertProcessJobPlans();
   assertSandboxPlans();
   assertChatSharePlans();
   assertSessionDirectoryPlans();
@@ -1788,6 +1809,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
   assertSessionJobPlans();
+  assertProcessJobPlans();
   assertSandboxPlans();
   assertChatSharePlans();
   assertSessionDirectoryPlans();

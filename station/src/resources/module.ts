@@ -95,7 +95,7 @@ export const ResourcesLive = Layer.effectDiscard(
         // Every process's, once: some 20 ms.
         traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
         runners: () => runnersWithSessions(data, whose),
-        jobs: () => watchedJobs(store),
+        jobs: () => watchedJobs(store, hub.processJobLookup()),
         isApp,
         self: [process.pid, ...(launcher() ? [process.ppid] : [])],
       })),

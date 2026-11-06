@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { runnerId } from "../agents/process.ts";
 import { runnerOf } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { watchedJobs } from "../jobs/memory.ts";
 import { platform } from "../platform/index.ts";
 import { gate } from "./door.ts";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
@@ -55,7 +56,7 @@ export const AdbLive = Layer.effectDiscard(
           return r === undefined ? [] : [r.runner, r.pid];
         });
       },
-      jobs: () => store.jobsRunning().flatMap((j) => (j.pgid === null ? [] : [{ pgid: j.pgid, mine: (id: string) => j.sessionKey === sessionOf(id) }])),
+      jobs: () => watchedJobs(store, hub.processJobLookup()).map((j) => ({ pgid: j.pgid, mine: (id: string) => j.session === sessionOf(id) })),
       cwds: (pids) => platform.cwds(pids),
       self: process.pid,
     }, grant, holders);
