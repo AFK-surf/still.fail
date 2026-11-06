@@ -239,8 +239,17 @@ pub fn Scroll::on_activity(self : Scroll, owner : View, f : (ScrollActivity) -> 
 ///|
 fn Scroll::activity_tell(self : Scroll, activity : ScrollActivity) -> Unit {
   if self.activity_observers.is_empty() { return }
-  for observer in self.activity_observers.copy() {
-    if observer.live { @signals.untracked(fn() { (observer.tell)(activity) }) }
+  let observers = self.activity_observers.copy()
+  let tell = fn() {
+    for observer in observers {
+      if observer.live { @signals.untracked(fn() { (observer.tell)(activity) }) }
+    }
+  }
+  match self.host {
+    // A replan can end a coast during layout. Its listener may read the list's geometry, so tell it after this
+    // layout, still in the same change, rather than re-entering a partially measured tree.
+    Some(host) if host.tree.layouts_active > 0 => host.tree.said_after_laid(fn() { if host.alive() { tell() } })
+    _ => tell()
   }
 }
 

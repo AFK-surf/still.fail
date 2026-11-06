@@ -443,6 +443,9 @@ fn Scroll::fling_grew(self : Scroll, f : Fling, w : ListWay, t : Double, d : Dou
   match list_planned(f.t0, f.x0 + d, f.v0, w, w.same, density, bound) {
     Some(g) => self.fling.set(Some(g))
     None => {
+      if self.activity_coasting {
+        self.activity_changed = self.activity_changed || w.at(f, t) + d != self.activity_from
+      }
       self.fling.set(None)
       self.x.set(f.x0 + d)
     }
@@ -532,9 +535,11 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
 fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   (self.settle_off)()
   self.settle_off = fn() {  }
-  guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else { return }
+  guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else {
+    self.activity_stop(t, @signals.untracked(fn() { self.x.get() }))
+    return
+  }
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
-  ignore(t)
   self.settle_off = v.at_moment(rest, fn() {
     self.settle_off = fn() {  }
     let flung = @signals.untracked(fn() { self.fling.get() })
@@ -574,12 +579,16 @@ fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? 
     return
   }
   let density = w.px / dmax(w.h, 1.0)
+  let before = if self.activity_coasting { @signals.untracked(fn() { self.where_at(t) }) } else { 0.0 }
   match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
     // (past its foot already as it is laid out now (what is under what is in sight less by more than it had left to
     // go): it meets it now, at its speed now)
     Some(g) if g.end_t < t => self.fling.set(Some(met_now(f, w, t, most, density)))
     Some(g) => self.fling.set(Some(g))
     None => {
+      if self.activity_coasting {
+        self.activity_changed = self.activity_changed || before != self.activity_from
+      }
       self.fling.set(None)
       self.x.set(f.x0)
     }

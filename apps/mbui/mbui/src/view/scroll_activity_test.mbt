@@ -106,3 +106,31 @@ test "a scroll activity listener leaves with its owner" {
   assert_eq(events, [@view.ScrollMoved(10.0), @view.ScrollCoasting(20.0)])
   tree.dispose()
 }
+
+///|
+test "a user coast ended by shorter content tells the listener without counting reflow as a hand move" {
+  let scroll = @view.Scroll::list()
+  let count = @signals.signal(100)
+  let events : Array[@view.ScrollActivity] = []
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(list) {
+      list.width(Is(Some(200.0))).height(Is(Some(100.0))) |> ignore
+      scroll.on_activity(list, fn(event) { events.push(event) })
+      list.scrolls_anchored(scroll, fn() { Array::makei(count.get(), fn(i) { i }) }, from_end=false, ahead=0.0,
+        fn(row, _) { row.height(Is(Some(40.0))) |> ignore }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(200.0, 200.0, now=0.0) |> ignore
+  let id = tree.claimer_of(tree.claimers_at(50.0, 50.0), 0.0, -20.0).unwrap()
+  tree.drag_at(id, Down, 50.0, 80.0, 10.0) |> ignore
+  tree.drag_at(id, Moved, 50.0, 60.0, 20.0) |> ignore
+  tree.drag_at(id, Moved, 50.0, 40.0, 30.0) |> ignore
+  tree.drag_at(id, Up, 50.0, 40.0, 30.0) |> ignore
+  assert_true(events.last() is Some(@view.ScrollCoasting(_)))
+  tree.bring_to(50.0)
+  count.set(0)
+  tree.frame(200.0, 200.0, now=50.0) |> ignore
+  tree.advance(10000.0)
+  assert_true(events.last() is Some(@view.ScrollStopped(_, true)))
+  tree.dispose()
+}

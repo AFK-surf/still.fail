@@ -5480,9 +5480,9 @@ pub fn View::owns(self : View, f : () -> Unit) -> View {
 
 ///|
 /// Run once immediately before this node or any ancestor begins being removed, while its entire subtree still lives.
-/// The callback can read its current layout, including changes since the last painted frame. It also runs before the
-/// whole tree is disposed. Signal writes are told after removal, with any enclosing structural change. The callback
-/// must not itself remove or rebuild this subtree. A callback registered on an already removed node is not kept.
+/// It also runs before the whole tree is disposed. Signal writes are told after removal, with any enclosing structural
+/// change. The callback must not itself remove or rebuild this subtree. A callback registered on an already removed
+/// node is not kept.
 pub fn View::before_removed(self : View, f : () -> Unit) -> View {
   guard self.alive() else { return self }
   let tree = self.tree
