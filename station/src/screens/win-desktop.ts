@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { AudioFrame, Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenResolution, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
+import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenResolution, type ScreenScale, type ScreenSource, type ScreenVideo, type ScreenView, type ViewOptions, codecFor } from "./source.ts";
 import { processUi } from "./ui.ts";
 import { WinInput } from "./win-input.ts";
 
@@ -243,7 +243,7 @@ export class WindowsDesktop implements ScreenSource {
     if (binary === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
     // H.265 where it is taken (stillfail-screen makes it where the hardware has an encoder of it, else H.264: its info
     // says which), H.264, else a JPEG a picture (an agent's view, a client without either).
-    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
+    const codec = codecFor(options, ["h265", "h264", "jpeg"]);
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh();
     if (this.#status?.capture === false) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());

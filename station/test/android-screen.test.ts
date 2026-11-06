@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { makeScreens } from "../src/screens/source.ts";
-import { AndroidScreens, AndroidInput, KEYCODES, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
+import { ScreenRefused } from "../src/screens/hub.ts";
+import { AndroidScreen, AndroidScreens, AndroidInput, KEYCODES, PEEKS_MOST, PEEK_BITRATE, PEEK_FPS, PeekCount, bitrateOf, viewArgs, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
 
 const size = { width: 1000, height: 2000 };
 
@@ -44,6 +45,36 @@ test("a view's size: what it asked, at least 1280 to drive; a preview as small a
   assert.equal(sideOf({ ...options, maxWidth: 400, maxHeight: 800 }), 1280);
   assert.equal(sideOf({ ...options, maxWidth: 400, maxHeight: 800, peek: true }), 800);
   assert.equal(sideOf({ ...options, maxWidth: 3840, maxHeight: 2160 }), 2560);
+});
+
+test("a view's rate by its side: 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440, 8 above", () => {
+  assert.deepEqual([320, 480, 481, 720, 1080, 1280, 1440, 1600, 2560].map(bitrateOf), [2e6, 2e6, 3e6, 3e6, 5e6, 7e6, 7e6, 8e6, 8e6]);
+});
+
+test("what scrcpy is run with: a view's rate by its side (not the pace's start), a preview's small, slow and not waking it", () => {
+  const options = { codecs: ["h264" as const], bitrate: 1_500_000 };
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 1600, maxHeight: 2400 }), { maxSide: 2400, bitrate: 8_000_000, wake: true });
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 700, maxHeight: 1000, fps: 30 }), { maxSide: 1280, bitrate: 7_000_000, fps: 30, wake: true });
+  assert.deepEqual(viewArgs({ ...options, maxWidth: 640, maxHeight: 640, peek: true, fps: 60 }), { maxSide: 640, bitrate: PEEK_BITRATE, fps: PEEK_FPS, wake: false });
+  assert.equal(PEEK_FPS, 2);
+  assert.equal(PEEK_BITRATE, 300_000);
+});
+
+test("previews of a machine's devices: at most two at once, one more refused before anything runs on a device", async () => {
+  const peeks = new PeekCount();
+  for (let i = 0; i < PEEKS_MOST; i++) assert.equal(peeks.take(), true);
+  assert.equal(peeks.take(), false);
+  let asked = 0;
+  const adb = { run: async () => (asked++, ""), shell: () => { throw new Error("nothing runs"); } };
+  const screen = new AndroidScreen({ id: "android:emulator-5554", title: "t", size, panels: [], adb: adb as any, file: "/nonexistent", changed: () => {}, peeks });
+  await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["jpeg", "h264"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 503);
+  await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["jpeg"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 415);
+  assert.equal(asked, 0);
+  // One ended: another may start (its run failing here gives its place back too).
+  peeks.free();
+  await assert.rejects(screen.open({ maxWidth: 640, maxHeight: 640, codecs: ["h264"], peek: true }), (e: unknown) => e instanceof ScreenRefused && e.status === 503);
+  assert.ok(asked > 0);
+  assert.equal(peeks.running, PEEKS_MOST - 1);
 });
 
 test("a finger: down, moves, up, in the picture's pixels with its size", () => {

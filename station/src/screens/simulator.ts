@@ -19,7 +19,7 @@ import { SimDebug } from "./sim-debug.ts";
 import { SimInput } from "./sim-input.ts";
 import { type ChromeSource, chromeOf, displaysOf } from "./sim-chrome.ts";
 import { type Panel, panelOf } from "./sim-mask.ts";
-import type { Codec, ScreenSource, ScreenView, Screens, ViewOptions } from "./source.ts";
+import { type ScreenSource, type ScreenView, type Screens, type ViewOptions, codecFor } from "./source.ts";
 
 /// A booted device as simctl lists it.
 export type Booted = { udid: string; name: string; runtime: string; type: string };
@@ -267,8 +267,8 @@ export class Simulator implements ScreenSource {
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
-    // H.264 (the helper's encoder; H.265 where asked and this Mac has it), else a JPEG a picture (an agent's view).
-    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
+    // A card takes a JPEG; a full view takes H.265 or H.264 where the client can show it.
+    const codec = codecFor(options, ["h265", "h264", "jpeg"]);
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     const socket = await this.#helper.connect({ op: "simulator.view", udid: this.#device.udid, codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(options.fps ? { fps: options.fps } : {}) });
     const view = new HelperView(codec, socket, () => this.#views.delete(view), new SimInput(), "CoreSimulator");

@@ -66,6 +66,9 @@ pub struct Stream {
   /// the picture shown: its size in pixels and its frame's time, from the event that said it decoded
   priv mut size : (Int, Int)?
   priv mut at : Double?
+  /// The retained nodes that draw this stream follow these, made only when one first reads them.
+  priv mut picture_told : @signals.Signal[Int]?
+  priv mut size_told : @signals.Signal[Int]?
   /// frames handed over, their fate not said yet: their time and their ticket's number
   priv out : Array[(Double, Int)]
   /// what it let go of itself, said as the next frame begins ("d TS")
@@ -96,9 +99,24 @@ pub struct Stream {
 let open_streams : Array[Stream] = []
 
 ///|
+/// The stream textures latched since the last frame presented, including one used in more than one place.
+let changed_streams : Map[Int, Bool] = Map([])
+
+///|
 /// Where streams are drawn, by node, as the last build said: the stream, and the rect it is drawn at (Ctx::stream's
 /// `at`).
 let stream_nodes : Map[Int, (Stream, (Double, Double, Double, Double)?)] = Map([])
+
+///|
+/// A stream drawn by a node of the window's tree. Its source is read as that node's layer is painted.
+priv struct TreeStream {
+  source : () -> Stream?
+  fit : Fit
+}
+
+///|
+/// The streams drawn by tree nodes, each owned by its node.
+let tree_streams : Map[@view.NodeId, TreeStream] = Map([])
 
 ///|
 /// The frames handed over so far (their tickets' numbers).
@@ -112,6 +130,7 @@ let h264_known : Ref[Int] = Ref::new(-1)
 ///|
 fn streams_reset() -> Unit {
   open_streams.clear()
+  changed_streams.clear()
   stream_nodes.clear()
   stream_tickets.val = 0
   pointers_told.clear()
@@ -142,6 +161,8 @@ pub fn Stream::new(
     need_key: true,
     size: None,
     at: None,
+    picture_told: None,
+    size_told: None,
     out: [],
     own: [],
     acks: [],
@@ -313,6 +334,43 @@ pub fn Stream::size(self : Stream) -> (Int, Int)? {
 }
 
 ///|
+/// Its decoded size, followed by a tree property that uses it for layout.
+pub fn Stream::size_told(self : Stream) -> (Int, Int)? {
+  let told = match self.size_told {
+    Some(t) => t
+    None => {
+      let t = @signals.signal(0)
+      self.size_told = Some(t)
+      t
+    }
+  }
+  told.get() |> ignore
+  self.size
+}
+
+///|
+/// Read as a retained layer draws this stream, so a decoded frame marks that layer for paint.
+fn Stream::read_picture(self : Stream) -> Unit {
+  let told = match self.picture_told {
+    Some(t) => t
+    None => {
+      let t = @signals.signal(0)
+      self.picture_told = Some(t)
+      t
+    }
+  }
+  told.get() |> ignore
+}
+
+///|
+fn stream_tell(told : @signals.Signal[Int]?) -> Unit {
+  match told {
+    Some(t) => t.set(@signals.untracked(fn() { t.get() }) + 1)
+    None => ()
+  }
+}
+
+///|
 /// Whether a frame has shown since it opened (one is kept on screen through a reconnect or an end).
 pub fn Stream::shown_any(self : Stream) -> Bool {
   self.at is Some(_)
@@ -338,6 +396,7 @@ pub fn Stream::close(self : Stream) -> Unit {
     return
   }
   self.closed = true
+  stream_tell(self.picture_told)
   for o in self.out {
     outside_end(outside_stream, o.1)
   }
@@ -631,11 +690,17 @@ fn streams_frame_start() -> Unit {
           match (stream_num(t), stream_num(pw), stream_num(ph)) {
             (Some(ts), Some(fw), Some(fh)) => {
               s.at = Some(ts)
+              changed_streams[s.id] = true
+              let was = s.size
               s.size = if s.h264 && s.cw > 0 && s.ch > 0 {
                 Some((s.cw, s.ch))
               } else {
                 Some((fw.to_int(), fh.to_int()))
               }
+              if s.size != was {
+                stream_tell(s.size_told)
+              }
+              stream_tell(s.picture_told)
               latch.val = Some(ts)
               s.acks.push(ts)
               s.settled_to(ts)
@@ -734,6 +799,16 @@ pub fn Ctx::stream(
 }
 
 ///|
+/// Draw a stream in a tree node, over its ground and under what the node holds. The source is followed as the node's
+/// layer is drawn; decoded frames tell that layer to paint again. The node owns the registration, not the stream.
+pub fn stream_node(node : @view.View, source : () -> Stream?, fit? : Fit = FitFill) -> Unit {
+  guard node.alive() else { return }
+  let id = node.id()
+  tree_streams[id] = { source, fit }
+  node.owns(fn() { tree_streams.remove(id) |> ignore }) |> ignore
+}
+
+///|
 /// Node `i`'s stream drawn (paint_image): an instance of kind 4 whose image is the stream's (@hostapi.stream_tex_base +
 /// its id), as an image's is placed.
 fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
@@ -741,16 +816,37 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
     Some(x) => x
     None => return false
   }
-  let (pw, ph) = match s.size {
-    Some((pw, ph)) if !s.closed && s.id != 0 && pw > 0 && ph > 0 => (pw.to_double(), ph.to_double())
-    _ => return true
-  }
   let (bx, by, bw, bh, fit) = match at {
     Some((x, y, w, h)) => (n.x + x, n.y + y, w, h, FitFill)
     None => (n.x, n.y, n.fw, n.fh, n.fit)
   }
+  let before = self.ninst
+  self.draw_stream(s, bx, by, bw, bh, fit, n.radius, alpha)
+  if self.ninst > before {
+    self.corners_last(n)
+  }
+  true
+}
+
+///|
+/// A stream's picture in a box, fitted and clipped as an image is. Used by both kinds of node.
+fn Ctx::draw_stream(
+  self : Ctx,
+  s : Stream,
+  bx : Double,
+  by : Double,
+  bw : Double,
+  bh : Double,
+  fit : Fit,
+  radius : Double,
+  alpha : Double,
+) -> Unit {
+  let (pw, ph) = match s.size {
+    Some((pw, ph)) if !s.closed && s.id != 0 && pw > 0 && ph > 0 => (pw.to_double(), ph.to_double())
+    _ => return
+  }
   if bw <= 0.0 || bh <= 0.0 {
-    return true
+    return
   }
   let (x, y, w, h, u0, v0, du, dv) = match fit {
     FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)
@@ -768,10 +864,8 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
       (bx + (bw - w) / 2.0, by + (bh - h) / 2.0, w, h, 0.0, 0.0, 1.0, 1.0)
     }
   }
-  self.push_inst(x, y, w, h, n.radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha, u0, v0, du, dv)
-  self.corners_last(n)
+  self.push_inst(x, y, w, h, radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha, u0, v0, du, dv)
   self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.stream_tex_base + s.id).to_double()
-  true
 }
 
 ///|

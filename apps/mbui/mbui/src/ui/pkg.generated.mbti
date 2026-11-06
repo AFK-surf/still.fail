@@ -642,6 +642,8 @@ pub fn stream_audio_here() -> Bool
 
 pub fn stream_layers_here() -> Bool
 
+pub fn stream_node(@view.View, () -> Stream?, fit? : Fit) -> Unit
+
 pub fn strike(String) -> @text.Run
 
 pub fn style(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h? : Len, max_h? : Len, p? : Space, px? : Space, py? : Space, pl? : Space, pr? : Space, pt? : Space, pb? : Space, m? : Space, mx? : Space, my? : Space, ml? : Space, mr? : Space, mt? : Space, mb? : Space, gap? : Space, align? : Align, justify? : Justify, bg? : Color, radius? : Radius, border? : Stroke, border_color? : Color, dashed? : Bool, shadow? : Shadow, clip? : Bool, opacity? : Opacity, narrow? : Patch, dark? : Patch, selected? : Patch, hovered? : Patch, focused? : Patch, pressed? : Patch, disabled? : Patch) -> Style
@@ -2523,6 +2525,7 @@ pub fn Stream::route(Self, Int32, Double, video~ : Bool, audio~ : Bool) -> Unit
 pub fn Stream::shown_any(Self) -> Bool
 pub fn Stream::shown_at(Self) -> Double?
 pub fn Stream::size(Self) -> (Int32, Int32)?
+pub fn Stream::size_told(Self) -> (Int32, Int32)?
 
 #derive(Eq, Show, @debug.Debug)
 pub(all) enum Stroke {

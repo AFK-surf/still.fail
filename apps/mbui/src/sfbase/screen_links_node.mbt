@@ -168,6 +168,14 @@ fn screen_link_card_node(v : @view.View, src : Source, key : String, href : Stri
               None => ()
             }
           }
+          match p.stream {
+            Some(st) =>
+              match st.size_told() {
+                Some((w, h)) if h > 0 => natural = w.to_double() / h.to_double()
+                _ => ()
+              }
+            None => ()
+          }
           let listed = match kc {
             Some(s) if s.width > 0.0 && s.height > 0.0 => s.width / s.height
             _ => 0.0
@@ -197,6 +205,13 @@ fn screen_link_card_node(v : @view.View, src : Source, key : String, href : Stri
           .image(Is(Some((pk, "", 8192))))
           .image_covers(Is(true))
           |> ignore
+        })
+        f.show(fn() {
+          peeks_told.get() |> ignore
+          p.stream is Some(_)
+        }, fn(pic) {
+          pic.over(Is(true)).grow(Is(1.0)) |> ignore
+          @ui.stream_node(pic, fn() { p.stream }, fit=FitCoverAt(0.0))
         })
       })
       |> ignore
