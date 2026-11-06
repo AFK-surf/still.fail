@@ -680,6 +680,8 @@ pub fn file_tile(@ui.Ctx, String, dir? : Bool, progress? : Double?, error? : Boo
 
 pub fn file_tile_fill(Double, Double, Int64) -> @paint.Shape
 
+pub fn file_tile_node(@view.View, () -> String, dir? : () -> Bool, progress? : () -> Double?, error? : () -> Bool) -> @view.View
+
 pub let files_gap : @ui.Space
 
 pub let files_row_end : @ui.Space
