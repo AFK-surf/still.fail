@@ -215,7 +215,8 @@ test("appending to an existing thread finds its previous message only once", () 
     const counted = new Proxy(db, { get(target, property) {
       if (property === "exec") return (sql: string) => {
         if (sql.includes("CREATE TRIGGER said_state_before_insert")) {
-          const traced = sql.replaceAll("s.thread=NEW.thread", "s.thread=NEW.thread AND visit_write_lookup(s.n)");
+          const traced = sql.replaceAll("s.thread=NEW.thread", "s.thread=NEW.thread AND (s.n=NEW.n OR visit_write_lookup(s.n))")
+            .replaceAll("FROM entries WHERE thread=NEW.thread", "FROM entries WHERE thread=NEW.thread AND (n=NEW.n OR visit_write_lookup(n))");
           assert.notEqual(traced,sql);
           replacements++;
           sql = traced;
