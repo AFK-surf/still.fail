@@ -43,6 +43,11 @@ priv struct Publishing {
   mut walks : Int
   /// the picture asked for copied, not kept in the photo album (a phone's 复制图片 beside its 保存到相册)
   mut copying : Bool
+  /// opened by a message's 多选: its seq, the one message ticked once the preview is read, and brought into sight
+  /// once it is laid out (None: all ticked, the page from its top)
+  mut picked : Double?
+  /// whether it is still to be brought into sight
+  mut aim : Bool
 }
 
 ///|
@@ -72,6 +77,8 @@ let publishing : Publishing = {
   walk: None,
   copying: false,
   walks: 0,
+  picked: None,
+  aim: false,
 }
 
 ///|
@@ -88,24 +95,26 @@ pub fn publish_reset() -> Unit {
   publishing.viz_failed.clear()
   publishing.stills.clear()
   publishing.walk = None
+  publishing.picked = None
+  publishing.aim = false
 }
 
 ///|
-/// Opened for chat `r`'s `thread`: what the picture would hold asked now (usePublishPreview); with `turn` (a
-/// message's seq), the turn of that message alone (a message's menu's 分享这一轮).
-pub fn open_publish(src : Source, r : ChatRef, thread : Double, turn? : Double? = None) -> Unit {
+/// Opened for chat `r`'s `thread`: what the picture would hold asked now (usePublishPreview). With `picked` (a
+/// message's seq: its menu's 多选, 2026-11-06 用户「分享这一轮改成多选，默认选中右键的那一行，可以勾选其它行，然后复制成图片」)
+/// the whole chat still, that message alone ticked and brought into sight, the others to tick.
+pub fn open_publish(src : Source, r : ChatRef, thread : Double, picked? : Double? = None) -> Unit {
   publish_reset()
   publishing.of.set(Some((r, thread)))
+  publishing.picked = picked
+  publishing.aim = picked is Some(_)
   let asked : Map[String, Json] = { "station": Json::string(r.station), "thread": Json::number(thread) }
-  match turn {
-    Some(n) => asked["turn"] = Json::number(n)
-    None => ()
-  }
   (src.call)("chat.publishPreview", Json::object(asked), fn(res) {
     match publishing.of.get() {
       Some((o, th)) if o.station == r.station && th == thread =>
         match res {
           Ok(v) => {
+            publish_pick_only(Some(v))
             publishing.preview.set(Some(v))
             publishing.read.set(1)
           }
@@ -117,6 +126,23 @@ pub fn open_publish(src : Source, r : ChatRef, thread : Double, turn? : Double? 
       _ => ()
     }
   })
+}
+
+///|
+/// The message 多选 was opened from (publishing.picked) the only one of preview `p`'s ticked; all of them when it is
+/// not among them.
+fn publish_pick_only(p : Json?) -> Unit {
+  guard publishing.picked is Some(seq) else { return }
+  let seqs = items(p, "list").map(fn(j) { number(Some(j), "seq") })
+  if !seqs.contains(seq) {
+    publishing.aim = false
+    return
+  }
+  for n in seqs {
+    if n != seq {
+      publishing.off[message_k(n)] = true
+    }
+  }
 }
 
 ///|
@@ -442,6 +468,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
         |> ignore
       })
       c.look(page, look)
+      publish_aim(c, list_key, native)
       publish_walk(c, list_key, list_node.val)
       // The image uses the chat's usual maximum column width, independent of the screen's width. Tables fit inside it.
       if messages.length() > 0 {
@@ -452,6 +479,30 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
     })
     |> ignore
   })
+}
+
+///|
+/// The message 多选 was opened from brought into sight once it is laid out (in the frame it is first measured: the
+/// page opens there, nothing scrolls), under what is over the page at the top, as far down as the paper's room; left
+/// where it is when it is in sight already.
+fn publish_aim(c : @ui.Ctx, list : String, native : Bool) -> Unit {
+  guard publishing.aim && publishing.picked is Some(seq) else { return }
+  match @motion.measured_rect(c, publish_aim_measure(seq)) {
+    Some((_, y, _, h)) => {
+      publishing.aim = false
+      let top = publish_head(c, native)
+      if y < top || y + h > c.height - publish_foot_room(c, native) {
+        c.list_scroll_by(list, y - top - publish_paper_in)
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// What message `seq`'s box on the page is measured as, to bring it into sight (publish_aim).
+fn publish_aim_measure(seq : Double) -> String {
+  "publish/aim/" + seq_s(seq)
 }
 
 ///|
@@ -619,6 +670,9 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
               _ => ()
             }
           })
+          if !taking && publishing.aim && publishing.picked == Some(m.seq) {
+            @motion.measure(c, said, publish_aim_measure(m.seq))
+          }
           let out = if taking { 0.0 } else { publish_out(c, k, on) }
           if out > 0.0 {
             c.look(said, @ui.look(alpha=publish_faded(out)))

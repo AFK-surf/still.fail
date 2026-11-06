@@ -866,7 +866,7 @@ let en : Map[String, String] = {
   "web-main.chat.pin": "Pin",
   "web-main.chat.pinFailed": "Couldn't pin: {error}",
   "web-main.chat.quote": "Quote",
-  "web-main.chat.shareTurn": "Share this turn",
+  "web-main.chat.selectMessages": "Select messages",
   "web-main.chat.rename": "Rename",
   "web-main.chat.regenerateTitle": "Regenerate title",
   "web-main.chat.regenerateTitle.done": "Title regenerated",

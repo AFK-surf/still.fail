@@ -380,7 +380,7 @@ pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) 
 
 pub fn open_new_workspace(@sfbase.Source) -> Unit
 
-pub fn open_publish(@sfbase.Source, @sfbase.ChatRef, Double, turn? : Double?) -> Unit
+pub fn open_publish(@sfbase.Source, @sfbase.ChatRef, Double, picked? : Double?) -> Unit
 
 pub fn open_relay(@sfbase.Source, @sfbase.ChatRef, Double, from~ : @sf.Anchor) -> Unit
 

@@ -925,7 +925,7 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
   let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
   t.right_click(px + pw / 2.0, py + ph / 2.0)
   t.frame()
-  assert_true(t.find("分享这一轮") is Some(_))
+  assert_true(t.find("多选") is Some(_))
   assert_true(@sfdesk.context.share is Some(_) && @sfdesk.context.link == "" && @sfdesk.context.words == "")
   t.key(@ui.key_escape)
   t.run_for(@kit.presence_out_ms)
