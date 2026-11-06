@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
+import { DecisionSessionsUnavailable } from "../src/store/legacy-decision-session.ts";
 import { decisionTimeIndexStep } from "../src/store/legacy-decision-time.ts";
 import { buildLegacyEntryLookups } from "../src/store/legacy-said-builder.ts";
 import { LEGACY_LATEST_DECISIONS_SCOPED, Store } from "../src/store/store.ts";
@@ -200,13 +201,19 @@ for (const prepared of [false, true]) test(`a small workspace avoids unrelated c
 });
 
 for (const missing of ["sessions_by_connect", "decision_checks_session"]) {
-  test(`reads stay correct when the auxiliary time index and ${missing} are removed`, () => {
+  test(`reads stay correct when the auxiliary time index and ${missing} are removed`, async () => {
     const dir = mkdtempSync(join(tmpdir(), "decision-time-two-indexes-")), path = join(dir, "station.db");
     oldStore(path, false);
     const store = Store.open(path);
+    const builder = missing === "decision_checks_session" ? buildLegacyEntryLookups(store, Promise.resolve()) : null;
+    if (builder) store.waitForDecisionSessions = () => builder.waitForDecisionSessions();
     try {
       store.db.exec(`DROP INDEX legacy_decision_time_at; DROP INDEX ${missing}`);
+      if (builder) {
+        assert.throws(() => store.latestDecisionsSince(0, { workspace: "mine", home: false }), DecisionSessionsUnavailable);
+        await store.prepareDecisionSessions();
+      }
       check(store);
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+    } finally { await builder?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 }

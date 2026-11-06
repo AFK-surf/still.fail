@@ -14,6 +14,7 @@ import { routes } from "../src/api/routes/accounts.ts";
 import { overview } from "../src/api/overview.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
+import { tr } from "../src/ops/i18n.ts";
 import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
@@ -29,7 +30,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -69,6 +70,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     resetQuota: o.resetQuota ?? null,
     codex: o.codex,
     hub: o.hub,
+    reviewUndecided: o.review,
     hermes: o.hermes,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
@@ -1120,6 +1122,19 @@ describe("the remaining accounts routes", { concurrency: true }, () => {
     assert.ok(decision.state === "pending" || decision.state === "ready", JSON.stringify(decision));
     assert.equal((await t.call("POST", "/automatic-decisions/refresh"))[0], 200);
     await t.close();
+  });
+
+  test("a review request reports when its rule was turned off while old checks were being prepared", async () => {
+    const entered = Promise.withResolvers<void>(), ready = Promise.withResolvers<number | null>();
+    const t = await rig({ review: () => { entered.resolve(); return ready.promise; } });
+    try {
+      t.config.update((raw) => { raw.automaticDecisions = { completion: { enabled: true, model: null } }; });
+      const response = t.call("POST", "/automatic-decisions/review");
+      await entered.promise;
+      t.config.update((raw) => { raw.automaticDecisions.completion.enabled = false; });
+      ready.resolve(null);
+      assert.deepEqual(await response, [409, { error: tr("zh", "station.decisions.enableFirst") }]);
+    } finally { ready.resolve(null); await t.close(); }
   });
 
   test("automatic archiving is for a workspace manager to change", async () => {

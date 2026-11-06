@@ -726,6 +726,9 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
 /// lines lingering. Said where its chat is taken (chat_take) and at the moment the next of them is due, which it gives
 /// (inf: none due). Retained pages use chat_timeline; this entry serves the old list_frame and linger_tick.
 pub fn chat_play(c : @ui.Ctx, rk : String, rd : Reading, shown~ : Bool) -> Double {
+  // A retained page owns its phases and lingering deadlines. An old whole-picture comparison can build that
+  // same page, but must not advance its state a second time or resume it while it is covered.
+  if rd.shown_by is Some(_) { return @double.infinity }
   let em = emits_of(rk)
   let now = c.moment()
   let mut due = @double.infinity
@@ -1653,8 +1656,10 @@ pub fn list_frame(
   // marked again: linger_tick plays it on then)
   rd.shown_frame = c.frame_number()
   @ui.built_used(fn() { rd.shown_frame = @ui.current().frame_number() })
-  chat_take(c, ek, rd, v, shown=true, in_front~)
-  chat_play(c, ek, rd, shown=true) |> ignore
+  if rd.shown_by is None {
+    chat_take(c, ek, rd, v, shown=true, in_front~)
+    chat_play(c, ek, rd, shown=true) |> ignore
+  }
   let read = if em.queue.length() > 0 || em.current is Some(_) {
     read.filter(fn(e) {
       match e {

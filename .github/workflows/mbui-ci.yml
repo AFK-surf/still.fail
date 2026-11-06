@@ -153,6 +153,15 @@ jobs:
         run: |
           touch "$RUNNER_TEMP/start"
           scripts/test_native.sh
+      - name: Capture the native view failure stack
+        if: failure() && steps.tests.outcome == 'failure'
+        shell: bash
+        run: |
+          exe=_build/native/release/test/view/view.whitebox_test.exe
+          if [ -x "$exe" ]; then
+            command -v gdb || (sudo apt-get update -qq && sudo apt-get install -y gdb)
+            gdb --batch -ex 'set pagination off' -ex run -ex 'thread apply all bt 100' --args "$exe" 'reentrant_layout_wbtest.mbt:0-17' || true
+          fi
       - name: "The same tests with the display's frames drawn on the way, at 60, 120, 24 and 7 a second (scripts/fps_check.sh): the same results, the same programs as above run again"
         shell: bash scripts/offline.sh {0}
         run: bash scripts/fps_check.sh
@@ -195,6 +204,7 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       - name: macOS apps
         run: |
+          set -o pipefail
           for app in demo textdiff kitdemo; do
             /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
           done
@@ -207,8 +217,6 @@ jobs:
           scripts/textdiff.sh mac
       - name: "A Tester's draw list drawn offscreen (mbui-render) against the host's own picture of it (scripts/render_check.sh); its md5, to compare machines"
         run: scripts/render_check.sh
-      - name: iOS simulator app
-        run: scripts/ios.sh build
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -217,6 +225,20 @@ jobs:
             apps/mbui/mbui/out/textdiff/
             apps/mbui/mbui/out/render-check/
           if-no-files-found: ignore
+
+  # The simulator build has its own five minutes. The macOS apps and render checks can use nearly the whole budget
+  # on a slower runner before the simulator's native compile even starts (run 42303931990).
+  ios-simulator:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mbui-moonbit
+      - name: iOS simulator app
+        run: scripts/ios.sh build
 
   android:
     defaults:

@@ -8,17 +8,34 @@ import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsN
 import { hasLegacyEdits, legacyEditsMaintenanceStep, legacyEditsNeedsWork } from "./legacy-edits-build.ts";
 import { archivePolicyIndexNeedsWork, archivePolicyIndexStep, hasLegacyArchivePolicy } from "./archive-policy-index.ts";
 import { decisionTimeIndexNeedsWork, decisionTimeIndexStep, hasLegacyDecisionTime } from "./legacy-decision-time.ts";
+import { decisionSessionIndexNeedsWork, decisionSessionIndexStep, decisionSessionRepairNeedsWork, decisionSessionRepairStep,
+  hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex } from "./legacy-decision-session.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time" | "legacy-decision-session" | "legacy-decision-session-repair";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
 /// steadily changing lookup cannot starve another and their transactions still yield to foreground writes.
 function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kind[], workerFile?: URL): {
-  ready: Promise<boolean>; wake: () => void; close: () => Promise<void>;
+  ready: Promise<boolean>; waitForDecisionSessions: () => Promise<boolean>;
+  wake: () => void; close: () => Promise<void>;
 } {
   const { promise: ready, resolve } = Promise.withResolvers<boolean>();
+  let decisionSessionsReady = Promise.withResolvers<boolean>();
+  let decisionSessionsSettled = false;
+  let decisionProbeCancel: (() => void) | null = null;
+  const finishDecisionSessions = (value: boolean) => {
+    if (!decisionSessionsSettled) {
+      decisionSessionsSettled = true;
+      decisionSessionsReady.resolve(value);
+      decisionProbeCancel?.();
+      decisionProbeCancel = null;
+    }
+  };
+  const checkDecisionSessions = () => {
+    if (!decisionSessionsSettled && store.decisionSessionsReady()) finishDecisionSessions(true);
+  };
   const lookups: Lookup[] = [];
   if (kinds.includes("legacy-said") && hasLegacySaid(store.db)) lookups.push({ kind: "legacy-said",
     needsWork: () => legacySaidNeedsWork(store.db), step: () => legacySaidMaintenanceStep(store.db) });
@@ -32,21 +49,37 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     needsWork: () => archivePolicyIndexNeedsWork(store.db), step: () => archivePolicyIndexStep(store.db) });
   if (kinds.includes("legacy-decision-time") && hasLegacyDecisionTime(store.db) && decisionTimeIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-time",
     needsWork: () => decisionTimeIndexNeedsWork(store.db), step: () => decisionTimeIndexStep(store.db) });
+  // An older opener may already have installed the native index. Keep the old table for live connections, but do not
+  // finish copying it when this Store does not read it.
+  if (kinds.includes("legacy-decision-session") && !store.decisionSessionsReady()
+    && hasLegacyDecisionSession(store.db) && decisionSessionIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-session",
+    needsWork: () => !store.decisionSessionsReady() && decisionSessionIndexNeedsWork(store.db), step: () => decisionSessionIndexStep(store.db) });
+  if (kinds.includes("legacy-decision-session") && !store.decisionSessionsReady()
+    && decisionSessionRepairNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-session-repair",
+    needsWork: () => !store.decisionSessionsReady() && decisionSessionRepairNeedsWork(store.db), step: () => decisionSessionRepairStep(store.db) });
+  checkDecisionSessions();
+  if (!decisionSessionsSettled && !lookups.some((lookup) => lookup.kind === "legacy-decision-time" || lookup.kind === "legacy-decision-session" || lookup.kind === "legacy-decision-session-repair"))
+    finishDecisionSessions(false);
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
   let worker: Worker | null = null;
   let retryCancel: (() => void) | null = null, memoryCancel: (() => void) | null = null;
-  let allowed = false, closed = false, requested = false, retryMs = 250, next = 0;
+  let allowed = false, handoverFailed = false, closed = false, requested = false, retryMs = 250, next = 0;
   let off: () => void = () => {}, periodicCancel: () => void = () => {};
-  // Login, policy and decision-time keys are kept current by their triggers and have no later reconciliation queue. Once published,
-  // these scans cannot become unfinished again; stop probing them on each message and periodic wake.
+  // Login, policy and decision keys are kept current by their triggers and have no later reconciliation queue. Once
+  // published, these scans cannot become unfinished again; stop probing them on each message and periodic wake.
   const retireComplete = () => {
+    // Another opener can finish a lookup before this worker starts or between its batches.
+    checkDecisionSessions();
     for (let index = lookups.length - 1; index >= 0; index--) {
       const lookup = lookups[index]!;
-      if ((lookup.kind !== "legacy-login" && lookup.kind !== "legacy-policy" && lookup.kind !== "legacy-decision-time") || lookup.needsWork()) continue;
+      if ((lookup.kind !== "legacy-login" && lookup.kind !== "legacy-policy" && lookup.kind !== "legacy-decision-time"
+        && lookup.kind !== "legacy-decision-session" && lookup.kind !== "legacy-decision-session-repair") || lookup.needsWork()) continue;
       lookups.splice(index,1);
       if (index < next) next--;
     }
+    // The native index may have appeared between the first check and retiring the session lookup.
+    checkDecisionSessions();
     if (next >= lookups.length) next = 0;
     if (lookups.length === 0) { off(); off = () => {}; periodicCancel(); }
   };
@@ -72,6 +105,7 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
       const lookup = nextLookup();
       if (!lookup) { retryMs = 250; resolve(true); return; }
       lookup.step();
+      checkDecisionSessions();
       memoryCancel = work.after(20, memoryStep);
     } catch (error) {
       log.warn("store", "an old message lookup batch stopped", { error: (error as Error).message });
@@ -120,7 +154,17 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
         failed = true;
         log.warn("store", "an old message lookup batch stopped", { error: result.error });
         void current.terminate();
-      } else { retryMs = 250; send(); }
+      } else {
+        retryMs = 250;
+        try { checkDecisionSessions(); }
+        catch (error) {
+          failed = true;
+          log.warn("store", "the decision-session lookup could not be checked", { error: (error as Error).message });
+          void current.terminate();
+          return;
+        }
+        send();
+      }
     });
     current.once("error", (error) => {
       failed = true;
@@ -142,24 +186,68 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     });
     // An older connection's writes do not notify this Store. Probe one indexed key periodically once handover ends.
     periodicCancel = work.every(5_000, () => {
-      if (!allowed || closed || worker !== null) return;
+      if (closed || worker !== null) return;
       try {
+        checkDecisionSessions();
+        if (!allowed) return;
         retireComplete();
         if (lookups.length === 0) { requested = false; resolve(true); }
         else if (lookups.some((lookup) => lookup.needsWork())) wake();
       }
       catch (error) { log.warn("store", "the old message lookup could not be checked", { error: (error as Error).message }); retry(); }
     });
-    void previous.then(() => { allowed = true; wake(); }, (error) => {
-      log.warn("store", "could not wait for the previous station before preparing messages", { error: (error as Error).message });
-      resolve(false);
-    });
   } else resolve(true);
+  // A session index can disappear after all startup work has retired, so keep the handover state even for an idle
+  // builder. A later reader can add a bounded repair without starting a second worker.
+  void previous.then(() => { allowed = true; wake(); }, (error) => {
+    handoverFailed = true;
+    log.warn("store", "could not wait for the previous station before preparing messages", { error: (error as Error).message });
+    finishDecisionSessions(false);
+    resolve(false);
+  });
+  const ensureDecisionSessions = () => {
+    installDecisionSessionIndex(store.db);
+    const add = (lookup: Lookup) => { if (!lookups.some((existing) => existing.kind === lookup.kind)) lookups.push(lookup); };
+    if (hasSharedDecisionSession(store.db) && decisionTimeIndexNeedsWork(store.db)) add({ kind: "legacy-decision-time",
+      needsWork: () => decisionTimeIndexNeedsWork(store.db), step: () => decisionTimeIndexStep(store.db) });
+    if (hasLegacyDecisionSession(store.db) && decisionSessionIndexNeedsWork(store.db)) add({ kind: "legacy-decision-session",
+      needsWork: () => !store.decisionSessionsReady() && decisionSessionIndexNeedsWork(store.db), step: () => decisionSessionIndexStep(store.db) });
+    if (decisionSessionRepairNeedsWork(store.db)) add({ kind: "legacy-decision-session-repair",
+      needsWork: () => !store.decisionSessionsReady() && decisionSessionRepairNeedsWork(store.db), step: () => decisionSessionRepairStep(store.db) });
+    wake();
+  };
   return {
     ready, wake,
+    waitForDecisionSessions: () => {
+      if (closed) return Promise.resolve(false);
+      if (store.decisionSessionsReady()) return Promise.resolve(true);
+      if (handoverFailed) return Promise.resolve(false);
+      if (decisionSessionsSettled) { decisionSessionsReady = Promise.withResolvers<boolean>(); decisionSessionsSettled = false; }
+      const probe = () => {
+        try {
+          checkDecisionSessions();
+          if (!decisionSessionsSettled) {
+            // An index can disappear between batches. Recheck while a reader is waiting so the worker can retire
+            // the now-useless lookup and start the bounded repair instead of leaving that reader waiting forever.
+            ensureDecisionSessions();
+            checkDecisionSessions();
+          }
+        }
+        catch (error) {
+          log.warn("store", "the decision-session lookup could not be checked", { error: (error as Error).message });
+          finishDecisionSessions(false);
+        }
+      };
+      probe();
+      // Another process can finish the lookup while handover is still in progress. Probe promptly only while a
+      // reader is actually waiting; the ordinary maintenance check continues at its slower interval otherwise.
+      if (!decisionSessionsSettled && decisionProbeCancel === null) decisionProbeCancel = work.every(250, probe);
+      return decisionSessionsReady.promise;
+    },
     close: async () => {
       if (closed) return;
       closed = true;
+      finishDecisionSessions(false);
       resolve(false);
       off(); retryCancel?.(); memoryCancel?.();
       await work.close();
@@ -175,5 +263,5 @@ export function buildLegacySaid(store: Store, previous: Promise<void>, workerFil
 
 /// Prepare the old lookups a store needs after the old station has handed over.
 export function buildLegacyEntryLookups(store: Store, previous: Promise<void>, workerFile?: URL): ReturnType<typeof buildLookups> {
-  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy","legacy-decision-time"],workerFile);
+  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy","legacy-decision-time","legacy-decision-session"],workerFile);
 }

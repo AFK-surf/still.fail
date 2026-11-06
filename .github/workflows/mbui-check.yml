@@ -265,7 +265,7 @@ jobs:
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/wasm-test.log" | sed 's/^\[[^]]*\] test //; s/ failed.*//' | sort -u)
           [ -n "$failed" ] || exit 0
           printf '%s\n' "$failed"
-          # Keep the original assertion and its context as well as the compact list of test names.
+          # Keep the original assertion or abort detail alongside the test names.
           grep -a -A8 'test .* failed' "$RUNNER_TEMP/wasm-test.log"
           subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
           echo "::error title=check-mbui (wasm-gc ${{ matrix.part }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s\n' "$failed" | wc -l) tests failed, all named in the log and the summary"
@@ -308,8 +308,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test" }
+      - name: Keep the native return-path crash stack
+        if: matrix.group == '2/4'
+        run: command -v gdb || (sudo apt-get update -qq && sudo apt-get install -y gdb)
       - name: The mbui app's tests (native, app ${{ matrix.group }}, on app-build's program)
         id: tests
+        env:
+          TEST_NATIVE_DEBUG: ${{ matrix.group == '2/4' && 'emit_time_wbtest.mbt' || '' }}
         run: |
           set -o pipefail
           chmod +x "$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" "$RUNNER_TEMP/app-test/testexe"

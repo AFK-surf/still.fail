@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pick, type Pressure } from "../src/jobs/admit.ts";
 
-test("one small task can run beside a busy build, but still waits for memory and another small task", () => {
+test("one small task can run beside a busy build, but still waits for critical memory and another small task", () => {
   const build = { id: "build", screen: false };
   const picture = { id: "picture", session: "a", queuedAt: 1, screen: false, small: true };
   const next = { id: "next", session: "b", queuedAt: 2, screen: false, small: true };
@@ -11,7 +11,19 @@ test("one small task can run beside a busy build, but still waits for memory and
   const never = () => null;
   assert.deepEqual(pick([picture], [build], room, 0, 0, never), { start: picture });
   assert.deepEqual(pick([next], [build, { id: "picture", screen: false, small: true }], room, 0, 0, never), { wait: "busy", cause: "small" });
-  assert.deepEqual(pick([picture], [build], { ...room, pressure: "high" }, 0, 0, never), { wait: "memory" });
+  assert.deepEqual(pick([picture], [build], { ...room, pressure: "critical" }, 0, 0, never), { wait: "memory" });
+  assert.deepEqual(pick([picture], [], { ...room, pressure: "critical" }, 0, null, never), { wait: "memory" });
+});
+
+test("under high memory pressure a small task still starts, and only it (#4355)", () => {
+  const build = { id: "build", screen: false };
+  const look = { id: "look", session: "a", queuedAt: 2, screen: false, small: true };
+  const other = { id: "other", session: "b", queuedAt: 1, screen: false };
+  const high = { busy: 0, pressure: "high" as Pressure };
+  const never = () => null;
+  assert.deepEqual(pick([other, look], [build], high, 0, 0, never), { start: look });
+  assert.deepEqual(pick([other], [], high, 0, null, never), { wait: "memory" });
+  assert.deepEqual(pick([look], [build, { id: "x", screen: false, small: true }], high, 0, 0, never), { wait: "busy", cause: "small" });
 });
 
 test("small tasks are fair between sessions and do not hold up a ready ordinary task", () => {

@@ -41,14 +41,22 @@ const LEGACY_SCHEMA = `
   CREATE TRIGGER legacy_decision_time_delete AFTER DELETE ON decision_checks BEGIN ${reconcile("OLD.id")} END;`;
 
 /// Choose while holding the writer lock: another old connection or opener may have changed the table or index.
-export function installDecisionTimeIndex(db: DatabaseSync): void {
+export function installDecisionTimeIndex(db: DatabaseSync, shareSession = false): void {
   const native = () => exists(db, "index", "decision_checks_lately");
   if (native() || hasLegacyDecisionTime(db)) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!native() && !hasLegacyDecisionTime(db)) {
       if (db.prepare("SELECT 1 FROM decision_checks LIMIT 1 OFFSET 63").get() === undefined) db.exec(DECISION_TIME_INDEX);
-      else db.exec(LEGACY_SCHEMA);
+      else {
+        db.exec(LEGACY_SCHEMA);
+        // If both lookups are missing, index the same empty staging table under this lock. The existing time scan
+        // will fill both lookups in one pass; never build this index synchronously on a populated staging table.
+        if (shareSession && !exists(db, "index", "decision_checks_session")
+          && !exists(db, "table", "legacy_decision_session_meta"))
+          // id is the table's rowid; SQLite already carries it at the end of this index.
+          db.exec("CREATE INDEX legacy_decision_time_by_session ON legacy_decision_time(session)");
+      }
     }
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }

@@ -1,6 +1,6 @@
 // The station's protocol driver inside DeepSeek Harness (a Cordis plugin dsh loads from the path its patch names:
 // agents/dsh.ts). One line of JSON per message on stdin and stdout, for the one session of the process:
-//   in:  {id, op: "open", cwd, resume?, provider?, model?}   → {id, session} | {id, error}
+//   in:  {id, op: "open", cwd, resume?, provider?, model?, effort?}   → {id, session} | {id, error}
 //        {id, op: "prompt" | "steer", text}   a message for the next turn, or for the running turn's next step
 //        {id, op: "cancel"}                   stops the running turn (it ends aborted)
 //   out: {id, ...} answers; {ev: "event", type, data} the session's turns and tool calls as dsh commits them;
@@ -48,13 +48,24 @@ export function apply(ctx) {
   })
 
   const ops = {
-    async open({ cwd, resume, provider, model }) {
+    async open({ cwd, resume, provider, model, effort }) {
       if (agent !== null) throw new Error('a session is open')
-      const agentOptions = provider && model ? { provider, model } : undefined
+      const agentOptions = provider && model ? { provider, model, ...(effort ? { reasoningEffort: effort } : {}) } : undefined
       handle = resume
         ? await ctx.agents.resume({ resumeSessionId: resume, agentOptions })
         : await ctx.agents.create({ sessionId: randomUUID(), meta: { cwd }, agentOptions })
       agent = handle.agent
+      // A resumed session goes on with the route its transcript last used (agentOptions only stand in until one is
+      // recorded): the one it is opened with now, after its model or effort was changed, is selected (a no-op when the
+      // same; a dsh from before model selections takes agentOptions). One that would still run another model is
+      // refused rather than run under the station's name for it: the station then starts a new session on it.
+      if (resume && agentOptions && agent.model?.select) {
+        agent.model.select(agentOptions)
+        const running = agent.model.current?.()
+        if (running && (running.provider !== provider || running.model !== model)) {
+          throw new Error(`resumed on ${running.provider}/${running.model}, not ${provider}/${model}`)
+        }
+      }
       return { session: agent.session.id }
     },
     prompt({ text }) {

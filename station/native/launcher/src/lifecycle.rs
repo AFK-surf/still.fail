@@ -45,7 +45,9 @@ pub struct Times {
     /// How long run/drained stays when nobody stops the station (the Rust station's DRAINED_LIMIT).
     pub drained: Duration,
     /// A Node's, once it serves (ready, or handed over to), to take over: serve every entrance (TAKEN_OVER). The old one
-    /// exiting (`exit`) and Node waiting for it (agents.ts PREVIOUS_LIMIT_MS, 40 s) fit in it.
+    /// exiting (`exit`) and Node waiting for it (agents.ts PREVIOUS_LIMIT_MS, 40 s) fit in it. Counted again from each
+    /// time it says it is still `taking`: one a loaded machine makes slow gets there, and ending it would only start
+    /// the same work over (2026-11-06: six in a row on a station); one that hangs is ended.
     pub take: Duration,
     /// After a handover whose new Node did not take over, the wait before a Node is started again: the installer's to
     /// put the release from before back (the old Node is gone by then; this way the next one runs on it).
@@ -392,6 +394,13 @@ impl<O: Os> Lifecycle<O> {
             if slot == Slot::Current {
                 self.os.route(name, Some(port));
                 self.check_taken();
+            }
+        } else if message["taking"] == true {
+            let by = self.os.now() + self.times.take;
+            if let Some(node) = self.node_mut(slot)
+                && let Some(take_by) = node.take_by.as_mut()
+            {
+                *take_by = by;
             }
         } else if let Some(why) = message["failed"].as_str() {
             // It could not take over (Node: the agents' side did not start).
@@ -920,6 +929,32 @@ mod tests {
         assert_ne!(station.file("station.json").as_deref(), Some("before"));
         assert_eq!(station.station_json()["version"], "0.1.0");
         assert_eq!(station.serving(), again);
+    }
+
+    #[test]
+    fn a_node_that_says_it_is_still_taking_over_gets_its_time_again_until_it_goes_silent() {
+        let mut station = station("taking", false);
+        let old = station.last();
+        station.up(Slot::Current, "0.1.0", 5000);
+        station.start_next();
+        let new = station.last();
+        station.said(Slot::Next, ready("0.2.0"));
+        station.ended(old, EXITED_0);
+        for _ in 0..3 {
+            station.pass(s(90) - MS);
+            station.said(Slot::Current, json!({"taking": true}));
+        }
+        assert!(station.os.killed.is_empty() && station.file("handoff-failed").is_none());
+        // Silent for the whole of it: hung.
+        station.pass(s(90) - MS);
+        assert!(station.os.killed.is_empty());
+        station.pass(MS);
+        assert_eq!(station.os.killed, [new]);
+        assert!(station.file("handoff-failed").unwrap().contains("did not take over"));
+        // Late, as it goes: it does not bring back a limit.
+        station.said(Slot::Current, json!({"taking": true}));
+        station.pass(s(90));
+        assert_eq!(station.os.killed, [new]);
     }
 
     #[test]
