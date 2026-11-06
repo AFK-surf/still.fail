@@ -69,13 +69,22 @@ fn triple_node_models(
             check=if flag(o(), "liked") { On } else { Off }))
         })) |> ignore
         @sf.presses_node(hit, fn() { triple_like(src, station, of, id(), !flag(o(), "liked")) })
+        hit.focusable(Is(true), keys=@view.focus_space) |> ignore
         hit.box(fn(box) {
           box.width(Is(Some(triple_box_side))).height(Is(Some(triple_box_side)))
-          .radius(Is(4.0)).lines_up(Is(Some(Middle))).lies_along(Is(Middle))
-          .ground(By(fn() { if flag(o(), "liked") { @sf.theme().p.accent } else { 0L } }))
-          .edge(By(fn() { (1.0, if flag(o(), "liked") { @sf.theme().p.accent } else { @sf.theme().p.line_strong }) })) |> ignore
+          .radius(Is(6.0)).lines_up(Is(Some(Middle))).lies_along(Is(Middle))
+          .ground(By(fn() { if flag(o(), "liked") { @ui.tree_theme().primary } else { @ui.tree_theme().bg } }))
+          .edge(By(fn() {
+            let t = @ui.tree_theme()
+            (1.0, if flag(o(), "liked") { t.primary } else if hit.pointed() { t.field_hover } else { t.border })
+          })) |> ignore
           box.show(fn() { flag(o(), "liked") }, fn(check) {
-            @sf.icon_node(check, "check", 12.0, By(fn() { @sf.theme().p.bg })) |> ignore
+            @sf.icon_node(check, "check", 12.0, By(fn() { @ui.tree_theme().on_primary })) |> ignore
+          })
+          box.show(fn() { hit.focus_shown() }, fn(ring) {
+            let out = fn() { @ui.tree_theme().focus_gap + @ui.tree_theme().focus_w }
+            ring.over(Is(true)).margin(By(fn() { (-out(), -out(), -out(), -out()) }))
+            .radius(By(fn() { 6.0 + out() })).edge(By(fn() { (@ui.tree_theme().focus_w, @ui.tree_theme().focus) })) |> ignore
           })
         }) |> ignore
       }) |> ignore
@@ -274,7 +283,7 @@ fn triple_node_catalog(
             }) |> ignore
             body.box(fn(rule) { rule.width(Is(Some(1.0))).ground(By(fn() { @sf.theme().p.line })) |> ignore }) |> ignore
             body.box(fn(models) {
-              models.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+              models.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
               triple_node_series(models, src, station, of, state, data, sheet, saved, close)
             }) |> ignore
           }
@@ -340,6 +349,7 @@ fn triple_node_catalog(
 ///|
 fn triple_node_search(parent : @view.View, state : TripleNodePanel) -> Unit {
   parent.show(fn() { items(state.pick.get(), "options").length() > 8 }, fn(slot) {
+    slot.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     slot.box(fn(line) {
       let editor : Ref[@view.View?] = Ref(None)
       line.row(Is(true)).height(Is(Some(@sf.menu_row_min))).padding(Is((12.0, 0.0, 12.0, 0.0)))

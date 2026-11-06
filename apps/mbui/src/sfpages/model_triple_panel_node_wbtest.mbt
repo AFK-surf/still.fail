@@ -1,6 +1,61 @@
 // The model catalogue is exercised directly while its presenter is being integrated separately.
 
 ///|
+test "model panel nodes: favourite checkbox takes space but not enter" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let state = triple_node_panel_state(Some({ "options": [{ "model": "Alpha", "name": "Alpha" }], "option": "Alpha" }))
+  let calls : Array[String] = []
+  let src = @sfbase.made_source(call=fn(name, _, done) { calls.push(name); done(Ok({})) })
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=600.0, h=500.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(panel) {
+      panel.width(Is(Some(400.0))) |> ignore
+      triple_node_catalog(panel, src, "ws/st", "new", state, fn() { false }, fn() { false }, "", fn() {  })
+    }) |> ignore
+  })
+  t.draw()
+  let label = @sf.t("web-main.model.likeModel", args=[("model", "Alpha")])
+  t.tab()
+  assert_eq(t.focused().map(fn(s) { s.label }), Some(label))
+  t.enter()
+  assert_eq(calls, [], msg="enter does not toggle a checkbox")
+  t.key(@ui.key_space)
+  assert_eq(calls, ["pick.like"], msg="space toggles only the checkbox")
+}
+
+///|
+test "model panel nodes: search and model rows fit the two-column catalogue" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let options : Array[Json] = Array::makei(10, fn(i) {
+    let name = "Model " + i.to_string()
+    { "model": Json::string(name), "name": Json::string(name), "maker": { "id": if i == 0 { "one" } else { "two" } } }
+  })
+  let state = triple_node_panel_state(Some({
+    "options": Json::array(options), "near": ["Model 0"], "option": "Model 0",
+    "makers": [{ "id": "one", "title": "First", "count": 1 }, { "id": "two", "title": "Second", "count": 9 }],
+  }))
+  state.all.set(true)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=700.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(panel) {
+      panel.offset(Is((20.0, 30.0))).width(Is(Some(500.0))).height(Is(Some(600.0))) |> ignore
+      triple_node_body(panel, @sfbase.sample_source, "ws/st", "new", state, fn() { false }, fn() { false }, "", fn() {  }, fn(_, _) {  })
+    }) |> ignore
+  })
+  t.draw()
+  let (search_x, _, search_w, _) = t.get(TextField, label=@sf.t("web-main.model.search")).rect
+  let (model_x, _, model_w, _) = t.get(Button, label="Model 0").rect
+  assert_true(search_x + search_w <= 520.5, msg="the search stays in the panel: \{(search_x, search_w)}")
+  assert_true(model_x + model_w <= 520.5, msg="the selected row and its check stay in the panel: \{(model_x, model_w)}")
+}
+
+///|
 test "model panel nodes: recent models, search and independent favourite targets" {
   @sfbase.reset()
   triple_reset()
