@@ -164,6 +164,65 @@ fn af_kept_told() -> Unit raise {
 }
 
 ///|
+// kept across runs: what the third stopped run below sets in the layout it stops in
+let af_watched : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_watched, what a watch made in the third stopped run and owned by none of it asked to wait
+// for its change told whole as it was told, done
+let af_kept_watch : Array[String] = []
+
+///|
+test "panic: a run stopped in a layout, a kept watch and one of its own told in it" {
+  af_run()
+  // (a watch owned by none of the run: kept; told, it asks to wait for the change told whole, both ways)
+  let kept = @signals.watch(fn() {
+    @signals.after_flush(fn() { af_kept_watch.push("after_flush") })
+    @signals.after_all_flushed(fn() { af_kept_watch.push("after_all_flushed") })
+  })
+  kept.read(fn() { af_watched.get() }) |> ignore
+  // (the run's own, let go as a run begins, on_reset)
+  let own = @signals.watch(fn() {
+    @signals.after_flush(fn() { af_note("the stopped run's own watch's after_flush, held") })
+    @signals.after_all_flushed(fn() { af_note("the stopped run's own watch's after_all_flushed, held") })
+  })
+  own.read(fn() { af_watched.get() }) |> ignore
+  on_reset(fn() { own.stop() })
+  @signals.afters_held(fn() {
+    // (both watches told now, what they ask held back by the layout)
+    af_watched.set(1)
+    af_reached.push("watched")
+    abort("stopped")
+  })
+}
+
+///|
+test "a Tester started after a run stopped in a layout: what a kept watch asked as it was told done, none of its own" {
+  af_stopped(["batch", "held", "watched"])
+  af_next() |> ignore
+  af_kept_watch_told()
+}
+
+///|
+/// wasm-gc, Wasm, JS: what the watch kept from the stopped layout asked as it was told there, done as the Tester began
+/// (owned by it, kept), in the order of each way
+#cfg(any(target="wasm-gc", target="wasm", target="js"))
+fn af_kept_watch_told() -> Unit raise {
+  assert_eq(
+    af_kept_watch,
+    ["after_flush", "after_all_flushed"],
+    msg="the kept watch's, asked as it was told in the stopped layout: done as the run began",
+  )
+}
+
+///|
+/// Native and LLVM: no stopped run here, no watch of it
+#cfg(any(target="native", target="llvm"))
+fn af_kept_watch_told() -> Unit raise {
+  assert_eq(af_kept_watch, [])
+}
+
+///|
 /// wasm-gc, Wasm, JS: each stopped run before, reached as far as its abort (what waited in it asked for), in order
 #cfg(any(target="wasm-gc", target="wasm", target="js"))
 fn af_stopped(runs : Array[String]) -> Unit raise {

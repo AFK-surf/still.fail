@@ -33,7 +33,7 @@ priv struct Run {
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
   afters : Array[() -> Unit]
-  /// what owned what was made as each of `afters` was asked for (owner_now): a run stopped before it was done keeps it
+  /// what asked for each of `afters` (asker: what was reading, running or owning then): a run stopped before it was done keeps it
   /// for its owner while that owner is kept (reset_globals, run_told)
   afters_by : Array[ReactiveNode?]
   /// what waits for that and for all of `afters` (after_all_flushed): done once none of them is left
@@ -233,6 +233,20 @@ fn owner_now() -> ReactiveNode? {
   match run.active_sub {
     Some(s) => Some(s)
     None => run.owner
+  }
+}
+
+///|
+/// What asks for what is done now (after_flush): what is reading where something is; else the effect or the watch
+/// running (a watch's told runs with nothing reading, as does what an effect runs untracked); else the owner set
+fn asker() -> ReactiveNode? {
+  match run.active_sub {
+    Some(s) => Some(s)
+    None =>
+      match run.running {
+        Some(r) => Some(r)
+        None => run.owner
+      }
   }
 }
 
@@ -618,7 +632,7 @@ fn afters_drained() -> Unit {
 pub fn after_flush(f : () -> Unit) -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
     run.afters.push(f)
-    run.afters_by.push(owner_now())
+    run.afters_by.push(asker())
   } else {
     f()
   }
@@ -631,7 +645,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 pub fn after_all_flushed(f : () -> Unit) -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
     run.lasts.push(f)
-    run.lasts_by.push(owner_now())
+    run.lasts_by.push(asker())
   } else {
     f()
   }
