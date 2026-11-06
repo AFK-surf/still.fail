@@ -207,7 +207,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
   let pressed = logins_here.pressed.get(id).unwrap_or(false)
   let code = text(l, "code")
   // the same step in the station's own browser, for the ⋯ beside the step's button
-  let elsewhere = match login_station_way(c, core, station, l) {
+  let elsewhere = match login_station_way(core, station, l) {
     Some(way) => [way]
     None => []
   }
@@ -217,12 +217,14 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       login_code(c, core, code)
       // one press: the code copied first, then its page; the code stays on show for a clipboard that refused it
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=elsewhere) {
-        logins_here.pressed[id] = true
-        logins_said()
-        c.copy_text(code)
-        login_open(core, match text(l, "codeUrl") {
-          "" => url
-          u => u
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+          logins_here.pressed[id] = true
+          logins_said()
+          @ui.current().copy_text(code)
+          login_open(core, match text(l, "codeUrl") {
+            "" => url
+            u => u
+          })
         })
       }
     }
@@ -238,7 +240,9 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.browser"], [("station", station), ("id", id)])
       let again = if relay {
-        [(@sf.t("web-main.logins.signIn"), fn() { login_relay(c, core, station, id, text(l, "title")) })]
+        [(@sf.t("web-main.logins.signIn"), fn() {
+          @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
+        })]
       } else {
         []
       }
@@ -267,7 +271,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
       if login_step(c, "login-main/" + id, label, !opened, busy~, more=elsewhere) {
-        login_relay(c, core, station, id, text(l, "title"))
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
       }
     }
     "open" if url != "" => {
@@ -275,9 +279,11 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
         login_said(c, domain)
       }
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=elsewhere) {
-        logins_here.pressed[id] = true
-        logins_said()
-        login_open(core, url)
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+          logins_here.pressed[id] = true
+          logins_said()
+          login_open(core, url)
+        })
       }
     }
     _ => login_said(c, text(l, "statusText"), busy=true, last=true)
@@ -289,7 +295,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
 /// 浏览器中打开, or 回到 … 的浏览器 while its tab is open) and what does it: its page opened in a tab there (the one open,
 /// if it is), whose view opens here and goes back by itself once the login ends; a loopback's callback comes back to the
 /// command there, nothing relayed or pasted.
-fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
+fn login_station_way(core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
   if !flag(l, "browser") || text(l, "browserText") == "" {
     return None
   }
@@ -299,9 +305,11 @@ fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (
     (
       label,
       fn() {
-        c.tell("login-station/" + id, fn() {
-          @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
-            (core.open_screen)(station, text(Some(v), "screen"))
+        @settings.confirm_claude_auth(text(l, "name") == "claude" && text(l, "screen") == "", fn() {
+          @ui.current().tell("login-station/" + id, fn() {
+            @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
+              (core.open_screen)(station, text(Some(v), "screen"))
+            })
           })
         })
       },
@@ -398,14 +406,16 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
       d => @sf.t("web-main.logins.pasteLead", args=[("domain", d)])
     }
   })
-  let elsewhere = match login_station_way(c, core, station, l) {
+  let elsewhere = match login_station_way(core, station, l) {
     Some(way) => [way]
     None => []
   }
   if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=elsewhere, last=false) {
-    logins_here.pressed[id] = true
-    logins_said()
-    login_open(core, text(l, "url"))
+    @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+      logins_here.pressed[id] = true
+      logins_said()
+      login_open(core, text(l, "url"))
+    })
   }
   // sent, nothing is left to type: the keyboard goes (the code stays in the field as it is checked)
   let send = fn(code : String) {
@@ -919,8 +929,11 @@ fn login_active_node(card : @view.View, core : Core, station : String, l : () ->
       (
         label,
         fn() {
-          @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
-            (core.open_screen)(station, text(Some(v), "screen"))
+          let current = l()
+          @settings.confirm_claude_auth(text(current, "name") == "claude" && text(current, "screen") == "", fn() {
+            @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
+              (core.open_screen)(station, text(Some(v), "screen"))
+            })
           })
         },
       ),
@@ -969,11 +982,16 @@ fn login_active_node(card : @view.View, core : Core, station : String, l : () ->
         |> ignore
         // one press: the code copied first, then its page
         login_step_node(s, fn() { @sf.t("web-main.logins.copyOpen") }, fn() { !pressed() }, fn() {
-          press()
-          @ui.clipboard_set(text(l(), "code"))
-          login_open(core, match text(l(), "codeUrl") {
-            "" => url()
+          let current = l()
+          let code = text(current, "code")
+          let page = match text(current, "codeUrl") {
+            "" => text(current, "url")
             u => u
+          }
+          @settings.confirm_claude_auth(text(current, "name") == "claude", fn() {
+            press()
+            @ui.clipboard_set(code)
+            login_open(core, page)
           })
         }, more=elsewhere)
       }
@@ -990,7 +1008,10 @@ fn login_active_node(card : @view.View, core : Core, station : String, l : () ->
           }
         }, busy~, more=fn() {
           if relay() {
-            [(@sf.t("web-main.logins.signIn"), fn() { login_relay_now(core, station, id, text(l(), "title")) })]
+            [(@sf.t("web-main.logins.signIn"), fn() {
+              let current = l()
+              @settings.confirm_claude_auth(text(current, "name") == "claude", fn() { login_relay_now(core, station, id, text(current, "title")) })
+            })]
           } else {
             []
           }
@@ -1026,13 +1047,19 @@ fn login_active_node(card : @view.View, core : Core, station : String, l : () ->
         let busy = fn() { @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)]) }
         login_step_node(s, fn() { @sf.t(if opened() { "web-main.logins.openAgain" } else { "web-main.logins.signIn" }) }, fn() {
           !opened()
-        }, fn() { login_relay_now(core, station, id, text(l(), "title")) }, busy~, more=elsewhere)
+        }, fn() {
+          let current = l()
+          @settings.confirm_claude_auth(text(current, "name") == "claude", fn() { login_relay_now(core, station, id, text(current, "title")) })
+        }, busy~, more=elsewhere)
       }
       "open" => {
         s.show(fn() { domain() != "" }, fn(d) { login_said_node(d, domain) })
         login_step_node(s, fn() { @sf.t("web-main.logins.signIn") }, fn() { !pressed() }, fn() {
-          press()
-          login_open(core, url())
+          let current = l()
+          @settings.confirm_claude_auth(text(current, "name") == "claude", fn() {
+            press()
+            login_open(core, text(current, "url"))
+          })
         }, more=elsewhere)
       }
       _ => login_said_node(s, fn() { text(l(), "statusText") }, busy=fn() { true }, last=true)
@@ -1095,17 +1122,23 @@ fn login_paste_node(s : @view.View, core : Core, station : String, l : () -> Jso
       (
         label,
         fn() {
-          @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
-            (core.open_screen)(station, text(Some(v), "screen"))
+          let current = l()
+          @settings.confirm_claude_auth(text(current, "name") == "claude" && text(current, "screen") == "", fn() {
+            @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
+              (core.open_screen)(station, text(Some(v), "screen"))
+            })
           })
         },
       ),
     ]
   }
   login_step_node(s, fn() { @sf.t("web-main.logins.openPage") }, fn() { !opened() && words() == "" && !busy() }, fn() {
-    logins_here.pressed[id] = true
-    logins_said()
-    login_open(core, text(l(), "url"))
+    let current = l()
+    @settings.confirm_claude_auth(text(current, "name") == "claude", fn() {
+      logins_here.pressed[id] = true
+      logins_said()
+      login_open(core, text(current, "url"))
+    })
   }, external=true, more=elsewhere, last=false)
   let send = fn() {
     let code = @signals.untracked(words)

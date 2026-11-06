@@ -21,6 +21,58 @@ test "a profile's page, wide: who it is and whether it works, then its allowance
 }
 
 ///|
+test "a Claude profile asks before opening in the station but not when returning to its page" {
+  for (w, platform) in page_cases {
+    for already_open in [false, true] {
+      let calls : Array[String] = []
+      let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, mode="settings-profile-login-station", over=fn(s) {
+        fn with_open_screen(v : Json, open : Bool) -> Json {
+          match v {
+            Object(o) => {
+              let copy = o.copy()
+              for key, value in o { copy[key] = with_open_screen(value, open) }
+              if open && text(Some(v), "state") == "needs_code" && flag(Some(v), "browser") {
+                copy["screen"] = "browser:T1"
+              }
+              Json::object(copy)
+            }
+            Array(a) => Json::array(a.map(fn(x) { with_open_screen(x, open) }))
+            _ => v
+          }
+        }
+        { ..s,
+          topic: fn(name, params) {
+            let result = (s.topic)(name, params)
+            { ..result, value: result.value.map(fn(v) { with_open_screen(v, already_open) }) }
+          },
+          call: fn(name, params, done) {
+            if name == "profile.loginBrowser" {
+              calls.push(name)
+              done(Ok({ "screen": "browser:T1" }))
+            } else {
+              (s.call)(name, params, done)
+            }
+          },
+        }
+      })
+      t.click(Button, label="其他方式")
+      t.run_for(@ui.move_most_ms)
+      t.tap_text(if already_open { "回到 Willow 的浏览器" } else { "在 Willow 的浏览器中打开" })
+      t.run_for(@ui.move_most_ms)
+      if already_open {
+        assert_eq(calls, ["profile.loginBrowser"])
+        assert_false(@sf.presenting())
+      } else {
+        assert_true(calls.is_empty())
+        assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+        t.tap_text("继续打开")
+        assert_eq(calls, ["profile.loginBrowser"])
+      }
+    }
+  }
+}
+
+///|
 test "a shared subscription's main switch and its station details remain usable at each width" {
   for case in page_cases {
     let (w, platform) = case

@@ -86,6 +86,8 @@ pub fn confirm(String, String, String, () -> Unit, danger? : Bool) -> Unit
 
 pub fn confirm_borrow(Core, String, String, @json.Json?) -> Unit
 
+pub fn confirm_claude_auth(Bool, () -> Unit) -> Unit
+
 pub let connects_mine : @ref.Ref[Bool]
 
 pub fn dark(@json.Json?, Bool) -> Bool
