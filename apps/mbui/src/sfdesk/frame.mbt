@@ -1032,7 +1032,9 @@ fn wide_keeps(v : @view.View, src : Source) -> Unit {
   v.reacts(
     fn() {
       match @sfbase.workspace_in_view(src).0 {
-        Some(w) if app.nav.depth() == 1 && app.nav.top() == Home =>
+        // The waiting page is already the workspace's destination. Landing on a chat under it would leave that
+        // chat on the narrow stack if the window were made smaller before this device is approved.
+        Some(w) if app.nav.depth() == 1 && app.nav.top() == Home && !@settings.lock_waiting(settings_core(src, w), w.id) =>
           Some((w.id, (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value))
         _ => None
       }

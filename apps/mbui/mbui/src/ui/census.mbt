@@ -115,6 +115,10 @@ pub fn Tester::census(self : Tester) -> Census {
         if (n.ground & 0xFFL) != 0L {
           color[census_hex(n.ground)] = true
         }
+        let (edge_width, edge_ink) = n.edge
+        if edge_width > 0.0 && (edge_ink & 0xFFL) != 0L {
+          color[census_hex(edge_ink)] = true
+        }
       }
     None => ()
   }

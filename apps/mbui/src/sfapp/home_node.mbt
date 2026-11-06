@@ -82,6 +82,7 @@ fn home_top_bar_node(
   tips : @sf.TipLayer,
   workspace : () -> Workspace?,
   view : () -> ChatsView?,
+  invited? : () -> Bool = fn() { false },
 ) -> Unit {
   v.box(fn(g) {
     // (pointed at itself, the arrow over it where nothing of it says otherwise, as over main's bar: not left to what is
@@ -201,6 +202,14 @@ fn home_top_bar_node(
             m.says(By(fn() { Some(@view.said(Image, label=text(marks(), "othersLabel"))) })) |> ignore
             @sfpages.chat_mark_node(m, fn() { text(marks(), "others") })
           })
+          s.show(fn() { !(field(marks(), "others") is Some(String(_))) && invited() }, fn(m) {
+            m.width(Is(Some(8.0)))
+            .height(Is(Some(8.0)))
+            .radius(Is(4.0))
+            .ground(By(fn() { @ui.tree_theme().color(@sf.mark_blue) }))
+            .says(By(fn() { Some(@view.said(Image, label=tr("android-chat.home.invited"))) }))
+            |> ignore
+          })
         })
         |> ignore
         @sf.round_key_node(end, "settings", fn() { tr("android-chat.home.settings") }, fn() {
@@ -214,5 +223,4 @@ fn home_top_bar_node(
   })
   |> ignore
 }
-
 

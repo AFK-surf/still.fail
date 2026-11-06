@@ -86,7 +86,7 @@ fn pane_pages(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
   // out nowhere meanwhile (none of it built, pressed or read out), the focus in it let go of then, after it is kept)
   v.show(gated, fn(g) {
     g.grow(Is(1.0)).focus_returns() |> ignore
-    @ui.old(g, fn(c) { pane_gate_built(c, src) }, key=tape_island_key).grow(Is(1.0)) |> ignore
+    pane_gate_node(g, src)
     g.show(@sf.native_on, fn(k) { gate_heading(k, src) })
   })
   v.box(fn(s) {
@@ -97,18 +97,24 @@ fn pane_pages(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 }
 
 ///|
-/// What waits to be confirmed in the workspace's safe mode, in the pane off the tape (its island).
-fn pane_gate_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  let (_, target) = fold_target(src, w, c.window_size().0)
-  fold_bars(fold_built(c, target))
-  if @ui.window_inset() {
-    title_row(c, "page-title-row", @sf.wide_bar_h)
-  }
-  c.box(style=frame_gate.then(@ui.style(w=Fixed(c.width), h=Fixed(c.height))), fn() {
-    let core = settings_core(src, w)
-    @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+/// What waits to be confirmed in the workspace's safe mode, in the pane off the tape. Its top row moves a window
+/// with its own title bar, while the page underneath keeps the whole pane's room.
+fn pane_gate_node(parent : @view.View, src : Source) -> Unit {
+  parent.show(fn() { @ui.window_inset_now() }, fn(t) {
+    t.over(Is(true)).height(Is(Some(@sf.wide_bar_h))).presses(Is(true)).moves_window(Is(true)) |> ignore
+  })
+  parent.box(fn(page) {
+    page.grow(Is(1.0)).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+    page.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
+      p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+      match @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) {
+        Some(w) => {
+          let core = settings_core(src, w)
+          @sfpages.lock_wait_page_node(p, core, fn() { @settings.here_of(core, w.id, w.name) })
+        }
+        None => ()
+      }
+    })
   })
   |> ignore
 }
