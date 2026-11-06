@@ -612,6 +612,55 @@ fn triple_node_foot(
 }
 
 ///|
+/// The shared presenter reads these again when the core's pick changes while a setting is open.
+fn triple_node_pick_choices(state : TripleNodePanel, which : String) -> Array[@sf.Choice] {
+  let pick = state.pick.get()
+  match which {
+    "runtime" => items(pick, "runtimes").filter_map(fn(r) {
+      if r is String(r) { Some(@sf.choice(r, @settings.runtime_label(r), icon="runtime:" + r)) } else { None }
+    })
+    "effort" => items(pick, "efforts").filter_map(fn(e) {
+      if e is String(e) { Some(@sf.choice(e, effort_text(e))) } else { None }
+    })
+    "fast" => [
+      @sf.choice("standard", @sf.t("web-main.model.standard")),
+      @sf.choice("fast", "Fast", note=@sf.t("web-main.model.fastNote"), icon="zap"),
+    ]
+    "context" => items(pick, "contexts").map(fn(c) { @sf.choice(text(Some(c), "id"), text(Some(c), "text")) })
+    _ => []
+  }
+}
+
+///|
+fn triple_node_pick_current(state : TripleNodePanel, which : String) -> String {
+  let pick = state.pick.get()
+  let draft = field(pick, "draft")
+  match which {
+    "runtime" => text(draft, "runtime")
+    "effort" => match text(draft, "effort") { "" => text(pick, "effortDefault"); e => e }
+    "fast" => match field(draft, "fast") {
+      Some(True) => "fast"
+      Some(False) => "standard"
+      _ => if flag(pick, "fastPlan") { "fast" } else { "standard" }
+    }
+    "context" => text(pick, "contextNow")
+    _ => ""
+  }
+}
+
+///|
+fn triple_node_pick_choose(src : Source, station : String, of : String, which : String, value : String) -> Unit {
+  let patch : Map[String, Json] = match which {
+    "runtime" => { "runtime": Json::string(value) }
+    "effort" => { "effort": if value == "" { Json::null() } else { Json::string(value) } }
+    "fast" => { "fast": Json::boolean(value == "fast") }
+    "context" => { "context": if value == "" { Json::null() } else { Json::string(value) } }
+    _ => {}
+  }
+  if !patch.is_empty() { pick_save(src, station, of, patch) }
+}
+
+///|
 /// The choices in a subordinate runtime, effort, speed or context picker. Each saves immediately, as the old pick does.
 fn triple_node_pick_body(
   parent : @view.View,
@@ -622,36 +671,10 @@ fn triple_node_pick_body(
   which : String,
   close : () -> Unit,
 ) -> Unit {
-  let pick = fn() { state.pick.get() }
-  let draft = fn() { field(pick(), "draft") }
-  let choices = fn() -> Array[(String, String)] {
-    match which {
-      "runtime" => items(pick(), "runtimes").filter_map(fn(r) {
-        if r is String(r) { Some((r, @settings.runtime_label(r))) } else { None }
-      })
-      "effort" => items(pick(), "efforts").filter_map(fn(e) {
-        if e is String(e) { Some((e, effort_text(e))) } else { None }
-      })
-      "fast" => [("standard", @sf.t("web-main.model.standard")), ("fast", "Fast")]
-      "context" => items(pick(), "contexts").map(fn(c) { (text(Some(c), "id"), text(Some(c), "text")) })
-      _ => []
-    }
-  }
-  let current = fn() {
-    match which {
-      "runtime" => text(draft(), "runtime")
-      "effort" => match text(draft(), "effort") { "" => text(pick(), "effortDefault"); e => e }
-      "fast" => match field(draft(), "fast") {
-        Some(True) => "fast"
-        Some(False) => "standard"
-        _ => if flag(pick(), "fastPlan") { "fast" } else { "standard" }
-      }
-      "context" => text(pick(), "contextNow")
-      _ => ""
-    }
-  }
-  parent.each(choices, fn(choice) { choice.0 }, fn(slot, choice) {
-    let selected = fn() { choice.get().0 == current() }
+  parent.each(fn() {
+    triple_node_pick_choices(state, which).map(fn(c) { (c.key, c.label, c.note) })
+  }, fn(choice) { choice.0 }, fn(slot, choice) {
+    let selected = fn() { choice.get().0 == triple_node_pick_current(state, which) }
     slot.box(fn(row) {
       @sf.style_node(row, fn() { triple_option_style })
       row.min_height(By(fn() { Some(@sf.theme().rows.pick) }))
@@ -659,21 +682,14 @@ fn triple_node_pick_body(
       .says(By(fn() { Some(@view.said(Radio, label=choice.get().1, check=if selected() { On } else { Off })) })) |> ignore
       @sf.presses_node(row, fn() {
         let value = choice.get().0
-        let patch : Map[String, Json] = match which {
-          "runtime" => { "runtime": Json::string(value) }
-          "effort" => { "effort": if value == "" { Json::null() } else { Json::string(value) } }
-          "fast" => { "fast": Json::boolean(value == "fast") }
-          "context" => { "context": if value == "" { Json::null() } else { Json::string(value) } }
-          _ => {}
-        }
         close()
-        if !patch.is_empty() { pick_save(src, station, of, patch) }
+        triple_node_pick_choose(src, station, of, which, value)
       })
       row.box(fn(words) {
         words.grow(Is(1.0)) |> ignore
         @sf.words_node(words, fn() { choice.get().1 }, fn() { if selected() { triple_picked } else { triple_words } }) |> ignore
-        words.show(fn() { which == "fast" && choice.get().0 == "fast" }, fn(note) {
-          @sf.words_node(note, fn() { @sf.t("web-main.model.fastNote") }, fn() { triple_note }) |> ignore
+        words.show(fn() { choice.get().2 != "" }, fn(note) {
+          @sf.words_node(note, fn() { choice.get().2 }, fn() { triple_note }) |> ignore
         })
       }) |> ignore
       row.box(fn(check) {
