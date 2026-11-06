@@ -54,6 +54,12 @@ test("what the machines say reads", () => {
   assert.equal(fieldOrNull("Pages wired down: 123.\n", "Anonymous pages"), null);
   assert.equal(pressureOfLevel("1\n"), "normal");
   assert.equal(pressureOfLevel("2"), "high");
+  // Warn with a quarter of the memory available is not pressure (#4355); with under a tenth it is.
+  assert.equal(pressureOfLevel("2", 6, 24), "normal");
+  assert.equal(pressureOfLevel("2", 2, 24), "high");
+  assert.equal(pressureOfLevel("2", 3, 100), "critical");
+  assert.equal(pressureOfLevel("2", null, 24), "high", "unreadable memory keeps the conservative warning");
+  assert.equal(pressureOfLevel("4", 20, 24), "critical");
   assert.equal(pressureOfLevel("4"), "critical");
   assert.equal(pressureOfLevel(""), null);
   assert.equal(pressureOfAvailable(50, 100), "normal");
