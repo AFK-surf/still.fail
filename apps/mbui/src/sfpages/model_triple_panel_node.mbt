@@ -11,6 +11,7 @@ priv struct TripleNodePanel {
   serial : Ref[Int]
   tips_at : Ref[@view.View?]
   tips : @sf.TipLayer
+  pick_anchor : Ref[(String, @view.View) -> Unit]
 }
 
 ///|
@@ -24,6 +25,7 @@ fn triple_node_panel_state(page : Json?) -> TripleNodePanel {
     serial: Ref(0),
     tips_at,
     tips: @sf.TipLayer::new(fn() { tips_at.val }),
+    pick_anchor: Ref(fn(_, _) {  }),
   }
 }
 
@@ -407,6 +409,7 @@ fn triple_node_setting(
   value_style? : () -> @ui.TextStyle = fn() { triple_who_name },
   requested? : () -> Bool,
   accepted? : () -> Unit = fn() {  },
+  made? : (@view.View) -> Unit = fn(_) {  },
 ) -> Unit {
   parent.box(fn(row) {
     row.row(Is(true)).height(By(fn() { Some(@sf.button_height()) })).padding(Is((10.0, 0.0, 10.0, 0.0)))
@@ -414,6 +417,7 @@ fn triple_node_setting(
     .ground(By(fn() { if @sf.lit_node(row) { @sf.theme().p.hover } else { 0L } }))
     .says(By(fn() { Some(@view.said(Button, label=value())) })) |> ignore
     @sf.presses_node(row, fn() { open(row) })
+    made(row)
     match requested {
       Some(read) => row.reacts(read, fn(asked) { if asked { accepted(); open(row) } })
       None => ()
@@ -436,6 +440,7 @@ fn triple_node_sheet_setting(
   head_width : () -> Double,
   open : (@view.View) -> Unit,
   runtime? : () -> String,
+  made? : (@view.View) -> Unit = fn(_) {  },
 ) -> Unit {
   parent.box(fn(row) {
     @sf.style_node(row, fn() { triple_option_style })
@@ -443,6 +448,7 @@ fn triple_node_sheet_setting(
     .ground(By(fn() { if @sf.lit_node(row) { @sf.theme().p.hover } else { 0L } }))
     .says(By(fn() { Some(@view.said(Button, label=value())) })) |> ignore
     @sf.presses_node(row, fn() { open(row) })
+    made(row)
     row.box(fn(head) {
       head.width(By(fn() { Some(head_width()) })) |> ignore
       @sf.words_node(head, title, fn() { triple_head }) |> ignore
@@ -523,11 +529,11 @@ fn triple_node_body(
               @sf.style_node(tray, fn() { if upwards { triple_tray } else { triple_tray_first } })
               tray.show(fn() { items(pick(), "efforts").length() > 0 }, fn(row) {
                 triple_node_sheet_setting(row, fn() { @sf.t("web-main.model.effort") }, fn() { effort_text(effort()) }, head_width,
-                  fn(at) { open_pick("effort", at) })
+                  fn(at) { open_pick("effort", at) }, made=fn(at) { (state.pick_anchor.val)("effort", at) })
               })
               tray.show(fn() { !flag(pick(), "runtimeFixed") && items(pick(), "runtimes").length() > 1 }, fn(row) {
                 triple_node_sheet_setting(row, fn() { @sf.t("web-main.model.runtime") }, fn() { @settings.runtime_label(runtime()) }, head_width,
-                  fn(at) { open_pick("runtime", at) }, runtime=runtime)
+                  fn(at) { open_pick("runtime", at) }, runtime=runtime, made=fn(at) { (state.pick_anchor.val)("runtime", at) })
               })
             })
           }
@@ -537,6 +543,7 @@ fn triple_node_body(
         })
       }) |> ignore
       content.show(fn() { !sheet() && !all() && items(pick(), "efforts").length() > 0 }, fn(efforts) {
+        (state.pick_anchor.val)("effort", efforts)
         efforts.box(fn(head) {
           @sf.words_node(head, fn() { @sf.t("web-main.model.effort") }, fn() { triple_picked }) |> ignore
         }) |> ignore
@@ -570,12 +577,13 @@ fn triple_node_foot(
       if text(draft(), "profile") != "" { text(pick(), "who") } else { @sf.t("web-main.model.auto") }
     }, fn(at) { open_pick("account", at) }, value_style=fn() {
       match text(pick(), "whoLevel") { "amber" => triple_amber_sm; "red" => triple_red_sm; _ => triple_who_name }
-    }, requested=fn() { me != "" && triple.accounts_asked.get() == me }, accepted=fn() { triple.accounts_asked.set("") })
+    }, requested=fn() { me != "" && triple.accounts_asked.get() == me }, accepted=fn() { triple.accounts_asked.set("") },
+      made=fn(at) { (state.pick_anchor.val)("account", at) })
     foot.show(fn() { !sheet() && !flag(pick(), "runtimeFixed") && items(pick(), "runtimes").length() > 1 }, fn(room) {
       room.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
       room.box(fn(rule) { @sf.style_node(rule, fn() { triple_foot_rule }) }) |> ignore
       triple_node_setting(room, fn() { @sf.t("web-main.model.runtime") }, fn() { @settings.runtime_label(text(draft(), "runtime")) },
-        fn(at) { open_pick("runtime", at) }, runtime=fn() { text(draft(), "runtime") })
+        fn(at) { open_pick("runtime", at) }, runtime=fn() { text(draft(), "runtime") }, made=fn(at) { (state.pick_anchor.val)("runtime", at) })
     })
     foot.show(fn() { flag(pick(), "fastAvailable") }, fn(room) {
       room.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
@@ -586,7 +594,7 @@ fn triple_node_foot(
           Some(False) => @sf.t("web-main.model.standard")
           _ => if flag(pick(), "fastPlan") { "Fast" } else { @sf.t("web-main.model.standard") }
         }
-      }, fn(at) { open_pick("fast", at) })
+      }, fn(at) { open_pick("fast", at) }, made=fn(at) { (state.pick_anchor.val)("fast", at) })
     })
     foot.show(fn() { !items(pick(), "contexts").is_empty() }, fn(room) {
       room.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
@@ -594,7 +602,7 @@ fn triple_node_foot(
       triple_node_setting(room, fn() { @sf.t("web-main.model.context") }, fn() {
         let now = text(pick(), "contextNow")
         text(items(pick(), "contexts").iter().find_first(fn(c) { text(Some(c), "id") == now }), "text")
-      }, fn(at) { open_pick("context", at) })
+      }, fn(at) { open_pick("context", at) }, made=fn(at) { (state.pick_anchor.val)("context", at) })
     })
     foot.show(fn() { field(pick(), "borrow") is Some(Object(_)) }, fn(room) {
       @sf.button_node(room, fn() { text(field(pick(), "borrow"), "action") }, borrow, tone=Primary,
