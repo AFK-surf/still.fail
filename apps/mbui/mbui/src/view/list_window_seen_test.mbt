@@ -257,46 +257,39 @@ test "scrolls_window: put where rows 10 to 12 show in an event and laid out ther
 }
 
 ///|
-test "scrolls_window: two lists' blocks come in sight in one layout, the first's telling putting it on and laying the tree out at once: what that layout finds told after the second's telling, not within the first's, each of the event's moment" {
-  let log : Array[(Int, Int, Double?)] = []
+/// Two windowed lists side by side, each a column 300 by 100 of `0..<400` 40 tall, the first while `there` says so:
+/// each telling said into `log` (which list, the first block told, the moment it was told at), what the first told
+/// then told `first_told` with the tree. The tree and the two lists' scrolls, its first frame drawn.
+fn two_lists(
+  log : Array[(Int, Int, Double?)],
+  there : @signals.Signal[Bool],
+  first_told : (@view.Tree, Array[Int]) -> Unit,
+) -> (@view.Tree, @view.Scroll, @view.Scroll) {
   let one = @view.Scroll::list()
   let two = @view.Scroll::list()
   let held : Ref[@view.Tree?] = Ref(None)
-  let put_on = Ref(false)
   let keys = fn() { Array::makei(400, fn(i) { i }) }
   let row = fn(b : @view.View, _k : Int) { b.height(Is(Some(40.0))) |> ignore }
-  // (each telling: which list, the first block it told, the moment it was told at)
   let said = fn(list : Int, came : Array[Int]) {
-    let at = match held.val {
-      Some(t) => t.moment()
-      None => None
+    match held.val {
+      Some(t) => {
+        log.push((list, came[0], t.moment()))
+        if list == 1 {
+          first_told(t, came)
+        }
+      }
+      None => ()
     }
-    log.push((list, came[0], at))
   }
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(600.0))).height(Is(Some(100.0))).row(Is(true)) |> ignore
       o.box(fn(p) {
         p.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-        p.scrolls_window(
-          one,
-          keys,
-          est=40.0,
-          seen=fn(came) {
-            said(1, came)
-            // (rows 10 on come in sight: put on to 20 and laid out at once, as an event reads where things are)
-            if !put_on.val && came.contains(10) {
-              put_on.val = true
-              one.put(800.0)
-              match held.val {
-                Some(t) => t.laid_as_now()
-                None => ()
-              }
-            }
-          },
-          row,
-        )
-        |> ignore
+        p.show(fn() { there.get() }, fn(q) {
+          q.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+          q.scrolls_window(one, keys, est=40.0, seen=fn(came) { said(1, came) }, row) |> ignore
+        })
       })
       |> ignore
       o.box(fn(p) {
@@ -309,12 +302,59 @@ test "scrolls_window: two lists' blocks come in sight in one layout, the first's
   })
   held.val = Some(tree)
   tree.frame(600.0, 100.0, now=0.0) |> ignore
+  (tree, one, two)
+}
+
+///|
+test "scrolls_window: two lists' blocks come in sight in one layout, the first's telling putting it on and laying the tree out at once: what that layout finds told after the second's telling, not within the first's, each of the event's moment" {
+  let log : Array[(Int, Int, Double?)] = []
+  let there = @signals.signal(true)
+  let one : Ref[@view.Scroll?] = Ref(None)
+  let (tree, s1, s2) = two_lists(log, there, fn(t, came) {
+    // (rows 10 on come in sight: put on to 20 and laid out at once, as an event reads where things are)
+    if came.contains(10) {
+      one.val.unwrap().put(800.0)
+      t.laid_as_now()
+    }
+  })
+  one.val = Some(s1)
   let first = log.length()
   tree.event_said(5.0, fn() {  }, fn() {
-    one.put(400.0)
-    two.put(400.0)
+    s1.put(400.0)
+    s2.put(400.0)
     tree.laid_as_now()
   })
   assert_eq(log[first:].to_array(), [(1, 10, Some(5.0)), (2, 10, Some(5.0)), (1, 20, Some(5.0))])
   tree.dispose()
+}
+
+///|
+test "scrolls_window: two lists' blocks come in sight in a frame's layout, the first's telling putting it on, laying the tree out at once, letting it go and laying out again: what that layout found not told, the list gone before its turn, the second's told; the same with a frame after or none" {
+  let runs : Array[Array[(Int, Int)]] = []
+  for painted in [false, true] {
+    let log : Array[(Int, Int, Double?)] = []
+    let there = @signals.signal(true)
+    let one : Ref[@view.Scroll?] = Ref(None)
+    let (tree, s1, s2) = two_lists(log, there, fn(t, came) {
+      if came.contains(10) {
+        one.val.unwrap().put(800.0)
+        t.laid_as_now()
+        there.set(false)
+        t.laid_as_now()
+      }
+    })
+    one.val = Some(s1)
+    let first = log.length()
+    // (outside an event, no batch round it: what it sets told as it is set)
+    s1.put(400.0)
+    s2.put(400.0)
+    tree.frame(600.0, 100.0, now=5.0) |> ignore
+    if painted {
+      tree.frame(600.0, 100.0, now=16.0) |> ignore
+    }
+    runs.push(log[first:].to_array().map(fn(e) { (e.0, e.1) }))
+    tree.dispose()
+  }
+  assert_eq(runs[0], [(1, 10), (2, 10)])
+  assert_eq(runs[1], runs[0])
 }
