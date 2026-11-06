@@ -159,26 +159,26 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     let (before, after) = vw.near(src)
     vw.read_near(src, before, after)
   })
-  // where its picture flies from and back into, kept as the chat lays its thumbnail out while it flies: where it was
+  // where its picture flies from and back into, kept as an old view lays its thumbnail out while it flies (a node's
+  // thumbnail is read where it is drawn in each frame of the flight, and kept as it goes: note_thumb_node's
+  // before_let_go; an old view's is measured as it is built, nothing of it told as it goes): where it was
   // last, what showed of it moved with it, for the frames it is on the screen no more (Viewer::flight_from; its nodes
   // read it where it is in the frame they draw)
   n.reacts(
     fn() {
       // (followed whether it flies or not: its flight said at each cause, the thumbnail's place as it is measured)
       vw.fly.said()
+      if !vw.flies || tree_thumb_owner(vw.thumb_id()).get() is Some(_) {
+        return None
+      }
       // (all of it that the flight is drawn by: where it is, what showed of it, where its list leaves it clear, its
       // corners, how its picture sits in it, which; what it draws over its picture goes with it)
-      let at = vw
-        .flight_from(@ui.current())
-        .map(fn(t) -> ThumbDrawn { { box: (t.x, t.y, t.w, t.h), seen: t.seen, clear: t.clear, corners: t.corners.each(), letterbox: t.letterbox, top_crop: t.top_crop, picture: t.picture } })
-      if vw.flies {
-        at
-      } else {
-        None
-      }
+      vw
+      .flight_from(@ui.current())
+      .map(fn(t) -> ThumbDrawn { { box: (t.x, t.y, t.w, t.h), seen: t.seen, clear: t.clear, corners: t.corners.each(), letterbox: t.letterbox, top_crop: t.top_crop, picture: t.picture } })
     },
-    fn(_) {
-      if vw.flies {
+    fn(at) {
+      if at is Some(_) {
         vw.fly_from = vw.flight_from(@ui.current())
       }
     },
@@ -1707,91 +1707,122 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
   }
   // its flight: the box it is cut to, its box round (the thumbnail's corners as far as the flight leaves them), the
   // still in it on the black where it is letterboxed or not decoded yet (one frame), what the thumbnail draws over it
-  let flight = fn(node : @view.View) -> FlightBox? { vw.player_flight(src, node, at(node)).map(fn(f) { f.0 }) }
+  // (as each frame is painted: from where the thumbnail is drawn in it, at the frame's moment while it flies)
+  let painted_at = fn(laid : @view.Laid, node : @view.View) {
+    vw.fly.said()
+    vw.fade.said()
+    let now = node.logic_at()
+    if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
+      laid.at()
+    } else {
+      @double.infinity
+    }
+  }
+  let flight = fn(laid : @view.Laid, node : @view.View) -> FlightBox? {
+    vw.player_flight(src, node, painted_at(laid, node), laid~).map(fn(f) { f.0 })
+  }
+  let picture = fn() {
+    vw.grab_told.get() |> ignore
+    if vw.fly_pic != "" {
+      vw.fly_pic
+    } else if vw.shown_kind() == Some(KVideo) {
+      vw.still(src)
+    } else {
+      ""
+    }
+  }
+  // (laid out over the stage, all of it, once; drawn where the flight has it as each frame is painted: cut to what
+  // shows of it, its box round as the flight leaves the thumbnail's corners, nothing laid out for it as it flies)
   n.box(fn(cut) {
     cut
     .over(Is(true))
     // (a picture alone: no press taken anywhere in it, whatever is under it its own (it covers the window as it waits
     // for the frame it goes back with))
     .presses(Is(false))
-    .clips(Is(true))
-    .offset(By(fn() {
-      match flight(cut) {
-        Some(f) => (f.cut.0, f.cut.1)
-        None => (0.0, 0.0)
-      }
-    }))
-    .width(By(fn() { flight(cut).map(fn(f) { f.cut.2 }) }))
-    .height(By(fn() { flight(cut).map(fn(f) { f.cut.3 }) }))
+    .clip_drawn(Painted(fn(laid) { flight(laid, cut).map(fn(f) { f.cut }) }))
     |> ignore
     cut.box(fn(b) {
-      let picture = fn() {
-        vw.grab_told.get() |> ignore
-        if vw.fly_pic != "" {
-          vw.fly_pic
-        } else if vw.shown_kind() == Some(KVideo) {
-          vw.still(src)
-        } else {
-          ""
-        }
-      }
       b
       .over(Is(true))
-      .clips(Is(true))
-      .corners(By(fn() { flight(b).map(fn(f) { f.corners }) }))
-      .offset(By(fn() {
-        match flight(b) {
-          Some(f) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
-          None => (0.0, 0.0)
-        }
-      }))
-      .width(By(fn() { flight(b).map(fn(f) { f.box.2 }) }))
-      .height(By(fn() { flight(b).map(fn(f) { f.box.3 }) }))
-      // (no still: the black alone)
-      .ground(By(fn() {
-        if flight(b) is Some(_) && picture() == "" {
-          0x000000FFL
-        } else {
-          0L
-        }
-      }))
+      // (none where it has nowhere to fly from)
+      .alpha(Painted(fn(laid) { if flight(laid, b) is Some(_) { 1.0 } else { 0.0 } }))
+      .corners(Painted(fn(laid) { flight(laid, b).map(fn(f) { f.corners }) }))
+      .clip_drawn(Painted(fn(laid) { flight(laid, b).map(fn(f) { f.box }) }))
       |> ignore
-      // (the still and the black round it one frame filling the box, cut once by its round corners, as the old
+      // (where its box is and how big, as each frame is painted: placed and drawn so, nothing laid out for it)
+      let boxed = fn(n : @view.View) {
+        n
+        .over(Is(true))
+        .offset(Painted(fn(laid) { flight(laid, n).map(fn(f) { (f.box.0, f.box.1) }).unwrap_or((0.0, 0.0)) }))
+        .drawn_size(Painted(fn(laid) { flight(laid, n).map(fn(f) { (f.box.2, f.box.3) }) }))
+        |> ignore
+      }
+      // (no still: the black alone, its box round as its flight has it)
+      b.box(fn(k) {
+        boxed(k)
+        k
+        .corners(Painted(fn(laid) { flight(laid, k).map(fn(f) { f.corners }) }))
+        .ground(Painted(fn(laid) { if flight(laid, k) is Some(_) && picture() == "" { 0x000000FFL } else { 0L } }))
+        |> ignore
+      })
+      |> ignore
+      // (the still and the black round it one frame filling its box, cut once by its round corners, as the old
       // flight's picture in its matte was)
       b.box(fn(f) {
+        boxed(f)
         f
-        .over(Is(true))
         .image(By(fn() {
-          match flight(f) {
-            Some(_) if picture() != "" => Some((picture(), "", stage_px))
-            _ => None
+          vw.fly.said()
+          if vw.flies && picture() != "" {
+            Some((picture(), "", stage_px))
+          } else {
+            None
           }
         }))
-        .image_in(By(fn() {
-          match flight(f) {
-            Some(fb) if picture() != "" =>
-              Some(((fb.picture.0 - fb.box.0, fb.picture.1 - fb.box.1, fb.picture.2, fb.picture.3), 0x000000FFL))
-            _ => None
-          }
-        }))
+        .image_in(
+          Painted(fn(laid) {
+            match flight(laid, f) {
+              Some(fb) if picture() != "" =>
+                Some(((fb.picture.0 - fb.box.0, fb.picture.1 - fb.box.1, fb.picture.2, fb.picture.3), 0x000000FFL))
+              _ => None
+            }
+          }),
+        )
         |> ignore
       })
       |> ignore
       // what the thumbnail draws over its picture (its capsule), whole, in its box: gone by halfway out, back from
       // halfway in, as a row's content goes with its room; none seen where it flies not (its old view made as the
-      // viewer is, built by the time it sets out)
+      // viewer is, built by the time it sets out). Laid out as big as the thumbnail it flies from (an old view draws at
+      // the size it is laid out at), placed by the flight's box as each frame is painted
       b.box(fn(o) {
         o
         .over(Is(true))
+        // (by its foot, where what it draws lies (the capsule at its foot's start), as the flight's box grows past it)
+        .offset(
+          Painted(fn(laid) {
+            match (flight(laid, o), vw.fly_from) {
+              (Some(f), Some(t)) => (f.box.0, f.box.1 + f.box.3 - t.h)
+              _ => (0.0, 0.0)
+            }
+          }),
+        )
+        .width(By(fn() {
+          vw.fly.said()
+          vw.fly_from.map(fn(t) { t.w })
+        }))
+        .height(By(fn() {
+          vw.fly.said()
+          vw.fly_from.map(fn(t) { t.h })
+        }))
         .alpha(By(fn() {
-          match vw.player_flight(src, o, at(o)) {
+          match vw.player_flight(src, o, at(o), kept=true) {
             Some((_, p)) => dmax(0.0, 1.0 - flight_over_gone * p)
             None => 0.0
           }
         }))
         |> ignore
-        // (what it draws over its picture alone, as its chat said it last (Viewer::thumb_over): where it is and how big
-        // the flight's, followed by the nodes round it; none of its place read here)
+        // (what it draws over its picture alone, as its chat said it last (Viewer::thumb_over))
         @ui.old(o, fn(_c) { (vw.thumb_over())(1.0) })
         .over(Is(true))
         |> ignore
@@ -1807,7 +1838,7 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
     .over(Is(true))
     .alpha(By(fn() {
       let t = at(s)
-      let bars = match vw.player_flight(src, s, t) {
+      let bars = match vw.player_flight(src, s, t, kept=true) {
         Some((_, p)) => bars_share(p)
         None => 1.0
       }
@@ -1840,10 +1871,19 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
 /// A film's flight as node `node` draws it at `t` (from the thumbnail where the chat lays it out, Viewer::flight_from, to
 /// where its player draws its picture, or back from where it was: Viewer::fly_to) and how far it has come: None where
 /// it flies not (or waits for the frame it shows to be grabbed as it closes: its player's picture where it was).
-fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Double) -> (FlightBox, Double)? {
+fn Viewer::player_flight(
+  self : Viewer,
+  src : Source,
+  node : @view.View,
+  t : Double,
+  laid? : @view.Laid,
+  kept? : Bool = false,
+) -> (FlightBox, Double)? {
   let vw = self
   vw.fly.said()
   vw.grab_told.get() |> ignore
+  // (its landing told: it flies no more as its thumbnail is shown again, one picture on the screen, image_ends)
+  pv_hidden.get() |> ignore
   if !vw.flies || (vw.closing && vw.leaving_grab) {
     return None
   }
@@ -1853,7 +1893,9 @@ fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Dou
     Some(r) if vw.fly_back => Some(r)
     _ => vw.video_target(src, width, h)
   }
-  match (vw.flight_from(@ui.current()), to) {
+  // (from where the thumbnail is drawn in the frame `laid` is of; `kept`: from where it was as it set out)
+  let from = if kept { vw.fly_from } else { vw.flight_from(@ui.current(), laid?) }
+  match (from, to) {
     (Some(from), Some(to)) => {
       let p = vw.flying_at(t)
       flight_box(from, vw.lifted_at(t), to, p, width, h).map(fn(f) { (f, p) })

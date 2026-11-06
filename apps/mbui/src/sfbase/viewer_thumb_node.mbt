@@ -56,6 +56,20 @@ pub fn note_thumb_node(
     pv_thumbs[id] = { radius: r, letterbox: l, top_crop: crop, picture: p, id: 0, list, over, said: s }
     if changed { thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1) }
   })) |> ignore
+  // (let go as a picture flies to or from it: where it was last drawn, as it was, kept as where it flies on from or
+  // back to: Viewer's fly_from, read once, as it goes, while it is still drawn there)
+  node.before_let_go(fn() {
+    for v in [@signals.untracked(fn() { viewer.get() }), @signals.untracked(fn() { pv_leaving.get() })] {
+      match v {
+        Some(v) if v.flies && v.thumb_id() == id =>
+          match tree_thumb_of(@ui.current(), node, look) {
+            Some(t) => v.fly_from = Some(t)
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }) |> ignore
   node.owns(fn() {
     match @signals.untracked(fn() { owner.get() }) {
       Some((held, _)) if held.id() == node.id() => {
@@ -83,11 +97,8 @@ pub fn note_list_node(node : @view.View, key : String, bar : () -> Double, room 
 
 ///|
 fn tree_thumb_of(c : @ui.Ctx, node : @view.View, look : () -> ThumbLook, laid? : @view.Laid) -> Thumb? {
-  // Follow placement even while it is laid out nowhere, so showing the same node again tells its readers (but where it
-  // is read as a frame is painted, `laid`: where it is drawn in that frame, Laid::drawn, nothing followed).
-  if laid is None {
-    ignore(node.drawn_window_told())
-  }
+  // (where it is drawn: in the frame `laid` is of as that is painted (Laid::drawn), else as it was last drawn, at the
+  // moment of what asks (a tap opening it, a back closing it); nothing of it followed)
   guard node.alive() && !node.shown_nowhere() else { return None }
   guard @ui.view_tree() is Some(tree) else { return None }
   let l = look()

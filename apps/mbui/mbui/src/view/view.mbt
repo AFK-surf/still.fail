@@ -88,7 +88,8 @@ pub fn Laid::drawn(self : Laid, v : View) -> (Double, Double, Double, Double)? {
     return None
   }
   let (x, y, _, s) = self.tree.projected(v.at, drawing=true)
-  Some((x, y, n.lw * s, n.lh * s))
+  let (w, h) = n.look.drawn_size.unwrap_or((n.lw, n.lh))
+  Some((x, y, w * s, h * s))
 }
 
 ///|
@@ -195,6 +196,9 @@ pub(all) struct Look {
   /// the rect it cuts what it holds to (x, y, w, h, in its own terms; None: none of its own), as it is painted, whether
   /// or not it clips to itself: View::clip_drawn
   mut clip_drawn : (Double, Double, Double, Double)?
+  /// how big it is drawn (w, h; None: as it is laid out), as it is painted: its ground, its picture and its edge, and
+  /// where it is pressed, from where it is laid out; what it holds laid out as ever: View::drawn_size
+  mut drawn_size : (Double, Double)?
   /// the picture it shows over its ground, all of it filled (its source as what hosts the tree keeps pictures by, what
   /// stands in for it till it is decoded at the size it is drawn ("" none), the most pixels it is asked at), drawn as
   /// what hosts the tree draws one (None: none): View::image
@@ -457,6 +461,10 @@ struct Node {
   mut stop : (() -> Unit)?
   /// what else goes with it (View::owns, its structure's binding), run once as it is let go
   drops : Map[Int, () -> Unit]
+  /// what is done as it is let go while it is still as it was, laid out and drawn (View::before_let_go), run first
+  goes : Array[() -> Unit]
+  /// being let go: what is done first done, the rest of its going to come (what that does let it go once, not again)
+  mut letting_go : Bool
   /// the key the next of them is kept by
   mut drop_next : Int
   /// its properties' bindings, by property: what stops each
@@ -1225,6 +1233,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.shadow_out = false
       n.look.cut_across = None
       n.look.clip_drawn = None
+      n.look.drawn_size = None
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
       n.look.image_cover = false
@@ -1339,6 +1348,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.back_at = -1.0
       n.back_from = 0.0
       n.going = None
+      n.letting_go = false
+      n.goes.clear()
       n.inert = false
       n.turned_off = false
       n.modal = false
@@ -1354,13 +1365,15 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, drawn_size: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
         parent,
         allow_ellipsis: false,
         kids: [],
         owner: None,
         stop: None,
         drops: {},
+        goes: [],
+        letting_go: false,
         drop_next: 0,
         props: {},
         on_press: None,
@@ -1848,7 +1861,8 @@ pub fn View::drawn_at(self : View) -> Double {
 pub fn View::rect(self : View) -> (Double, Double, Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   let (x, y, s) = self.tree.placed(self.at)
-  (x, y, n.flex.width * s, n.flex.height * s)
+  let (w, h) = n.look.drawn_size.unwrap_or((n.flex.width, n.flex.height))
+  (x, y, w * s, h * s)
 }
 
 ///|
@@ -2177,6 +2191,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
 /// Words: View::words, View::words_runs), any other its own, so that one bound never lets go of another's.
 priv enum Prop {
   ClipDrawn
+  DrawnSize
   CutAcross
   Notch
   ShadowOut
@@ -2595,9 +2610,34 @@ pub fn View::cut_across(self : View, across : Live[(Double, Double)?]) -> View {
 /// of its own), whether or not it clips to itself (View::clips: both, where it does): what shows of a thing on its way
 /// cut as each frame is painted (a picture flying out of its thumbnail, cut where the list it was in leaves it seen),
 /// nothing laid out for it; its corners round as its own are (View::radius, View::corners); what it cuts away pressed
-/// nowhere. Paint's: what it holds drawn again, all of it.
+/// nowhere, its round corners' too, as an old view's round clip (Ctx's in_round_clip): its rect or its corners said
+/// again, what a still pointer is over worked out again. Paint's: what it holds drawn again, all of it.
 pub fn View::clip_drawn(self : View, rect : Live[(Double, Double, Double, Double)?]) -> View {
-  self.bind(ClipDrawn, rect, Paint, fn(r) { self.tree.nodes[self.at].look.clip_drawn = r })
+  self.bind(ClipDrawn, rect, Paint, fn(r) {
+    let n = self.tree.nodes[self.at]
+    if n.look.clip_drawn != r {
+      n.look.clip_drawn = r
+      // (where what it holds is pressed another: what a still pointer is over worked out again, Tree::hits_said)
+      self.tree.hits = self.tree.hits + 1
+    }
+  })
+  self
+}
+
+///|
+/// How big it is drawn as it changes (w, h; None: as it is laid out), from where it is laid out: its ground, its
+/// picture, its edge, and where it is pressed and found (View::rect, Laid::drawn), all of that size; what it holds laid
+/// out as ever, where it is. A thing growing or shrinking on its way (a film's still flying out of its thumbnail) drawn
+/// as each frame is painted, nothing laid out for it. Paint's: its own layer drawn again.
+pub fn View::drawn_size(self : View, size : Live[(Double, Double)?]) -> View {
+  self.bind(DrawnSize, size, Paint, fn(z) {
+    let n = self.tree.nodes[self.at]
+    if n.look.drawn_size != z {
+      n.look.drawn_size = z
+      // (where it is pressed another: what a still pointer is over worked out again, Tree::hits_said)
+      self.tree.hits = self.tree.hits + 1
+    }
+  })
   self
 }
 
@@ -2802,12 +2842,72 @@ pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, 
     let n = self.nodes[i]
     if n.bounds_input {
       let (x, y, sc) = self.placed(i)
-      let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
+      let (w, h) = input_size(n)
+      let (x1, y1) = (x + w * sc, y + h * sc)
       b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))
+    }
+    // (and where it cuts what it holds as it is painted: nothing of it found past that, View::clip_drawn)
+    match n.look.clip_drawn {
+      Some((cx, cy, cw, ch)) => {
+        let (x, y, sc) = self.placed(i)
+        let (x0, y0) = (x + cx * sc, y + cy * sc)
+        b = (dmax(b.0, x0), dmax(b.1, y0), dmin(b.2, x0 + cw * sc), dmin(b.3, y0 + ch * sc))
+      }
+      None => ()
     }
     i = n.parent
   }
   b
+}
+
+///|
+/// How big what a node bounds input to is: as big as it is drawn (View::drawn_size), else as it is laid out.
+fn input_size(n : Node) -> (Double, Double) {
+  n.look.drawn_size.unwrap_or((n.flex.width, n.flex.height))
+}
+
+///|
+/// Whether (x, y) in the window is where node `n` (placed at `nx`, `ny`, `s` as big) shows what it holds, as it cuts
+/// it as it is painted (View::clip_drawn): within its rect, within its round corners as the renderers cut them (as
+/// round, and as smooth, as push_inset_clip_r has them: smooth.mbt sd_clip), as an old view's round clip is pressed
+/// (Ctx's in_round_clip); anywhere, where it cuts nothing so.
+fn clip_drawn_holds(n : Node, nx : Double, ny : Double, s : Double, x : Double, y : Double) -> Bool {
+  guard n.look.clip_drawn is Some((cx, cy, cw, ch)) else { return true }
+  let (x0, y0) = (nx + cx * s, ny + cy * s)
+  let (x1, y1) = (x0 + dmax(0.0, cw) * s, y0 + dmax(0.0, ch) * s)
+  if x < x0 || y < y0 || x >= x1 || y >= y1 {
+    return false
+  }
+  let r = n.look.radius
+  let (a, b, c, d) = n.look.corners.unwrap_or((r, r, r, r))
+  if a <= 0.0 && b <= 0.0 && c <= 0.0 && d <= 0.0 {
+    return true
+  }
+  let room = dmin(x1 - x0, y1 - y0) / 2.0
+  let fit = fn(k : Double) { dmax(dmin(k * s, room), 0.0) }
+  let (a, b, c, d) = (fit(a), fit(b), fit(c), fit(d))
+  let sm = fn(k : Double) { @paint.smoothness(k, room) }
+  @paint.sd_clip(x, y, x0, y0, x1, y1, (a, b, c, d), (sm(a), sm(b), sm(c), sm(d))) <= 0.0
+}
+
+///|
+/// Whether (x, y) in the window is where what holds node `id` shows it, as each cuts what it holds as it is painted
+/// (View::clip_drawn), round corners and all: what Tree::input_bounds says of their rects, at a point, as the walk
+/// for a press has it (Tree::walk_taken).
+fn Tree::clips_drawn_hold(self : Tree, id : NodeId, x : Double, y : Double) -> Bool {
+  guard self.alive_id(id) else { return true }
+  let mut i = self.nodes[id.at].parent
+  while i >= 0 {
+    let n = self.nodes[i]
+    if n.look.clip_drawn is Some(_) {
+      let (nx, ny, sc) = self.placed(i)
+      if !clip_drawn_holds(n, nx, ny, sc, x, y) {
+        return false
+      }
+    }
+    i = n.parent
+  }
+  true
 }
 
 ///|
@@ -2883,7 +2983,16 @@ pub fn View::tint(self : View, ink : Live[Int64]) -> View {
 ///|
 /// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
 pub fn View::radius(self : View, r : Live[Double]) -> View {
-  self.bind(Radius, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
+  self.bind(Radius, r, Paint, fn(r) {
+    let n = self.tree.nodes[self.at]
+    if n.look.radius != r {
+      n.look.radius = r
+      // (where it cuts what it holds as it is painted, its corners: where that is pressed another, View::clip_drawn)
+      if n.look.clip_drawn is Some(_) {
+        self.tree.hits = self.tree.hits + 1
+      }
+    }
+  })
   self
 }
 
@@ -2891,7 +3000,16 @@ pub fn View::radius(self : View, r : Live[Double]) -> View {
 /// Its corners each (top left, then round it; None: all as its radius, View::radius), as an old view's box's radius
 /// may be four (@ui.Radius::Corners): its ground's, its glass's, its edge's and its cut's (View::clips): paint's.
 pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double)?]) -> View {
-  self.bind(Corners, corners, Paint, fn(k) { self.tree.nodes[self.at].look.corners = k })
+  self.bind(Corners, corners, Paint, fn(k) {
+    let n = self.tree.nodes[self.at]
+    if n.look.corners != k {
+      n.look.corners = k
+      // (where it cuts what it holds as it is painted, its corners: where that is pressed another, View::clip_drawn)
+      if n.look.clip_drawn is Some(_) {
+        self.tree.hits = self.tree.hits + 1
+      }
+    }
+  })
   self
 }
 
@@ -5400,6 +5518,16 @@ pub fn View::gesture(
 }
 
 ///|
+/// `f` run once as it is let go, first, while it is still as it was: alive, laid out and drawn where it was (what is
+/// to be kept of where it was as it goes: a thumbnail a picture flies back to, gone from the screen as it flies).
+/// View::owns' are run after, it gone.
+pub fn View::before_let_go(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.goes.push(f)
+  self
+}
+
+///|
 /// `f` run once as it is let go (what it holds that is no effect: a computed to dispose, a resource to close).
 pub fn View::owns(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
@@ -5440,7 +5568,15 @@ pub fn View::owned_count(self : View) -> Int {
 /// Lets it go: what it holds first, then its scope stopped (what it was made with: its bindings, its effects, their
 /// cleanups run), what goes with it run, its callback and measure dropped, its index free.
 fn View::let_go(self : View) -> Unit {
-  guard self.live() is Some(n) else { return }
+  guard self.live() is Some(n) && !n.letting_go else { return }
+  // (what is to be done while it is as it was, first: where it is drawn read as it was, View::before_let_go; what that
+  // does letting it, or what holds it, go meanwhile lets it go no more than once: the rest of its going here, after)
+  n.letting_go = true
+  let goes = n.goes.copy()
+  n.goes.clear()
+  for f in goes {
+    f()
+  }
   // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
   // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
   if self.tree.pointed_within_at(self.at) {
@@ -5451,7 +5587,12 @@ fn View::let_go(self : View) -> Unit {
   let kids = n.kids.map(fn(k) { self.tree.handle(k) })
   n.kids.clear()
   for k in kids {
-    k.let_go()
+    match k.live() {
+      // (one whose going this is done from within, before it lets go: held by this no more, its own going finished
+      // where it began, nothing of it left pointing at this one's place, which may be another's by then)
+      Some(kn) if kn.letting_go => kn.parent = -1
+      _ => k.let_go()
+    }
   }
   n.live = false
   match self.tree.modals.search(self.at) {
@@ -6818,7 +6959,8 @@ fn Tree::sizes_told_now(self : Tree) -> Bool {
         Some(cell) => {
           let rect = if self.out_at(at) { None } else {
             let (x, y, _, s) = self.projected(at, drawing=true)
-            Some((x, y, n.lw * s, n.lh * s))
+            let (w, h) = n.look.drawn_size.unwrap_or((n.lw, n.lh))
+            Some((x, y, w * s, h * s))
           }
           if @signals.untracked(fn() { cell.get() }) != rect {
             told.val = true
@@ -7285,10 +7427,12 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
   n.look_due = false
   let id = { at, gen: n.gen }
   self.work.instances = self.work.instances + 1
+  // (as big as it is drawn: View::drawn_size, else as laid out)
+  let (cw, ch) = n.look.drawn_size.unwrap_or((n.lw, n.lh))
   n.content = Some({
     id,
-    w: n.lw,
-    h: n.lh,
+    w: cw,
+    h: ch,
     ground: n.look.ground,
     ink: n.look.ink,
     words: n.look.words,
@@ -7658,22 +7802,14 @@ fn Tree::walk_taken(
         return false
       }
       if n.bounds_input {
-        let (x1, y1) = (nx + n.flex.width * s, ny + n.flex.height * s)
+        let (w, h) = input_size(n)
+        let (x1, y1) = (nx + w * s, ny + h * s)
         if x < nx || y < ny || x >= x1 || y >= y1 {
           return false
         }
       }
       // (what it cuts away as it is painted is not seen: nothing of it pressed there, View::clip_drawn)
-      match n.look.clip_drawn {
-        Some((cx, cy, cw, ch)) => {
-          let (x0, y0) = (nx + cx * s, ny + cy * s)
-          if x < x0 || y < y0 || x >= x0 + cw * s || y >= y0 + ch * s {
-            return false
-          }
-        }
-        None => ()
-      }
-      true
+      clip_drawn_holds(n, nx, ny, s, x, y)
     },
   )
 }
@@ -8100,7 +8236,7 @@ fn Tree::finger_on(
   }
   // (within what holds it bounds it to: View::bounds_input)
   let (bx0, by0, bx1, by1) = self.input_bounds(c.id)
-  if x < bx0 || y < by0 || x >= bx1 || y >= by1 {
+  if x < bx0 || y < by0 || x >= bx1 || y >= by1 || !self.clips_drawn_hold(c.id, x, y) {
     return false
   }
   let n = self.nodes[c.id.at]
@@ -8235,7 +8371,8 @@ fn Tree::reached(
     let (bx0, by0, bx1, by1) = self.input_bounds(id)
     let (rx0, rx1) = room(x0, x1, cut.0, cut.2, dmax(0.0, bx0), dmin(ww, bx1))
     let (ry0, ry1) = room(y0, y1, cut.1, cut.3, dmax(0.0, by0), dmin(wh, by1))
-    if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 {
+    // (and within the round corners of what cuts it as it is painted, as a press on it is)
+    if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 || !self.clips_drawn_hold(id, x, y) {
       continue
     }
     let dx = dmax(0.0, dmax(x0 - x, x - x1))
@@ -8732,7 +8869,8 @@ fn Tree::within(self : Tree, at : Int) -> Bool {
   }
   let n = self.nodes[at]
   let (x, y, s) = self.placed(at)
-  px >= x && px < x + n.lw * s && py >= y && py < y + n.lh * s
+  let (w, h) = n.look.drawn_size.unwrap_or((n.lw, n.lh))
+  px >= x && px < x + w * s && py >= y && py < y + h * s
 }
 
 ///|
@@ -8824,7 +8962,7 @@ fn Tree::bar_near_at(self : Tree) -> Int? {
       px < cx + c.w * s &&
       py < cy + c.h * s {
       let (bx0, by0, bx1, by1) = self.input_bounds(c.id)
-      if px >= bx0 && py >= by0 && px < bx1 && py < by1 {
+      if px >= bx0 && py >= by0 && px < bx1 && py < by1 && self.clips_drawn_hold(c.id, px, py) {
         top.val = c.id.at
       }
     }
@@ -9121,7 +9259,7 @@ fn Tree::blocks_at(self : Tree, c : Content, cx : Double, cy : Double, s : Doubl
     return false
   }
   let (bx0, by0, bx1, by1) = self.input_bounds(c.id)
-  x >= bx0 && y >= by0 && x < bx1 && y < by1
+  x >= bx0 && y >= by0 && x < bx1 && y < by1 && self.clips_drawn_hold(c.id, x, y)
 }
 
 ///|
