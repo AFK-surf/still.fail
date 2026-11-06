@@ -10,6 +10,7 @@ import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { keyPart, sandboxName } from "../src/agents/sandbox-name.ts";
 import { installLegacySaid } from "../src/store/legacy-said-build.ts";
 import { installLegacyAgent } from "../src/store/legacy-agent-build.ts";
+import { installPeopleSinceIndex } from "../src/store/legacy-people-since.ts";
 
 // The release's main.js loads and answers: a module importing createRequire as the bundle's banner did declared it
 // twice, and every station updated to 0.1.7119 kept its old one (the new one exited with 1 before it was ready).
@@ -37,6 +38,8 @@ test("the workers in a station release start and process a batch", { skip: !proc
     const put = store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     put.run(saidThread, 1, "agent", "s", "first", 1);
     for (let n = 2; n <= 70; n++) put.run(saidThread, n, "person", "p", `m${n}`, n);
+    store.db.exec("DROP INDEX entries_people_since");
+    installPeopleSinceIndex(store.db);
     store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(saidThread);
     const turn = store.db.prepare("INSERT INTO turns(id,session_key,kind,started_at) VALUES (?,'old-turn','input',?)");
     for (let n = 0; n < 70; n++) turn.run(`old-${n}`, n);
@@ -84,6 +87,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/widget-sources-worker.js", { thread }],
       ["read/cc-index-worker.js", { session: "old-cc" }],
       ["read/card-posts-worker.js", { thread }],
+      ["read/card-posts-worker.js", { thread: saidThread, people: true }],
       ["read/archive-mark-worker.js", { scope: "all" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
@@ -122,5 +126,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT name FROM widget_source_rows WHERE thread=? AND path='/w/bundle.html'").get(thread)?.name, "bundle.html");
     assert.equal(store.db.prepare("SELECT complete FROM cc_sessions WHERE session='old-cc'").get()?.complete, 1);
     assert.equal(store.db.prepare("SELECT n FROM card_posts WHERE thread=?").get(thread)?.n, 1);
+    assert.equal(store.db.prepare("SELECT complete FROM legacy_people_time_scopes WHERE thread=?").get(saidThread)?.complete, 1);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });

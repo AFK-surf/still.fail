@@ -17,6 +17,8 @@ import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcTh
 import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
 import { CLOSED_CARDS_INDEXED, CLOSED_CARDS_PENDING, CLOSED_CHAT_SAMPLE, CLOSED_SAMPLE_LIMIT, CLOSED_TIME_SAMPLE,
   LEGACY_CLOSED_CARDS, closedCardsReady, hasClosedCardsTimeIndex, hasLegacyClosedCards, hasNativeClosedCards } from "../store/legacy-closed-cards.ts";
+import { LEGACY_FIRST_PERSON_SINCE, LEGACY_HAS_PEOPLE_SINCE, LEGACY_PEOPLE_AFTER, PEOPLE_TIME_PENDING, PEOPLE_TIME_SAMPLE_LIMIT,
+  SMALL_PEOPLE_AFTER, SMALL_PEOPLE_FIRST, SMALL_PEOPLE_HAS, hasLegacyPeopleSince, hasNativePeopleSince, peopleSinceReady } from "../store/legacy-people-since.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
@@ -819,12 +821,36 @@ export const ANSWER_PEOPLE_AFTER = `SELECT thread, n FROM entries INDEXED BY ent
 export const ANSWER_NEXT_PERSON = `SELECT n, at FROM entries INDEXED BY entries_people_by_n
   WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1`;
 
+type PeopleTimeMode = "native" | "legacy" | "small";
+type AnswerMode = PeopleTimeMode | "cards";
+const peopleTimePending = (threads: number[]): never => { throw new Refused(503,PEOPLE_TIME_PENDING + JSON.stringify(threads)); };
+const smallPeople = (s: Store, thread: number, since: number): Json => {
+  const row = one(s,SMALL_PEOPLE_HAS,thread,since)!;
+  if (row.seen >= PEOPLE_TIME_SAMPLE_LIMIT) peopleTimePending([thread]);
+  return row;
+};
+const hasRecentPeople = (s: Store, thread: number, since: number, mode: PeopleTimeMode): boolean =>
+  mode === "small" ? smallPeople(s,thread,since).yes === 1
+    : one(s,mode === "native" ? HAS_ANSWER_PEOPLE_SINCE : LEGACY_HAS_PEOPLE_SINCE,thread,since) !== undefined;
+const firstRecentPerson = (s: Store, thread: number, since: number, mode: PeopleTimeMode): number | null => {
+  const row = one(s,mode === "native" ? FIRST_ANSWER_PERSON_SINCE : mode === "legacy" ? LEGACY_FIRST_PERSON_SINCE : SMALL_PEOPLE_FIRST,thread,since)!;
+  if (mode === "small" && row.seen >= PEOPLE_TIME_SAMPLE_LIMIT) peopleTimePending([thread]);
+  return row.n as number | null;
+};
+const peopleAfter = (s: Store, thread: number, since: number, n: number, mode: PeopleTimeMode): { thread: number; n: number }[] => {
+  const result = all(s,mode === "native" ? ANSWER_PEOPLE_AFTER : mode === "legacy" ? LEGACY_PEOPLE_AFTER : SMALL_PEOPLE_AFTER,thread,since,n);
+  if (mode === "small" && result.some((row) => row.seen >= PEOPLE_TIME_SAMPLE_LIMIT)) peopleTimePending([thread]);
+  return result.filter((row) => row.n !== null).map((row) => ({ thread: row.thread, n: row.n }));
+};
+
 /// The people's messages since `since` (ms) in a thread that each are the first after a card (the last before it), in
 /// order. With many old cards, seek from a person to the next card and its first person, skipping ordinary messages.
-function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
-  if (one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) === undefined) return [];
+function answersOf(s: Store, thread: number, since: number, mode: AnswerMode): { thread: number; n: number }[] {
+  if (mode !== "cards" && !hasRecentPeople(s,thread,since,mode)) return [];
   const cardRows = all(s, CARD_POST_SAMPLE, thread);
   if (cardRows.length >= ANSWER_CARD_SAMPLE_SIZE) {
+    // Direct callers need not hold a read snapshot: a new card could have arrived since the short-card probe.
+    const timeMode: PeopleTimeMode = mode === "cards" ? peopleTimePending([thread]) : mode;
     const nextCard = (n: number): number | null => {
       return (one(s, CARD_POST_NEXT, thread, n)?.n as number | undefined) ?? null;
     };
@@ -834,8 +860,7 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
     if (firstPerson === undefined) return [];
     // If the first answer is already recent, no earlier answer exists. Otherwise find the first recent person by
     // the time index, so old answered cards do not have to be visited. Times need not follow entry order.
-    const first = firstPerson.at >= since ? firstPerson.n as number
-      : one(s, FIRST_ANSWER_PERSON_SINCE, thread, since).n as number | null;
+    const first = firstPerson.at >= since ? firstPerson.n as number : firstRecentPerson(s,thread,since,timeMode);
     if (first === null) return [];
     const out = [{ thread, n: first }];
     let n = first;
@@ -850,7 +875,7 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
       if (person.at >= since) out.push({ thread, n });
       else if (++older >= ANSWER_CARD_SAMPLE_SIZE) {
         // If timestamps are far out of sequence, finish by the time index instead of walking old answers.
-        return out.concat(all(s, ANSWER_PEOPLE_AFTER, thread, since, n) as { thread: number; n: number }[]);
+        return out.concat(peopleAfter(s,thread,since,n,timeMode));
       }
     }
   }
@@ -905,11 +930,43 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
       if (waiting.length) throw new Refused(503, CLOSED_CARDS_PENDING + JSON.stringify(waiting));
     }
   }
-  const withPeople = scope.filter((thread) => one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) !== undefined);
-  const carded = new Set(threadsWithCards(s, withPeople));
-  const relevant = withPeople.filter((thread) => carded.has(thread));
-  requireCardPosts(s, relevant);
-  const said = relevant.flatMap((thread) => answersOf(s, thread, since));
+  const nativePeople = hasNativePeopleSince(s.db);
+  const modes = new Map<number,AnswerMode>();
+  let said: { thread: number; n: number }[];
+  try {
+    let relevant: number[];
+    if (nativePeople) {
+      const withPeople = scope.filter((thread) => hasRecentPeople(s,thread,since,"native"));
+      const carded = new Set(threadsWithCards(s,withPeople));
+      relevant = withPeople.filter((thread) => carded.has(thread));
+      for (const thread of relevant) modes.set(thread,"native");
+    } else {
+      // A cardless chat needs no people lookup. Short chats can answer from at most 65 entries without waiting.
+      const carded = threadsWithCards(s,scope), waiting: number[] = [];
+      relevant = [];
+      for (const thread of carded) {
+        // When the card-post lookup is ready and small, seek the first person after each card. Its cost is bounded
+        // by the cards, even if this chat has a long history and the old people-time lookup is not prepared yet.
+        if (cardPostsReady(s.db,thread) && all(s,CARD_POST_SAMPLE,thread).length < ANSWER_CARD_SAMPLE_SIZE) {
+          modes.set(thread,"cards"); relevant.push(thread); continue;
+        }
+        const mode: PeopleTimeMode = hasLegacyPeopleSince(s.db) && peopleSinceReady(s.db,thread) ? "legacy" : "small";
+        if (mode === "small") {
+          const probe = one(s,SMALL_PEOPLE_HAS,thread,since)!;
+          if (probe.seen >= PEOPLE_TIME_SAMPLE_LIMIT) { waiting.push(thread); continue; }
+          if (probe.yes !== 1) continue;
+        } else if (!hasRecentPeople(s,thread,since,mode)) continue;
+        modes.set(thread,mode); relevant.push(thread);
+      }
+      if (waiting.length) peopleTimePending(waiting);
+    }
+    requireCardPosts(s,relevant);
+    said = relevant.flatMap((thread) => answersOf(s,thread,since,modes.get(thread)!));
+  } catch (error) {
+    // A direct caller need not hold the worker's snapshot; an older connection may have removed the native index.
+    if (nativePeople && (error as Error).message.includes("no such index: entries_people_since")) peopleTimePending(scope);
+    throw error;
+  }
   const askedBefore = (thread: number, n: number): number | null => {
     return one(s, CARD_POST_BEFORE, thread, n).n as number | null;
   };
