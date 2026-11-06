@@ -675,9 +675,20 @@ pub fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
 }
 
 ///|
-/// How fast it goes through its pose now (a share a ms).
+/// A flight's linear share at its exact picture or cause moment. The pose's Way owns its deadline; unlike a
+/// general Way's whole-ms motion sample, the flight's geometry and its interrupted velocity use fractional ms.
+fn turn_share_at(t : Turn, at : Double) -> Double {
+  let start = t.clock.starts_at()
+  if t.span <= 0.0 || start < 0.0 {
+    return 1.0
+  }
+  dmax(0.0, dmin(1.0, (at - start) / t.span))
+}
+
+///|
+/// Where a flight is at its picture or change's cause, including a stretch already said of it.
 fn emit_clock_at(t : Turn, at : Double) -> Double {
-  let s = t.clock.value_at(at)
+  let s = turn_share_at(t, at)
   match t.warp {
     Some((u0, m0, m1)) => hermite(u0, m0, 1.0, m1, s)
     None => s
@@ -687,7 +698,7 @@ fn emit_clock_at(t : Turn, at : Double) -> Double {
 ///|
 fn turn_rate(t : Turn, at : Double) -> Double {
   match t.warp {
-    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.value_at(at)) / t.span
+    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, turn_share_at(t, at)) / t.span
     None => 1.0 / t.span
   }
 }

@@ -140,3 +140,65 @@ test "the same agent's next answer chooses its drop from the two placed landings
     assert_eq(no_frames, float_cause_history(distance, 120, false, true, false))
   }
 }
+
+///|
+fn fractional_flight_history(hz : Int, fraction : Double, warped : Bool) -> Unit raise {
+  let key = "fractional-flight-test"
+  let tester = @ui.Tester::new(fn(_) {  }, w=390.0, h=844.0, platform=2)
+  tester.draw()
+  let start = tester.time()
+  let at = start + 50.0 + fraction
+  if hz > 0 {
+    let period = 1000.0 / hz.to_double()
+    let mut n = 1
+    while start + n.to_double() * period < at {
+      tester.frame_at(start + n.to_double() * period)
+      n += 1
+    }
+  }
+  let em = emits_of(key)
+  em.watched = true
+  let place = fn(k : String) -> (Double, Double, Double, Double)? {
+    if k == "emit-avatar/" + key + "/agent" {
+      Some((0.0, 100.0, 10.0, 10.0))
+    } else if k == "emit-landing/" + key + "/1" {
+      Some((0.0, 0.0, 10.0, 10.0))
+    } else {
+      None
+    }
+  }
+  let turn : Turn = {
+    seq: 1.0, ts: "one", agent: "agent", pose: Return, from: None, from_at: None,
+    clock: pose_clock(200.0, Some(start)), span: 200.0, warp: None, timed: true,
+  }
+  em.current = Some(turn)
+  let share = (100.0 + fraction) / 200.0
+  let expected_y = 3.0 + 97.0 * (3.0 * share * share - 2.0 * share * share * share)
+  let actual = emit_flight_by(key, em, ["agent"], place, start + 100.0 + fraction).unwrap()
+  assert_true((actual.1 - expected_y).abs() < 0.000001, msg="\{hz} Hz, \{fraction}: fractional flight \{actual.1}, expected \{expected_y}")
+
+  em.current = Some({ ..turn, pose: Float, warp: if warped { Some((0.1, 0.85, 0.75)) } else { None } })
+  let epsilon = 0.001
+  let before = emit_flight_by(key, em, ["agent"], place, at).unwrap().1
+  let earlier = emit_flight_by(key, em, ["agent"], place, at - epsilon).unwrap().1
+  emit_step(tester.ctx(), key, em, ["agent"], turns_of(key), start + 350.75, place~, one_phase=true, at~)
+  let after = emit_flight_by(key, em, ["agent"], place, at).unwrap().1
+  let later = emit_flight_by(key, em, ["agent"], place, at + epsilon).unwrap().1
+  assert_true((before - after).abs() < 0.000001, msg="\{hz} Hz, \{fraction}, warped \{warped}: extension moved the avatar from \{before} to \{after}")
+  let speed_before = (before - earlier) / epsilon
+  let speed_after = (later - after) / epsilon
+  assert_true((speed_before - speed_after).abs() < 0.001, msg="\{hz} Hz, \{fraction}, warped \{warped}: extension changed speed from \{speed_before} to \{speed_after}")
+  emits.remove(key) |> ignore
+  turns_by.remove(key) |> ignore
+}
+
+///|
+test "the flying avatar uses the fractional picture moment and keeps its speed when a flight is extended" {
+  for hz in [0, 60, 120] {
+    for fraction in [0.25, 0.5, 0.75] {
+      for warped in [false, true] {
+        fractional_flight_history(hz, fraction, warped)
+      }
+    }
+  }
+}
