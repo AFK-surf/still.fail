@@ -1053,6 +1053,7 @@ pub struct Ctx {
   mut read_back_whole : Bool
   laid_reads : Map[Int32, ((Double, Double, Double, Double)?, SourceLoc)]
   size_reads : Map[Int32, ((Double, Double)?, SourceLoc)]
+  asked_reads : Map[Int32, ((Double, Double)?, SourceLoc)]
   place_reads : Map[Int32, (String, (Int32, Double, Double)?)]
   info_reads : Array[(String, () -> Bool)]
   row_reads : Map[(Int32, Int32), (String, Double?)]
@@ -1062,9 +1063,11 @@ pub struct Ctx {
   left_reads : Map[Int32, (Bool, SourceLoc)]
   cut_ids : Map[Int32, Bool]
   laid_watch : Map[Int32, Int32]
+  asked_watch : Map[Int32, Int32]
   tallest_h : Map[Int32, Double]
   mut tallest_new : Bool
   laid_rects : Map[Int32, (Double, Double, Double, Double)]
+  asked_sizes : Map[Int32, (Double, Double)]
   shown_watch : Map[Int32, (Int32, String)]
   shown_spans : Map[Int32, (Double, Double)]
   mut nav_rest : Double
@@ -1295,6 +1298,8 @@ pub fn Ctx::keyboard_up(Self) -> Bool
 pub fn Ctx::keys(Self) -> Array[(Int32, Int32, Bool)]
 pub fn Ctx::keys_came(Self) -> Bool
 pub fn Ctx::laid_out(Self, Int32) -> (Double, Double, Double, Double)?
+#callsite(autofill(loc))
+pub fn Ctx::laid_asked_size(Self, Int32, loc~ : SourceLoc) -> (Double, Double)?
 #callsite(autofill(loc))
 pub fn Ctx::laid_rect(Self, Int32, loc~ : SourceLoc) -> (Double, Double, Double, Double)?
 #callsite(autofill(loc))

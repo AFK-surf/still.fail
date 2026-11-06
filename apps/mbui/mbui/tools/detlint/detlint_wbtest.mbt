@@ -1913,6 +1913,18 @@ test "follow-layout" {
 }
 
 ///|
+test "follow-layout counts an unconstrained old layout measurement" {
+  let fs = found(
+    [("src/app/sheet.mbt", "fn sheet(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n" +
+      "  let h = c.laid_asked_size(1).unwrap().1\n" +
+      "  a.follow(h, @motion.tween(260.0))\n}\n")],
+    "follow-layout",
+    1,
+  )
+  assert_eq(lines(fs), [3])
+}
+
+///|
 test "motion-spring" {
   // the app's own springs, by @motion's and a Ctx's; its presets, a test's and the framework's not counted
   let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))
@@ -2034,6 +2046,22 @@ test "layout-read-back" {
     cfg~,
   )
   assert_eq(lines(fs), [2, 3, 4, 6, 7, 8])
+}
+
+///|
+test "layout-read-back counts an unconstrained old layout measurement" {
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      ("src/app/sheet.mbt", "fn sheet(c : @ui.Ctx) -> Unit {\n  c.laid_asked_size(1) |> ignore\n}\n"),
+      ("src/app/sheet_wbtest.mbt", "test \"t\" {\n  t.ctx().laid_asked_size(1) |> ignore\n}\n"),
+      ("src/ui/sheet.mbt", "fn sheet(c : Ctx) -> Unit {\n  c.laid_asked_size(1) |> ignore\n}\n"),
+    ],
+    "layout-read-back",
+    1,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2])
 }
 
 ///|

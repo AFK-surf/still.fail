@@ -1598,6 +1598,7 @@ fn size_said(s : Size) -> String {
 priv enum LaidRead {
   Rect(Int, (Double, Double, Double, Double)?, SourceLoc)
   Size(Int, (Double, Double)?, SourceLoc)
+  AskedSize(Int, (Double, Double)?, SourceLoc)
   Left(Int, Bool, SourceLoc)
   /// where what is picked ends (Ctx::selection_end)
   Sel((Double, Double, Double)?, SourceLoc)
@@ -1628,6 +1629,12 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
       self.laid_watch[id] = self.frame_no
       if !self.size_reads.contains(id) {
         self.size_reads[id] = (v, loc)
+      }
+    }
+    AskedSize(id, v, loc) => {
+      self.asked_watch[id] = self.frame_no
+      if !self.asked_reads.contains(id) {
+        self.asked_reads[id] = (v, loc)
       }
     }
     Left(id, v, loc) => {

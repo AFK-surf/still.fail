@@ -1069,7 +1069,7 @@ fn moving_listed(f : MbtFile, k : Int) -> Bool {
 ///|
 /// What the layout measures, as read by a view: a node's size or place, the window's, the keyboard's.
 let layout_reads : Array[String] = [
-  "measured", "measured_rect", "laid_size", "laid_rect", "laid_out", "rect_of", "node_rect", "drawn_rect",
+  "measured", "measured_rect", "laid_size", "laid_asked_size", "laid_rect", "laid_out", "rect_of", "node_rect", "drawn_rect",
   "drawn_at", "window_size", "ime_inset", "list_place", "list_row_height", "row_height",
 ]
 
