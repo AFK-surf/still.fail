@@ -1366,7 +1366,7 @@ export class Views implements Owner {
         const prefs = this.ok({ topic: "prefs" }) ?? null;
         const bell = { on: badgeKindsOf(prefs).services, seen: jobsSeenOf(prefs, view.scope as string) };
         const clock = this.#clock();
-        // Asked again as the next of them has been up an hour (nothing else would say it).
+        // Asked again as the next has been up an hour or a listed one's age changes.
         const next = jobs.longNext(open, screens, clock.now);
         this.#againIn(view, next ?? Infinity);
         return { ok: jobs.longJobs(open, clock, (session) => this.#ranFrom(stations, session), bell, screens) };

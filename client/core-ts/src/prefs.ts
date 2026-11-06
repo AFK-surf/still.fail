@@ -61,8 +61,8 @@ export function badgeKindsOf(prefs: unknown): BadgeKinds {
   return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message"), services: flag("services") };
 }
 
-/// The jobs left up long in a workspace that its bell has shown (`jobsSeen`, by workspace: each `<station>/<id>`, as
-/// the `longJobs` view's `ids` were when it opened).
+/// The reminders left up long in a workspace that its bell has shown (`jobsSeen`, by workspace, as the `longJobs`
+/// view's `ids` were when it opened).
 export function jobsSeenOf(prefs: unknown, workspace: string): Set<string> {
   const by = isObject(prefs) && isObject(prefs.jobsSeen) ? prefs.jobsSeen[workspace] : null;
   return new Set(Array.isArray(by) ? by.filter((k): k is string => typeof k === "string") : []);

@@ -731,7 +731,7 @@ test("who is on a screen: every view's person, told to all on it and in the list
   await settle();
   const { views, ...named } = hub.people("fake");
   assert.deepEqual(named, { viewers: ["Pat", "Vic"], controlledBy: ["Pat"] });
-  assert.deepEqual(views.map(({ at: _at, id: _id, ...v }) => v), [{ name: "Pat", control: true, device: member.device }, { name: "Vic", control: false, device: reader.device }]);
+  assert.deepEqual(views.map(({ at: _at, id: _id, instance: _instance, ...v }) => v), [{ name: "Pat", control: true, device: member.device }, { name: "Vic", control: false, device: reader.device }]);
   assert.ok(views.every((v) => v.at > 0 && v.id !== ""));
   assert.deepEqual(hub.listed("en").screens, [{ id: "fake", kind: "browser", title: "Tab", width: 1280, height: 720, viewers: ["Pat", "Vic"], controlledBy: ["Pat"], views }]);
   assert.equal(told, 2);
@@ -2000,6 +2000,44 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
   assert.equal(runtimeName("something else"), "something else");
   assert.deepEqual(screenOf({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } }), { width: 1206, height: 2622 });
   assert.deepEqual(screenOf({}), { width: 0, height: 0 });
+});
+
+test("a screen registration and a connection each have their own stable run identity", () => {
+  const hub = new ScreenHub();
+  const source = () => ({
+    id: "simulator:U", kind: "simulator" as const, title: () => "iPhone",
+    size: () => ({ width: 1, height: 1 }), since: () => 1000,
+    open: () => Promise.reject(new Error("not opened")),
+  });
+  const remove = hub.add(source());
+  const first = hub.listed("en").screens[0]!.instance;
+  assert.equal(typeof first, "string");
+  hub.changed();
+  assert.equal(hub.listed("en").screens[0]!.instance, first, "updates do not change the run");
+  remove();
+  hub.add(source());
+  const second = hub.listed("en").screens[0]!.instance;
+  assert.notEqual(second, first, "the same screen and start time can name a new registration");
+
+  const leave = hub.join("simulator:U", { name: "Pat", control: true, tell: () => {} });
+  const view = hub.people("simulator:U").views[0]!;
+  const run = view.instance;
+  assert.equal(typeof run, "string");
+  assert.equal(hub.people("simulator:U").views[0]!.instance, run);
+  leave();
+  hub.join("simulator:U", { name: "Pat", control: true, tell: () => {} });
+  assert.notEqual(hub.people("simulator:U").views[0]!.instance, run);
+  const anotherHub = new ScreenHub();
+  anotherHub.add(source());
+  anotherHub.join("simulator:U", { name: "Pat", control: true, tell: () => {} });
+  assert.notEqual(anotherHub.people("simulator:U").views[0]!.instance, run, "a station restart can reuse its view id");
+  const sameWatcher = { name: "Alex", control: false, tell: () => {} };
+  hub.join("simulator:U", sameWatcher);
+  const firstShared = hub.people("simulator:U").views.at(-1)!.instance;
+  hub.join("simulator:U", sameWatcher);
+  const shared = hub.people("simulator:U").views.slice(-2);
+  assert.equal(shared[0]!.instance, firstShared, "another join cannot change an existing identity");
+  assert.notEqual(shared[1]!.instance, firstShared);
 });
 
 test("a simulator says it can be debugged; other screens neither say so nor answer", () => {

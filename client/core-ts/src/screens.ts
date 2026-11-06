@@ -70,6 +70,7 @@ export type ScreenCall =
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const instanceId = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 100;
 const unit = (v: number) => Math.min(1, Math.max(0, v));
 
 function text(params: unknown, field: string): string {
@@ -336,6 +337,7 @@ function viewsOf(inner: Inner, v: unknown, control: boolean): J[] {
     const agent = get(w, "agent") === true;
     return [{
       id, name: personShown(name), device: client !== "" ? client : device !== "" ? t("core-views.screen.unnamedDevice", { id: device.slice(0, 8) }) : "", app, at, ago: relativeTime(at, now, inner.host.utcOffsetMin(now)), control: get(w, "control") === true,
+      ...(instanceId(get(w, "instance")) ? { instance: get(w, "instance") } : {}),
       ...(me !== null && (device === me || get(w, "self") === me) ? { here: true } : {}),
       ...(agent ? { agent: true } : {}),
       ...(control && !agent ? { may: true } : {}),
@@ -425,6 +427,7 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       ...(chat ? { chat } : {}),
       // Since when it has been up (a simulator's boot, an emulator's start: jobs.ts `longScreens`).
       ...(finite(get(s, "since")) ? { since: get(s, "since") } : {}),
+      ...(instanceId(get(s, "instance")) ? { instance: get(s, "instance") } : {}),
     };
     const access = accessOf(get(s, "access"));
     const clipboard = clipTypesOf(get(s, "clipboard"));

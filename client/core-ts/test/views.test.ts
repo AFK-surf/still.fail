@@ -188,6 +188,28 @@ test("a long-running screen appears at an hour and a removed screen leaves no re
   }
 });
 
+test("a long-running screen's age changes without another station update", async () => {
+  const t = setup();
+  const u = ui();
+  try {
+    t.subscribe(1, { topic: "longJobs", scope: "ws" });
+    t.set(workspace(), oneStation());
+    await t.read(u, 1);
+    t.set(link("ws/st"), { state: "online" });
+    t.set({ topic: "jobs", station: "ws/st" }, []);
+    t.set({ topic: "screens", station: "ws/st" }, { screens: [{
+      id: "simulator:A", title: "Test simulator", since: t.host.nowMs() - 2 * LONG + 1_000, closable: true,
+    }] });
+    await t.read(u, 1);
+    assert.equal(u.value.groups[0].jobs[0].age, "1 小时");
+    await t.host.time.pass(600, 200);
+    await t.read(u, 1);
+    assert.equal(u.value.groups[0].jobs[0].age, "2 小时");
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
 const session = (key: string): J => ({ key, connect: "c1", profile: "p1", runtime: "claude", model: "opus", effort: null, process: "cold", pending: 0, lastTurn: null });
 const member = (thread: number, key: string, connect: string): J => ({ thread, session: key, connect, joinedAt: 1 });
 const fullSession = (key: string, patch: J = {}): J => ({

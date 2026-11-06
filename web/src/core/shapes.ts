@@ -5060,8 +5060,8 @@ export interface LongJobsView {
 	 */
 	lit?: boolean;
 	/**
-	 * Each of them as `<station>/<id>`: what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`)
-	 * once the bell opens.
+	 * Each job as `<station>/<id>`, each screen or connection with its run identity (or its start time from an older station):
+	 * what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`) once the bell opens.
 	 */
 	ids?: string[];
 }
@@ -6156,7 +6156,7 @@ export interface PrefsView {
 	 */
 	trouble?: Record<string, string>;
 	/**
-	 * The jobs left up long the rail's bell has shown, by workspace: each `<station>/<id>`, as the
+	 * The long-running reminders the rail's bell has shown, by workspace, as the
 	 * `longJobs` view's `ids` were when it opened. They no longer light it.
 	 */
 	jobsSeen?: Record<string, string[]>;
@@ -6761,6 +6761,8 @@ export interface ScreenPresence {
 	app?: string;
 	/** When it opened, in ms since 1970. */
 	at: number;
+	/** The station's identity for this connection, when it says one. */
+	instance?: string;
 	/** How long ago, in words (3 分钟前), as of when this was said. */
 	ago: string;
 	/** Its input is taken. */
@@ -6824,6 +6826,8 @@ export interface ScreenItem {
 	chat?: ScreenChat;
 	/** Since when it has been up, in ms since 1970: a simulator's boot, an emulator's start; none for the rest or from a station before it. */
 	since?: number;
+	/** The station's identity for this registration of a screen, when it says one. */
+	instance?: string;
 	/**
 	 * What the core says of it under its title: what it is, its size, the chat that opened it, who is on it; or, while its
 	 * station lacks a grant for it, what cannot be done now (core).

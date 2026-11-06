@@ -138,13 +138,55 @@ test("simulators_and_peoples_views_up_long_are_listed_with_how_each_is_stopped",
     ["screen:android:emulator-5580", "orchard · 安卓模拟器", "2 小时", { call: "screen.close", screen: "android:emulator-5580", word: "关闭" }],
   ]);
   assert.deepEqual([views.jobs[0].id, views.jobs[0].name, views.jobs[0].whereText, views.jobs[0].stop], ["view:simulator:A/v1", "Demo iPhone · iOS 27.2", "orchard · Peng · MacBook", { call: "screen.endView", screen: "simulator:A", view: "v1", word: "断开" }]);
-  assert.deepEqual(v.ids, ["w/s1/screen:simulator:A", "w/s1/screen:android:emulator-5580", "w/s1/view:simulator:A/v1"]);
+  assert.deepEqual(v.ids, [
+    `w/s1/screen:simulator:A@${NOW - 3 * LONG}`,
+    `w/s1/screen:android:emulator-5580@${NOW - 2 * LONG}`,
+    `w/s1/view:simulator:A/v1@${NOW - 2 * LONG}`,
+  ]);
   assert.equal(v.lit, true);
   // Asked again as the next is up an hour: simulator:B's, a minute in; v4 the same.
   assert.equal(longNext([], [["w/s1", null, screens]], NOW), LONG - 60_000);
   assert.equal(longNext([["w/s1", null, [job("j", { startedAt: NOW - LONG + 5_000 })]]], [], NOW), 5_000);
   assert.equal(longNext([], [["w/s1", null, [{ id: "desktop", views: [view("here", { at: NOW - 60_000, here: true })] }]]], NOW), null, "a view here never becomes a reminder");
   assert.equal(longNext([], [], NOW), null);
+});
+
+test("a new run of a seen simulator or connection lights the bell again", () => {
+  const screens = (since: number, at: number): J[] => [{
+    id: "simulator:A", title: "Test simulator", since, closable: true,
+    views: [{ id: "v1", name: "Peng", at, may: true }],
+  }];
+  const first = longJobs([], c(), undefined, undefined, [["w/s1", null, screens(NOW - 4 * LONG, NOW - 3 * LONG)]]);
+  const seen = { on: true, seen: new Set<string>(first.ids) };
+  assert.equal(longJobs([], c(), undefined, seen, [["w/s1", null, screens(NOW - 4 * LONG, NOW - 3 * LONG)]]).lit, false);
+  const newSimulator = longJobs([], c(), undefined, seen, [["w/s1", null, screens(NOW - 2 * LONG, NOW - 3 * LONG)]]);
+  const newView = longJobs([], c(), undefined, seen, [["w/s1", null, screens(NOW - 4 * LONG, NOW - 2 * LONG)]]);
+  assert.equal(newSimulator.lit, true, "a new boot of the same simulator is a new reminder");
+  assert.equal(newView.lit, true, "a new connection with a reused id is a new reminder");
+  assert.equal(newSimulator.groups[0].jobs[0].stop.screen, "simulator:A", "the close operation keeps the actual screen id");
+  assert.equal(newView.groups[1].jobs[0].stop.view, "v1", "the disconnect operation keeps the actual view id");
+});
+
+test("station run identities distinguish restarts even when start times are equal", () => {
+  const screens = (screenRun: string, viewRun: string): J[] => [{
+    id: "simulator:A", title: "Test", since: NOW - 2 * LONG, instance: screenRun, closable: true,
+    views: [{ id: "v1", name: "Peng", at: NOW - 2 * LONG, instance: viewRun, may: true }],
+  }];
+  const first = longJobs([], c(), undefined, undefined, [["w/s1", null, screens("screen-1", "view-1")]]);
+  const seen = { on: true, seen: new Set<string>(first.ids) };
+  assert.equal(longJobs([], c(), undefined, seen, [["w/s1", null, screens("screen-1", "view-1")]]).lit, false);
+  assert.equal(longJobs([], c(), undefined, seen, [["w/s1", null, screens("screen-2", "view-1")]]).lit, true);
+  assert.equal(longJobs([], c(), undefined, seen, [["w/s1", null, screens("screen-1", "view-2")]]).lit, true);
+});
+
+test("a long-running item's displayed age is refreshed at its next change", () => {
+  const almostTwo = NOW - 2 * LONG + 1_000;
+  const screen = { id: "simulator:A", title: "Test", since: almostTwo, closable: true };
+  assert.equal(longNext([], [["w/s1", null, [screen]]], NOW), 500);
+  assert.equal(longNext([["w/s1", null, [job("a", { startedAt: almostTwo })]]], [], NOW), 500);
+  const later = { ...c(), now: NOW + 500 };
+  assert.equal(longJobs([], c(), undefined, undefined, [["w/s1", null, [screen]]]).groups[0].jobs[0].age, "1 小时");
+  assert.equal(longJobs([], later, undefined, undefined, [["w/s1", null, [screen]]]).groups[0].jobs[0].age, "2 小时");
 });
 
 test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
