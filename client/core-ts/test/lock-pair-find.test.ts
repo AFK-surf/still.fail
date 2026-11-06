@@ -19,7 +19,7 @@ const LAPTOP_APP = "e2".repeat(32);
 
 /// How a trusted device answers when dialled: not there (the dial fails at once), not answering (the dial hangs), a
 /// code shown, that it approves this one nowhere it asks, or nothing (reached, its answer lost).
-type Way = "away" | "silent" | "code" | "credential" | "no" | "mute";
+type Way = "away" | "silent" | "code" | "code-ends-on-proof" | "code-ends-after-another" | "credential" | "no" | "mute";
 
 /// A core waiting in `ws` (its device not in the lock, the owner's two apps in it), its mesh's base key ME, and the
 /// trusted devices' ends as `ways` says now: each dial of each counted.
@@ -55,7 +55,15 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
               if (way === "mute") return;
               const hasCredential = way === "credential" && (hello as { workspaces?: { ws: string; credential: string }[] }).workspaces?.some((w) => w.ws === "ws" && w.credential === "signed-member");
               const places = (hello as { personal?: unknown }).personal ? ["person:s1"] : ["ws"];
-              yield* there.send(way === "code" || hasCredential ? { t: "code", workspaces: places } : { t: "no", error: "not_here" });
+              yield* there.send(way === "code" || way === "code-ends-on-proof" || way === "code-ends-after-another" || hasCredential ? { t: "code", workspaces: places } : { t: "no", error: "not_here" });
+              if (way === "code-ends-on-proof" || way === "code-ends-after-another") {
+                yield* there.next(); // It disconnects while the new device is checking the code.
+                if (way === "code-ends-after-another") {
+                  ways[LAPTOP_APP] = "code";
+                  yield* Effect.sleep(PAIR_REDIAL_MS + 1_000);
+                }
+                there.close();
+              }
             }),
           );
           return here;
@@ -251,6 +259,43 @@ test("a code disappears during the search: another device opened afterwards can 
   assert.equal((await w.pair()).state, "code");
   assert.equal(w.dials[PHONE_APP], 1, "the device whose code was shown is not asked again");
   assert.equal(w.dials[LAPTOP_APP], 2);
+});
+
+test("a code disappears while it is checked: another device opened afterwards can still show one", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-on-proof", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  const error = await w.ask("lock.pairCode", { workspace: "ws", code: "123456" }).then(() => null, (e) => e as { code: string });
+  assert.equal(error?.code, "pair_ended");
+  assert.equal((await w.pair()).state, "finding", "the other device is still being sought");
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1);
+  assert.equal(w.dials[LAPTOP_APP], 2);
+});
+
+test("a code disappears while it is checked and no other device answers: say why it ended", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-on-proof", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  await assert.rejects(w.ask("lock.pairCode", { workspace: "ws", code: "123456" }), { code: "pair_ended" });
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS);
+  const p = await w.pair();
+  assert.equal(p.state, "failed");
+  assert.ok(p.error, "the page explains why the previous code went away");
+  assert.equal(w.dials[LAPTOP_APP], PAIR_DIAL_TRIES);
+});
+
+test("another device shows a code while the first one's code is being checked", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-after-another", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  const error = await w.ask("lock.pairCode", { workspace: "ws", code: "123456" }).then(() => null, (e) => e as { code: string });
+  assert.equal(w.dials[LAPTOP_APP], 2);
+  assert.equal((await w.pair()).state, "code", "the newly shown code was not tested and is not wrong");
+  assert.equal(error?.code, "pair_ended");
 });
 
 test("a code disappears during the search and no other device answers: say why it ended", async () => {
