@@ -67,6 +67,13 @@ pub fn completion_node(
   tips? : @sf.TipLayer,
   bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
 ) -> Unit {
+  // The frame may give a window-wide layer. In a frame without one, the page holds its own above the scroll list.
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let own_tips = tips is None
+  let tips = match tips {
+    Some(t) => t
+    None => @sf.TipLayer::new(fn() { tips_at.val })
+  }
   let topic = fn() { @settings.stations_of(core, here()) }
   // (the stations' drafts the page's own, as the old frame kept them by station: each opened as its rows first come,
   // kept while the station goes offline and comes back, all dropped as the page is let go)
@@ -145,7 +152,7 @@ pub fn completion_node(
                     @sf.section_node(s, fn() { @sf.sample_words(n) }, fn(sec) {
                       form_rows_node(sec, core.quiet(), "sample", "sample", fn() { Some(form_view_sample()) }, fn() {
                         Some({ "enabled": true })
-                      })
+                      }, tips)
                     })
                   }
                 },
@@ -177,7 +184,7 @@ pub fn completion_node(
               },
               fn(p, why) {
                 if why == "" {
-                  completion_station_node(p, core, station, form_of, view, tips?)
+                  completion_station_node(p, core, station, form_of, view, tips)
                 } else {
                   @sf.page_note_node(p, fn() { @sf.t(why) })
                 }
@@ -193,8 +200,11 @@ pub fn completion_node(
     actions~,
     said?,
     width?,
-    tips?,
+    tips~,
   )
+  if own_tips {
+    tips_at.val = Some(v.box(fn(layer) { layer.over(Is(true)) |> ignore }))
+  }
 }
 
 ///|
@@ -207,7 +217,7 @@ fn completion_station_node(
   station : String,
   form_of : (String) -> String,
   view : () -> Json?,
-  tips? : @sf.TipLayer,
+  tips : @sf.TipLayer,
 ) -> Unit {
   v.pick(fn() { flag(view(), "canEdit") }, fn(p, can) {
     if !can {
@@ -226,7 +236,7 @@ fn completion_station_node(
       },
       fn(q, state) {
         match state {
-          0 => form_rows_node(q, core, station, form, view, fn() { topic().value }, tips?)
+          0 => form_rows_node(q, core, station, form, view, fn() { topic().value }, tips)
           1 =>
             @sf.page_note_node(q, fn() {
               match topic().error {
@@ -237,7 +247,7 @@ fn completion_station_node(
           _ =>
             @sf.waiting_node(
               q,
-              fn(s) { form_rows_node(s, core.quiet(), station, form, view, fn() { Some({ "enabled": true }) }) },
+              fn(s) { form_rows_node(s, core.quiet(), station, form, view, fn() { Some({ "enabled": true }) }, tips) },
               note=fn() { { reading: true, text: @sf.t("web-pages.automaticDecisions.readingConfig"), failing: [] } },
             )
         }
@@ -258,7 +268,7 @@ fn form_rows_node(
   form : String,
   view : () -> Json?,
   d : () -> Json?,
-  tips? : @sf.TipLayer,
+  tips : @sf.TipLayer,
 ) -> Unit {
   let call = fn(action : String, input : Array[(String, Json)]) {
     @settings.act(
@@ -349,7 +359,7 @@ fn form_rows_node(
         },
         acts=true,
         // (asked: a spinner at its end; failed: a mark there, why under the pointer)
-        tail=fn(e) { doing_mark_node(e, reviewing, review_failed, tips?) },
+        tail=fn(e) { @settings.doing_mark_node(e, reviewing, review_failed, tips, inline=true) },
         tail_shown=fn() { reviewing() || review_failed() is Some(_) },
       )
     })
@@ -373,36 +383,6 @@ fn form_rows_node(
     @sf.page_note_node(n, fn() { failed_of(core, ["automaticDecisions.form.save"], on_form).unwrap_or("") }, bad=fn() { true })
   })
 }
-
-///|
-/// Where what someone set going shows how it is (doing_mark's) as nodes: a spinner while it is under way, a small red
-/// mark while it failed a moment ago, why said under the pointer (in `tips`, where given).
-fn doing_mark_node(v : @view.View, running : () -> Bool, failed : () -> String?, tips? : @sf.TipLayer) -> Unit {
-  v.pick(fn() { if running() { 1 } else if failed() is Some(_) { 2 } else { 0 } }, fn(p, what) {
-    match what {
-      1 => @sf.spinner_node(p, size=@sf.spinner_inline) |> ignore
-      2 => {
-        let mark = @sf.icon_node(p, "info", doing_mark_inline, By(fn() { @sf.theme().p.red }))
-        match tips {
-          Some(t) =>
-            @sf.tip_node(t, mark, fn() {
-              match failed() {
-                Some("") | None => @sf.t("web-main.doing.failed")
-                Some(why) => why
-              }
-            })
-            |> ignore
-          None => ()
-        }
-      }
-      _ => ()
-    }
-  })
-}
-
-///|
-/// doing_mark's mark beside a row's words (inline: 12).
-let doing_mark_inline : Double = 12.0
 
 ///|
 /// What a station says of its rule, made up, for what is shown while it is read (form_rows in its bones): it may be

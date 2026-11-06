@@ -45,6 +45,38 @@ test "归档建议, at each width and with either hand: a row a station, its rul
 }
 
 ///|
+test "归档建议 shows the review failure in its own tip layer when its frame gives it none" {
+  let stage = @signals.signal("failed", same=fn(a, b) { a == b })
+  let t = setting_tester(AutoCompletion, 390.0, platform=0, over=fn(base) {
+    {
+      ..base,
+      topic: fn(name, params) {
+        let read = (base.topic)(name, params)
+        if name == "doing" {
+          let entries : Array[Json] = if stage.get() == "idle" {
+            []
+          } else {
+            [{ "call": "automaticDecisions.review", "stage": Json::string(stage.get()), "error": "Review failed", "params": { "station": "ws1/st1" } }]
+          }
+          { ..read, value: Some({ "doing": Json::array(entries) }) }
+        } else {
+          read
+        }
+      },
+    }
+  })
+  let mark = t.get(Status, label="Review failed")
+  assert_eq((mark.rect.2, mark.rect.3), (12.0, 12.0))
+  t.move(mark.rect.0 + 6.0, mark.rect.1 + 6.0)
+  t.run_for(@sf.tip_delay_ms + @kit.pop_out_ms)
+  assert_true(t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden && s.label == "Review failed" }))
+  stage.set("running")
+  t.draw()
+  assert_false(t.semantics().any(fn(s) { s.role == Status && s.label == "Review failed" }))
+  assert_false(t.semantics().any(fn(s) { s.role == Tooltip && !s.hidden && s.label == "Review failed" }))
+}
+
+///|
 test "归档策略, at each width and with either hand: its words, its options in their two groups with how many chats each got" {
   for case in page_cases {
     let (w, platform) = case

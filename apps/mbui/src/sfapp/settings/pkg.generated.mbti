@@ -97,6 +97,8 @@ pub fn decision_form_open(Core, String) -> String
 #callsite(autofill(loc))
 pub fn doing_mark(@ui.Ctx, Bool, String?, inline? : Bool, loc~ : SourceLoc) -> Unit
 
+pub fn doing_mark_node(@view.View, () -> Bool, () -> String?, @sf.TipLayer, inline? : Bool) -> Unit
+
 pub fn drop_login(Core, String, NewProfile) -> Unit
 
 pub fn error_text(@json.Json) -> String
