@@ -141,3 +141,32 @@ test "compact bar: removing the page during a press cancels it" {
   assert_true(t.query(Button, label="Back") is None)
   assert_true(!@ui.view_tree().unwrap().clock_read(), msg="the removed bar leaves no ripple ticking")
 }
+
+///|
+test "compact bar: Tab reaches both actions and the host can activate back" {
+  let went = Ref(0)
+  let copied = Ref(0)
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=200.0, platform=0)
+  t.check_looks(false)
+  t.set_a11y(true)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    nav_bar_node(root, fn() { "Back" }, fn() { "Title" }, fn() { went.val += 1 },
+      trailing=fn(slot) {
+        icon_button_node(slot, "copy", fn() { "Copy" }, fn() { copied.val += 1 }, size=32.0) |> ignore
+      }) |> ignore
+  })
+  t.draw()
+  let back = t.get(Button, label="Back")
+  t.tab()
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("Back"))
+  t.enter()
+  t.tab()
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("Copy"))
+  t.key(@ui.key_space)
+  t.ctx().ask_action(back.id, Activate)
+  assert_eq((went.val, copied.val), (2, 1))
+  let (x, y, w, _) = back.rect
+  assert_eq(t.press_target_at(x + w / 2.0, y - 1.0).map(fn(s) { s.label }), Some("Back"),
+    msg="the back control can be reached outside its drawn bounds")
+}
