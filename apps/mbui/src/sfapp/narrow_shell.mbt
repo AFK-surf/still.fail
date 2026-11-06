@@ -511,7 +511,7 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | Permissions | AutoCompletion) =>
           narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -542,7 +542,8 @@ fn narrow_made_as(
     Some(
       (
         kind,
-        fn(outer : @view.View, page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
+        fn(outer : @view.View, page : () -> Page, under : Page?, stint : () -> Int, entry : Int) {
+          @sfbase.page_focus_entry(outer, entry)
           // (a place switched to on the bar: all of it but its ground coming in from the ball's side, page_view's)
           let v = match place {
             true if under is None => {
@@ -716,6 +717,10 @@ fn narrow_made_as(
     Setting(Notifications) =>
       made("notifications", fn(p, core, here, frame, stint, _acts) {
         @sfpages.notify_node(p, core, here, on_back=core.pop, frame~, stint~)
+      })
+    Setting(Permissions) =>
+      made("permissions", fn(p, core, _here, frame, _stint, _acts) {
+        @sfpages.permissions_node(p, core, on_back=core.pop, frame~)
       })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {

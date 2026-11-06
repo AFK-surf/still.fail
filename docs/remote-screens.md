@@ -178,10 +178,12 @@ client, so any client that acknowledges what it drew is paced.
   kbit/s, again each round trip and 200 ms it stays. Only frames held back lower it: an acknowledgement late alone (a
   still screen's large picture, a screen that changes little, a packet lost and sent again, which holds the frames
   behind it for about a round trip and then they all come) lowers nothing, as what went through then says nothing of
-  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, to the most the view is asked at
-  (`rateCeiling`): the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s), or by the 画质
-  the view asked, 原画 its pixels × 8 and 高清 × 4 (at least its own, at most 60 Mbit/s: 1080p 16.6 and 8.3 Mbit/s,
-  4K 60): a desktop's text at its own rate stayed soft on a LAN even at 原画. So a slow link gets as many frames,
+  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, and by 30% once nothing was held back
+  for 2 s (`UP_FAST`: a link with room climbs back sooner), to the most the view is asked at (`rateCeiling`): its
+  pixels × 16 (at least the source's own, `ownRate`: its pixels × 3, at least 1 Mbit/s; at most 60 Mbit/s: 1080p 33,
+  4K 60), 流畅's × 6. 自动 is the best the link carries, as 高清 and 原画 are (they choose the picture's size alone). A
+  desktop's text at its own rate stayed soft on a LAN even at 原画, and at the × 8 原画 had and the × 4 高清 had
+  still soft as it moved (2026-11-06; Moonlight asks 20 Mbit/s for 1080p at 60). So a slow link gets as many frames,
   smaller, rather than fewer and late.
   A frame's round trip and the oldest's wait are counted without the moments the station's own loop stood still
   (screen-pace.ts `LoopStall`: a 10 ms tick, how late it came): a Mac host's loop stood still 40–140 ms every few
@@ -203,7 +205,7 @@ client, so any client that acknowledges what it drew is paced.
   one 10 s after the last, `KeyClock`), not every so many pictures. 90 and 120 come only where the display draws that
   many (a 60 Hz display gives 60). A browser tab's and a simulator's frames are held to it by the pace alone. The bit
   rate stays a rate: fewer frames a second, each of them larger.
-- **Start.** A view opens at 1.5 Mbit/s (`ViewOptions.bitrate`, the helper's `bitrate`) and goes up by half each 0.5 s
+- **Start.** A view with a rate the source can change opens at 1.5 Mbit/s (`ViewOptions.bitrate`, the helper's `bitrate`) and goes up by half each 0.5 s
   until it is first lowered: its first frame is a whole picture, its largest, and one at the source's own rate held a
   1 Mbit/s link up for a second. Rate is lowered only once 0.5 s of acknowledgements say what went through.
 - **Size.** Unless the view asked 原画 (whose picture is never made smaller): while the rate stays at a quarter or less
@@ -511,9 +513,13 @@ power; Escape is back). The apps' `debug`, `poses` are not said of it yet.
 A view is a run of scrcpy's server on the device (`stillfail-scrcpy-<id>.jar` in /data/local/tmp, removed once it runs,
 over an `adb forward` of its own): H.264 only, its protocol pinned to the file's version (scrcpy keeps no compatibility
 between releases: the version goes up only with the file). Its encoder takes no new size or rate while running, so a
-view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side; a slow link drops
-what it could not fetch up to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on,
-a view does; with the screen off no frame comes. Measured on 2026-11-03 at 1280 on the long side: first frame 180-240 ms,
+view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side, with a rate by
+that side: 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440 and 8 above. The pace's opening rate is not used, since
+this encoder cannot climb from it. A preview runs at its requested size, 2 frames a second and 300 kbit/s; at most two
+previews of this station's Android screens run at once. A further request is refused; current mbui cards do not
+automatically retry it when a place is freed. A slow link drops what it could not fetch up to a new key frame
+(`keyframe` starts a new capture). A preview does not turn the screen on, a view does; with the screen off no frame comes.
+Measured on 2026-11-03 at 1280 on the long side: first frame 180-240 ms,
 a finger to the picture changing 66-103 ms on an emulator on the same Mac, 88 ms once on a phone through its member link.
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
@@ -711,7 +717,7 @@ device's round trip to the station (the `stationNet` view, in its colour), which
 bits a second as they came, packets lost, the way, the picture's size and codec, what captures it and whether it is encoded on the hardware); and 控制中心, a menu: 画质, the
 picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is in device pixels, the web at most 1920×1080 or 2560×1440, the mbui
 app as large as its stage has been, asked again as it grows a tenth a side; 流畅 1280×720, 高清 1920×1080, 原画
-the screen's own size; said to the station as `quality` too, 高清 and 原画 letting the bit rate go higher; another opens
+the screen's own size; said to the station as `quality` too, 流畅 holding the bit rate lower (Pace, "Bit rate"); another opens
 the view again), 帧率 (`prefs.screenFps`: 自动 as many as the station and the link give, or at most 120, 90, 60, 30 or
 15 a second, said to the station as `fps`; another opens the view again, `screen.bounds` saying it with the 画质), 组合键 while driving (the keys this device's system keeps for
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del

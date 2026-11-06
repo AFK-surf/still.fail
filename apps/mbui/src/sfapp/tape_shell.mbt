@@ -12,7 +12,7 @@
 
 ///|
 /// The tape's shell (above), in node `v`.
-fn taped_shell(v : @view.View, src : Source) -> Unit {
+fn taped_shell(v : @view.View, src : Source, focus_page? : Bool = false) -> Unit {
   // (on the tape's ground, the sidebar's, as the old frame's tape was: what no panel covers shows it)
   v.ground(By(fn() { @sf.theme().p.sidebar })) |> ignore
   // how the panes' lists take a mouse, as the hand changes
@@ -21,7 +21,7 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
   @ui.old(v, fn(c) { taped_under(c, src) }).over(Is(true)) |> ignore
   // a page opened in the page's panel shows once the core has given what it shows, the one before staying till then
   // (page_local_ms at most), as a page pushed on a phone slides in then
-  @sfdesk.tape_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
+  @sfdesk.tape_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms, focus_page~)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)
 }

@@ -13,6 +13,66 @@ test "权限, at each width and with either hand: notifications, what they are f
 }
 
 ///|
+test "permissions made once follow the system's permission and offer the right action" {
+  for case in [(390.0, 2), (1280.0, 0)] {
+    let (w, platform) = case
+    let notify : @signals.Signal[Json?] = @signals.signal(None)
+    let t = setting_tester(Permissions, w, platform~, over=fn(base) {
+      notify.set(notify_with((base.topic)("notify", Map::new()).value, [("permission", Json::string("default"))]))
+      notify_over(base, notify, @signals.signal(None), [])
+    }, host=fn(host) { host.set_notice_permission("default") })
+    assert_true(t.find(@sf.t("web-pages.permissions.state.default")) is Some(_))
+    let asks = t.notice_asks()
+    t.click(Button, label=@sf.t("web-pages.permissions.allow"))
+    t.draw()
+    assert_eq(t.notice_asks() - asks, 1)
+    notify.set(notify_with(notify.get(), [("permission", Json::string("denied"))]))
+    t.draw()
+    assert_true(t.find(@sf.t("web-pages.permissions.state.denied")) is Some(_))
+    assert_true(t.all(Button, label=@sf.t("web-pages.permissions.allow")).length() == 0)
+    t.click(Button, label=@sf.t("web-pages.permissions.open"))
+    t.draw()
+    assert_eq(t.notice_settings_opened(), 1)
+    notify.set(notify_with(notify.get(), [("permission", Json::string("granted"))]))
+    t.draw()
+    assert_true(t.find(@sf.t("web-pages.permissions.state.granted")) is Some(_))
+    assert_true(t.all(Button, label=@sf.t("web-pages.permissions.open")).length() == 0)
+    notify.set(notify_with(notify.get(), [("permission", Json::string("unexpected"))]))
+    t.draw()
+    assert_true(t.find(@sf.t("web-pages.permissions.state.unknown")) is Some(_))
+  }
+}
+
+///|
+test "permissions keep the focused action through a page-width change" {
+  let width = @signals.signal(700.0)
+  let notify : @signals.Signal[Json?] = @signals.signal(None)
+  let t = setting_tester(Permissions, 700.0, platform=0, layout_width=fn() { width.get() }, over=fn(base) {
+    notify.set(notify_with((base.topic)("notify", Map::new()).value, [("permission", Json::string("default"))]))
+    notify_over(base, notify, @signals.signal(None), [])
+  }, host=fn(host) { host.set_notice_permission("default") })
+  let allow = @sf.t("web-pages.permissions.allow")
+  let open = @sf.t("web-pages.permissions.open")
+  t.act(Button, Focus, label=allow)
+  width.set(390.0)
+  t.resize(390.0, 900.0)
+  assert_eq(t.focused().map(fn(s) { s.label }), Some(allow))
+  let asks = t.notice_asks()
+  t.key(@ui.key_code_enter)
+  assert_eq(t.notice_asks() - asks, 1)
+  // A different action replacing the old one must not inherit its focus.
+  notify.set(notify_with(notify.get(), [("permission", Json::string("denied"))]))
+  t.draw()
+  assert_true(t.focused().map(fn(s) { s.label }) != Some(open))
+  t.act(Button, Focus, label=open)
+  width.set(700.0)
+  t.resize(700.0, 900.0)
+  assert_eq(t.focused().map(fn(s) { s.label }), Some(open))
+  t.key(@ui.key_space)
+  assert_eq(t.notice_settings_opened(), 1)
+}
+
+///|
 test "归档, at each width and with either hand: the hint, its three ways, each station a row saying how it archives; its row opens its page" {
   for case in page_cases {
     let (w, platform) = case
