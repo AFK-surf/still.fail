@@ -59,8 +59,10 @@ fn confirm_row(c : @ui.Ctx, core : Core, view : Json?, blocks : Array[() -> Unit
 
 ///|
 /// Joining the lock `p`, as far as it got: looking for a device on it; where to read the code and the code's boxes
-/// (six, on a keypad); what stopped it. `at`: this place's key.
-fn personal_join(c : @ui.Ctx, core : Core, p : Json?, at : String) -> Unit {
+/// (six, on a keypad); what stopped it. `at`: this place's key. `centred`: its words in the middle, as a page of the
+/// lock alone has them (共享调试 off it: adb_lock_first).
+fn personal_join(c : @ui.Ctx, core : Core, p : Json?, at : String, centred? : Bool = false) -> Unit {
+  let note = if centred { personal_note_centred } else { @sf.ask_note }
   let pair = field(p, "pair")
   let state = text(pair, "state")
   match state {
@@ -70,7 +72,7 @@ fn personal_join(c : @ui.Ctx, core : Core, p : Json?, at : String) -> Unit {
         _ => []
       }
       let looks = if names.is_empty() { tr("android-misc.personal.code") } else { fill("android-misc.personal.codeOn", [("device", names.join("、"))]) }
-      c.text(if state == "wrong" { text(pair, "error") } else { looks }, style=@sf.ask_note) |> ignore
+      c.text(if state == "wrong" { text(pair, "error") } else { looks }, style=note) |> ignore
       gap(c, 12.0)
       let typed = c.code_field(
         "personal-code/" + at,
@@ -91,14 +93,18 @@ fn personal_join(c : @ui.Ctx, core : Core, p : Json?, at : String) -> Unit {
       }
       if text(pair, "untilText") != "" {
         gap(c, 12.0)
-        c.text(text(pair, "untilText"), style=@sf.ask_note) |> ignore
+        c.text(text(pair, "untilText"), style=note) |> ignore
       }
     }
-    "none" => c.text(tr("android-misc.personal.none.found"), style=@sf.ask_note) |> ignore
-    "failed" => c.text(text(pair, "error"), style=@sf.ask_note) |> ignore
-    _ => c.text(tr("android-misc.personal.finding"), style=@sf.ask_note) |> ignore
+    "none" => c.text(tr("android-misc.personal.none.found"), style=note) |> ignore
+    "failed" => c.text(text(pair, "error"), style=note) |> ignore
+    _ => c.text(tr("android-misc.personal.finding"), style=note) |> ignore
   }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let personal_note_centred : @ui.TextStyle = @sf.ask_note.then(@ui.text_style(center=true))
 
 ///|
 /// The lock as this device has it: the devices on it, or how this one joins it.
