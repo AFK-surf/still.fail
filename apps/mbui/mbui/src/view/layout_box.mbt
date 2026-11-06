@@ -442,8 +442,8 @@ fn Tree::child_under(self : Tree, at : Int, holder : Int) -> Int {
 
 ///|
 /// How big `target` is laid out, as its last layout left it: None where it is gone, laid out to nothing, or it or what
-/// holds it, up to `holder`, was left out of its row (View::drops) or kept unplaced by the box laying it out
-/// (Layout::place).
+/// holds it, up to `holder`, is left out by the layout under way or its last (flex's own line: out of its row,
+/// View::drops; kept unplaced by the box laying it out, Layout::place), not as the tree last placed it (a node's `out`).
 fn Tree::anchor_size(self : Tree, target : NodeId, holder : Int) -> (Double, Double)? {
   guard target.at < self.nodes.length() &&
     self.nodes[target.at].live &&
@@ -453,7 +453,7 @@ fn Tree::anchor_size(self : Tree, target : NodeId, holder : Int) -> (Double, Dou
   let mut i = target.at
   while i >= 0 && i != holder {
     let m = self.nodes[i]
-    if m.out || m.flex.line == -1 {
+    if m.flex.left_out() {
       return None
     }
     i = m.parent
