@@ -2,6 +2,7 @@
 // a few cities: you in Shanghai, on the move; your machine in Beijing, at the office; a line straight between them.
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
+import { PRODUCT_NAME } from "./words.ts";
 
 /** Where a place is drawn: longitude 112.5°E to 126.5°E across, latitude 42°N to 29°N down. */
 const at = (lon: number, lat: number) => ({ x: (lon - 112.5) * 40, y: (42 - lat) * 49 });
@@ -110,8 +111,8 @@ export function Distance(props: DemoProps) {
 
       <section className={css.section}>
         <div className={css.wrap}>
-          <h2 className={css.headingTitle}>试用 still.fail</h2>
-          <p className={css.headingLede}>以下为使用示例数据的 still.fail</p>
+          <h2 className={css.headingTitle}>试用 {PRODUCT_NAME}</h2>
+          <p className={css.headingLede}>以下为使用示例数据的 {PRODUCT_NAME}</p>
           <div className={`${css.edge} ${css.demoAfterHeading}`}>
             <Demo v="2" {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo.chat } : {})} />
           </div>
