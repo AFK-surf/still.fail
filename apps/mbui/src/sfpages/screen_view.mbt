@@ -792,8 +792,9 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     if s.open_now() {
       center_button(c, s, u, close)
     }
-    // (a panel's bar of its own: the panel's close at its end; where the system has bars, there, bar_chat)
-    if u.own_bar is Some(_) && !@sf.native_on() && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
+    // (a panel's bar of its own: the panel's close at its end, beside what it closes, where the system has bars too:
+    // among the chat's actions in them it read as another thing's; the user, 2026-11-06)
+    if u.own_bar is Some(_) && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
       close()
     }
   })

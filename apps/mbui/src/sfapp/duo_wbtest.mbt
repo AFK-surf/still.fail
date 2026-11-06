@@ -1291,10 +1291,53 @@ test "Duo chat's screens menu opens beside the column, not over it" {
 }
 
 ///|
-test "a screen alone in a chat's panel on an iPhone Duo: closed from the system's bars, no × of the panel's nor its own" {
+test "a screen alone in a chat's panel on an iPhone Duo: its × at the end of its own bar, the system's bars' switch the panel's as for any panel" {
   let t = native_chat(669.0, 951.0, true, mode="chat-screen-tab")
+  // (the panel brought over, in use)
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Panel))
+  t.frame()
   t.run_for(@ui.move_most_ms)
-  assert_eq(nav_icon_of(t, "page/chat/history"), Some(@sf.icon_path("close")))
-  assert_true(t.find(@sf.t("web-pages.chat.closePanel")) is None, msg="no × of the panel's")
-  assert_true(t.find(@sf.t("android-misc.screen.close")) is None, msg="nor of its own")
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
+  // (the chat's panel switch in the bars as it is with any panel open: no × among the chat's actions)
+  assert_eq(nav_icon_of(t, "page/chat/history"), Some(@sf.icon_path("panel-close")))
+  assert_true(t.find(@sf.t("web-pages.chat.closePanel")) is None, msg="no row of the panel's over its bar")
+  // its own × at the end of its one row, after 只看/控制 and 控制中心
+  guard said_at(t, @sf.t("android-misc.screen.close")) is Some((cx, cy, cw, ch)) else { fail("no × of its own") }
+  guard said_at(t, @sf.t("web-pages.screen.panel")) is Some((px, _, pw, _)) else { fail("no 控制中心") }
+  assert_true(px + pw <= cx + 0.5, msg="控制中心 at \{px}..\{px + pw}, × at \{cx}")
+  // pressed: the panel gone, the switch's icon the panel's open
+  t.tap(cx + cw / 2.0, cy + ch / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(nav_icon_of(t, "page/chat/history"), Some(@sf.icon_path("panel-open")))
+  assert_true(said_at(t, @sf.t("android-misc.screen.close")) is None)
+}
+
+///|
+test "a new chat on an iPhone Duo: its 文件 among the page's actions in the system's bars, none of its own over the page" {
+  for size in [(669.0, 951.0, 0.0), (951.0, 669.0, 84.0)] {
+    let (w, h, side) = size
+    let at = "\{w}x\{h}"
+    let t = native_chat(w, h, true, side~, mode="newchat-lend")
+    @sfdesk.new_chat()
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() is NewChat, msg=at)
+    assert_true(@sfdesk.wide.tape, msg=at)
+    let files = @sf.t("web-pages.chat.files")
+    assert_true(nav_icon_of(t, "page/new/files") is Some(_), msg="\{at}: the bars handed hold no 文件: \{t.nav_said()}")
+    assert_true(said_at(t, files) is None, msg="\{at}: 文件 drawn on the page too")
+    // chosen there: its 文件 panel beside it, with the panel's own close
+    t.post(@hostapi.system_channel, "{\"nav\":\"page/new/files\"}")
+    t.frames_owed()
+    t.run_for(@ui.move_most_ms)
+    assert_true(said_at(t, @sf.t("web-pages.chat.closePanel")) is Some(_), msg="\{at}: no 文件 panel opened from the bars")
+  }
+}
+
+///|
+test "a new chat where the stations lend their files, no system's bars: its 文件 over the page as it was" {
+  let t = native_chat(951.0, 669.0, false, mode="newchat-lend")
+  @sfdesk.new_chat()
+  t.run_for(@ui.move_most_ms)
+  assert_true(said_at(t, @sf.t("web-pages.chat.files")) is Some(_))
+  assert_false(t.nav_said().contains("page/new/files"))
 }

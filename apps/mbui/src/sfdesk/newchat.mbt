@@ -39,23 +39,28 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let with_bar = fn() {
     c.box(style=new_frame_style, id=page, fn() {
       @sfpages.new_chat_page(c, src, w, frame)
-      // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is; its
-      // empty part drags the window, as a chat's bar's (in one with its buttons in the app's top row)
-      let bar = c.id("new/bar")
-      if @ui.window_inset() {
-        c.window_drag(bar)
-      }
-      c.layer(fn() {
-        c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar_wide(files) }, id=bar, fn() {
-          if @sf.icon_button(c, "folder", key="new/files", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.files")) {
-            new_files_set(src, w.id, !files)
-          }
-          // (its end by the window's while the page is moved aside for the sidebar shown a while)
-          page_bar_end(c)
+      let toggle = fn() { new_files_set(src, w.id, !new_files_open(src, w.id)) }
+      // its 文件 in the system's bars where they are, among the page's actions as a chat's are there (bar_chat), nothing
+      // of its own over the page (the user, 2026-11-06: a folder floating in the page's corner on a Duo fitted nothing)
+      if !bar_action("new/files", @sf.t("web-pages.chat.files"), "folder", toggle) {
+        // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is; its
+        // empty part drags the window, as a chat's bar's (in one with its buttons in the app's top row)
+        let bar = c.id("new/bar")
+        if @ui.window_inset() {
+          c.window_drag(bar)
+        }
+        c.layer(fn() {
+          c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar_wide(files) }, id=bar, fn() {
+            if @sf.icon_button(c, "folder", key="new/files", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.files")) {
+              toggle()
+            }
+            // (its end by the window's while the page is moved aside for the sidebar shown a while)
+            page_bar_end(c)
+          })
+          |> ignore
         })
         |> ignore
-      })
-      |> ignore
+      }
       // a row of the 文件 tab carried over it, let go there: into its message (DropHint, useChatDrop)
       drop_hint(c, page)
       chat_drop(c, src, address, "new:" + w.id, page)

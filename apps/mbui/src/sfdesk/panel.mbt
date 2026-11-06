@@ -524,7 +524,7 @@ fn side_panel(
         }
         // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
         // (histories_ticked)
-        if !column_short.get() && !(@sf.native_on() && screen_tab_alone(tabs)) && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+        if !column_short.get() && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
           side_change(src, r, "clear", None)
         }
       })
