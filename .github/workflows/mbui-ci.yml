@@ -49,6 +49,8 @@ jobs:
         run: bash scripts/logwait_test.sh
       - name: Simulator termination exits on failure and leaves no client after a deadline
         run: bash scripts/ios-terminate-test.sh
+      - name: A partial repaint check cannot reuse a missing frame from its preceding run
+        run: bash scripts/render_paint_damage_test.sh
       - name: "Android's frame pacing (FramePacer, MBView's) on a clock of its own: each refresh a new frame while the app asks, the display's rate, a phone's recorded frames replayed (scripts/framepacer_test.sh; its known list only shortens)"
         run: sh scripts/framepacer_test.sh
       - name: Check

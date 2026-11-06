@@ -9,6 +9,16 @@ cd "$D/.."
 O=${1:-out/paint-damage}
 mkdir -p "$O"
 O=$(cd "$O" && pwd)
+pairs="typing-before:typing-after caret-before:caret-hidden caret-hidden:caret-shown
+regions-before:regions-moved regions-moved:regions-shrunk regions-shrunk:regions-gone regions-gone:regions-new
+clips-before:clips-after glass-before:glass-after"
+# A missing frame this run must not be supplied by an earlier run in this directory. Only these generated files
+# belong to this check; keep anything else the caller stored beside them.
+for pair in $pairs; do
+  for name in "${pair%:*}" "${pair#*:}"; do
+    rm -f "$O/$name.dl" "$O/$name.png" "$O/$name.whole.png" "$O/$name.render.log"
+  done
+done
 code=0
 MBUI_PAINT_DAMAGE_PRINT=1 moon_tests src/ui/field_present_wbtest.mbt > "$O/frames.log" 2>&1 || code=1
 awk -v out="$O" '/^DLEND/{p=0; close(file)} p{print > file} /^DLBEGIN /{file=out "/" $2 ".dl"; p=1}' "$O/frames.log"
@@ -17,9 +27,7 @@ if [ -z "$renderer" ]; then
   (unset MBUI_APP_MOD; APP=render bash "$D/mac.sh" build) > "$O/build.log" 2>&1
   renderer="$PWD/$(pkg_build render native release)/render.exe"
 fi
-for pair in typing-before:typing-after caret-before:caret-hidden caret-hidden:caret-shown \
-  regions-before:regions-moved regions-moved:regions-shrunk regions-shrunk:regions-gone regions-gone:regions-new \
-  clips-before:clips-after glass-before:glass-after; do
+for pair in $pairs; do
   before=${pair%:*}
   after=${pair#*:}
   if [ ! -s "$O/$before.dl" ] || [ ! -s "$O/$after.dl" ]; then
@@ -27,7 +35,6 @@ for pair in typing-before:typing-after caret-before:caret-hidden caret-hidden:ca
     code=1
     continue
   fi
-  rm -f "$O/$after.png" "$O/$after.whole.png"
   MBUI_DL_FROM="$O/$before.dl" MBUI_DL="$O/$after.dl" MBUI_DL_PNG="$O/$after.png" \
     "$renderer" > "$O/$after.render.log" 2>&1
   if grep -Eq '[1-9][0-9]* not known here' "$O/$after.render.log"; then

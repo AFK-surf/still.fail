@@ -107,6 +107,8 @@ Without a window (mbui-render, the bench) the offscreen target is the canvas: it
   byte, with no missing glyphs. The tests also keep an unchanged region outside the damage. A paint watch, wake
   or glyph retry must invalidate the layer's previous reach and its reach after recording, just as a tree change
   does; asking for another recording alone does not repaint the host's retained canvas.
+  Each run removes its expected outputs first: a frame missing this run cannot come from an earlier run in the
+  same directory (`scripts/render_paint_damage_test.sh` checks both default and supplied output directories).
 - `MBUI_PROBE=1` says every 2 s how many frames were drawn whole, in parts or not at all, why the whole ones were
   (`whole_why`, by @damage.Parts::why: 1 none before, 3 another window, 4 the atlas anew, 5 more than half, 6 an old
   frame with no tree),
