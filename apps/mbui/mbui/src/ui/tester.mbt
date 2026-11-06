@@ -89,6 +89,9 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
+  // (what a run stopped half way left of signals put back first, what is let go here let go under none of it; what it
+  // told and had yet to run left told: run once all of it is let go, below)
+  @signals.reset_globals()
   // (every frame checked till the test says otherwise: Tester::scene_checks_every)
   checks_every.val = 1
   checks_frame.val = 0
@@ -205,6 +208,9 @@ fn reset_globals() -> Unit {
   text_said.clear()
   timers_reset()
   reset_drawing()
+  // (what the stopped run told and had yet to run, run now that what it made is let go: what is its own (the tree's
+  // watches, stopped above) runs no more; what was made before it and kept runs as the batch's end would have run it)
+  @signals.run_told()
   let left = leaked_state()
   if left.length() > 0 {
     abort("state kept from an earlier test: " + left.join(", "))
