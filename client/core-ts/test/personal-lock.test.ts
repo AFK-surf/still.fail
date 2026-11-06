@@ -1389,6 +1389,54 @@ test("a reported remote take-back prevents a valid signed grant from lending aft
   }
 });
 
+for (const source of ["event", "whole list"] as const) for (const denial of ["failed", "pending"] as const) {
+  test(`a remote take-back from a ${source} survives restart when its denial write is ${denial} but the cache was saved`, async () => {
+    const c = cloud(), a = device(c, "a");
+    const link = { adb: () => Effect.sync(() => {
+      let read = false;
+      const bytes = new TextEncoder().encode(JSON.stringify({ grants: [], signs: true }));
+      return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+    }) };
+    const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+    const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) };
+    const p = phone(env), set = p.host.storageSet.bind(p.host), release = Deferred.makeUnsafe<void>();
+    const cacheSaved = Promise.withResolvers<void>();
+    let cold: ReturnType<typeof phone> | undefined;
+    try {
+      const now = Math.floor(p.host.nowMs() / 1000);
+      const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+      await flush();
+      p.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+      await flush();
+      assert.deepEqual(p.adb.wanted(), [STATION]);
+      p.host.storageSet = (key, value) => {
+        if (key === REVOKED_KEY) return denial === "failed" ? Effect.fail(new HostError("denial save failed", true)) : Effect.andThen(Deferred.await(release), set(key, value));
+        if (key === GRANTS_KEY) return Effect.andThen(set(key, value), Effect.sync(() => cacheSaved.resolve()));
+        return set(key, value);
+      };
+      if (source === "event") p.adb.heard(STATION, { id: "p1", status: "ended" });
+      else await p.runner.run(p.adb.readGrants(STATION));
+      await cacheSaved.promise;
+      await flush();
+      assert.deepEqual(p.adb.wanted(), [], "the phone stops lending when it hears the take-back");
+      const host = new FakeHost(p.host.time);
+      for (const [key, value] of p.host.storage) host.storage.set(key, value.slice());
+      assert.equal(host.storage.has(REVOKED_KEY), false, "the denial itself did not reach storage");
+      cold = phone(env, host);
+      await flush();
+      cold.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+      await flush();
+      assert.deepEqual(cold.adb.wanted(), [], "the old valid signature cannot lend after a cold restart");
+    } finally {
+      Deferred.doneUnsafe(release, Effect.void);
+      p.host.storageSet = set;
+      await p.runner.shutdown();
+      if (cold) await cold.runner.shutdown();
+      await a.runner.shutdown();
+    }
+  });
+}
+
 test("a station cannot revive a revoked signed grant by extending its reported expiry", async () => {
   const c = cloud(), a = device(c, "a");
   const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });

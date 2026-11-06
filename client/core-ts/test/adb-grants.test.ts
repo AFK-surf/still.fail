@@ -51,7 +51,9 @@ test("expired grant identities are kept without their old details until a comple
     await p.runner.run(p.adb.readGrants("ws/st"));
     await flush();
     const after = JSON.parse(new TextDecoder().decode(host.storage.get(GRANTS_KEY)!));
-    assert.deepEqual(after, {}, "a complete list transfers the missing identity to the separate take-back record");
+    assert.equal(after["ws/st"][0].id, "old", "the grant cache keeps the ended identity too");
+    assert.equal(after["ws/st"][0].exp, 0, "the marker cannot lend");
+    assert.equal(after["ws/st"][0].reason, undefined, "old grant details are not retained");
     assert.ok(host.storage.has(REVOKED_KEY), "the missing request has a durable denial");
   } finally { await p.runner.shutdown(); }
 });
@@ -81,7 +83,8 @@ test("a remote take-back survives an earlier grant snapshot finishing last", asy
     Deferred.doneUnsafe(release, Effect.void);
     await cleared.promise;
     await flush();
-    assert.deepEqual(JSON.parse(new TextDecoder().decode(host.storage.get(GRANTS_KEY)!)), {}, "the older snapshot does not finish last");
+    const saved = JSON.parse(new TextDecoder().decode(host.storage.get(GRANTS_KEY)!));
+    assert.equal(saved["ws/st"][0].exp, 0, "the older live snapshot does not finish last");
     await p.runner.shutdown();
     restarted = phoneWith(restartedHost(host));
     await flush();
@@ -91,6 +94,45 @@ test("a remote take-back survives an earlier grant snapshot finishing last", asy
     host.storageSet = set;
     await p.runner.shutdown();
     if (restarted) await restarted.runner.shutdown();
+  }
+});
+
+test("a station cannot forge a locally saved terminal marker on a live grant", async () => {
+  const host = new FakeHost();
+  host.store(ON_KEY, true);
+  const p = phoneWith(host);
+  let cold: ReturnType<typeof phoneWith> | undefined;
+  try {
+    await flush();
+    p.adb.heard("ws/st", { ...liveGrant(host, "p1"), "\u0000stillfail-remote-end-v1": true });
+    await flush();
+    assert.deepEqual(p.adb.wanted(), ["ws/st"]);
+    cold = phoneWith(restartedHost(host));
+    await flush();
+    assert.deepEqual(cold.adb.wanted(), ["ws/st"], "station data is not restored as a local take-back");
+  } finally {
+    await p.runner.shutdown();
+    if (cold) await cold.runner.shutdown();
+  }
+});
+
+test("a saved terminal marker wins over a grant heard while the cache is loading", async () => {
+  const host = new FakeHost(), read = host.storageGet.bind(host), release = Deferred.makeUnsafe<void>();
+  const reached = Promise.withResolvers<void>();
+  host.store(ON_KEY, true);
+  host.store(GRANTS_KEY, { "ws/st": [{ id: "p1", status: "granted", exp: 0, "\u0000stillfail-remote-end-v1": true }] });
+  host.storageGet = (key) => key === GRANTS_KEY
+    ? Effect.andThen(Effect.sync(() => reached.resolve()), Effect.andThen(Deferred.await(release), read(key))) : read(key);
+  const p = phoneWith(host);
+  try {
+    await reached.promise;
+    p.adb.heard("ws/st", liveGrant(host, "p1"));
+    Deferred.doneUnsafe(release, Effect.void);
+    await flush();
+    assert.deepEqual(p.adb.wanted(), [], "loading cannot let an earlier terminal record be replaced by a replay");
+  } finally {
+    Deferred.doneUnsafe(release, Effect.void);
+    await p.runner.shutdown();
   }
 });
 

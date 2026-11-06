@@ -67,6 +67,9 @@ function approvalProof(g: J): string | null {
 /// started anew (the app's process gone and back, the phone started again) lends it to them at once, not only once
 /// each station is reached again.
 export const GRANTS_KEY = "adb-grants";
+// A terminal request is also kept in the grant cache. The row alone does not lend on older clients, which do not
+// understand its terminal meaning and can still accept a later replay.
+const GRANT_REMOTE_END = "\u0000stillfail-remote-end-v1";
 /// Where this phone's 共享调试 switch is kept (2026-10-30, user: 「全局的 adb 开关，默认关闭，开启后永远开启，不会因为更新或者重启关掉」):
 /// off, it lends to no chat whatever is granted; on, until turned off here. None kept (a core from before it): on where a
 /// grant was live, as it lent then.
@@ -716,7 +719,11 @@ export class Adb {
       for (const [station, list] of Object.entries(kept as Record<string, J[]>)) {
         const at = this.#grants.get(station) ?? new Map<string, J>();
         const touched = state.grantTouched.get(station);
-        for (const g of list) if (!touched?.has(g.id) && !at.has(g.id)) at.set(g.id, g);
+        for (const g of list) {
+          // A terminal marker is local state, not a grant, and must win even over an event heard during this read.
+          if (g[GRANT_REMOTE_END] === true) this.#rememberRemoteEnd(station, g.id);
+          else if (!touched?.has(g.id) && !at.has(g.id)) at.set(g.id, g);
+        }
         this.#grants.set(station, at);
       }
       state.grantTouched.clear();
@@ -735,7 +742,8 @@ export class Adb {
       const kept = new Map<string, Set<string>>();
       for (const g of this.#allGrants()) {
         const station = g.station as string;
-        (out[station] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
+        // A station cannot turn a live row into a local terminal marker by adding our reserved field.
+        (out[station] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station" && k !== GRANT_REMOTE_END)));
         const ids = kept.get(station) ?? new Set<string>();
         ids.add(g.id);
         kept.set(station, ids);
@@ -747,6 +755,12 @@ export class Adb {
         if (!kept.get(station)?.has(id) && !this.#remoteEnded(station, id)) {
           (out[station] ??= []).push({ id, status: "granted", exp: 0 });
         }
+      }
+      // A denial and a cache snapshot are independent writes. Keep terminal identities in both so that either one
+      // saved before a process ends prevents the other from reviving an already observed take-back after restart.
+      for (const scope of state.remoteEnds) {
+        const [station, id] = JSON.parse(scope) as [string, string];
+        (out[station] ??= []).push({ id, status: "granted", exp: 0, [GRANT_REMOTE_END]: true });
       }
       const saved = yield* Effect.result(Effect.mapError(this.#env.host.storageSet(GRANTS_KEY, utf8(JSON.stringify(out))), asCoreError));
       if (saved._tag === "Failure") {
