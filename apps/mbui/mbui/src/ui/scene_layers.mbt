@@ -2587,7 +2587,10 @@ fn scene_layer_skippable(tree : @view.Tree, p : TreePaint, c : @view.Content) ->
 /// out: nothing of it changed but where it is, and all it reached as last drawn, moved there, wholly outside that clip
 /// and the window (Flutter's picture culled whole as it is composited; what is inside drawn whole, cut where it is put).
 fn Ctx::scene_layer_left_out(self : Ctx, id : @view.NodeId, x : Double, y : Double, k : Int) -> Bool {
-  guard scene.layers.get(id) is Some(l) && scene_kept_but_place(l) && l.skippable else { return false }
+  // (one holding what changed or moved in it: drawn, what changed of it reaching where it reaches now)
+  guard scene.layers.get(id) is Some(l) && scene_kept_but_place(l) && l.skippable && !scene.holding.contains(id) else {
+    return false
+  }
   let (cx0, cy0, cx1, cy1) = (clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3])
   self.scene_reach_out(l, x - l.held.0 - l.shown.0, y - l.held.1 - l.shown.1, cx0, cy0, cx1, cy1)
 }
@@ -2596,7 +2599,7 @@ fn Ctx::scene_layer_left_out(self : Ctx, id : @view.NodeId, x : Double, y : Doub
 /// Whether kept layer `c`, put as far again from where it is as (`mx`, `my`) (its holder put as kept), is left out
 /// (Ctx::scene_layer_left_out): by the clip it began in, as its holder has it.
 fn Ctx::scene_layer_put_out(self : Ctx, c : SceneLayer, m : (Double, Double)) -> Bool {
-  guard scene_kept_but_place(c) && c.skippable else { return false }
+  guard scene_kept_but_place(c) && c.skippable && !scene.holding.contains(c.id) else { return false }
   self.scene_reach_out(c, m.0, m.1, c.clip[0], c.clip[1], c.clip[2], c.clip[3])
 }
 
