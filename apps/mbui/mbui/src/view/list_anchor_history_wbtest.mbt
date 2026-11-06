@@ -60,7 +60,10 @@ fn hist_look(
   room_below? : Bool = false,
   regrab? : Bool = false,
   rest_by? : Double = 1.0e9,
+  shape? : HistShape = hist_long,
 ) -> HistSeen {
+  let n = shape.n
+  let py = shape.press_y
   let told : Array[String] = []
   faults_stop.val = false
   let meets_before = meet_said.val
@@ -466,8 +469,9 @@ test "scrolls_anchored laid out from its top or its end, long or short, one row,
   for from_end in [false, true] {
     for n in [1, 2] {
       let y = if from_end { 80.0 } else { 20.0 }
+      let side = if from_end { "end" } else { "top" }
       for by in [140.0, -140.0] {
-        wrong.append(hist_compare("from its \{if from_end { "end" } else { "top" }}, \{n} rows of 40, flung \{by}", 0.0, by, forty, -1, 0.0, moments, rest_by=4000.0, shape={ from_end, n, wheel: Some(0.0), foot_room: 0.0, press_y: y }))
+        wrong.append(hist_compare("from its \{side}, \{n} rows of 40, flung \{by}", 0.0, by, forty, -1, 0.0, moments, rest_by=4000.0, shape={ from_end, n, wheel: Some(0.0), foot_room: 0.0, press_y: y }))
       }
     }
   }
