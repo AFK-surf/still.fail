@@ -350,7 +350,11 @@ three places, each untracked, and nowhere else:
 What a layout makes (a list's rows, `by_room`'s and `layout_box`'s children) is a cache of the picture: how many are
 made and let go is by the frames there were and the room there is. So it holds no state of the app's and starts nothing
 that lasts (a subscription, a download, a decoded picture, a draft): those are kept outside it by the data's key, and
-what it makes reads them.
+what it makes reads them. A long list makes the rows a scroll goes past only to measure them; which rows were shown is
+told once the frame is painted, never found by a row being made: `scrolls_window`'s `seen` (in sight as it was laid
+out, or gone across as it went on by itself, whether the frames between were many or one; not what a move at once went
+past), as a page opens a draft for a block it showed; `scrolls_anchored`'s `sighted` (what a move at once went past
+too), as the pictures a chat's rows show are asked for.
 
 What waits for a node "to be laid out" (a sheet opened once the page is there, a keyboard asked for once the field is)
 waits for nothing that is the tree's: it is done at its cause; where the host must have the node drawn first, the node's
