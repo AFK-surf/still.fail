@@ -74,7 +74,7 @@ test "a quote's flying copy reserves its picture's room without making or owning
         }) |> ignore
       })
     original.val = Some(card)
-    root.show(fn() { copies.get() }, fn(p) { flying.val = Some((card.copy)(p, fn() { None })) })
+    root.show(fn() { copies.get() }, fn(p) { flying.val = Some((card.copy)(p, None)) })
   })
   t.draw()
   copies.set(true)

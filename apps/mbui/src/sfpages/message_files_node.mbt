@@ -212,7 +212,7 @@ fn media_file_node(
     view,
     share,
     top_crop,
-    copy: fn(v, cw, ch, cfit, cradius) { media_fitted_node(v, picture, cw, ch, cfit, cradius) },
+    copy: fn(v, cfit, cradius) { media_fitted_fill_node(v, picture, cfit, cradius) },
   }
 }
 
@@ -277,7 +277,7 @@ fn card_file_node(
     view,
     share: fn() { (1.0, 1.0) },
     top_crop: fn() { false },
-    copy: fn(v, _, _, _, _) { @sf.file_card_node(v, info, floating=true) |> ignore },
+    copy: fn(v, _, _) { @sf.file_card_node(v, info, floating=true) |> ignore },
   }
 }
 

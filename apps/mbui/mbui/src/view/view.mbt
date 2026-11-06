@@ -982,6 +982,14 @@ pub struct Tree {
   feet : Map[Int, (Double, Double)]
   foot_readers : Map[Int, Array[NodeId]]
   foot_read : Map[Int, Int]
+  /// the box layouts under way, outermost first (View::layout_box): where a box reading an anchor (Layout::anchor) finds
+  /// the one that lays out both it and that anchor
+  layouts : Array[Layout]
+  /// the boxes whose layouts read how big a node is that another branch has laid out before them (Layout::anchor: what
+  /// flies over a list, as big as the row it lands on), by the box that lays out both: who reads which, as big as it
+  /// read it; and the box each reader's last layout read under (one at most)
+  anchor_readers : Map[Int, Array[AnchorRead]]
+  anchor_read : Map[Int, Int]
   /// what each box's layout reported of what it laid out, by name (Layout::report)
   reports : Map[Int, Map[String, (Double, Double)]]
   /// what each node works out of how big a node holding it is laid out, by that node (Live's Roomed)
@@ -1218,6 +1226,9 @@ pub fn Tree::new(
     feet: {},
     foot_readers: {},
     foot_read: {},
+    layouts: [],
+    anchor_readers: {},
+    anchor_read: {},
     reports: {},
     roomed: {},
     on_layers_focus: fn(_, _) {  },
@@ -1311,6 +1322,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       self.feet.remove(i)
       self.foot_readers.remove(i)
       self.foot_unread(i)
+      self.anchor_readers.remove(i)
+      self.anchor_unread(i)
       self.reports.remove(i)
       self.roomed.remove(i)
       n.flex = @flex.Node::new()

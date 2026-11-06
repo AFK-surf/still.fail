@@ -2504,7 +2504,7 @@ pub(all) struct FileLandingNode {
   view : @view.View
   share : () -> (Double, Double)
   top_crop : () -> Bool
-  copy : (@view.View, () -> Double, () -> Double, () -> @ui.Fit, () -> Double) -> Unit
+  copy : (@view.View, () -> @ui.Fit, () -> Double) -> Unit
 }
 
 pub(all) struct FilePage {

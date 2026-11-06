@@ -37,7 +37,7 @@ fn flying_quote_face_node(
   picture : (Double, Double)?,
 ) -> Unit {
   @sf.quote_card_node(parent, fn() { source.author }, fn() { source.text }, role=fn() { source.role },
-    composer=true, corner=fn() { corner }, words_width=fn() { words_width },
+    composer=true, corner=fn() { corner }, words_width?=words_width.map(@sf.WordsWidth::fixed),
     picture?=picture.map(fn(s) { fn(p) { p.width(Is(Some(s.0))).height(Is(Some(s.1))) |> ignore } }),
     comment_field=fn(p) { flying_comment_node(p, written, false) }) |> ignore
 }

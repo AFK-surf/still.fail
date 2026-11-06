@@ -540,6 +540,8 @@ pub fn runs_glyph_cells(Array[@text.Run], @view.WordsLook) -> Array[(Double, Dou
 
 pub fn runs_links(@view.View, () -> Array[@text.Run], (String) -> Unit, hold? : (String, (Double, Double, Double, Double)) -> Unit, shown? : (Array[(String, String, Int32)]) -> Unit) -> RunsLinks
 
+pub fn runs_words_in(@view.View, Double) -> Words?
+
 pub fn runs_words_now(@view.View) -> Words?
 
 pub fn runtime() -> @effect.Runtime

@@ -181,6 +181,18 @@ fn chat_talk_node(
       })
       }) |> ignore
     })
+    // (what flies over its messages and its composer, laid out after them in the same layout: what flies as big as
+    // what it lands on as that is laid out, Layout::anchor)
+    let fl = body.box(fn(fl) {
+      @sfpages.chat_flight_layer_made(r, fl)
+      @sfbase.send_flight_node(
+        fl,
+        r.station + ":" + r.session,
+        fn(f) { (landing.val)(f.key).bind(fn(l) { l.text }) },
+        quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) },
+        files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
+      )
+    })
     body.layout_box(By(fn() { (made_now.get().map(fn(m) { (m.room_of)() }), (lift.val)()) }), fn(lay, k) {
       let (of, lift) = k
       let (_, ch) = lay.measure(f, lay.width)
@@ -191,22 +203,10 @@ fn chat_talk_node(
       lay.measure(l, lay.width, height=lay.height, foot=(0.0, room + lift)) |> ignore
       lay.place(l, 0.0, 0.0)
       lay.place(f, 0.0, lay.height - ch)
+      lay.measure(fl, lay.width, height=lay.height) |> ignore
+      lay.place(fl, 0.0, 0.0)
     })
     |> ignore
-  })
-  |> ignore
-  talk.box(fn(fl) {
-    fl
-    .over(Is(true))
-    |> ignore
-    @sfpages.chat_flight_layer_made(r, fl)
-    @sfbase.send_flight_node(
-      fl,
-      r.station + ":" + r.session,
-      fn(f) { (landing.val)(f.key).bind(fn(l) { l.text }) },
-      quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) },
-      files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
-    )
   })
   |> ignore
   // (what is picked of a message: the finger's bar or the mouse's pill over it: pick_node.mbt)

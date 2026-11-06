@@ -12,7 +12,7 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, platform=2, stable=false)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(@sf.ui_theme_now)
-    root.box(fn(viewport) {
+    flight_page(root, [fn(root) { root.box(fn(viewport) {
       viewport.height(Is(Some(180.0))).clips(Is(true)) |> ignore
       viewport.drawn_off(Painted(fn(laid) { (0.0, row_off + send_list_rise(laid, viewport, "chat", fn(_) { landings.get("row").map(fn(l) { l.0 }) })) })) |> ignore
       viewport.show(fn() { row.get() }, fn(bubble) {
@@ -25,19 +25,16 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
         landings["row"] = (bubble, words)
         bubble.owns(fn() { landings.remove("row") }) |> ignore
       })
-    }) |> ignore
-    root.box(fn(input) {
+    }) |> ignore }, fn(root) { root.box(fn(input) {
       input.over(Is(true)).width(Is(Some(330.0))).height(Is(Some(100.0))).offset(Is((20.0, 400.0))) |> ignore
       @ui.field(input, field, max_lines=4, line=24.75, color=@sf.theme().p.text) |> ignore
-    }) |> ignore
-    root.box(fn(layer) {
+    }) |> ignore }, fn(root) { root.box(fn(layer) {
       layer.over(Is(true)) |> ignore
       send_flight_node(layer, "chat", fn(_) { landings.get("row") })
-    }) |> ignore
-    stamp.val = Some(root.box(fn(time) {
+    }) |> ignore }, fn(root) { stamp.val = Some(root.box(fn(time) {
       time.over(Is(true)).offset(Is((20.0, 300.0))).words_runs(Is([@ui.plain("刚刚")])) |> ignore
       send_time_node(time, fn() { "chat" }, fn() { "row" })
-    }))
+    })) }])
   })
   t.draw()
   let source = field.lines().unwrap()
@@ -125,7 +122,7 @@ fn sent_cut_frame(retained : Bool, up : Double) -> Array[Array[Double]] {
   }, w=400.0, h=600.0)
   if retained {
     @ui.set_view_app(fn(root) {
-      flight_visible_node(root, Some(shown), from, fn() { (160.0, 80.0) }, fn(_) { (100.0, 110.0) },
+      flight_visible_node(root, Some(shown), from, None, fn() { () }, fn(_, _) { (160.0, 80.0) }, fn(_) { (100.0, 110.0) },
         fn() { up }, fn(_) { (0.0, 0.0) }).ground(Is(0x335599FFL)) |> ignore
     })
   }
@@ -144,4 +141,20 @@ test "a retained flight opens the source's partial visibility and opacity as the
     assert_eq(old.length(), 1)
     assert_eq(sent_cut_frame(true, up), old, msg="up=\{up}")
   }
+}
+
+///|
+/// A page laid out as a chat's is: each part as big as it, in turn, what flies laid out after what it lands on
+/// (Layout::anchor).
+fn flight_page(root : @view.View, parts : Array[(@view.View) -> Unit]) -> Unit {
+  root.box(fn(page) {
+    page.grow(Is(1.0)) |> ignore
+    let held = parts.map(fn(part) { page.box(part) })
+    page.layout_box(Is(()), fn(lay, _) {
+      for h in held {
+        lay.measure(h, lay.width, height=lay.height) |> ignore
+        lay.place(h, 0.0, 0.0)
+      }
+    }) |> ignore
+  }) |> ignore
 }

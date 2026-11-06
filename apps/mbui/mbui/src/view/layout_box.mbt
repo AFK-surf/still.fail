@@ -82,6 +82,7 @@ pub fn Layout::measure(
   foot? : (Double, Double),
 ) -> (Double, Double) {
   self.check(child)
+  child.tree.anchors_due(self.owner.at, child.at)
   match foot {
     Some(f) => {
       let tree = child.tree
@@ -115,6 +116,7 @@ pub fn Layout::measure(
 /// The child measured and laid out as wide as it asks, `most` at most, as Layout::measure measures it.
 pub fn Layout::fit(self : Layout, child : View, most : Double) -> (Double, Double) {
   self.check(child)
+  child.tree.anchors_due(self.owner.at, child.at)
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child_fitted(child.tree.nodes[child.at].flex, most, containing_height=self.height)
   self.measured.add(child.at)
@@ -185,6 +187,8 @@ pub fn[K : Eq] View::layout_box(
     // (what it reports said anew by this layout: Layout::report; the foot it reads read anew, Layout::given_foot)
     self.tree.reports.remove(self.at)
     self.tree.foot_unread(self.at)
+    self.tree.anchor_unread(self.at)
+    self.tree.layouts.push(ctx)
     match value.val {
       Some(v) => {
         let guard_before = @signals.set_access_guard(Some("layout_box node \{self.at} must use content and constraints"))
@@ -193,6 +197,7 @@ pub fn[K : Eq] View::layout_box(
       }
       None => ()
     }
+    self.tree.layouts.pop() |> ignore
     let gone = []
     for k, child in keyed {
       if !ctx.seen.contains(k) { gone.push((k, child)) }
@@ -395,4 +400,153 @@ pub fn Layout::reported_span(self : Layout, child : View, name : String) -> (Dou
     todo.append(tree.nodes[at].kids)
   }
   None
+}
+
+///|
+/// One box's read of how big an anchor was laid out (Layout::anchor), under the box laying out both: as big as it read
+/// it, None where it was laid out to nothing.
+struct AnchorRead {
+  reader : NodeId
+  target : NodeId
+  seen : (Double, Double)?
+}
+
+///|
+fn Tree::anchor_unread(self : Tree, at : Int) -> Unit {
+  match self.anchor_read.get(at) {
+    Some(holder) => {
+      self.anchor_read.remove(at)
+      match self.anchor_readers.get(holder) {
+        Some(rs) => {
+          rs.retain(fn(r) { r.reader.at != at })
+          if rs.is_empty() {
+            self.anchor_readers.remove(holder)
+          }
+        }
+        None => ()
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// The child of `holder` that `at` is in (itself, or one that holds it), -1 where it is not in `holder`.
+fn Tree::child_under(self : Tree, at : Int, holder : Int) -> Int {
+  let mut c = at
+  while c >= 0 && self.nodes[c].parent != holder {
+    c = self.nodes[c].parent
+  }
+  c
+}
+
+///|
+/// How big `target` is laid out, as its last layout left it: None where it is gone, laid out to nothing, or it or what
+/// holds it, up to `holder`, was left out of its row (View::drops) or kept unplaced by the box laying it out
+/// (Layout::place).
+fn Tree::anchor_size(self : Tree, target : NodeId, holder : Int) -> (Double, Double)? {
+  guard target.at < self.nodes.length() &&
+    self.nodes[target.at].live &&
+    self.nodes[target.at].gen == target.gen else {
+    return None
+  }
+  let mut i = target.at
+  while i >= 0 && i != holder {
+    let m = self.nodes[i]
+    if m.out || m.flex.line == -1 {
+      return None
+    }
+    i = m.parent
+  }
+  let n = self.nodes[target.at].flex
+  if n.width > 0.0 && n.height > 0.0 { Some((n.width, n.height)) } else { None }
+}
+
+///|
+/// As `holder` measures its child `child`: each box in that child whose last layout read an anchor `holder` laid out
+/// before it (Layout::anchor) laid out again where that anchor is laid out otherwise than it read it, in this layout
+/// (marked by the framework inside the layout of `holder`, what it lays out: no fault).
+fn Tree::anchors_due(self : Tree, holder : Int, child : Int) -> Unit {
+  guard self.anchor_readers.get(holder) is Some(rs) else { return }
+  let due = []
+  for r in rs {
+    let n = self.nodes[r.reader.at]
+    if n.live && n.gen == r.reader.gen && self.child_under(r.reader.at, holder) == child &&
+      self.anchor_size(r.target, holder) != r.seen {
+      due.push(r.reader.at)
+    }
+  }
+  for at in due {
+    self.layout_marked_at(at)
+  }
+}
+
+///|
+/// How big `target` is laid out in this layout, for this box to lay out what it holds by (what flies over a list as big
+/// as the row it lands on, its words as wide as that row's): a node of another branch that the box laying out both
+/// (the nearest that holds both, a View::layout_box) has measured before the child this box is in, or whose layout is
+/// done as this box is laid out (what is over others: flex lays it out once all else is), as CSS lays out what is
+/// placed by an anchor after the anchor (anchor-size()). Read so, this box is laid out again in that
+/// box's layout as the anchor is laid out otherwise (it measures this one's branch after the anchor's: nothing told,
+/// no layout more, no frame late). None while the anchor is laid out to nothing (a row the list has not laid out):
+/// laid out again as it comes to be. An anchor not laid out before this box in a layout holding both is a fault.
+pub fn Layout::anchor(self : Layout, target : View) -> (Double, Double)? {
+  guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
+    abort("a layout context is only used inside its own callback")
+  }
+  let tree = self.owner.tree
+  guard physical_equal(target.tree, tree) else { abort("Layout::anchor: a node of another tree") }
+  guard target.alive() else { return None }
+  let me = self.owner.at
+  // (the nearest that holds both: a box laying out what it holds (View::layout_box), its layout under way and the
+  // anchor's child measured in it, or its layout done (what is placed over others, laid out once all else is: flex's
+  // absolute boxes, after what they stand over))
+  let mut holder = tree.nodes[me].parent
+  while holder >= 0 && tree.child_under(target.at, holder) < 0 {
+    holder = tree.nodes[holder].parent
+  }
+  guard holder >= 0 && tree.nodes[holder].flex.layout_children is Some(_) else {
+    fault("layout_box node \{me}: anchor node \{target.at} held with it by no box laying out both (View::layout_box)")
+    return None
+  }
+  let tk = tree.child_under(target.at, holder)
+  let rk = tree.child_under(me, holder)
+  let under_way = tree.layouts.iter().find_first(fn(l) { l.owner.at == holder })
+  match under_way {
+    Some(p) if !p.measured.contains(tk) || tk == rk => {
+      fault(
+        "layout_box node \{me}: anchor node \{target.at} not laid out before it by node \{holder}, which lays out both (its node \{tk}, then its node \{rk})",
+      )
+      return None
+    }
+    _ => ()
+  }
+  let seen = tree.anchor_size(target.id(), holder)
+  match tree.anchor_read.get(me) {
+    Some(h) if h != holder => {
+      fault("layout_box node \{me}: anchors read under node \{h} and node \{holder} in one layout")
+      return seen
+    }
+    _ => ()
+  }
+  tree.anchor_read[me] = holder
+  match tree.anchor_readers.get(holder) {
+    Some(rs) => rs.push({ reader: self.owner.id(), target: target.id(), seen })
+    None => tree.anchor_readers[holder] = [{ reader: self.owner.id(), target: target.id(), seen }]
+  }
+  seen
+}
+
+///|
+/// `f` done as this layout measures what it lays out (Layout::measure): what measuring reads (a font's theme, how
+/// words are set) read as ever, laid out again as that changes (Tree::words_again), nothing else of the app's: words
+/// laid out as wide as an anchor (Layout::anchor) by the same measure that lays out the anchor's.
+pub fn[T] Layout::as_measured(self : Layout, f : () -> T) -> T {
+  guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
+    abort("a layout context is only used inside its own callback")
+  }
+  let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
+  let v = f()
+  @signals.set_access_guard(guard_before) |> ignore
+  v
 }
