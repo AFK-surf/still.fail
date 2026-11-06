@@ -449,7 +449,9 @@ pub fn login_steps(
       match in_station {
         Some((name, busy, open)) if flag(job, "browser") => {
           let label = @sf.t(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
-          items.push(Some(@sf.menu_item_of(label, disabled=busy, fn() { open(label) })))
+          items.push(Some(@sf.menu_item_of(label, disabled=busy, fn() {
+            @settings.confirm_claude_auth(provider == "Claude" && text(job, "screen") == "", fn() { open(label) })
+          })))
         }
         _ => ()
       }
@@ -477,7 +479,7 @@ pub fn login_steps(
         |> ignore
         c.box(style=pf_step_buttons, fn() {
           if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external") {
-            (core.open_link)(url)
+            @settings.confirm_claude_auth(provider == "Claude", fn() { (core.open_link)(url) })
           }
           page_more()
         })
@@ -541,11 +543,13 @@ pub fn login_steps(
               tone=Primary,
               icon="external",
             ) {
-            if !filled {
-              @ui.clipboard_set(code)
-              profile_edit.command = "copied/" + key
-            }
-            (core.open_link)(url)
+            @settings.confirm_claude_auth(provider == "Claude", fn() {
+              if !filled {
+                @ui.clipboard_set(code)
+                profile_edit.command = "copied/" + key
+              }
+              (core.open_link)(url)
+            })
           }
           page_more()
         })
