@@ -649,7 +649,8 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// holds' last line), none while it cannot. `for_field`: the editor these choices belong to; scrolling keeps
 /// that editor's keyboard, as an old view's capped column does. `content_extent`: a virtual list's counted content
 /// height (width across), available when its heights change, before those heights have been laid out in its holder.
-/// `bar_clear`: the top and foot room kept clear by the scroll bar.
+/// `bar_clear`: the top and foot room kept clear by the scroll bar. `bar_in_held`: across, `bar_in` as far in as what
+/// holds it all is padded at its start as last laid out (a padding worked out as it is laid out: Roomed), not as said.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
@@ -660,6 +661,7 @@ pub fn View::scrolls(
   for_field? : NodeId,
   content_extent? : () -> Double,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  bar_in_held? : Bool = false,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
@@ -757,7 +759,7 @@ pub fn View::scrolls(
           (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
+      self.scroll_bar(s, b, state, bar_in~, bar_clear~, bar_in_of?=if bar_in_held { Some(inner) } else { None })
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()

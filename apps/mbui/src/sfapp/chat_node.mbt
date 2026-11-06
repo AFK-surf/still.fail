@@ -53,9 +53,10 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       f
       .over(Is(true))
       .lies_along(By(fn() { if @ui.system_tabletop() is Some(_) { Start } else { End } }))
-      .padding(By(fn() {
+      // (by how tall the page is laid out, in the same layout (Roomed): nothing of its height read back)
+      .padding(Roomed(p, fn(_, page_h) {
         let top = match @ui.system_tabletop() {
-          Some((_, foot)) => dmax(0.0, dmin(foot, page_height() - frame().foot - composer_room()))
+          Some((_, foot)) => dmax(0.0, dmin(foot, page_h - frame().foot - composer_room()))
           None => 0.0
         }
         (0.0, top, 0.0, frame().foot)
