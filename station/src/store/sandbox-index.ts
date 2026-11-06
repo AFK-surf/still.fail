@@ -3,6 +3,7 @@
 // store's initial preparation happen in bounded batches, never in a trigger on an older connection.
 import type { DatabaseSync } from "node:sqlite";
 import { keyPart, sandboxName } from "../agents/sandbox-name.ts";
+import { type Json, type SessionRow, toSession } from "./rows.ts";
 
 const VERSION = 1;
 const EXISTS = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sandbox_name_meta'";
@@ -28,7 +29,17 @@ const RUNNER_ORDER = `(s.archived_at IS NULL) DESC, s.last_active_at ASC,
 export const RUNNER_SESSION_CANDIDATES = `SELECT s.key FROM sandbox_name_rows n
   CROSS JOIN sessions s ON s.key = n.session WHERE n.name = ?
   ORDER BY ${RUNNER_ORDER}`;
+/// Takeup needs every matching session, including archived sessions and colliding runner names. The old all-session
+/// query orders equal activity by rowid ascending; keep that order when combining them with running Codex sessions.
+export const RUNNER_TAKEUP_NAMES = "SELECT session FROM sandbox_name_rows INDEXED BY sandbox_name_lookup WHERE name = ?";
+export const RUNNER_TAKEUP_SESSIONS = `WITH keys AS (
+  SELECT value AS key FROM json_each(?1)
+  UNION SELECT key FROM sessions INDEXED BY sessions_running WHERE running = 1 AND runtime = 'codex'
+)
+SELECT s.* FROM keys k CROSS JOIN sessions s ON s.key = k.key
+ORDER BY s.last_active_at DESC, s.rowid ASC`;
 export const RUNNER_DIRTY_LIMIT = 64;
+const RUNNER_TAKEUP_LIMIT = 8192;
 export function runnerChoiceFromKeys(count: number): string {
   if (!Number.isSafeInteger(count) || count < 1 || count > RUNNER_DIRTY_LIMIT + 1) throw new RangeError("bad runner candidate count");
   return `SELECT s.key FROM sessions s WHERE s.key IN (${Array(count).fill("?").join(", ")}) ORDER BY ${RUNNER_ORDER} LIMIT 1`;
@@ -161,6 +172,36 @@ export function runnerNameSessions(db: DatabaseSync, runners: readonly { id: str
     }
     db.exec("COMMIT");
     return found;
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+/// Take up all sessions for the runner parts, with the current dirty journal and running Codex sessions from one
+/// snapshot. Null keeps the original immediate all-session read while the lookup is incomplete or unusually large.
+export function runnerTakeUpSessions(db: DatabaseSync, parts: readonly string[]): SessionRow[] | null {
+  db.exec("BEGIN");
+  try {
+    const keys = new Set<string>();
+    if (parts.length !== 0) {
+      const prepared = db.prepare("SELECT 1 FROM sandbox_name_meta WHERE id = 1 AND version = ? AND enabled = 1 AND phase = 2").get(VERSION);
+      if (prepared === undefined) { db.exec("COMMIT"); return null; }
+      const dirty = db.prepare(SANDBOX_DIRTY_BATCH).all(RUNNER_DIRTY_LIMIT + 1) as { session: string }[];
+      if (dirty.length > RUNNER_DIRTY_LIMIT) { db.exec("COMMIT"); return null; }
+      const wanted = new Set(parts);
+      const lookup = db.prepare(RUNNER_TAKEUP_NAMES);
+      for (const part of wanted) {
+        for (const { session } of lookup.all(sandboxName(part)) as { session: string }[]) {
+          if (keyPart(session) === part) keys.add(session);
+        }
+      }
+      for (const { session } of dirty) if (wanted.has(keyPart(session))) keys.add(session);
+    }
+    // SQLite's JSON reader does not preserve a NUL in a string. Do not lose an old key through that encoding.
+    if (keys.size > RUNNER_TAKEUP_LIMIT || [...keys].some((key) => key.includes("\0"))) {
+      db.exec("COMMIT"); return null;
+    }
+    const rows = db.prepare(RUNNER_TAKEUP_SESSIONS).all(JSON.stringify([...keys])) as Json[];
+    db.exec("COMMIT");
+    return rows.map(toSession);
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
 

@@ -1,8 +1,8 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
-import { disableSandboxIndex, enableSandboxIndex, runnerNameSessions, sandboxIndexEnabled, sandboxIndexReady, sandboxIndexStep, sandboxSessions } from "../store/sandbox-index.ts";
-import type { Store } from "../store/store.ts";
+import { disableSandboxIndex, enableSandboxIndex, runnerNameSessions, runnerTakeUpSessions, sandboxIndexEnabled, sandboxIndexReady, sandboxIndexStep, sandboxSessions } from "../store/sandbox-index.ts";
+import type { SessionRow, Store } from "../store/store.ts";
 
 /// Prepare the session-name lookup only when an idle sandbox or a runner needs it. Old sessions and old writers'
 /// journalled keys are handled after handover in short transactions. Concurrent callers share the same preparation.
@@ -81,6 +81,25 @@ export class SandboxNameBuilder {
       log.warn("hub", "the runner name lookup could not be read", { error: (error as Error).message });
     }
     void this.prepare();
+    return "fallback";
+  }
+
+  /// Startup cannot wait for old names to be prepared; keep the old answer until the shared worker catches up.
+  takeUp(parts: readonly string[]): SessionRow[] | "fallback" {
+    if (this.stopped) return "fallback";
+    if (parts.length !== 0) this.forRunners = true;
+    try {
+      if (parts.length === 0 || sandboxIndexEnabled(this.store.db)) {
+        const sessions = runnerTakeUpSessions(this.store.db, parts);
+        if (sessions !== null) {
+          if (parts.length !== 0 && !sandboxIndexReady(this.store.db)) void this.prepare();
+          return sessions;
+        }
+      }
+    } catch (error) {
+      log.warn("hub", "the runner takeup lookup could not be read", { error: (error as Error).message });
+    }
+    if (parts.length !== 0) void this.prepare();
     return "fallback";
   }
 
