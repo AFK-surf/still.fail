@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Slots, avcCodec, decodable, hvcCodec } from "../web/src/screen/frames.ts";
+import { Slots, avcCodec, decodable, hvcCodec, peekAckAt } from "../web/src/screen/frames.ts";
 
 test("an avcC's codec string: its profile, compatibility and level", () => {
   assert.equal(avcCodec(new Uint8Array([1, 0x42, 0xe0, 0x1f, 0xff])), "avc1.42E01F");
@@ -33,4 +33,12 @@ test("a page's video previews: so many at once, one more refused until one is gi
 test("where nothing decodes a video, a preview takes JPEG alone", async () => {
   assert.equal(typeof (globalThis as { VideoDecoder?: unknown }).VideoDecoder, "undefined");
   assert.deepEqual(await decodable(true), ["jpeg"]);
+});
+
+test("a preview's acknowledgements: a video's as each frame is shown, a JPEG's 500 ms after the one before", () => {
+  assert.equal(peekAckAt("h264", 1000, 900, 500), 1000);
+  assert.equal(peekAckAt("h265", 1000, 900, 500), 1000);
+  assert.equal(peekAckAt("jpeg", 1000, 900, 500), 1400);
+  assert.equal(peekAckAt("jpeg", 2000, 900, 500), 2000);
+  assert.equal(peekAckAt(undefined, 1000, 900, 500), 1400);
 });

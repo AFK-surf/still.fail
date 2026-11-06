@@ -10,7 +10,7 @@ import { core, useTopic } from "../core/react.ts";
 import type { ScreenCard as Card } from "../core/shapes.ts";
 import { screenOfLink } from "../chatRefs.ts";
 import { t } from "../i18n.ts";
-import { ScreenFrames, Slots, decodable, type Codec, type FrameConfig, type FrameHead } from "./frames.ts";
+import { ScreenFrames, Slots, decodable, peekAckAt, type Codec, type FrameConfig, type FrameHead } from "./frames.ts";
 import * as chatCss from "../Chat.css.ts";
 import * as css from "./ScreenLink.css.ts";
 
@@ -96,9 +96,9 @@ function useShown(el: RefObject<HTMLElement | null>): boolean {
 
 /**
  * The screen live in its card (`screen.view` with `peek`: only looking, not among those on it, its tab not brought
- * forward), a picture every PEEK_MS while the card is on the screen; its mark until a picture comes (a tab behind
- * another casts none). JPEG where the source has it, else H.264 (an Android device's), two of those at once on
- * the page (`videoPeeks`); one refused or ended asks again PEEK_AGAIN_MS on.
+ * forward), a picture every PEEK_MS while the card is on the screen (a video's as fast as its station sends it); its
+ * mark until a picture comes (a tab behind another casts none). JPEG where the source has it, else H.264 (an Android
+ * device's), two of those at once on the page (`videoPeeks`); one refused or ended asks again PEEK_AGAIN_MS on.
  */
 function Peek({ station, screen, card }: { station: string; screen: string; card: Card }) {
   const box = useRef<HTMLSpanElement>(null);
@@ -118,12 +118,16 @@ function Peek({ station, screen, card }: { station: string; screen: string; card
       const abort = new AbortController();
       let live = true;
       let video = false;
-      // Each acknowledgement PEEK_MS after the one before: the station sends no faster.
+      // A JPEG's acknowledgement PEEK_MS after the one before (the station sends no faster); a video's as it is shown
+      // (its station paces it: peekAckAt).
+      let codec: string | undefined;
       let at = 0;
       const timers = new Set<ReturnType<typeof setTimeout>>();
       const ack = (ts: number) => {
-        at = Math.max(Date.now(), at + PEEK_MS);
-        const timer = setTimeout(() => { timers.delete(timer); if (live) tell("screen.ack", { view: name, ts }); }, at - Date.now());
+        const now = Date.now();
+        at = peekAckAt(codec, now, at, PEEK_MS);
+        if (at <= now) { tell("screen.ack", { view: name, ts }); return; }
+        const timer = setTimeout(() => { timers.delete(timer); if (live) tell("screen.ack", { view: name, ts }); }, at - now);
         timers.add(timer);
       };
       const frames = new ScreenFrames(c, { ack, keyframe: () => tell("screen.keyframe", { view: name }), drawn: () => setDrawn(true) });
@@ -151,6 +155,7 @@ function Peek({ station, screen, card }: { station: string; screen: string; card
             if (!videoPeeks.take()) { ended(); return; }
             video = true;
           }
+          codec = v.config.codec;
           frames.config(v.config, bytes);
         }
       }, abort.signal).catch(() => undefined).finally(ended);
