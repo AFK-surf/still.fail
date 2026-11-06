@@ -26,6 +26,7 @@ pub fn button_node(
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
   let height = button_height()
+  let in_row_end = parent.lent(row_end_node).unwrap_or(false)
   parent.box(fn(v) {
     // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
     // in and how far its room is open; how faded it is)
@@ -86,7 +87,9 @@ pub fn button_node(
     .radius(Is(height / 2.0))
     .ground(By(fn() { looks().0 }))
     .alpha(By(fn() { seen.shown(v) }))
-    .presses(By(live))
+    // A disabled end control still blocks its row, and says it is disabled to a reader.
+    .presses(By(fn() { in_row_end || live() }))
+    .turned_off(By(fn() { in_row_end && !live() }))
     // (the keyboard's focus too while it can be pressed, Enter and Space pressing it: button's c.focusable)
     .focusable(By(live))
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
@@ -96,6 +99,9 @@ pub fn button_node(
       }
     })
     |> ignore
+    if in_row_end && (tone == Ghost || tone == GhostDanger) {
+      v.margin(Is((0.0, 0.0, -button_padx, 0.0))) |> ignore
+    }
     if across {
       // (as wide as what holds it, whichever way that lays out: its own height kept)
       v.width_share(Is(1.0)) |> ignore
