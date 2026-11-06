@@ -671,7 +671,7 @@ struct Node {
   /// left out of its row as it was last laid out (View::drops): laid out nowhere, what it holds with it; none of it drawn,
   /// pressed or read out
   mut out : Bool
-  /// explicit omission's source (laid_nowhere Is/By), read at a cause without running layout; Roomed is layout's
+  /// explicit participation (View::shown), read at a cause without running layout; laid_nowhere is layout's
   mut nowhere_by : (() -> Bool)?
   /// readers of that declaration, told if it is replaced; its source's own signals say when its value changes
   mut nowhere_said : @signals.Signal[Int]?

@@ -90,7 +90,7 @@ fn pane_pages(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
     g.show(@sf.native_on, fn(k) { gate_heading(k, src) })
   })
   v.box(fn(s) {
-    s.grow(Is(1.0)).laid_nowhere(By(gated)) |> ignore
+    s.grow(Is(1.0)).shown(fn() { !gated() }) |> ignore
     pane_stack(s, src, tips)
   })
   |> ignore

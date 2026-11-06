@@ -30,7 +30,7 @@ let nav_page_shown : @view.Lent[() -> Bool] = @view.Lent::new()
 
 ///|
 /// Whether the navigation page holding `v` is shown, read as navigation changes
-/// it, and whether an ancestor explicitly keeps it out (laid_nowhere Is/By). This says nothing about clipping,
+/// it, and whether an ancestor explicitly keeps it out (View::shown). This says nothing about clipping,
 /// room-dependent omissions or painted opacity. Outside a stack, only the explicit omissions apply;
 /// a nested stack also follows the page holding it.
 pub fn page_shown(v : @view.View) -> Bool {
@@ -272,7 +272,7 @@ pub fn[P] nav_view(
                     shown.val
                   },
                   fn(m) {
-                    m.grow(Is(1.0)).laid_nowhere(By(fn() { !nav.shows(k) })) |> ignore
+                    m.grow(Is(1.0)).shown(fn() { nav.shows(k) }) |> ignore
                     nav.made(m, k, e, f, bg, edge)
                   },
                 )

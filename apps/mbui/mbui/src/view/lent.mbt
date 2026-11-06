@@ -198,9 +198,9 @@ pub fn View::shown_nowhere(self : View) -> Bool {
 }
 
 ///|
-/// Whether it or an ancestor is explicitly kept out by laid_nowhere(Is/By), as those declarations say now.
+/// Whether it or an ancestor is explicitly kept out by View::shown, as those declarations say now.
 /// Followed at their causes, without laying out or reading a previous layout's omissions. A retained activity
-/// uses this declaration, not shown_nowhere: a row squeezed out by drops, a Roomed omission, clipping and opacity
+/// uses this declaration, not shown_nowhere: laid_nowhere's sampled omission, a row squeezed out by drops, clipping and opacity
 /// are layout or paint results and do not start or cancel that activity. A node let go is nowhere.
 pub fn View::declared_nowhere(self : View) -> Bool {
   guard self.alive() else { return true }
