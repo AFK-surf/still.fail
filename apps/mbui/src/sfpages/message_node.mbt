@@ -888,8 +888,10 @@ fn quotes_node(
       let quote_picture_most = fn(col_w : Double) {
         if mine {
           Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
-        } else {
+        } else if col_w >= 0.0 {
           Some(@sf.quote_picture_room(col_w))
+        } else {
+          None
         }
       }
       let card = @sf.quote_card_node(
@@ -908,13 +910,20 @@ fn quotes_node(
             let file = fn() { quote_file(q(), files()) }
             // A non-media file keeps the quote's existing placeholder; video uses its own cover's limits.
             let kind = fn(a : Attachment) { if file_kind(a.name) == "video" { "video" } else { "image" } }
+            // (by the column's width where it is the column's card; a copy of the card flown elsewhere (flight's) is held
+            // by no column: as wide as its picture, within what holds it)
+            let held = room.tree.holds(col.id(), room.id())
             let most = fn(col_w : Double) {
               match (file(), quote_picture_most(col_w)) {
                 (Some(a), Some(w)) => media_box_width(a, kind(a), Some(w), false)
+                (Some(a), None) => media_box_width(a, kind(a), None, false)
                 _ => 0.0
               }
             }
-            b.width(Roomed(col, fn(w, _) { Some(most(w)) })).max_width_within(Roomed(col, fn(w, _) { Some(most(w)) }))
+            let most_live = fn() -> @view.Live[Double?] {
+              if held { Roomed(col, fn(w, _) { Some(most(w)) }) } else { By(fn() { Some(most(-1.0)) }) }
+            }
+            b.width(most_live()).max_width_within(most_live())
             .aspect(By(fn() { file().map(fn(a) { media_box_ratio(a, kind(a)) }).unwrap_or(0.0) }))
             |> ignore
           })

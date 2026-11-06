@@ -3515,6 +3515,28 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
 }
 
 ///|
+/// Where it was last placed in the window, as placed_window_now says it, read also as it is let go (what it lets go of
+/// as it goes, View::owns: its place and what held it as they stood): for an action that hands what it showed to
+/// another owner, said once at that moment. Zero where it was never placed.
+pub fn View::placed_window_last(self : View) -> (Double, Double, Double, Double) {
+  guard self.at >= 0 && self.at < self.tree.nodes.length() else { return (0.0, 0.0, 0.0, 0.0) }
+  let n = self.tree.nodes[self.at]
+  guard n.gen == self.gen else { return (0.0, 0.0, 0.0, 0.0) }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut i = self.at
+  while i >= 0 {
+    let m = self.tree.nodes[i]
+    if !m.slot {
+      x = x + m.lx
+      y = y + m.ly
+    }
+    i = m.parent
+  }
+  (x, y, n.lw, n.lh)
+}
+
+///|
 /// What was told worked out and laid out as of the logic's moment, nothing placed by it (each node where it was placed
 /// till a frame or a change's end places things, by this same layout): where a change under way lays things out, read
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in

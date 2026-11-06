@@ -234,7 +234,13 @@ pub fn MoveGroup::position(self : MoveGroup, v : @view.View) -> (Double) -> (Dou
     }
     laid.val
   }
-  v.owns(fn() { placed() |> ignore }) |> ignore
+  v.owns(fn() {
+    let r = v.placed_window_last()
+    if r.2 > 0.0 || r.3 > 0.0 {
+      laid.val = Some(r)
+    }
+  })
+  |> ignore
   let mover = self.movers.iter().find_first(fn(m) { !m.gone && m.v.id() == v.id() })
   fn(at) {
     match (placed(), mover) {
