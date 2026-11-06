@@ -951,18 +951,19 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
 /// A paragraph's images in rows (image_rows'), each by the file it names and its width over its height (`images`, as they
 /// change): 8 apart either way, 8 over and under; as many on a row as fit the width it is laid out at, at least 120
 /// high, then grown alike to fill it, 200 high at most; a row's images one height. Each drawn by its file (`md`'s
-/// `files`) filling its place, kept by the file and which of its showings in the paragraph it is; another file made
-/// again in its place. Rows and widths worked out by its layout from the width it is given, in the same layout: nothing
+/// `files`) filling its place, kept by the file, which of its showings in the paragraph it is and its proportion; another
+/// made again in its place. A row as tall as its tallest image is laid out (each as wide as its share, floored). Rows and widths worked out by its layout from the width it is given, in the same layout: nothing
 /// of its laid size read back.
 fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String, Double)]) -> Unit {
-  // (each by its key, the file and how many of it are before it: one file twice two images)
+  // (each by its key, the file, how many of it are before it and its proportion: one file twice two images; one whose
+  // proportion changed another, drawn by what the file is now)
   let keyed = fn() {
     let all : Array[(String, String, Double)] = []
     let seen : Map[String, Int] = {}
     for named in images() {
       let k = seen.get(named.0).unwrap_or(0)
       seen[named.0] = k + 1
-      all.push((named.0 + "#" + k.to_string(), named.0, named.1))
+      all.push((named.0 + "#" + k.to_string() + "@" + named.1.to_string(), named.0, named.1))
     }
     all
   }
@@ -976,6 +977,8 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       }
       let h = if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (l.width - image_row_gap * (n - 1).to_double()) / ratios) }
       let mut x = 0.0
+      // (the row as tall as its tallest image is drawn: each as wide as its share of `h`, floored)
+      let mut tall = 0.0
       for i in span.0..<span.1 {
         let (k, file, ratio) = all[i]
         let w = (ratio * h).floor()
@@ -985,11 +988,12 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
             None => ()
           }
         })
-        l.measure(cell, w) |> ignore
+        let (_, ch) = l.measure(cell, w)
+        tall = dmax(tall, ch)
         l.place(cell, x, y)
         x = x + w + image_row_gap
       }
-      y = y + h + image_row_gap
+      y = y + tall + image_row_gap
     }
     l.size_to(y)
   })
