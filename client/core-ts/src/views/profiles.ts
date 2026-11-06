@@ -92,7 +92,7 @@ export function workspaceProfiles(stations: J[]): J {
     const owns = (m: J) => m.role !== "user";
     const troubled = (i: number) => isObject(list[i]![1].trouble);
     const first = (ok: (m: J, i: number) => boolean) => members.findIndex(ok);
-    const at = [first((m, i) => owns(m) && m.online && !troubled(i)), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
+    const at = [first((m, i) => owns(m) && m.usable && !troubled(i)), first((m) => owns(m) && m.usable), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
     const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription" || p.access?.login === true;
     const servesHere = list.map(([station, profile]) => profileServes(profile, String(station.station).split("/")[0] ?? "", station.joined === true));
@@ -162,7 +162,8 @@ export function workspaceProfiles(stations: J[]): J {
     const host = share ? String(share.host) : String(s.id);
     // Where it can be used: every station that has it, signed in or borrowing (how each has it is the account's page's,
     // who may borrow its sharing's).
-    const where = t("core-views.profiles.usableOn", { stations: stationsOf(members).join(t("core-views.list_separator")) });
+    const availableAt = stationsOf(members.filter((m) => m.enabled));
+    const where = availableAt.length > 0 ? t("core-views.profiles.usableOn", { stations: availableAt.join(t("core-views.list_separator")) }) : "";
     const kind = group(p);
     const usable = members.some((m) => m.usable);
     items.push({
@@ -244,6 +245,7 @@ function profileAvailability(s: J, p: J, byId: Map<string, J>): { usable: boolea
 /// `on`: of an account signed in on several stations, the trouble of those of its copies that have one, said with
 /// where (the row's own copy may be one that works).
 function stateOf(usable: boolean, hostName: string, p: J, on: { stations: string[]; p: J } | null): { state: J; look: boolean } {
+  if (p.enabled === false && !usable) return { state: { text: t("core-views.present.profile.disabled"), tone: "neutral" }, look: false };
   if (!usable) return { state: { text: t("core-views.profiles.away", { station: hostName }), tone: "red" }, look: true };
   if (on !== null) {
     const { state, look } = stateOf(true, hostName, on.p, null);
@@ -269,7 +271,8 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
   const subscription = p.access?.kind === "subscription";
   const online = s.online === true;
   // A borrowed subscription: as good as its host is reachable (the cloud's word, and the borrower's).
-  const { usable } = profileAvailability(s, p, byId);
+  const { usable: reachable } = profileAvailability(s, p, byId);
+  const usable = reachable && p.enabled !== false;
   const users: string[] = role === "host" && Array.isArray(share.users) ? share.users.map((u: string) => name(u)) : [];
   let about: string;
   if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });
@@ -281,6 +284,7 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
     stationName: String(s.name),
     title: String(s.name),
     online,
+    enabled: p.enabled !== false,
     profileId: String(p.id),
     profileName: String(p.name ?? ""),
     role,

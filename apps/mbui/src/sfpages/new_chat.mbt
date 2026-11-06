@@ -827,13 +827,14 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
   let blocked = text(v, "blocked")
   let title = match blocked {
     "profile" => @sf.t("web-main.newChat.addProfileFor", args=[("name", name)])
+    "disabled" => @sf.t("web-main.newChat.profilesDisabled")
     "shared" => @sf.t("web-main.newChat.notShared", args=[("name", name)])
     _ => @sf.t("web-main.newChat.pickModels")
   }
   let lead = match blocked {
     "profile" =>
       @sf.t("web-pages.profiles.lead", args=[("subscription", @sf.t("web-pages.profiles.leadSubscription"))])
-    "shared" => text(v, "problem")
+    "shared" | "disabled" => text(v, "problem")
     _ => @sf.t("web-main.newChat.noModelsLead", args=[("name", name)])
   }
   new_column(c, fn(_) {

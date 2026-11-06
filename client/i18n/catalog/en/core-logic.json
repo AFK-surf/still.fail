@@ -56,6 +56,7 @@
   "core-logic.choose.force.moves_off": "Account “{account}” can't run {model}; will switch to one that can",
   "core-logic.choose.pick_model": "Choose a model",
   "core-logic.choose.problem.borrow_only": "{name} has no profile of its own; pick a model from another station to borrow its account",
+  "core-logic.choose.problem.disabled_profiles": "The profiles available on {name} are disabled. Enable one on the Profiles page.",
   "core-logic.choose.problem.loading": "Loading {name}'s Profiles",
   "core-logic.choose.problem.no_models": "No Profile on this station lists models yet. Use the button below to view profiles.",
   "core-logic.choose.problem.not_shared": "{name} belongs to {home}, and none of its Profiles is available to this workspace yet. Turn on “Also for {workspace}” on a Profile",

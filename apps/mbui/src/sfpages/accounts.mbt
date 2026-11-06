@@ -191,7 +191,7 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
       c.box(style=pf_state, fn() {
         c.text(join([text(p, "checkLine"), when], " · "), style=pf_check_words) |> ignore
         let checking = is_doing(core, ["profile.check"], on)
-        if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking) {
+        if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking || (has(p, "enabled") && !flag(p, "enabled"))) {
           @settings.act(core, @sf.t("web-pages.profiles.recheck"), "profile.check", obj([("station", str(address)), ("id", str(id))]))
           // (its allowance read again with it: how much is left, as of now)
           let q = field(p, "quota")
@@ -284,6 +284,9 @@ fn profile_rename(core : Core, address : String, p : Json?) -> Unit {
 fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Json?) -> Unit {
   let id = text(p, "id")
   let machine = flag(p, "machine")
+  let access = field(p, "access")
+  let keyed = ["api-provider", "anthropic-api", "opencode-go"].contains(text(access, "kind")) && !flag(access, "login")
+  let can_disable = keyed && has(p, "enabled")
   let key = "profile-more/" + address + "/" + id
   if !@sf.icon_action(c, "more", key, @sf.t("common.more")) {
     return
@@ -314,6 +317,26 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
   let items : Array[@sf.MenuItem?] = []
   if !machine {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
+  }
+  if can_disable {
+    let enabled = flag(p, "enabled")
+    let label = if enabled { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.connect.enable") }
+    let change = fn() {
+      @settings.act(
+        core,
+        label,
+        "profile.put",
+        obj([("station", str(address)), ("id", str(id)), ("input", obj([("enabled", Json::boolean(!enabled))]))]),
+        done=if enabled { @sf.t("web-pages.profiles.disabled") } else { @sf.t("web-pages.connect.enabled") },
+      )
+    }
+    items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
+      if enabled {
+        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+      } else {
+        change()
+      }
+    })))
   }
   items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
   @sf.menu(items, from=Of(c.id(key)), along=End)
@@ -631,11 +654,12 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
   let ago = text(field(field(quota, "time"), "checkedAt"), "ago")
   let windows = items(quota, "windows")
   let credits = text(quota, "creditsText")
+  let stopped = has(p, "enabled") && !flag(p, "enabled")
   @sf.section(
     c,
     @sf.t("web-pages.profiles.quota"),
     actions=fn() {
-      if @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing) {
+      if !stopped && @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing) {
         @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
       }
     },
@@ -865,7 +889,7 @@ fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : J
   @sf.section(
     c,
     @sf.t("web-pages.profiles.models"),
-    note=if all.length() > 0 { @sf.t("web-pages.profiles.modelsAbout") } else { @sf.t("web-pages.profiles.modelsAboutNone") },
+    note=if has(p, "enabled") && !flag(p, "enabled") { "" } else if all.length() > 0 { @sf.t("web-pages.profiles.modelsAbout") } else { @sf.t("web-pages.profiles.modelsAboutNone") },
     fn() {
       @sf.group(c, fn() {
         let row = "profile-models/" + key

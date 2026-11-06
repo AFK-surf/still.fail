@@ -137,6 +137,17 @@ async function rig(o: Setup = {}) {
   return { data, path, fake, config, store, hub: hub!, slack, claude, ask, get, saved, overview: () => overview(owner), close };
 }
 
+test("a disabled profile cannot be newly bound to a connect, but other settings of an existing binding can be edited", async () => {
+  const t = await rig();
+  try {
+    assert.equal((await t.ask("PUT", "/connects/ds", { bind: { profile: "cc" } }))[0], 200);
+    t.config.update((raw) => { raw.profiles.find((p: Json) => p.id === "cc").enabled = false; });
+    assert.equal((await t.ask("PUT", "/connects/ds", { requireMention: false }))[0], 200);
+    assert.equal((await t.ask("PUT", "/connects/ds", { bind: { profile: "cc" } }))[0], 400);
+    assert.equal((await t.ask("PUT", "/connects/new", { bind: { runtime: "claude", profile: "cc" } }))[0], 400);
+  } finally { await t.close(); }
+});
+
 /// Looks every 20 ms until `f` holds: what the stand-in's sockets do has no event here. No deadline (it comes, however
 /// slow the machine, or the test hangs).
 async function until(_what: string, f: () => boolean) {

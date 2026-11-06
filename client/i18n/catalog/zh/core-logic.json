@@ -56,6 +56,7 @@
   "core-logic.choose.force.moves_off": "当前账号「{account}」无法运行 {model}，将自动切换到能运行它的账号",
   "core-logic.choose.pick_model": "选择模型",
   "core-logic.choose.problem.borrow_only": "{name} 没有自己的 Profile，可以在模型里选择其他 station 的账号借用",
+  "core-logic.choose.problem.disabled_profiles": "{name} 的可用 Profile 均已停用，请在 Profile 页面重新启用。",
   "core-logic.choose.problem.loading": "正在读取 {name} 的 Profile",
   "core-logic.choose.problem.no_models": "此 station 的 Profile 均未列出模型。点击下方按钮查看 Profile。",
   "core-logic.choose.problem.not_shared": "{name} 属于 {home}，其 Profile 尚未对此 workspace 开放：在 Profile 页开启「同时用于 {workspace}」",

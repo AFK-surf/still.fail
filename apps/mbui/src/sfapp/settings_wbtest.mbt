@@ -934,6 +934,34 @@ test "a profile in trouble: what is wrong a pill in its head before what its che
 }
 
 ///|
+test "an API key can be disabled and enabled again from its page" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("settings")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("profile:ws1/st1#k2")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let log = t.drive("tap icon:more\nuntil 停用\ntap =停用\nuntil 停用「备用 key」？\ntap =停用\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  t.draw()
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { !flag(field(Some(c.params), "input"), "enabled") }))
+  assert_true(t.find("已停用") is Some(_))
+  assert_true(t.find("刷新") is None, msg="a stopped profile must not show an apparently active quota refresh")
+  assert_true(t.find("列出的模型都可在新对话和连接中选择") is None, msg="a stopped profile cannot offer its models for selection")
+  let again = t.drive("tap icon:more\nuntil 启用\ntap =启用\n")
+  assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { flag(field(Some(c.params), "input"), "enabled") }))
+}
+
+///|
 test "a subscription's page signed in: 重新登录 and the way by hand, rows of its account" {
   let t = profile_whole("profile:ws1/st1#cc")
   let (_, by) = t.find("重新登录").unwrap()

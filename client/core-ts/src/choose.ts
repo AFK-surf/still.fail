@@ -15,6 +15,7 @@ import * as model from "./shapes/model.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
 import { borrowable, effortDefault, models, quotaLine, servingIn, sourced } from "./views/models.ts";
+import { profileServes } from "./views/profile-scope.ts";
 import { pendingKeyMade } from "./views/local.ts";
 import { ofAddress } from "./workspace.ts";
 
@@ -307,7 +308,8 @@ export class Choose implements Owner {
     // offers them (borrowed before the chat is made) rather than only adding a profile.
     const lends = overview !== null && profiles.length === 0 && !joined
       && borrowable(this.#env.store.get({ topic: "stations", scope }), typeof station.station === "string" ? station.station : "", [], null, this.#env.now()).length > 0;
-    view.blocked = overview !== null && profiles.length === 0 ? (joined && all.length > 0 ? "shared" : lends ? null : "profile") : overview !== null && options.length === 0 ? "models" : null;
+    const disabled = all.some((p) => get(p, "enabled") === false && profileServes(p, scope, joined));
+    view.blocked = overview !== null && profiles.length === 0 ? (lends ? null : disabled ? "disabled" : joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
     const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name")
       ?? this.#env.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === scope)?.name;
@@ -316,6 +318,7 @@ export class Choose implements Owner {
       : t("core-logic.choose.problem.not_shared_elsewhere", { name, workspace: typeof here === "string" ? here : "" });
     view.problem = overview === null ? t("core-logic.choose.problem.loading", { name })
       : lends ? t("core-logic.choose.problem.borrow_only", { name })
+      : view.blocked === "disabled" ? t("core-logic.choose.problem.disabled_profiles", { name })
       : view.blocked === "shared" ? notShared()
       : profiles.length > 0 && options.length === 0 ? t("core-logic.choose.problem.no_models") : null;
     if (r.entry !== null && isObject(r.entry.spent)) {

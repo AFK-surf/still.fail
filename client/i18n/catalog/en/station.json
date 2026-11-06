@@ -306,6 +306,7 @@
   "station.preview.socketRefused": "localhost:{port} rejected this WebSocket ({status})",
   "station.profile.addressNeeded": "Enter a valid endpoint URL (starting with http or https)",
   "station.profile.cannotRun": "“{profile}” can't run {runtime}",
+  "station.profile.disabled": "“{profile}” is disabled; enable it first",
   "station.profile.chatgptSubscription": "ChatGPT subscription",
   "station.profile.grokSubscription": "SuperGrok subscription",
   "station.profile.changedRecheck": "The profile changed. Check it again.",

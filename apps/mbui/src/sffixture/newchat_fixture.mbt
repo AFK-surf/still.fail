@@ -590,14 +590,15 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "frequent": [],
     }
   }
-  // its station with no profile open here: what to add first (newchat-noprofile)
-  if f.mode == "newchat-noprofile" {
+  // Its station has no profile, or its only available profiles are disabled.
+  if f.mode == "newchat-noprofile" || f.mode == "newchat-disabled" {
     return {
       "kept": Json::string(n.station),
       "stations": [fix_station("st1"), fix_station("st2")],
       "any": true,
       "station": fix_station(n.station),
-      "blocked": "profile",
+      "blocked": Json::string(if f.mode == "newchat-disabled" { "disabled" } else { "profile" }),
+      "problem": Json::string(if f.mode == "newchat-disabled" { "Willow 的可用 Profile 均已停用，请在 Profile 页面重新启用。" } else { "" }),
       "model": Json::null(),
       "runtime": "",
       "effort": "",

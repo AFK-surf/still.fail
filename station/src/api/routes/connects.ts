@@ -128,6 +128,7 @@ export function connectEdits(deps: ConnectEditDeps) {
         // (as the hub has it: running what its check found too)
         const p = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.find((p) => p.id === profile);
         if (!p || !p.runtimes.includes(runtime)) throw new Error(tr(lang, "station.profile.cannotRun", { profile, runtime }));
+        if (p.enabled === false && (oldBind === null || get(bind, "profile") !== undefined)) throw new Error(tr(lang, "station.profile.disabled", { profile: p.name }));
         if (model !== null && !runs(p, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: p.name, model }));
       }
       if (effort !== null && ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined)) {

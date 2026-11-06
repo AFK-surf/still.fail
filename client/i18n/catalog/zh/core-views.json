@@ -258,6 +258,7 @@
   "core-views.present.processes.none": "没有运行中的 agent 进程",
   "core-views.present.processes.running": "{n} 个 agent 进程 {size}",
   "core-views.present.profile.blocked": "已停用",
+  "core-views.present.profile.disabled": "已停用",
   "core-views.present.profile.decision_pending": "正在识别决策模型",
   "core-views.present.profile.decision.no_probabilities": "当前登录未提供决策概率接口",
   "core-views.present.profile.decision.none_verified": "尚未验证可用的决策模型",
