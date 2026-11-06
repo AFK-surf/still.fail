@@ -456,19 +456,31 @@ fn[T] page_blocks(
   // original inset as it closes, while its successor gets the inset of its new place.
   let placed = fn() { items().mapi(fn(i, item) { (item, i == 0) }) }
   let (read, rooms, lend) = if animated {
-    let before : Ref[Array[String]] = Ref([])
-    let watched = Ref(false)
-    let given = fn() {
+    // Keep the business keys with their item snapshot. An independent version can change without reading `items`
+    // again, so continuity belongs to each list reaction, not to a side effect of reading the items.
+    let current : @signals.Computed[(Array[(T, Bool)], Array[String])] = @signals.computed(fn(was) {
       let now = placed()
       let present = now.filter(fn(it) { continuity(it.0) }).map(fn(it) { key(it.0) })
-      let prior = Set::from_array(before.val)
-      watched.val = present.iter().any(fn(k) { prior.contains(k) })
-      before.val = present
-      now
+      let present = match was {
+        Some((_, prior)) if prior == present => prior
+        _ => present
+      }
+      (now, present)
+    })
+    let before : Ref[Array[String]] = Ref([])
+    let watched = fn() {
+      let present = current.get().1
+      if physical_equal(present, before.val) {
+        !present.is_empty()
+      } else {
+        let prior = Set::from_array(before.val)
+        before.val = present
+        present.iter().any(fn(k) { prior.contains(k) })
+      }
     }
     let sizes : @ui.ListRows[(T, Bool)] = @ui.ListRows::new()
-    let rows = sizes.in_node(v, given, fn(it) { key(it.0) }, fn(it) { version(it.0) },
-      watched=fn() { watched.val }, moves=fn(_) { moves })
+    let rows = sizes.in_node(v, fn() { current.get().0 }, fn(it) { key(it.0) }, fn(it) { version(it.0) },
+      watched~, moves=fn(_) { moves })
     (rows.read, Some(rows.room_now), rows.lend)
   } else {
     let current = @signals.computed(fn(_) {
