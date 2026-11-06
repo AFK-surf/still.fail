@@ -81,3 +81,32 @@ test "drawn_now reads what is drawn by the drawing's moment as of the event's mo
   assert_eq(width_past_45(0.0), (Some(20.0), Some(40.0)))
   assert_eq(width_past_45(50.0), width_past_45(0.0))
 }
+
+///|
+/// How often what shows once the drawing is past 45 is made, a frame sampled for 50 with the host at 0, then an event at
+/// 40 asking where it is drawn now.
+fn made_past_45() -> Int {
+  let made = Ref(0)
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root.box(fn(v) {
+      v.row(Is(true)).height(Is(Some(40.0))) |> ignore
+      v.show(fn() { v.drawn_past(45.0) }, fn(c) {
+        made.val += 1
+        c.width(Is(Some(30.0))).height(Is(Some(40.0))) |> ignore
+      })
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.event(40.0, fn() { page.val.unwrap().drawn_now() |> ignore })
+  page.val.unwrap().drawn_now() |> ignore
+  made.val
+}
+
+///|
+test "drawn_now makes and lets go of nothing a structure shows by the drawing's moment: it stands as drawn" {
+  assert_eq(made_past_45(), 1)
+}
