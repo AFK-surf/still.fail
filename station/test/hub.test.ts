@@ -2360,6 +2360,28 @@ test("a deleted profile's sessions go on on another, and stop when no other can 
   await r.close();
 });
 
+test("a disabled profile cannot run a new or pinned session, and its existing session moves", async () => {
+  const r = new Rig();
+  try {
+    const m = say("<@UBOT> work");
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    r.edit(withProfile("cc2", "another", ["opus"]));
+    r.hub.store.setSessionProfile(key, "cc", true);
+    r.edit((raw) => { raw.profiles.find((p: any) => p.id === "cc").enabled = false; });
+    await r.hub.profileGone("cc");
+    assert.deepEqual([r.session(key).profile, r.session(key).profilePinned], ["cc2", false]);
+    assert.ok(!r.hub.profilesIn(null).some((p) => p.id === "cc"));
+    assert.throws(() => r.hub.accounts.change(key, { profile: "cc" }), /停用/);
+    assert.throws(() => newSession(r.hub, { ...chat(), model: "opus", profile: "cc" }), /停用/);
+    const [next] = newSession(r.hub, { ...chat(), model: "opus" });
+    assert.equal(r.session(next).profile, "cc2");
+    r.edit((raw) => { delete raw.profiles.find((p: any) => p.id === "cc").enabled; });
+    assert.ok(r.hub.profilesIn(null).some((p) => p.id === "cc"), "enabled again without deleting its settings");
+  } finally { await r.close(); }
+});
+
 test("a connect or a new chat can keep its sessions to one profile; otherwise the pool picks", async () => {
   const r = new Rig();
   r.edit((raw) => {

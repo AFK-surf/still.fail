@@ -918,6 +918,7 @@
   "web-main.newChat.noStation": "没有在线的 station。可在设置中添加，或启动已添加的 station。",
   "web-main.newChat.notShared": "{name} 尚无可用于此 workspace 的 Profile",
   "web-main.newChat.pickModels": "查看 Profile 的模型",
+  "web-main.newChat.profilesDisabled": "Profile 已停用",
   "web-main.newChat.placeholder": "做任何事",
   "web-main.newChat.sub": "描述要做的事。将在 {name} 上使用所选模型开启新会话。",
   "web-main.newChat.subChosen": "描述要做的事。将在所选 station 上使用所选模型开启新会话。",

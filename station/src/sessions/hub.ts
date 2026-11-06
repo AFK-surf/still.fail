@@ -1129,7 +1129,7 @@ export class Hub {
   /// The profiles sessions of workspace `ws` may run on (docs/multi-workspace.md): every one for the home workspace's.
   profilesIn(ws: string | null): Profile[] {
     const home = this.workspaces()[0] ?? null;
-    return this.config().profiles.filter((p) => allowedIn(p, ws, home));
+    return this.config().profiles.filter((p) => p.enabled !== false && allowedIn(p, ws, home));
   }
 
   /// Whether a session's chat is in `workspace` (a viewer's): what a member of one workspace may see and use.
@@ -1144,7 +1144,7 @@ export class Hub {
     const config = this.config();
     const connect = connectOf(config, connectId);
     const own: ModelChoice = { runtime: connect.bind.runtime, model: connect.bind.model ?? null };
-    const profiles = config.profiles.filter((p) => allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
+    const profiles = config.profiles.filter((p) => p.enabled !== false && allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
     const same = (c: ModelChoice) => c.runtime === own.runtime && (c.model === null || own.model === null ? c.model === own.model : sameModel(c.model, own.model));
     return [own, ...modelsRun(profiles, null).filter((c) => !same(c))];
   }
@@ -1158,7 +1158,7 @@ export class Hub {
     const runtime = chosen === null ? connect.bind.runtime : runtimeNamed(chosen.runtime);
     if (runtime === null) throw new Error(`unknown runtime ${chosen?.runtime}`);
     const model = chosen === null ? (connect.bind.model ?? null) : chosen.model;
-    const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
+    const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
     if (fits.length === 0 && chosen !== null) throw new Error(tr(stationLang(), "station.session.noProfileForModel", { model: model ?? runtimeTitle(runtime), runtime: runtimeTitle(runtime) }));
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
     const kept = chosen === null && connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;

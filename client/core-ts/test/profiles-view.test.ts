@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import { profile as shownProfile } from "../src/present.ts";
-import { runtimes } from "../src/views/models.ts";
+import { choices, models, runtimes, runnableOn, servingIn } from "../src/views/models.ts";
 import { stationProfileSummary, workspaceProfiles } from "../src/views/profiles.ts";
 
 holdLanguage();
@@ -13,6 +13,21 @@ const A = "a".repeat(64);
 const B = "b".repeat(64);
 const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id, access: { kind: "subscription" }, checkTone: "green", ...extra });
 const station = (id: string, name: string, online: boolean, profiles: unknown[] | null) => ({ id, station: `w/${id}`, name, online, overview: profiles === null ? undefined : { sharing: true, profiles } });
+
+test("a disabled key remains in the account list but is absent from model and account choices", () => {
+  const off = shownProfile(profile("off", { access: { kind: "anthropic-api", key: "sk-1…2345" }, enabled: false, runtimes: ["claude"], models: ["opus", "sonnet"], check: { state: "ok", detail: "Works" } }));
+  const on = shownProfile(profile("on", { runtimes: ["claude"], models: ["sonnet"], check: { state: "ok", detail: "Works" } }));
+  const overview = { profiles: [off, on] };
+  const row = workspaceProfiles([station(A, "office", true, [off])]).items[0];
+  assert.deepEqual([row.state.text, row.look, row.where, row.usable], ["已停用", false, "", false]);
+  assert.deepEqual(runtimes(overview), [{ runtime: "claude", models: ["sonnet"] }]);
+  assert.deepEqual(models(overview, 0).map((m: any) => m.model), ["sonnet"]);
+  assert.deepEqual(choices(overview, { runtime: "claude" }, 0).map((m: any) => m.model), ["sonnet"]);
+  assert.deepEqual(runnableOn(overview, { runtime: "claude", model: "sonnet" }, 0).map((p: any) => p.id), ["on"]);
+  assert.deepEqual(servingIn(overview, "w", false).profiles.map((p: any) => p.id), ["on"]);
+  assert.equal(off.trouble, null);
+  assert.equal(off.checkLine, "");
+});
 
 test("a station's profile count uses the profile list's needs-a-look rule", () => {
   const shown = (id: string, extra: Record<string, unknown>) => shownProfile(profile(id, { runtime: "claude", ...extra }));

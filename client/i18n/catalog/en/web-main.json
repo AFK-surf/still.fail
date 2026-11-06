@@ -957,6 +957,7 @@
   "web-main.newChat.noStation": "No station online. Add one in Settings, or start one you've added.",
   "web-main.newChat.notShared": "{name} has no profile for this workspace yet",
   "web-main.newChat.pickModels": "View the profiles' models",
+  "web-main.newChat.profilesDisabled": "Profiles are disabled",
   "web-main.newChat.placeholder": "Do anything",
   "web-main.newChat.sub": "Describe the task. A new session starts on {name} with the chosen model.",
   "web-main.newChat.subChosen": "Describe the task. A new session starts on the chosen station with the chosen model.",
