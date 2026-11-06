@@ -140,7 +140,13 @@ test "group row node: the departing last row and its replacement each keep their
       let rows = @ui.ListRows::new().in_node(list, fn() { items.get() }, fn(x) { x.0 }, fn(_) { "" })
       list.height(Is(Some(200.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, est=50.0,
         rooms=rows.room_now, fn(slot, k) {
-          let item = fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).unwrap() }
+          let now = fn() {
+            let (values, keys) = (rows.read)()
+            keys.search_by(fn(key) { key == k }).map(fn(i) { values[i] })
+          }
+          // The last value remains available until the node is removed, after its key leaves the list's snapshot.
+          let last = Ref(@signals.untracked(now).unwrap())
+          let item = fn() { match now() { Some(value) => { last.val = value; value }; None => last.val } }
           group_row_node(slot, fn() { item().1 }, fn() { item().2 }, fn(body) {
             cards[k] = body.parent().unwrap().parent().unwrap().kids()[0]
             body.height(Is(Some(40.0))).owns(fn() { cards.remove(k) }) |> ignore
@@ -187,7 +193,12 @@ fn group_row_motion_case(which : Int, coming : Bool) -> Unit raise {
       let rows = @ui.ListRows::new().in_node(list, fn() { items.get() }, fn(x) { x.0 }, fn(_) { "" })
       list.height(Is(Some(240.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, est=50.0,
         rooms=rows.room_now, room_transforms=false, fn(row, k) {
-          let item = fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).unwrap() }
+          let now = fn() {
+            let (values, keys) = (rows.read)()
+            keys.search_by(fn(key) { key == k }).map(fn(i) { values[i] })
+          }
+          let last = Ref(@signals.untracked(now).unwrap())
+          let item = fn() { match now() { Some(value) => { last.val = value; value }; None => last.val } }
           slots[k] = row.parent().unwrap()
           group_row_node(row, fn() { item().1 }, fn() { item().2 }, fn(body) {
             cards[k] = body.parent().unwrap().parent().unwrap().kids()[0]
