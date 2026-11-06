@@ -57,18 +57,19 @@ pub fn list_row_node(
     // the line reaching into the row's room for it where it must)
     text.box(fn(h) {
       style_node(h, fn() { theme().chat_list.head })
-      h
-      .margin(By(fn() {
+      let reach = fn() {
         let l = theme().chat_list
-        let reach = if at == Side && end_slot > 0.0 {
+        if at == Side && end_slot > 0.0 {
           let last = if corner_end() > 0.0 { corner_end() } else { l.face_d }
-          dmax(0.0, l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0))
+          l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0)
         } else {
           0.0
         }
-        (0.0, 0.0, -reach, 0.0)
-      }))
-      .padding(By(fn() { (0.0, 0.0, end_room(), 0.0) }))
+      }
+      // (reaching out past the row's padding where the corner's column is nearer its end, in from it where farther)
+      h
+      .margin(By(fn() { (0.0, 0.0, -dmax(0.0, reach()), 0.0) }))
+      .padding(By(fn() { (0.0, 0.0, end_room() + dmax(0.0, -reach()), 0.0) }))
       |> ignore
       head(h)
     })

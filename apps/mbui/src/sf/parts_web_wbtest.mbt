@@ -373,3 +373,54 @@ test "a list's row in a side column: what stands at its first line's end in one 
   assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
   assert_true((end - corner).abs() < 0.5, msg="the first line's end at \{end}, the corner's at \{corner}")
 }
+
+///|
+test "a list's row as a node in a side column: what stands at its first line's end in one column with what stands in its foot's end corner" {
+  // (a mouse's and a finger's sizes; in the corner last an agent's mark, 16 wide, or a face)
+  for platform in [0, 2] {
+    for last in [16.0, 0.0] {
+      let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=800.0, h=600.0, platform~, corners_held=false)
+      @ui.set_view_app(fn(root) {
+        @ui.set_tree_theme(ui_theme_now)
+        root.box(fn(holder) {
+          holder.width(Is(Some(280.0))) |> ignore
+          holder.box(fn(row) {
+            let square = fn(s : @view.View, color : Int64, side : Double) {
+              s.width(Is(Some(side))).height(Is(Some(side))).ground(Is(color)) |> ignore
+            }
+            list_row_node(
+              row,
+              Side,
+              high=true,
+              end_slot=16.0,
+              corner=fn(k) { k.box(fn(s) { square(s, 0x00FF00FFL, if last > 0.0 { last } else { theme().chat_list.face_d }) }) |> ignore },
+              corner_w=fn() { 16.0 },
+              corner_end=fn() { last },
+              fn(h) {
+                h.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+                h.box(fn(s) { square(s, 0xFF0000FFL, 16.0) }) |> ignore
+              },
+              fn(_) {  },
+            )
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      t.draw()
+      let at = fn(color : Int64) {
+        match t.drawn_rects().search_by(fn(r) { r.4 == color }) {
+          Some(i) => {
+            let r = t.drawn_rects()[i]
+            r.0 + r.2 / 2.0
+          }
+          None => -1.0
+        }
+      }
+      let end = at(0xFF0000FFL)
+      let corner = at(0x00FF00FFL)
+      assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
+      assert_true((end - corner).abs() < 0.5, msg="platform \{platform}, last \{last}: the first line's end at \{end}, the corner's at \{corner}")
+    }
+  }
+}
