@@ -2089,13 +2089,9 @@ fn Ctx::scene_emitted(
     // (wholly outside what it is drawn in and the window where it is put: left out, as the walk leaves it out)
     match scene.layers.get(cid) {
       Some(c) if along =>
-        if self.scene_layer_put_out(c, moved) {
-          // (moved with what holds it all the same: where it is put, and what it holds, kept so)
-          scene_moved_out(c, moved)
-          scene_left_out(c, None, self.ninst, self.segs.length() / 4)
-        } else {
-          self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
-        }
+        // (moved with what holds it, never left out by the clip it began in as drawn: that may have moved with it; what
+        // holds it is left out or not as a whole where it is put)
+        self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
       // (as kept where nothing of it changed, where it was put; moved in it, put where it is now, its block moved by
       // its reference (scene_moved_by); else drawn anew where its reference is, the rest of what holds it as kept:
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
