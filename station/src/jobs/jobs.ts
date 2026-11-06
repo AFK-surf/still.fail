@@ -931,7 +931,8 @@ export class Jobs {
   /// The record of a job's group an earlier station started (not one this station follows).
   private leftBehind(pgid: number): ProcessRow | null {
     for (const r of this.running.values()) if (r.pgid === pgid) return null;
-    return this.store.listProcesses().find((p) => p.runtime === "job" && p.pgid === pgid) ?? null;
+    const entry = this.store.processByGroup(pgid);
+    return entry?.runtime === "job" ? entry : null;
   }
 
   /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it), if it was at work within

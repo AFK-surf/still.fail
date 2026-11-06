@@ -28,7 +28,9 @@ import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlocksScan } from "../src/store/usage-summary-blocks.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
-import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_JOB_SESSIONS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { activeJobUpgradeStep, ACTIVE_JOB_CONFLICT, ACTIVE_JOB_END, ACTIVE_JOB_FIRST, ACTIVE_JOB_NEXT, ACTIVE_JOB_NULL_ID,
+  ACTIVE_REMOTE_FIRST, ACTIVE_REMOTE_NEXT, REMOTE_QUEUE_PREPARED } from "../src/store/active-jobs-upgrade.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import { RECOVER_AWAKE_WAITS, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
 import { AWAKE_BACKFILL_FIRST, AWAKE_BACKFILL_NEXT, AWAKE_WAIT_STATUS, reconcileAwakeWaits, syncAwakeWait } from "../src/store/awake-waits.ts";
@@ -59,6 +61,11 @@ import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PE
 import { REBOX_BACKFILL_FIRST, REBOX_BACKFILL_NEXT, REBOX_READY } from "../src/vault/rebox-index.ts";
 import { CARRIED_SAVE_PENDING, Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
+import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, RUNNER_TAKEUP_NAMES, RUNNER_TAKEUP_SESSIONS, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
+  SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
+import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_ARGUMENTS, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_INITIAL, SESSION_DIR_LIVE_FEW, SESSION_DIR_LIVE_MANY, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
+import { installChatShareIndex, SHARE_DIRTY, SHARE_DUE, SHARE_FIRST, SHARE_LAPSED_WORKSPACE, SHARE_LIVE, SHARE_NEXT, SHARE_NEXT_TIME } from "../src/store/chat-share-index.ts";
+import { installProcessJobs, PROCESS_JOBS, PROCESS_JOB_CONFLICT, PROCESS_JOB_END, PROCESS_JOB_FIRST, PROCESS_JOB_NEXT, PROCESS_JOB_NULL_ID } from "../src/store/process-jobs.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -87,6 +94,10 @@ const memory = () => open(":memory:");
 
 function assertSessionJobPlans() {
   const db = memory().db;
+  const work = (db.prepare(`EXPLAIN QUERY PLAN ${RUNNING_JOB_SESSIONS}`).all('["a"]') as { detail: string }[]).map((r) => r.detail).join(" | ");
+  assert.match(work, /SEARCH active_watch_jobs USING COVERING INDEX active_watch_jobs_session .*session=\?/);
+  assert.match(work, /SEARCH active_other_jobs USING PRIMARY KEY .*session=\?/);
+  assert.doesNotMatch(work, /SCAN (active_watch_jobs|active_other_jobs|jobs)\b/);
   const up = (db.prepare(`EXPLAIN QUERY PLAN ${read.PREPARED_UP_JOBS_OF}`).all("a") as { detail: string }[]).map((r) => r.detail);
   const upDetail = up.join(" | ");
   assert.ok(up.some((s) => s.startsWith("SEARCH i USING PRIMARY KEY") && s.includes("session=?")), upDetail);
@@ -98,6 +109,113 @@ function assertSessionJobPlans() {
   assert.ok(watches.some((s) => /^SCAN w\b/.test(s)), watchDetail); // Only running watches are in this lookup.
   assert.ok(watches.some((s) => s.startsWith("SEARCH j ") && s.includes("id=?")), watchDetail);
   assert.ok(watches.every((s) => !/^SCAN (j|jobs)\b/.test(s)), watchDetail);
+}
+
+function assertProcessJobPlans() {
+  const db = memory().db;
+  installProcessJobs(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  const groups = plan(PROCESS_JOBS);
+  assert.match(groups, /SCAN p\b/); // This table contains only running process groups.
+  assert.match(groups, /SEARCH j USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  assert.doesNotMatch(groups, /SCAN (j|jobs)\b/);
+  assert.match(plan(PROCESS_JOB_END), /SEARCH jobs USING COVERING INDEX jobs_state .*state=\?/);
+  assert.match(plan(PROCESS_JOB_FIRST, "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid</);
+  assert.match(plan(PROCESS_JOB_NEXT, "1", "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid>/);
+  assert.match(plan(PROCESS_JOB_NULL_ID), /SEARCH jobs USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  const conflicts = plan(PROCESS_JOB_CONFLICT, "a", "token", 1);
+  assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
+  assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
+  assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
+}
+
+function assertActiveJobUpgradePlans() {
+  const db = memory().db;
+  db.exec("DROP INDEX active_other_remote_jobs");
+  activeJobUpgradeStep(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  assert.match(plan(ACTIVE_JOB_END), /SEARCH jobs USING COVERING INDEX jobs_state .*state=\?/);
+  assert.match(plan(ACTIVE_JOB_FIRST, "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid</);
+  assert.match(plan(ACTIVE_JOB_NEXT, "1", "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid>/);
+  assert.match(plan(ACTIVE_JOB_NULL_ID), /SEARCH jobs USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  const conflicts = plan(ACTIVE_JOB_CONFLICT, "a", "token", 1);
+  assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
+  assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
+  assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
+  assert.match(plan(ACTIVE_REMOTE_FIRST, "s", "j", 64), /SEARCH active_other_jobs USING PRIMARY KEY/);
+  assert.match(plan(ACTIVE_REMOTE_NEXT, "a", "j", "z", "j", 64), /SEARCH active_other_jobs USING PRIMARY KEY/);
+  const remote = plan(REMOTE_QUEUE_PREPARED);
+  assert.match(remote, /SEARCH w USING PRIMARY KEY .*job>\?/);
+  assert.match(remote, /SEARCH a USING PRIMARY KEY .*job>\?/);
+  assert.equal(remote.split(" | ").filter((s) => /SEARCH j USING INDEX sqlite_autoindex_jobs_1 .*id=\?/.test(s)).length, 2, remote);
+  assert.doesNotMatch(remote, /SCAN (a|w|j|jobs)\b/);
+}
+
+function assertSandboxPlans() {
+  const db = memory().db;
+  enableSandboxIndex(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  for (const sql of [SANDBOX_SESSION, RUNNER_SESSION_CANDIDATES]) {
+    const lookup = plan(sql, "s");
+    assert.match(lookup, /SEARCH n USING (?:COVERING )?INDEX sandbox_name_lookup .*name=\?/);
+    assert.match(lookup, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+    assert.doesNotMatch(lookup, /SCAN (n|s|sessions)\b/);
+  }
+  assert.match(plan(runnerChoiceFromKeys(2), "a", "b"), /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+  assert.match(plan(RUNNER_TAKEUP_NAMES, "s"), /SEARCH sandbox_name_rows USING COVERING INDEX sandbox_name_lookup .*name=\?/);
+  const takeup = plan(RUNNER_TAKEUP_SESSIONS, '["a","b"]');
+  assert.match(takeup, /SCAN sessions USING INDEX sessions_running/);
+  assert.match(takeup, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+  assert.doesNotMatch(takeup, /SCAN s\b/);
+  for (const sql of [SANDBOX_SCAN_FIRST, SANDBOX_SCAN_NEXT, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_DIRTY_BATCH])
+    assert.match(sql, /LIMIT \?$/);
+  assert.match(plan(SANDBOX_SCAN_NEXT, "s", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
+  assert.match(plan(SANDBOX_PRUNE_NEXT, "s", "z", 64), /SEARCH sandbox_name_rows USING PRIMARY KEY .*session>\?/);
+}
+
+function assertChatSharePlans() {
+  const db = memory().db;
+  installChatShareIndex(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  for (const [sql, args] of [[SHARE_LIVE, [0]], [SHARE_DUE, [0, 1]]] as const) {
+    const p = plan(sql, ...args);
+    assert.match(p, /SEARCH t USING COVERING INDEX chat_share_target_time .*used>\?/);
+    assert.match(p, /SEARCH c USING INDEX sqlite_autoindex_chat_shares_1 .*session=\?/);
+    assert.doesNotMatch(p, /SCAN (?:t|c|chat_shares)\b/);
+  }
+  assert.match(plan(SHARE_NEXT_TIME, 0), /SEARCH t USING COVERING INDEX chat_share_target_time .*used>\?/);
+  assert.match(plan(SHARE_LAPSED_WORKSPACE, "w", 0), /SEARCH t USING COVERING INDEX chat_share_target_workspace .*workspace=\? AND used<\?/);
+  assert.match(plan(SHARE_NEXT, "s", "z", 64), /SEARCH chat_shares USING COVERING INDEX sqlite_autoindex_chat_shares_1 .*session>\?/);
+  for (const sql of [SHARE_FIRST, SHARE_NEXT, SHARE_DIRTY]) assert.match(sql, /LIMIT \?$/);
+}
+
+function assertSessionDirectoryPlans() {
+  const db = memory().db;
+  installSessionDirectories(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  for (const live of [true, false]) {
+    const candidate = plan(sessionDirectoryCandidate(live), "/a");
+    assert.match(candidate, /SEARCH d USING COVERING INDEX session_dir_root .*root=\?/);
+    assert.match(candidate, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+    assert.doesNotMatch(candidate, /SCAN (d|s|sessions)\b/);
+    assert.match(plan(sessionDirectoryChoice(2, live), "a", "b", "/a", "/a"), /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+  }
+  for (const sql of [SESSION_DIR_FIRST, SESSION_DIR_NEXT, SESSION_DIR_DIRTY]) assert.match(sql, /LIMIT \?$/);
+  assert.match(plan(SESSION_DIR_NEXT, "a", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
+  assert.match(plan(SESSION_DIR_LIVE_MANY), /SCAN sessions USING (?:COVERING )?INDEX sessions_live/);
+  assert.match(SESSION_DIR_LIVE_MANY, /LIMIT 1 OFFSET 32$/);
+  assert.match(plan(SESSION_DIR_LIVE_FEW), /SCAN sessions USING INDEX sessions_live/);
+  assert.match(SESSION_DIR_LIVE_FEW, /LIMIT 32$/);
+  assert.match(plan(SESSION_DIR_INITIAL, "/", "0"), /SEARCH session_dir_rows USING COVERING INDEX session_dir_root .*root>\?/);
+  const argumentsPlan = plan(SESSION_DIR_ARGUMENTS, '["/a"]', "/home", '["a"]');
+  assert.match(argumentsPlan, /SEARCH d USING COVERING INDEX session_dir_root .*root=\?/);
+  assert.match(argumentsPlan, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+  assert.doesNotMatch(argumentsPlan, /SCAN (d|s|sessions)\b/);
 }
 
 function assertAwakeJobPlan() {
@@ -1504,6 +1622,11 @@ test("what the station asks again and again is planned by an index, never a scan
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
   assertSessionJobPlans();
+  assertProcessJobPlans();
+  assertActiveJobUpgradePlans();
+  assertSandboxPlans();
+  assertChatSharePlans();
+  assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
@@ -1716,6 +1839,11 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
   assertSessionJobPlans();
+  assertProcessJobPlans();
+  assertActiveJobUpgradePlans();
+  assertSandboxPlans();
+  assertChatSharePlans();
+  assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its

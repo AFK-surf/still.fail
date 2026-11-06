@@ -19,7 +19,7 @@ import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
-import { WorkspaceWatch, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
+import { WorkspaceWatch, workspaceSessionsToMeasure, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -52,6 +52,7 @@ import { workspaceSizeTools } from "../tools/workspace-size.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
+import { ChatShareIndexBuilder } from "../xshare/index-builder.ts";
 import { overview } from "../api/overview.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 import { agentsRoutes } from "../api/admin.ts";
@@ -214,6 +215,7 @@ export const AgentsLive = (control: Control) =>
       const hub = new Hub({
         config: settings,
         store,
+        previous,
         // The connects' chats (Slack's: slack/module.ts, which says them below); the station's own chat is the hub's.
         chats: (id) => {
           for (const chats of surfaceChats) {
@@ -284,8 +286,6 @@ export const AgentsLive = (control: Control) =>
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
       // Measure only working chats, and only station-owned workspaces. A chat's remote workspaces are measured on the
       // machines that hold them; an offline or older station supplies no reading until it can answer.
-      const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>, waiting?: Set<string>): boolean =>
-        row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || (waiting ? waiting.has(row.key) : store.lastTurn(row.key)?.declared === "waiting"));
       const working = (key: string): boolean => workspaceWorking(store, (session) => hub.processState(session), key);
       const workspaceWatch: WorkspaceWatch = new WorkspaceWatch({
         data,
@@ -293,11 +293,8 @@ export const AgentsLive = (control: Control) =>
         working,
         notify: (session, text) => hub.notify(session, text),
         readings: async () => {
-          const jobsRunning = new Set(store.jobsRunning().map((j) => j.sessionKey));
-          const live = store.liveSessions();
-          // Whether each waits, of those not at work otherwise, in one statement.
-          const waiting = store.waitingOf(live.filter((s) => s.archivedAt === null && !s.running && hub.processState(s.key) !== "running" && !jobsRunning.has(s.key)).map((s) => s.key));
-          return (await Promise.all(live.filter((s) => workingRow(s, jobsRunning, waiting)).map(async (s) => {
+          const workingSessions = workspaceSessionsToMeasure(store, (session) => hub.processState(session));
+          return (await Promise.all(workingSessions.map(async (s) => {
             const found: WorkspaceReading[] = [];
             if (roomOf(data, s.workspace) !== null) {
               const size = remote.workspaceReader.size(s.workspace, workspaceWatch.limit(s.key, ""));
@@ -319,7 +316,9 @@ export const AgentsLive = (control: Control) =>
       yield* Effect.addFinalizer(() => Effect.promise(() => workspaceWatch.close()));
       // What the agents run here, watched for the machine's memory (jobs/memory.ts): their agents told when it is much,
       // the largest stopped only when the machine is about to run out.
-      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text), clock: hub.clock });
+      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text),
+        clock: hub.clock, runnerNames: (runners) => hub.runnerNameSessions(runners), directory: (dir) => hub.sessionInDirectory(dir),
+        processJobs: hub.processJobLookup() });
       memory.start();
       yield* Effect.addFinalizer(() => Effect.promise(() => memory.close()));
       // Tasks of stations no longer in the workspace, or no longer allowed, stop: once the mesh is up, and as the roster
@@ -397,8 +396,11 @@ export const AgentsLive = (control: Control) =>
       remote.setInbox(inbox);
       // Chats shared with other workspaces, and theirs shared with this one (docs/chat-share.md): their stations are
       // asked and heard through it, for those chats only.
+      const shareIndex = new ChatShareIndexBuilder(store, previous);
+      yield* Effect.addFinalizer(() => Effect.promise(() => shareIndex.close()));
       const xshare = new ChatShares({
         data, store, cloud,
+        prepareIndex: () => shareIndex.request(),
         ask: (station, request) => remote.ask(station, request),
         link: (chat) => hub.link(chat) ?? null,
         // As its messages are headed (sender: as the chat list calls it).
