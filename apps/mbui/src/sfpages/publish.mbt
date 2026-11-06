@@ -620,7 +620,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         let lit = if taking {
           0.0
         } else {
-          let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k))) || c.hand_lit(c.lit(c.id("publish/said/" + k)))
+          let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k)))
           @motion.animate(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
         }
         let ground = if taking {
@@ -635,13 +635,11 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
             let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
             c.look(g, @ui.look(alpha=lit))
           }
-          // (what it says, faded once out of the picture; its box to tick beside it never is, so that every one shows,
-          // 2026-11-06 用户 of the boxes of those not ticked: 「看不清」; pressed anywhere, it is ticked or not as its box
-          // is, 「其它行怎么选」)
+          // (what it says, faded once out of the picture; its box to tick beside it never is, its edge the muted ink,
+          // so that every one shows: 2026-11-06 用户 of the boxes of those not ticked,「看不清」)
           let content = Ref(0)
-          let press = if taking { 0 } else { c.id("publish/said/" + k) }
           let said = c.box(style=publish_said, fn() {
-            content.val = c.box(style=publish_said, id=press, fn() {
+            content.val = c.box(style=publish_said, fn() {
             // (its files drawn each to tick: file_item asks picturing)
             picturing.val = Some((m.seq, taking))
             message_row(c, src, here, m)
@@ -677,13 +675,6 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
               |> ignore
             }
           })
-          if press != 0 && c.clicked(press) {
-            if on {
-              publishing.off[k] = true
-            } else {
-              publishing.off.remove(k)
-            }
-          }
           if !taking && publishing.aim && publishing.picked == Some(m.seq) {
             @motion.measure(c, said, publish_aim_measure(m.seq))
           }

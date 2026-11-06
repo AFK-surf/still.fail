@@ -323,7 +323,7 @@ test "多选: the chat's picture opened from a message has that message alone ti
 }
 
 ///|
-test "多选: a message pressed anywhere is ticked or not as its box is; one not ticked fades, its box does not" {
+test "多选: a message not ticked fades, its box to tick does not" {
   let calls : Array[Made] = []
   let t = publish_core(calls, menu=true)
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
@@ -356,12 +356,6 @@ test "多选: a message pressed anywhere is ticked or not as its box is; one not
   }
   t.run_for(@ui.move_most_ms)
   assert_eq(box_alpha(1), 1.0)
-  t.tap_text("部署好了")
-  t.run_for(@ui.move_most_ms)
-  assert_true(!@sfpages.publish_message_left_out(6.0))
-  t.tap_text("部署好了")
-  t.run_for(@ui.move_most_ms)
-  assert_true(@sfpages.publish_message_left_out(6.0))
 }
 
 ///|
