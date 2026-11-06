@@ -58,7 +58,7 @@ test "group row node: first and last follow the list without remaking or unfocus
       group_row_node(page, fn() { first.get() }, fn() { last.get() }, fn(body) {
         made.val += 1
         row.val = Some(body)
-        card.val = body.parent()
+        card.val = Some(body.parent().unwrap().parent().unwrap().kids()[0])
         body.height(Is(Some(40.0))).says(Is(Some(@view.said(Button, label="File")))) |> ignore
         presses_node(body, fn() { pressed.val += 1 })
       })
@@ -139,10 +139,10 @@ test "group row node: the departing last row and its replacement each keep their
     root.box(fn(list) {
       let rows = @ui.ListRows::new().in_node(list, fn() { items.get() }, fn(x) { x.0 }, fn(_) { "" })
       list.height(Is(Some(200.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, est=50.0,
-        room=rows.room, fn(slot, k) {
+        rooms=rows.room_now, fn(slot, k) {
           let item = fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).unwrap() }
           group_row_node(slot, fn() { item().1 }, fn() { item().2 }, fn(body) {
-            cards[k] = body.parent().unwrap()
+            cards[k] = body.parent().unwrap().parent().unwrap().kids()[0]
             body.height(Is(Some(40.0))).owns(fn() { cards.remove(k) }) |> ignore
           })
         }) |> ignore
@@ -160,4 +160,76 @@ test "group row node: the departing last row and its replacement each keep their
   assert_eq(ends("b"), Some((0.0, 0.0, radius, radius)))
   t.run_for(@ui.row_size_ms)
   assert_false(cards.contains("b"))
+}
+
+///|
+/// A list's current items with their current ends; ListRows keeps each departing item's last value as its snapshot.
+fn group_row_motion_items(names : Array[String]) -> Array[(String, Bool, Bool)] {
+  names.mapi(fn(i, name) { (name, i == 0, i == names.length() - 1) })
+}
+
+///|
+/// Exercise one end or the middle while its room is halfway open or closed.
+fn group_row_motion_case(which : Int, coming : Bool) -> Unit raise {
+  let names = if which == 3 { ["only"] } else { ["first", "middle", "last"] }
+  let key = if which == 3 { "only" } else { names[which] }
+  let all = group_row_motion_items(names)
+  let fewer = group_row_motion_items(names.filter(fn(name) { name != key }))
+  let items = @signals.signal(if coming { fewer } else { all }, same=fn(a, b) { a == b })
+  let cards : Map[String, @view.View] = {}
+  let bodies : Map[String, @view.View] = {}
+  let slots : Map[String, @view.View] = {}
+  let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=300.0, platform=2)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.box(fn(list) {
+      let rows = @ui.ListRows::new().in_node(list, fn() { items.get() }, fn(x) { x.0 }, fn(_) { "" })
+      list.height(Is(Some(240.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, est=50.0,
+        rooms=rows.room_now, room_transforms=false, fn(row, k) {
+          let item = fn() { (rows.read)().0.iter().find_first(fn(x) { x.0 == k }).unwrap() }
+          slots[k] = row.parent().unwrap()
+          group_row_node(row, fn() { item().1 }, fn() { item().2 }, fn(body) {
+            cards[k] = body.parent().unwrap().parent().unwrap().kids()[0]
+            bodies[k] = body
+            body.list_room_content().height(Is(Some(40.0))).ground(Is(0x987654FFL)).owns(fn() {
+              cards.remove(k)
+              bodies.remove(k)
+              slots.remove(k)
+            }) |> ignore
+          })
+        }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  items.set(if coming { all } else { fewer })
+  t.draw()
+  let started = t.time()
+  let tree = @ui.view_tree().unwrap()
+  let r = @ui.tree_theme().corner(Xl2)
+  let top = if which == 0 || which == 3 { r } else { 0.0 }
+  let foot = if which == 2 || which == 3 { r } else { 0.0 }
+  let mut saw_motion = false
+  for ms in [17.5, 73.75, 150.0, 225.0] {
+    t.frame_at(started + ms)
+    let card = tree.drawn_of(cards[key].id()).unwrap()
+    let body = tree.drawn_of(bodies[key].id()).unwrap()
+    if body.alpha > 0.0 && body.alpha < 1.0 {
+      saw_motion = true
+      assert_eq(card.corners, Some((top, top, foot, foot)))
+      assert_eq(card.alpha, 1.0)
+      assert_true(tree.drawn_of(slots[key].id()).unwrap().clips)
+      assert_true(tree.drawn_clear_of(cards[key].id(), slots[key].id()))
+      assert_false(tree.drawn_clear_of(bodies[key].id(), slots[key].id()))
+    }
+  }
+  assert_true(saw_motion, msg="\{key}, coming \{coming}: content moves during its room's change")
+}
+
+///|
+test "group row node: moving first, middle, last and only rows keep an opaque card and fade only their content" {
+  for which in 0..<4 {
+    group_row_motion_case(which, true)
+    group_row_motion_case(which, false)
+  }
 }
