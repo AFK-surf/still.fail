@@ -9,9 +9,10 @@ test "rows scrolled by whole pixels, what they hold between pixels: copied as ke
     root
     .width(Is(Some(390.0)))
     .height(Is(Some(600.0)))
-    .scrolls_window(@view.Scroll::list(), fn() { Array::makei(200, fn(i) { i }) }, est=66.0, fn(row, k) {
-      row.height(Is(Some(66.0))).ground(Is(if k % 2 == 0 { 0xF2F2F2FFL } else { 0xFFFFFFFFL })) |> ignore
-      // (a badge three tenths of a pixel off its row's pixels, a line of words seven tenths off)
+    .scrolls_window(@view.Scroll::list(), fn() { Array::makei(200, fn(i) { i }) }, est=199.0 / 3.0, fn(row, k) {
+      row.height(Is(Some(199.0 / 3.0))).ground(Is(if k % 2 == 0 { 0xF2F2F2FFL } else { 0xFFFFFFFFL })) |> ignore
+      // (each row 199 pixels tall, its place a third of a point off whole points, as a phone's rows are; a badge three
+      // tenths of a pixel off its row's pixels, a line of words seven tenths off)
       row.box(fn(b) {
         b.offset(Is((22.0, 18.1))).width(Is(Some(30.0))).height(Is(Some(30.0))).radius(Is(15.0))
         .ground(Is(0x3366CCFFL)) |> ignore
