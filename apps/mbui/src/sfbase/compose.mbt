@@ -842,24 +842,37 @@ pub fn drafts_given_read() -> Unit {
 
 ///|
 /// What takes what is put into a draft from elsewhere as it is put there, by the draft's key: the composers of the
-/// window's tree's that say so (draft_taker_said), the last said first, each let go with its node (one of a draft
-/// going while another of it stays: the one that stays takes it).
+/// window's tree's that say so (draft_taker_said), each with its node, the last said first, each let go with its node
+/// (one of a draft going while another of it stays: the one that stays takes it).
 // kept across runs: each let go with its node
-let draft_takers : Map[String, Array[() -> Unit]] = {}
+let draft_takers : Map[String, Array[(@view.View, () -> Unit)]] = {}
+
+///|
+/// Whether anything put into draft `key` from elsewhere waits to be taken.
+fn draft_waiting(key : String) -> Bool {
+  shared_into.contains(key) ||
+  quoted_into.contains(key) ||
+  followed_into.contains(key) ||
+  marked_into.contains(key) ||
+  files_put.iter().any(fn(x) { x.0 == key })
+}
 
 ///|
 /// Node `v` (a composer of the tree's) takes what is put into draft `key` from elsewhere with `take`, at once, as it is
-/// put there (draft_given_to), while it is there.
+/// put there (draft_given_to), while it is there. Let go with what still waits for the draft, another of the draft's
+/// still there takes it at that moment (draft_take_at).
 pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit {
   let list = draft_takers.get(key).unwrap_or([])
-  list.push(take)
+  list.push((v, take))
   draft_takers[key] = list
   v.owns(fn() {
     match draft_takers.get(key) {
       Some(list) => {
-        list.retain(fn(f) { !physical_equal(f, take) })
+        list.retain(fn(t) { !physical_equal(t.1, take) })
         if list.is_empty() {
           draft_takers.remove(key)
+        } else if draft_waiting(key) {
+          draft_take_at(key)
         }
       }
       None => ()
@@ -874,7 +887,21 @@ pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit
 /// composer as it next builds (draft_given).
 pub fn draft_given_to(key : String) -> Unit {
   match draft_takers.get(key) {
-    Some(list) if list.length() > 0 => (list[list.length() - 1])()
+    Some(list) if list.length() > 0 => (list[list.length() - 1].1)()
+    _ => draft_given()
+  }
+}
+
+///|
+/// The same as an event of the tree's at this moment (where nothing may be written yet: what the host hands on as a
+/// frame begins), by the draft's last taker's node; that node let go before it, the next of the draft's takes it then
+/// (draft_taker_said); none, an old view's composer as it next builds.
+pub fn draft_take_at(key : String) -> Unit {
+  match draft_takers.get(key) {
+    Some(list) if list.length() > 0 => {
+      let (v, take) = list[list.length() - 1]
+      v.at_moment(v.cause_at(), take) |> ignore
+    }
     _ => draft_given()
   }
 }

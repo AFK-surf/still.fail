@@ -302,6 +302,8 @@ pub fn draft_given() -> Unit
 
 pub fn draft_given_to(String) -> Unit
 
+pub fn draft_take_at(String) -> Unit
+
 pub fn draft_taker_said(@view.View, String, () -> Unit) -> Unit
 
 pub fn drafts_given_read() -> Unit

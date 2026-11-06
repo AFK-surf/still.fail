@@ -195,16 +195,17 @@ pub fn composer_node(
       },
       fn(files) {
         composing.picking.set(None)
-        // (left for the draft as what is shared in is, then taken at this moment as an event of the tree's: what follows
-        // a draft's files reads layout, which nothing has yet as the host's answers are handed on; this composer gone
-        // by then, the draft's next takes them as it comes)
+        // (left for the draft as what is shared in is, then taken at this moment as an event of the tree's by the draft's
+        // composer (draft_take_at): what follows a draft's files reads layout, which nothing has yet as the host's
+        // answers are handed on; that composer let go first, another of the draft's takes them then, or the next as
+        // it comes)
         if !@signals.untracked(no_files) {
           let list = @sfbase.shared_into.get(w.key).unwrap_or([])
           for f in files {
             list.push(f)
           }
           @sfbase.shared_into[w.key] = list
-          root.at_moment(root.cause_at(), take) |> ignore
+          @sfbase.draft_take_at(w.key)
         }
       },
     )
