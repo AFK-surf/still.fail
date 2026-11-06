@@ -19,10 +19,19 @@ test "rows scrolled by whole pixels, what they hold between pixels: copied as ke
         .ground(Is(0x3366CCFFL)) |> ignore
       })
       |> ignore
-      // (an icon's shape, its bands worked out where its outline lies: between pixels)
-      row.box(fn(i) {
-        i.offset(Is((340.0, 20.0))).width(Is(Some(20.0))).height(Is(Some(20.0)))
-        .shapes(Is([shape_of([([2.3, 1.7, 17.6, 2.2, 15.9, 18.4], true)], fill=0x333333FFL)])) |> ignore
+      // (an icon's shape in layers held in layers, each laid out a fraction of a point into the one holding it (a
+      // badge in a corner, as a chat's row has), its bands worked out where its outline lies: between pixels)
+      row.box(fn(a) {
+        a.alpha(Is(0.95)).padding(Is((0.0, 12.37, 0.0, 0.0))).width(Is(Some(60.0))) |> ignore
+        a.box(fn(b) {
+          b.alpha(Is(0.9)).padding(Is((1.13, 3.11, 0.0, 0.0))) |> ignore
+          b.box(fn(i) {
+            i.alpha(Is(0.85)).width(Is(Some(20.0))).height(Is(Some(20.0)))
+            .shapes(Is([shape_of([([2.3, 1.7, 17.6, 2.2, 15.9, 18.4], true)], fill=0x333333FFL)])) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
       })
       |> ignore
       row.box(fn(w) {
