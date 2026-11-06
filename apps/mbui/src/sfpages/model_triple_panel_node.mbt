@@ -177,11 +177,13 @@ fn triple_node_series(
   of : String,
   state : TripleNodePanel,
   data : () -> TripleModels,
+  sheet : () -> Bool,
   saved : String,
   close : () -> Unit,
 ) -> Unit {
   let scroll = @view.Scroll::new()
-  parent.max_height(Is(Some(triple_list_h))).shrink(Is(1.0)).min_height(Is(Some(0.0)))
+  parent.max_height(By(fn() { Some(if sheet() { dmax(parent.window().1, triple_list_h) } else { triple_list_h }) }))
+  .shrink(Is(1.0)).min_height(Is(Some(0.0)))
   .scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(list) {
     list.gap(Is(1.0)) |> ignore
     list.each(fn() { data().series }, fn(s) { s.0 }, fn(group, series) {
@@ -201,9 +203,10 @@ fn triple_node_series(
 }
 
 ///|
-fn triple_node_kinds(parent : @view.View, state : TripleNodePanel, data : () -> TripleModels) -> Unit {
+fn triple_node_kinds(parent : @view.View, state : TripleNodePanel, data : () -> TripleModels, sheet : () -> Bool) -> Unit {
   let scroll = @view.Scroll::new()
-  parent.max_height(Is(Some(triple_list_h))).shrink(Is(1.0)).min_height(Is(Some(0.0)))
+  parent.max_height(By(fn() { Some(if sheet() { dmax(parent.window().1, triple_list_h) } else { triple_list_h }) }))
+  .shrink(Is(1.0)).min_height(Is(Some(0.0)))
   .scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(list) {
     list.each(fn() { data().kinds }, fn(k) { text(Some(k), "id") }, fn(slot, maker) {
       let k = fn() { Some(maker.get()) }
@@ -258,21 +261,21 @@ fn triple_node_catalog(
       })
       part.pick(fn() { if data().searching || data().kinds.length() < 2 { 0 } else if sheet() { 1 } else { 2 } }, fn(body, which) {
         match which {
-          0 => triple_node_series(body, src, station, of, state, data, saved, close)
+          0 => triple_node_series(body, src, station, of, state, data, sheet, saved, close)
           1 => body.pick(fn() { state.kind.get() == "" }, fn(level, makers) {
-            if makers { triple_node_kinds(level, state, data) }
-            else { triple_node_series(level, src, station, of, state, data, saved, close) }
+            if makers { triple_node_kinds(level, state, data, sheet) }
+            else { triple_node_series(level, src, station, of, state, data, sheet, saved, close) }
           })
           _ => {
             body.row(Is(true)).gap(Is(6.0)) |> ignore
             body.box(fn(kinds) {
               kinds.width(Is(Some(192.0))) |> ignore
-              triple_node_kinds(kinds, state, data)
+              triple_node_kinds(kinds, state, data, sheet)
             }) |> ignore
             body.box(fn(rule) { rule.width(Is(Some(1.0))).ground(By(fn() { @sf.theme().p.line })) |> ignore }) |> ignore
             body.box(fn(models) {
               models.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-              triple_node_series(models, src, station, of, state, data, saved, close)
+              triple_node_series(models, src, station, of, state, data, sheet, saved, close)
             }) |> ignore
           }
         }
@@ -302,7 +305,8 @@ fn triple_node_catalog(
         let scroll_rows = fn(into : @view.View, rows : (@view.View) -> Unit) {
           into.box(fn(room) {
             let scroll = @view.Scroll::new()
-            room.max_height(Is(Some(triple_list_h))).shrink(Is(1.0)).min_height(Is(Some(0.0)))
+            room.max_height(By(fn() { Some(if is_sheet { dmax(room.window().1, triple_list_h) } else { triple_list_h }) }))
+            .shrink(Is(1.0)).min_height(Is(Some(0.0)))
             .scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(list) {
               list.gap(Is(12.0)) |> ignore
               rows(list)

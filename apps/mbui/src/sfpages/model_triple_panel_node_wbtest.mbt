@@ -160,6 +160,32 @@ test "model panel nodes: recent models stay visible while favourites scroll in a
 }
 
 ///|
+test "model panel nodes: a sheet uses the available height for its maker list" {
+  for sheet in [true, false] {
+    @sfbase.reset()
+    @sf.set_words(@sfbase.fill)
+    let makers : Array[Json] = Array::makei(20, fn(i) {
+      { "id": Json::string("maker-" + i.to_string()), "title": Json::string("Maker " + i.to_string()), "count": 1 }
+    })
+    let state = triple_node_panel_state(Some({ "makers": Json::array(makers) }))
+    let data = fn() { triple_models(state.pick.get(), "", true, "", sheet) }
+    let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=400.0, h=800.0, platform=2)
+    t.check_looks(false)
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      root.box(fn(list) {
+        list.width(Is(Some(350.0))).height(Is(Some(700.0))) |> ignore
+        triple_node_kinds(list, state, data, fn() { sheet })
+      }) |> ignore
+    })
+    t.draw()
+    let (_, _, _, shown) = t.shown_of("Maker 11").unwrap()
+    if sheet { assert_true(shown > 0.0, msg="the taller sheet shows more rows before scrolling") }
+    else { assert_eq(shown, 0.0, msg="an anchored list retains its 360-point cap") }
+  }
+}
+
+///|
 fn triple_settings_fixture() -> Json {
   {
     "value": { "model": "Alpha", "runtime": "codex", "effort": "high" },
