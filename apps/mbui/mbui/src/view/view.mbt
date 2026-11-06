@@ -7228,8 +7228,8 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
-  // (the passes counted for the moment it is asked at, however it comes to lay out again in it (what is under the
-  // pointer told after placing lays it out once more, in here): one bound for all of them)
+  // (the passes of this outermost layout and those nested in it (what is under the pointer told after placing lays it
+  // out once more, in here): one bound for all of them; another asked for apart, at the same moment or not, its own)
   if self.laying == 0 {
     self.moment_passes = 0
   }
