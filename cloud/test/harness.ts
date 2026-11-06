@@ -105,7 +105,8 @@ export async function harness(
   /** still.fail cloud's time, in seconds: what a station signs with, say. */
   const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
-    adminToken = randomSecret();
+    adminToken = randomSecret(),
+    feedbackToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = {
     ...(await exportJWK(publicKey)),
@@ -172,6 +173,7 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
+        FEEDBACK_TOKEN: feedbackToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         ...(options.access ? { ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD: "test-access-aud" } : {}),
         ...(options.upstream ? { RELEASES_UPSTREAM: "https://upstream.test/releases" } : {}),
@@ -359,6 +361,7 @@ export async function harness(
     grantJwk,
     grantPublicJwk,
     adminToken,
+    feedbackToken,
     signingKey,
     codes,
     mails,

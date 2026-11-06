@@ -13,7 +13,7 @@ import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, socketToken } from "./api";
+import { adminApi, api, blockAccount, feedbackList, socketToken } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
@@ -208,6 +208,12 @@ async function handle(request: Request, env: Env): Promise<Response> {
     } catch {
       return reply({ error: "invalid_request" }, 400);
     }
+  }
+  // The console's bug reports for the team's feedback monitor (docs/feedback.md): FEEDBACK_TOKEN reads them and nothing else.
+  if (path === "/v1/admin/feedback/list" && request.method === "POST") {
+    const supplied = bearerToken(request);
+    if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();
+    return reply({ feedback: await feedbackList(env) });
   }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {
