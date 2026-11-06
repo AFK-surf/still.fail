@@ -52,6 +52,7 @@ import { workspaceSizeTools } from "../tools/workspace-size.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
+import { ChatShareIndexBuilder } from "../xshare/index-builder.ts";
 import { overview } from "../api/overview.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 import { agentsRoutes } from "../api/admin.ts";
@@ -399,8 +400,11 @@ export const AgentsLive = (control: Control) =>
       remote.setInbox(inbox);
       // Chats shared with other workspaces, and theirs shared with this one (docs/chat-share.md): their stations are
       // asked and heard through it, for those chats only.
+      const shareIndex = new ChatShareIndexBuilder(store, previous);
+      yield* Effect.addFinalizer(() => Effect.promise(() => shareIndex.close()));
       const xshare = new ChatShares({
         data, store, cloud,
+        prepareIndex: () => shareIndex.request(),
         ask: (station, request) => remote.ask(station, request),
         link: (chat) => hub.link(chat) ?? null,
         // As its messages are headed (sender: as the chat list calls it).

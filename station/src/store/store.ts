@@ -59,6 +59,7 @@ import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION 
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
+import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -821,7 +822,9 @@ export class Store {
   /// Every chat shared with another workspace now, by its session key.
   chatShares(): Map<string, ChatShare> {
     const now = this.now();
-    return new Map(this.#all("SELECT * FROM chat_shares").flatMap((r) => {
+    let indexed: Json[] | null = null;
+    try { indexed = liveChatShareRows(this.db, now); } catch { /* Keep the original read if the lookup is unavailable. */ }
+    return new Map((indexed ?? this.#all("SELECT * FROM chat_shares")).flatMap((r) => {
       const share = liveShare(toChatShare(r), now);
       return share === null ? [] : [[r.session, share] as const];
     }));
@@ -835,9 +838,17 @@ export class Store {
   }
 
   /// The workspaces some chat's share with lapsed: their stations are still answered why they read it no more.
-  lapsedShareWorkspaces(): Set<string> {
+  lapsedShareWorkspaces(workspaces: readonly string[] | null = null): Set<string> {
     const now = this.now();
-    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to.filter((t) => !shareLive(t, now)).map((t) => t.workspace)));
+    if (workspaces !== null) {
+      try {
+        const indexed = lapsedChatShareWorkspaces(this.db, workspaces, now);
+        if (indexed !== null) return indexed;
+      } catch { /* Keep the original read if the lookup is unavailable. */ }
+    }
+    const wanted = workspaces === null ? null : new Set(workspaces);
+    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to
+      .filter((t) => !shareLive(t, now) && (wanted === null || wanted.has(t.workspace))).map((t) => t.workspace)));
   }
 
   /// The agents of `workspaces` read a chat or wrote to it: its share with them goes on from now (one lapsed stays
@@ -856,9 +867,11 @@ export class Store {
   /// it no longer). Answers when the next one lapses, null when none will.
   lapseChatShares(since: number): number | null {
     const now = this.now();
-    let next: number | null = null;
+    let indexed: ReturnType<typeof dueChatShareRows> = null;
+    try { indexed = dueChatShareRows(this.db, since, now); } catch { /* Keep the original read if the lookup is unavailable. */ }
+    let next: number | null = indexed?.next ?? null;
     this.#with((changes) => {
-      for (const r of this.#all("SELECT * FROM chat_shares")) {
+      for (const r of indexed?.rows ?? this.#all("SELECT * FROM chat_shares")) {
         const ends = toChatShare(r).to.map((t) => t.used + XSHARE_IDLE_MS);
         if (ends.some((end) => end > since && end <= now)) {
           for (const t of this.sessionThreads(r.session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
