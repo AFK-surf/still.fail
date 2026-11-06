@@ -1009,12 +1009,6 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     view_changes_taken(tree)
   }
   dr.targets_said = true
-  // (what of the tree changed drawn first where it lies in the last frame's, as by the tree alone, where it can be: then
-  // all of it the old frame paints round is copied as kept, what holds it too, scene_layers.mbt)
-  // (not where the old frame paints for its own: what it draws first, as before, the tree's after it in its order)
-  if !scene_checking() && !scene.old_due && scene_wanted() {
-    self.scene_alone(tree, before_old=true) |> ignore
-  }
   // (the last frame's instances kept to copy the layers kept from: scene_layers.mbt)
   self.scene_begin()
   let n0 = self.ninst
