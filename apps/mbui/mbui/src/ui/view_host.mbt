@@ -1402,8 +1402,7 @@ fn Ctx::tree_step(
     // (a layer of its own: copied as kept where nothing of it, nor what it is drawn in, changed; else drawn as it keeps
     // how it is drawn, or by a walk of its own, followed by its own watch)
     let outer = scene.drawing
-    let copied = self.scene_copied(p, c.id, p.moved_open > 0, place, p.fading, p.stretching, p.glyphing)
-    if copied {
+    if self.scene_copied(p, c.id, p.moved_open > 0, place, p.fading, p.stretching, p.glyphing) {
       match outer {
         Some(o) => o.inner.push(c.id)
         None => ()
@@ -1417,7 +1416,7 @@ fn Ctx::tree_step(
         // (drawn now and reaching nothing inside what it is drawn in and the window, as drawn: left out after all, as
         // in a check's frame, drawn anew, where nothing of what was kept is asked: a layer first drawn, or drawn anew,
         // left out as one kept and left out by where it reached)
-        if !copied && skippable && self.scene_drawn_out(l, clip_top()) {
+        if skippable && self.scene_drawn_out(l, clip_top()) {
           self.ninst = l.start
           self.segs.truncate(l.seg_from * 4)
           scene_left_out(l, None, l.start, l.seg_from)

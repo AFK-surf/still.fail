@@ -104,6 +104,10 @@ priv struct SceneLayer {
   /// whether it is left out whole where all it reached as last drawn lies wholly outside what it is drawn in and the
   /// window, put where it is (nothing of it drawn moved after it is drawn: scene_layer_skippable)
   mut skippable : Bool
+  /// how far what it drew itself reached as drawn (`own_reach`, in its block's terms), and all it and what it holds reach
+  /// now, where it is put (`now_reach`): whether it is left out, the same whether drawn or put together of what is kept
+  own_reach : @damage.Rect
+  now_reach : @damage.Rect
 }
 
 ///|
@@ -1336,6 +1340,8 @@ fn Ctx::scene_drawn(
         inner_cuts: @damage.Rect::none(),
         fades_inside: false,
         skippable: false,
+        own_reach: @damage.Rect::none(),
+        now_reach: @damage.Rect::none(),
       }
       scene.layers[id] = l
       l
@@ -1951,6 +1957,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   l.block_from.clear()
   l.block_refs.clear()
   l.bands.clear()
+  l.own_reach.clear()
   l.block_owners = if inst_owners_kept() {
     Some({ owner: [], cell: [], tree: [], mark: [], bone: [] })
   } else {
@@ -1985,6 +1992,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   }
   self.scene_block_take(l, at, self.ninst, sat, self.segs.length() / 4, band) |> ignore
   held.clear()
+  scene_now_reach(l)
   l.block_seg_base = s0
   l.bands_at.clear()
 }
@@ -1996,6 +2004,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
 fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom : Int, sto : Int, band : Int) -> Int {
   let mut band = band
   if to > from {
+    scene.parts.reach_add(self.inst, from, to, l.own_reach)
     self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
     // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
     while band < l.bands_at.length() && l.bands_at[band] < to {
@@ -2108,21 +2117,8 @@ fn Ctx::scene_emitted(
     }
   }
   self.scene_block_put(l, ip, l.block_n, sp, l.block_segs.length() / 4, band, dseg, dx, dy, depth, soft) |> ignore
-  // (all it and what it holds reach now, what moved in it with it: as far as it reaches, whether it is left out next
-  // by it, Ctx::scene_layer_left_out)
-  match scene.reach.get(l.id) {
-    Some(e) =>
-      for r in l.block_refs {
-        let (_, _, cid, tops) = r
-        if !tops {
-          match scene.reach.get(cid) {
-            Some(ce) => e.reach.take(ce.reach)
-            None => ()
-          }
-        }
-      }
-    None => ()
-  }
+  // (all it and what it holds reach now, where each is put: whether it is left out, Ctx::scene_layer_left_out)
+  scene_now_reach(l)
   // (what it drew over everything: put where the window's stack has it next, Ctx::raise_tops)
   if l.tops.length() > 0 {
     scene.tops_now.push(l.id)
@@ -2645,8 +2641,7 @@ fn Ctx::scene_reach_out(
   cx1 : Double,
   cy1 : Double,
 ) -> Bool {
-  guard scene.reach.get(l.id) is Some(e) else { return false }
-  let (x0, y0, x1, y1) = e.reach.rect()
+  let (x0, y0, x1, y1) = l.now_reach.rect()
   guard x1 > x0 && y1 > y0 else { return false }
   let (ax0, ay0) = (dmax(cx0, 0.0), dmax(cy0, 0.0))
   let (ax1, ay1) = (dmin(cx1, self.width), dmin(cy1, self.height))
@@ -2703,11 +2698,39 @@ fn scene_moved_out(l : SceneLayer, moved : (Double, Double)) -> Unit {
   }
   l.shown = (l.shown.0 + moved.0, l.shown.1 + moved.1)
   scene_reach_moved(l, moved.0, moved.1)
+  let (x0, y0, x1, y1) = l.now_reach.rect()
+  if x1 > x0 {
+    l.now_reach.clear()
+    l.now_reach.add(x0 + moved.0, y0 + moved.1, x1 + moved.0, y1 + moved.1)
+  }
   for r in l.block_refs {
     let (_, _, cid, tops) = r
     if !tops {
       match scene.layers.get(cid) {
         Some(c) => scene_moved_out(c, moved)
+        None => ()
+      }
+    }
+  }
+}
+
+///|
+/// All layer `l` and what it holds reach now (its `now_reach`), as it is put: what it drew itself (as drawn, moved as
+/// far as it is put from there) and all each it holds reaches now, as it is drawn or put together of what is kept,
+/// the same either way.
+fn scene_now_reach(l : SceneLayer) -> Unit {
+  let r = l.now_reach
+  r.clear()
+  let (x0, y0, x1, y1) = l.own_reach.rect()
+  if x1 > x0 {
+    let (dx, dy) = l.shown
+    r.add(x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+  }
+  for ref in l.block_refs {
+    let (_, _, cid, tops) = ref
+    if !tops {
+      match scene.layers.get(cid) {
+        Some(c) => r.take(c.now_reach)
         None => ()
       }
     }
