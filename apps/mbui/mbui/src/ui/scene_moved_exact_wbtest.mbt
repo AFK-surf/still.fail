@@ -30,5 +30,5 @@ test "rows scrolled by whole pixels, what they hold at thirds of a pixel: copied
     t.wheel(195.0, 300.0, 37.0)
     t.clock_frame()
   }
-  assert_true(scene_done().copied > 0)
+  assert_true(scene_done().copied > 0, msg="\{scene_done()}: \{scene_alone_why()}")
 }
