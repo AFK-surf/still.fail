@@ -52,7 +52,10 @@ test "compact bar: dynamic words and inset, centred title, separate actions, and
   t.click(Button, label="Settings")
   t.click(Button, label="Copy")
   assert_eq((went.val, copied.val), (1, 1))
+  let row_before = t.rect_of("row 3").unwrap().1
   t.drag(195.0, 260.0, 195.0, 120.0)
+  t.draw()
+  assert_true(t.rect_of("row 3").unwrap().1 < row_before, msg="the content scrolled")
   assert_eq(t.rect_of("Shared debugging").unwrap().1, a.1, msg="the bar did not scroll")
   back.set("Station")
   title.set("Choose model")
