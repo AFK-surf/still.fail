@@ -970,7 +970,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // across on the way as it went on by itself (a fling, a wheel's notches easing in, a glide to its end: each row
         // of that way in sight at a moment of it, whether the frames between were many or one); not what it went past
         // as it was moved at once (a wheel's turn, a drag's move, its bar, put) or as it was first laid out where it was
-        // scrolled to, made only to be measured: seen, told once the frame is painted)
+        // scrolled to, made only to be measured: seen, told as this layout is done, of its moment, whether a frame is
+        // painted before what comes next or not (Tree::said_after_laid))
         match seen {
           Some(tell) => {
             let at_once = first_laid || s.moved_at_once != seen_moves.val
@@ -1000,8 +1001,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               seen_last.add(k)
             }
             if !came.is_empty() {
-              // (to the list still there, as sighted's)
-              self.tree.said_after_paint(fn() { if held.live() is Some(_) { tell(came) } })
+              // (to the list still there)
+              self.tree.said_after_laid(fn() { if held.live() is Some(_) { tell(came) } })
             }
           }
           None => ()

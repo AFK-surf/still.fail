@@ -13,8 +13,8 @@ priv struct SeenCase {
 
 ///|
 /// Blocks `0..<400` in a column 300 by 100 (from its top), 40 and 80 tall in turn, counted 80 till laid out: what it
-/// told seen (in the order told, each frame's once it is painted), what it made, what of it is made now; its first
-/// frame drawn.
+/// told seen (in the order told, each layout's as it is done), what it made, what of it is made now; its first frame
+/// drawn.
 fn seen_case() -> SeenCase {
   let scroll = @view.Scroll::list()
   let seen = []
@@ -42,7 +42,7 @@ fn seen_case() -> SeenCase {
 }
 
 ///|
-/// The frame `dt` on, what it said to tell once it is painted told.
+/// The frame `dt` on, what it said to tell once it is painted told (what it tells seen told as it is laid out).
 fn SeenCase::frame(self : SeenCase, dt : Double) -> Unit {
   self.now = self.now + dt
   self.tree.frame(300.0, 100.0, now=self.now) |> ignore
@@ -167,28 +167,53 @@ fn gone_case(windowed : Bool, there : @signals.Signal[Bool], told : Array[Int]) 
 }
 
 ///|
-test "scrolls_window, scrolls_anchored: a list let go after it was laid out at an input's moment, before the frame is painted, tells nothing of what came in sight then; one still there tells it as the frame is painted" {
-  for windowed in [true, false] {
-    for let_go in [false, true] {
-      let there = @signals.signal(true)
-      let told : Array[Int] = []
-      let (tree, frame) = gone_case(windowed, there, told)
-      frame(0.0)
-      let first = told.length()
-      // (a wheel down 400, then another: laid out at the second's moment, rows 10 to 12 in sight then)
-      tree.wheel_at(150.0, 50.0, 0.0, 400.0, 0, 1.0) |> ignore
-      tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, 2.0) |> ignore
-      if let_go {
-        there.set(false)
-      }
-      frame(16.0)
-      let after = told[first:].to_array()
-      if let_go {
-        assert_eq(after, [], msg="windowed \{windowed}")
-      } else {
-        assert_true(after.contains(10), msg="windowed \{windowed}: \{after}")
-      }
-      tree.dispose()
+test "scrolls_window: what came in sight as it was laid out at an input's moment told seen as that layout is done, before any frame is painted; let go at a later input's moment, what it told the same whether a frame was painted between or not" {
+  let runs : Array[Array[Int]] = []
+  for painted in [false, true] {
+    let there = @signals.signal(true)
+    let told : Array[Int] = []
+    let (tree, frame) = gone_case(true, there, told)
+    frame(0.0)
+    let first = told.length()
+    // (a wheel down 400, then another: laid out at the second's moment, rows 10 to 12 in sight then)
+    tree.wheel_at(150.0, 50.0, 0.0, 400.0, 0, 1.0) |> ignore
+    tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, 2.0) |> ignore
+    let at_second = told[first:].to_array()
+    assert_true(at_second.contains(10), msg="painted \{painted}: \{at_second}")
+    if painted {
+      frame(8.0)
     }
+    // (let go at an input's moment: the tree brought to it first, as an input brings it)
+    tree.bring_to(10.0)
+    there.set(false)
+    frame(16.0)
+    runs.push(told[first:].to_array())
+    tree.dispose()
+  }
+  assert_eq(runs[1], runs[0])
+}
+
+///|
+test "scrolls_anchored: a list let go after it was laid out at an input's moment, before the frame is painted, tells nothing sighted of what came in sight then (what asks the host for its pictures once drawn); one still there tells it as the frame is painted" {
+  for let_go in [false, true] {
+    let there = @signals.signal(true)
+    let told : Array[Int] = []
+    let (tree, frame) = gone_case(false, there, told)
+    frame(0.0)
+    let first = told.length()
+    // (a wheel down 400, then another: laid out at the second's moment, rows 10 to 12 in sight then)
+    tree.wheel_at(150.0, 50.0, 0.0, 400.0, 0, 1.0) |> ignore
+    tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, 2.0) |> ignore
+    if let_go {
+      there.set(false)
+    }
+    frame(16.0)
+    let after = told[first:].to_array()
+    if let_go {
+      assert_eq(after, [])
+    } else {
+      assert_true(after.contains(10), msg="\{after}")
+    }
+    tree.dispose()
   }
 }
