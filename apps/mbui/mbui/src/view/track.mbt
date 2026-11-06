@@ -25,9 +25,9 @@ pub struct Tracker {
   priv vals : FixedArray[Double]
   priv mut index : Int
   priv mut n : Int
-  // (where its velocity is worked out, made once with it: asked as each of a finger's events comes, it makes nothing
-  // anew then)
-  priv fit : Fit
+  // (where its velocity is worked out: made as it is first asked for, then kept, so what is asked as each of a
+  // finger's events comes makes nothing anew; a tracker never asked, none)
+  priv mut fit : Fit?
 }
 
 ///|
@@ -61,7 +61,7 @@ pub fn Tracker::new() -> Tracker {
     vals: FixedArray::make(track_size, 0.0),
     index: 0,
     n: 0,
-    fit: Fit::new(),
+    fit: None,
   }
 }
 
@@ -100,8 +100,16 @@ pub fn Tracker::velocity(self : Tracker) -> Double {
   if self.n == 0 {
     return 0.0
   }
-  let xs = self.fit.xs
-  let ys = self.fit.ys
+  let fit = match self.fit {
+    Some(f) => f
+    None => {
+      let f = Fit::new()
+      self.fit = Some(f)
+      f
+    }
+  }
+  let xs = fit.xs
+  let ys = fit.ys
   let newest = self.times[self.index]
   let mut prev = newest
   let mut idx = self.index
@@ -122,7 +130,7 @@ pub fn Tracker::velocity(self : Tracker) -> Double {
   if count < 2 {
     return 0.0
   }
-  let v = lsq_slope(self.fit, count)
+  let v = lsq_slope(fit, count)
   if v != v {
     0.0
   } else {
