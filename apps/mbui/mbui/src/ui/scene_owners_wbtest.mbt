@@ -7,7 +7,7 @@
 /// A list of 300 rows wheeled down in steps, then a row's words changed, who drew each instance kept from the start or
 /// not (`track`), and kept from the last frame on either way: each frame's instances, what the scene did for them,
 /// and who drew each of the last frame's.
-fn owners_run(track : Bool) -> (Array[Array[Array[Double]]], Array[SceneWork], Array[(Int, @view.NodeId?)]) {
+fn owners_kept_run(track : Bool) -> (Array[Array[Array[Double]]], Array[SceneWork], Array[(Int, @view.NodeId?)]) {
   let words = @signals.signal("first")
   let t = Tester::new(fn(_) {  }, w=400.0, h=600.0)
   inst_owners.track = track
@@ -55,8 +55,8 @@ fn owners_run(track : Bool) -> (Array[Array[Array[Double]]], Array[SceneWork], A
 
 ///|
 test "who drew each instance, kept or not, changes nothing of what the scene does or draws, and kept from a frame on is whole" {
-  let (kept_frames, kept_work, kept_owners) = owners_run(true)
-  let (frames, work, owners) = owners_run(false)
+  let (kept_frames, kept_work, kept_owners) = owners_kept_run(true)
+  let (frames, work, owners) = owners_kept_run(false)
   inst_owners.track = true
   let said = fn(w : SceneWork) { (w.layers, w.recorded, w.copied, w.copied_insts) }
   assert_eq(work.map(said), kept_work.map(said))
