@@ -154,6 +154,50 @@ test("a message steered in as the turn ends is worked on in its thread, and the 
   await r.close();
 });
 
+test("a state said before the turn read a message no longer stands: the turn that leaves it unanswered is asked again", async () => {
+  const r = new Rig();
+  const first = message();
+  await r.accept(first);
+  await settle();
+  const key = sessionKey("cl", "C1", first.threadTs);
+  const session = r.claude.last();
+  // Given while it writes its answer to the first message: the post that ends the turn was written without seeing it.
+  await r.accept(reply(first, "9999.1", "你有哪些 chat"));
+  await settle();
+  assert.ok(session.steers[0]!.includes("你有哪些 chat"));
+  await r.call(key, "chat_post", { to: `C1/${first.threadTs}`, text: "第一个问题的回答", kind: "all_done", done: "回答了第一个问题" });
+  // The tool answered: its model is asked again, with the message; it answers in words nobody reads, and its turn ends.
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  await settle();
+  session.says("我有这些 chat");
+  session.complete();
+  await settle();
+  assert.equal(session.prompts.length, 2, "asked where it stands, as any turn ending in no state");
+  assert.equal(r.store.listTurns(key).at(-1)?.summary.declared ?? null, null);
+  await r.close();
+});
+
+test("a state said after the turn read a message stands", async () => {
+  const r = new Rig();
+  const first = message();
+  await r.accept(first);
+  await settle();
+  const key = sessionKey("cl", "C1", first.threadTs);
+  const session = r.claude.last();
+  await r.accept(reply(first, "9999.1", "你有哪些 chat"));
+  await settle();
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  await settle();
+  await r.call(key, "chat_post", { to: `C1/${first.threadTs}`, text: "两个都答了", kind: "all_done", done: "两个问题都答了" });
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  await settle();
+  session.complete();
+  await settle();
+  assert.equal(session.prompts.length, 1, "nothing asked again");
+  assert.equal(r.store.listTurns(key).at(-1)?.summary.declared, "final");
+  await r.close();
+});
+
 test("a message during a running turn moves what it waits on to the background, unless its profile says not", async () => {
   const r = new Rig();
   const first = message();
