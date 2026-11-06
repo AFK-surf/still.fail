@@ -46,6 +46,9 @@ pub struct ChatRows {
   priv lead : @signals.Signal[String]
   /// the rows read by key (version_of): each where it was last found, a signal told as what it shows changes
   priv read : Map[String, RowRead]
+  /// where the row read last was found (-1: none yet): one read for the first time looked for from there, as the rows
+  /// read one after another are those beside each other (a list scrolled to its older rows)
+  priv mut read_at : Int
   /// the messages the list drew (item), by their key among the messages: what a row gone showed
   priv drawn : Map[String, SaidRow]
   /// the changes since the list last took them (changes)
@@ -90,6 +93,7 @@ pub fn ChatRows::new(
     shapes: 0,
     lead: @signals.signal("", same=fn(a, b) { a == b }),
     read: {},
+    read_at: -1,
     drawn: {},
     told: [Whole],
     gone: [],
@@ -226,7 +230,9 @@ pub fn ChatRows::version_of(self : ChatRows, key : String) -> Int? {
   let r = match self.read.get(key) {
     Some(r) => r
     None => {
-      let r = { at: self.length_now() - 1, n: 0, said: @signals.signal(0, same=fn(a, b) { a == b }) }
+      let n = self.length_now()
+      let at = if self.read_at >= 0 && self.read_at < n { self.read_at } else { n - 1 }
+      let r = { at, n: 0, said: @signals.signal(0, same=fn(a, b) { a == b }) }
       self.read[key] = r
       r
     }
@@ -235,9 +241,27 @@ pub fn ChatRows::version_of(self : ChatRows, key : String) -> Int? {
   match self.find(key, r.at) {
     Some(i) => {
       r.at = i
+      self.read_at = i
       Some(v)
     }
     None => None
+  }
+}
+
+///|
+/// Where the row keyed `key` is, looked for from where it was last read (version_of) where it was, else from `near`.
+/// Followed by nothing.
+pub fn ChatRows::find_read(self : ChatRows, key : String, near : Int) -> Int? {
+  match self.read.get(key) {
+    Some(r) =>
+      match self.find(key, r.at) {
+        Some(i) => {
+          r.at = i
+          Some(i)
+        }
+        None => None
+      }
+    None => self.find(key, near)
   }
 }
 
