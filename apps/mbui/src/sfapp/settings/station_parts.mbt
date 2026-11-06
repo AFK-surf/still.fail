@@ -682,6 +682,30 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
     }
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
     let keys = ["head"]
+    // 默认最长授权: the longest a chat's grant of the phone may last (as the vault's: pressed, the library's choices);
+    // a setting, so with the switch at the page's top, not after the lists (2026-11-06, 左子健: 设置不要放在列表后面啊)
+    let lasts_row = fn() {
+      let lasts = if text(view, "lasts") == "hour" { "hour" } else { "chat" }
+      if @sf.link_row(c, "adb-lasts", tr("android-misc.adb.lasts"), note=tr("android-settings.vault.lasts." + lasts), tail=fn() {
+          doing_mark(c, is_doing(core, ["adb.setLasts"], []), failed_of(core, ["adb.setLasts"], []))
+        }) {
+        @sf.pick(
+          tr("android-misc.adb.lasts"),
+          ["hour", "chat"].map(fn(l) { @sf.choice(l, tr("android-settings.vault.lasts." + l), note=tr("android-settings.vault.lasts." + l + "Detail")) }),
+          lasts,
+          fn(picked) {
+            if picked != lasts {
+              act(core, tr("android-misc.adb.lasts"), "adb.setLasts", obj([("lasts", str(picked))]))
+            }
+          },
+          from=Of(c.id("adb-lasts")),
+        )
+      }
+    }
+    if !flag(phone, "supported") {
+      keys.push("lasts")
+      blocks.push(fn() { list_card(c, lasts_row) })
+    }
     // the phone's switch: only a phone lends
     if flag(phone, "supported") {
       keys.push("switch")
@@ -703,6 +727,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
             }
             act(core, tr(if on { "android-misc.adb.turnOff" } else { "android-misc.adb.step.on" }), "adb.on", obj([("on", Json::boolean(!on))]))
           }
+          lasts_row()
         })
       })
     }
@@ -836,29 +861,6 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
             }) {
             (core.open_chat)(station, session, "")
           }
-        }
-      })
-    })
-    // The ordinary default follows what needs action and the current lending.
-    // 默认最长授权: the longest a chat's grant of the phone may last (as the vault's: pressed, the library's choices)
-    keys.push("lasts")
-    blocks.push(fn() {
-      list_card(c, fn() {
-        let lasts = if text(view, "lasts") == "hour" { "hour" } else { "chat" }
-        if @sf.link_row(c, "adb-lasts", tr("android-misc.adb.lasts"), note=tr("android-settings.vault.lasts." + lasts), tail=fn() {
-            doing_mark(c, is_doing(core, ["adb.setLasts"], []), failed_of(core, ["adb.setLasts"], []))
-          }) {
-          @sf.pick(
-            tr("android-misc.adb.lasts"),
-            ["hour", "chat"].map(fn(l) { @sf.choice(l, tr("android-settings.vault.lasts." + l), note=tr("android-settings.vault.lasts." + l + "Detail")) }),
-            lasts,
-            fn(picked) {
-              if picked != lasts {
-                act(core, tr("android-misc.adb.lasts"), "adb.setLasts", obj([("lasts", str(picked))]))
-              }
-            },
-            from=Of(c.id("adb-lasts")),
-          )
         }
       })
     })

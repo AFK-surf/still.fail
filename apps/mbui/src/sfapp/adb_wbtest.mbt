@@ -250,8 +250,7 @@ test "settings' 共享调试: unfinished setup stands out before routine setting
   assert_true(t.find("设置 › 关于手机") is Some(_))
   assert_true(t.find("WLAN") is Some(_))
   assert_true(t.find("无线调试") is Some(_))
-  // The less urgent default remains available further down the page.
-  t.wheel(195.0, 400.0, 1500.0)
+  // The setting stays with the switch at the page's top.
   assert_true(t.find("默认最长授权") is Some(_))
 }
 
@@ -467,4 +466,12 @@ test "settings' 共享调试: 开启个人锁 there turns the lock on, and a dev
       assert_eq(typed[0].1, { "code": "123456" })
     }
   }
+}
+
+///|
+test "settings' 共享调试: its settings at the top, the lists after them" {
+  let t = settings_tester("adb:", shows="settings-adb-chats-long", platform=2)
+  guard t.find("默认最长授权") is Some((_, lasts_y)) else { fail("the setting is shown") }
+  guard t.find("已授权的对话") is Some((_, chats_y)) else { fail("the chats are shown") }
+  assert_true(lasts_y < chats_y)
 }
