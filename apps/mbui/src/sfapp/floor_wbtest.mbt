@@ -31,9 +31,6 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   let t = linger_core()
   // its answer out of its avatar, its turn over: its line stays its moment from there
   t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms())
-  let sample_phase = emits_of(emit_chat).current.map(fn(p) { (p.pose, p.clock.end()) })
-  let sample_node = t.find(tr("android-chat.chat.working"))
-  println("floor original held sample at \{t.time()}: phase \{sample_phase}, node \{sample_node}")
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
   assert_true(t.at_end())
   let ys = answer_ys(t, linger_ms + 100.0)

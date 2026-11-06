@@ -57,7 +57,7 @@ pub(all) struct Turn {
   /// its way stretched as it goes (a Float waiting for words sent to land, emit_step): how far it was, how fast it went
   /// on and how fast it ends, over its clock (0 to 1: emit_clock); None: the clock itself
   warp : (Double, Double, Double)?
-  /// the glide's length has been chosen from the endpoints at its start; an underway glide is never retimed
+  /// the glide's length has been chosen from the endpoints available at its start; an underway glide is never retimed
   timed : Bool
 }
 
@@ -348,6 +348,19 @@ pub fn emit_release(e : Emits) -> Unit {
 
 ///|
 pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
+  emit_next_placed(c, e, agent, "", fn(_) { None }, emit_moment(c), at?)
+}
+
+///|
+fn emit_next_placed(
+  c : @ui.Ctx,
+  e : Emits,
+  agent : String,
+  key : String,
+  place : (String) -> (Double, Double, Double, Double)?,
+  now : Double,
+  at? : Double,
+) -> Unit {
   let at = at.unwrap_or(emit_moment(c))
   match e.current {
     Some(t) => e.ended[t.agent] = t.clock.end()
@@ -365,7 +378,7 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   // before was declared to end, else from this frame
   let float = who == agent || at >= fold.end()
   let left = dmax(fold.end() - at, 0.0)
-  e.current = Some({
+  let turn : Turn = {
     seq,
     ts,
     agent: who,
@@ -376,7 +389,9 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
     span: if float { Float.ms() } else { left },
     warp: None,
     timed: false,
-  })
+  }
+  // Choose the route before publishing the new phase: the phase may itself mount its landing row.
+  e.current = Some(if float { emit_start_float(key, turn, place, now) } else { turn })
   // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
   c.moving(e.mover, e as &@ui.Moving)
   e.changed()
@@ -406,6 +421,33 @@ fn emit_way_ms(pose : Pose, from : (Double, Double)?, to : (Double, Double)?) ->
     }
     _ => usual
   }
+}
+
+///|
+/// Choose a Float's duration once, from the scene that exists at its cause. Publishing the Float can mount its
+/// destination, but that later registration must not revise the duration already chosen. When the cause is being
+/// caught up late, its old geometry is unavailable, so the pose keeps its usual duration.
+fn emit_start_float(
+  key : String,
+  t : Turn,
+  place : (String) -> (Double, Double, Double, Double)?,
+  now : Double,
+) -> Turn {
+  let start = t.clock.end() - t.span
+  let span = if now <= start {
+    let from = match t.from {
+      Some(k) => match place(k) {
+        Some(r) => Some((r.0, r.1 + 3.0))
+        None => t.from_at
+      }
+      None => place("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
+    }
+    let to = place("emit-landing/" + key + "/" + seq_s(t.seq)).map(fn(r) { (r.0, r.1 + 3.0) })
+    emit_way_ms(if t.from is Some(_) { Spit } else { Float }, from, to)
+  } else {
+    t.span
+  }
+  { ..t, clock: pose_clock(span, Some(start)), span, timed: true }
 }
 
 ///|
@@ -490,7 +532,7 @@ pub fn emit_step(
     if !turns.emitting() {
       turns.emits_at(c, now)
     }
-    emit_next(c, e, "", at=turns.started_at(emits_turn))
+    emit_next_placed(c, e, "", key, place, now, at=turns.started_at(emits_turn))
   }
   // a pose's end reached: the next pose, from its own beginning in this frame
   let was = e.current
@@ -502,36 +544,6 @@ pub fn emit_step(
     let t = match e.current {
       Some(t) => t
       None => break
-    }
-    // The row becomes available when Float is published. At that same cause the owner supplies its placement;
-    // choose the distance-based duration once, preserving a previous handover if its landing node has gone.
-    let t = match t.pose {
-      Float if !t.timed && t.warp is None => {
-        let start = t.clock.end() - t.span
-        if now <= start {
-          let from = match t.from {
-            Some(k) => match place(k) {
-              Some(r) => Some((r.0, r.1 + 3.0))
-              None => t.from_at
-            }
-            None => place("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
-          }
-          let to = place("emit-landing/" + key + "/" + seq_s(t.seq)).map(fn(r) { (r.0, r.1 + 3.0) })
-          if from is Some(_) && to is Some(_) {
-            let span = emit_way_ms(if t.from is Some(_) { Spit } else { Float }, from, to)
-            let t = { ..t, clock: pose_clock(span, Some(start)), span, timed: true }
-            e.current = Some(t)
-            t
-          } else {
-            t
-          }
-        } else {
-          let t = { ..t, timed: true }
-          e.current = Some(t)
-          t
-        }
-      }
-      _ => t
     }
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
@@ -561,8 +573,10 @@ pub fn emit_step(
     // the next from where this one was declared to end, whichever frame sees it
     let at = t.clock.end()
     match t.pose {
-      Fold =>
-        e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None, timed: false })
+      Fold => {
+        let next = { ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None, timed: false }
+        e.current = Some(emit_start_float(key, next, place, now))
+      }
       Float => {
         // (held till words sent from here land, as their way declared: built again then, their flight's end read by
         // nothing)
@@ -593,7 +607,7 @@ pub fn emit_step(
             let from_at = emit_landing_by(key, e, t, agents, place)
             e.queue.remove(0) |> ignore
             e.done[seq_s(t.seq)] = true
-            e.current = Some({
+            let next_turn : Turn = {
               seq: next.0,
               ts: next.1,
               agent: next.2,
@@ -604,7 +618,8 @@ pub fn emit_step(
               span: emit_drop_ms,
               warp: None,
               timed: false,
-            })
+            }
+            e.current = Some(emit_start_float(key, next_turn, place, now))
             e.aimed = None
             e.aimed_at = -1.0
           }
@@ -620,7 +635,7 @@ pub fn emit_step(
         }
       Return => {
         e.done[seq_s(t.seq)] = true
-        emit_next(c, e, t.agent, at~)
+        emit_next_placed(c, e, t.agent, key, place, now, at~)
         // none left: their turn is over where this one was declared to end
         if e.current is None {
           turns.over(c, Emits, at)

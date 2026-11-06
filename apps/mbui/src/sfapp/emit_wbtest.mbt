@@ -176,21 +176,6 @@ test "the answer coming in does not end its own motion: float, spit and return e
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  let tree = @ui.view_tree().unwrap()
-  let route : Ref[(Double?, (Double, Double, Double, Double)?, (Double, Double, Double, Double)?)?] = Ref(None)
-  // Observe the placement already supplied when the Float is declared. This read neither lays out nor asks for
-  // a picture at the deadline: the loop below keeps the original continuous host-frame sequence.
-  let stop = @signals.effect(fn() {
-    em.read()
-    @signals.untracked(fn() {
-      if route.val is None && em.current is Some(turn) && turn.pose == Float && turn.timed {
-        route.val = Some((tree.moment(),
-          emit_place(t.ctx(), "emit-avatar/" + emit_chat + "/" + turn.agent),
-          emit_place(t.ctx(), "emit-landing/" + emit_chat + "/" + seq_s(turn.seq))))
-      }
-    })
-  })
-  defer { stop() }
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let frames : Map[String, Int] = {}
@@ -209,16 +194,6 @@ test "the answer coming in does not end its own motion: float, spit and return e
           Some(was) => {
             assert_true(t.time() >= was.2, msg="\{was.0} ended before \{was.2}: \{t.time()}")
             assert_eq(phase.1, was.2, msg="the next phase starts at the preceding phase's end")
-            if turn.pose == Float {
-              guard route.val is Some((at, Some(a), Some(b))) else {
-                fail("Float has no endpoints at its declaration: \{route.val}")
-              }
-              assert_eq(at, Some(phase.1), msg="the route is resolved at its start without an extra picture")
-              let distance = dmax((b.0 - a.0).abs(), (b.1 + 3.0 - a.1).abs())
-              // The existing distance rule scales a 440 ms, 100-point Float by the window's Move duration.
-              let expected = (440.0 * @ui.move_ms(distance) / @ui.move_ms(100.0)).round()
-              assert_eq(turn.span, expected, msg="Float endpoints \{a} → \{b}, distance \{distance}")
-            }
             phases.push(phase)
           }
           None => phases.push(phase)
@@ -237,9 +212,10 @@ test "the answer coming in does not end its own motion: float, spit and return e
         }
     }
   }
-  // Float and Return take the time their distance declares. Every phase is drawn until that end, and handed to
-  // the next at exactly that end; fixed frame counts for a 440 ms Float would reject a shorter, complete route.
+  // In this scene the answer's row is not mounted at Float's cause, so it takes the usual 440 ms. Each phase
+  // is drawn until its declared end and hands over to the next at exactly that end.
   assert_eq(phases.map(fn(p) { p.0 }), ["Fold", "Float", "Spit", "Return"], msg="frames \{frames}; declared phases \{phases}")
+  assert_true(frames.get("Float").unwrap_or(0) >= 26, msg="frames \{frames}; declared phases \{phases}")
   assert_true(frames.get("Spit").unwrap_or(0) >= 22, msg="frames \{frames}; declared phases \{phases}")
   assert_true(frames.get("Return").unwrap_or(0) >= 13, msg="frames \{frames}; declared phases \{phases}")
   assert_true(em.current is None)
