@@ -654,11 +654,12 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
   let ago = text(field(field(quota, "time"), "checkedAt"), "ago")
   let windows = items(quota, "windows")
   let credits = text(quota, "creditsText")
+  let stopped = has(p, "enabled") && !flag(p, "enabled")
   @sf.section(
     c,
     @sf.t("web-pages.profiles.quota"),
     actions=fn() {
-      if @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing, disabled=has(p, "enabled") && !flag(p, "enabled")) {
+      if !stopped && @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing) {
         @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
       }
     },
@@ -888,7 +889,7 @@ fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : J
   @sf.section(
     c,
     @sf.t("web-pages.profiles.models"),
-    note=if all.length() > 0 { @sf.t("web-pages.profiles.modelsAbout") } else { @sf.t("web-pages.profiles.modelsAboutNone") },
+    note=if has(p, "enabled") && !flag(p, "enabled") { "" } else if all.length() > 0 { @sf.t("web-pages.profiles.modelsAbout") } else { @sf.t("web-pages.profiles.modelsAboutNone") },
     fn() {
       @sf.group(c, fn() {
         let row = "profile-models/" + key

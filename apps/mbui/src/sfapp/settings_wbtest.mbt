@@ -954,6 +954,8 @@ test "an API key can be disabled and enabled again from its page" {
   t.draw()
   assert_true(named(calls, "profile.put").iter().any(fn(c) { !flag(field(Some(c.params), "input"), "enabled") }))
   assert_true(t.find("已停用") is Some(_))
+  assert_true(t.find("刷新") is None, msg="a stopped profile must not show an apparently active quota refresh")
+  assert_true(t.find("列出的模型都可在新对话和连接中选择") is None, msg="a stopped profile cannot offer its models for selection")
   let again = t.drive("tap icon:more\nuntil 启用\ntap =启用\n")
   assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
   assert_true(named(calls, "profile.put").iter().any(fn(c) { flag(field(Some(c.params), "input"), "enabled") }))
