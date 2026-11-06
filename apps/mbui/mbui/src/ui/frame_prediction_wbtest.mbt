@@ -53,10 +53,12 @@ test "a host's predicted frame leaves a later touch able to cancel its deadline 
     }
     assert_eq(fired, [], msg="prediction cannot take an input deadline")
     assert_eq(view_tree().unwrap().logic_at(), start + 90.0)
-    t.advance(start + 94.0 - t.time())
-    t.touch_at(0, 50.0, 30.0, start + 94.0)
-    t.advance(1.0)
-    t.touch_at(2, 50.0, 30.0, start + 95.0)
+    let down_at = start + 94.0
+    let up_at = start + 95.0
+    t.advance(down_at - t.time())
+    t.touch_at(0, 50.0, 30.0, down_at)
+    t.advance(up_at - t.time())
+    t.touch_at(2, 50.0, 30.0, up_at)
     assert_eq(pressed, [95.0], msg="the actual touch callback keeps its event time")
     t.frame_shown_at(start + 120.0, start + 120.0)
     assert_eq(fired, [("other", 105.0)])

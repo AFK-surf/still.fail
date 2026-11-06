@@ -76,6 +76,7 @@ test "a frame's geometry notifications do not resettle predicted placement as an
 
 ///|
 test "a predicted frame with geometry observers cannot execute a future input" {
+  let deadline = 95.0
   let told : Array[Double] = []
   let page : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
@@ -89,16 +90,17 @@ test "a predicted frame with geometry observers cannot execute a future input" {
   defer { tree.dispose() }
   tree.frame(400.0, 300.0, now=0.0) |> ignore
   let v = page.val.unwrap()
-  v.at_moment(95.0, fn() { told.push(v.cause_at()) }) |> ignore
+  v.at_moment(deadline, fn() { told.push(v.cause_at()) }) |> ignore
   tree.at(100.0)
   tree.frame(400.0, 300.0, now=90.0) |> ignore
   assert_eq(told, [], msg="display prediction must not run a deadline before its input time")
-  tree.advance(95.0)
-  assert_eq(told, [95.0])
+  tree.advance(deadline)
+  assert_eq(told, [deadline])
 }
 
 ///|
 test "a drawing-clock observer cannot advance a deadline past an input that cancels it" {
+  let after_deadline = 120.0
   let told : Array[Double] = []
   let shown : Array[Bool] = []
   let page : Ref[@view.View?] = Ref(None)
@@ -115,7 +117,7 @@ test "a drawing-clock observer cannot advance a deadline past an input that canc
   assert_eq(shown.last(), Some(true))
   assert_eq(tree.logic_at(), 90.0)
   tree.event(95.0, cancel)
-  tree.advance(120.0)
+  tree.advance(after_deadline)
   assert_eq(told, [])
 }
 
@@ -166,6 +168,7 @@ test "nested geometry notifications keep the frame's moment and restore the next
 
 ///|
 test "prediction preserves equal-time deadline registration order and cancellation" {
+  let after_deadlines = 120.0
   let page : Ref[@view.View?] = Ref(None)
   let seen : Array[(String, Double)] = []
   let tree = @view.Tree::new(fn(root) {
@@ -188,8 +191,8 @@ test "prediction preserves equal-time deadline registration order and cancellati
   tree.frame(400.0, 300.0, now=90.0) |> ignore
   assert_eq(seen, [])
   tree.event(95.0, cancel)
-  tree.advance(120.0)
+  tree.advance(after_deadlines)
   assert_eq(seen, [("a", 100.0), ("c", 100.0), ("d", 100.0)])
-  tree.advance(120.0)
+  tree.advance(after_deadlines)
   assert_eq(seen.length(), 3, msg="each deadline runs once")
 }
