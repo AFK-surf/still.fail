@@ -223,7 +223,9 @@ pub struct PageFocusScope {
 pub fn PageFocusScope::new() -> PageFocusScope {
   let focus : PageFocusNodes = { controls: {}, pending: Ref(None) }
   {
-    lend_to: fn(parent) { parent.lends(page_focus_scope_lent, focus) |> ignore },
+    lend_to: fn(parent) {
+      parent.lends(page_focus_scope_lent, focus).lends(page_focus_lent, focus) |> ignore
+    },
     capture_focus: fn() { focus.capture() },
     has_pending_focus: fn() { focus.has_pending() },
     cancel_focus: fn() { focus.pending.val = None },
@@ -231,8 +233,8 @@ pub fn PageFocusScope::new() -> PageFocusScope {
 }
 
 ///|
-/// Lend this page's scope to `parent`, which makes the page now or later. The page still restores its own focus when
-/// its arrangement changes; a scope lent here also survives replacement of the whole page by its owner.
+/// Lend this page's scope to `parent`, which makes its controls now or later. A page_node also uses it for changes of
+/// arrangement; controls outside a page_node can register with page_focus_node and return after they are laid out.
 pub fn PageFocusScope::lend(self : PageFocusScope, parent : @view.View) -> Unit {
   (self.lend_to)(parent)
 }
@@ -283,14 +285,34 @@ fn PageFocusNodes::capture(self : PageFocusNodes) -> Bool {
 }
 
 ///|
+/// Give a pending return to the first eligible copy of its control once they have been laid out.
+fn PageFocusNodes::give(self : PageFocusNodes) -> Unit {
+  let pending = self.pending.val
+  self.pending.val = None
+  match pending {
+    Some(request) =>
+      match self.controls.get(request.key) {
+        Some(entries) =>
+          for node in entries {
+            if request.back.give(node) {
+              break
+            }
+          }
+        None => ()
+      }
+    None => ()
+  }
+}
+
+///|
 /// Forget a pending return when this logical page is left instead of structurally replaced.
 pub fn PageFocusScope::cancel(self : PageFocusScope) -> Unit {
   (self.cancel_focus)()
 }
 
-/// Name a focusable control by a stable key within its page, so page_node can restore its focus when the page changes
-/// arrangement. The key identifies the control, not its displayed label, and must be unique within the page. Removed,
-/// disabled or off-screen controls cannot take the restored focus; no focus is taken after another focus request.
+/// Name a focusable control by a stable key within its page, so its scope can restore focus after a replacement. The
+/// key identifies the control, not its displayed label, and must be unique within the page. Removed, disabled or
+/// off-screen controls cannot take the restored focus; no focus is taken after another focus request.
 pub fn page_focus_node(control : @view.View, key : String) -> @view.View {
   page_focus_register(control, NamedFocus(key))
 }
@@ -311,6 +333,20 @@ fn page_focus_register(control : @view.View, key : PageFocusKey) -> @view.View {
           _ => ()
         }
       }) |> ignore
+      // A scope can also hold controls outside page_node. Their replacement may be made after its shell has already
+      // laid out, so return when the matching control itself is laid out, not when the shell first appears.
+      match scope.pending.val {
+        Some(request) if request.key == key =>
+          control.once_laid_out(fn() {
+            match scope.pending.val {
+              Some(current) if physical_equal(current, request) => {
+                scope.give()
+              }
+              _ => ()
+            }
+          })
+        _ => ()
+      }
     }
     None => ()
   }
@@ -631,21 +667,7 @@ fn[T] page_node_build(
     }
     if focus.pending.val is Some(_) {
       p.once_laid_out(fn() {
-        let pending = focus.pending.val
-        focus.pending.val = None
-        match pending {
-          Some(request) =>
-            match focus.controls.get(request.key) {
-              Some(entries) =>
-                for node in entries {
-                  if request.back.give(node) {
-                    break
-                  }
-                }
-              None => ()
-            }
-          None => ()
-        }
+        focus.give()
       })
     }
   })

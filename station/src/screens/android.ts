@@ -31,7 +31,19 @@ const FOLLOWED_FOR = 10 * 60_000;
 /// Encoded frames kept for a view that asks slowly: past this they are dropped up to a new key frame (a delta dropped
 /// alone would break every frame after it).
 const QUEUE_MOST = 30;
-const BITRATE = 8_000_000;
+/// What a view is encoded at, by the side scrcpy is asked for (sideOf): its encoder takes no new rate while it runs, so a
+/// view cannot start low and climb as the pace asks of a helper's. A phone's UI stays sharp at these where 1.5 Mbit/s
+/// (the pace's start, which this took before) left 1280 and up soft; a still screen sends nothing at any of them.
+export function bitrateOf(side: number): number {
+  return side <= 480 ? 2_000_000 : side <= 720 ? 3_000_000 : side <= 1080 ? 5_000_000 : side <= 1440 ? 7_000_000 : 8_000_000;
+}
+/// A preview (a link's card): about two pictures a second, small and cheap.
+export const PEEK_FPS = 2;
+export const PEEK_BITRATE = 300_000;
+/// The most previews of this machine's devices running at once, besides the views: each is a run of scrcpy and an
+/// encoder on a device, and a video decoder in the client showing its card (a page of cards would use up a phone's
+/// hardware decoders). One more is refused (503); a caller may try again after a place is freed.
+export const PEEKS_MOST = 2;
 /// What a view opened to drive shows at least, however small the window it opened in: scrcpy cannot change its size
 /// without starting over.
 const LEAST_SIDE = 1280;
@@ -312,9 +324,11 @@ function adbRun(path: string, args: string[]): Promise<string> {
   });
 }
 
-function connect(port: number): Promise<net.Socket> {
+function connect(port: number, signal: AbortSignal): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(port, "127.0.0.1");
+    const socket = net.connect({ port, host: "127.0.0.1", signal });
+    // Aborting a connection can also emit an error after connect has resolved.
+    socket.on("error", () => {});
     socket.once("connect", () => (socket.off("error", reject), resolve(socket)));
     socket.once("error", reject);
   });
@@ -343,9 +357,11 @@ export class AndroidView implements ScreenView {
   readonly #gone: () => void;
   readonly #sized: (size: { width: number; height: number }) => void;
   readonly #input = new AndroidInput();
+  readonly #stopped = new AbortController();
   #server: ChildProcess | null = null;
   #video: net.Socket | null = null;
   #control: net.Socket | null = null;
+  #pending: net.Socket | null = null;
   #port = 0;
   #ended = false;
   #size = { width: 0, height: 0 };
@@ -367,9 +383,24 @@ export class AndroidView implements ScreenView {
     const scid = randomInt(1, 0x7fffffff).toString(16).padStart(8, "0");
     const jar = `/data/local/tmp/stillfail-scrcpy-${scid}.jar`;
     const name = `localabstract:scrcpy_${scid}`;
+    try {
+      await this.#start(file, jar, name, scid, options);
+    } finally {
+      void this.#adb.run(["shell", `rm -f ${jar}`]).catch(() => {});
+    }
+  }
+
+  async #start(file: string, jar: string, name: string, scid: string, options: { maxSide: number; bitrate: number; fps?: number; wake: boolean }) {
     await this.#adb.run(["push", file, jar]);
-    this.#port = Number((await this.#adb.run(["forward", "tcp:0", name])).trim());
-    if (!Number.isInteger(this.#port) || this.#port <= 0) throw new Error("adb gave no port for the view");
+    if (this.#ended) throw new Error("the view's program ended");
+    const port = Number((await this.#adb.run(["forward", "tcp:0", name])).trim());
+    if (!Number.isInteger(port) || port <= 0) throw new Error("adb gave no port for the view");
+    if (this.#ended) {
+      // close ran before adb returned the port, so it could not remove this forward then.
+      void this.#adb.run(["forward", "--remove", `tcp:${port}`]).catch(() => {});
+      throw new Error("the view's program ended");
+    }
+    this.#port = port;
     const args = [
       `scid=${scid}`, "log_level=warn", "audio=false", "control=true", "tunnel_forward=true", "cleanup=false", "video_codec=h264",
       `max_size=${options.maxSide}`, `video_bit_rate=${options.bitrate}`, `max_fps=${options.fps ?? 60}`, `power_on=${options.wake}`,
@@ -383,13 +414,34 @@ export class AndroidView implements ScreenView {
       if (!this.#ended) log.warn("screens", "an Android view's program ended", { said: said.slice(0, 500) });
       this.close();
     });
+    let timedOut = false;
+    const stopDeadline = wall.after(CONNECT_TIMEOUT, () => { timedOut = true; this.close(); });
+    try {
+      await this.#connectView(() => said, () => timedOut);
+    } finally {
+      stopDeadline();
+    }
+  }
+
+  async #connectView(said: () => string, timedOut: () => boolean) {
+    const ended = () => said().trim() || (timedOut() ? "the view's program did not start" : "the view's program ended");
     // (a forward tunnel takes a connection before anything listens: the byte the program sends first says it does)
     const until = wall.now() + CONNECT_TIMEOUT;
     while (this.#video === null) {
-      if (this.#ended) throw new Error(said.trim() || "the view's program ended");
-      if (wall.now() > until) throw new Error(said.trim() || "the view's program did not start");
-      const socket = await connect(this.#port).catch(() => null);
+      if (this.#ended) throw new Error(ended());
+      if (wall.now() > until) throw new Error(said().trim() || "the view's program did not start");
+      const socket = await connect(this.#port, this.#stopped.signal).catch(() => null);
+      if (this.#ended) {
+        socket?.destroy();
+        throw new Error(ended());
+      }
+      this.#pending = socket;
       const first = socket === null ? null : await firstOf(socket);
+      this.#pending = null;
+      if (this.#ended) {
+        socket?.destroy();
+        throw new Error(ended());
+      }
       if (socket === null || first === null) {
         socket?.destroy();
         await wall.sleep(100);
@@ -403,12 +455,15 @@ export class AndroidView implements ScreenView {
       stream.heard(first);
       socket.resume();
     }
-    const control = await connect(this.#port);
+    const control = await connect(this.#port, this.#stopped.signal);
+    if (this.#ended) {
+      control.destroy();
+      throw new Error(ended());
+    }
     // (what it answers, a clipboard's change, nobody here asks)
     control.on("data", () => {});
     control.on("error", () => this.close());
     this.#control = control;
-    void this.#adb.run(["shell", `rm -f ${jar}`]).catch(() => {});
   }
 
   #session(size: { width: number; height: number }) {
@@ -473,6 +528,8 @@ export class AndroidView implements ScreenView {
   close() {
     if (this.#ended) return;
     this.#ended = true;
+    this.#stopped.abort();
+    this.#pending?.destroy();
     this.#video?.destroy();
     this.#control?.destroy();
     this.#server?.kill();
@@ -489,6 +546,40 @@ export function sideOf(options: ViewOptions): number {
   return Math.min(MOST_SIDE, options.peek ? asked : Math.max(LEAST_SIDE, asked)) & ~7;
 }
 
+/// What scrcpy is run with for a view: its side, its rate by that side (bitrateOf; `ViewOptions.bitrate`, the pace's start
+/// for a source that climbs from it, is not taken), its frames a second as asked (none: 60), its screen turned on to
+/// drive. A preview: PEEK_FPS and PEEK_BITRATE at the card's size, the screen left as it is.
+export function viewArgs(options: ViewOptions): { maxSide: number; bitrate: number; fps?: number; wake: boolean } {
+  const maxSide = sideOf(options);
+  if (options.peek === true) return { maxSide, bitrate: PEEK_BITRATE, fps: PEEK_FPS, wake: false };
+  return { maxSide, bitrate: bitrateOf(maxSide), ...(options.fps ? { fps: options.fps } : {}), wake: true };
+}
+
+/// The previews running of a machine's devices, PEEKS_MOST at most.
+export class PeekCount {
+  #running = 0;
+  readonly #most: number;
+
+  constructor(most = PEEKS_MOST) {
+    this.#most = most;
+  }
+
+  /// One more starts, unless as many as can run already do.
+  take(): boolean {
+    if (this.#running >= this.#most) return false;
+    this.#running++;
+    return true;
+  }
+
+  free() {
+    this.#running = Math.max(0, this.#running - 1);
+  }
+
+  get running(): number {
+    return this.#running;
+  }
+}
+
 /// One device on adb.
 export class AndroidScreen implements ScreenSource {
   readonly id: string;
@@ -501,10 +592,12 @@ export class AndroidScreen implements ScreenSource {
   readonly #file: string;
   readonly #changed: () => void;
   readonly #views = new Set<AndroidView>();
+  readonly #peeks: PeekCount;
   #size: { width: number; height: number };
 
-  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void }) {
+  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void; peeks?: PeekCount }) {
     this.id = o.id;
+    this.#peeks = o.peeks ?? new PeekCount();
     this.panels = o.panels;
     this.#title = o.title;
     this.#size = o.size;
@@ -521,27 +614,34 @@ export class AndroidScreen implements ScreenSource {
     return this.#size;
   }
 
-  async open(options: ViewOptions): Promise<ScreenView> {
+  async open(options: ViewOptions, signal?: AbortSignal): Promise<ScreenView> {
     if (!options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
-    const view: AndroidView = new AndroidView(this.#adb, () => this.#views.delete(view), (size) => {
+    if (signal?.aborted) throw new Error("the view is no longer wanted");
+    const peek = options.peek === true;
+    if (peek && !this.#peeks.take()) throw new ScreenRefused(503, "station.screen.failed", { said: `at most ${PEEKS_MOST} Android screens are previewed at once` });
+    const view: AndroidView = new AndroidView(this.#adb, () => {
+      this.#views.delete(view);
+      if (peek) this.#peeks.free();
+    }, (size) => {
       // Turned or unfolded: its shape as the listing has it.
       if (Math.abs(size.width / size.height - this.#size.width / this.#size.height) < SAME_SHAPE) return;
       this.#size = size;
       this.#changed();
     });
     this.#views.add(view);
+    const cancel = () => view.close();
+    signal?.addEventListener("abort", cancel, { once: true });
     try {
-      await view.start(this.#file, {
-        maxSide: sideOf(options),
-        bitrate: Math.round(options.bitrate ?? BITRATE),
-        ...(options.fps ? { fps: options.fps } : {}),
-        wake: options.peek !== true,
-      });
+      if (signal?.aborted) { cancel(); throw new Error("the view is no longer wanted"); }
+      await view.start(this.#file, viewArgs(options));
+      if (signal?.aborted) throw new Error("the view is no longer wanted");
       return view;
     } catch (error) {
       view.close();
       log.warn("screens", "an Android view did not open", { id: this.id, error: (error as Error).message });
       throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
+    } finally {
+      signal?.removeEventListener("abort", cancel);
     }
   }
 
@@ -597,6 +697,8 @@ export class AndroidScreens {
   readonly #adb: () => string | null;
   readonly #file: string;
   readonly #listed = new Map<string, { id: string; source: AndroidScreen; remove: () => void }>();
+  /// The previews running, of all its devices.
+  readonly #peeks = new PeekCount();
   #follow: ChildProcess | null = null;
   #again: (() => void) | null = null;
   #closed = false;
@@ -712,6 +814,7 @@ export class AndroidScreens {
       adb,
       file: this.#file,
       changed: () => this.#screens.changed(),
+      peeks: this.#peeks,
     });
   }
 

@@ -207,7 +207,7 @@ fn host_work_now() -> Array[(String, Int)] {
 }
 
 ///|
-/// A frame begins (frame_shown_at's start): what was done since the frame recorded last ended, kept for it.
+/// Just before on_frame, after the host's replies and renderer setup: work since the last completed frame.
 fn host_frame_begin() -> Unit {
   guard host_record.val is Some(_) else { return }
   let now = host_work_now()
@@ -266,7 +266,7 @@ pub fn Tester::host_frames(self : Tester) -> Array[HostFrame] {
 }
 
 ///|
-/// The frame just drawn at `at`, recorded where recording (frame_shown_at's end).
+/// Immediately after on_frame returns, before the Tester's checks and callbacks: the frame the host received.
 fn host_frame_drawn(at : Double) -> Unit {
   guard host_record.val is Some(r) else {
     host_asked_next.val = true
