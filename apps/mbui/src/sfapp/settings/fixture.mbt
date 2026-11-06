@@ -205,12 +205,17 @@ let fx_connect_step : Ref[String] = Ref("team")
 let fx_station_many_profiles : Ref[Bool] = Ref(false)
 
 ///|
+/// A station whose update failed because its state could not be read.
+let fx_station_update_failed : Ref[Bool] = Ref(false)
+
+///|
 /// The made-up settings as a run starts (reset): none changed, no sheet or scroll to put up.
 fn fixture_reset() -> Unit {
   fx.names.clear()
   fx_many_models.val = false
   fx_many_kept.val = false
   fx_station_many_profiles.val = false
+  fx_station_update_failed.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
@@ -456,8 +461,9 @@ pub fn fixture_page(mode : String) -> String {
       station_parts["ws1/st1"] = "settings"
       up("", "settings/station/ws1/st1", 0)
     }
-    "settings-station-versions" => {
+    "settings-station-versions" | "settings-station-update-failed" => {
       station_parts["ws1/st1"] = "machine"
+      fx_station_update_failed.val = m == "settings-station-update-failed"
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-stations-add" => up("add", "", 0)
@@ -551,7 +557,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-outflow" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-outflow" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-network" | "settings-station-away" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1287,7 +1293,9 @@ fn fx_station(address : String) -> Json {
                 ("channel", str("stable")),
                 ("auto", Json::boolean(fx.auto)),
                 ("updatable", Json::boolean(true)),
-                ("state", str("idle")),
+                ("state", str(if fx_station_update_failed.val { "failed" } else { "idle" })),
+                ("failedText", str("更新失败")),
+                ("message", str(if fx_station_update_failed.val { "无法读取 C:\\Users\\Willow\\.stillfail\\mesh\\cloud.json：文件可能已加密或损坏。请在文件加密软件中允许程序 C:\\Users\\Willow\\.stillfail\\app\\node\\node.exe 读取，或从备份恢复文件。" } else { "" })),
                 ("checkedAt", Json::number(1.0)),
                 // (the core's words of it: present.ts software)
                 ("shownText", str("0.1.1288")),

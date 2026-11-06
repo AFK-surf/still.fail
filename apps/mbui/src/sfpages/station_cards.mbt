@@ -271,11 +271,7 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
           }
           c.text(text(v, "updatingText"), style=sw_newer) |> ignore
         } else if state == "failed" {
-          let fid = c.id("software-failed/" + station + "/" + id)
-          c.box(id=fid, fn() { c.text(text(v, "failedText"), style=sw_failed) |> ignore }) |> ignore
-          if text(v, "message") != "" {
-            @sf.tip(c, "software-failed-tip/" + station + "/" + id, fid, text(v, "message"))
-          }
+          c.text(text(v, "failedText"), style=sw_failed) |> ignore
           if flag(v, "repairable") {
             repair(@sf.t("common.retry"))
           } else {
@@ -304,6 +300,9 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
       if text(v, "note") != "" {
         c.text(text(v, "note"), style=sw_note) |> ignore
+      }
+      if state == "failed" && text(v, "message") != "" {
+        c.text(text(v, "message"), style=sw_note) |> ignore
       }
       // the station's own: which releases it takes, and whether it takes them by itself
       if switches {

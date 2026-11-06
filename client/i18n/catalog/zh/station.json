@@ -454,6 +454,7 @@
   "station.updates.downloadingStation": "正在下载新版本",
   "station.updates.draining": "等待 {n} 个 agent 完成本轮后重启（新消息将排队）",
   "station.updates.handoff": "正在交接给新版本（agent 不中断）",
+  "station.files.invalidJson": "无法读取 {path}：文件可能已加密或损坏。请在文件加密软件中允许程序 {program} 读取，或从备份恢复文件。",
   "station.updates.installerExit": "安装脚本退出，退出码 {code}",
   "station.updates.installerTimedOut": "安装脚本 20 分钟未结束，请查看 ~/.stillfail/run/update.log",
   "station.updates.installing": "正在安装",

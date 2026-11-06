@@ -460,6 +460,7 @@
     "other": "Waiting for {n} agents to finish their turns before restarting (new messages queue)"
   },
   "station.updates.handoff": "Handing over to new version (agents keep running)",
+  "station.files.invalidJson": "Couldn't read {path}: the file may be encrypted or damaged. Allow {program} to read it in your file encryption software, or restore the file from a backup.",
   "station.updates.installerExit": "Installer exited with {code}",
   "station.updates.installerTimedOut": "Installer didn't finish in 20 min; see ~/.stillfail/run/update.log",
   "station.updates.installing": "Installing",
