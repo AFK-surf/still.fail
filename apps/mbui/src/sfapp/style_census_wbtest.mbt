@@ -77,12 +77,15 @@ test "styles: how many values of each kind the app's screens use" {
   // The settings' list and 关于 on the window's tree keep their list's scroll bar's thumb as a node while at rest (unseen
   // then), so its existing look is counted where the old list built none at rest: a corner of 1.5 and the bar's two inks
   // (24272B42, ECECED42), no token of its own.
+  // 外观's 主题色 draws each accent other than the orange as a dot of its own colour, by day and by night (@sf.accents:
+  // four of them, eight colours), and 自定义's outline round its ＋ (the ink at 24%, by day and by night): what the
+  // setting shows, not a style's.
   inspect(counts.to_string(), content=(
     #|text 37
     #|weight 4
     #|space 25
     #|radius 21
-    #|color 70
+    #|color 80
     #|
 
 

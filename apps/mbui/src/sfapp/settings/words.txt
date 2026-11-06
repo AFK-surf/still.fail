@@ -1103,6 +1103,15 @@ web-pages.about.perf.title
 web-pages.about.privacy
 web-pages.addProfile.editAction
 web-pages.addProfile.openAction
+web-pages.appearance.accent.blue
+web-pages.appearance.accent.custom
+web-pages.appearance.accent.description
+web-pages.appearance.accent.hue
+web-pages.appearance.accent.orange
+web-pages.appearance.accent.pink
+web-pages.appearance.accent.purple
+web-pages.appearance.accent.teal
+web-pages.appearance.accent.title
 web-pages.appearance.archive.description
 web-pages.appearance.archive.done
 web-pages.appearance.archive.doneHint

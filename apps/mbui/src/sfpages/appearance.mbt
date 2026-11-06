@@ -1,6 +1,6 @@
 // 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
 // device shows still.fail, its settings (@sf.settings: wide, rows of one list card, each choice at its row's end;
-// narrow, a block each): 主题, 字体 (the faces chosen, opening their page: FontRow; font_setting.mbt), 动画, 震动, 语言; with
+// narrow, a block each): 主题, 主题色, 字体 (the faces chosen, opening their page: FontRow; font_setting.mbt), 动画, 震动, 语言; with
 // keyboard and mouse the files dragged into a chat too, and laid out wide the rail changed in place (as the web's,
 // `wideOnly`). Each choice is the core's prefs (`prefs.set`), shown at once. When a done chat is offered to archive is
 // 归档's (archiving.mbt), as the web's.
@@ -31,6 +31,24 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           [("system", "web-main.appearance.system"), ("light", "web-main.appearance.light"), ("dark", "web-main.appearance.dark")],
           @settings.appearance(prefs),
         )
+      })
+    },
+    // the colour theme (@sf.accents, or a hue of one's own), its dots in their own colours
+    fn() {
+      @sf.setting(c, @sf.t("web-pages.appearance.accent.title"), note=@sf.t("web-pages.appearance.accent.description"), fn() {
+        let now = @settings.pref(core, "accent")
+        let shown = if @sf.tone_of(now) is Some(_) { now } else { "" }
+        let picked = @sf.accent_pick(
+          c,
+          "appearance/accent",
+          accent_names.map(fn(k) { @sf.t(k) }),
+          @sf.t("web-pages.appearance.accent.custom"),
+          @sf.t("web-pages.appearance.accent.hue"),
+          shown,
+        )
+        if picked != shown {
+          c.after_build("appearance/accent", fn() { @settings.set_pref(core, "accent", picked) })
+        }
       })
     },
     // the faces chosen, opening their page (a chat as they set it and their list are a page's own, on every screen)
@@ -133,3 +151,11 @@ pub fn fonts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     "web-pages.appearance.fonts.description",
   ))
 }
+
+///|
+/// The accents' names, as @sf.accents has them.
+// kept across runs: a value (no element of it changes)
+let accent_names : Array[String] = [
+  "web-pages.appearance.accent.orange", "web-pages.appearance.accent.blue", "web-pages.appearance.accent.teal", "web-pages.appearance.accent.purple",
+  "web-pages.appearance.accent.pink",
+]

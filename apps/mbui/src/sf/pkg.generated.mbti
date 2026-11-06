@@ -22,6 +22,12 @@ pub fn about_mark_node(@view.View, () -> String, () -> String, TipLayer) -> @vie
 
 pub let accent : @ui.TextStyle
 
+pub fn accent_key() -> String
+
+pub fn accent_pick(@ui.Ctx, String, Array[String], String, String, String) -> String
+
+pub let accents : Array[AccentTone]
+
 pub fn action(@ui.Ctx, String, String, icon? : String, busy? : Bool, disabled? : Bool, bad? : Bool) -> Bool
 
 pub let agent_card_w : @ui.Len
@@ -363,6 +369,10 @@ pub let custom_field_dense_w : @ui.Len
 pub let custom_field_r : @ui.Radius
 
 pub let custom_field_w : @ui.Len
+
+pub fn custom_hue(String) -> Int32?
+
+pub fn custom_tone(Int32) -> AccentTone
 
 pub fn dashed_frame(@ui.Ctx, Double, Double, Double, Double, Int64) -> Int32
 
@@ -1296,6 +1306,8 @@ pub fn note_link_node(@view.View, () -> String, () -> String, () -> Unit, inline
 
 pub let notice_w : @ui.Len
 
+pub fn oklch(Double, Double, Double) -> Int64
+
 pub fn on_corner(Double, Double, room? : Double) -> Double
 
 pub fn on_the_night(() -> Unit) -> Unit
@@ -1870,6 +1882,8 @@ pub let select_chevron : Double
 
 pub let select_w : Double
 
+pub fn set_accent(String) -> Unit
+
 pub fn set_dark(Bool?) -> Unit
 
 pub fn set_language(String?) -> Unit
@@ -2232,6 +2246,8 @@ pub let toast_shadow_y : Double
 
 pub fn tone_ground(Int64) -> Int64
 
+pub fn tone_of(String) -> AccentTone?
+
 pub fn tool_button(@ui.Ctx, String, String, String, on_press~ : () -> Unit, drop? : Int32, lit? : Int64, disabled? : Bool, shortcut? : String) -> Tool
 
 pub fn tool_mark(@ui.Ctx, String, Double) -> Unit
@@ -2527,6 +2543,16 @@ pub let workspace_tile_mark : Double
 // Errors
 
 // Types and methods
+pub(all) struct AccentTone {
+  key : String
+  light : Int64
+  light_text : Int64
+  dark : Int64
+  dark_text : Int64
+  light_grounds : Grounds?
+  dark_grounds : Grounds?
+}
+
 #derive(Eq)
 pub(all) enum Anchor {
   Of(Int32)
@@ -2734,6 +2760,20 @@ pub(all) struct GlyphCounts {
 pub(all) struct Got {
   loaded : Double
   total : Double
+}
+
+pub(all) struct Grounds {
+  bg : Int64
+  canvas : Int64
+  raised : Int64
+  sidebar : Int64
+  list : Int64
+  selected : Int64
+  paper : Int64
+  card : Int64
+  card2 : Int64
+  chip : Int64
+  faint : Int64
 }
 
 pub(all) struct Items {

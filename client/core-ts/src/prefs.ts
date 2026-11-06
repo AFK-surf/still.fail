@@ -13,7 +13,7 @@ import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 import { setOwnBuild } from "./station/oldest.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
@@ -21,6 +21,15 @@ const JOBS_SEEN_KEPT = 200;
 /// At most this many failures kept as let go in one workspace's 待处理.
 const FAILS_GONE_KEPT = 200;
 const PREFS = { topic: "prefs" };
+/// The app's colour themes other than still.fail's orange (`accent`; none: the orange), or a hue of one's own
+/// (`custom:<0..359>`, the app makes the theme of it).
+const ACCENTS = ["blue", "teal", "purple", "pink"];
+const CUSTOM = /^custom:([0-9]{1,3})$/;
+
+function customHue(v: unknown): number | null {
+  const m = typeof v === "string" ? CUSTOM.exec(v) : null;
+  return m && Number(m[1]) < 360 ? Number(m[1]) : null;
+}
 
 type Map_ = Record<string, unknown>;
 
@@ -206,6 +215,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   }
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("motion" in prefs && prefs.motion !== "reduce" && prefs.motion !== "full") throw CoreError.invalid(t("core-misc.params.invalid", { error: "motion" }));
+  if ("accent" in prefs && !(ACCENTS.includes(prefs.accent as string) || customHue(prefs.accent) !== null)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "accent" }));
   if ("haptics" in prefs && prefs.haptics !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "haptics" }));
   if ("appUpdate" in prefs && prefs.appUpdate !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "appUpdate" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));

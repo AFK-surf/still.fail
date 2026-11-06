@@ -399,6 +399,7 @@ fn settings_search_children(row : SettingsRow, core : Core) -> Array[SettingsRow
     "appearance" => {
       let a : Array[(String, String, @settings.Route)] = [
         ("theme", @sf.t("web-pages.appearance.theme.title"), Appearance),
+        ("accent", @sf.t("web-pages.appearance.accent.title"), Appearance),
         ("fonts", @sf.t("web-pages.appearance.fonts.title"), Fonts),
         ("motion", @sf.t("web-pages.appearance.motion.title"), Appearance),
         ("haptics", @sf.t("web-pages.appearance.haptics.title"), Appearance),

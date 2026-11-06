@@ -1,5 +1,5 @@
 // What the app does each frame and between frames whichever frame draws it (the phone's, the desktop's): its light
-// or dark and language as the prefs say, where its attention is (told the core), the system's say (a link it was
+// or dark, accent and language as the prefs say, where its attention is (told the core), the system's say (a link it was
 // opened with, back on screen, the menu bar's items, the network), the number on its icon.
 
 ///|
@@ -31,6 +31,8 @@ pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
   @ui.set_haptics(text(prefs, "haptics") != "off")
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
+  // the accent as this device is set (the prefs' `accent`, as chosen here a moment ago), else still.fail's orange
+  @sf.set_accent(@settings.pref_from(prefs, "accent"))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {
     told_dark.val = Some(dark)

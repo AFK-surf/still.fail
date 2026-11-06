@@ -543,7 +543,26 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).motion, undefined);
-  set(7, { invite: "ABCD-EFGH" });
+  // The accent: one of the app's colours, or (none) still.fail's orange.
+  set(33, { accent: "teal" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).accent, "teal");
+  set(34, { accent: "#ff0000" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 34).length, 1);
+  set(36, { accent: "custom:210" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).accent, "custom:210");
+  set(37, { accent: "custom:360" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 37).length, 1);
+  set(35, { accent: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).accent, undefined);
+  set(7,{ invite: "ABCD-EFGH" });
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).invite, "ABCD-EFGH");
