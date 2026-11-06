@@ -200,3 +200,25 @@ test "panic event action cannot be started by layout itself" {
   })
   tree.frame(390.0, 844.0) |> ignore
 }
+
+///|
+test "panic a before-removal callback in layout cannot start a geometry event" {
+  let shown = @signals.signal(true)
+  let host : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    host.val = Some(root)
+    root.box(fn(v) {
+      v.height(Is(Some(20.0))).layout_box(By(fn() { shown.get() }), fn(l, visible) {
+        if visible {
+          let child = l.child("child", fn(c) {
+            c.before_removed(fn() { root.event_action(fn() { c.laid_size() |> ignore }) }) |> ignore
+          })
+          l.measure(child, l.width) |> ignore
+          l.place(child, 0.0, 0.0)
+        }
+      }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  tree.event(10.0, fn() { shown.set(false); host.val.unwrap().laid_size() |> ignore })
+}

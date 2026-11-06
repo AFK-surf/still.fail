@@ -5624,7 +5624,9 @@ pub fn View::event_action(self : View, f : () -> Unit) -> Unit {
   let tree = self.tree
   let at = if tree.cause_at >= 0.0 { tree.cause_at } else { tree.time_now() }
   if tree.layouts_active > 0 {
-    guard tree.cleanups_active > 0 else { abort("an event action cannot be started by layout") }
+    guard tree.cleanups_active > 0 && tree.removing_callbacks == 0 else {
+      abort("an event action cannot be started by layout or a before-removal callback in layout")
+    }
     @signals.after_flush(fn() {
       if !tree.gone {
         guard tree.layouts_active == 0 && !@signals.tracking_underway() else {
@@ -5684,7 +5686,9 @@ pub fn View::after_event_action(self : View, f : () -> Unit) -> Unit {
   let tree = self.tree
   let at = if tree.cause_at >= 0.0 { tree.cause_at } else { tree.time_now() }
   if tree.layouts_active > 0 {
-    guard tree.cleanups_active > 0 else { abort("an event action cannot be started by layout") }
+    guard tree.cleanups_active > 0 && tree.removing_callbacks == 0 else {
+      abort("an event action cannot be started by layout or a before-removal callback in layout")
+    }
   } else {
     guard !@signals.tracking_underway() else {
       abort("an event action cannot be started by a tracked computation or layout")
