@@ -96,7 +96,7 @@ fn Tree::shown_owed(self : Tree, upto : Double) -> Bool {
 ///|
 /// What the layout of a frame shown later wrote, as it was before (Tree::shadow_shown): each live node's compute and
 /// its place and size, and the tree's tables of what a layout reported and read.
-priv struct ShadowSaved {
+struct ShadowSaved {
   nodes : Array[(Int, Int, @flex.Node, Double, Double, Double, Double, Bool)]
   feet : Map[Int, (Double, Double)]
   foot_readers : Map[Int, Array[NodeId]]
