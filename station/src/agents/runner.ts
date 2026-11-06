@@ -98,12 +98,14 @@ export function existingRunners(data: string): RunnerInfo[] {
 /// The runners alive now, as `existingRunners` finds them, read without holding the station's thread: what is looked at
 /// every few seconds (jobs/memory.ts, resources/watch.ts). Their files are some 10 kB each (a command's arguments), and
 /// on a machine short of memory twenty runners took up to 5 s to read on the thread (2026-10-25).
-export async function liveRunners(data: string): Promise<RunnerInfo[]> {
+export async function liveRunners(data: string, options: { strict?: boolean } = {}): Promise<RunnerInfo[]> {
   const dir = runnersDir(data);
   let names: string[];
   try {
     names = await readdir(dir);
-  } catch {
+  } catch (error) {
+    // Recovery must not mistake an unreadable directory for no runners and start a second owner for their threads.
+    if (options.strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return [];
   }
   const read = await Promise.all(names.filter((f) => f.endsWith(".json")).map((f) => readFile(join(dir, f), "utf8").catch(() => null)));

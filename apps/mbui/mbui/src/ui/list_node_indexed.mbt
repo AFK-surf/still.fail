@@ -22,7 +22,7 @@ pub struct NodeRowsIndexed[T] {
   source : @view.AnchoredSource[String]
   item_of : (String) -> (T, Int)?
   room : (String, Double) -> @view.ListRoom
-  room_now : () -> (String, Double) -> @view.ListRoom
+  room_now : () -> (String, Double, Double) -> @view.ListRoom
   moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool
@@ -59,7 +59,7 @@ pub fn[T] ListRows::in_node_indexed(
   middle? : (T) -> Bool = fn(_) { true },
   grown? : (T) -> Bool = fn(_) { true },
   lead? : (T, Int) -> Double = fn(_, _) { 0.0 },
-  lead_in_layout? : (T, Int) -> (() -> Double),
+  lead_in_layout? : (T, Int) -> (Double) -> Double,
   own? : (T) -> Bool = fn(_) { false },
 ) -> NodeRowsIndexed[T] {
   let ended = @signals.signal(0)
@@ -425,16 +425,17 @@ pub fn[T] ListRows::in_node_indexed(
     room_with(now, k, natural, of_now)
   }
   // (the rooms as they are now, read before a layout that lays them out reads none of what they are worked out of)
-  let room_now = fn() -> (String, Double) -> @view.ListRoom {
+  let room_now = fn() -> (String, Double, Double) -> @view.ListRoom {
     told.get() |> ignore
     let c = self.causes
     c.read()
     if !busy() {
-      return still
+      return fn(k, natural, _width) { still(k, natural) }
     }
     let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
-    // (what each row on its way is worked out by, read now: those on their way and the last, no other)
-    let pre : Map[String, (Bool, () -> Double, Bool, Bool)] = {}
+    // (what each row on its way is worked out by, read now: those on their way and the last, no other; the room over
+    // it by the width the list is laid out at, as it is laid out)
+    let pre : Map[String, (Bool, (Double) -> Double, Bool, Bool)] = {}
     let note = fn(k : String) {
       if pre.contains(k) { return }
       match item_of(k) {
@@ -443,7 +444,7 @@ pub fn[T] ListRows::in_node_indexed(
             Some(f) => f(it, i)
             None => {
               let value = lead(it, i)
-              fn() { value }
+              fn(_) { value }
             }
           }
           pre[k] = (middle(it), over, grown(it), own(it))
@@ -456,10 +457,10 @@ pub fn[T] ListRows::in_node_indexed(
       note(g.key)
     }
     let owned = own_last()
-    fn(k, natural) {
+    fn(k, natural, width) {
       room_with(now, k, natural, fn(k) {
         match pre.get(k) {
-          Some((in_middle, over, grows, owns)) => Some((in_middle, over(), grows, owns))
+          Some((in_middle, over, grows, owns)) => Some((in_middle, over(width), grows, owns))
           None => Some((false, 0.0, false, owned == Some(k)))
         }
       })

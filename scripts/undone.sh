@@ -43,25 +43,42 @@ moved() {
 # text: binary; its mode alone; an empty one added or deleted), there or not, its mode and its contents; or a file's
 # mode it changed, whatever its lines: where the base has that commit's still (main changed it since: not this one's).
 objects_back() {
-  git diff --numstat --no-renames "$1^" "$1" -- $files > "$work/num"
-  back=0
-  while IFS='	' read -r plus minus f; do
-    to=$f
-    if [ -s "$work/moved" ]; then
-      to=$(awk -v f="$f" '$1 == f { print $2; exit }' "$work/moved")
-      [ -n "$to" ] || to=$f
-    fi
-    was=$(git ls-tree "$1^" -- "$f" | awk '{ print $1, $3 }')
-    then_=$(git ls-tree "$1" -- "$f" | awk '{ print $1, $3 }')
-    in_base=$(git ls-tree "$base" -- "$f" | awk '{ print $1, $3 }')
-    now=$(git ls-tree "$tree" -- "$to" | awk '{ print $1, $3 }')
-    if [ "$plus" = - ] || { [ "$plus" = 0 ] && [ "$minus" = 0 ]; }; then
-      [ "$in_base" = "$then_" ] && [ "$was" = "$now" ] && back=1
-    fi
-    if [ -n "$was" ] && [ -n "$then_" ] && [ -n "$now" ] && [ "${was%% *}" != "${then_%% *}" ] &&
-       [ "${in_base%% *}" = "${then_%% *}" ] && [ "${was%% *}" = "${now%% *}" ]; then back=1; fi
-  done < "$work/num"
-  echo $back
+  git diff --numstat --no-renames "$1^" "$1" -- $files > "$work/num" || return 1
+  touched=$(awk '{ print $3 }' "$work/num") || return 1
+  [ -n "$touched" ] || { echo 0; return; }
+  # Read each tree once, rather than starting four git processes for every file in every main commit. Keep tree
+  # entries (-t) as well as files: a branch can replace a file with a directory, or the other way around.
+  git ls-tree -r -t "$1^" -- $touched > "$work/was" || return 1
+  git ls-tree -r -t "$1" -- $touched > "$work/then" || return 1
+  [ -f "$work/in-base" ] || git ls-tree -r -t "$base" -- $files > "$work/in-base" || return 1
+  [ -f "$work/now" ] || git ls-tree -r -t "$tree" -- $files > "$work/now" || return 1
+  awk -v was_file="$work/was" -v then_file="$work/then" -v base_file="$work/in-base" \
+      -v now_file="$work/now" -v moved_file="$work/moved" '
+    function read_objects(file, into,  line, tab, path, fields) {
+      while ((getline line < file) > 0) {
+        tab = index(line, "\t"); path = substr(line, tab + 1)
+        split(substr(line, 1, tab - 1), fields, " ")
+        into[path] = fields[1] " " fields[3]
+      }
+      close(file)
+    }
+    function mode(object,  fields) { split(object, fields, " "); return fields[1] }
+    BEGIN {
+      read_objects(was_file, was); read_objects(then_file, then_)
+      read_objects(base_file, in_base); read_objects(now_file, now)
+      while ((getline line < moved_file) > 0) {
+        split(line, parts, " ")
+        if (!(parts[1] in to)) to[parts[1]] = parts[2]
+      }
+      close(moved_file)
+    }
+    {
+      plus = $1; minus = $2; f = $3; target = (f in to) ? to[f] : f
+      if ((plus == "-" || (plus == "0" && minus == "0")) && in_base[f] == then_[f] && was[f] == now[target]) back = 1
+      if (was[f] != "" && then_[f] != "" && now[target] != "" && mode(was[f]) != mode(then_[f]) &&
+          mode(in_base[f]) == mode(then_[f]) && mode(was[f]) == mode(now[target])) back = 1
+    }
+    END { print back ? 1 : 0 }' "$work/num"
 }
 
 undone=""
@@ -73,7 +90,8 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   if printf '%s\n' "$messages" | grep -qiE "(reverts|undoes) ${short}"; then continue; fi
   git diff --binary --no-renames "$m^" "$m" -- $files > "$work/patch" 2>/dev/null || continue
   [ -s "$work/patch" ] || continue
-  if [ "$(objects_back "$m")" = 1 ]; then
+  object_back=$(objects_back "$m") || { echo "could not examine objects from main commit $short" >&2; exit 2; }
+  if [ "$object_back" = 1 ]; then
     touched=$(git diff --name-only --no-renames "$m^" "$m" -- $files | tr '\n' ' ')
     undone="$undone
   $short $(git log -1 --format=%s "$m")

@@ -126,6 +126,23 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
 }
 
 ///|
+/// Give the new chat's present, unlocked composer the keyboard at the shortcut's moment.
+pub fn new_chat_focus(src : Source, w : Workspace) -> Bool {
+  let c = @ui.current()
+  if c.field_focused() { return false }
+  let v = (src.topic)("newChat", { "scope": Json::string(w.id) }).value
+  guard field(v, "stations") is Some(Array(_)) && field(v, "station") is Some(Object(_)) &&
+    text(v, "blocked") == "" && new_composer_unlocked(v) else { return false }
+  c.focus_field(@sfbase.writing(src, "new:" + w.id).field, ask_later=false)
+  c.field_focused()
+}
+
+///|
+fn new_composer_unlocked(v : Json?) -> Bool {
+  text(v, "runtime") != "" && field(v, "model") is Some(_)
+}
+
+///|
 /// The new chat of view `v` as it is left (madeChat.ts toMadeChat, data-made-leave): as it was but for its composer
 /// (the chat's now, its place kept), its scene `up` of the way faded where it is, what is under the composer `fade` of
 /// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
@@ -477,6 +494,7 @@ fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body 
     c.box(style=new_capsule_in_row, id~, body)
   }
   c.semantics(b, Button, id~, label~)
+  c.focusable(id, node=b)
   c.clicked(id)
 }
 
@@ -680,7 +698,7 @@ fn new_composer_place(
         note: [],
         tail: None,
         roomy: wide,
-        locked: held || text(v, "runtime") == "" || field(v, "model") is None,
+        locked: held || !new_composer_unlocked(v),
         offline: false,
         warm_agent: false,
       }

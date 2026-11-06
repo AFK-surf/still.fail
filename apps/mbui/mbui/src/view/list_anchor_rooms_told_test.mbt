@@ -4,7 +4,7 @@
 
 ///|
 test "scrolls_anchored: laid out again, the rows whose rooms came out as they were told nothing" {
-  let c = anchored_case(100, ahead=200.0, rooms=fn() { fn(_, h) { @view.list_room(h) } })
+  let c = anchored_case(100, ahead=200.0, rooms=fn() { fn(_, h, _) { @view.list_room(h) } })
   c.tree.frame(390.0, 844.0, now=10.0) |> ignore
   let rows = c.live.length()
   assert_true(rows > 3)

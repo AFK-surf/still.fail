@@ -230,7 +230,9 @@ jobs:
         # (mbui's ui, in apps/mbui/mbui: 34 s, its tests 14. Not yet the app's pages, sfapp's: built and run on wasm-gc
         # they took more than the 5 minutes, cancelled at 4 min 43 s of its tests' step, 42033580953)
         include:
-          - { part: mbui ui, dir: apps/mbui/mbui, pkgs: "-p mbui/ui", key: ui }
+          # (and view's: each test that aborts in a program of its own, moon_test_wasm, its four after
+          # layout_box_sized_test's panic one no more run in what it left)
+          - { part: mbui ui, dir: apps/mbui/mbui, pkgs: "-p mbui/ui -p mbui/view", key: ui }
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -248,7 +250,8 @@ jobs:
         run: |
           set -o pipefail
           touch "$RUNNER_TEMP/start"
-          moon test --target wasm-gc --release ${{ matrix.pkgs }} 2>&1 | grep -av '^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │' > "$RUNNER_TEMP/wasm-test.log"
+          . scripts/env.sh
+          moon_test_wasm ${{ matrix.pkgs }} 2>&1 | grep -av '^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │' > "$RUNNER_TEMP/wasm-test.log"
       - uses: actions/cache/save@v4
         if: always()
         with:
@@ -258,7 +261,7 @@ jobs:
       - name: What failed
         if: always()
         run: |
-          grep -a 'Total tests' "$RUNNER_TEMP/wasm-test.log" || tail -40 "$RUNNER_TEMP/wasm-test.log"
+          grep -a 'Total tests: .* programs)' "$RUNNER_TEMP/wasm-test.log" || tail -40 "$RUNNER_TEMP/wasm-test.log"
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/wasm-test.log" | sed 's/^\[[^]]*\] test //; s/ failed.*//' | sort -u)
           [ -n "$failed" ] || exit 0
           printf '%s\n' "$failed"

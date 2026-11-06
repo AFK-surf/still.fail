@@ -320,6 +320,10 @@ test "panic: Layout::reported read of a child not measured in the same layout ab
 
 ///|
 test "drawn_each: a few nodes found where and in the order the scene's walk finds them, the tree not gone through" {
+  // (a run of its own begun, as a Tester begins one: the panic test before it in this program stopped in a layout, its
+  // guard said, @signals.reset_globals; nothing of it to let go here, what it told run at once, run_told)
+  @signals.reset_globals()
+  @signals.run_told()
   let ids : Array[@view.NodeId] = []
   let on = @signals.signal(true)
   let tree = @view.Tree::new(

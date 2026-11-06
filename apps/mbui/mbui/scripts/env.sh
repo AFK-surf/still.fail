@@ -45,10 +45,55 @@ moon_test_native() { ( native_tests "$PWD"; moon test $NATIVE "$@" ); }
 
 # `moon_tests ARGS…`: `moon test ARGS…` as development runs it, on wasm-gc (--release, as native's: no C compiled, the
 # user 2026-11-03; wasm-gc rather than classic Wasm, whose memory, freed by counting alone, never frees what holds
-# itself), and in CI (GITHUB_ACTIONS) or with MBUI_NATIVE_TESTS=1 on native as moon_test_native does.
+# itself) as moon_test_wasm does, and in CI (GITHUB_ACTIONS) or with MBUI_NATIVE_TESTS=1 on native as moon_test_native
+# does.
 moon_tests() {
   if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${MBUI_NATIVE_TESTS:-}" = 1 ]; then moon_test_native "$@"
-  else moon test --target wasm-gc --release "$@"; fi
+  else moon_test_wasm "$@"; fi
+}
+
+# `moon_test_wasm ARGS…`: `moon test --target wasm-gc --release ARGS…`, the tests in the programs `chk tests-apart`
+# says (each test that aborts as it should alone: moon's driver runs a package's tests in one instance there, and what
+# one stopped half way leaves, every test after it runs in), one after another: the output of each, then the tests
+# run and failed of all. Fails where one fails, or ran another number of tests than it was given. ARGS: what moon
+# test is given, its --update (-u, -l N) given to each program, the rest saying which tests (those of some of a file's,
+# -i, --filter, run alone: each program runs only what they select).
+moon_test_wasm() {
+  local say=() run=() selected whole files plan n args out err code=0 total=0 failed=0 got
+  local chk; chk="$(dirname "${BASH_SOURCE[0]}")/chk"
+  while [ $# -gt 0 ]; do
+    case $1 in
+      -u|--update) run+=("$1") ;;
+      -l|--limit) run+=("$1" "$2"); shift ;;
+      *) say+=("$1") ;;
+    esac
+    shift
+  done
+  err=$(mktemp)
+  # (the outline alone read: what moon says besides, as it builds them, a compile error, said as it is where it fails)
+  selected=$(moon test --target wasm-gc --release --outline ${say[@]+"${say[@]}"} 2> "$err") || { cat "$err"; rm -f "$err"; return 1; }
+  files=$(printf '%s\n' "$selected" | "$chk" tests-apart --files) || { cat "$err"; rm -f "$err"; return 1; }
+  whole=$(mktemp)
+  # (each of their files' every test: which abort, and whether all of a file is selected)
+  # shellcheck disable=SC2086
+  moon test --target wasm-gc --release --outline $files > "$whole" 2> "$err" || { cat "$err"; rm -f "$err" "$whole"; return 1; }
+  plan=$(printf '%s\n' "$selected" | "$chk" tests-apart "$whole") || { cat "$err"; rm -f "$err" "$whole"; return 1; }
+  rm -f "$err" "$whole"
+  while IFS=$'\t' read -r n args; do
+    # (args: paths and -i FROM-TO, no spaces in them)
+    out=$(moon test --target wasm-gc --release ${run[@]+"${run[@]}"} $args 2>&1) || code=1
+    printf '%s\n' "$out"
+    got=$(printf '%s\n' "$out" | sed -n 's/^Total tests: \([0-9]*\), passed: [0-9]*, failed: \([0-9]*\)\..*/\1 \2/p' | tail -1)
+    if [ -z "$got" ] || [ "${got% *}" != "$n" ]; then
+      echo "moon_test_wasm: moon test $args ran ${got% *} tests, not its $n"
+      code=1
+      # (none of them counted as passed)
+      got="0 $n"
+    fi
+    total=$((total + n)); failed=$((failed + ${got#* }))
+  done <<< "$plan"
+  echo "Total tests: $total, passed: $((total - failed)), failed: $failed. ($(printf '%s\n' "$plan" | wc -l | tr -d ' ') programs)"
+  return $code
 }
 
 # `on_screen COMMAND…`: a command that opens a window (an app run on the host: a shot, a recording, a scripted run)
