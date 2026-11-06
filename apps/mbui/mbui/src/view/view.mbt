@@ -816,8 +816,9 @@ pub struct Tree {
   /// returns; and whether that is being made now (no layout under way then)
   made_after : Array[() -> Unit]
   mut making_after : Bool
-  /// a Roomed value being applied as its holder is laid out (View::bind's Roomed): nothing it sets marks the layout
-  mut roomed_applying : Bool
+  /// the node a Roomed value is being applied to as its holder is laid out (View::bind's Roomed; -1: none): its own
+  /// mark is found again there, not a layout to do again (what else the apply changes is marked as any change is)
+  mut roomed_applying : Int
   /// how deep in Tree::laid_out it is (0: not laying out), and whether what layouts found is being told
   mut laying : Int
   mut telling_laid : Bool
@@ -1169,7 +1170,7 @@ pub fn Tree::new(
     after_laid: [],
     made_after: [],
     making_after: false,
-    roomed_applying: false,
+    roomed_applying: -1,
     laying: 0,
     telling_laid: false,
     first_drawn: [],
@@ -2068,7 +2069,7 @@ fn Tree::marked(self : Tree, loc~ : SourceLoc) -> Unit {
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
-  if self.roomed_applying {
+  if self.roomed_applying == at {
     return
   }
   if self.layout_owner >= 0 {
@@ -2592,7 +2593,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
           // (applied as part of the layout under way: what holds it up to `of` found again here, not marked to be laid
           // out again)
           let was = tree.roomed_applying
-          tree.roomed_applying = true
+          tree.roomed_applying = at
           apply(v)
           tree.roomed_applying = was
           // (laid out otherwise in this layout: what it is found to be, and what holds it up to `of`, found again)
