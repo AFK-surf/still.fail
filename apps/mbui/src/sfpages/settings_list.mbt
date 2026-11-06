@@ -358,13 +358,19 @@ let settings_search_grow : @ui.Style = @ui.style(w=@sf.grow)
 let settings_search_page : @ui.Style = @ui.css("w=Full pb=S3 clip=true")
 
 ///|
+/// The room under the search field on a page (settings_search_page's S3).
+let settings_search_foot : Double = 12.0
+
+///|
 /// The same search control hosted in the Small settings page's made-once tree.
 fn settings_search_node(parent : @view.View) -> Unit {
   @ui.old(parent, fn(c) {
     c.with_theme(@sf.ui_theme(), fn() {
       c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore
     })
-  }, natural=true).width_share(Is(1.0)) |> ignore
+    // (as tall as it is before it is laid out too: made again as it scrolls back, told 0 it would close its room under
+    // the finger, not show, and open it again further on)
+  }, natural=true, unlaid=fn() { @sf.theme().chat_list.band_h + settings_search_foot }).width_share(Is(1.0)) |> ignore
 }
 
 ///|
