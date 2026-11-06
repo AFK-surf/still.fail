@@ -1034,7 +1034,7 @@ pub struct Tree {
   /// the nodes whose being under the pointer is read (View::pointer_within: their cells), each as it was made (its
   /// index and generation), told again as the pointer moves and as what is placed changes
   withins_at : Array[(Int, Int)]
-  /// pointer geometry waiting for the whole signal change to be committed
+  /// pointer geometry waiting for the whole signal change, or being settled after it
   mut withins_asked : Bool
   /// whether a frame's laying out is telling what is under the pointer (Tree::laid_out): what it lays out then not again
   mut withins_passing : Bool
@@ -4295,7 +4295,9 @@ fn Tree::withins_settled(self : Tree) -> Unit {
   // change, just as settle_after_change does, after every reader has seen its cause.
   self.withins_asked = true
   @signals.after_flush(fn() {
-    self.withins_asked = false
+    // A layout releases modal notifications as it returns. Keep this settlement owned until it has also finished
+    // restoring the drawn clock, or that release can enter withins_ready again before this one returns.
+    defer { self.withins_asked = false }
     self.withins_ready()
   })
 }

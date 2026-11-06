@@ -324,7 +324,7 @@ test "a notification from a stopped event can lay out in the next frame" {
 }
 
 ///|
-fn held_past_stopped_measurement(modal : Bool) -> Unit {
+fn held_past_stopped_measurement(modal : Bool) -> Unit raise {
   faults_stop.val = false
   defer { faults_stop.val = true }
   let armed = Ref(false)
