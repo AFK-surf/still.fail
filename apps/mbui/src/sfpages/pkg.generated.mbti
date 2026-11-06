@@ -484,6 +484,8 @@ pub fn picture_share(@sfbase.Attachment, Double, min_side? : Double) -> (Double,
 
 pub fn plan_list(@ui.Ctx, Array[@json.Json]) -> Unit
 
+pub fn plan_list_node(@view.View, () -> Array[@json.Json]) -> Unit
+
 pub fn play_page(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
 pub fn policy_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
