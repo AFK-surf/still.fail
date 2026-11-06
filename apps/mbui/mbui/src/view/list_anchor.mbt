@@ -339,11 +339,24 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // its ends, their give and a fling's end all as it is counted, from that event)
   let bar_off = Ref(0.0)
   s.bar_off = fn() { bar_off.val }
+  // (its foot in the hand's terms where its last row was laid out, as last laid out: Scroll::foot_hand)
+  let foot_hand : Ref[Double?] = Ref(None)
+  s.foot_hand = fn() { foot_hand.val }
+  // (the moment what it holds last changed: rows come or gone, or one measured otherwise than it was)
+  let held_since = Ref(-1.0e9)
+  s.held_since = fn() { held_since.val }
+  // (the rows as last laid out, by their array: another array, what it holds changed)
+  let keys_laid : Ref[Array[K]?] = Ref(None)
+  // (whether a fling is under way, as last set: what its layout reads, not the signal)
+  let flinging = Ref(false)
+  self.reacts(fn() { s.fling.get() is Some(_) }, fn(now) { flinging.val = now })
   s.reads_free = true
   s.rebase = fn() {
     let d = bar_off.val
     if d != 0.0 {
       bar_off.val = 0.0
+      // (its foot where the hand will have it: moved as much)
+      foot_hand.val = foot_hand.val.map(fn(f) { f + d })
       seen_x.val = seen_x.val.map(fn(x) { x + d })
       if s.as_list {
         s.grew_above(d)
@@ -371,7 +384,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       }
     }
   }
-  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reveal = fn(_, _) { }; s.reads_free = false }) |> ignore
+  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.foot_hand = fn() { None }; s.held_since = fn() { -1.0e9 }; s.rebase = fn() { }; s.reveal = fn(_, _) { }; s.reads_free = false }) |> ignore
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
@@ -431,6 +444,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       }),
       fn(l, c) {
         let all = c.keys.v
+        match keys_laid.val {
+          Some(was) if !physical_equal(was, all) && was != all => held_since.val = self.tree.logic
+          _ => ()
+        }
+        keys_laid.val = Some(all)
         let n = c.indexed.map(fn(s) { s.1 }).unwrap_or(all.length())
         let mut reset_fixed = false
         if fixed_estimate && (l.width != measured_width.val || c.words != measured_words.val) {
@@ -566,7 +584,13 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             fixed_add(i, natural - heights.get(k).unwrap_or(est))
           }
           match heights.get(k) {
-            Some(was) => known_sum.val = known_sum.val - was + natural
+            Some(was) => {
+              // (measured otherwise than it was: what it holds changed, now)
+              if (was - natural).abs() > 0.001 {
+                held_since.val = self.tree.logic
+              }
+              known_sum.val = known_sum.val - was + natural
+            }
             None => known_sum.val = known_sum.val + natural
           }
           heights[k] = natural
@@ -834,6 +858,31 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           extent_floor.val = at + h + under + foot_laid.val
         }
         let most = dmax(0.0, extent() - foot_laid.val - h)
+        // (its last row laid out: its foot in the hand's terms as measured, where the hand has it, its last row's foot
+        // under the window, less how much further it was asked to go than its end (held there: list_laid_from_end's
+        // beyond_end). Not as it is counted, by the mean of those measured over all it holds, nor where the hand has
+        // it alone once at its end: the one a fling to it is planned to, whatever frames came before (2026-11-06: at 60
+        // and at 144 a second 28 apart, its bounce 4 ms apart))
+        foot_hand.val = if r.keys.length() > 0 && r.last == n - 1 {
+          let last_foot = r.tops[r.keys.length() - 1] + r.heights[r.keys.length() - 1]
+          Some(c.x + last_foot - h - r.beyond_end)
+        } else {
+          None
+        }
+        // (once all of it is laid out: a fling planned to another foot than this one planned again to it)
+        if foot_hand.val is Some(_) && flinging.val {
+          let host = s.host
+          self.tree.once_laid_out(fn() {
+            match (s.host, host) {
+              (Some(v), Some(was)) if physical_equal(v.tree, self.tree) &&
+                physical_equal(was.tree, v.tree) &&
+                v.at == was.at &&
+                v.gen == was.gen &&
+                v.live() is Some(_) => s.foot_moved(v, v.logic_at(), s.most())
+              _ => ()
+            }
+          })
+        }
         let counted = if at_end || (!from_end && r.at_start) {
           most
         } else if r.first == 0 {

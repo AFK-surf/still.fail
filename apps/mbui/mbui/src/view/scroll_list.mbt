@@ -557,19 +557,33 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 /// come or gone; what grew above, Scroll::grew_above), at rest then.
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
   // (a list that holds itself at its ends (reads_free) counts how far it can go in its own terms, its fling goes in the
-  // hand's: its foot where the hand's terms have it, as far from where the hand has it as the list counts it to be)
-  let most = if self.reads_free { most - (self.bar_off)() } else { most }
+  // hand's: its foot where the hand's terms have it, as measured where its last row is laid out (list_anchor.mbt's
+  // foot_hand), else as far from where the hand has it as the list counts it to be)
+  let measured = if self.reads_free { (self.foot_hand)() } else { None }
+  let most = match measured {
+    Some(foot) => foot
+    None => if self.reads_free { most - (self.bar_off)() } else { most }
+  }
+  // (a foot measured otherwise than the fling was planned to: planned again, if it met it already too, as it met it)
   guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
     f.v0 > 0.0 &&
-    t <= f.end_t &&
-    (laid || f.till != most) else {
+    (t <= f.end_t || measured is Some(_)) &&
+    (laid || (f.till - most).abs() > 0.001) else {
     return
   }
   let density = w.px / dmax(w.h, 1.0)
   match list_planned(f.t0, f.x0, f.v0, w, w.same, density, most) {
-    // (past its foot already as it is laid out now (what is under what is in sight less by more than it had left to
-    // go): it meets it now, at its speed now)
-    Some(g) if g.end_t < t => self.fling.set(Some(met_now(f, w, t, most, density)))
+    // (past its foot already as it is laid out now: it met it where its way comes to it, at the moment it did, as
+    // planned from where it set out, whatever frames were drawn between; not before what it holds came to be as it
+    // is now (a row gone or come at an event's moment: met then, at its speed then))
+    Some(g) if g.end_t < t => {
+      let since = (self.held_since)()
+      if g.end_t >= since {
+        self.fling.set(Some(g))
+      } else {
+        self.fling.set(Some(met_now(f, w, dmin(since, t), most, density)))
+      }
+    }
     Some(g) => self.fling.set(Some(g))
     None => {
       self.fling.set(None)

@@ -18,7 +18,8 @@ pub(all) struct ListAnchor[K] {
 /// What one layout of the list measured and placed: the rows from `first` to `last` (indexes, `last` the newest one
 /// placed), each one's top in the window (its foot's distance from the window's top: `tops[i - first]` and
 /// `heights[i - first]`), and where it is now (`anchor`, None at its end). `start`/`end`: whether its first and last rows
-/// are among them, the oldest row's top and the newest's foot where they are.
+/// are among them, the oldest row's top and the newest's foot where they are. `beyond_end`/`beyond_start`: how much
+/// further than its end (its start) it was asked to be scrolled than it went, held there (0 where it was not).
 pub(all) struct ListLaid[K] {
   first : Int
   last : Int
@@ -28,6 +29,8 @@ pub(all) struct ListLaid[K] {
   anchor : ListAnchor[K]?
   at_start : Bool
   at_end : Bool
+  beyond_start : Double
+  beyond_end : Double
 } derive(Eq)
 
 ///|
@@ -51,7 +54,18 @@ pub fn[K : Eq] list_laid_from_end(
   went_past? : (Int) -> Unit = fn(_) {  },
 ) -> ListLaid[K] {
   if n == 0 {
-    return { first: 0, last: -1, keys: [], tops: [], heights: [], anchor: None, at_start: true, at_end: true }
+    return {
+      first: 0,
+      last: -1,
+      keys: [],
+      tops: [],
+      heights: [],
+      anchor: None,
+      at_start: true,
+      at_end: true,
+      beyond_start: 0.0,
+      beyond_end: 0.0,
+    }
   }
   // (the anchor's row and how far its foot is under the window's, scrolled `by`)
   let (start_i, start_under) = match anchor {
@@ -96,6 +110,8 @@ pub fn[K : Eq] list_laid_from_end(
     // (its foot over the window's top and what is made over it)
     under = under + passed(i)
   }
+  // (past its newest's foot: held there, how much further said)
+  let beyond_end = if under < 0.0 { -under } else { 0.0 }
   if under < 0.0 {
     under = 0.0
   }
@@ -122,6 +138,9 @@ pub fn[K : Eq] list_laid_from_end(
   // (its start come in the window under its top: held at the top, the rows under the anchor drawn up under it as far
   // as there are any; all it holds shorter than the window, at the foot, at its end)
   let mut shift = 0.0
+  // (how far past its start it was asked to be scrolled, as `slack` allows: held at its start, as far as there is more
+  // of it to draw up under it)
+  let mut beyond_start = 0.0
   // (`slack` of it may show past its start: room kept there for a row tucked out of sight, list_laid_from_top's)
   if first == 0 && foot > slack {
     let mut past = under
@@ -131,6 +150,7 @@ pub fn[K : Eq] list_laid_from_end(
       past = past + height_of(k)
     }
     shift = dmin(foot - slack, past)
+    beyond_start = foot - slack
   }
   under = under - shift
   let keys : Array[K] = []
@@ -178,6 +198,8 @@ pub fn[K : Eq] list_laid_from_end(
     anchor,
     at_start: first == 0 && tops.length() > 0 && tops[0] >= -0.001,
     at_end: anchor is None,
+    beyond_start,
+    beyond_end,
   }
 }
 
@@ -234,5 +256,8 @@ pub fn[K : Eq] list_laid_from_top(
     anchor: r.anchor.map(fn(a) { { ..a, near: m(a.near) } }),
     at_start: r.at_start,
     at_end: r.at_end,
+    // (the list turned over: its end the other's start)
+    beyond_start: r.beyond_end,
+    beyond_end: r.beyond_start,
   }
 }

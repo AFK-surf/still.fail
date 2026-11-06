@@ -86,6 +86,12 @@ pub struct Scroll {
   /// a list laid out from its anchor's (View::scrolls_anchored): how far where it is counted to be among all it holds
   /// is from where the hand has it, as it was last laid out (what its bar and what reads where it is add)
   priv mut bar_off : () -> Double
+  /// a list laid out from its anchor's, its last row laid out: where its foot is in the hand's terms, as measured (where
+  /// the hand has it, its last row's foot under the window, less how far past it it was asked to go); none before
+  priv mut foot_hand : () -> Double?
+  /// the moment what such a list holds last changed (rows come, gone, or measured otherwise than they were): no fling
+  /// meets a foot that came then before then
+  priv mut held_since : () -> Double
   /// how far it is scrolled read as the hand last left it, not kept within how far it can go as that is counted now:
   /// what such a list's layout reads changes only as the hand moves it, not as it is counted taller or shorter
   priv mut reads_free : Bool
@@ -172,6 +178,8 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     for_field: None,
     bar_off: fn() { 0.0 },
+    foot_hand: fn() { None },
+    held_since: fn() { -1.0e9 },
     reads_free: false,
     rebase: fn() { },
     reveal: fn(_, _) { },
