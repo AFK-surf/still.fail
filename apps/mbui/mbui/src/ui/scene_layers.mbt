@@ -1161,7 +1161,9 @@ fn Ctx::scene_copied(
   glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
 ) -> Bool {
   guard !scene.fresh else { return copy_not(id, "nothing kept") }
-  guard !forced else { return copy_not(id, "what holds it drawn whole") }
+  // (what holds it placed otherwise: where it is put now, and what it is cut, faded, stretched and glyphed by as it
+  // is drawn in now, its key, say what that changes of it; `forced` no more than that)
+  ignore(forced)
   guard scene.layers.get(id) is Some(l) else { return copy_not(id, "not kept") }
   guard l.seen >= 0 && l.seen >= scene.frame - 1 else { return copy_not(id, "seen \{l.seen}, of \{scene.frame}") }
   guard !l.own_only else { return copy_not(id, "own only") }
