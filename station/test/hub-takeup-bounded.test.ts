@@ -140,3 +140,15 @@ test("takeup reads names, pending keys and session rows from one snapshot", () =
     assert.deepEqual(runnerTakeUpSessions(db, [keyPart("session")])?.map((row) => row.key), []);
   } finally { old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("each session being taken up tells the launcher the station gets on with it", async () => {
+  const r = new Rig();
+  const hub = r.newHub({ chats: () => undefined, internal: false });
+  let said = 0;
+  (hub as any).options.taking = () => { said++; };
+  (hub as any).actor = () => { throw new Error("no actor in this test"); };
+  try {
+    for (const key of ["a", "b"]) await (hub as any).adoptOne({ key }, { key }, false);
+    assert.equal(said, 2);
+  } finally { await hub.shutdown(); await r.close(); }
+});
