@@ -651,11 +651,9 @@
   "android-misc.personal.back": "Security",
   "android-misc.personal.about": "Which of your devices can sign as you. Allowing phone debugging takes the personal key on a device, and the phone checks it itself, so a stolen login alone can't allow it.",
   "android-misc.personal.note": "Which devices can approve as you, such as phone debugging",
-  "android-misc.personal.none": "This device creates your personal lock the first time you allow phone debugging",
   "android-misc.personal.me": "This device",
   "android-misc.personal.remove": "Remove",
-  "android-misc.personal.outside.note": "Join to allow phone debugging. A phone that hasn't joined lends itself to no chat.",
-  "android-misc.personal.join": "Join personal lock",
+  "android-misc.personal.outside.note": "You turned it on on another device. This one must join to allow phone debugging.",
   "android-misc.personal.finding": "Looking for your other devices. Open still.fail on one of them",
   "android-misc.personal.code": "Enter the code shown on your other device",
   "android-misc.personal.none.found": "No device that can approve was found. Open still.fail on another device and try again",
@@ -669,5 +667,7 @@
   "android-misc.personal.toConfirm.note": "Grants from before the update have no personal key signature. Your phone lends itself again once they're confirmed, with one check.",
   "android-misc.personal.toConfirm.row": "To confirm",
   "android-misc.personal.confirm": "Confirm",
-  "android-misc.personal.codeOn": "Read the code shown on “{device}”"
+  "android-misc.personal.codeOn": "Read the code shown on “{device}”",
+  "android-misc.personal.open": "Turn on personal lock",
+  "android-misc.personal.open.note": "Which devices can approve as you. Needed to allow phone debugging."
 }

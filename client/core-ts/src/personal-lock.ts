@@ -228,6 +228,15 @@ export class PersonalLock {
     });
   }
 
+  /// Turned on here, where the person has no lock yet (the cloud heard from: not knowing is not none).
+  open(sub: string, reason: string): Effect.Effect<null, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.refresh(sub);
+      if (this.standing(sub) === "none") yield* this.begin(sub, reason);
+      return null;
+    });
+  }
+
   /// A chat's grant signed: the lock begun first where there is none, refused on a device outside it.
   signGrant(sub: string, body: Omit<GrantBody, "v" | "sub">, reason: string): Effect.Effect<SignedGrant, CoreError> {
     return Effect.gen({ self: this }, function* () {

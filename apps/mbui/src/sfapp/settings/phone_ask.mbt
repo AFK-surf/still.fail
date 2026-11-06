@@ -8,10 +8,6 @@
 // nothing could reach it.
 
 ///|
-// kept across runs: reset with the page's state (settings reset)
-let phone_joining : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
-
-///|
 /// The request's card while it waits: its words, and its answer where it is the viewer's (`mine`) and a core is there.
 /// `how`: the 共享调试 page opened, where this phone lacks something first.
 pub fn phone_card(
@@ -58,7 +54,12 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
   let row = phone_row(core, request)
   // (a station from before signatures: allowed, nothing would lend)
-  let lacks = if flag(row, "oldStation") { Some(tr("android-misc.personal.updateStation")) } else { match adb_ready(c) {
+  let lacks = if flag(row, "oldStation") {
+    Some(tr("android-misc.personal.updateStation"))
+  } else if flag(row, "join") {
+    // (no lock of the person's own on this device: not allowed here until it has one, its page a tap away)
+    Some(tr("android-misc.personal.open"))
+  } else { match adb_ready(c) {
     AdbLacks(step) => Some(step)
     // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
     AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
@@ -98,32 +99,17 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       }
     })
   }
-  // Allowed on a device outside the person's own lock: it joins right here (the code shown on a device on it), then the
-  // request goes on as it was allowed.
-  let sub = text(row, "sub")
-  let joining = phone_joining.contains(request)
-  if joining && !flag(row, "join") {
-    phone_joining.remove(request)
-    decide(true)
-  } else if joining {
-    personal_join(c, core, personal_of((core.topic)("adbShare", Map([])).value, sub), "phone/" + request)
-  }
   match lacks {
     Some(step) => c.text(fill("android-misc.adb.ask.first", [("step", step)]), style=@sf.ask_note) |> ignore
     None => ()
   }
   @sf.ask_buttons(c, fn() {
     if lacks is Some(_) {
-      if @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary) {
+      if @sf.button(c, if flag(row, "join") { tr("android-misc.personal.open") } else { tr("android-misc.adb.ask.how") }, key="phone/" + request + "/how", tone=Primary) {
         how()
       }
-    } else if !joining && @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
-      if flag(row, "join") {
-        phone_joining[request] = true
-        (core.call)("adb.personalJoin", obj([("sub", str(sub))]), fn(_) {  })
-      } else {
-        decide(true)
-      }
+    } else if @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
+      decide(true)
     }
     if @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under) {
       decide(false)
@@ -211,8 +197,9 @@ pub fn phone_link(core : Core?, station : String, said : String) -> String {
 /// Where a request's 查看步骤 takes the person: settings' 共享调试 while the phone's switch is off (it is turned on
 /// there), else the 共享调试 of the chat's station (`station`), which says what is next for it, pairing with it too
 /// (2026-10-30: it opened settings' page, which has nothing of any station, its pairing nowhere to be found).
-pub fn phone_steps(core : Core?, station : String) -> Route {
+pub fn phone_steps(core : Core?, station : String, request? : String = "") -> Route {
   match core {
+    Some(core) if flag(phone_row(core, request), "join") => PersonalLock
     Some(core) if flag((core.topic)("adbShare", Map([])).value, "on") => AdbShare(station)
     _ => AdbShare("")
   }

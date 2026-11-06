@@ -574,6 +574,8 @@ export class Adb {
           this.heard(call.station, (r as J)?.request);
           return null;
         });
+      case "personalOpen":
+        return this.#of(call.sub, (sub) => this.#env.personal.open(sub, t("core-misc.personal.reason.open")));
       case "personalJoin":
         return this.#of(call.sub, (sub) => Effect.gen({ self: this }, function* () {
           yield* this.#env.personal.refresh(sub);
@@ -666,7 +668,7 @@ export class Adb {
   #toConfirm(g: J): boolean {
     if (g.status !== "granted" || g.signed != null || this.#revoked.has(g.id) || this.#old.has(g.station)) return false;
     const sub = this.#subAt(g.station);
-    return sub !== null && this.#env.personal.standing(sub) !== "outside" && this.#env.personal.standing(sub) !== "replaced";
+    return sub !== null && this.#env.personal.standing(sub) === "member";
   }
 
   /// What this device signs to allow a chat a phone (docs/personal-lock.md).
@@ -783,7 +785,7 @@ export class Adb {
         ...shown,
         ...(sub !== null ? { sub } : {}),
         ...(whole.status === "granted" ? { held: this.#holds(whole) !== null, unsigned: whole.signed == null } : {}),
-        ...(whole.status === "pending" && (standing === "outside" || standing === "replaced") ? { join: true } : {}),
+        ...(whole.status === "pending" && standing !== "member" ? { join: true } : {}),
         ...(this.#old.has(whole.station) ? { oldStation: true } : {}),
       };
       const key = JSON.stringify([g.station, grantChat(g)]);

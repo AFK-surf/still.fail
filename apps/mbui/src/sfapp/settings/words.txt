@@ -1730,10 +1730,10 @@ android-misc.personal.confirm
 android-misc.personal.finding
 android-misc.personal.forget
 android-misc.personal.heading
-android-misc.personal.join
 android-misc.personal.me
-android-misc.personal.none
 android-misc.personal.none.found
+android-misc.personal.open
+android-misc.personal.open.note
 android-misc.personal.outside.note
 android-misc.personal.remove
 android-misc.personal.replaced
