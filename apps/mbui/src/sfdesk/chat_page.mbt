@@ -312,7 +312,8 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
               c.text(o.note, style=info_quiet) |> ignore
             }
           })
-          c.semantics(b, Link, id~, label=o.text)
+          c.focusable(id, node=b)
+          c.semantics(b, Link, id~, label=o.text, actions=[Activate])
           @sf.tip(c, "info-opener", id, o.text, repeats=true)
           return
         }
@@ -511,7 +512,8 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
     })
     |> ignore
   })
-  c.semantics(b, Button, id~, label~)
+  c.focusable(id, node=b)
+  c.semantics(b, Button, id~, label~, actions=[Activate])
   c.on_press(id, press)
 }
 
@@ -527,7 +529,8 @@ fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Js
     c.box(style=info_pull_words, fn() { c.text(title, style=info_pull_title) |> ignore }) |> ignore
     c.text("#" + count(pull, "number").to_string(), style=info_end) |> ignore
   })
-  c.semantics(b, Link, id~, label=title)
+  c.focusable(id, node=b)
+  c.semantics(b, Link, id~, label=title, actions=[Activate])
   let url = text(pull, "url")
   // (at the info's left: under it, it would cover the info's rows after it; the user, 2026-10-29: 显示到左边)
   @sfpages.web_peek(c, src, r.station, url, title, id, side=Left, peek=text(pull, "peek"))

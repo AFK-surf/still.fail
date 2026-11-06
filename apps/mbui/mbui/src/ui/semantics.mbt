@@ -132,7 +132,8 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 }
 
 ///|
-/// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
+/// `action` asked of widget `id` by a test or the host's accessibility. Activate runs its press callback in this
+/// event, as a pointer release does; a widget still reading actions in its build sees those in the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
   // one already, that one's, nothing done ahead of it: what it is asked of found and judged as things are then)
@@ -161,6 +162,19 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   // (an old view's widget: none where the tree keeps that old view from being read out or acted on now: a modal layer
   // of its over it, what holds it hidden, taking no presses, leaving: Tree::acts_on)
   if !old_said_allowed(self, id) {
+    return
+  }
+  if action == Activate && made_presses.contains(id) {
+    // The callback may outlive the last box that registered it. Only a currently exposed semantic action may
+    // invoke it: a retired, hidden, disabled or covered row cannot be revived by an old accessibility id.
+    if self.semantics_tree().iter().any(fn(s) {
+      s.id == id && !s.hidden && !s.disabled && s.actions.contains(Activate)
+    }) {
+      self.clicked.push(id)
+      made_pressed(id)
+      hand_event()
+      input_came()
+    }
     return
   }
   self.asked_actions.push((id, action))

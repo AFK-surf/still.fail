@@ -472,6 +472,17 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
 }
 
 ///|
+/// A key pressing an old view's callback belongs to this input, before the next frame. Fields and catchers retain
+/// their keys, and an old modal or a retained host that excludes the focus keeps the press from reaching it.
+fn Ctx::press_key_now(self : Ctx, code : Int, mods : Int) -> Bool {
+  let focus = self.focus_allowed()
+  guard mods == 0 && (code == key_enter || code == key_space) && focus != 0 else { return false }
+  guard !self.editors.contains(focus) && !self.dev.catchers.contains(focus) &&
+    self.keys_reach(focus) && made_presses.contains(focus) else { return false }
+  self.press_focused(if code == key_enter { press_enter } else { press_space })
+}
+
+///|
 /// A primary press went down on `target` (0 nothing): it takes the focus if it does on a press; else the focus is let
 /// go from anything but a field (a field keeps it: what is tapped beside it, a send button, does not take its keys).
 fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {

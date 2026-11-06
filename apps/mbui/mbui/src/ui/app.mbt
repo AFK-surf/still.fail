@@ -1942,6 +1942,12 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
     return
   }
+  if g().press_key_now(code, mods) {
+    took_input("key", h_now(), [code.to_double(), mods.to_double()])
+    hand_event()
+    h_request_frame()
+    return
+  }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)
