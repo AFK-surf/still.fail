@@ -11,7 +11,8 @@
 
 ///|
 /// What was pressed here, by login (a step's button plain grey once pressed: the eye on to what follows), whether a code
-/// is typed in its field, and the field.
+/// is typed in its field, and the field: these two by the place its card is drawn in as well (login_field), a login's
+/// card being in its chat and on its station's page at once.
 priv struct LoginsHere {
   pressed : Map[String, Bool]
   typed : Map[String, Bool]
@@ -32,8 +33,16 @@ pub fn login_cards_reset() -> Unit {
 
 ///|
 /// Login `id` of `station` as its card; one the core does not know (ended long ago) draws nothing, the message's words
-/// say it. `marked`: the one a link pointed to (its ground the accent, faint).
-pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marked? : Bool = false) -> Unit {
+/// say it. `marked`: the one a link pointed to (its ground the accent, faint). `place`: where it is drawn (its chat, its
+/// station's page), each place's code field its own.
+pub fn login_card(
+  c : @ui.Ctx,
+  core : Core,
+  station : String,
+  id : String,
+  marked? : Bool = false,
+  place? : String = "chat",
+) -> Unit {
   let l = match (core.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) }).value {
     Some(Object(_)) as v => v
     _ => return
@@ -59,7 +68,7 @@ pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marke
           login_cancel(c, core, station, id)
         })
         |> ignore
-        login_active(c, core, station, l, flag(all, "canRelay"))
+        login_active(c, core, station, l, flag(all, "canRelay"), place)
       } else {
         c.box(style=lc_title_room, fn() { c.text(text(l, "title"), style=lc_title) |> ignore }) |> ignore
         login_said(c, text(l, "statusText"), last=true)
@@ -181,11 +190,11 @@ fn login_step(
 /// A login under way, for one who may finish it (ActiveCard): what the person does now by its step (or, while its agent
 /// answers the command or it is checked, how it stands), then the step's own button. One whose page gives a code to
 /// paste back is its own (PasteSteps).
-fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : Bool) -> Unit {
+fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : Bool, place : String) -> Unit {
   let id = text(l, "id")
   let url = text(l, "url")
   if flag(l, "paste") && url != "" {
-    login_paste(c, core, station, l)
+    login_paste(c, core, station, l, place)
     return
   }
   // checking what came back (the browser's callback): nothing left for the person but to wait
@@ -361,13 +370,15 @@ fn login_code(c : @ui.Ctx, core : Core, code : String) -> Unit {
 }
 
 ///|
-/// The field a login's code is pasted in, by login (kept across frames).
-fn login_field(id : String) -> @ui.Field {
-  match logins_here.fields.get(id) {
+/// The field a login's code is pasted in, by its key (login_paste's: the place, station and login; kept across frames).
+/// One a place: a card shown in its chat and on its station's page beside it is two editors, and one Field given to
+/// both faulted, the chat in its place 这部分显示出错了 as it opened (2026-11-06).
+fn login_field(key : String) -> @ui.Field {
+  match logins_here.fields.get(key) {
     Some(f) => f
     None => {
       let f = @ui.Field::new()
-      logins_here.fields[id] = f
+      logins_here.fields[key] = f
       f
     }
   }
@@ -377,14 +388,15 @@ fn login_field(id : String) -> @ui.Field {
 /// A login whose page gives a code to paste back (PasteSteps): where to sign in and what to bring back, then 打开登录页
 /// (solid until pressed here or a code is in) and the field, 完成 at its end once a code is in (Enter too); sent, the
 /// keyboard goes, the code stays and 完成 turns while it is checked.
-fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
+fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : String) -> Unit {
   let p = @sf.theme().p
   let id = text(l, "id")
+  let here = place + "\u{1}" + station + "\u{1}" + id
   let sending = @settings.is_doing(core, ["machineLogin.answer"], [("station", station), ("id", id)])
   let checking = text(l, "state") == "verifying"
   let busy = sending || checking
   let opened = logins_here.pressed.get(id).unwrap_or(false)
-  let typed = logins_here.typed.get(id).unwrap_or(false)
+  let typed = logins_here.typed.get(here).unwrap_or(false)
   login_said(c, if checking {
     text(l, "statusText")
   } else {
@@ -426,10 +438,10 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
         placeholder_color=p.muted,
         caret_color=p.accent,
         enter_sends=true,
-        field=login_field(id),
+        field=login_field(here),
       )
       words = r.text.trim(chars=" \n").to_string()
-      logins_here.typed[id] = words != ""
+      logins_here.typed[here] = words != ""
       match r.submitted {
         Some(sent) if sent.trim(chars=" \n").to_string() != "" && !busy => send(sent.trim(chars=" \n").to_string())
         _ => ()
