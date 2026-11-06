@@ -1377,7 +1377,8 @@ fn Ctx::tree_step(
     // in it drawn whole where it is drawn, cut where it is put, Flutter's picture recorded whole and cut as it is
     // composited: Ctx::scene_layer_outside)
     let skippable = scene_layer_skippable(tree, p, c)
-    if skippable && self.scene_layer_left_out(c.id, ox + x, oy + y, clip_top()) {
+    // (a check's frame never left out by what was kept: drawn, and left out after by where it reaches as drawn now, below)
+    if skippable && !scene_checking() && self.scene_layer_left_out(c.id, ox + x, oy + y, clip_top()) {
       match scene.layers.get(c.id) {
         Some(l) => scene_left_out(l, scene.drawing, self.ninst, self.segs.length() / 4)
         None => ()
@@ -1408,6 +1409,13 @@ fn Ctx::tree_step(
     match scene.layers.get(c.id) {
       Some(l) => {
         l.skippable = skippable
+        // (a check's frame, drawn anew: left out by where it reaches as drawn now, wholly outside what it is drawn in and
+        // the window, nothing of what was kept asked: what the frame it checks left out by what it kept is so or not)
+        if scene_checking() && skippable && self.scene_drawn_out(l, clip_top()) {
+          self.ninst = l.start
+          self.segs.truncate(l.seg_from * 4)
+          scene_left_out(l, None, l.start, l.seg_from)
+        }
       }
       None => ()
     }

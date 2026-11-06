@@ -2663,3 +2663,12 @@ fn scene_left_out(l : SceneLayer, outer : SceneLayer?, k : Int, s : Int) -> Unit
     None => ()
   }
 }
+
+///|
+/// Whether layer `l`, just drawn anew, reaches as drawn now (its node's reach: SceneEntry's, all it holds with it)
+/// nothing inside the clip at `k` and the window: a check's frame leaving it out by what it draws, not by what was kept
+/// (Ctx::scene_layer_left_out). Where it reaches nothing, nothing of it drawn anyway.
+fn Ctx::scene_drawn_out(self : Ctx, l : SceneLayer, k : Int) -> Bool {
+  guard !l.own_only && !l.each && l.count > 0 else { return false }
+  self.scene_reach_out(l, 0.0, 0.0, clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3])
+}
