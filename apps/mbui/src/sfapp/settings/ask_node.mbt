@@ -209,12 +209,17 @@ fn phone_foot_node(parent : @view.View, core : Core, station : String, request :
   let key = "phone/" + request
   parent.reacts(fn() { () }, fn(_) { adb_phone_ask() })
   let lacks = fn() {
-    match adb_ready_now() {
+    let row = phone_row(core, request)
+    if flag(row, "oldStation") {
+      Some(tr("android-misc.personal.updateStation"))
+    } else if flag(row, "join") {
+      Some(tr("android-misc.personal.open"))
+    } else { match adb_ready_now() {
       AdbLacks(step) => Some(step)
       // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
       AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
       _ => None
-    }
+    } }
   }
   let scopes = fn() { if lasts() == "hour" { ["hour"] } else { ["hour", "chat"] } }
   let scope = fn() {
@@ -259,7 +264,9 @@ fn phone_foot_node(parent : @view.View, core : Core, station : String, request :
   @sf.ask_buttons_node(parent, fn(b) {
     b.pick(fn() { lacks() is Some(_) }, fn(first, lacking) {
       if lacking {
-        @sf.button_node(first, fn() { tr("android-misc.adb.ask.how") }, how, tone=Primary, at_foot=true) |> ignore
+        @sf.button_node(first, fn() {
+          tr(if flag(phone_row(core, request), "join") { "android-misc.personal.open" } else { "android-misc.adb.ask.how" })
+        }, how, tone=Primary, at_foot=true) |> ignore
       } else {
         @sf.button_node(first, fn() { tr("android-settings.vault.act.allow") }, fn() { decide(true) }, tone=Primary, busy=fn() {
           pending() == Some(true)

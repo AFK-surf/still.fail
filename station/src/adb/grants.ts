@@ -18,6 +18,9 @@ const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
   chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
 };
 
+/// The most a grant's signature takes (bytes of JSON).
+const SIGNED_MAX = 4096;
+
 export type Status = "pending" | "granted" | "denied" | "ended";
 export type PhoneRequest = {
   id: string; session: string; chat: string; owner: string; reason: string; at: number; status: Status;
@@ -26,6 +29,9 @@ export type PhoneRequest = {
   lastUsedAt?: number;
   /// The chat's current title, filled when sent (not kept in the record).
   chatTitle?: string | null;
+  /// What the person's device signed as it approved this (docs/personal-lock.md): their phone lends only on it, and
+  /// checks it itself. Carried, not read, here.
+  signed?: { body: unknown; sig: unknown };
   /// Granted, how this station's adb holds the phone (link.ts `AdbState.adb`: `connected`, `unpaired`, `off`,
   /// `unauthorized`, `missing`, `failed`; `gone`: not offered here now; none yet: not heard since it was granted), and
   /// the last of them the agent was told of (`linked`).
@@ -385,7 +391,7 @@ export class PhoneGrants {
   }
 
   /// The owner (`email`) decides request `id`: `scope` grants it, null refuses it. Why it is refused, or null.
-  decide(email: string, id: string, scope: Scope | null, workspace: string): string | null {
+  decide(email: string, id: string, scope: Scope | null, workspace: string, signed?: unknown): string | null {
     const r = this.get(id);
     if (r === null || this.#workspace(r) !== workspace) return "no such request";
     if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for decides its requests";
@@ -397,8 +403,24 @@ export class PhoneGrants {
     else {
       r.scope = scope;
       r.exp = this.#secs() + LASTS[scope];
+      const s = signed as PhoneRequest["signed"] | undefined;
+      if (s != null && typeof s === "object" && JSON.stringify(s).length <= SIGNED_MAX) r.signed = { body: s.body, sig: s.sig };
       this.#settle(r, "granted");
     }
+    return null;
+  }
+
+  /// What the owner's device signed for a grant live from before signatures (docs/personal-lock.md): carried from now on.
+  sign(email: string, id: string, signed: unknown, workspace: string): string | null {
+    const r = this.get(id);
+    if (r === null || this.#workspace(r) !== workspace) return "no such request";
+    if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for signs its grants";
+    if (r.status !== "granted") return `the request is ${r.status}`;
+    const s = signed as PhoneRequest["signed"] | undefined;
+    if (s == null || typeof s !== "object" || JSON.stringify(s).length > SIGNED_MAX) return "not a signature";
+    r.signed = { body: s.body, sig: s.sig };
+    // (told to their devices, not to the chat: nothing changed for it)
+    this.#settle(r, "granted", undefined, false);
     return null;
   }
 

@@ -272,7 +272,7 @@ pub fn settings_parts(
 pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
   match r {
     Fonts => Appearance
-    SecurityOpen => Security
+    SecurityOpen | PersonalLock => Security
     VaultItems | VaultItem(_, _) => Vault
     AdbShare("") => AdbShare("")
     Station(_) | AdbShare(_) => Stations

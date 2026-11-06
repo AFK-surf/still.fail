@@ -35,6 +35,16 @@ pub fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
     Some(_) if flag(lock, "locked") => blocks.append(lock_on(c, core, here, look, lock))
     Some(_) => blocks.append(lock_off(c, core, look, lock))
   }
+  // The person's own lock, first (the workspace's goes on for screens): an app's alone (a web page signs nothing).
+  if @ui.platform() != 4 {
+    blocks.insert(0, fn() {
+      @sf.group(c, fn() {
+        if @sf.link_row(c, "personal-lock", @sf.t("android-misc.personal.heading"), note=@sf.t("android-misc.personal.note")) {
+          (core.push)(PersonalLock)
+        }
+      })
+    })
+  }
   @sf.page(c, on_back=core.pop, frame~, "security", @sf.t("web-pages.security.title"), blocks, lead=@sf.t("web-pages.security.lead"))
 }
 

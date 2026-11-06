@@ -84,6 +84,19 @@ function world() {
   };
 }
 
+test("what the person's device signed goes with the grant to their phone, read by no one here", async () => {
+  const w = world();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    const signed = { body: { v: 1, request: "p1" }, sig: { key: "ed25519:aa", sig: "bb" } };
+    assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a", signed), null);
+    assert.deepEqual(w.grants.get("p1")!.signed, signed);
+    assert.deepEqual(w.grants.shown(w.grants.get("p1")!).signed, signed);
+  } finally {
+    w.db.close();
+  }
+});
+
 test("phone request status stays consistent as it is asked, granted and ended", async () => {
   const w = world();
   try {

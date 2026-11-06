@@ -20,6 +20,18 @@ export type AdbCall =
   | { kind: "revoke"; station: string; request: string }
   /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
   | { kind: "lasts"; lasts: "hour" | "chat" }
+  /// The person's own lock (docs/personal-lock.md): this device asks to join it, types the code shown on one on it, stops
+  /// asking; a device taken off; the lock pinned here left, and one begun anew.
+  /// (`sub`: whose: a device may be signed in to several accounts, each with a lock of its own.)
+  | { kind: "personalOpen"; sub: string }
+  | { kind: "personalJoin"; sub: string }
+  | { kind: "personalCode"; code: string }
+  | { kind: "personalCancel" }
+  | { kind: "personalRemove"; sub: string; key: string }
+  | { kind: "personalForget"; sub: string }
+  | { kind: "personalRestart"; sub: string }
+  /// The grants made before they were signed, signed now at one go (the person asked once).
+  | { kind: "personalConfirm" }
   /// This phone's 共享调试 switch: off, lent to no chat; on, until turned off (kept on the device).
   | { kind: "on"; on: boolean };
 
@@ -60,6 +72,22 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
       return { kind: "on", on };
     }
+    case "adb.personalOpen":
+      return { kind: "personalOpen", sub: text("sub") };
+    case "adb.personalJoin":
+      return { kind: "personalJoin", sub: text("sub") };
+    case "adb.personalCode":
+      return { kind: "personalCode", code: text("code") };
+    case "adb.personalCancel":
+      return { kind: "personalCancel" };
+    case "adb.personalRemove":
+      return { kind: "personalRemove", sub: text("sub"), key: text("key") };
+    case "adb.personalForget":
+      return { kind: "personalForget", sub: text("sub") };
+    case "adb.personalRestart":
+      return { kind: "personalRestart", sub: text("sub") };
+    case "adb.personalConfirm":
+      return { kind: "personalConfirm" };
     case "adb.ports":
       return { kind: "ports", ports: { connect: port("connect"), pair: port("pair"), device: text("device"), android: text("android"), package: text("package") } };
     case "adb.decide":

@@ -282,5 +282,18 @@
   "core-misc.secure.noDeviceLock": "请先为此设备设置锁屏密码",
   "core-misc.secure.notInFront": "still.fail 在后台时无法验证身份：请切回后重试",
   "core-misc.secure.keyInvalidated": "此设备的锁屏密码关闭过，原有密钥已失效：请使用恢复码",
-  "core-misc.reader.gone": "这本书已经不在了，请重新打开"
+  "core-misc.reader.gone": "这本书已经不在了，请重新打开",
+  "core-misc.personal.noKey": "这台设备存不了个人钥匙，请用桌面或安卓 app",
+  "core-misc.personal.outside": "这台设备还不在你的个人锁里，先在设置 › 安全 › 个人锁加入",
+  "core-misc.personal.replaced": "云端的个人锁和这台设备记住的不一样，先在设置 › 安全 › 个人锁确认",
+  "core-misc.personal.noAccount": "这台设备没有登录对应的账号",
+  "core-misc.personal.noRequest": "找不到这个申请，它可能已经结束了",
+  "core-misc.personal.reason.grant": "允许这个对话调试你的手机",
+  "core-misc.personal.reason.add": "把新设备加入你的个人锁",
+  "core-misc.personal.reason.remove": "把设备移出你的个人锁",
+  "core-misc.personal.reason.forget": "这台设备不再相信原来的个人锁",
+  "core-misc.personal.reason.restart": "新建你的个人锁",
+  "core-misc.personal.oldStation": "这台 station 版本太旧，批准了手机也不会出借。请先更新 station",
+  "core-misc.personal.reason.confirm": "确认这些对话调试你的手机",
+  "core-misc.personal.reason.open": "开启你的个人锁"
 }
