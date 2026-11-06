@@ -25,7 +25,15 @@ pub fn chat_timeline(
     let showing = shown()
     chat_take(c, rk, rd, cv, shown=showing, in_front=in_front())
     if showing {
-      emit_step(c, em, turns_of(rk), rd.landing.get(), at=now)
+      match em.current {
+        Some(t) if (t.pose == Float || t.pose == Spit) && now >= t.clock.end() => {
+          // The previous phase's row changes have been committed at their cause. Mount and place the endpoints
+          // at this deadline before looking up their keys, even if no picture has visited those rows yet.
+          owner.tree.laid_as_now()
+        }
+        _ => ()
+      }
+      emit_step(c, rk, em, cv.agents.map(fn(a) { a.key }), turns_of(rk), rd.landing.get(), at=now)
     }
     let keeps = emit_keeps(em)
     let gone : Array[String] = []

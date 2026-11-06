@@ -39,15 +39,18 @@ pub let emit_drop_ms : Double = 280.0
 
 ///|
 /// A message's turn: its seq and agent, its pose and how far through it (`clock`, 0 to 1, said as the pose sets out,
-/// from where the pose before was declared to end); `from`, on from the same agent's message before it (where its
-/// avatar is), dropping on without going home.
+/// from where the pose before was declared to end); `from`, on from the same agent's message before it (that
+/// message's emit_places key), dropping on without going home. A row rebuilt since is found by that key, never by
+/// a point left by a picture of an earlier message.
 pub(all) struct Turn {
   seq : Double
   /// its message's ts: its row's key (Entry::id's `m:` and it)
   ts : String
   agent : String
   pose : Pose
-  from : (Double, Double)?
+  from : String?
+  /// the previous landing at the handover cause, used only while `from` has no placed node
+  from_at : (Double, Double)?
   clock : @motion.Way
   /// how long its clock is (ms)
   span : Double
@@ -67,18 +70,14 @@ pub(all) struct Emits {
   /// when each agent's last message came out of its avatar, as its poses declared it to end (not the frame that saw
   /// it end): its line's lingering counted from there (chat_tick)
   ended : Map[String, Double]
-  /// where the flying avatar was last sent, for which message; where it last let one out
+  /// this message's endpoint at its Float or Spit deadline, for this seq alone: a fallback while its row is
+  /// absent. Drawing never writes it. A new turn or release clears it.
   mut aimed : (Double, Double)?
   mut aimed_at : Double
-  mut landed : (Double, Double)?
-  /// where the flying avatar's activity's avatar was last drawn: where it goes home to (Return)
-  mut home : (Double, Double)?
   /// whether what comes in is watched (the page in front, the reader at its end), as last drawn
   mut watched : Bool
   /// the agent whose avatar the flying copy shows as (its activity's own hidden), "" none
   mut copied : String
-  /// the flight as last worked out: how far through its pose, from where (y) to where (y), for the motion log
-  mut trace : (Double, Double, Double)
   /// what it is said to move by (Ctx::moving): its turns, each pose's end known as it starts
   mover : @ui.Mover
   /// a message's coming in held for words sent from here on their way (emit_step): till their declared landing (-1:
@@ -128,11 +127,8 @@ pub fn emits_of(key : String) -> Emits {
         ended: {},
         aimed: None,
         aimed_at: -1.0,
-        landed: None,
-        home: None,
         watched: false,
         copied: "",
-        trace: (0.0, 0.0, 0.0),
         mover: @ui.Mover::new(),
         held_until: -1.0,
         out_key: "",
@@ -344,6 +340,8 @@ pub fn emit_release(e : Emits) -> Unit {
   e.queue.clear()
   e.current = None
   e.copied = ""
+  e.aimed = None
+  e.aimed_at = -1.0
 }
 
 ///|
@@ -353,6 +351,8 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
     Some(t) => e.ended[t.agent] = t.clock.end()
     None => ()
   }
+  e.aimed = None
+  e.aimed_at = -1.0
   if e.queue.length() == 0 {
     e.current = None
     return
@@ -369,6 +369,7 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
     agent: who,
     pose: if float { Float } else { Fold },
     from: None,
+    from_at: None,
     clock: if float { pose_clock(Float.ms(), Some(at)) } else { pose_clock(left, Some(at)) },
     span: if float { Float.ms() } else { left },
     warp: None,
@@ -395,8 +396,8 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
 /// over its usual way (emit_way_points, a row or two), longer or shorter as a Move of it is (@ui.move_ms: the further the
 /// longer, not in proportion). The hop (Float) is a hop's, over its own height above the higher of its ends; the drop
 /// and the folding, a row's.
-fn return_ms(e : Emits) -> Double {
-  match (e.landed, e.home) {
+fn return_ms(landed : (Double, Double)?, home : (Double, Double)?) -> Double {
+  match (landed, home) {
     (Some(l), Some(h)) => {
       let far = dmax((h.0 - l.0).abs(), (h.1 - l.1).abs())
       (Return.ms() * @ui.move_ms(far) / @ui.move_ms(emit_way_points)).round()
@@ -411,7 +412,7 @@ let emit_way_points : Double = 100.0
 
 ///|
 /// How long a pose takes (Float on from the message before: only the drop).
-pub fn pose_ms(pose : Pose, from : (Double, Double)?) -> Double {
+pub fn pose_ms(pose : Pose, from : String?) -> Double {
   match pose {
     Float => if from is Some(_) { emit_drop_ms } else { Float.ms() }
     _ => pose.ms()
@@ -441,7 +442,7 @@ fn emit_moment(c : @ui.Ctx) -> Double {
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
-pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double, at? : Double) -> Unit {
+pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], turns : Turns, sending : Double, at? : Double) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
   let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
   // the words of what came out all in: drawn as laid out from here, what showed them built again (emit_out)
@@ -526,14 +527,19 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double, at? : 
         }
         let at = dmax(at, e.held_until)
         e.held_until = -1.0
+        // The same endpoint selection as the picture, including its fallback if the row is absent. This cause
+        // keeps it for this seq; a missing endpoint never retains another message's point.
+        e.aimed = emit_landing_by(key, e, t, agents, emit_place_now)
+        e.aimed_at = t.seq
         e.out_at[seq_s(t.seq)] = pose_clock(emit_out_ms_most, Some(at))
         let clock = pose_clock(Spit.ms(), Some(at))
-        e.current = Some({ ..t, pose: Spit, from: None, clock, span: Spit.ms(), warp: None })
+        e.current = Some({ ..t, pose: Spit, from: None, from_at: None, clock, span: Spit.ms(), warp: None })
       }
       Spit =>
-        match (e.queue.get(0), e.landed) {
+        match e.queue.get(0) {
           // the same agent's next message is waiting: the avatar drops on to it from here, not going home to hop
-          (Some(next), Some(l)) if next.2 == t.agent => {
+          Some(next) if next.2 == t.agent => {
+            let from_at = emit_landing_by(key, e, t, agents, emit_place_now)
             e.queue.remove(0) |> ignore
             e.done[seq_s(t.seq)] = true
             e.current = Some({
@@ -541,14 +547,22 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double, at? : 
               ts: next.1,
               agent: next.2,
               pose: Float,
-              from: Some(l),
+              from: Some("emit-landing/" + key + "/" + seq_s(t.seq)),
+              from_at,
               clock: pose_clock(emit_drop_ms, Some(at)),
               span: emit_drop_ms,
               warp: None,
             })
+            e.aimed = None
+            e.aimed_at = -1.0
           }
           _ => {
-            let span = return_ms(e)
+            // Both ends belong to this phase's cause, not to whichever pictures happened to sample Spit.
+            let landed = emit_landing_by(key, e, t, agents, emit_place_now)
+            let home = emit_place_now("emit-avatar/" + key + "/" + t.agent).map(fn(r) { (r.0, r.1) })
+            let span = return_ms(landed, home)
+            e.aimed = landed
+            e.aimed_at = t.seq
             e.current = Some({ ..t, pose: Return, clock: pose_clock(span, Some(at)), span, warp: None })
           }
         }
@@ -633,35 +647,31 @@ fn hermite_slope(p0 : Double, m0 : Double, p1 : Double, m1 : Double, s : Double)
 }
 
 ///|
-/// Where the flying avatar's 18 face is (its top left, in the window) and how it is scaled about its middle, or None
-/// when none flies (ChatMotion.flight): between where it set out and where it is going, both as last laid out.
-pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], at? : Double) -> (Double, Double, Double, Double)? {
-  e.read()
-  let t = match e.current {
-    Some(t) if t.pose != Fold => t
-    _ => return None
-  }
-  let avatar = match emit_place(c, "emit-avatar/" + key + "/" + t.agent) {
-    Some(r) => (r.0, r.1)
-    None => return None
-  }
-  e.home = Some(avatar)
+/// The route's landing from one set of places: a known row, this seq's causal fallback, then the first activity or
+/// outbox. Both the phase handover and its pictures use this choice, including when no landing row can be found.
+fn emit_landing_by(
+  key : String,
+  e : Emits,
+  t : Turn,
+  agents : Array[String],
+  place : (String) -> (Double, Double, Double, Double)?,
+) -> (Double, Double)? {
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in
   // there, the activities move down), or over what was sent from here not in the chat yet (the outbox's rows, under
   // the messages: it comes in over them), 3 down its row as a message's avatar sits; as it comes in, where it was
   // aimed
-  let known = match emit_place(c, "emit-landing/" + key + "/" + seq_s(t.seq)) {
-    Some(r) => Some((r.0, r.1 + 3.0))
-    None => None
+  match place("emit-landing/" + key + "/" + seq_s(t.seq)) {
+    Some(r) => return Some((r.0, r.1 + 3.0))
+    None => ()
   }
-  let held = match e.aimed {
-    Some(a) if e.aimed_at == t.seq && t.pose != Float => Some(a)
-    _ => None
+  match e.aimed {
+    Some(a) if e.aimed_at == t.seq && t.pose != Float => return Some(a)
+    _ => ()
   }
   // (the activities' avatars sit 3 down their rows, as a message's does)
   let mut first : (Double, Double)? = None
   for a in agents {
-    match emit_place(c, "emit-avatar/" + key + "/" + a) {
+    match place("emit-avatar/" + key + "/" + a) {
       Some(r) =>
         match first {
           Some(f) if f.1 <= r.1 => ()
@@ -671,38 +681,56 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String],
     }
   }
   if e.out_key != "" {
-    match emit_place(c, "emit-out/" + key + "/" + e.out_key) {
-      Some(r) => {
+    match (place("emit-out/" + key + "/" + e.out_key), place("emit-avatar/" + key + "/" + t.agent)) {
+      (Some(r), Some(avatar)) => {
         let y = r.1 + 3.0
         match first {
           Some(f) if f.1 <= y => ()
           _ => first = Some((avatar.0, y))
         }
       }
-      None => ()
+      _ => ()
     }
   }
-  let landing = match (known, held, first) {
-    (Some(k), _, _) => k
-    (None, Some(h), _) => h
-    (None, None, Some(f)) => f
+  first
+}
+
+///|
+/// Where the flying avatar's 18 face is (its top left, in the window) and how it is scaled about its middle, or None
+/// when none flies (ChatMotion.flight): between the places read in this picture. This samples the declared phase;
+/// it never records a landing, starts another phase or changes its duration.
+pub fn emit_flight_by(
+  key : String,
+  e : Emits,
+  agents : Array[String],
+  place : (String) -> (Double, Double, Double, Double)?,
+  at : Double,
+) -> (Double, Double, Double, Double)? {
+  e.read()
+  let t = match e.current {
+    Some(t) if t.pose != Fold => t
     _ => return None
   }
-  e.aimed = Some(landing)
-  e.aimed_at = t.seq
-  let u = match at {
-    Some(at) => emit_clock_at(t, at)
-    None => emit_clock(c, t)
+  let avatar = match place("emit-avatar/" + key + "/" + t.agent) {
+    Some(r) => (r.0, r.1)
+    None => return None
   }
-  e.trace = (u, avatar.1, landing.1)
+  guard emit_landing_by(key, e, t, agents, place) is Some(landing) else { return None }
+  let u = emit_clock_at(t, at)
   match t.pose {
     Float => {
       // from its activity's avatar, or on from the message before it (where it was)
       let start = match t.from {
-        Some(f) => f
+        Some(k) => {
+          // The previous row may have left the window. Its handover point belongs to this route, not to an
+          // earlier agent's sample. With neither endpoint, there is no copy; never restart at the activity.
+          match place(k) {
+            Some(r) => (r.0, r.1 + 3.0)
+            None => match t.from_at { Some(p) => p; None => return None }
+          }
+        }
         None => avatar
       }
-      e.trace = (u, start.1, landing.1)
       // The answer opens above the activity. That part of the trip is already moved by the list's common
       // height curve; carry it whole, and glide only the remaining distance (other activities between them).
       // Easing toward the moving landing again made an empty room appear before its avatar followed it.
@@ -713,14 +741,18 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String],
       let y = landing.1 + hermite(start.1 - landing.1 - opened, 0.0, 0.0, 0.0, u)
       Some((hermite(start.0, 0.0, landing.0, 0.0, u), y, 1.0, 1.0))
     }
-    Spit => {
-      e.landed = Some(landing)
-      Some((landing.0, landing.1, 1.0, 1.0))
-    }
+    Spit => Some((landing.0, landing.1, 1.0, 1.0))
     _ =>
       // home from where it let the message out
       Some((hermite(landing.0, 0.0, avatar.0, 0.0, u), hermite(landing.1, 0.0, avatar.1, 0.0, u), 1.0, 1.0))
   }
+}
+
+///|
+/// The same flight sampled against the placed endpoints by an old caller or a check. This observes placement;
+/// it does not lay out, publish geometry or advance phases. The retained flyer passes the picture's Laid directly.
+pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], at? : Double) -> (Double, Double, Double, Double)? {
+  emit_flight_by(key, e, agents, fn(k) { emit_place(c, k) }, at.unwrap_or(emit_moment(c)))
 }
 
 ///|
@@ -877,9 +909,36 @@ let emit_out_slide : Double = 10.0
 /// Where what a message flies between is laid out, by its key ("emit-avatar/…", "emit-landing/…", "emit-out/…"), for
 /// the nodes of a list in the window's tree (what they lay out read as they are, each while it lives); an old view's
 /// measured as it is drawn (@motion.measure).
-/// A row mounting or leaving also tells readers: the old node's geometry has no further changes to publish
-/// after it is disposed, and its flying copy must stop using that node in the same frame.
-pub let emit_places : @sf.LiveMap[String, () -> (Double, Double, Double, Double)?] = @sf.LiveMap::new()
+/// A row mounting or leaving also tells readers: its flying copy must stop using a disposed node, and a new node
+/// registered under the same key supplies the endpoint from then on.
+pub let emit_places : @sf.LiveMap[String, EmitAt] = @sf.LiveMap::new()
+
+///|
+/// The retained endpoint, owned by its node; a row rebuilt under the same message key replaces this handle.
+pub(all) struct EmitAt {
+  node : @view.View
+  dy : Double
+}
+
+///|
+/// This picture's endpoint, including the list's drawing offsets. No signal is published from this read.
+pub fn emit_place_drawn(laid : @view.Laid, key : String) -> (Double, Double, Double, Double)? {
+  emit_places.get(key).bind(fn(p) { laid.drawn(p.node).map(fn(r) { (r.0, r.1 + p.dy, r.2, r.3) }) })
+}
+
+///|
+/// A phase's endpoint at its logical cause. Place what that cause has said so far, without advancing deadlines or
+/// asking for a frame. Re-read the registration after layout: it may have replaced or released that row. An absent,
+/// hidden or unplaced node has no point; an old view's last measured rectangle is never a causal endpoint.
+pub fn emit_place_now(key : String) -> (Double, Double, Double, Double)? {
+  @signals.untracked(fn() {
+    guard emit_places.get(key) is Some(p) && p.node.alive() else { return None }
+    p.node.tree.laid_as_now()
+    guard emit_places.get(key) is Some(now) && now.node.alive() && !now.node.shown_nowhere() else { return None }
+    let r = now.node.placed_window_now(drawing=true)
+    if r.2 > 0.0 && r.3 > 0.0 { Some((r.0, r.1 + now.dy, r.2, r.3)) } else { None }
+  })
+}
 
 ///|
 /// The list room opening under a landing, in the same frame as emit_places. It is already a displacement of the
@@ -890,7 +949,11 @@ pub let emit_rooms : @sf.LiveMap[String, () -> Double?] = @sf.LiveMap::new()
 /// Where the node or old view kept as `key` is laid out, in the window: x, y, w, h (None while none is).
 pub fn emit_place(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
   match emit_places.get(key) {
-    Some(f) => f()
+    Some(p) => {
+      guard p.node.alive() && !p.node.shown_nowhere() else { return None }
+      let r = p.node.placed_window_now(drawing=true)
+      if r.2 > 0.0 && r.3 > 0.0 { Some((r.0, r.1 + p.dy, r.2, r.3)) } else { None }
+    }
     None => @motion.measured_rect(c, key)
   }
 }

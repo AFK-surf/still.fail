@@ -1319,16 +1319,13 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
   }
   layer.show(fn() { flying() is Some(_) }, fn(f) {
     // (where it is as this frame draws it, from the layer's corner: its 18 face's top left, the ring round it)
-    let at = fn() {
-      let shown = f.drawn_at()
+    let at = fn(laid : @view.Laid) {
       let agents = match view() {
         Some(v) => v.agents.map(fn(a) { a.key })
         None => []
       }
-      // The flight's clock and both endpoints belong to this frame. A row's placement can change after the
-      // clock was read; its published geometry must still invalidate the copy's position in that same pass.
-      em.read()
-      @sfbase.emit_flight(@ui.current(), rk, em, agents, at=shown)
+      // This picture reads the rows' current placement directly. It publishes no endpoint back to the timeline.
+      @sfbase.emit_flight_by(rk, em, agents, fn(k) { @sfbase.emit_place_drawn(laid, k) }, laid.at())
     }
     let a = fn() { flying() }
     f
@@ -1337,11 +1334,11 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
     .height(Is(Some(ring_side)))
     .lies_along(Is(Middle))
     .lines_up(Is(Some(Middle)))
-    .alpha(By(fn() { if at() is Some(_) { 1.0 } else { 0.0 } }))
+    .alpha(Painted(fn(laid) { if at(laid) is Some(_) { 1.0 } else { 0.0 } }))
     // (from where this frame laid the layer out, read as it is painted)
     .offset(Painted(fn(laid) {
       let (lx, ly, _, _) = laid.rect(layer).unwrap_or((0.0, 0.0, 0.0, 0.0))
-      match at() {
+      match at(laid) {
         Some((x, y, _, _)) => (x - ring_room - lx, y - ring_room - ly)
         None => (0.0, 0.0)
       }

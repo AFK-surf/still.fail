@@ -3508,9 +3508,15 @@ pub fn View::laid_before_causes(self : View) -> Unit {
 /// Where it was last placed in the window, and how big (each that holds it where it was placed too: its layout's place
 /// and its offset), drawn off and grown or shrunk by nothing: as it stood before a change told now is laid out, in the
 /// terms of laid_window_now (for what moves from there for that change's cause, said once at that moment).
-pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) {
+/// With `drawing`, include the placed drawing offsets and scales, exactly as Laid::drawn does. Neither form lays
+/// anything out, advances time or publishes geometry; a caller needing the cause's placement brings it there first.
+pub fn View::placed_window_now(self : View, drawing? : Bool = false) -> (Double, Double, Double, Double) {
   layout_read("placed_window_now")
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  if drawing {
+    let (x, y, _, s) = self.tree.projected(self.at, drawing=true)
+    return (x, y, n.lw * s, n.lh * s)
+  }
   let mut x = 0.0
   let mut y = 0.0
   let mut i = self.at
