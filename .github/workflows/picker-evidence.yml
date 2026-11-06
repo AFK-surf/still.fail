@@ -1,0 +1,49 @@
+name: picker-before-evidence
+on:
+  push:
+    branches: [codex/picker-evidence-cfb34584]
+permissions:
+  contents: read
+jobs:
+  picture:
+    runs-on: [self-hosted, macos-ci]
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - size: phone
+            window: 390x844
+            platform: '2'
+            input: finger
+          - size: desktop
+            window: 1280x800
+            platform: '0'
+            input: mouse
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Render the station chooser and picker
+        shell: bash
+        env:
+          MBUI_FIXTURE: files-add-folder
+          MBUI_WIN: ${{ matrix.window }}
+          MBUI_FILM_PLATFORM: ${{ matrix.platform }}
+          MBUI_NATIVE_INPUT: ${{ matrix.input }}
+          MBUI_LOCALE: zh
+          MBUI_FILM_SCALE: '2'
+          MBUI_MEDIA_RECORD: '{"product_base":"b2e7bef7cd9310627291d75cbf8bc74640096cbf"}'
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/picker-evidence"
+          bash apps/mbui/scripts/wasm-film-build.sh "$RUNNER_TEMP/picker-runtime"
+          for scene in stations picker; do
+            MBUI_MEDIA_RUNTIME="$RUNNER_TEMP/picker-runtime/sffilm" bash apps/mbui/scripts/media.sh picture \
+              "$RUNNER_TEMP/picker-evidence/$scene-${{ matrix.size }}-before.png" "$GITHUB_WORKSPACE/.picker-evidence/$scene.drive"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: picker-before-${{ matrix.size }}
+          path: ${{ runner.temp }}/picker-evidence/
