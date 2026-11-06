@@ -911,8 +911,8 @@ fn Ctx::scene_begin(self : Ctx) -> Unit {
     scene.drawn_by = by
     scene.parts.whole(if scene.prev_n == 0 { 1 } else if atlas_anew { 4 } else { 3 })
   }
-  // (who drew what kept, a shot at another size: everything drawn anew)
-  scene.fresh = scene.fresh || looks_rebuilt.val || inst_owners.on || words_zoom.val != 1.0
+  // (a shot at another size: everything drawn anew; who drew what kept with each layer's block, Ctx::scene_block_kept)
+  scene.fresh = scene.fresh || looks_rebuilt.val || words_zoom.val != 1.0
   // (what is kept draws from the atlas still: said so before anything of this frame places a glyph)
   if !scene.fresh {
     scene_plots_drawn()
