@@ -22,17 +22,19 @@ pub fn chat_timeline(
   }) |> ignore
   fn advance() {
     if advancing.val || pending.val || !owner.alive() { return }
+    guard read() is Some(cv) else { return }
+    let c = @ui.current()
+    let showing = shown()
     pending.val = true
+    // Decide which replies are held before the caller publishes this data change's rows. Deferring this take
+    // lets a waiting reply enter and then leave the list in the same input, starting a move it never should have.
+    chat_take(c, rk, rd, cv, shown=showing, in_front=in_front())
     owner.tree.after_change(fn() {
       pending.val = false
       if advancing.val || !owner.alive() { return }
-      guard read() is Some(cv) else { return }
       advancing.val = true
       defer { advancing.val = false }
-      let c = @ui.current()
       let now = owner.cause_at()
-      let showing = shown()
-      chat_take(c, rk, rd, cv, shown=showing, in_front=in_front())
       if showing {
         let placed = Ref(false)
         let place = fn(k) {

@@ -180,34 +180,50 @@ pub fn Tree::laid_as_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Finish `f` after this change has been published, at its cause, outside any layout under way. This is completion
-/// of the same change, before the next input; it asks for no frame and advances no deadline. Inside a signal flush
-/// it waits for that flush, not just the inner measurement, to return. The caller keeps its own lifetime guard.
-/// A cause needing placement may place once here and read all its endpoints; it never reenters the active layout.
+/// Finish `f` after the tree's current change has been published, before its next deadline or input. This queue
+/// belongs to that tree's commit, not the outer signal flush: a deadline reached from a structural reader must
+/// finish before that reader continues. Work raised by layout waits for that layout to return. No frame is asked
+/// for and no deadline advanced. The caller keeps its own lifetime guard.
 pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
-  let at = self.logic_at()
-  let done = fn(complete : Bool) {
-    if self.nodes.is_empty() || !self.nodes[0].live { return }
-    let was = self.cause_at
+  if self.gone { return }
+  self.changes.push((self.logic_at(), f))
+  // The commit/layout boundaries drain this queue themselves, even inside an outer signal flush. Only a call
+  // made in an unrelated raw signal batch needs its end notification; no tree change is under way in that case.
+  if self.committing == 0 && self.laying == 0 && self.layouts_active == 0 && !self.changes_running {
+    if @signals.batch_depth() == 0 { self.changes_done() |> ignore }
+    else { @signals.after_flush(fn() { self.changes_done() |> ignore }) }
+  }
+}
+
+///|
+/// Complete one tree change, including the changes its completion publishes. Each callback's writes are told
+/// whole before the next callback reads them, even when the caller is itself a signal watcher. Never enter a
+/// layout or a partial tree commit. Disposal clears the remaining callbacks.
+fn Tree::changes_done(self : Tree) -> Bool {
+  if self.changes_running || self.committing > 0 || self.laying > 0 || self.layouts_active > 0 ||
+    @signals.batch_depth() > 0 || self.changes.is_empty() {
+    return false
+  }
+  self.changes_running = true
+  let was = self.cause_at
+  defer {
+    self.cause_at = was
+    self.changes_running = false
+  }
+  let mut i = 0
+  while i < self.changes.length() && !self.gone {
+    let (at, f) = self.changes[i]
+    i += 1
     self.cause_at = at
-    defer { self.cause_at = was }
+    self.committing += 1
     @signals.start_batch()
     @signals.untracked(f)
     @signals.end_batch()
-    if complete {
-      // A callback held by a layout can change its result. Complete that sample's marks too, without asking for
-      // another frame or advancing the timeline. An ordinary change leaves placement to its cause as before.
-      @signals.untracked(fn() {
-        self.pull()
-        self.laid_out(self.clock.get())
-      })
-    }
+    self.committing -= 1
+    self.modals_settled()
   }
-  // laid_out_now holds after_flush through compute/then, including a standalone measured_now. A full layout may
-  // still be walking or telling sizes after that compute: finish at its outer return in that case.
-  @signals.after_flush(fn() {
-    if self.laying > 0 { self.said_after_laid(fn() { done(true) }) } else { done(false) }
-  })
+  self.changes.clear()
+  true
 }
 
 ///|

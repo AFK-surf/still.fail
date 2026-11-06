@@ -876,6 +876,9 @@ pub struct Tree {
   mut committing : Int
   // what is to be done once the event being taken is committed whole (Tree::after_event), in order
   afters : Array[() -> Unit]
+  /// Work completing a published change, before the next timeline moment or input is taken (Tree::after_change).
+  changes : Array[(Double, () -> Unit)]
+  mut changes_running : Bool
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
@@ -1164,6 +1167,8 @@ pub fn Tree::new(
     modals: [],
     committing: 0,
     afters: [],
+    changes: [],
+    changes_running: false,
     modals_due: false,
     held: None,
     gesture_tapped: false,
@@ -1905,6 +1910,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.shows_due.clear()
   self.laid_waits.clear()
   self.afters.clear()
+  self.changes.clear()
   self.held_tracks.clear()
   self.thumbs.clear()
   @signals.end_batch()
@@ -3589,6 +3595,8 @@ fn Tree::measured_now(self : Tree) -> Unit {
     })
   }
   self.standing = was_standing
+  // A standalone measurement has no outer laid_out/tell_laid to finish work raised by flex's callbacks.
+  self.changes_done() |> ignore
 }
 
 ///|
@@ -3957,6 +3965,7 @@ fn Tree::modals_told(self : Tree) -> Unit {
 /// A change committed whole (the outermost Tree::at_cause or event ending, its moment still the cause's): what a modal
 /// layer said in it told now.
 fn Tree::modals_settled(self : Tree) -> Unit {
+  self.changes_done() |> ignore
   if self.committing == 0 && self.modals_due {
     self.modals_due = false
     self.modals_now()
@@ -7272,6 +7281,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // event finding where things are, a change settled): once, by the outermost)
   if self.laying == 0 {
     self.tell_laid()
+    if self.changes_done() && self.due {
+      self.laid_out(upto)
+    }
   }
 }
 
