@@ -2,7 +2,7 @@
 // at another path) is the same image, drawn at its proportion now and opened as the file is now.
 
 ///|
-test "an image in a row whose file its message tells again is the same image, drawn at its proportion now and opened as it is now" {
+test "an image in a row whose file its message tells again is the same image, drawn at its proportion now, opened as it is now from its thumbnail" {
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
   let told = @signals.signal(0)
@@ -57,9 +57,24 @@ test "an image in a row whose file its message tells again is the same image, dr
   assert_eq(b_now.id, b.id, msg="乙 the same image")
   assert_eq(a_now.id, a.id, msg="甲 the same image")
   assert_true((b_now.rect.2 / b_now.rect.3 - 480.0 / 640.0).abs() < 0.02, msg="乙 drawn upright: \{b.rect} then \{b_now.rect}")
-  // (pressed, it opens the file where it is kept now)
+  // (pressed, it opens the file where it is kept now, from this image: its thumbnail by the file now, none by the file
+  // as it was)
   t.tap(b_now.rect.0 + b_now.rect.2 / 2.0, b_now.rect.1 + b_now.rect.3 / 2.0)
-  let opened = viewer.get().map(fn(v) { v.file.path })
+  let opened = viewer.get()
   viewer.set(None)
-  assert_eq(opened, Some("work/s-c1/kept/row-b.png"))
+  guard opened is Some(v) else { fail("乙 opened nothing") }
+  assert_eq(v.file.path, "work/s-c1/kept/row-b.png")
+  let now_id = v.thumb_id()
+  let was_id = now_id.replace(old="work/s-c1/kept/row-b.png", new="work/s-c1/row-b.png")
+  assert_true(was_id != now_id, msg=now_id)
+  match thumb_of(t.ctx(), now_id) {
+    Some(th) =>
+      assert_true(
+        (th.x - b_now.rect.0).abs() < 0.5 && (th.y - b_now.rect.1).abs() < 0.5 && (th.w - b_now.rect.2).abs() < 0.5 &&
+        (th.h - b_now.rect.3).abs() < 0.5,
+        msg="乙's thumbnail at \{(th.x, th.y, th.w, th.h)}, drawn at \{b_now.rect}",
+      )
+    None => fail("no thumbnail of 乙 where it is kept now")
+  }
+  assert_true(thumb_of(t.ctx(), was_id) is None && !pv_thumbs.contains(was_id), msg="乙's thumbnail where it was let go")
 }

@@ -1062,7 +1062,7 @@ pub let note_subtle : Int64
 
 pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit, said? : String) -> Unit
 
-pub fn note_thumb_node(@view.View, String, () -> Double, () -> String, letterbox? : () -> Bool, top_crop? : () -> Bool, list? : String, over? : (Double) -> Unit, said? : () -> String) -> Unit
+pub fn note_thumb_node(@view.View, () -> String, () -> Double, () -> String, letterbox? : () -> Bool, top_crop? : () -> Bool, list? : String, over? : (Double) -> Unit, said? : () -> String) -> Unit
 
 pub let notice_host : @ref.Ref[NoticeHost]
 

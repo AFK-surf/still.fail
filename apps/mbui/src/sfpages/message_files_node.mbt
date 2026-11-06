@@ -200,7 +200,7 @@ fn media_file_node(
     }
     @sfbase.note_thumb_node(
       b,
-      @signals.untracked(thumb),
+      thumb,
       fn() { corner },
       fn() {
         let p = picture()

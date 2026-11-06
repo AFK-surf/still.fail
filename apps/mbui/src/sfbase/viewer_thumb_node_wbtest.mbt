@@ -15,7 +15,7 @@ test "a retained thumbnail follows its moving, scaled, clipped node and leaves w
       p.box(fn(thumb) {
         thumb.width(Is(Some(80.0))).height(Is(Some(60.0))).ground(Is(0xFFFFFFFFL)).radius(By(fn() { radius.get() }))
         .offset(By(fn() { (off.get(), 0.0) })).scale(By(fn() { scale.get() })) |> ignore
-        note_thumb_node(thumb, "test-picture", fn() { radius.get() }, fn() { "mem:test" }, list="messages")
+        note_thumb_node(thumb, fn() { "test-picture" }, fn() { radius.get() }, fn() { "mem:test" }, list="messages")
       }) |> ignore
     })
   })

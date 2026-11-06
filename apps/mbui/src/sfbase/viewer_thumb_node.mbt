@@ -30,9 +30,11 @@ fn tree_thumb_owner(id : String) -> @signals.Signal[(@view.View, () -> ThumbLook
 let pv_tree_lists : Map[String, (@view.View, () -> Double, () -> Double)] = {}
 
 ///|
+/// `node` as the thumbnail of `id` (as it changes: a file told again where it is kept is the same thumbnail under its
+/// new id, the old one let go), drawn with `radius` and `picture`, while it lives.
 pub fn note_thumb_node(
   node : @view.View,
-  id : String,
+  id : () -> String,
   radius : () -> Double,
   picture : () -> String,
   letterbox? : () -> Bool = fn() { false },
@@ -44,28 +46,38 @@ pub fn note_thumb_node(
   let look = fn() -> ThumbLook {
     { radius: radius(), letterbox: letterbox(), top_crop: top_crop(), picture: picture(), id: 0, list, over, said: said() }
   }
-  let owner = tree_thumb_owner(id)
-  owner.set(Some((node, look)))
+  // (the id it holds, let go where this node still holds it)
+  let held : Ref[String?] = Ref(None)
+  let let_go = fn(k : String) {
+    guard pv_tree_thumbs.get(k) is Some(owner) else { return }
+    match @signals.untracked(fn() { owner.get() }) {
+      Some((n, _)) if n.id() == node.id() => {
+        pv_thumbs.remove(k)
+        owner.set(None)
+        if !owner.watched() { pv_tree_thumbs.remove(k) }
+      }
+      _ => ()
+    }
+  }
   node.owns(@signals.effect(fn() {
+    let k = id()
+    if held.val != Some(k) {
+      @signals.untracked(fn() {
+        if held.val is Some(was) { let_go(was) }
+        tree_thumb_owner(k).set(Some((node, look)))
+      })
+      held.val = Some(k)
+    }
     let r = radius()
     let p = picture()
     let l = letterbox()
     let crop = top_crop()
     let s = said()
-    let changed = match pv_thumbs.get(id) { Some(was) => was.said != s; None => s != "" }
-    pv_thumbs[id] = { radius: r, letterbox: l, top_crop: crop, picture: p, id: 0, list, over, said: s }
+    let changed = match pv_thumbs.get(k) { Some(was) => was.said != s; None => s != "" }
+    pv_thumbs[k] = { radius: r, letterbox: l, top_crop: crop, picture: p, id: 0, list, over, said: s }
     if changed { thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1) }
   })) |> ignore
-  node.owns(fn() {
-    match @signals.untracked(fn() { owner.get() }) {
-      Some((held, _)) if held.id() == node.id() => {
-        pv_thumbs.remove(id)
-        owner.set(None)
-        if !owner.watched() { pv_tree_thumbs.remove(id) }
-      }
-      _ => ()
-    }
-  }) |> ignore
+  node.owns(fn() { if held.val is Some(k) { let_go(k) } }) |> ignore
 }
 
 ///|
