@@ -134,6 +134,8 @@ export interface AdbPersonal {
 	email: string;
 	/** `none` (no lock yet), `member`, `outside` (a lock this device is not on), `replaced` (the cloud has another than the one pinned here). */
 	standing: string;
+	/** A newer verified lock is not saved on this device; authorizations wait for the save. */
+	pending?: boolean;
 	devices?: AdbPersonalDevice[];
 	pair?: AdbPersonalPair;
 }

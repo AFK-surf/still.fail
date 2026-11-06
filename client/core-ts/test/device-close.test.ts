@@ -2,7 +2,7 @@
 // same storage (node.ts `fatal` starts it in the same process) reads it; a write that fails is said, not dropped.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Scope } from "effect";
 import { Core } from "../src/core.ts";
 import { DEVICE_TABLES } from "../src/data.ts";
 import { HostError } from "../src/host.ts";
@@ -78,4 +78,21 @@ test("a device table that cannot be written as the core closes is said, not drop
   await assert.rejects(core.close(), (e: unknown) => e instanceof HostError && /device\/choice: disk full/.test(e.message));
   // What could be written was.
   assert.ok(host.storage.get("device/prefs"));
+});
+
+test("a failed fiber cleanup does not skip saving changed device tables", async () => {
+  const { host, core } = await started();
+  core.inner.runner.onDefect = () => {};
+  const set = host.storageSet.bind(host);
+  let attempts = 0;
+  host.storageSet = (key, value) => key === "device/prefs" && ++attempts === 1 ? Effect.fail(new HostError("temporary write failure")) : set(key, value);
+  core.inner.data.put("prefs", "device", { n: 3 });
+  await host.settle();
+  assert.equal(attempts, 1, "the background write failed and must be retried by close");
+  await core.inner.runner.run(Scope.provide(Effect.acquireRelease(Effect.void, () => Effect.die(new Error("cleanup failed"))), core.inner.runner.root.scope));
+  await assert.rejects(core.close(), /cleanup failed/);
+  const kept = host.storage.get("device/prefs");
+  assert.ok(kept, "device data is still flushed after a cleanup fails");
+  const saved = JSON.parse(new TextDecoder().decode(kept));
+  assert.equal(saved.device.n, 3, "device data is still flushed after a cleanup fails");
 });

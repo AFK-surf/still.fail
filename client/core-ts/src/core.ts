@@ -293,11 +293,15 @@ export class Core {
         lends: () => inner.host.tcp !== undefined && (inner.data.shared({ topic: "prefs" }) as { device?: { app?: unknown } } | undefined)?.device?.app === "android",
         personal: new PersonalLock({
           host: inner.host,
+          signerHost: host,
           runner: inner.runner,
           cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
-          changed: () => inner.store.invalidate({ topic: "adbShare" }),
+          changed: () => {
+            inner.store.invalidate({ topic: "adbShare" });
+            inner.adb?.personalChanged();
+          },
         }),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
@@ -578,8 +582,14 @@ export class Core {
   close(): Promise<void> {
     if (this.#closing) return this.#closing;
     const { runner, data } = this.inner;
-    runner.shutdown();
-    this.#closing = runner.run(data.device.close());
+    this.#closing = (async () => {
+      try {
+        await runner.shutdown();
+      } finally {
+        // A failed fiber finalizer must not leave changed device tables unwritten.
+        await runner.run(data.device.close());
+      }
+    })();
     return this.#closing;
   }
 }

@@ -287,6 +287,8 @@
   "core-misc.personal.outside": "This device isn't on your personal lock yet. Join it first in Settings › Security › Personal lock",
   "core-misc.personal.replaced": "The cloud's personal lock differs from the one this device remembers. Confirm in Settings › Security › Personal lock first",
   "core-misc.personal.changed": "Your personal lock changed during this action. Try again",
+  "core-misc.personal.unsaved": "The latest personal lock has not been saved on this device. Check device storage and try again",
+  "core-misc.personal.keyMismatch": "This device's personal key does not match its saved identity",
   "core-misc.personal.noAccount": "This device isn't signed in to that account",
   "core-misc.personal.noRequest": "This request can't be found. It may have ended",
   "core-misc.personal.reason.grant": "Allow this chat to debug your phone",

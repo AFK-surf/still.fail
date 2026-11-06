@@ -24,6 +24,7 @@ export class Runner {
   /// The core's own: closing it ends everything.
   readonly root: Scoped;
   #closed = false;
+  #stopping: Promise<void> | null = null;
   /// Told of a fiber that failed with a bug: a native host starts the core anew.
   onDefect: (error: unknown) => void = (error) => {
     console.error("core fiber failed", error);
@@ -84,11 +85,14 @@ export class Runner {
     Effect.runFork(Fiber.interrupt(fiber));
   }
 
-  /// Stops everything (the core is let go).
-  shutdown(): void {
-    if (this.#closed) return;
+  /// Stops everything and waits for interrupted fibers' finalizers and uninterruptible writes to finish.
+  shutdown(): Promise<void> {
+    if (this.#stopping) return this.#stopping;
     this.#closed = true;
-    this.close(this.root);
+    this.#stopping = Effect.runPromise(Scope.close(this.root.scope, Exit.void));
+    // Most callers have no subsequent work to wait for; keep a defect visible for them too.
+    void this.#stopping.catch((error) => this.onDefect(error));
+    return this.#stopping;
   }
 
   get closed(): boolean {

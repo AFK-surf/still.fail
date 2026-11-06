@@ -15,7 +15,7 @@ import { Deferred, Effect, Queue } from "effect";
 import { HostError } from "../src/error.ts";
 import type { IrohStream } from "../src/iroh.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
-import { utf8 } from "../src/util.ts";
+import { hex, utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
@@ -23,7 +23,7 @@ import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
 import { pairs } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
-import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
+import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalPairState, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
 import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
 import { Status, stationReplies } from "./station-fixture.ts";
@@ -840,6 +840,188 @@ test("a trusted device loading its personal lock waits before refusing a pairing
   assert.ok("ok" in result && "approved" in result.ok, "the first message after the wait still reaches the pairing");
   assert.equal(restarting.chain("s1")?.devices.has(`ed25519:${"11".repeat(32)}`), true);
 });
+
+for (const change of ["forget", "restart", "join another lock", "advance the same lock", "remove from the same lock", "forget one of two accounts", "fail one account write", "fail after one account write", "interrupt one account write"] as const) {
+  test(`a personal pairing response handles ${change} while its proof is in flight`, async () => {
+    const m = await met(), n = await met();
+    const kept = new Map<string, Entry[]>();
+    const cloud = (sub: string, method: string, _path: string, body: unknown) => Effect.sync(() => {
+      const entries = kept.get(sub) ?? [];
+      if (method === "GET") return { entries };
+      const adding = (body as { entries: Entry[] }).entries;
+      const next = adding[0]!.seq === 0 ? adding : [...entries.slice(0, adding[0]!.seq), ...adding];
+      kept.set(sub, next);
+      return { entries: next };
+    });
+    const personal = (r: typeof m, id: string) => {
+      const sealed = new Map<string, Uint8Array>();
+      const secureGet = r.host.secureGet!;
+      r.host.secureSet = (key, value) => Effect.sync(() => void sealed.set(key, value));
+      r.host.secureGet = (key, opts) => opts.user ? Effect.succeed(sealed.get(key) ?? null) : secureGet.call(r.host, key, opts);
+      return new PersonalLock({ host: r.host, runner: r.core.inner.runner, cloud, device: () => Effect.succeed(id), label: () => "this", changed: () => {} });
+    };
+    const owner = personal(m, ME), joining = personal(n, PHONE);
+    m.core.inner.adb.personal = () => owner;
+    n.core.inner.adb.personal = () => joining;
+    n.core.inner.mesh = () => Effect.succeed({ deviceId: () => PHONE } as never);
+    // The two hosts must not create the same deterministic test key.
+    n.host.randomBytes(new Uint8Array(17));
+    const release = Deferred.makeUnsafe<void>(), writeRelease = Deferred.makeUnsafe<void>();
+    let writing = false;
+    try {
+      await m.run(owner.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+      await n.run(joining.load("s1"));
+      const theirKey = await n.run(joining.makeKey());
+      assert.ok("ok" in theirKey);
+      const added = await m.run(owner.addDevice("s1", { key: theirKey.ok, id: PHONE, label: "phone" }, "why"));
+      assert.ok("ok" in added);
+      await n.run(joining.joined("s1", added.ok, joining.joinGeneration("s1")));
+      assert.equal(joining.standing("s1"), "member");
+      const multi = change === "forget one of two accounts" || change === "fail one account write" || change === "fail after one account write" || change === "interrupt one account write";
+      const subs = multi ? ["s1", "s2"] : ["s1"];
+      const places = subs.map((sub) => `person:${sub}`);
+      if (multi) {
+        const accounts = m.core.inner.accounts.list.bind(m.core.inner.accounts);
+        m.core.inner.accounts.list = () => {
+          const existing = accounts();
+          return [...existing, { ...existing[0]!, sub: "s2" }];
+        };
+        const opened = await m.run(owner.signGrant("s2", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+        assert.ok("ok" in opened);
+        await n.run(joining.load("s2"));
+        const second = await m.run(owner.addDevice("s2", { key: theirKey.ok, id: PHONE, label: "phone" }, "why"));
+        assert.ok("ok" in second);
+        await n.run(joining.joined("s2", second.ok, joining.joinGeneration("s2")));
+      }
+      const [trusted, phone] = await pipe();
+      let held = false;
+      const delayed = { ...trusted, send: (message: unknown) => {
+        if ((message as { t?: string })?.t !== "approved") return trusted.send(message);
+        return Effect.andThen(Effect.sync(() => { held = true; }), Effect.andThen(Deferred.await(release), trusted.send(message)));
+      } };
+      m.core.inner.runner.fork(serveTrusted(m.core.inner, PHONE, ME, delayed));
+      const hello = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "phone", sign_key: null, personal: { subs, key: theirKey.ok } }), phone.next()));
+      assert.deepEqual(hello, { ok: { t: "code", workspaces: places } });
+      const shown = (await m.prompts()).pairing.find((p: { device: string }) => p.device === PHONE);
+      keep(n.core.inner, trying(n.core.inner, places), ME, phone, places);
+      const results: { _tag: string; success?: unknown }[] = [];
+      const proving = n.core.inner.runner.fork(Effect.map(Effect.result(n.core.inner.adb.run({ kind: "personalCode", code: shown.code })), (result) => { results.push(result); }));
+      for (let i = 0; i < 300 && !held; i++) { await n.host.time.pass(10); await m.host.time.pass(10); }
+      assert.equal(held, true, "the trusted device approved but its response is held");
+      if (change === "forget") await n.run(joining.forget("s1", "why"));
+      else if (change === "forget one of two accounts") await n.run(joining.forget("s2", "why"));
+      else if (change === "fail one account write" || change === "fail after one account write") {
+        const set = n.host.storageSet.bind(n.host);
+        let failed = false;
+        n.host.storageSet = (key, value) => {
+          if (key === `personal-lock-${hex(utf8("s2"))}` && !failed) {
+            failed = true;
+            const failure = Effect.fail(new HostError("personal lock write failed", true));
+            return change === "fail after one account write" ? Effect.andThen(set(key, value), failure) : failure;
+          }
+          return set(key, value);
+        };
+      } else if (change === "interrupt one account write") {
+        const set = n.host.storageSet.bind(n.host);
+        n.host.storageSet = (key, value) => key === `personal-lock-${hex(utf8("s2"))}`
+          ? Effect.andThen(Effect.sync(() => { writing = true; }), Effect.andThen(Deferred.await(writeRelease), set(key, value)))
+          : set(key, value);
+      } else if (change === "remove from the same lock") {
+        const removed = await m.run(owner.removeDevice("s1", theirKey.ok, "why"));
+        assert.ok("ok" in removed);
+        const read = await n.run(joining.refresh("s1"));
+        assert.ok("ok" in read);
+        assert.equal(joining.standing("s1"), "outside");
+      } else if (change === "restart") {
+        await n.host.time.pass(1_000);
+        const restarted = await n.run(joining.restart("s1", "why"));
+        assert.ok("ok" in restarted);
+      } else if (change === "join another lock") {
+        await m.host.time.pass(1_000);
+        const restarted = await m.run(owner.restart("s1", "why"));
+        assert.ok("ok" in restarted);
+        const newChain = await m.run(owner.addDevice("s1", { key: theirKey.ok, id: PHONE, label: "phone" }, "why"));
+        assert.ok("ok" in newChain);
+        const joined = await n.run(joining.joined("s1", newChain.ok, joining.joinGeneration("s1")));
+        assert.ok("ok" in joined);
+      } else {
+        const ownKey = await m.run(owner.makeKey());
+        assert.ok("ok" in ownKey);
+        const more = await m.run(owner.addDevice("s1", { key: ownKey.ok, id: ME, label: "owner again" }, "why"));
+        assert.ok("ok" in more);
+        const read = await n.run(joining.refresh("s1"));
+        assert.ok("ok" in read);
+      }
+      const expected = multi ? entryHash(kept.get("s1")!.at(-1)!) : joining.chain("s1")?.hash;
+      Deferred.doneUnsafe(release, Effect.void);
+      if (change === "interrupt one account write") {
+        for (let i = 0; i < 300 && !writing; i++) { await n.host.time.pass(10); await m.host.time.pass(10); }
+        assert.equal(writing, true, "the first account was kept and the second write is pending");
+        n.core.inner.runner.interrupt(proving);
+        Deferred.doneUnsafe(writeRelease, Effect.void);
+        for (let i = 0; i < 100; i++) await n.host.time.pass(10);
+        const restarted = new PersonalLock({ host: n.host, runner: n.core.inner.runner, cloud, device: () => Effect.succeed(PHONE), label: () => "phone", changed: () => {} });
+        await n.run(restarted.load("s1"));
+        await n.run(restarted.load("s2"));
+        for (const sub of ["s1", "s2"]) {
+          assert.equal(joining.chain(sub)?.hash, restarted.chain(sub)?.hash, `${sub} agrees after restart`);
+          assert.equal(personalPairState(n.core.inner, sub)?.state, "done", `${sub} is not left checking after its write`);
+        }
+        return;
+      }
+      for (let i = 0; i < 300 && results.length === 0; i++) { await n.host.time.pass(10); await m.host.time.pass(10); }
+      assert.equal(results.length, 1, "the proof finished");
+      assert.equal(joining.chain("s1")?.hash, expected, "the old approval did not replace the later decision");
+      assert.equal(joining.standing("s1"), change === "forget" ? "none" : change === "remove from the same lock" ? "outside" : "member");
+      const success = change === "advance the same lock" || multi;
+      assert.equal(results[0]?._tag, success ? "Success" : "Failure", "only a still-current proof completes");
+      assert.equal(personalPairState(n.core.inner, "s1")?.state, success ? "done" : "failed");
+      const cold = new PersonalLock({ host: n.host, runner: n.core.inner.runner, cloud, device: () => Effect.succeed(PHONE), label: () => "phone", changed: () => {} });
+      await n.run(cold.load("s1"));
+      assert.equal(cold.chain("s1")?.hash, expected, "the same decision survives restart");
+      assert.equal(cold.standing("s1"), change === "forget" ? "none" : change === "remove from the same lock" ? "outside" : "member");
+      if (multi) {
+        const answer = results[0]?.success as { workspaces: string[]; failed: { ws: string }[] };
+        assert.deepEqual(answer.workspaces, ["person:s1"], "the answer includes only accounts actually pinned");
+        assert.deepEqual(answer.failed.map((f) => f.ws), ["person:s2"]);
+        assert.equal("chains" in answer, false, "the view does not receive the signed chains");
+        assert.equal(joining.standing("s2"), change === "forget one of two accounts" ? "none" : "member");
+        assert.equal(personalPairState(n.core.inner, "s2")?.state, "failed");
+        await n.run(cold.load("s2"));
+        assert.equal(cold.standing("s2"), change === "forget one of two accounts" ? "none" : "member");
+        if (change === "fail one account write" || change === "fail after one account write") {
+          assert.equal(joining.view("s2").pending, true, "the newer known chain is awaiting a durable save");
+          assert.equal(joining.chain("s2")?.hash, entryHash(kept.get("s2")!.at(-1)!));
+          if (change === "fail one account write") assert.notEqual(joining.chain("s2")?.hash, cold.chain("s2")?.hash, "a failed write leaves the previous on-disk chain");
+          else assert.equal(joining.chain("s2")?.hash, cold.chain("s2")?.hash, "a write may have completed before reporting failure");
+        } else {
+          assert.equal(joining.chain("s2")?.hash, cold.chain("s2")?.hash, "forget remains in effect after restart");
+        }
+      }
+      if (multi || change === "remove from the same lock") {
+        // The account may be joined by a fresh proof after it has read the current cloud lock.
+        const sub = multi ? "s2" : "s1";
+        await n.run(joining.refresh(sub));
+        assert.equal(joining.standing(sub), change === "fail one account write" || change === "fail after one account write" ? "member" : "outside");
+        assert.equal(joining.view(sub).pending, false, "refresh saved the known chain before the next pairing");
+        const [trustedAgain, phoneAgain] = await pipe();
+        m.core.inner.runner.fork(serveTrusted(m.core.inner, PHONE, ME, trustedAgain));
+        const nextHello = await m.run(Effect.andThen(phoneAgain.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "phone", sign_key: null, personal: { subs: [sub], key: theirKey.ok } }), phoneAgain.next()));
+        assert.deepEqual(nextHello, { ok: { t: "code", workspaces: [`person:${sub}`] } });
+        const nextShown = (await m.prompts()).pairing.find((p: { device: string }) => p.device === PHONE);
+        keep(n.core.inner, trying(n.core.inner, [`person:${sub}`]), ME, phoneAgain, [`person:${sub}`]);
+        const retry: { _tag: string }[] = [];
+        n.core.inner.runner.fork(Effect.map(Effect.result(n.core.inner.adb.run({ kind: "personalCode", code: nextShown.code })), (result) => { retry.push(result); }));
+        for (let i = 0; i < 300 && retry.length === 0; i++) { await n.host.time.pass(10); await m.host.time.pass(10); }
+        assert.equal(retry[0]?._tag, "Success", "a later attempt can join the remaining account");
+        assert.equal(joining.standing(sub), "member");
+        const again = new PersonalLock({ host: n.host, runner: n.core.inner.runner, cloud, device: () => Effect.succeed(PHONE), label: () => "phone", changed: () => {} });
+        await n.run(again.load(sub));
+        assert.equal(again.standing(sub), "member");
+      }
+    } finally { Deferred.doneUnsafe(release, Effect.void); Deferred.doneUnsafe(writeRelease, Effect.void); }
+  });
+}
 
 test("a long personal lock reaches the joining device over fragmented pairing reads", async () => {
   const m = await met(), inner = m.core.inner;

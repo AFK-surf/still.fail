@@ -637,6 +637,8 @@
   "android-misc.personal.replaced": "云端的个人锁和这台设备记住的不一样",
   "android-misc.personal.replaced.note": "只有你自己新建过个人锁才会这样。如果不是你做的，不要继续，你的账号可能已经被盗。",
   "android-misc.personal.forget": "是我新建的，改用新的",
+  "android-misc.personal.pending": "个人锁的最新记录尚未保存在本机，手机调试授权已暂停。请检查设备存储后重试。",
+  "android-misc.personal.pending.retry": "重试保存",
   "android-misc.personal.updateStation": "更新这台 station",
   "android-misc.personal.toConfirm": "{n} 个对话的授权需要确认",
   "android-misc.personal.toConfirm.note": "更新前批的授权，确认一次后手机继续出借",

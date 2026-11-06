@@ -1783,6 +1783,8 @@ let en : Map[String, String] = {
   "android-misc.personal.open": "Turn on personal lock",
   "android-misc.personal.open.note": "Which devices can approve as you. Needed to allow phone debugging.",
   "android-misc.personal.outside.note": "You turned it on on another device. This one must join to allow phone debugging.",
+  "android-misc.personal.pending": "The latest personal lock has not been saved on this device. Phone debugging grants are paused. Check device storage and try again.",
+  "android-misc.personal.pending.retry": "Try saving again",
   "android-misc.personal.remove": "Remove",
   "android-misc.personal.replaced": "The cloud's personal lock differs from the one this device remembers",
   "android-misc.personal.replaced.note": "This happens only if you started a new lock yourself. If you didn't, stop here: your account may be compromised.",

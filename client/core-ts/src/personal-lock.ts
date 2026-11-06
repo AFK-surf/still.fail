@@ -94,6 +94,8 @@ export type Standing = "none" | "member" | "outside" | "replaced";
 
 export type PersonalEnv = {
   host: Host;
+  /// The device host before per-core wrappers: overlapping cores on it share signer creation.
+  signerHost?: Host;
   runner: Runner;
   /// A request to the cloud as this person.
   cloud: (sub: string, method: string, path: string, body: unknown) => Effect.Effect<unknown, CoreError>;
@@ -112,26 +114,42 @@ const POST_BYTES = 256 * 1024;
 /// The cloud's account quota reports Retry-After: 60 seconds; a later refresh can resume if it remains busy.
 const RATE_RETRY_MS = 60_000;
 
+// Cores can overlap while an earlier one is closing. When they use the same host, they must not each create a signer.
+const keyWriters = new WeakMap<Host, ReturnType<typeof Semaphore.makeUnsafe>>();
+function keyWriter(host: Host): ReturnType<typeof Semaphore.makeUnsafe> {
+  let writer = keyWriters.get(host);
+  if (!writer) keyWriters.set(host, writer = Semaphore.makeUnsafe(1));
+  return writer;
+}
+
 export class PersonalLock {
   readonly #env: PersonalEnv;
   /// The chain pinned here, each person's; what the cloud has where this is not it.
   readonly #pinned = new Map<string, Entry[]>();
   readonly #seen = new Map<string, Entry[]>();
   readonly #loaded = new Set<string>();
+  /// Forgetting or replacing a lock invalidates reads and pairing attempts started against its earlier state.
+  readonly #generations = new Map<string, number>();
   /// A device's storage writes may complete out of order; serialize each account's pin and forget.
   readonly #writing = new Map<string, ReturnType<typeof Semaphore.makeUnsafe>>();
   /// A pin that reached memory but whose storage write failed must be tried again even if the cloud says it unchanged.
   readonly #dirty = new Set<string>();
+  /// The signer is shared by every account on the device, so its creation is serialized across accounts.
+  readonly #keyWriter: ReturnType<typeof Semaphore.makeUnsafe>;
   #myKey: string | null = null;
 
   constructor(env: PersonalEnv) {
     this.#env = env;
+    this.#keyWriter = keyWriter(env.signerHost ?? env.host);
   }
 
   /// The chain pinned here as read so far, what it says.
   chain(sub: string): Chain | null {
     return checkChain(this.#pinned.get(sub) ?? [], sub);
   }
+
+  /// A newer verified chain must be saved before this account can sign or lend on it.
+  ready(sub: string): boolean { return !this.#dirty.has(sub); }
 
   /// Load the pinned chain and public key without waiting for the cloud, including when pairing arrives at startup.
   loaded(sub: string): boolean { return this.#loaded.has(sub); }
@@ -140,16 +158,25 @@ export class PersonalLock {
     const env = this.#env;
     return Effect.gen({ self: this }, function* () {
       if (!this.#loaded.has(sub)) {
+        const generation = this.#generation(sub);
         const kept = yield* Effect.orElseSucceed(env.host.storageGet(keptAs(sub)), () => null);
         const said = kept === null ? null : (parseJson(kept) as Entry[] | null);
         const id = yield* Effect.orElseSucceed(env.host.storageGet(KEY_ID), () => null);
-        // Another load may have completed and subsequently extended the chain while these reads were pending.
-        if (!this.#loaded.has(sub)) {
-          if (Array.isArray(said) && checkChain(said, sub) !== null) this.#pinned.set(sub, said);
-          if (id !== null && this.#myKey === null) this.#myKey = fromUtf8(id);
+        // The key is common to accounts and can still be used when this account's old read became stale.
+        yield* this.#keyWriter.withPermits(1)(Effect.sync(() => {
+          const key = id === null ? null : fromUtf8(id);
+          if (key !== null && crypto.validKeyId(key) && this.#myKey === null) this.#myKey = key;
+        }));
+        yield* this.#writer(sub).withPermits(1)(Effect.sync(() => {
+          if (this.#loaded.has(sub)) return;
+          // A forget or a join can finish while the host is reading. Neither may be undone by that earlier read.
+          if (generation === this.#generation(sub) && !this.#pinned.has(sub) && Array.isArray(said) && checkChain(said, sub) !== null) {
+            this.#pinned.set(sub, said);
+            if (said.length > 0) this.#generations.set(sub, generation + 1);
+          }
           this.#loaded.add(sub);
           env.changed();
-        }
+        }));
       }
     });
   }
@@ -159,6 +186,9 @@ export class PersonalLock {
     const env = this.#env;
     return Effect.gen({ self: this }, function* () {
       yield* this.load(sub);
+      // A previous write can have failed after the cloud accepted the entry. Retry the local save even offline.
+      const unsaved = this.#pinned.get(sub);
+      if (unsaved && this.#dirty.has(sub)) yield* this.#pin(sub, unsaved, { base: unsaved });
       const said = (yield* env.cloud(sub, "GET", PATH, null)) as { entries?: Entry[] } | null;
       yield* this.#heard(sub, Array.isArray(said?.entries) ? said.entries : []);
     });
@@ -210,16 +240,22 @@ export class PersonalLock {
     });
   }
 
+  #generation(sub: string): number { return this.#generations.get(sub) ?? 0; }
+
+  /// A pairing attempt may complete only while the lock it started from has not been forgotten or replaced.
+  joinGeneration(sub: string): number { return this.#generation(sub); }
+
   #writer(sub: string): ReturnType<typeof Semaphore.makeUnsafe> {
     let writer = this.#writing.get(sub);
     if (!writer) this.#writing.set(sub, writer = Semaphore.makeUnsafe(1));
     return writer;
   }
 
-  #pin(sub: string, entries: Entry[], options: { base?: Entry[]; replace?: boolean } = {}): Effect.Effect<void, CoreError> {
+  #pin(sub: string, entries: Entry[], options: { base?: Entry[]; replace?: boolean; generation?: number; memberKey?: string } = {}): Effect.Effect<void, CoreError> {
     return this.#writer(sub).withPermits(1)(Effect.uninterruptible(Effect.gen({ self: this }, function* () {
       const current = this.#pinned.get(sub) ?? [];
       // A concurrent forget or join must not be undone by an earlier cloud response.
+      if (options.generation !== undefined && options.generation !== this.#generation(sub)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       if (options.base && !prefixOf(options.base, current)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       if (options.replace && options.base?.length === 0 && current.length > 0 && !prefixOf(entries, current)) {
         return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
@@ -229,11 +265,20 @@ export class PersonalLock {
       if (!options.replace && current.length > 0) {
         if (next !== current && !prefixOf(current, entries)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       }
+      // The accepted proof may be an older prefix of a chain that removed this device in the meantime.
+      if (options.memberKey && !checkChain(next, sub)?.devices.has(options.memberKey)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       if (next === current && !this.#dirty.has(sub)) return;
+      if ((current[0] ? entryHash(current[0]) : null) !== (next[0] ? entryHash(next[0]) : null)) {
+        this.#generations.set(sub, this.#generation(sub) + 1);
+      }
       this.#pinned.set(sub, next);
+      this.#loaded.add(sub);
       this.#dirty.add(sub);
+      // Stop lending immediately, including while the write is still outstanding.
+      this.#env.changed();
       yield* Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(next))), asCoreError);
       this.#dirty.delete(sub);
+      this.#env.changed();
     })));
   }
 
@@ -244,7 +289,7 @@ export class PersonalLock {
     return this.#seen.has(sub) ? "outside" : "none";
   }
 
-  /// This device's key's id, made the first time, no one asked: keeping it takes no check, using it does.
+  /// This device's key's id, made the first time. Recovering an already sealed key with no saved id asks its person.
   makeKey(): Effect.Effect<string, CoreError> {
     return Effect.map(this.#madeKey(null), (k) => k.id);
   }
@@ -253,27 +298,50 @@ export class PersonalLock {
   /// read what is in hand.
   #madeKey(reason: string | null): Effect.Effect<{ id: string; seed: Uint8Array | null }, CoreError> {
     const { host } = this.#env;
-    return Effect.gen({ self: this }, function* () {
+    return this.#keyWriter.withPermits(1)(Effect.gen({ self: this }, function* () {
       if (this.#myKey !== null) return { id: this.#myKey, seed: null };
-      if (!host.appKeys || !host.secureSet) return yield* Effect.fail(new CoreError("personal_no_key", t("core-misc.personal.noKey")));
-      if (reason !== null && host.secureAsk) yield* Effect.mapError(host.secureAsk(reason), asCoreError);
-      const seed = new Uint8Array(32);
-      host.randomBytes(seed);
-      yield* Effect.mapError(host.secureSet(KEY, seed, { user: true }), asCoreError);
-      const id = `ed25519:${hex(ed25519.getPublicKey(seed))}`;
-      yield* Effect.mapError(host.storageSet(KEY_ID, utf8(id)), asCoreError);
-      this.#myKey = id;
-      return { id, seed };
-    });
+      // Another load may not have completed yet. Never overwrite an existing seed merely because its public id has
+      // not reached memory; nor create a new one when the host could not read the saved id.
+      const stored = yield* Effect.mapError(host.storageGet(KEY_ID), asCoreError);
+      if (stored !== null) {
+        const id = fromUtf8(stored);
+        if (!crypto.validKeyId(id)) {
+          return yield* Effect.fail(new CoreError("personal_key_mismatch", t("core-misc.personal.keyMismatch")));
+        }
+        this.#myKey = id;
+        return { id, seed: null };
+      }
+      if (!host.appKeys || !host.secureSet || !host.secureGet) return yield* Effect.fail(new CoreError("personal_no_key", t("core-misc.personal.noKey")));
+      // A process may have stopped after sealing the seed but before saving its public id. Recover that seed rather
+      // than replacing an identity that might already be in a lock. The host asks only if the sealed seed exists.
+      const recovered = yield* Effect.mapError(host.secureGet(KEY, { user: true, reason: reason ?? t("core-misc.personal.reason.open") }), asCoreError);
+      if (recovered !== null && recovered.length !== 32) return yield* Effect.fail(new CoreError("personal_key_mismatch", t("core-misc.personal.keyMismatch")));
+      if (reason !== null && recovered === null && host.secureAsk) yield* Effect.mapError(host.secureAsk(reason), asCoreError);
+      return yield* Effect.uninterruptible(Effect.gen({ self: this }, function* () {
+        let seed = recovered;
+        if (seed === null) {
+          seed = new Uint8Array(32);
+          host.randomBytes(seed);
+          yield* Effect.mapError(host.secureSet!(KEY, seed, { user: true }), asCoreError);
+        }
+        const id = `ed25519:${hex(ed25519.getPublicKey(seed))}`;
+        yield* Effect.mapError(host.storageSet(KEY_ID, utf8(id)), asCoreError);
+        this.#myKey = id;
+        return { id, seed };
+      }));
+    }));
   }
 
   /// The key's seed: the person asked, as reading it takes.
   #unseal(reason: string): Effect.Effect<Uint8Array, CoreError> {
     const { host } = this.#env;
-    return Effect.gen(function* () {
+    return Effect.gen({ self: this }, function* () {
       if (!host.secureGet) return yield* Effect.fail(new CoreError("personal_no_key", t("core-misc.personal.noKey")));
       const seed = yield* Effect.mapError(host.secureGet(KEY, { user: true, reason }), asCoreError);
       if (seed === null || seed.length !== 32) return yield* Effect.fail(new CoreError("personal_no_key", t("core-misc.personal.noKey")));
+      if (this.#myKey === null || `ed25519:${hex(ed25519.getPublicKey(seed))}` !== this.#myKey) {
+        return yield* Effect.fail(new CoreError("personal_key_mismatch", t("core-misc.personal.keyMismatch")));
+      }
       return seed;
     });
   }
@@ -287,12 +355,15 @@ export class PersonalLock {
   /// One entry more, signed here, told to the cloud and pinned once it took it.
   #append(sub: string, seed: Uint8Array, kind: string, body: unknown, restart = false): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (kind !== "genesis" && !this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
+      if (kind !== "genesis" && this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       const base = this.#pinned.get(sub) ?? [];
+      const generation = this.#generation(sub);
       const seen = this.#seen.get(sub);
       const before = restart ? [] : base;
       const e = this.#entry(sub, seed, this.#myKey!, kind, body, before);
       yield* this.#env.cloud(sub, "POST", PATH, { entries: [e] });
-      yield* this.#pin(sub, [...before, e], { base, replace: restart });
+      yield* this.#pin(sub, [...before, e], { base, replace: restart, generation });
       if (this.#seen.get(sub) === seen) this.#seen.delete(sub);
       this.#env.changed();
     });
@@ -312,6 +383,13 @@ export class PersonalLock {
   /// Turned on here, where the person has no lock yet (the cloud heard from: not knowing is not none).
   open(sub: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      yield* this.load(sub);
+      // The retry offered for a failed local save does not need the cloud, nor does it begin another lock.
+      const unsaved = this.#pinned.get(sub);
+      if (unsaved && this.#dirty.has(sub)) {
+        yield* this.#pin(sub, unsaved, { base: unsaved });
+        return null;
+      }
       yield* this.refresh(sub);
       if (this.standing(sub) === "none") yield* this.begin(sub, reason);
       return null;
@@ -323,11 +401,14 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       const read = yield* Effect.result(this.refresh(sub));
       const standing = this.standing(sub);
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       // Not heard from the cloud, no lock known here is not no lock: one begun now would take its place.
       if (read._tag === "Failure" && standing === "none") return yield* Effect.fail(read.failure);
       if (standing === "outside") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       if (standing === "replaced") return yield* Effect.fail(new CoreError("personal_replaced", t("core-misc.personal.replaced")));
       const seed = standing === "none" ? yield* this.begin(sub, reason) : yield* this.#unseal(reason);
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       const whole: GrantBody = { v: 1, sub, ...body };
       return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
     });
@@ -336,8 +417,11 @@ export class PersonalLock {
   /// Grants signed at one go, the person asked once; refused on a device not on the lock.
   signGrants(sub: string, bodies: Omit<GrantBody, "v" | "sub">[], reason: string): Effect.Effect<SignedGrant[], CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       const seed = yield* this.#unseal(reason);
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       return bodies.map((body) => {
         const whole: GrantBody = { v: 1, sub, ...body };
         return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
@@ -354,6 +438,7 @@ export class PersonalLock {
   /// it to pin.
   addDevice(sub: string, device: Device, reason: string, seed: Uint8Array | null = null): Effect.Effect<Entry[], CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       yield* this.#append(sub, seed ?? (yield* this.#unseal(reason)), "device", device);
       return this.#pinned.get(sub) ?? [];
@@ -362,6 +447,7 @@ export class PersonalLock {
 
   removeDevice(sub: string, key: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (!this.ready(sub)) return yield* Effect.fail(new CoreError("personal_unsaved", t("core-misc.personal.unsaved")));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       yield* this.#append(sub, yield* this.#unseal(reason), "device.remove", { key });
       return null;
@@ -369,11 +455,12 @@ export class PersonalLock {
   }
 
   /// The lock a device that let this one in brought (the connection proved by the code shown there): pinned.
-  joined(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
+  joined(sub: string, entries: Entry[], generation: number): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const chain = checkChain(entries, sub);
-      if (chain === null || this.#myKey === null || !chain.devices.has(this.#myKey)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#pin(sub, entries, { replace: true });
+      const key = this.#myKey;
+      if (chain === null || key === null || !chain.devices.has(key)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      yield* this.#pin(sub, entries, { replace: true, generation, memberKey: key });
       this.#seen.delete(sub);
       this.#env.changed();
     });
@@ -391,6 +478,8 @@ export class PersonalLock {
           if (before) this.#pinned.set(sub, before);
           return yield* Effect.fail(removed.failure);
         }
+        this.#generations.set(sub, this.#generation(sub) + 1);
+        if (this.#myKey !== null) this.#loaded.add(sub);
         this.#dirty.delete(sub);
       })));
       this.#env.changed();
@@ -421,6 +510,7 @@ export class PersonalLock {
     return {
       standing: this.standing(sub),
       sub,
+      pending: !this.ready(sub),
       devices: [...(pinned?.devices.values() ?? [])].map((d) => ({ key: d.key, label: d.label, me: d.key === this.#myKey })),
     };
   }

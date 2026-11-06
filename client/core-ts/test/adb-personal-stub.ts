@@ -6,6 +6,7 @@ import type { AdbEnv } from "../src/adb.ts";
 export const personalStub = (): Pick<AdbEnv, "personal" | "subOf" | "subs" | "pair"> => ({
   personal: {
     chain: () => ({ devices: new Map(), hash: null }),
+    ready: () => true,
     refresh: () => Effect.void,
     view: () => ({ standing: "member", sub: "s", devices: [] }),
     standing: () => "member",

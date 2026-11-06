@@ -478,6 +478,30 @@ test "settings' 共享调试: 开启个人锁 there turns the lock on, and a dev
 }
 
 ///|
+test "settings' personal lock: a failed save pauses authorization and offers a retry" {
+  new_run()
+  @settings.fixture_page("settings-adb-lock-pending") |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("personal-lock:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("重试保存") is Some(_))
+  assert_true(t.find("OPPO PLP110") is None)
+  t.tap_text("重试保存")
+  t.draw()
+  assert_true(calls.iter().any(fn(call) { call.0 == "adb.personalOpen" && call.1 == { "sub": "s" } }), msg="\{calls.map(fn(call) { call.0 })}")
+}
+
+///|
 test "settings' 共享调试: its settings at the top, the lists after them" {
   let t = settings_tester("adb:", shows="settings-adb-chats-long", platform=2)
   guard t.find("默认最长授权") is Some((_, lasts_y)) else { fail("the setting is shown") }

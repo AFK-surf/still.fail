@@ -1856,6 +1856,7 @@ export const SHAPES: Record<string, Shape> = {
     ["sub", "String"],
     ["email", "String", { said: true }],
     ["standing", "String", { doc: "`none` (no lock yet), `member`, `outside` (a lock this device is not on), `replaced` (the cloud has another than the one pinned here)." }],
+    ["pending", "bool", { default: true, doc: "A newer verified lock is not saved on this device; authorizations wait for the save." }],
     ["devices", vec("AdbPersonalDevice"), { default: true }],
     ["pair", opt("AdbPersonalPair")],
   ], { doc: "The person's own lock as this device has it (docs/personal-lock.md, the `adbShare` topic's `personal`)." }),

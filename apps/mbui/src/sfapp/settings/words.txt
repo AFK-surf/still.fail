@@ -1737,6 +1737,8 @@ android-misc.personal.none.found
 android-misc.personal.open
 android-misc.personal.open.note
 android-misc.personal.outside.note
+android-misc.personal.pending
+android-misc.personal.pending.retry
 android-misc.personal.remove
 android-misc.personal.replaced
 android-misc.personal.replaced.note

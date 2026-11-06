@@ -555,7 +555,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
     "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" => "adb:"
-    "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" => "personal-lock:"
+    "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" | "settings-adb-lock-pending" => "personal-lock:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
@@ -3412,6 +3412,7 @@ fn fx_adb_share() -> Json {
     )
   }
   match fx_adb.val {
+    "lock-pending" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("pending", Json::boolean(true)), ("devices", Json::array([obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))])]))])]))])
     // the person's own lock on the page (docs/personal-lock.md): this device on it, outside it, or asked for a code
     "lock-member" =>
       lent("connected", [

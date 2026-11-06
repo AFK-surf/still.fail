@@ -586,7 +586,13 @@ export class Adb {
           return yield* this.#env.pair.begin(others.includes(sub) ? others : [sub, ...others]);
         }));
       case "personalCode":
-        return Effect.as(this.#env.pair.code(call.code), null);
+        // A single code can join several accounts; say which were pinned and which must be tried again, without
+        // sending the signed chains back to the view.
+        return Effect.map(this.#env.pair.code(call.code), (answer) => {
+          if (answer === null || typeof answer !== "object") return null;
+          const result = answer as { workspaces?: unknown; failed?: unknown };
+          return { workspaces: Array.isArray(result.workspaces) ? result.workspaces : [], failed: Array.isArray(result.failed) ? result.failed : [] };
+        });
       case "personalCancel":
         return Effect.sync(() => (this.#env.pair.cancel(), null));
       case "personalRemove":
@@ -671,7 +677,7 @@ export class Adb {
   #toConfirm(g: J): boolean {
     if (g.status !== "granted" || g.signed != null || this.#revoked.has(g.id) || this.#old.has(g.station)) return false;
     const sub = this.#subAt(g.station);
-    return sub !== null && this.#env.personal.standing(sub) === "member";
+    return sub !== null && this.#env.personal.ready(sub) && this.#env.personal.standing(sub) === "member";
   }
 
   /// What this device signs to allow a chat a phone (docs/personal-lock.md).
@@ -692,7 +698,7 @@ export class Adb {
   #holds(g: J): number | null {
     if (g.status !== "granted" || this.#revoked.has(g.id)) return null;
     const sub = this.#subAt(g.station);
-    const chain = sub === null ? null : this.#env.personal.chain(sub);
+    const chain = sub === null || !this.#env.personal.ready(sub) ? null : this.#env.personal.chain(sub);
     return sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
   }
 
@@ -701,6 +707,9 @@ export class Adb {
   accountsKnown(): void {
     for (const { sub } of this.#env.subs()) this.#readPersonal(sub);
   }
+
+  /// Reconsider active lending as soon as a personal lock starts or finishes a local write.
+  personalChanged(): void { this.#sync(); }
 
   #readPersonal(sub: string): void {
     this.#env.runner.fork(Effect.ensuring(Effect.ignore(this.#env.personal.refresh(sub), { log: "Unhandled", message: "personal lock read" }), Effect.sync(() => this.#sync())));

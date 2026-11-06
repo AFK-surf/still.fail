@@ -162,7 +162,7 @@ function personalRequest(inner: Inner, hello: J): { key: string; subs: string[] 
 function personalAsked(inner: Inner, hello: J): { key: string; subs: string[]; who: { sub: string; email: string; name: string } } | null {
   const request = personalRequest(inner, hello);
   if (request === null) return null;
-  const mine = request.subs.filter((sub) => inner.adb.personal().standing(sub) === "member");
+  const mine = request.subs.filter((sub) => inner.adb.personal().ready(sub) && inner.adb.personal().standing(sub) === "member");
   const account = inner.accounts.list().find((a) => a.sub === mine[0]);
   return account === undefined ? null : { key: request.key, subs: mine, who: { sub: account.sub, email: account.email, name: account.name ?? "" } };
 }
@@ -440,7 +440,7 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
 /// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
 /// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; personalGenerations: Map<string, number>; personalFailures?: Map<string, string>; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -448,6 +448,8 @@ let runs = 0;
 function mine(inner: Inner, ws: string): J | null {
   const y = tryings.get(inner);
   if (!y || !y.workspaces.includes(ws)) return null;
+  const personalError = y.personalFailures?.get(ws);
+  if (personalError !== undefined) return { state: "failed", devices: 0, error: personalError };
   const credentialError = y.credentialErrors?.get(ws);
   if (credentialError !== undefined) return { state: "failed", devices: 0, error: credentialError };
   // Signed in elsewhere, not here: no trusted device that answered approves it in this one (2026-11-04: a web page
@@ -697,7 +699,11 @@ function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): 
 
 /// This device's try begun, in `workspaces`: what came of one before forgotten.
 export function trying(inner: Inner, workspaces: string[]): Trying {
-  const y: Trying = { state: "finding", workspaces, met: new Map(), run: ++runs };
+  const personalGenerations = new Map(workspaces.filter(isPerson).map((place) => {
+    const sub = place.slice("person:".length);
+    return [sub, inner.adb.personal().joinGeneration(sub)] as const;
+  }));
+  const y: Trying = { state: "finding", workspaces, met: new Map(), run: ++runs, personalGenerations };
   tryings.set(inner, y);
   changed(inner, y);
   return y;
@@ -812,13 +818,46 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     }
     if (approved !== null) {
       drop(y);
-      y.state = "done";
-      y.approvedIn = arr(get(approved, "workspaces")).filter((w): w is string => typeof w === "string");
-      for (const place of y.approvedIn.filter(isPerson)) {
-        const sub = place.slice("person:".length);
-        yield* inner.adb.personal().joined(sub, arr(get(get(approved, "chains"), sub)) as Entry[]);
-      }
-      for (const ws of y.approvedIn.filter((w) => !isPerson(w))) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      const answer = approved;
+      // Once an approval has been received, a cancelled caller must not strand its successfully saved accounts in
+      // "checking" while an uninterruptible host write finishes. Network proof and subsequent workspace reads remain
+      // interruptible; only recording the received answer and publishing its result are kept together.
+      approved = yield* Effect.uninterruptible(Effect.gen(function* () {
+        const said = arr(get(answer, "workspaces")).filter((w): w is string => typeof w === "string");
+        const approvedIn: string[] = [];
+        const personalFailures = new Map<string, string>();
+        const failed: { ws: string; error: string }[] = [];
+        let firstFailure: CoreError | null = null;
+        for (const place of said) {
+          if (tryings.get(inner) !== y) return yield* Effect.fail(new CoreError("pair_ended", t("core-misc.lock.pairGone")));
+          if (!isPerson(place)) { approvedIn.push(place); continue; }
+          const sub = place.slice("person:".length);
+          const generation = y.personalGenerations.get(sub);
+          const joined = generation === undefined
+            ? Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")))
+            : inner.adb.personal().joined(sub, arr(get(get(answer, "chains"), sub)) as Entry[], generation);
+          const result = yield* Effect.result(joined);
+          if (result._tag === "Failure") {
+            firstFailure ??= result.failure;
+            personalFailures.set(place, result.failure.message);
+            failed.push({ ws: place, error: result.failure.message });
+          } else {
+            approvedIn.push(place);
+          }
+        }
+        y.personalFailures = personalFailures;
+        if (approvedIn.length === 0 && firstFailure !== null) {
+          y.state = "failed";
+          y.error = firstFailure.message;
+          changed(inner, y);
+          return yield* Effect.fail(firstFailure);
+        }
+        y.approvedIn = approvedIn;
+        y.state = "done";
+        changed(inner, y);
+        return { ...answer, workspaces: approvedIn, failed: [...arr(get(answer, "failed")), ...failed] };
+      }));
+      for (const ws of y.approvedIn?.filter((w) => !isPerson(w)) ?? []) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
     } else if (checked.some((m) => y.met.get(m.id) === m)) {
       y.state = "wrong";
       y.left = left;
@@ -900,6 +939,7 @@ export function tryOne(inner: Inner, m: Met, base: string, code: string): Effect
 export function personalBegin(inner: Inner, subs: string[]): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
     const personal = inner.adb.personal();
+    yield* Effect.forEach(subs, (sub) => personal.load(sub), { concurrency: "unbounded", discard: true });
     const key = yield* personal.makeKey();
     const before = tryings.get(inner);
     if (before) drop(before);
@@ -924,7 +964,7 @@ export const personalCancel = (inner: Inner): void => cancel(inner);
 export const personalPairState = (inner: Inner, sub: string): J => {
   const y = tryings.get(inner);
   // (let in to the others on this code, not this one: nothing went wrong here, it is simply not on that device's locks)
-  if (y?.state === "done" && y.approvedIn !== undefined && !y.approvedIn.includes(personOf(sub))) return null;
+  if (y?.state === "done" && y.approvedIn !== undefined && !y.approvedIn.includes(personOf(sub)) && !y.personalFailures?.has(personOf(sub))) return null;
   const at = mine(inner, personOf(sub));
   if (at === null) return null;
   // Which of the person's devices show the code, by name: where to look.

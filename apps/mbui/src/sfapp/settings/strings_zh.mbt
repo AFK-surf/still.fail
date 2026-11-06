@@ -1751,6 +1751,8 @@ let zh : Map[String, String] = {
   "android-misc.personal.open": "开启个人锁",
   "android-misc.personal.open.note": "哪些设备能以你的名义批准。开启后才能批准手机调试。",
   "android-misc.personal.outside.note": "你已在别的设备开启过，这台设备要加入后才能批准手机调试。",
+  "android-misc.personal.pending": "个人锁的最新记录尚未保存在本机，手机调试授权已暂停。请检查设备存储后重试。",
+  "android-misc.personal.pending.retry": "重试保存",
   "android-misc.personal.remove": "移除",
   "android-misc.personal.replaced": "云端的个人锁和这台设备记住的不一样",
   "android-misc.personal.replaced.note": "只有你自己新建过个人锁才会这样。如果不是你做的，不要继续，你的账号可能已经被盗。",

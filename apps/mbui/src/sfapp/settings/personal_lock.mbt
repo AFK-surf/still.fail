@@ -121,7 +121,15 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
   let doing = is_doing(core, ["adb.personalOpen", "adb.personalJoin", "adb.personalCode", "adb.personalRemove", "adb.personalForget", "adb.personalRestart"], [])
   let said = str(sub)
   list_card(c, fn() {
-    match text(view, "standing") {
+    if flag(view, "pending") {
+      list_row(c, key="personal-pending/" + sub, fn() {
+        c.box(style=fill_words, fn() { row_lines(c, tr("android-misc.personal.pending"), "", wrap_sub=true) }) |> ignore
+      })
+      |> ignore
+      if @sf.link_row(c, "personal-retry/" + sub, tr("android-misc.personal.pending.retry"), lacks=false) && !doing {
+        act(core, tr("android-misc.personal.pending.retry"), "adb.personalOpen", obj([("sub", said)]))
+      }
+    } else { match text(view, "standing") {
       "member" =>
         for d in items(view, "devices") {
           let d = Some(d)
@@ -172,6 +180,6 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
         if @sf.link_row(c, "personal-open/" + sub, tr("android-misc.personal.open"), note=tr("android-misc.personal.open.note"), lacks=true) && !doing {
           act(core, tr("android-misc.personal.open"), "adb.personalOpen", obj([("sub", said)]))
         }
-    }
+    } }
   })
 }
