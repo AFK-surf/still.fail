@@ -6714,6 +6714,11 @@ fn Tree::laid_before_due_at(self : Tree, at : Double) -> Unit {
     })
   }
   self.standing = false
+  // (what that layout's changes wait for (Tree::follow_point's) done now, out of its standing, before the event or what
+  // is due at that moment: as Tree::settled_at does)
+  if cause < 0.0 {
+    self.afters_done()
+  }
 }
 
 ///|
