@@ -66,8 +66,7 @@ fn ref_menu_node(
     p.owns(@signals.effect(fn() { match offered() { Some(o) => held.val = o; None => () } })) |> ignore
     let data = fn() { offer.get().unwrap_or(held.val) }
     let look = @motion.presence_node(p, initial=false, enter=@kit.pop_in, exit=@kit.pop_out)
-    p.beside(cap.id(), side=Top, along=Start, offset=ref_menu_off)
-    .width(By(fn() { Some(cap.laid_size_told().map(fn(s) { s.0 }).unwrap_or(ref_menu_least)) }))
+    p.beside(cap.id(), side=Top, along=Start, offset=ref_menu_off, as_wide=true)
     .max_height(By(fn() { Some(dmin(ref_menu_max, p.window().1 - 16.0)) }))
     .padding(Is((@sf.panel_pad, @sf.panel_pad, @sf.panel_pad, @sf.panel_pad)))
     .radius(By(fn() { @ui.tree_theme().corner(@sf.ref_menu_corner) }))
