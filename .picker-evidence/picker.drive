@@ -1,4 +1,6 @@
 until =Willow
+wait 1000
 tap =Willow
 until 收藏此文件夹
+wait 1000
 exit

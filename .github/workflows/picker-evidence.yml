@@ -4,6 +4,9 @@ on:
     branches: [codex/picker-evidence-cfb34584]
 permissions:
   contents: read
+concurrency:
+  group: picker-evidence-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   picture:
     runs-on: [self-hosted, macos-ci]
@@ -16,6 +19,10 @@ jobs:
             window: 390x844
             platform: '2'
             input: finger
+          - size: medium
+            window: 800x800
+            platform: '0'
+            input: mouse
           - size: desktop
             window: 1280x800
             platform: '0'
@@ -38,9 +45,12 @@ jobs:
           set -eu
           mkdir -p "$RUNNER_TEMP/picker-evidence"
           bash apps/mbui/scripts/wasm-film-build.sh "$RUNNER_TEMP/picker-runtime"
-          for scene in stations picker; do
-            MBUI_MEDIA_RUNTIME="$RUNNER_TEMP/picker-runtime/sffilm" bash apps/mbui/scripts/media.sh picture \
-              "$RUNNER_TEMP/picker-evidence/$scene-${{ matrix.size }}-before.png" "$GITHUB_WORKSPACE/.picker-evidence/$scene.drive"
+          for theme in light dark; do
+            if [ "$theme" = dark ]; then export MBUI_DARK=1; else unset MBUI_DARK; fi
+            for scene in stations picker; do
+              MBUI_MEDIA_RUNTIME="$RUNNER_TEMP/picker-runtime/sffilm" bash apps/mbui/scripts/media.sh picture \
+                "$RUNNER_TEMP/picker-evidence/$scene-${{ matrix.size }}-$theme-before.png" "$GITHUB_WORKSPACE/.picker-evidence/$scene.drive"
+            done
           done
       - uses: actions/upload-artifact@v4
         if: always()
