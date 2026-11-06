@@ -275,7 +275,7 @@ pub fn menu_node(
                 }
               }
               match kind {
-                0 => menu_rule_node(cell, reach)
+                0 => menu_rule_inset_node(cell, reach)
                 1 => menu_heading_node(cell, fn() { item().label }, past, reach)
                 _ => {
                   rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, current, stop, extras(i), check_end~, multiple~, mark_node?=mark_node)
@@ -538,12 +538,20 @@ fn menu_heading_node(
 }
 
 ///|
-/// A line between parts of a menu (menu_rule): the words' ink faintly, 1 high, 6 over and under it, as wide as its rows'
-/// grounds.
-fn menu_rule_node(b : @view.View, reach : Double) -> Unit {
+/// A line between parts of a small panel (menu_rule): the words' ink faintly, 1 high, 6 over and under it, as wide as
+/// its container. The color follows the theme.
+pub fn menu_rule_node(parent : @view.View) -> Unit {
+  menu_rule_inset_node(parent, 0.0)
+}
+
+///|
+/// A menu's line is inset to meet the edges of its rows' grounds.
+fn menu_rule_inset_node(b : @view.View, reach : Double) -> Unit {
   b.box(fn(r) {
-    r.padding(Is((reach, 6.0, reach, 6.0))) |> ignore
-    r.box(fn(l) { l.height(Is(Some(1.0))).ground(By(fn() { @ui.alpha(@ui.tree_theme().fg, 0.12) })) |> ignore }) |> ignore
+    r.width_share(Is(1.0)).padding(Is((reach, 6.0, reach, 6.0))) |> ignore
+    r.box(fn(l) {
+      l.width_share(Is(1.0)).height(Is(Some(1.0))).ground(By(fn() { @ui.alpha(@ui.tree_theme().fg, 0.12) })) |> ignore
+    }) |> ignore
   })
   |> ignore
 }

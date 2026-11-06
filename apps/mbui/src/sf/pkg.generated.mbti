@@ -1246,6 +1246,8 @@ pub fn menu_row_reach(Double) -> Double
 
 pub fn menu_rule(@ui.Ctx) -> Unit
 
+pub fn menu_rule_node(@view.View) -> Unit
+
 pub fn menu_shown(String) -> Bool
 
 pub let menu_w : Double
@@ -1581,6 +1583,8 @@ pub fn panel_go(String, (@ui.Ctx, () -> Unit) -> Unit, description? : String, fo
 pub fn panel_ground() -> Int64
 
 pub fn panel_group(@ui.Ctx, () -> Unit, label? : String, lead? : (@ui.Ctx) -> Unit) -> Unit
+
+pub fn panel_group_node(@view.View, (@view.View) -> Unit, label? : () -> String, lead? : (@view.View) -> Unit) -> @view.View
 
 pub fn panel_head(@ui.Ctx, String, note? : String, end? : (@ui.Ctx) -> Unit) -> Unit
 

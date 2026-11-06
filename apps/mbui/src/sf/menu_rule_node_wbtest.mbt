@@ -1,0 +1,67 @@
+// The panel separator in the retained tree has the same geometry and ink as the old panel separator.
+
+///|
+fn panel_rule_drawing(node : Bool, dark : Bool, width : Double, start : Bool) -> Array[(Double, Double, Double, Double, Int64)] {
+  set_dark(Some(dark))
+  let t = @ui.Tester::new(fn(c) {
+    begin(c) |> ignore
+    if !node {
+      c.with_theme(ui_theme(), fn() {
+        c.box(w=Px(width), align=if start { AStart } else { AStretch }, fn() { menu_rule(c) }) |> ignore
+      })
+    }
+  }, w=400.0, h=80.0, dark~)
+  if node {
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(ui_theme_now)
+      root.box(fn(panel) {
+        panel.width(Is(Some(width))).lines_up(Is(if start { Some(Start) } else { None })) |> ignore
+        menu_rule_node(panel)
+      }) |> ignore
+    })
+  }
+  t.draw()
+  let drawn = t.drawn_rects()
+  set_dark(None)
+  drawn
+}
+
+///|
+test "panel rule node draws like menu_rule at both widths and themes" {
+  for dark in [false, true] {
+    for width in [160.0, 320.0] {
+      for start in [false, true] {
+        let old = panel_rule_drawing(false, dark, width, start)
+        let node = panel_rule_drawing(true, dark, width, start)
+        assert_eq(node, old, msg="width \{width}, dark \{dark}, start \{start}")
+        assert_true(node.iter().any(fn(r) { r.0 == 0.0 && r.1 == 6.0 && r.2 == width && r.3 == 1.0 }))
+      }
+    }
+  }
+}
+
+///|
+test "panel rule node follows a theme change without remaking its line" {
+  set_dark(Some(false))
+  let holder : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=240.0, h=80.0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.box(fn(panel) {
+      holder.val = Some(panel)
+      menu_rule_node(panel)
+    }) |> ignore
+  })
+  t.draw()
+  let line = holder.val.unwrap().kids()[0].kids()[0]
+  let light = t.drawn_rects().filter(fn(r) { r.3 == 1.0 })
+  set_dark(Some(true))
+  t.draw()
+  let dark = t.drawn_rects().filter(fn(r) { r.3 == 1.0 })
+  let kept = line.alive()
+  set_dark(None)
+  assert_eq((light.length(), dark.length()), (1, 1))
+  assert_eq((light[0].0, light[0].1, light[0].2, light[0].3), (dark[0].0, dark[0].1, dark[0].2, dark[0].3))
+  assert_true(light[0].4 != dark[0].4)
+  assert_true(kept)
+}
