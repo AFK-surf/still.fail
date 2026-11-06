@@ -763,12 +763,10 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
-  /// every binding's watch and what runs it, by a number of its own, while it lives (let go as it stops): what is asked
-  /// at once (View::laid_size, Tree::bring_to) pulls those whose reads changed by then, told or not
-  pulls : Map[Int, (@signals.Watch, Bound)]
-  mut pulls_made : Int
+  /// how many bindings live: what is asked at once (View::laid_size, Tree::bring_to) pulls those whose reads changed
+  mut pulls_held : Int
   /// those marked as what they read changed, since they last ran (Tree::pull)
-  pulls_marked : Array[Int]
+  pulls_marked : Array[Bound]
   mut layout_due : Bool
   /// the node whose own layout (View::layout_box) is running now, building and measuring its children (-1 none)
   mut layout_owner : Int
@@ -990,6 +988,7 @@ struct Bound {
   mut queued : Bool
   mut marked : Bool
   mut live : Bool
+  mut watch : @signals.Watch?
   mut run : () -> Unit
 }
 
@@ -1054,8 +1053,7 @@ pub fn Tree::new(
     after_paint: [],
     first_drawn: [],
     bindings_due: [],
-    pulls: {},
-    pulls_made: 0,
+    pulls_held: 0,
     pulls_marked: [],
     timeline: [],
     told: 0,
@@ -1755,7 +1753,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
-  self.pulls.clear()
+  self.pulls_held = 0
   self.pulls_marked.clear()
   self.timeline.clear()
   self.changed.clear()
@@ -1792,7 +1790,7 @@ pub fn View::box(self : View, make : (View) -> Unit) -> View {
   if self.at == 0 {
     self.tree.top_last()
   }
-  self.boxes_again()
+  self.box_appended(v.at)
   v.owning(fn() { make(v) })
   v
 }
@@ -2001,11 +1999,9 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  } }
+  let b : Bound = { queued: false, marked: false, live: true, watch: None, run: fn() {  } }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
-  let k = self.pulls_made
-  self.pulls_made = k + 1
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
@@ -2020,7 +2016,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
-      self.pulls_marked.push(k)
+      self.pulls_marked.push(b)
     }
   })
   b.run = fn() {
@@ -2037,11 +2033,14 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     self.cause_at = was
   }
   (b.run)()
-  self.pulls[k] = (w, b)
+  b.watch = Some(w)
+  self.pulls_held += 1
   fn() {
+    if !b.live { return }
     b.live = false
     b.run = fn() {  }
-    self.pulls.remove(k)
+    b.watch = None
+    self.pulls_held -= 1
     w.stop()
   }
 }
@@ -2055,9 +2054,9 @@ fn Tree::pull(self : Tree) -> Unit {
   while self.pulls_marked.length() > 0 {
     let marked = self.pulls_marked.copy()
     self.pulls_marked.clear()
-    for k in marked {
-      match self.pulls.get(k) {
-        Some((w, b)) if b.marked => {
+    for b in marked {
+      match b.watch {
+        Some(w) if b.live && b.marked => {
           self.work.pulled = self.work.pulled + 1
           if w.changed_now() {
             (b.run)()
@@ -2074,7 +2073,7 @@ fn Tree::pull(self : Tree) -> Unit {
 ///|
 /// How many bindings the tree holds (each property bound By, while its node lives): for a test to see what is let go.
 pub fn Tree::bindings_held(self : Tree) -> Int {
-  self.pulls.length()
+  self.pulls_held
 }
 
 ///|
@@ -5587,6 +5586,36 @@ fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
 }
 
 ///|
+/// A newly made box follows what its parent holds. Through slots, it follows all of the layout parent's boxes only if
+/// every slot is last among its siblings; otherwise their order is found again.
+fn View::box_appended(self : View, child : Int) -> Unit {
+  // The root tells the host before linking its new box. That telling may synchronously make another box.
+  if self.at == 0 {
+    self.boxes_again()
+    return
+  }
+  let mut at = self.at
+  while self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
+    let n = self.tree.nodes[at]
+    let parent = n.parent
+    let siblings = self.tree.nodes[parent].kids
+    // Tree::boxes omits a slot made as wide as its anchor, along with everything it holds.
+    if (n.beside is Some(b) && b.as_wide) ||
+      parent == 0 ||
+      siblings.length() == 0 ||
+      siblings[siblings.length() - 1] != at {
+      self.boxes_again()
+      return
+    }
+    at = parent
+  }
+  self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
+  self.tree.layout_marked_at(at)
+  self.tree.order_marked()
+  self.tree.modals_told()
+}
+
+///|
 /// What it holds changed (made, let go, moved): the boxes of the node that lays them out (itself, or the first not a
 /// slot holding it) put again in order, it marked to be laid out, the order to be made again.
 fn View::boxes_again(self : View) -> Unit {
@@ -6570,11 +6599,8 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
   }
   self.bindings_due.clear()
   // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
-  let still = self.pulls_marked.filter(fn(k) {
-    match self.pulls.get(k) {
-      Some((_, b)) => b.marked
-      None => false
-    }
+  let still = self.pulls_marked.filter(fn(b) {
+    b.live && b.watch is Some(_) && b.marked
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
