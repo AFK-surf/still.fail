@@ -40,12 +40,13 @@ function device(c: ReturnType<typeof cloud>, id: string) {
   host.randomBytes = (b: Uint8Array) => void b.fill(id.charCodeAt(0));
   const sealed = new Map<string, Uint8Array>();
   const asks = { n: 0, refuse: false };
+  // (asking by itself, as much as a read of what is sealed: each is a prompt on the person's screen)
   host.secureSet = (key: string, value: Uint8Array) => Effect.sync(() => void sealed.set(key, value));
   host.secureGet = (key: string, opts: { user: boolean; reason?: string }) => {
     if (opts.user) asks.n++;
     return asks.refuse ? Effect.fail(new HostError("user_cancelled")) : Effect.succeed(sealed.get(key) ?? null);
   };
-  host.secureAsk = () => Effect.void;
+  host.secureAsk = () => Effect.sync(() => void asks.n++);
   const runner = new Runner(host.time.clock);
   const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => id, changed: () => {} });
   return { host, runner, lock, asks };
@@ -62,7 +63,7 @@ test("the first signature begins the lock; it asks the person and signs what hol
     assert.equal(a.lock.standing(SUB), "none");
     const signed = await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
     assert.equal(a.lock.standing(SUB), "member");
-    assert.ok(a.asks.n >= 1, "the person was asked");
+    assert.equal(a.asks.n, 1, "the person is asked once, though the key is made and used");
     assert.equal(c.kept.entries.length, 1);
     const { devices } = a.lock.chain(SUB)!;
     assert.equal(grantHolds(grantOf(signed), STATION, SUB, devices, NOW), 2_000_000_000);
@@ -211,6 +212,21 @@ test("a phone started anew reads the lock it pinned, and lends for its grants be
     assert.deepEqual(p.adb.wanted(), [STATION]);
   } finally {
     p.runner.shutdown();
+    a.runner.shutdown();
+  }
+});
+
+test("a lock begun anew, the key there already, asks the person once", async () => {
+  const c = cloud();
+  const a = device(c, "a");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const before = a.asks.n;
+    await a.runner.run(a.lock.restart(SUB, "why"));
+    assert.equal(a.asks.n, before + 1);
+    assert.equal(c.kept.entries.length, 1);
+    assert.equal(a.lock.standing(SUB), "member");
+  } finally {
     a.runner.shutdown();
   }
 });

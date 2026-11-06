@@ -179,9 +179,15 @@ export class PersonalLock {
 
   /// This device's key's id, the key made the first time (the person asked).
   makeKey(reason: string): Effect.Effect<string, CoreError> {
+    return Effect.map(this.#madeKey(reason), (k) => k.id);
+  }
+
+  /// This device's key's id; made just now, its seed too: the person was asked once for that, and is not asked again to
+  /// read what is in hand.
+  #madeKey(reason: string): Effect.Effect<{ id: string; seed: Uint8Array | null }, CoreError> {
     const { host } = this.#env;
     return Effect.gen({ self: this }, function* () {
-      if (this.#myKey !== null) return this.#myKey;
+      if (this.#myKey !== null) return { id: this.#myKey, seed: null };
       if (!host.appKeys || !host.secureSet) return yield* Effect.fail(new CoreError("personal_no_key", t("core-misc.personal.noKey")));
       if (host.secureAsk) yield* Effect.mapError(host.secureAsk(reason), asCoreError);
       const seed = new Uint8Array(32);
@@ -190,7 +196,7 @@ export class PersonalLock {
       const id = `ed25519:${hex(ed25519.getPublicKey(seed))}`;
       yield* Effect.mapError(host.storageSet(KEY_ID, utf8(id)), asCoreError);
       this.#myKey = id;
-      return id;
+      return { id, seed };
     });
   }
 
@@ -226,9 +232,9 @@ export class PersonalLock {
   /// A lock begun here, this device its first (one the cloud has already gives way to it: `restart`).
   begin(sub: string, reason: string): Effect.Effect<Uint8Array, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const key = yield* this.makeKey(reason);
+      const { id: key, seed: made } = yield* this.#madeKey(reason);
       const id = yield* this.#env.device();
-      const seed = yield* this.#unseal(reason);
+      const seed = made ?? (yield* this.#unseal(reason));
       this.#pinned.delete(sub);
       yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label() } });
       return seed;
