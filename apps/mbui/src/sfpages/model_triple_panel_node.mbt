@@ -1,6 +1,20 @@
 // The model panel's contents as retained nodes. The presenter supplies their lifetime, anchor and close action.
 
 ///|
+// The two column titles use the small panel's own heading, including its room around the words.
+// kept across runs: a value (no field of it changes)
+let triple_node_panel_head : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 gap=S0_5")
+
+///|
+// A search is 36 high: its centered title and the other column's title share the same baseline.
+// kept across runs: a value (no field of it changes)
+let triple_node_panel_head_search : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 pb=S1_5 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_node_panel_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg)
+
+///|
 /// A panel keeps its own navigation and the last pick. That pick stops following the core when the panel closes, so a
 /// save cannot rearrange the contents while they leave.
 priv struct TripleNodePanel {
@@ -507,9 +521,16 @@ fn triple_node_body(
         .shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
         // This header and its input stay mounted while the sheet becomes an anchored panel or vice versa.
         models.box(fn(head) {
-          head.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(8.0)) |> ignore
+          head.row(Is(true)).lines_up(Is(Some(Middle))).gap(By(fn() {
+            if sheet() { @ui.Space::S2.px() } else { @ui.Space::S3.px() }
+          })).padding(By(fn() {
+            let across = @ui.Space::S2_5.px()
+            if sheet() { (0.0, 0.0, 0.0, 0.0) }
+            else if items(pick(), "options").length() > 8 { (across, 0.0, 0.0, @ui.Space::S1.px()) }
+            else { (across, @ui.Space::S1_5.px(), across, @ui.Space::S1.px()) }
+          })) |> ignore
           head.show(fn() { !sheet() }, fn(title) {
-            @sf.words_node(title, fn() { @sf.t("android-chat.new.model") }, fn() { triple_picked }).grow(Is(1.0)) |> ignore
+            @sf.words_node(title, fn() { @sf.t("android-chat.new.model") }, fn() { triple_node_panel_title }).grow(Is(1.0)) |> ignore
           })
           triple_node_search(head, state)
         }) |> ignore
@@ -555,9 +576,13 @@ fn triple_node_body(
         .ground(By(fn() { @ui.tree_theme().color(Line) })) |> ignore
       })
       content.show(has_efforts, fn(efforts) {
+        efforts.gap(Is(@ui.Space::SPx.px())) |> ignore
         (state.pick_anchor.val)("effort", efforts)
         efforts.box(fn(head) {
-          @sf.words_node(head, fn() { @sf.t("web-main.model.effort") }, fn() { triple_picked }) |> ignore
+          @sf.style_node(head, fn() {
+            if items(pick(), "options").length() > 8 { triple_node_panel_head_search } else { triple_node_panel_head }
+          })
+          @sf.words_node(head, fn() { @sf.t("web-main.model.effort") }, fn() { triple_node_panel_title }) |> ignore
         }) |> ignore
         triple_node_efforts(efforts, src, station, of, state)
       })

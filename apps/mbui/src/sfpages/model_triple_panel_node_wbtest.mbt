@@ -332,6 +332,53 @@ test "model panel nodes: search leaves room for the effort column" {
 }
 
 ///|
+test "model panel nodes: model and effort headings align" {
+  for searching in [false, true] {
+    @sfbase.reset()
+    @sf.set_words(@sfbase.fill)
+    let original = triple_settings_fixture()
+    let pick = match original {
+      Object(m) => {
+        let next = m.copy()
+        if searching {
+          let options = items(Some(original), "options").copy()
+          for i in 0..<10 {
+            let name = "Extra " + i.to_string()
+            options.push({ "model": Json::string(name), "name": Json::string(name) })
+          }
+          next["options"] = Json::array(options)
+        }
+        Json::object(next)
+      }
+      _ => original
+    }
+    let state = triple_node_panel_state(Some(pick))
+    let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=700.0, platform=0)
+    t.check_looks(false)
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      root.box(fn(panel) {
+        panel.offset(Is((20.0, 30.0))).width(Is(Some(500.0))) |> ignore
+        triple_node_body(panel, @sfbase.sample_source, "ws/st", "new", state, fn() { false }, fn() { false },
+          "", fn() {  }, fn(_, _) {  })
+      }) |> ignore
+    })
+    t.draw()
+    let (_, model_y, _, model_h) = t.shown_of(@sf.t("android-chat.new.model")).unwrap()
+    let (_, effort_y, _, effort_h) = t.shown_of(@sf.t("web-main.model.effort")).unwrap()
+    assert_true((model_y - effort_y).abs() < 1.0 && (model_h - effort_h).abs() < 1.0,
+      msg="column titles align with and without search: \{(searching, model_y, model_h, effort_y, effort_h)}")
+    let (_, low_y, _, low_h) = t.get(Radio, label=effort_text("low")).rect
+    let below_title = if searching { @ui.Space::S1_5.px() } else { @ui.Space::S1.px() }
+    assert_true((low_y - effort_y - effort_h - below_title - @ui.Space::SPx.px()).abs() < 0.5,
+      msg="the effort list starts below its heading: \{(searching, effort_y, effort_h, low_y)}")
+    let (_, high_y, _, _) = t.get(Radio, label=effort_text("high")).rect
+    assert_true((high_y - low_y - low_h - 1.0).abs() < 0.5,
+      msg="effort rows retain their one-point gap: \{(low_y, low_h, high_y)}")
+  }
+}
+
+///|
 test "model panel nodes: all models sits at the foot of the effort column" {
   @sfbase.reset()
   @sf.set_words(@sfbase.fill)
