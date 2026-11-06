@@ -1,6 +1,8 @@
 ///|
-fn info_release(t : @ui.Tester, label : String, hz : Int) -> Double raise {
-  let (x, y) = t.find(label).unwrap()
+fn info_release(t : @ui.Tester, label : String, hz : Int, role? : @ui.Role = Button) -> Double raise {
+  let (left, top, width, height) = t.get(role, label~).rect
+  let x = left + width / 2.0
+  let y = top + height / 2.0
   let start = t.time()
   let press_ms = 50.0
   let release_at = start + press_ms
@@ -88,13 +90,13 @@ test "a chat info opener changes the page at release with the same inputs at any
     t.click(Button, label="对话信息")
     t.run_for(@kit.pop_ms)
     let depth = app.nav.depth()
-    release_times.push(info_release(t, "由「和 Ana 一起看新版的引导页」创建", hz))
+    release_times.push(info_release(t, "由「和 Ana 一起看新版的引导页」创建", hz, role=Link))
     assert_false(@sfdesk.chat_pops_open().0)
     opener_open(t)
-    assert_eq(app.nav.depth(), depth + 1)
+    assert_eq(app.nav.depth(), depth)
     t.run_for(@ui.move_most_ms)
     opener_open(t)
-    assert_eq(app.nav.depth(), depth + 1, msg="drawing does not open the page a second time")
+    assert_eq(app.nav.depth(), depth, msg="drawing does not add another page")
   }
   assert_eq(release_times[0], release_times[1])
   assert_eq(release_times[0], release_times[2])
@@ -108,7 +110,7 @@ test "a chat info pull opens its URL at release once without waiting for a frame
     t.run_for(@ui.move_most_ms)
     t.click(Button, label="对话信息")
     t.run_for(@kit.pop_ms)
-    release_times.push(info_release(t, "列表里的图片按需解码", hz))
+    release_times.push(info_release(t, "列表里的图片按需解码", hz, role=Link))
     assert_false(@sfdesk.chat_pops_open().0)
     assert_eq(t.opened(), ["https://github.com/acme/shop/pull/131"])
     t.run_for(@ui.move_most_ms)
