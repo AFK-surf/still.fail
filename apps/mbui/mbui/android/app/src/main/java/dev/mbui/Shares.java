@@ -77,10 +77,10 @@ final class Shares {
                         if (!c.isNull(1)) size = c.getLong(1);
                     }
                 } catch (Exception e) {
-                    Host.log("shared in: " + e);
+                    Host.log("shared in: " + Host.errShown(e));
                 }
                 if (size > MAX) {
-                    Host.log("shared in: " + name + " is too big (" + size + " bytes)");
+                    Host.log("shared in: " + Host.shown(String.valueOf(name)) + " is too big (" + size + " bytes)");
                     continue;
                 }
                 try (InputStream in = cr.openInputStream(u)) {
@@ -96,7 +96,7 @@ final class Shares {
                     files.put(new JSONObject().put("name", name).put("type", type == null ? "" : type).put("size", out.size()));
                     bytes.add(out.toByteArray());
                 } catch (Exception e) {
-                    Host.log("shared in: " + name + ": " + e);
+                    Host.log("shared in: " + Host.shown(String.valueOf(name)) + ": " + Host.errShown(e));
                 }
             }
             if (words.isEmpty() && bytes.isEmpty()) return;
@@ -139,7 +139,7 @@ final class Shares {
             if (files.length() > 0) o.put("files", files);
             sharedFiles = bytes;
             sharedIn = o.toString();
-            Host.log("shared in: " + words.length() + " characters" + (subject != null ? " (" + subject + ")" : "")
+            Host.log("shared in: " + words.length() + " characters" + (subject != null ? " (" + Host.shown(subject) + ")" : "")
                     + (files.length() > 0 ? ", " + files.length() + " files" : ""));
             Host.requestFrame();
         } catch (JSONException ignored) {
@@ -176,13 +176,13 @@ final class Shares {
             try (FileOutputStream out = new FileOutputStream(f)) {
                 out.write(data);
             } catch (IOException e) {
-                Host.log("share: " + e);
+                Host.log("share: " + Host.errShown(e));
                 return false;
             }
             Uri uri = new Uri.Builder().scheme("content").authority(c.getPackageName() + ".shared").appendPath(safe).build();
             send.setType(mime.isEmpty() ? "application/octet-stream" : mime).putExtra(Intent.EXTRA_STREAM, uri)
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            Host.log("share: " + safe + " (" + data.length + " bytes, " + send.getType() + ") to the system's share sheet");
+            Host.log("share: " + Host.shown(String.valueOf(safe)) + " (" + data.length + " bytes, " + send.getType() + ") to the system's share sheet");
         } else {
             send.setType("text/plain").putExtra(Intent.EXTRA_TEXT, text);
             Host.log("share: " + text.length() + " characters to the system's share sheet");

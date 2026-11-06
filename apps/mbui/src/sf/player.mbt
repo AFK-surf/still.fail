@@ -172,10 +172,10 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
             match r {
               Ok(bytes) => {
                 let cues = @codec.parse_subtitles(sub, bytes)
-                @ui.log("player: subtitle \{sub}: \{cues.length()} lines")
+                @ui.log("player: subtitle \{@ui.shown(sub)}: \{cues.length()} lines")
                 pl.media.set_subtitle(true, cues)
               }
-              Err(e) => @ui.log("player: subtitle \{sub} not read: \{e}")
+              Err(e) => @ui.log("player: subtitle \{@ui.shown(sub)} not read: \{@ui.shown(e.to_string())}")
             }
           })
         }

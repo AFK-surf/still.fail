@@ -74,7 +74,7 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
       stream_part(src, "drive.read", p, size, answer, ended=fn(r) {
         match r {
           Ok(_) => ()
-          Err(e) => @ui.log("player: \{name} @\{offset.to_int()} failed: \{e.stringify()}")
+          Err(e) => @ui.log("player: \{@ui.shown(name)} @\{offset.to_int()} failed: \{@ui.shown(e.stringify())}")
         }
       })
     }),
@@ -111,7 +111,7 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
       (src.call)("drive.place", Json::object(p), fn(r) {
         match r {
           Ok(_) => ()
-          Err(e) => @ui.log("drive: \{name}: where it was left not kept: \{e.stringify()}")
+          Err(e) => @ui.log("drive: \{@ui.shown(name)}: where it was left not kept: \{@ui.shown(e.stringify())}")
         }
       })
     },

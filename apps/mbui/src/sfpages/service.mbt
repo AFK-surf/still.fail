@@ -165,7 +165,7 @@ fn bar_now(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView, fixed : Bool) ->
   // (said on the log as the page moves: e2e/flows check where it went)
   if at != p.logged_path {
     p.logged_path = at
-    @ui.log("service: at \{at}")
+    @ui.log("service: at \{@ui.shown(at)}")
   }
   // a tap anywhere on the address types there (the I-beam over it)
   let pill = c.id("service/address")

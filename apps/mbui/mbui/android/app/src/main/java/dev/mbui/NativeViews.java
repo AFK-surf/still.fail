@@ -680,7 +680,7 @@ final class NativeViews {
         v.picture = new Picture(id);
         v.picture.make();
         views.put(id, v);
-        Host.log("view " + id + ": open " + (kind == 1 ? "video " + arg : kind == 2 ? "page of " + arg.length() + " characters" : "site at " + arg));
+        Host.log("view " + id + ": open " + (kind == 1 ? "video " + Host.urlShown(arg) : kind == 2 ? "page of " + arg.length() + " characters" : "site at " + Host.urlShown(arg)));
         Host.main.post(() -> {
             if (kind == 3 && cookiesClearing) {
                 afterCookies.add(() -> make(v, kind));
@@ -1401,10 +1401,10 @@ final class NativeViews {
         try (OutputStream out = c.getContentResolver().openOutputStream(uri)) {
             if (out == null) return false;
             out.write(data);
-            Host.log("saved " + name + " (" + data.length + " bytes) to Downloads");
+            Host.log("saved " + Host.shown(name) + " (" + data.length + " bytes) to Downloads");
             return true;
         } catch (IOException e) {
-            Host.log("save " + name + ": " + e);
+            Host.log("save " + Host.shown(name) + ": " + Host.errShown(e));
             return false;
         }
     }
@@ -2674,7 +2674,7 @@ final class NativeViews {
                     if (state == 0) {
                         state = 1;
                         framed = 1;
-                        Host.log("view " + id + ": site page loaded (" + path + ")");
+                        Host.log("view " + id + ": site page loaded (" + Host.shown(path) + ")");
                     }
                     stood();
                     pageReady(view);

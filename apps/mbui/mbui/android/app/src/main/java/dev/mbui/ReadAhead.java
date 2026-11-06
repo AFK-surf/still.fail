@@ -47,7 +47,7 @@ final class ReadAhead {
             long n = ch.size();
             if (n > 0) ch.map(FileChannel.MapMode.READ_ONLY, 0, n).load();
         } catch (IOException | RuntimeException e) {
-            Host.log("read ahead: " + f.getName() + ": " + e);
+            Host.log("read ahead: " + Host.shown(f.getName()) + ": " + Host.errShown(e));
         }
     }
 }

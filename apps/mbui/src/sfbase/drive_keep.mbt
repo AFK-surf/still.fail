@@ -75,14 +75,14 @@ pub fn keeps_take() -> Array[() -> Unit] {
     match kept {
       Keeping => left.push(k)
       KeptAt(at) => {
-        @hostapi.log("kept \{k.name}: \{at}")
+        @hostapi.log("kept \{@ui.shown(k.name)}: \{@ui.shown(at)}")
         k.keep.end()
         toast_later(k.saved)
       }
       // the person called the panel or the sheet off: nothing to say
       CalledOff => k.keep.end()
       Failed => {
-        @hostapi.log("keep \{k.name}: failed")
+        @hostapi.log("keep \{@ui.shown(k.name)}: failed")
         k.keep.end()
         toast_later(k.failed)
       }

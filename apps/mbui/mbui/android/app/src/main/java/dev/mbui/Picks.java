@@ -98,7 +98,7 @@ final class Picks {
                     k.infos.add("");
                 }
             } catch (Exception e) {
-                Host.log("pick: " + p + ": " + e);
+                Host.log("pick: " + Host.shown(String.valueOf(p)) + ": " + Host.errShown(e));
             }
         }
         done(id, k.names.isEmpty() ? -1 : 1);
@@ -150,7 +150,7 @@ final class Picks {
             return new Uri.Builder().scheme("content").authority(a.getPackageName() + ".shared")
                     .appendPath(Shares.CAMERA).appendPath(f.getName()).build();
         } catch (java.io.IOException e) {
-            Host.log("pick: " + e);
+            Host.log("pick: " + Host.errShown(e));
             return null;
         }
     }
@@ -196,7 +196,7 @@ final class Picks {
                         k.infos.add("");
                     }
                 } catch (Exception e) {
-                    Host.log("pick: " + taken + ": " + e);
+                    Host.log("pick: " + Host.shown(String.valueOf(taken)) + ": " + Host.errShown(e));
                 }
             }
             if (taken != null) taken.delete();
@@ -236,7 +236,7 @@ final class Picks {
                     if (!c.isNull(1)) size = c.getLong(1);
                 }
             } catch (Exception e) {
-                Host.log("pick: " + e);
+                Host.log("pick: " + Host.errShown(e));
             }
             if (size > MAX) continue;
             if (k.hold && size > WHOLE) {
@@ -268,7 +268,7 @@ final class Picks {
                     k.infos.add("0\t" + out.size() + "\t" + u);
                 }
             } catch (Exception e) {
-                Host.log("pick: " + name + ": " + e);
+                Host.log("pick: " + Host.shown(String.valueOf(name)) + ": " + Host.errShown(e));
             }
         }
     }

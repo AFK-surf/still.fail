@@ -83,7 +83,7 @@ public final class Notices {
                 .setCategory(Notification.CATEGORY_MESSAGE)
                 .build();
         m.notify(tag, ID, n);
-        Host.log("NOTICE " + tag + "\t" + title + "\t" + body);
+        Host.log("NOTICE " + tag + "\t" + Host.shown(title) + "\t" + Host.shown(body));
     }
 
     /** A chat opened: its notification goes (Notifier.cancel). */
@@ -177,7 +177,7 @@ public final class Notices {
                 && ("https".equals(intent.getData().getScheme()) || "http".equals(intent.getData().getScheme()))) {
             String link = intent.getData().toString();
             intent.setData(null);
-            Host.log("LINK OPENED " + link);
+            Host.log("LINK OPENED " + Host.urlShown(link));
             try {
                 Native.post("system", new org.json.JSONObject().put("link", link).toString());
             } catch (org.json.JSONException ignored) {
@@ -188,7 +188,7 @@ public final class Notices {
         if (o == null) return;
         intent.removeExtra(OPENS);
         opened = o;
-        Host.log("NOTICE TAP " + o.replace('\n', ' '));
+        Host.log("NOTICE TAP " + Host.shown(o).replace('\n', ' '));
         Host.requestFrame();
     }
 

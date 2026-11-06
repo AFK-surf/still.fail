@@ -1,7 +1,8 @@
 // The device beyond the window, tried on a host (src/ui/device.mbt): a key catcher holds the focus from the start and
 // says on the log what it caught ("CAUGHT …"); words typed into it ending in "!" are commands: paste! reads the
 // clipboard ("CLIP …": its words, its picture, its files by name and size), copytext! and copypng! write it (a
-// one-pixel PNG), awake! and sleep! keep the screen on or let it go, haptic! fires a long press's. The soft keyboard's
+// one-pixel PNG), awake! and sleep! keep the screen on or let it go, haptic! fires a long press's, openlink! and
+// keepfile! open a made-up link and keep a made-up file (what the host's log says of them). The soft keyboard's
 // height is said as it changes ("IME …"). The last line said is on the screen too, for a scripted run's `until`:
 // `APP=devicedemo scripts/android.sh build`, scripts/mac.sh.
 
@@ -33,7 +34,7 @@ fn main {
   }
   let command = fn(typed : String) {
     // (what was typed before it, with no space between, is not the command's)
-    let commands = ["paste", "copytext", "copypng", "awake", "sleep", "haptic"]
+    let commands = ["paste", "copytext", "copypng", "awake", "sleep", "haptic", "openlink", "keepfile"]
     let word = match commands.search_by(fn(w) { typed.has_suffix(w) }) {
       Some(i) => commands[i]
       None => typed
@@ -45,6 +46,10 @@ fn main {
       "awake" => @ui.keep_awake(true)
       "sleep" => @ui.keep_awake(false)
       "haptic" => @ui.haptic(LongPress)
+      // (what the host's log says of a link and a file's name a person gave: a made-up one, its path and query and its
+      // name sentinels, as scripts look for none of them on a phone's log, Host.urlShown and shown)
+      "openlink" => @ui.open_url("https://example.invalid/QZXPATH/a?q=QZXQUERY") |> ignore
+      "keepfile" => @ui.keep("QZXNAME.txt", "text/plain", b"made up") |> ignore
       _ => ()
     }
     say("DONE \{word} (copy shown: \{@ui.copy_shown()})")

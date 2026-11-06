@@ -13,7 +13,7 @@ let dumped : Map[String, Int] = {}
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
   // (read in a computed, followed: Sub.changes)
   let s = @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed()
-  if dump {
+  if dump_on() {
     let key = name + " " + Json::object(params).stringify()
     if dumped.get(key) != Some(s.version) {
       dumped[key] = s.version
@@ -28,14 +28,30 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
 }
 
 ///|
-/// MBUI_CORE_DUMP=1: what each topic the app follows holds, on the log (DUMP …): never of a real account's core, which
-/// is all this app's is (@ui.content_kept).
-let dump : Bool = @ui.env("MBUI_CORE_DUMP") == "1" && @ui.content_kept()
+/// MBUI_CORE_DUMP=1: what each topic the app follows holds, on the log (DUMP …): of a test run's account alone
+/// (@ui.content_kept, said by main), never a person's. Read once, after main said where the data comes from.
+fn dump_on() -> Bool {
+  if dump_said.val < 0 {
+    dump_said.val = if @ui.env("MBUI_CORE_DUMP") == "1" && @ui.content_kept() { 1 } else { 0 }
+  }
+  dump_said.val == 1
+}
 
 ///|
-/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs; never
-/// of a real account's core (@ui.content_kept).
-let call_log : Bool = @ui.env("MBUI_CALL_LOG") == "1" && @ui.content_kept()
+let dump_said : Ref[Int] = Ref::new(-1)
+
+///|
+/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs: of a
+/// test run's account alone (@ui.content_kept, said by main), never a person's. Read once, after main said it.
+fn call_log_on() -> Bool {
+  if call_log_said.val < 0 {
+    call_log_said.val = if @ui.env("MBUI_CALL_LOG") == "1" && @ui.content_kept() { 1 } else { 0 }
+  }
+  call_log_said.val == 1
+}
+
+///|
+let call_log_said : Ref[Int] = Ref::new(-1)
 
 ///|
 /// The fields whose values are secrets (keys, tokens, passwords, a vault item's value, recovery words, a sign-in's code):
@@ -179,11 +195,11 @@ let core_source : @sfapp.Source = {
         return
       }
     }
-    if call_log {
+    if call_log_on() {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.call(name, params~, on_done=fn(r) {
-      if call_log {
+      if call_log_on() {
         match r {
           Ok(v) => @hostapi.log("ANSWER \{name} ok \{logged(name, v)}")
           Err(e) => @hostapi.log("ANSWER \{name} error \{e.stringify()}")
@@ -197,11 +213,11 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return
     }
-    if call_log {
+    if call_log_on() {
       @hostapi.log("CALL \{name} \{logged(name, params)} with \{bytes.length()} bytes")
     }
     @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
-      if call_log {
+      if call_log_on() {
         match r {
           Ok(v) => @hostapi.log("ANSWER \{name} ok \{logged(name, v)}")
           Err(e) => @hostapi.log("ANSWER \{name} error \{e.stringify()}")
@@ -215,19 +231,19 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return
     }
-    if call_log {
+    if call_log_on() {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.call_bytes(name, params~, on_done=fn(r) {
       match r {
         Ok((v, bytes)) => {
-          if call_log {
+          if call_log_on() {
             @hostapi.log("ANSWER \{name} ok \{logged(name, v)} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
           }
           done(Ok((v, bytes.unwrap_or(Bytes::new(0)))))
         }
         Err(e) => {
-          if call_log {
+          if call_log_on() {
             @hostapi.log("ANSWER \{name} error \{e.stringify()}")
           }
           done(Err(e))
@@ -240,19 +256,19 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return
     }
-    if call_log {
+    if call_log_on() {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.stream_bytes(name, params~, on_value=fn(v, _) { on_value(v) }, on_done=fn(r) {
       match r {
         Ok((v, bytes)) => {
-          if call_log {
+          if call_log_on() {
             @hostapi.log("ANSWER \{name} ok \{logged(name, v)} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
           }
           done(Ok((v, bytes.unwrap_or(Bytes::new(0)))))
         }
         Err(e) => {
-          if call_log {
+          if call_log_on() {
             @hostapi.log("ANSWER \{name} error \{e.stringify()}")
           }
           done(Err(e))
@@ -267,13 +283,13 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return 0
     }
-    if call_log {
+    if call_log_on() {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.stream(name, params~, bytes~, on_value=fn(v, b) {
       on_value(v, b)
     }, on_done=fn(r) {
-      if call_log {
+      if call_log_on() {
         match r {
           Ok(_) => @hostapi.log("ANSWER \{name} ok")
           Err(e) => @hostapi.log("ANSWER \{name} error \{e.stringify()}")
@@ -363,6 +379,12 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
+  // where its data comes from (@ui.set_data_source): a test run's own, an account it hands in against its own cloud
+  // (MBUI_CLOUD with MBUI_CORE_ACCOUNT: src/sfcore/signin.mbt, e2e/'s runs; an environment a phone's app takes only from
+  // its shell, MainActivity.testHooks), made up; anything else a person's, nothing of it kept
+  if @ui.env("MBUI_CLOUD") != "" && (@ui.env("MBUI_CORE_ACCOUNT") != "" || @ui.env("MBUI_CORE_ACCOUNT_B64") != "") {
+    @ui.set_data_source(MadeUp)
+  }
   // the app as the system's keyboard (mbui's Keyboard.java, in a process of its own): the keyboard alone
   if @ui.env("MBUI_KEYBOARD") == "1" {
     @keyboard.run()

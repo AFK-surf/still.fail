@@ -1447,11 +1447,11 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
                 match r {
                   Ok(bytes) => {
                     if v.reads.get() < 3 {
-                      @ui.log("preview: \{v.name} @\{offset.to_int()} \{bytes} bytes through the core (\{v.part_call()})")
+                      @ui.log("preview: \{@ui.shown(v.name)} @\{offset.to_int()} \{bytes} bytes through the core (\{v.part_call()})")
                     }
                     v.reads.set(v.reads.get() + 1)
                   }
-                  Err(e) => @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
+                  Err(e) => @ui.log("preview: \{@ui.shown(v.name)} @\{offset.to_int()} failed: \{@ui.shown(e.stringify())}")
                 }
               })
             },
@@ -2358,7 +2358,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       // which would go on to draw this one's picture where the strip now puts the next one (a frame of this one in its
       // place, or of nothing where the one before comes)
       c.built_from_changed("the preview stepped")
-      @ui.log("preview: stepped to \{n.file.name}")
+      @ui.log("preview: stepped to \{@ui.shown(n.file.name)}")
     }
   }
 }
@@ -2714,7 +2714,7 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
     None => {
       let p = @ui.Pdf::open(b)
       v.pdf = Some(p)
-      @ui.log("preview: \{v.name}: a PDF of \{p.pages} pages")
+      @ui.log("preview: \{@ui.shown(v.name)}: a PDF of \{p.pages} pages")
       p
     }
   }

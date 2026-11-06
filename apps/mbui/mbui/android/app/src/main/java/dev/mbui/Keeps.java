@@ -64,7 +64,7 @@ final class Keeps {
         try {
             k.out = new FileOutputStream(k.part);
         } catch (IOException e) {
-            Host.log("keep " + safe + ": " + e);
+            Host.log("keep " + Host.shown(safe) + ": " + Host.errShown(e));
             k.state = -1;
         }
         keeps.put(id, k);
@@ -79,7 +79,7 @@ final class Keeps {
             k.size += data.length;
             return 1;
         } catch (IOException e) {
-            Host.log("keep " + k.name + ": " + e);
+            Host.log("keep " + Host.shown(k.name) + ": " + Host.errShown(e));
             close(k);
             done(k, -1, "");
             return 0;
@@ -123,10 +123,10 @@ final class Keeps {
             whole.put(MediaStore.Downloads.IS_PENDING, 0);
             cr.update(uri, whole, null, null);
             String shown = nameOf(cr, uri, k.name);
-            Host.log("keep: " + shown + " (" + k.size + " bytes) in Downloads");
+            Host.log("keep: " + Host.shown(shown) + " (" + k.size + " bytes) in Downloads");
             done(k, 1, "Download/" + shown);
         } catch (Exception e) {
-            Host.log("keep " + k.name + ": " + e);
+            Host.log("keep " + Host.shown(k.name) + ": " + Host.errShown(e));
             if (uri != null) try { cr.delete(uri, null, null); } catch (Exception ignored) { }
             done(k, -1, "");
         }
@@ -160,10 +160,10 @@ final class Keeps {
             whole.put(MediaStore.MediaColumns.IS_PENDING, 0);
             cr.update(uri, whole, null, null);
             String shown = nameOf(cr, uri, k.name);
-            Host.log("keep: " + shown + " (" + k.size + " bytes) in " + dir);
+            Host.log("keep: " + Host.shown(shown) + " (" + k.size + " bytes) in " + Host.shown(String.valueOf(dir)));
             done(k, 1, dir + "/" + shown);
         } catch (Exception e) {
-            Host.log("keep " + k.name + ": " + e);
+            Host.log("keep " + Host.shown(k.name) + ": " + Host.errShown(e));
             if (uri != null) try { cr.delete(uri, null, null); } catch (Exception ignored) { }
             done(k, -1, "");
         }
@@ -197,10 +197,10 @@ final class Keeps {
             try {
                 copy(cr, uri, k);
                 String shown = nameOf(cr, uri, k.name);
-                Host.log("keep: " + shown + " (" + k.size + " bytes) where chosen");
+                Host.log("keep: " + Host.shown(shown) + " (" + k.size + " bytes) where chosen");
                 done(k, 1, shown);
             } catch (Exception e) {
-                Host.log("keep " + k.name + ": " + e);
+                Host.log("keep " + Host.shown(k.name) + ": " + Host.errShown(e));
                 done(k, -1, "");
             }
         }, "mbui-keep").start();
@@ -279,7 +279,7 @@ final class Keeps {
                 return got == out.length ? out : Arrays.copyOf(out, got);
             }
         } catch (Exception e) {
-            Host.log("keep: " + where + " not read back: " + e);
+            Host.log("keep: " + Host.shown(String.valueOf(where)) + " not read back: " + Host.errShown(e));
             return null;
         }
     }

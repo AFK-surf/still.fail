@@ -144,12 +144,12 @@ final class Images {
                 b = c;
             }
         } catch (Throwable e) {
-            Host.log("image " + r.src + ": " + e);
+            Host.log("image " + Host.urlShown(r.src) + ": " + Host.errShown(e));
             b = null;
         }
         if (Host.bench != 0 && b != null) {
             Host.log("image " + orig[0] + "x" + orig[1] + " -> " + b.getWidth() + "x" + b.getHeight()
-                    + " in " + (System.nanoTime() - t0) / 1000000 + " ms: " + r.src);
+                    + " in " + (System.nanoTime() - t0) / 1000000 + " ms: " + Host.urlShown(r.src));
         }
         Bitmap bmp = b;
         toGL(() -> upload(id, bmp, orig[0], orig[1]));

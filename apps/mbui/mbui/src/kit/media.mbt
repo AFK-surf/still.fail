@@ -296,7 +296,7 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   self.scrub = -1.0
   self.scrub_sent = -1.0
   self.waiting = false
-  @ui.log("player: open \{track.name} (\{track.mime}) from \{start.to_int()} ms")
+  @ui.log("player: open \{@ui.shown(track.name)} (\{track.mime}) from \{start.to_int()} ms")
 }
 
 ///|
@@ -646,7 +646,7 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
       Some(n) => n.bytes().to_int()
       None => 0
     }
-    @ui.log("player: \{name} ready, \{s.duration.to_int()} ms long, \{read} bytes read")
+    @ui.log("player: \{@ui.shown(name)} ready, \{s.duration.to_int()} ms long, \{read} bytes read")
     // the place it opens at, once more where the player took no seek before it was ready
     if p.start_at > 0.0 && s.position < p.start_at - 1000.0 {
       p.seek_owed = true

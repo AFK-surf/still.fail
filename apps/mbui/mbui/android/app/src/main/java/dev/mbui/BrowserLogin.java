@@ -60,7 +60,7 @@ final class BrowserLogin {
             logins.remove(bid);
             return 0;
         }
-        Host.log("browser login: listening on 127.0.0.1:" + login.port + " for " + path);
+        Host.log("browser login: listening on 127.0.0.1:" + login.port + " for " + Host.shown(path));
         return bid;
     }
 
@@ -113,7 +113,7 @@ final class BrowserLogin {
         Host.main.post(() -> {
             try {
                 a.startActivity(view);
-                Host.log("open-tab: " + url);
+                Host.log("open-tab: " + Host.urlShown(url));
             } catch (ActivityNotFoundException e) {
                 Host.openUrl(url);
             }
@@ -167,7 +167,7 @@ final class BrowserLogin {
                     ours ? page("Signed in", "已回到 app，可以关掉这个页面 · Back in the app: you can close this page", link)
                          : page("Not found", "这不是这次登录的地址 · Not this sign-in", null));
         }
-        Host.log("browser login: " + r.method + " " + bare + " (Host " + host + ") " + (ours ? "taken" : "refused"));
+        Host.log("browser login: " + r.method + " " + Host.shown(bare) + " (Host " + host + ") " + (ours ? "taken" : "refused"));
         if (!ours) return;
         Loopback.close(login.lid);  // after the answer: nothing else is taken
         if (login.back == null) login.back = "http://127.0.0.1:" + login.port + path;

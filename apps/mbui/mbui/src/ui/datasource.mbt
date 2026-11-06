@@ -16,7 +16,8 @@
 pub(all) enum DataSource {
   /// A person's account, its core's own: nothing of it written down.
   RealAccount
-  /// Made up (a fixture's chats, a Tester's): a run's tape and text kept as the environment asks.
+  /// Made up (a fixture's chats, a Tester's, a test run's own account against its own cloud): a run's tape and text
+  /// kept as the environment asks.
   MadeUp
 } derive(Eq, Show)
 
@@ -35,4 +36,15 @@ pub fn set_data_source(s : DataSource) -> Unit {
 /// of made-up data.
 pub fn content_kept() -> Bool {
   data_source.val == MadeUp
+}
+
+///|
+/// Words a person gave or was shown (a file's or a track's name, a link, a page's path, an error's message) as the
+/// general log may say them: themselves of made-up data, how many of a real account's (content_kept).
+pub fn shown(s : String) -> String {
+  if content_kept() {
+    s
+  } else {
+    "(\{s.length()} characters)"
+  }
 }

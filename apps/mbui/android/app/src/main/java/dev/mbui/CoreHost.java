@@ -131,7 +131,7 @@ final class CoreHost {
                             answer(id, null, "unsupported", null);
                     }
                 } catch (Throwable e) {
-                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    if (tracing()) Host.log("core app call " + op + " -> error " + Host.shown(errorText(e)));
                     answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
                 }
             });
@@ -150,7 +150,7 @@ final class CoreHost {
                     if (b == null) answer(id, "{\"none\":true}", null, null);
                     else answer(id, "{}", null, b);
                 } catch (Throwable e) {
-                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    if (tracing()) Host.log("core app call " + op + " -> error " + Host.shown(errorText(e)));
                     answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
                 }
             });
@@ -163,7 +163,7 @@ final class CoreHost {
                 try {
                     listen(id, op, new JSONObject(new String(json, StandardCharsets.UTF_8)), bytes);
                 } catch (Throwable e) {
-                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    if (tracing()) Host.log("core app call " + op + " -> error " + Host.shown(errorText(e)));
                     answer(id, null, errorText(e), null);
                 }
             });
@@ -185,7 +185,7 @@ final class CoreHost {
             } catch (Throwable e) {
                 error = op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
-            if (tracing()) Host.log("core app call " + op + " -> " + (error != null ? "error " + error
+            if (tracing()) Host.log("core app call " + op + " -> " + (error != null ? "error " + Host.shown(error)
                     : head + (body != null ? " +" + body.length + " bytes" : "")));
             answer(id, head, error, body);
         });
@@ -252,7 +252,7 @@ final class CoreHost {
     private final Map<Integer, Listen> listens = new ConcurrentHashMap<>();
 
     private void listen(long id, String op, JSONObject a, byte[] bytes) throws Exception {
-        if (tracing()) Host.log("core app call " + op + " " + a);
+        if (tracing()) Host.log("core app call " + op + " " + Host.shown(String.valueOf(a)));
         int which = a.optInt("id", 0);
         switch (op) {
             case "listen.open": {

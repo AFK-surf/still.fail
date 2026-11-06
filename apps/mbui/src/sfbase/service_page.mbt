@@ -210,7 +210,7 @@ pub(all) struct Sink {
 pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
   p.asked += 1
   if p.asked <= 3 {
-    @ui.log("service: the page asks \{req.verb} \{req.path}")
+    @ui.log("service: the page asks \{req.verb} \{@ui.shown(req.path)}")
   }
   let bare = match req.path.find("?") {
     Some(i) => req.path.view(end_offset=i).to_owned()
@@ -825,7 +825,7 @@ pub fn service_site(src : Source, p : ServicePage, file : FilePage?, leave : (St
         too_slow=svc("android-chat.web.slow"),
         leave~,
       )
-      @ui.log("service: \{p.name} on \{p.station} (port \{p.port}) opened in a site view")
+      @ui.log("service: \{@ui.shown(p.name)} on \{p.station} (port \{p.port}) opened in a site view")
       p.site = Some(v)
       v
     }

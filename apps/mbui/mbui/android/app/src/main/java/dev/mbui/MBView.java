@@ -836,7 +836,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         @Override
         public boolean commitText(CharSequence text, int pos) {
             String s = text.toString();
-            if (Host.imeLog()) Host.log("ime: commitText " + s);
+            if (Host.imeLog()) Host.log("ime: commitText " + Host.shown(s));
             composing = false;
             composingText = "";
             if (s.equals("\n")) {
@@ -850,7 +850,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         @Override
         public boolean setComposingText(CharSequence text, int pos) {
             String s = text.toString();
-            if (Host.imeLog()) Host.log("ime: setComposingText " + s);
+            if (Host.imeLog()) Host.log("ime: setComposingText " + Host.shown(s));
             composingText = s;
             composing = s.length() > 0;
             view.toGL(() -> Native.text(1, s, s.length(), 0));
@@ -1051,7 +1051,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
         @Override
         public boolean commitText(CharSequence text, int pos) {
-            if (Host.imeLog()) Host.log("ime: commitText " + text);
+            if (Host.imeLog()) Host.log("ime: commitText " + Host.shown(text));
             if (text.toString().equals("\n")) {
                 // Enter: the field's to decide (a new line, or sent), after what is composed is in
                 finishComposingText();
@@ -1063,7 +1063,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
         @Override
         public boolean setComposingText(CharSequence text, int pos) {
-            if (Host.imeLog()) Host.log("ime: setComposingText " + text);
+            if (Host.imeLog()) Host.log("ime: setComposingText " + Host.shown(text));
             return super.setComposingText(text, pos);
         }
 
