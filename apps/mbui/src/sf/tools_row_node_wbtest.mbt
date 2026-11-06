@@ -105,6 +105,21 @@ test "tools row nodes: actual width drops whole tools in priority order and brin
 }
 
 ///|
+test "tools row nodes: the more button stays lit while its menu is open" {
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
+  let t = row_test_case(@signals.signal(107.0), @signals.signal(true), @signals.signal(true), @signals.signal(false), @signals.signal(false), hits, nodes, platform=2)
+  let rect = t.get(Button, label="more").rect
+  let closed = drawn_within(t, rect)
+  t.click(Button, label="more")
+  t.run_for(dur_ms)
+  assert_true(drawn_within(t, rect) != closed, msg="the open menu's trigger has its chosen ground")
+  t.key(@ui.key_escape)
+  t.run_for(dur_ms)
+  assert_eq(drawn_within(t, rect), closed, msg="the trigger returns to its resting look when the menu closes")
+}
+
+///|
 test "tools row nodes: its open menu follows left-out tools and live items, and selects what it shows" {
   let width = @signals.signal(107.0)
   let fixed = @signals.signal(true)
