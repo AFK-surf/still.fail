@@ -319,3 +319,116 @@ fn af_kept_held_told() -> Unit raise {
 fn af_kept_held_told() -> Unit raise {
   assert_eq(af_kept_held, [])
 }
+
+///|
+// kept across runs: what sets an effect made in the fifth stopped run below and owned by none of it going (that
+// effect sets what the run's watches read)
+let af_go : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_go, what sets an effect of the fifth stopped run's own going (it sets the same)
+let af_go_own : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_go, what the fifth stopped run's watches read, set by those effects as they run
+let af_set_in : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_go, what those watches read as they are told
+let af_probe : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+// kept across runs: as af_go, which of those effects set what the watches read, as it sets it
+let af_setter : Ref[String] = Ref("")
+
+///|
+// kept across runs: as af_go, each run of the kept effect
+let af_go_runs : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: as af_go, what a watch made in the fifth stopped run and owned by none of it asked as it was told
+// (in the run of the effect that set what it read), done: which way, and which effect set it
+let af_kept_set_in : Array[String] = []
+
+///|
+test "panic: a run stopped in a layout, watches told as an effect running sets what they read" {
+  af_run()
+  // (a watch owned by none of the run: kept; told, it asks to wait for the change told whole, both ways, and reads)
+  let kept = @signals.watch(fn() {
+    let by = af_setter.val
+    @signals.after_flush(fn() { af_kept_set_in.push("after_flush, set by the \{by}") })
+    @signals.after_all_flushed(fn() { af_kept_set_in.push("after_all_flushed, set by the \{by}") })
+    af_probe.get() |> ignore
+  })
+  // (the run's own, let go as a run begins, on_reset)
+  let own = @signals.watch(fn() {
+    let by = af_setter.val
+    @signals.after_flush(fn() { af_note("the stopped run's own watch's after_flush, set by the \{by}") })
+    @signals.after_all_flushed(fn() { af_note("the stopped run's own watch's after_all_flushed, set by the \{by}") })
+    af_probe.get() |> ignore
+  })
+  on_reset(fn() { own.stop() })
+  let read = fn() {
+    kept.read(fn() { af_set_in.get() }) |> ignore
+    own.read(fn() { af_set_in.get() }) |> ignore
+  }
+  // (an effect owned by none of the run, kept; one of the run's own, on_reset: each, set going, sets what the watches
+  // read, as it runs: they are told there and then, in a flush inside its run)
+  @signals.effect(fn() {
+    af_go_runs.val += 1
+    if af_go.get() > 0 {
+      af_setter.val = "kept effect"
+      af_set_in.set(af_go.get())
+    }
+  })
+  |> ignore
+  let own_effect = @signals.effect(fn() {
+    if af_go_own.get() > 0 {
+      af_setter.val = "stopped run's own effect"
+      af_set_in.set(100 + af_go_own.get())
+    }
+  })
+  on_reset(own_effect)
+  @signals.afters_held(fn() {
+    read()
+    af_go.set(1)
+    read()
+    af_go_own.set(1)
+    af_reached.push("told in an effect's set")
+    abort("stopped")
+  })
+}
+
+///|
+test "a Tester started after a run stopped in a layout: what a kept watch asked as an effect's set told it done, none of its own" {
+  af_stopped(["batch", "held", "watched", "told as read", "told in an effect's set"])
+  af_next() |> ignore
+  af_kept_set_in_told()
+}
+
+///|
+/// wasm-gc, Wasm, JS: what the watch kept from the stopped layout asked as each effect's set told it there, done as
+/// the Tester began (its own, kept, whichever effect set it), in the order of each way; what it read as it was told
+/// followed by neither effect (the kept one not run again as it is set)
+#cfg(any(target="wasm-gc", target="wasm", target="js"))
+fn af_kept_set_in_told() -> Unit raise {
+  assert_eq(
+    af_kept_set_in,
+    [
+      "after_flush, set by the kept effect", "after_flush, set by the stopped run's own effect", "after_all_flushed, set by the kept effect",
+      "after_all_flushed, set by the stopped run's own effect",
+    ],
+    msg="the kept watch's, asked as an effect's set told it in the stopped layout: done as the run began",
+  )
+  let runs = af_go_runs.val
+  af_probe.set(1)
+  assert_eq(af_go_runs.val, runs, msg="what the watches read as they were told: not followed by the effect that set what they read")
+}
+
+///|
+/// Native and LLVM: no stopped run here, no watch of it
+#cfg(any(target="native", target="llvm"))
+fn af_kept_set_in_told() -> Unit raise {
+  assert_eq(af_kept_set_in, [])
+  assert_eq(af_go_runs.val, 0)
+}

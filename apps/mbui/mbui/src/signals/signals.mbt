@@ -441,6 +441,19 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
 }
 
 ///|
+/// A watch told, in a flush or as its read ends: the watch running, nothing reading (whatever was: an effect that set
+/// what it read, one that read it), so what it asks for is its own (asker) and what it reads followed by none
+fn watch_told(e : ReactiveNode, o : WatchOwn) -> Unit {
+  let running = run.running
+  let sub = run.active_sub
+  run.running = Some(e)
+  run.active_sub = None
+  (o.told)()
+  run.active_sub = sub
+  run.running = running
+}
+
+///|
 fn run_effect(e : ReactiveNode) -> Unit {
   let flags = e.flags
   // (a watch told: what it read changed, it says so; what it read stays followed till it reads anew, Watch::read)
@@ -462,10 +475,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
       if was is None {
         setting.val = o.marked_by.val
       }
-      let running = run.running
-      run.running = Some(e)
-      (o.told)()
-      run.running = running
+      watch_told(e, o)
       setting.val = was
     }
     o.marked_by.val = None
@@ -1031,15 +1041,7 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
         self.set_by.push(s)
       }
       guard e.own is WatchOwned(o) else { abort("a watch without its own") }
-      // (told as a watch is told in a flush, run_effect: the watch running, nothing reading; what it asks for is its
-      // own, asker, not what read it)
-      let running = run.running
-      let sub = run.active_sub
-      run.running = Some(e)
-      run.active_sub = None
-      (o.told)()
-      run.active_sub = sub
-      run.running = running
+      watch_told(e, o)
     }
   }
   v
