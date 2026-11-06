@@ -2570,6 +2570,7 @@ let en : Map[String, String] = {
   "web-pages.stations.latency": "Latency {latency}",
   "web-pages.stations.netNone": "Not connected",
   "web-pages.stations.offline": "Offline",
+  "web-pages.stations.online": "Online",
   "web-pages.stations.page.more": "More",
   "web-pages.stations.page.openFiles": "Open files",
   "web-pages.stations.page.part.processes": "Processes",
