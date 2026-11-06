@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
-import { CoreError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
@@ -63,6 +63,44 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   const pair = async () => (await lock()).me.pair;
   return { ...r, ways, dials, hellos, lock, pair, secondLock };
 }
+
+test("a signing key that cannot be read ends the request with its error, and a retry can ask again", async () => {
+  const w = await waiting({ [PHONE_APP]: "code" });
+  const secureGet = w.host.secureGet!;
+  w.host.secureGet = (key, opts) => key === "lock-signer"
+    ? Effect.fail(new HostError("钥匙暂不可用", true))
+    : secureGet(key, opts);
+  await assert.rejects(w.ask("lock.pair", { workspace: "ws" }), { code: "lock_key" });
+  const failed = await w.pair();
+  assert.equal(failed.state, "failed");
+  assert.match(failed.error, /钥匙暂不可用/);
+  assert.deepEqual(w.dials, {});
+  w.host.secureGet = secureGet;
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1);
+});
+
+test("a cancelled key read failing late cannot end a newer pairing request", async () => {
+  const w = await waiting({ [PHONE_APP]: "code" });
+  const secureGet = w.host.secureGet!;
+  const release = Deferred.makeUnsafe<void>();
+  w.host.secureGet = (key, opts) => key === "lock-signer"
+    ? Effect.andThen(Deferred.await(release), Effect.fail(new HostError("钥匙暂不可用", true)))
+    : secureGet(key, opts);
+  const first = w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(500);
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  w.host.secureGet = secureGet;
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  Deferred.doneUnsafe(release, Effect.void);
+  await assert.rejects(first, { code: "lock_key" });
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1);
+});
 
 test("a trusted device opened after the new device asked shows its code: dialled again every PAIR_REDIAL_MS", async () => {
   const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away" });
