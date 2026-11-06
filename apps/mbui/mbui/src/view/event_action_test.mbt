@@ -135,6 +135,35 @@ test "after-event action waits for structures even when the reacting watcher run
 }
 
 ///|
+test "after-event action takes a programmatic open at the current cause, with or without a batch" {
+  for batched in [false, true] {
+    let now = Ref(0.0)
+    let open = @signals.signal(false)
+    let root_ref : Ref[@view.View?] = Ref(None)
+    let extent : Ref[@view.View?] = Ref(None)
+    let seen : Array[(Double, Double)] = []
+    let tree = @view.Tree::new(fn(root) {
+      root_ref.val = Some(root)
+      root.show(fn() { open.get() }, fn(v) {
+        extent.val = Some(v)
+        v.height(Is(Some(200.0))) |> ignore
+      })
+    }, time=fn() { now.val })
+    tree.frame(390.0, 844.0, now=0.0) |> ignore
+    now.val = 50.0
+    if batched { @signals.start_batch() }
+    open.set(true)
+    let root : @view.View = root_ref.val.unwrap()
+    root.after_event_action(fn() {
+      let new_extent : @view.View = extent.val.unwrap()
+      seen.push((root.cause_at(), new_extent.laid_size().1))
+    })
+    if batched { @signals.end_batch() }
+    assert_eq(seen, [(50.0, 200.0)], msg="batched=\{batched}")
+  }
+}
+
+///|
 test "panic an after-event action cannot be started by a binding" {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(v) {
