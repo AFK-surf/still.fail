@@ -28,7 +28,7 @@ import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlocksScan } from "../src/store/usage-summary-blocks.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
-import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_JOB_SESSIONS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { activeJobUpgradeStep, ACTIVE_JOB_CONFLICT, ACTIVE_JOB_END, ACTIVE_JOB_FIRST, ACTIVE_JOB_NEXT, ACTIVE_JOB_NULL_ID,
   ACTIVE_REMOTE_FIRST, ACTIVE_REMOTE_NEXT, REMOTE_QUEUE_PREPARED } from "../src/store/active-jobs-upgrade.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
@@ -94,6 +94,10 @@ const memory = () => open(":memory:");
 
 function assertSessionJobPlans() {
   const db = memory().db;
+  const work = (db.prepare(`EXPLAIN QUERY PLAN ${RUNNING_JOB_SESSIONS}`).all('["a"]') as { detail: string }[]).map((r) => r.detail).join(" | ");
+  assert.match(work, /SEARCH active_watch_jobs USING COVERING INDEX active_watch_jobs_session .*session=\?/);
+  assert.match(work, /SEARCH active_other_jobs USING PRIMARY KEY .*session=\?/);
+  assert.doesNotMatch(work, /SCAN (active_watch_jobs|active_other_jobs|jobs)\b/);
   const up = (db.prepare(`EXPLAIN QUERY PLAN ${read.PREPARED_UP_JOBS_OF}`).all("a") as { detail: string }[]).map((r) => r.detail);
   const upDetail = up.join(" | ");
   assert.ok(up.some((s) => s.startsWith("SEARCH i USING PRIMARY KEY") && s.includes("session=?")), upDetail);
