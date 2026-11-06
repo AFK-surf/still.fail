@@ -134,7 +134,7 @@ async function pair(options: { queue?: boolean; before?: boolean } = {}) {
   b.remote.attach(peerCall(target, targetCloud, (id) => ({ id, ips: [`127.0.0.1:${sourcePort}`] })));
   /// `hold`: the methods held before they are asked, until `release`d. `bulk`/`most`: the bulk requests (contents,
   /// files' chunks) under way now, and the most there were at once.
-  const state = { old: false, failFileGet: false, asked: [] as string[], hold: new Set<string>(), held: [] as (() => void)[], bulk: 0, most: 0 };
+  const state = { old: false, beforeSafe: false, failFileGet: false, asked: [] as string[], hold: new Set<string>(), held: [] as (() => void)[], bulk: 0, most: 0 };
   const release = () => {
     state.hold.clear();
     for (const go of state.held.splice(0)) go();
@@ -153,6 +153,10 @@ async function pair(options: { queue?: boolean; before?: boolean } = {}) {
     }
     if (state.old && request.method === "describe") {
       const { sync: _, ...before } = await call(to, workspace, request);
+      return before;
+    }
+    if (state.beforeSafe && request.method === "sync.begin") {
+      const { safe: _, ...before } = await call(to, workspace, request);
       return before;
     }
     if (state.old && /^(sync\.|task\.files$)/.test(request.method)) throw new Refused(`unsupported peer method: ${request.method}`);
@@ -361,6 +365,17 @@ describe("dirsync", { concurrency: true }, () => {
     writeFileSync(join(dir, "trace"), "new local\n");
     await p.run("new", dir, "true");
     assert.equal(readFileSync(join(p.mirror("adopt"), "trace"), "utf8"), "new local\n");
+  });
+
+  test("a target without result protection is refused before a task runs", async () => {
+    const p = await pair();
+    const dir = join(p.home, "old-target");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "input"), "input\n");
+    p.state.beforeSafe = true;
+    await p.use("station_task", { key: "one", action: "prepare", command: "echo ran > result", dir });
+    await assert.rejects(p.use("station_task", { key: "one", action: "start" }), /cannot protect remote results.*update/i);
+    assert.equal(p.b.store.listJobs(null).length, 0);
   });
 
   test("a directory outside Git: all its files but dependencies and build output", async () => {
