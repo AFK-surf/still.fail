@@ -27,20 +27,42 @@ fn tree_thumb_owner(id : String) -> @signals.Signal[(@view.View, () -> ThumbLook
 }
 
 ///|
-/// Each living thumbnail's node, how it looks and the id it holds, by its node: one pressed takes its place's id
-/// (thumb_pressed); one let go of it leaves it to another showing of the same place still here.
-let pv_thumb_nodes : Map[@view.NodeId, (@view.View, () -> ThumbLook, Ref[String?])] = {}
+/// The living showings of each id and how each looks, as they come: one file shown more than once in the same place
+/// (placed twice in a message's words) is one id, each showing its node.
+let pv_thumb_holders : Map[String, Array[(@view.View, () -> ThumbLook)]] = {}
 
 ///|
-/// `node` (a thumbnail, note_thumb_node's) pressed: the thumbnail of `id` the viewer flies from and back into. One file
-/// shown more than once in the same place (placed twice in a message's words) is one id, each showing its node: the
-/// one pressed is the one that opens, hidden alone while the viewer has its picture.
+/// `node` (a thumbnail, note_thumb_node's) pressed: the thumbnail of `id` the viewer flies from and back into, the one
+/// pressed of its showings, hidden alone while the viewer has its picture.
 pub fn thumb_pressed(node : @view.View, id : String) -> Unit {
-  guard pv_thumb_nodes.get(node.id()) is Some(held) else { return }
+  guard pv_thumb_holders.get(id).unwrap_or([]).search_by(fn(h) { h.0.id() == node.id() }) is Some(i) else { return }
   let owner = tree_thumb_owner(id)
   match @signals.untracked(fn() { owner.get() }) {
     Some((n, _)) if n.id() == node.id() => ()
-    _ => owner.set(Some((held.0, held.1)))
+    _ => owner.set(Some(pv_thumb_holders[id][i]))
+  }
+}
+
+///|
+/// The viewer about to fly back into the thumbnail of `id`, the showing it flew from gone (its node let go, another
+/// showing of the same place still here): the one of those drawn on the window now first as they read (from the top,
+/// then from the left) takes its place; none drawn, it fades out as with no thumbnail.
+fn thumb_settle(c : @ui.Ctx, id : String) -> Unit {
+  let owner = tree_thumb_owner(id)
+  guard @signals.untracked(fn() { owner.get() }) is None else { return }
+  let mut best : ((Double, Double), (@view.View, () -> ThumbLook))? = None
+  for h in pv_thumb_holders.get(id).unwrap_or([]) {
+    match @signals.untracked(fn() { tree_thumb_of(c, h.0, h.1) }) {
+      Some(t) =>
+        match best {
+          Some(((y, x), _)) if y < t.y || (y == t.y && x <= t.x) => ()
+          _ => best = Some(((t.y, t.x), h))
+        }
+      None => ()
+    }
+  }
+  if best is Some((_, h)) {
+    owner.set(Some(h))
   }
 }
 
@@ -58,8 +80,8 @@ pub fn thumb_node_shows(node : @view.View, id : String) -> Double {
     return 1.0
   }
   match tree_thumb_owner(id).get() {
-    Some((n, _)) if n.id() != node.id() => 1.0
-    _ => 0.0
+    Some((n, _)) if n.id() == node.id() => 0.0
+    _ => 1.0
   }
 }
 
@@ -83,27 +105,24 @@ pub fn note_thumb_node(
   let look = fn() -> ThumbLook {
     { radius: radius(), letterbox: letterbox(), top_crop: top_crop(), picture: picture(), id: 0, list, over, said: said() }
   }
-  // (the id it holds, let go where this node still holds it)
+  // (the id it holds, let go where this node still holds it: its place, until the viewer settles another showing of
+  // it still here (thumb_settle), and what it looks like once none is)
   let held : Ref[String?] = Ref(None)
   let let_go = fn(k : String) {
+    match pv_thumb_holders.get(k) {
+      Some(hs) => {
+        hs.retain(fn(h) { h.0.id() != node.id() })
+        if hs.is_empty() { pv_thumb_holders.remove(k) }
+      }
+      None => ()
+    }
     guard pv_tree_thumbs.get(k) is Some(owner) else { return }
     match @signals.untracked(fn() { owner.get() }) {
       Some((n, _)) if n.id() == node.id() => {
-        // (another showing of the same place still here takes it: what the viewer flies back into, hidden meanwhile)
-        let mut next = None
-        for other, e in pv_thumb_nodes {
-          if other != node.id() && e.0.alive() && e.2.val == Some(k) {
-            next = Some((e.0, e.1))
-            break
-          }
-        }
-        match next {
-          Some(o) => owner.set(Some(o))
-          None => {
-            pv_thumbs.remove(k)
-            owner.set(None)
-            if !owner.watched() { pv_tree_thumbs.remove(k) }
-          }
+        owner.set(None)
+        if !pv_thumb_holders.contains(k) {
+          pv_thumbs.remove(k)
+          if !owner.watched() { pv_tree_thumbs.remove(k) }
         }
       }
       _ => ()
@@ -113,6 +132,10 @@ pub fn note_thumb_node(
     let k = id()
     if held.val != Some(k) {
       @signals.untracked(fn() {
+        match pv_thumb_holders.get(k) {
+          Some(hs) => hs.push((node, look))
+          None => pv_thumb_holders[k] = [(node, look)]
+        }
         // (another showing of the same place, living, that the viewer flies from or back into keeps it: the one pressed)
         let owner = tree_thumb_owner(k)
         let kept = match owner.get() {
@@ -146,9 +169,7 @@ pub fn note_thumb_node(
     pv_thumbs[k] = { radius: r, letterbox: l, top_crop: crop, picture: p, id: 0, list, over, said: s }
     if changed { thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1) }
   })) |> ignore
-  pv_thumb_nodes[node.id()] = (node, look, held)
   node.owns(fn() {
-    pv_thumb_nodes.remove(node.id())
     if held.val is Some(k) { let_go(k) }
   }) |> ignore
 }

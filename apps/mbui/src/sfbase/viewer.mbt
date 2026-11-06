@@ -1579,6 +1579,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // closed at once: the one going is only drawn (what was going before it, gone)
     marks_leave()
     leaving_done()
+    thumb_settle(c, self.thumb_id())
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
     match (thumb_of(c, self.thumb_id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
@@ -3092,7 +3093,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_thumbs.clear()
   pv_tree_thumbs.clear()
   pv_tree_lists.clear()
-  pv_thumb_nodes.clear()
+  pv_thumb_holders.clear()
   pv_lists.clear()
   pv_frames.clear()
   pv_frames_n.val = 0
