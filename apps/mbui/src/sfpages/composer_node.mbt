@@ -175,13 +175,47 @@ pub fn composer_node(
       p.padding(Is((32.0, 4.0, 32.0, 10.0))) |> ignore
       p.box(fn(e) { e.words(By(fn() { w.error.get() })).words_look(By(fn() { @ui.style_words(composer_error_words) })).ink(By(fn() { @sf.theme().p.red })) |> ignore }) |> ignore
     })
-    // Taking an answer is an effect, never a layout/property getter. The picker and host answers read by take_in
-    // wake this effect; the editor receives its own files directly. Reusing the same business path preserves all
-    // share-in, quotes, marked images, station files and optimistic write semantics.
+    // what is put into its draft from elsewhere (shared in, quoted, marked, a visualization's words, a 文件 row) taken
+    // as it is put there, by what puts it (sfbase's draft_given_to), in that event; what the system's picker gave it,
+    // as the host says it as a frame begins; a video's first frame made as its files change
+    let take = fn() {
+      @signals.untracked(fn() { take_in(@ui.current(), src, spec(), w, no_files(), focus=fn() { w.field.focus() }) })
+    }
+    @sfbase.draft_taker_said(root, w.key, take)
+    @ui.on_host_said(
+      root,
+      // (this composer's own: another of the same draft may be held a while beside it, as one page goes and the next
+      // comes)
+      kind="composer-pick/" + w.key + "/" + composer_made_next().to_string(),
+      fn() {
+        match @signals.untracked(fn() { composing.picking.get() }) {
+          Some((key, picker)) if key == w.key => picker.files()
+          _ => None
+        }
+      },
+      fn(files) {
+        composing.picking.set(None)
+        // (added as an event of the tree's at the answer's moment: what follows the draft's files reads where things
+        // are laid out, which nothing is yet as the host's answers are handed on)
+        root.at_moment(root.cause_at(), fn() {
+          if !@signals.untracked(no_files) {
+            for f in files {
+              writing_add_picked(src, w, @signals.untracked(spec).station, f)
+            }
+          }
+        })
+        |> ignore
+      },
+    )
+    // (a video's first frame made from its bytes: followed as its files change and as the player made for it says its
+    // frame, what it reads of that player's answer, writing_stills; nothing of the draft's written by it)
     root.owns(@signals.effect(fn() {
       ignore(w.files.get())
-      take_in(@ui.current(), src, spec(), w, no_files(), focus=fn() { w.field.focus() })
+      @sfbase.writing_stills(@ui.current())
     })) |> ignore
+    // (what was put there before it was made: taken at the moment it is made, as an event of the tree's, not as it is
+    // built)
+    root.at_moment(root.cause_at(), take) |> ignore
     root.owns(@signals.effect(fn() {
       match @sfbase.outside_ask.get() {
         Some(s) if s.key == draft => {

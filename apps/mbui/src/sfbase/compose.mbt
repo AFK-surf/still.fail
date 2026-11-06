@@ -749,7 +749,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
   let list = quoted_into.get(draft).unwrap_or([])
   list.push((author, ts, role, file))
   quoted_into[draft] = list
-  draft_given()
+  draft_given_to(draft)
 }
 
 ///|
@@ -757,7 +757,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
 /// the chat's key; taken by its composer as it is next drawn (files_taken).
 pub fn files_into(chat : String, d : Dragged) -> Unit {
   files_put.push((chat, d))
-  draft_given()
+  draft_given_to(chat)
 }
 
 ///|
@@ -838,6 +838,37 @@ pub fn draft_given() -> Unit {
 /// What is put into drafts from elsewhere, read (a composer taking what was put into its draft).
 pub fn drafts_given_read() -> Unit {
   drafts_given.get() |> ignore
+}
+
+///|
+/// What takes what is put into a draft from elsewhere as it is put there, by the draft's key: a composer of the window's
+/// tree's, said as it is made (draft_taker_said), let go with it.
+// kept across runs: each let go with its node
+let draft_takers : Map[String, () -> Unit] = {}
+
+///|
+/// Node `v` (a composer of the tree's) takes what is put into draft `key` from elsewhere with `take`, at once, as it is
+/// put there (draft_given_to), while it is there.
+pub fn draft_taker_said(v : @view.View, key : String, take : () -> Unit) -> Unit {
+  draft_takers[key] = take
+  v.owns(fn() {
+    match draft_takers.get(key) {
+      Some(f) if physical_equal(f, take) => draft_takers.remove(key)
+      _ => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Something put into draft `key` from elsewhere (its files, its quotes, words to send): taken now by the composer of
+/// the tree's that says it takes it (draft_taker_said), in this same event; with none, by an old view's composer as
+/// it next builds (draft_given).
+pub fn draft_given_to(key : String) -> Unit {
+  match draft_takers.get(key) {
+    Some(take) => take()
+    None => draft_given()
+  }
 }
 
 ///|

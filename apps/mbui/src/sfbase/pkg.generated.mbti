@@ -300,6 +300,10 @@ pub fn downloads_reset() -> Unit
 
 pub fn draft_given() -> Unit
 
+pub fn draft_given_to(String) -> Unit
+
+pub fn draft_taker_said(@view.View, String, () -> Unit) -> Unit
+
 pub fn drafts_given_read() -> Unit
 
 pub let drag_carried : @ref.Ref[() -> Dragged?]
@@ -1692,7 +1696,7 @@ pub fn this_machine() -> String
 
 pub fn thumb_occurrence(String, String, String) -> String
 
-pub fn thumb_of(@ui.Ctx, String) -> Thumb?
+pub fn thumb_of(@ui.Ctx, String, laid? : @view.Laid) -> Thumb?
 
 pub fn thumb_place(String, String, String, String) -> String
 
@@ -3741,7 +3745,7 @@ pub fn Viewer::draft_key(Self) -> String
 pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, Bool, Double) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
-pub fn Viewer::flight_from(Self, @ui.Ctx) -> Thumb?
+pub fn Viewer::flight_from(Self, @ui.Ctx, laid? : @view.Laid) -> Thumb?
 pub fn Viewer::flight_node(Self) -> Bool
 pub fn Viewer::flight_target(Self, @ui.Ctx, Source) -> (Double, Double, Double, Double)?
 pub fn Viewer::flow_stage(Self, @ui.Ctx, Source, Flow, PKind, Int32) -> Unit

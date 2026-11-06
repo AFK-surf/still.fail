@@ -502,6 +502,17 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 }
 
 ///|
+/// How many composers of the tree's were made (each one's own kind of what the host says to it: composer_node).
+// kept across runs: only counted on, never read for its number but to tell them apart
+let composer_made : Ref[Int] = Ref(0)
+
+///|
+fn composer_made_next() -> Int {
+  composer_made.val += 1
+  composer_made.val
+}
+
+///|
 /// What comes into the draft from outside the field before the box is laid out: the files the system's picker
 /// answered (for this draft), the files pasted into the field (⌘V with files or a picture on the clipboard, as the
 /// web's paste takes the clipboard's files), the rows the 文件 tab's 添加到消息 put in (named by their path, or as files where this chat
