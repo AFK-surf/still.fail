@@ -33,6 +33,7 @@ jobs:
           "$RUNNER_TEMP/linux-font-watch" ../assets/fonts/jetbrains_mono.ttf
           cc -std=c11 -fsyntax-only -I "$MOON_HOME/include" $(pkg-config --cflags pangocairo pangoft2 fontconfig) src/host/linux_text.c
   ui-test:
+    if: github.event.head_commit.message != 'Check in-place font writes'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

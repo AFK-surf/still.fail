@@ -1,6 +1,7 @@
 // An isolated fontconfig, with no fonts installed on the runner: the same inotify watch the Linux host uses sees a
 // root created after the app starts, nested directories, a font installed and removed, and a root moved away.
 #include <glib/gstdio.h>
+#include <stdio.h>
 #include "../../src/host/linux_font_watch.h"
 
 static int changes;
@@ -77,22 +78,37 @@ int main(int argc, char **argv) {
   gsize len = 0;
   g_assert_true(g_file_get_contents(argv[1], &bytes, &len, NULL));
   g_assert_true(g_file_set_contents(font, bytes, len, NULL));
-  g_free(bytes);
   dispatch();
   g_assert_cmpint(changes, ==, 5);
   g_assert_cmpint(system_fonts(), >, 0);
   g_assert_cmpint(FcConfigGetFonts(NULL, FcSetApplication)->nfont, ==, app_count);
-  g_assert_cmpint(g_remove(font), ==, 0);
+  // An in-place replacement does not change the directory's timestamp: the file's close must still refresh the set.
+  FILE *f = fopen(font, "wb");
+  g_assert_nonnull(f);
+  g_assert_cmpint(fwrite("invalid", 1, 7, f), ==, 7);
+  g_assert_cmpint(fclose(f), ==, 0);
   dispatch();
   g_assert_cmpint(changes, ==, 6);
+  g_assert_cmpint(system_fonts(), ==, 0);
+  f = fopen(font, "wb");
+  g_assert_nonnull(f);
+  g_assert_cmpuint(fwrite(bytes, 1, len, f), ==, len);
+  g_assert_cmpint(fclose(f), ==, 0);
+  g_free(bytes);
+  dispatch();
+  g_assert_cmpint(changes, ==, 7);
+  g_assert_cmpint(system_fonts(), >, 0);
+  g_assert_cmpint(g_remove(font), ==, 0);
+  dispatch();
+  g_assert_cmpint(changes, ==, 8);
   g_assert_cmpint(system_fonts(), ==, 0);
   g_assert_cmpint(FcConfigGetFonts(NULL, FcSetApplication)->nfont, ==, app_count);
   g_assert_cmpint(g_rename(root, moved), ==, 0);
   dispatch();
-  g_assert_cmpint(changes, ==, 7);
+  g_assert_cmpint(changes, ==, 9);
   g_assert_cmpint(g_mkdir(root, 0700), ==, 0);
   dispatch();
-  g_assert_cmpint(changes, ==, 8);
+  g_assert_cmpint(changes, ==, 10);
 
   g_remove(noise);
   g_rmdir(root);
