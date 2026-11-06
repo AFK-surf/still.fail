@@ -39,8 +39,9 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
   assert_true(t.at_end())
   let ys = answer_ys(t, linger_ms + 100.0)
-  // gone, its room kept as it goes, given back as the rows over it make way (the rows' spring, from where they stood)
-  assert_true(t.find(tr("android-chat.chat.working")) is None)
+  // Its logical stay has ended. The departing row can still be drawn while its room closes; keep observing that
+  // whole departure below, rather than requiring its picture gone only 100 ms into the row's 300 ms way.
+  assert_eq(lingering(), 0)
   assert_true(ys.length() > 1)
   let rest = t.rest_of("")
   if rest > t.time() && rest < @double.infinity {
@@ -53,6 +54,7 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   for i in 1..<ys.length() {
     assert_true((ys[i] - ys[i - 1]).abs() < 20.0, msg="\{ys}")
   }
+  assert_true(t.find(tr("android-chat.chat.working")) is None)
   assert_eq(floor_now(), 0.0)
   assert_true(t.at_end())
   t.assert_idle()

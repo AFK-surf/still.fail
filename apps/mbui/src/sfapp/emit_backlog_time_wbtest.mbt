@@ -46,6 +46,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
     let pictures : Array[String] = []
     let words : Array[Array[(String, Double, Double, Double, Double, Double)]] = []
     let hits : Array[Array[String]] = []
+    let covered_phases : Array[(Double?, Double, Pose, Double, Double)] = []
     for hz in [0, 60, 120] {
       let ended = Ref(false)
       let t = backlog_window(width, ended)
@@ -64,13 +65,24 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
         }
       })
       // This initial picture is common to every run: one agent in Float,
-      // three different agents waiting, hence at least twelve expired poses
+      // three different agents waiting, hence more than one batch of expired poses
       // to finish after the page returns (the later Folds have already ended).
       t.frame_at(arrived_at + Pose::Fold.ms() + 1.0)
       let em = emits_of(emit_chat)
       assert_true(em.current is Some(turn) && turn.pose == Float && turn.agent == agents[0])
       assert_eq(em.queue.map(fn(q) { q.2 }), agents[1:].to_array())
-      let held = em.current.unwrap()
+      // A page still beside the incoming page remains shown until navigation's declared end. The distance-based
+      // Float can finish in that interval. Observe the phase at the actual hide cause, without inserting a frame.
+      let covered : Ref[(@sfbase.Turn, Double?)?] = Ref(None)
+      let stop = @signals.effect(fn() {
+        let visible = shown()
+        @signals.untracked(fn() {
+          if !visible && covered.val is None && em.current is Some(turn) {
+            covered.val = Some((turn, tree.moment()))
+          }
+        })
+      })
+      defer { stop() }
       let start = t.time()
       let returned_at = start + agents.length().to_double() * (emit_all_ms() + @ui.move_most_ms)
       fix_later(1.0, fn() { @sfbase.open_page_over(Setting(About)) })
@@ -89,6 +101,8 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
         t.touch_at(2, -100.0, -100.0, at)
         if at < returned_at {
           assert_false(shown(), msg="the real chat page is covered")
+          guard covered.val is Some((held, hidden_at)) else { fail("the hide cause did not retain a phase") }
+          covered_phases.push((hidden_at, held.seq, held.pose, held.clock.starts_at(), held.clock.end()))
           assert_true(physical_equal(em.current.unwrap(), held), msg="covering the page keeps its original phase and deadline: \{width}/\{hz}, held \{(held.seq, held.pose, held.clock.starts_at(), held.clock.end(), held.span, held.timed)}, current \{em.current.map(fn(t) { (t.seq, t.pose, t.clock.starts_at(), t.clock.end(), t.span, t.timed) })}")
           assert_eq(em.queue.length(), 3)
           assert_true(em.queue.iter().all(fn(q) { q.3.end() < at }))
@@ -124,6 +138,8 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       assert_true(rd.shown_by is None, msg="releasing the page removes its navigation reader")
       assert_eq((tree.alive(), tree.bindings_held(), tree.due_count()), (0, 0, 0))
     }
+    assert_eq(covered_phases[0], covered_phases[1], msg="navigation hides the same phase at the same cause without pictures")
+    assert_eq(covered_phases[0], covered_phases[2])
     if pictures[0] != pictures[1] {
       // Keep the complete comparison below, and name its first differing instances on CI instead of only the
       // assertion's message. Atlas slots have already been replaced by glyph content keys by drawn_text.

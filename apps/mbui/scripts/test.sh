@@ -278,8 +278,17 @@ for t in $targets; do
     "$TESTEXE" parts "$info" "$j" "$@" > "$d/parts" || { rm -rf "$d"; return 2; }
     # Native stdout redirected to a file is otherwise block-buffered: an abort can lose even the test driver's
     # start marker and report the running test as not run. Keep complete lines on systems with coreutils stdbuf.
+    # A selected failing file can run under the debugger in its ordinary slot, once, to retain its first crash.
+    # This never retries a run. All other files keep their original command and the child's result is preserved.
+    export TEST_BACKTRACE_SCRIPT="$D/test-backtrace.gdb"
     [ ! -s "$d/parts" ] || sed "s|^|$d/|" "$d/parts" | xargs -P "$j" -L 1 sh -c \
-      's=$(date +%s); if command -v stdbuf >/dev/null 2>&1; then stdbuf -oL -eL "$0" "$2"; else "$0" "$2"; fi > "$1.out" 2>&1; echo "$? $(($(date +%s) - s))" > "$1.code"' "$exe"
+      's=$(date +%s)
+       { if [ -n "${TEST_NATIVE_DEBUG:-}" ] && [ "${2%%:*}" = "$TEST_NATIVE_DEBUG" ]; then
+           stdbuf -oL -eL gdb --batch --nx --return-child-result -x "$TEST_BACKTRACE_SCRIPT" --args "$0" "$2"
+         elif command -v stdbuf >/dev/null 2>&1; then stdbuf -oL -eL "$0" "$2"
+         else "$0" "$2"; fi
+       } > "$1.out" 2>&1
+       echo "$? $(($(date +%s) - s))" > "$1.code"' "$exe"
     "$TESTEXE" said "$info" "$d" "$pkg"
     c=$?
     rm -rf "$d"
