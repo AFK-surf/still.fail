@@ -767,6 +767,10 @@ pub struct Tree {
   mut pulls_held : Int
   /// those marked as what they read changed, since they last ran (Tree::pull)
   pulls_marked : Array[Bound]
+  /// Layout child lists changed during a keyed removal, to reconcile before layout reads them.
+  mut boxes_deferred : BoxesBatch?
+  /// Flex may call back into the tree. Removals in that call must update its child lists immediately.
+  mut layouts_active : Int
   mut layout_due : Bool
   /// the node whose own layout (View::layout_box) is running now, building and measuring its children (-1 none)
   mut layout_owner : Int
@@ -993,6 +997,13 @@ struct Bound {
 }
 
 ///|
+/// The child lists dirtied while a single keyed slot lets rows go.
+struct BoxesBatch {
+  slot : NodeId
+  pending : Set[NodeId]
+}
+
+///|
 /// A handle on a node made once: the tree, its index, its making there.
 pub struct View {
   tree : Tree
@@ -1055,6 +1066,8 @@ pub fn Tree::new(
     bindings_due: [],
     pulls_held: 0,
     pulls_marked: [],
+    boxes_deferred: None,
+    layouts_active: 0,
     timeline: [],
     told: 0,
     advancing: false,
@@ -1755,6 +1768,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.bindings_due.clear()
   self.pulls_held = 0
   self.pulls_marked.clear()
+  self.boxes_deferred = None
   self.timeline.clear()
   self.changed.clear()
   self.composed.clear()
@@ -5609,6 +5623,10 @@ fn View::box_appended(self : View, child : Int) -> Unit {
     }
     at = parent
   }
+  if self.tree.boxes_deferred is Some(batch) && batch.pending.contains(self.tree.handle(at).id()) {
+    self.boxes_again()
+    return
+  }
   self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
   self.tree.layout_marked_at(at)
   self.tree.order_marked()
@@ -5616,26 +5634,73 @@ fn View::box_appended(self : View, child : Int) -> Unit {
 }
 
 ///|
-/// What it holds changed (made, let go, moved): the boxes of the node that lays them out (itself, or the first not a
-/// slot holding it) put again in order, it marked to be laid out, the order to be made again.
-fn View::boxes_again(self : View) -> Unit {
-  let mut at = self.at
-  while self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
-    at = self.tree.nodes[at].parent
-  }
-  let n = self.tree.nodes[at]
+/// Put the layout boxes held by a node in the tree's order.
+fn Tree::boxes_now(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
   let all : Array[@flex.Node] = []
   for k in n.kids {
-    self.tree.boxes(k, all)
+    self.boxes(k, all)
   }
   n.flex.children.clear()
   for b in all {
     n.flex.children.push(b)
   }
+}
+
+///|
+/// Reconcile child lists before anything measures them; the changes have already marked layout and order.
+fn Tree::boxes_flush(self : Tree) -> Unit {
+  match self.boxes_deferred {
+    Some(batch) => {
+      let ids = batch.pending.iter().collect()
+      batch.pending.clear()
+      for id in ids {
+        if self.alive_id(id) { self.boxes_now(id.at) }
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// The node that lays out what `self` holds (itself, or the first node above its slots).
+fn View::boxes_owner(self : View) -> Int {
+  let mut at = self.at
+  while self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
+    at = self.tree.nodes[at].parent
+  }
+  at
+}
+
+///|
+/// What it holds changed (made, let go, moved): its layout boxes put in order and layout and order marked.
+fn View::boxes_again(self : View) -> Unit {
+  let at = self.boxes_owner()
+  match self.tree.boxes_deferred {
+    Some(batch) => batch.pending.remove(self.tree.handle(at).id())
+    None => ()
+  }
+  self.tree.boxes_now(at)
   self.tree.layout_marked_at(at)
   self.tree.order_marked()
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.tree.modals_told()
+}
+
+///|
+/// A removal during a keyed update: keep callbacks and layout marks at their usual moments, and put the layout list
+/// together before it is next read. Each individual removal remains visible through the tree itself.
+fn View::boxes_removed(self : View) -> Unit {
+  match self.tree.boxes_deferred {
+    Some(batch) if self.tree.layouts_active == 0 && batch.slot == self.id() => {
+      let at = self.boxes_owner()
+      batch.pending.add(self.tree.handle(at).id())
+      self.tree.layout_marked_at(at)
+      self.tree.order_marked()
+      self.tree.modals_told()
+    }
+    _ => self.boxes_again()
+  }
 }
 
 ///|
@@ -5661,7 +5726,7 @@ fn View::drop(self : View, v : View) -> Unit {
     Some(i) => n.kids.remove(i) |> ignore
     None => ()
   }
-  self.boxes_again()
+  self.boxes_removed()
 }
 
 ///|
@@ -5777,14 +5842,25 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
     }
     @signals.end_batch()
     let gone : Array[K] = []
+    let mut owns_boxes = false
     for k, r in rows {
       if !seen.contains(k) {
+        if leave <= 0.0 && slot.tree.layouts_active == 0 && slot.tree.boxes_deferred is None {
+          slot.tree.boxes_deferred = Some({ slot: slot.id(), pending: Set::new() })
+          owns_boxes = true
+        }
         gone.push(k)
         slot.leave(r.0, leave)
         if leave > 0.0 {
           gone_rows[k] = r
         }
       }
+    }
+    if leave <= 0.0 && gone.length() > 0 {
+      slot.tree.boxes_flush()
+    }
+    if owns_boxes {
+      slot.tree.boxes_deferred = None
     }
     for k in gone {
       rows.remove(k)
@@ -6721,11 +6797,14 @@ fn Tree::laid_out_now(
   height : Double,
   then : (Int) -> Unit,
 ) -> Unit {
+  self.boxes_flush()
   self.work.computes = self.work.computes + 1
   let g = @flex.computes() + 1
   @signals.afters_held(fn() {
+    self.layouts_active += 1
     @flex.compute(self.nodes[at].flex, width~, height~, round=false, reuse=true)
     then(g)
+    self.layouts_active -= 1
   })
 }
 
