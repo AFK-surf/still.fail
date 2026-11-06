@@ -24,6 +24,31 @@ fn work_now() -> Double {
 }
 
 ///|
+/// The first finger lifted since the last frame (ms on the work clock), for the time until a frame is submitted.
+// kept across runs: reset as the hand is reset, or the first frame after the touch is submitted
+let perf_touch_at : Ref[Double] = Ref(-1.0)
+
+///|
+fn perf_touch_started() -> Unit {
+  if !@hostapi.perf_recording() {
+    perf_touch_at.val = -1.0
+  } else if perf_touch_at.val < 0.0 {
+    perf_touch_at.val = work_now()
+  }
+}
+
+///|
+/// A frame submitted after a finger was lifted: this says the delay to submission, not when it appeared on screen or
+/// whether it drew what the touch chose.
+fn perf_touch_submitted(at : Double) -> Unit {
+  let start = perf_touch_at.val
+  perf_touch_at.val = -1.0
+  if start >= 0.0 && @hostapi.perf_recording() && at - start >= probe_slow_ms {
+    @hostapi.perf_line("touch: to_submit=\{((at - start) * 10.0).round() / 10.0}ms")
+  }
+}
+
+///|
 /// What the last frame did: the nodes its builds made (the last build's), those laid out anew, those placed elsewhere
 /// as they were and those where they were (layout.mbt's commit); the instances it drew; how long its builds, its layout
 /// and its paint took (ms, by work_now); how many times it was built (a layout read back that moved builds it again).

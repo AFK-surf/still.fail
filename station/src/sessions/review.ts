@@ -40,6 +40,7 @@ function candidatesOf(hub: Hub): [string, DecisionConfig][] {
   const rule = hub.config().automaticDecisions.completion;
   const candidates: [string, DecisionConfig][] = [];
   for (const profile of hub.config().profiles) {
+    if (profile.enabled === false) continue;
     const health = hub.accounts.healthOf(profile.id);
     if (!usable(health)) continue;
     const capability = health.check?.decision as Capability | undefined;

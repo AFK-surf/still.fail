@@ -1472,6 +1472,8 @@ export interface Profile {
 	 * station older than the setting.
 	 */
 	backgroundOnMessage?: boolean;
+	/** Whether this profile may be used; absent on stations from before disabling profiles. */
+	enabled?: boolean;
 	fast?: boolean;
 	check?: ProfileCheck;
 	login?: LoginJob;
@@ -5900,7 +5902,7 @@ export interface NewChatView {
 	/** Its profiles are being read. */
 	waiting: boolean;
 	/**
-	 * What keeps a chat from starting: `profile` (none added), `shared` (a station this workspace joined, none of
+	 * What keeps a chat from starting: `profile` (none added), `disabled` (its available profiles are disabled), `shared` (a station this workspace joined, none of
 	 * whose profiles its home's managers opened to it: asked of them, not added here; `problem` says so) or `models` (none enabled).
 	 */
 	blocked?: string;
@@ -6246,7 +6248,7 @@ export interface PrefsView {
 	stationUpdatesDismissed?: Record<string, string>;
 	/**
 	 * What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
-	 * theirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead.
+	 * theirs that went wrong), all (those and the unread; none: this). `badgeKinds`, when kept, says it instead.
 	 */
 	badge?: string;
 	/** What the app's badge counts, kind by kind (the notifications page); none: as `badge` says. */

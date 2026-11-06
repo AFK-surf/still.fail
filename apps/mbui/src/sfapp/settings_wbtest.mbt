@@ -773,6 +773,22 @@ test "a subscription signing in: its page's address copied from the ⋯ beside �
 }
 
 ///|
+test "adding an Anthropic subscription asks before opening its authorization page" {
+  let t = settings_tester("new-profile:ws1/st1", shows="settings-new-profile-login", platform=2)
+  t.tap_text("打开授权页面")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty(), msg="nothing opened before confirmation")
+  t.back()
+  sheet_rested(t, "sf-present")
+  assert_true(t.opened().is_empty(), msg="cancelling leaves the page closed")
+  t.tap_text("打开授权页面")
+  sheet_rested(t, "sf-present")
+  t.tap_text("继续打开")
+  assert_eq(t.opened().length(), 1)
+}
+
+///|
 test "本机缓存: the drives' files kept, counted with the chats', let go when asked" {
   let t = settings_tester("kept")
   // (what is kept asked of the core as the page is first built: drawn with its answer)
@@ -959,6 +975,32 @@ test "a profile in trouble: what is wrong a pill in its head before what its che
   let (cx, cy) = t.find("订阅有效").unwrap()
   assert_true((py - cy).abs() < 2.0 && cx > px)
   assert_true(t.find("sk-…a41f").unwrap().1 > t.find("API key").unwrap().1)
+}
+
+///|
+test "an API key can be disabled and enabled again from its page" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("settings")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("profile:ws1/st1#k2")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let log = t.drive("tap icon:more\nuntil 停用\ntap =停用\nuntil 停用「备用 key」？\ntap =停用\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  t.draw()
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { !flag(field(Some(c.params), "input"), "enabled") }))
+  assert_true(t.find("已停用") is Some(_))
+  let again = t.drive("tap icon:more\nuntil 启用\ntap =启用\n")
+  assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { flag(field(Some(c.params), "input"), "enabled") }))
 }
 
 ///|

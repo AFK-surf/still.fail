@@ -2672,14 +2672,27 @@ fn old_part_of(id : @view.NodeId) -> Int {
 ///|
 /// An event from outside handled by `f` at its own moment (the host's event time, taken once): the window's tree
 /// settled to it first, `f` run as one change with it as its cause's moment; an event in one, at that one's (Tree::event).
-fn view_event(f : () -> Unit) -> Unit {
-  view_event_said(fn() {  }, f)
+fn view_event(f : () -> Unit, what? : String = "event") -> Unit {
+  view_event_said(fn() {  }, f, what~)
 }
+
+///|
+/// An outside event can call another event. Only the outer event is timed, so its work is not reported twice.
+// kept across runs: zero whenever an event is not being handled
+let event_probe_depth : Ref[Int] = Ref(0)
 
 ///|
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
-fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
+fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") -> Unit {
+  let recording = event_probe_depth.val == 0 && @hostapi.perf_recording()
+  let start = if recording { work_now() } else { 0.0 }
+  let tree = if recording { view_app.val } else { None }
+  let before = tree.map(fn(t) { t.work() })
+  let alive = tree.map(fn(t) { t.alive() }).unwrap_or(0)
+  let memory = if recording { h_mem_mb() } else { -1.0 }
+  let in_frame = frame_running.val
+  event_probe_depth.val += 1
   match view_app.val {
     Some(t) => t.event_said(h_event_time(), said, f)
     None => {
@@ -2689,6 +2702,25 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
   turns_said(g(), h_event_time())
+  event_probe_depth.val -= 1
+  if recording {
+    let elapsed = work_now() - start
+    if elapsed >= probe_slow_ms {
+      let (made, gone, bound, laid, after) = match (tree, before) {
+        (Some(t), Some(w)) => {
+          let now = t.work()
+          (now.made - w.made, now.let_go - w.let_go, now.bound - w.bound, now.laid - w.laid, t.alive())
+        }
+        _ => (0, 0, 0, 0, 0)
+      }
+      let mem_after = h_mem_mb()
+      @hostapi.perf_line(
+        "event: kind=\{what} in_frame=\{in_frame} ms=\{(elapsed * 10.0).round() / 10.0} " +
+        "tree_made=\{made} tree_gone=\{gone} tree_bound=\{bound} tree_laid=\{laid} " +
+        "tree_alive=\{alive}->\{after} mem=\{memory.round()}->\{mem_after.round()}MB",
+      )
+    }
+  }
 }
 
 ///|

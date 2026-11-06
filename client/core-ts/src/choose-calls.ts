@@ -25,7 +25,7 @@ export function installChoose(inner: Inner): Choose {
     const station = topic.station as string;
     for (const p of arr(get(inner.data.get(topic), "profiles"))) {
       const id = typeof get(p, "id") === "string" ? p.id : "";
-      if (id === "" || (get(p, "check") !== undefined && p.check !== null)) continue;
+      if (id === "" || get(p, "enabled") === false || (get(p, "check") !== undefined && p.check !== null)) continue;
       const key = `${station}\u0001${id}`;
       if (checked.has(key)) continue;
       checked.add(key);

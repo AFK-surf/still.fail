@@ -299,6 +299,7 @@
   "station.preview.socketRefused": "localhost:{port} 拒绝了此 WebSocket（{status}）",
   "station.profile.addressNeeded": "请填写有效的接口地址（以 http 或 https 开头）",
   "station.profile.cannotRun": "「{profile}」无法运行 {runtime}",
+  "station.profile.disabled": "「{profile}」已停用，请先启用",
   "station.profile.chatgptSubscription": "ChatGPT 订阅",
   "station.profile.grokSubscription": "SuperGrok 订阅",
   "station.profile.changedRecheck": "Profile 已修改，请重新检查",

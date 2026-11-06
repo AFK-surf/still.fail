@@ -135,7 +135,7 @@ export class Accounts {
 
   /// Whether session `key` may run on `profile` (its workspace's, docs/multi-workspace.md).
   allows(key: string, profile: Profile): boolean {
-    return this.deps.allows?.(key, profile) ?? true;
+    return profile.enabled !== false && (this.deps.allows?.(key, profile) ?? true);
   }
 
   /// The profile a session's runtime starts on, asked again before each turn: its own while usable (on another it goes
@@ -258,7 +258,7 @@ export class Accounts {
   modelEfforts(runtime: RuntimeKind, model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
     const profiles = this.deps
       .config()
-      .profiles.filter((p) => p.runtimes.includes(runtime) && allowed(p))
+      .profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime) && allowed(p))
       .filter((p) => pinned === null || p.id === pinned)
       .filter((p) => model === null || runs(p, model));
     // One that has reported no levels (its check not done, or failed) is not known to lack any: it does not hold back
@@ -309,6 +309,7 @@ export class Accounts {
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);
       if (!next) throw new Error(`unknown profile ${wantedProfile}`);
+      if (next.enabled === false) throw new Error(t("station.profile.disabled", { profile: next.name }));
       if (!next.runtimes.includes(runtime)) throw new Error(t("station.profile.cannotRun", { profile: next.name, runtime: name }));
       if (!allowed(next)) throw new Error(t("station.profile.notHere", { profile: next.name }));
       const model = newModel !== undefined ? newModel : row.model;

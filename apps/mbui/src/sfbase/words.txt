@@ -699,6 +699,9 @@ common.legal.terms
 common.link.copied
 common.link.copy
 common.link.open
+common.login.confirmClaudeAction
+common.login.confirmClaudeBody
+common.login.confirmClaudeTitle
 common.more
 common.noMatch
 common.opening
@@ -1055,6 +1058,7 @@ web-main.newChat.noModelsLead
 web-main.newChat.noStation
 web-main.newChat.notShared
 web-main.newChat.pickModels
+web-main.newChat.profilesDisabled
 web-main.newChat.placeholder
 web-main.newChat.sub
 web-main.newChat.subChosen
@@ -2216,6 +2220,7 @@ web-pages.profiles.disable
 web-pages.profiles.disableBody
 web-pages.profiles.disableConfirm
 web-pages.profiles.disabled
+web-pages.profiles.disableKeyBody
 web-pages.profiles.env
 web-pages.profiles.envAdd
 web-pages.profiles.envLead

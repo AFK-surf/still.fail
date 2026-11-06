@@ -977,6 +977,24 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
   });
 }
 
+test("a disabled unchecked profile is checked only once it is enabled", async () => {
+  const p = profile("p1", "claude", ["claude-opus-5-5"], false, 0, { enabled: false });
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p] },
+    "POST /profiles/p1/check": { state: "ok", detail: "", checkedAt: 2 },
+  });
+  try {
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+    await host.settle();
+    assert.equal(stationPosted(host, "/profiles/p1/check").length, 0);
+    core.inner.data.set({ topic: "overview", station: "ws/st" }, { ...overview, profiles: [{ ...p, enabled: true }] });
+    await host.settle();
+    assert.equal(stationPosted(host, "/profiles/p1/check").length, 1);
+  } finally { core.close(); }
+});
+
 test("a_new_chat_is_made_under_the_key_its_page_had_before_it_was_made_and_its_page_reads_it_so_at_once", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();

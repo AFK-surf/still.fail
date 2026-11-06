@@ -191,7 +191,7 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
       c.box(style=pf_state, fn() {
         c.text(join([text(p, "checkLine"), when], " · "), style=pf_check_words) |> ignore
         let checking = is_doing(core, ["profile.check"], on)
-        if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking) {
+        if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking || (has(p, "enabled") && !flag(p, "enabled"))) {
           @settings.act(core, @sf.t("web-pages.profiles.recheck"), "profile.check", obj([("station", str(address)), ("id", str(id))]))
           // (its allowance read again with it: how much is left, as of now)
           let q = field(p, "quota")
@@ -284,6 +284,9 @@ fn profile_rename(core : Core, address : String, p : Json?) -> Unit {
 fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Json?) -> Unit {
   let id = text(p, "id")
   let machine = flag(p, "machine")
+  let access = field(p, "access")
+  let keyed = ["api-provider", "anthropic-api", "opencode-go"].contains(text(access, "kind")) && !flag(access, "login")
+  let can_disable = keyed && has(p, "enabled")
   let key = "profile-more/" + address + "/" + id
   if !@sf.icon_action(c, "more", key, @sf.t("common.more")) {
     return
@@ -314,6 +317,26 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
   let items : Array[@sf.MenuItem?] = []
   if !machine {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
+  }
+  if can_disable {
+    let enabled = flag(p, "enabled")
+    let label = if enabled { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.connect.enable") }
+    let change = fn() {
+      @settings.act(
+        core,
+        label,
+        "profile.put",
+        obj([("station", str(address)), ("id", str(id)), ("input", obj([("enabled", Json::boolean(!enabled))]))]),
+        done=if enabled { @sf.t("web-pages.profiles.disabled") } else { @sf.t("web-pages.connect.enabled") },
+      )
+    }
+    items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
+      if enabled {
+        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+      } else {
+        change()
+      }
+    })))
   }
   items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
   @sf.menu(items, from=Of(c.id(key)), along=End)
@@ -449,7 +472,9 @@ pub fn login_steps(
       match in_station {
         Some((name, busy, open)) if flag(job, "browser") => {
           let label = @sf.t(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
-          items.push(Some(@sf.menu_item_of(label, disabled=busy, fn() { open(label) })))
+          items.push(Some(@sf.menu_item_of(label, disabled=busy, fn() {
+            @settings.confirm_claude_auth(provider == "Claude" && text(job, "screen") == "", fn() { open(label) })
+          })))
         }
         _ => ()
       }
@@ -477,7 +502,7 @@ pub fn login_steps(
         |> ignore
         c.box(style=pf_step_buttons, fn() {
           if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external") {
-            (core.open_link)(url)
+            @settings.confirm_claude_auth(provider == "Claude", fn() { (core.open_link)(url) })
           }
           page_more()
         })
@@ -541,11 +566,13 @@ pub fn login_steps(
               tone=Primary,
               icon="external",
             ) {
-            if !filled {
-              @ui.clipboard_set(code)
-              profile_edit.command = "copied/" + key
-            }
-            (core.open_link)(url)
+            @settings.confirm_claude_auth(provider == "Claude", fn() {
+              if !filled {
+                @ui.clipboard_set(code)
+                profile_edit.command = "copied/" + key
+              }
+              (core.open_link)(url)
+            })
           }
           page_more()
         })
@@ -638,7 +665,7 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
     c,
     @sf.t("web-pages.profiles.quota"),
     actions=fn() {
-      if @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing) {
+      if @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing, disabled=has(p, "enabled") && !flag(p, "enabled")) {
         @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
       }
     },

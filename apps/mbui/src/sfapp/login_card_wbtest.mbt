@@ -90,6 +90,21 @@ test "a login whose page gives a code to paste back: 打开登录页, then the c
 }
 
 ///|
+test "a Claude login card asks before opening the authorization page" {
+  let calls : Array[Made] = []
+  let page = "https://claude.ai/oauth/authorize"
+  let t = with_logins(login_core(calls, login_of([
+    ("name", "claude"), ("step", "open"), ("paste", true), ("url", Json::string(page)),
+  ])))
+  t.tap_text("打开登录页")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty())
+  t.tap_text("继续打开")
+  assert_eq(t.opened(), [page])
+}
+
+///|
 test "a login's page copied from the ⋯ beside its button, its address on the clipboard and said so" {
   for login in [
     login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]),
@@ -147,6 +162,24 @@ test "a login the station's own browser can do: seldom used, in the ⋯ by the s
     Screen(at) => assert_eq((at.station, at.screen, at.until_gone), ("ws1/st1", "browser:T1", true))
     _ => assert_true(false, msg="its tab's view opened")
   }
+}
+
+///|
+test "returning to an already open Claude login in the station's browser needs no confirmation" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(
+    calls,
+    login_of([
+      ("name", "claude"), ("step", "loopback"), ("url", "https://claude.ai/oauth/authorize"),
+      ("browser", true), ("browserText", "回到 Willow 的浏览器"), ("screen", "browser:T1"),
+    ]),
+    answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } },
+    relay=false,
+  ))
+  t.tap_text("回到 Willow 的浏览器")
+  t.frame()
+  assert_eq(named(calls, "machineLogin.browser").length(), 1)
+  assert_false(@sf.presenting())
 }
 
 ///|
@@ -291,4 +324,49 @@ test "a login card's field keeps in view as the keyboard comes up: under the bar
   t.frame()
   guard t.focused() is Some({ rect: (_, y2, _, h2), .. }) else { fail("the field let go of the focus") }
   assert_true(y2 >= @sfpages.bar_foot && y2 + h2 <= composer, msg="field at \{y2}..\{y2 + h2}")
+}
+
+///|
+test "a code-pasting login's card in its chat and on its station's page beside it at once: a field each, no fault" {
+  // The agent's post with the login's link, the link opening the station's page beside the chat (kept in its tabs):
+  // the one Field in both faulted, the chat 这部分显示出错了 each time it opened (2026-11-06).
+  new_run()
+  let base = fixture("chat")
+  let pasting = login_of([("step", "open"), ("paste", true), ("url", "https://claude.ai/oauth/authorize")])
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      match name {
+        "machineLogin" => { value: Some(pasting), error: None, version: 1 }
+        "machineLogins" =>
+          {
+            value: Some({ "canLogin": true, "canRelay": true, "supported": true, "loaded": true, "logins": [pasting] }),
+            error: None,
+            version: 1,
+          }
+        _ => (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  // (the station's page as a tab beside the chat: after its files, as the fixture's kept tabs go)
+  @sfbase.open_page(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@ui.move_most_ms)
+  @settings.mark_login("ws1/st1", "login-1")
+  @sfbase.open_page(Setting(@settings.Route::Station("ws1/st1")))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(side_now({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" }).1, "station:[\"ws1/st1\"]")
+  assert_true(t.find("这部分显示出错了") is None)
+  let fields = t.locate("粘贴登录码")
+  assert_eq(fields.length(), 2, msg="\{fields}")
+  // what is typed in the one is its own: typed on the station's page
+  let (x, y) = fields.iter().find_first(fn(p) { p.0 > 800.0 }).unwrap()
+  t.tap(x, y)
+  t.type_text("ABC-123")
+  t.frame()
+  // (完成 shows once a code is in: on the station's page's card alone)
+  let done = t.locate("完成")
+  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{done}")
 }

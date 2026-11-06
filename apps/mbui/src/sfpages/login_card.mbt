@@ -11,7 +11,8 @@
 
 ///|
 /// What was pressed here, by login (a step's button plain grey once pressed: the eye on to what follows), whether a code
-/// is typed in its field, and the field.
+/// is typed in its field, and the field: these two by the place its card is drawn in as well (login_field), a login's
+/// card being in its chat and on its station's page at once.
 priv struct LoginsHere {
   pressed : Map[String, Bool]
   typed : Map[String, Bool]
@@ -32,8 +33,16 @@ pub fn login_cards_reset() -> Unit {
 
 ///|
 /// Login `id` of `station` as its card; one the core does not know (ended long ago) draws nothing, the message's words
-/// say it. `marked`: the one a link pointed to (its ground the accent, faint).
-pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marked? : Bool = false) -> Unit {
+/// say it. `marked`: the one a link pointed to (its ground the accent, faint). `place`: where it is drawn (its chat, its
+/// station's page), each place's code field its own.
+pub fn login_card(
+  c : @ui.Ctx,
+  core : Core,
+  station : String,
+  id : String,
+  marked? : Bool = false,
+  place? : String = "chat",
+) -> Unit {
   let l = match (core.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) }).value {
     Some(Object(_)) as v => v
     _ => return
@@ -59,7 +68,7 @@ pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marke
           login_cancel(c, core, station, id)
         })
         |> ignore
-        login_active(c, core, station, l, flag(all, "canRelay"))
+        login_active(c, core, station, l, flag(all, "canRelay"), place)
       } else {
         c.box(style=lc_title_room, fn() { c.text(text(l, "title"), style=lc_title) |> ignore }) |> ignore
         login_said(c, text(l, "statusText"), last=true)
@@ -181,11 +190,11 @@ fn login_step(
 /// A login under way, for one who may finish it (ActiveCard): what the person does now by its step (or, while its agent
 /// answers the command or it is checked, how it stands), then the step's own button. One whose page gives a code to
 /// paste back is its own (PasteSteps).
-fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : Bool) -> Unit {
+fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : Bool, place : String) -> Unit {
   let id = text(l, "id")
   let url = text(l, "url")
   if flag(l, "paste") && url != "" {
-    login_paste(c, core, station, l)
+    login_paste(c, core, station, l, place)
     return
   }
   // checking what came back (the browser's callback): nothing left for the person but to wait
@@ -197,7 +206,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
   let pressed = logins_here.pressed.get(id).unwrap_or(false)
   let code = text(l, "code")
   // the same step in the station's own browser, for the ⋯ beside the step's button
-  let elsewhere = match login_station_way(c, core, station, l) {
+  let elsewhere = match login_station_way(core, station, l) {
     Some(way) => [way]
     None => []
   }
@@ -211,9 +220,11 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       // one press: the code copied first, then its page; the code stays on show for a clipboard that refused it
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=login_page_ways(page, elsewhere)) {
-        logins_here.pressed[id] = true
-        c.copy_text(code)
-        login_open(core, page)
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+          logins_here.pressed[id] = true
+          @ui.current().copy_text(code)
+          login_open(core, page)
+        })
       }
     }
     // this device cannot take the browser's callback (a web page), or its port was taken just now: the station's
@@ -228,7 +239,9 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.browser"], [("station", station), ("id", id)])
       let again = if relay {
-        [(@sf.t("web-main.logins.signIn"), fn() { login_relay(c, core, station, id, text(l, "title")) })]
+        [(@sf.t("web-main.logins.signIn"), fn() {
+          @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
+        })]
       } else {
         []
       }
@@ -257,7 +270,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
       if login_step(c, "login-main/" + id, label, !opened, busy~, more=elsewhere) {
-        login_relay(c, core, station, id, text(l, "title"))
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
       }
     }
     "open" if url != "" => {
@@ -265,8 +278,10 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
         login_said(c, domain)
       }
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=login_page_ways(url, elsewhere)) {
-        logins_here.pressed[id] = true
-        login_open(core, url)
+        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+          logins_here.pressed[id] = true
+          login_open(core, url)
+        })
       }
     }
     _ => login_said(c, text(l, "statusText"), busy=true, last=true)
@@ -278,7 +293,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
 /// 浏览器中打开, or 回到 … 的浏览器 while its tab is open) and what does it: its page opened in a tab there (the one open,
 /// if it is), whose view opens here and goes back by itself once the login ends; a loopback's callback comes back to the
 /// command there, nothing relayed or pasted.
-fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
+fn login_station_way(core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
   if !flag(l, "browser") || text(l, "browserText") == "" {
     return None
   }
@@ -288,9 +303,11 @@ fn login_station_way(c : @ui.Ctx, core : Core, station : String, l : Json?) -> (
     (
       label,
       fn() {
-        c.tell("login-station/" + id, fn() {
-          @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
-            (core.open_screen)(station, text(Some(v), "screen"))
+        @settings.confirm_claude_auth(text(l, "name") == "claude" && text(l, "screen") == "", fn() {
+          @ui.current().tell("login-station/" + id, fn() {
+            @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
+              (core.open_screen)(station, text(Some(v), "screen"))
+            })
           })
         })
       },
@@ -361,13 +378,15 @@ fn login_code(c : @ui.Ctx, core : Core, code : String) -> Unit {
 }
 
 ///|
-/// The field a login's code is pasted in, by login (kept across frames).
-fn login_field(id : String) -> @ui.Field {
-  match logins_here.fields.get(id) {
+/// The field a login's code is pasted in, by its key (login_paste's: the place, station and login; kept across frames).
+/// One a place: a card shown in its chat and on its station's page beside it is two editors, and one Field given to
+/// both faulted, the chat in its place 这部分显示出错了 as it opened (2026-11-06).
+fn login_field(key : String) -> @ui.Field {
+  match logins_here.fields.get(key) {
     Some(f) => f
     None => {
       let f = @ui.Field::new()
-      logins_here.fields[id] = f
+      logins_here.fields[key] = f
       f
     }
   }
@@ -377,14 +396,15 @@ fn login_field(id : String) -> @ui.Field {
 /// A login whose page gives a code to paste back (PasteSteps): where to sign in and what to bring back, then 打开登录页
 /// (solid until pressed here or a code is in) and the field, 完成 at its end once a code is in (Enter too); sent, the
 /// keyboard goes, the code stays and 完成 turns while it is checked.
-fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
+fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : String) -> Unit {
   let p = @sf.theme().p
   let id = text(l, "id")
+  let here = place + "\u{1}" + station + "\u{1}" + id
   let sending = @settings.is_doing(core, ["machineLogin.answer"], [("station", station), ("id", id)])
   let checking = text(l, "state") == "verifying"
   let busy = sending || checking
   let opened = logins_here.pressed.get(id).unwrap_or(false)
-  let typed = logins_here.typed.get(id).unwrap_or(false)
+  let typed = logins_here.typed.get(here).unwrap_or(false)
   login_said(c, if checking {
     text(l, "statusText")
   } else {
@@ -393,13 +413,15 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
       d => @sf.t("web-main.logins.pasteLead", args=[("domain", d)])
     }
   })
-  let elsewhere = match login_station_way(c, core, station, l) {
+  let elsewhere = match login_station_way(core, station, l) {
     Some(way) => [way]
     None => []
   }
   if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=login_page_ways(text(l, "url"), elsewhere), last=false) {
-    logins_here.pressed[id] = true
-    login_open(core, text(l, "url"))
+    @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
+      logins_here.pressed[id] = true
+      login_open(core, text(l, "url"))
+    })
   }
   // sent, nothing is left to type: the keyboard goes (the code stays in the field as it is checked)
   let send = fn(code : String) {
@@ -426,10 +448,10 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
         placeholder_color=p.muted,
         caret_color=p.accent,
         enter_sends=true,
-        field=login_field(id),
+        field=login_field(here),
       )
       words = r.text.trim(chars=" \n").to_string()
-      logins_here.typed[id] = words != ""
+      logins_here.typed[here] = words != ""
       match r.submitted {
         Some(sent) if sent.trim(chars=" \n").to_string() != "" && !busy => send(sent.trim(chars=" \n").to_string())
         _ => ()

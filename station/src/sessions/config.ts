@@ -23,6 +23,8 @@ export type Profile = RuntimeProfile & {
   model?: string;
   /// A message that reaches a running Claude Code turn first moves what it waits on to the background (absent: on).
   backgroundOnMessage: boolean;
+  /// A stopped profile keeps its credentials and models but cannot be chosen for work.
+  enabled?: boolean;
   /// The joined workspaces kept from it (docs/multi-workspace.md): every workspace the station is in runs on it but these.
   withheld?: string[];
 };
@@ -121,6 +123,7 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
       named: models,
       model: nonEmpty(p.model),
       backgroundOnMessage: p.backgroundOnMessage !== false,
+      enabled: p.enabled !== false,
       ...(Array.isArray(p.withheld) ? { withheld: p.withheld.filter((w: unknown): w is string => typeof w === "string" && w !== "") } : {}),
     };
   });
@@ -184,7 +187,7 @@ export const allowedIn = (profile: Profile, ws: string | null, home: string | nu
 
 /// The profiles a connect's sessions can run on: every profile of its runtime allowed in its workspace.
 export const profilesFor = (config: HubConfig, connect: Connect, home: string | null = null): Profile[] =>
-  config.profiles.filter((p) => p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
+  config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
 
 export const runtimeName = (r: Runtime) => r;
 export const runtimeNamed = (name: string): Runtime | null => runtimeKind(name) ?? null;
