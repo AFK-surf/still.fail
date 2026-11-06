@@ -86,8 +86,8 @@ test("a cancelled package request closes its socket", async (t) => {
     rmSync(dir, { recursive: true, force: true });
   });
   const cancel = new AbortController();
-  const answer = ask(socket, "/about", cancel.signal);
-  await requestReceived;
+  const answer = ask(socket, "/about", AbortSignal.any([cancel.signal, t.signal]));
+  await Promise.race([requestReceived, answer.then(() => { throw new Error("request ended before cancellation"); })]);
   cancel.abort();
   await assert.rejects(answer, { name: "AbortError" });
   await socketClosed;
@@ -110,7 +110,8 @@ test("a cancelled package response closes its socket after its headers", async (
     rmSync(dir, { recursive: true, force: true });
   });
   const cancel = new AbortController();
-  const response = await forward(socket, { method: "GET", path: "/about", headers: {}, body: Buffer.alloc(0) }, null, cancel.signal);
+  const response = await forward(socket, { method: "GET", path: "/about", headers: {}, body: Buffer.alloc(0) }, null,
+    AbortSignal.any([cancel.signal, t.signal]));
   const reading = (async () => { for await (const _ of response.body as AsyncIterable<Buffer>) { /* drain */ } })();
   cancel.abort();
   await assert.rejects(reading);
