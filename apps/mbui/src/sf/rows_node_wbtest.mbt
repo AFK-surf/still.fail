@@ -48,49 +48,62 @@ test "rows nodes: a fixed filter and scrolling rows keep their own narrow room, 
 }
 
 ///|
-test "rows nodes: a page changing arrangement keeps the filter's words and lays the filter and rows out in its new column" {
-  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=400.0)
-  let width = @signals.signal(390.0)
-  let filter = @ui.Field::new()
-  let filter_room : Ref[@view.View?] = Ref(None)
-  let row_room : Ref[@view.View?] = Ref(None)
-  @ui.set_view_app(fn(root) {
-    @ui.set_tree_theme(ui_theme_now)
-    root.pick(fn() { look_for(width.get()) }, fn(page, look) {
-      look_lent(page, look)
-      over_rows_node(page, fn(f) {
-        filter_room.val = Some(f)
-        input_node(f, filter, placeholder="筛选") |> ignore
+test "rows nodes: a fixed filter keeps its node, focus and keyboard as the page changes arrangement, in a window or pane" {
+  for pane in [false, true] {
+    for platform in [0, 2] {
+      let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=400.0, platform~)
+      let width = @signals.signal(390.0)
+      let filter = @ui.Field::new()
+      let filter_room : Ref[@view.View?] = Ref(None)
+      let row_room : Ref[@view.View?] = Ref(None)
+      @ui.set_view_app(fn(root) {
+        @ui.set_tree_theme(ui_theme_now)
+        root.box(fn(page) {
+          if pane { page.lends(pane_lent, true) |> ignore }
+          over_rows_node(page, fn(f) {
+            filter_room.val = Some(f)
+            input_node(f, filter, placeholder="筛选") |> ignore
+          }, width=fn() { width.get() })
+          // The rows may be made anew as the page's arrangement changes; the filter above stays put.
+          page.pick(fn() { look_for(width.get()) }, fn(rows, look) {
+            look_lent(rows, look)
+            rows_column_node(rows, fn(r) {
+              row_room.val = Some(r)
+              r.height(Is(Some(40.0))) |> ignore
+            })
+          })
+        })
+        |> ignore
       })
-      rows_column_node(page, fn(r) {
-        row_room.val = Some(r)
-        r.height(Is(Some(40.0))) |> ignore
-      })
-    })
-    |> ignore
-  })
-  let columns = fn() {
-    let (fx, _, fw, _) = filter_room.val.unwrap().placed_window_now()
-    let (rx, _, rw, _) = row_room.val.unwrap().placed_window_now()
-    ((fx, fw), (rx, rw))
+      let columns = fn() {
+        let (fx, _, fw, _) = filter_room.val.unwrap().placed_window_now()
+        let (rx, _, rw, _) = row_room.val.unwrap().placed_window_now()
+        ((fx, fw), (rx, rw))
+      }
+      t.draw()
+      let narrow = if pane { (16.0, 358.0) } else { (12.0, 366.0) }
+      let middle = if pane { (16.0, 668.0) } else { (24.0, 652.0) }
+      assert_eq(columns(), (narrow, (0.0, 390.0)))
+      let field = t.get(TextField, label="筛选")
+      let (x, y, w, h) = field.rect
+      t.tap(x + w / 2.0, y + h / 2.0)
+      t.type_text("模型")
+      assert_eq(t.focused().map(fn(s) { s.id }), Some(field.id))
+      for (w, fixed, row, typed) in [
+        (700.0, middle, middle, "二"),
+        (900.0, (54.0, 792.0), (54.0, 792.0), "三"),
+        (390.0, narrow, (0.0, 390.0), "四"),
+      ] {
+        width.set(w)
+        t.resize(w, 400.0)
+        t.draw()
+        assert_eq((columns(), t.get(TextField, label="筛选").id, t.focused().map(fn(s) { s.id })), ((fixed, row), field.id, Some(field.id)), msg="pane \{pane}, platform \{platform}, width \{w}")
+        if platform == 2 { assert_true(t.ime().0) }
+        t.type_text(typed)
+      }
+      assert_eq(filter.text(), "模型二三四")
+    }
   }
-  t.draw()
-  assert_eq(columns(), ((12.0, 366.0), (0.0, 390.0)))
-  let (x, y, w, h) = t.get(TextField, label="筛选").rect
-  t.tap(x + w / 2.0, y + h / 2.0)
-  t.type_text("模型")
-  width.set(900.0)
-  t.resize(900.0, 400.0)
-  t.draw()
-  assert_eq((columns(), filter.text()), (((54.0, 792.0), (54.0, 792.0)), "模型"))
-  let (x, y, w, h) = t.get(TextField, label="筛选").rect
-  t.tap(x + w / 2.0, y + h / 2.0)
-  t.type_text("二")
-  assert_eq(filter.text(), "模型二")
-  width.set(390.0)
-  t.resize(390.0, 400.0)
-  t.draw()
-  assert_eq((columns(), filter.text()), (((12.0, 366.0), (0.0, 390.0)), "模型二"))
 }
 
 ///|

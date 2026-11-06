@@ -4,11 +4,39 @@
 ///|
 /// What stays over a page's scrolling rows, such as their filter. Narrow, it is in the page's room (12 from its sides,
 /// or 16 in a pane); wide, in the same centred column as the rows. `make` makes what stays there, outside the scroll.
-pub fn over_rows_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
-  match look_node(parent) {
-    Narrow => page_block(parent, fn(room) { room.box(make) |> ignore })
-    Wide => rows_column_node(parent, make)
+/// Given `width`, its arrangement follows that page width without remaking what it holds, so a field keeps its focus
+/// while the page changes arrangement. Otherwise it takes the arrangement lent by the page as it is made.
+pub fn over_rows_node(
+  parent : @view.View,
+  make : (@view.View) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let look = match width {
+    Some(w) => fn() { look_for(w()) }
+    None => fn() { look_node(parent) }
   }
+  let pane = in_pane_node(parent)
+  parent.box(fn(room) {
+    room
+    .row(Is(true))
+    .padding(By(fn() {
+      let side = if pane { panel_card_in } else if look() is Narrow { pg_room_in } else { desk_lane_in }
+      (side, 0.0, side, 0.0)
+    }))
+    .lies_along(Is(Middle))
+    |> ignore
+    room.box(fn(col) {
+      col
+      .grow(Is(1.0))
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      .max_width(By(fn() { if look() is Wide { Some(desk_lane_most) } else { None } }))
+      |> ignore
+      col.box(make) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|

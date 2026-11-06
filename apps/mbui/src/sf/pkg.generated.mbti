@@ -1420,7 +1420,7 @@ pub fn over_foot_reach(Double) -> @ui.Style
 
 pub fn over_rows(@ui.Ctx, () -> Unit) -> Unit
 
-pub fn over_rows_node(@view.View, (@view.View) -> Unit) -> Unit
+pub fn over_rows_node(@view.View, (@view.View) -> Unit, width? : () -> Double) -> Unit
 
 pub fn overlap(Double) -> @ui.Style
 
