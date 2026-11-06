@@ -261,6 +261,73 @@ fn triple_settings_fixture() -> Json {
 }
 
 ///|
+test "model panel nodes: search leaves room for the effort column" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let original = triple_settings_fixture()
+  let pick = match original {
+    Object(m) => {
+      let next = m.copy()
+      let options = items(Some(original), "options").copy()
+      for i in 0..<10 {
+        let name = "Extra " + i.to_string()
+        options.push({ "model": Json::string(name), "name": Json::string(name) })
+      }
+      next["options"] = Json::array(options)
+      Json::object(next)
+    }
+    _ => original
+  }
+  let state = triple_node_panel_state(Some(pick))
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=700.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(panel) {
+      panel.offset(Is((20.0, 30.0))).width(Is(Some(500.0))).height(Is(Some(600.0))) |> ignore
+      triple_node_body(panel, @sfbase.sample_source, "ws/st", "new", state, fn() { false }, fn() { false },
+        "", fn() {  }, fn(_, _) {  })
+    }) |> ignore
+  })
+  t.draw()
+  let (search_x, _, search_w, _) = t.get(TextField, label=@sf.t("web-main.model.search")).rect
+  let (effort_x, _, effort_w, _) = t.get(Radio, label=effort_text("low")).rect
+  assert_true(effort_w > 0.0 && search_x + search_w <= effort_x && effort_x + effort_w <= 520.5,
+    msg="search and effort stay visible side by side: \{(search_x, search_w, effort_x, effort_w)}")
+}
+
+///|
+test "model panel nodes: all models sits at the foot of the effort column" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let original = triple_settings_fixture()
+  let pick = match original {
+    Object(m) => {
+      let next = m.copy()
+      next["efforts"] = ["low", "medium", "high", "max", "ultra"]
+      Json::object(next)
+    }
+    _ => original
+  }
+  let state = triple_node_panel_state(Some(pick))
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=800.0, h=700.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    root.box(fn(panel) {
+      panel.offset(Is((20.0, 30.0))).width(Is(Some(500.0))) |> ignore
+      triple_node_body(panel, @sfbase.sample_source, "ws/st", "new", state, fn() { false }, fn() { false },
+        "", fn() {  }, fn(_, _) {  })
+    }) |> ignore
+  })
+  t.draw()
+  let (_, all_y, _, all_h) = t.get(Button, label=@sf.t("web-main.model.allModels")).rect
+  let (_, effort_y, _, effort_h) = t.get(Radio, label=effort_text("ultra")).rect
+  assert_true((all_y + all_h - effort_y - effort_h).abs() <= 4.0,
+    msg="all models is level with the last effort: \{(all_y, all_h, effort_y, effort_h)}")
+}
+
+///|
 test "model panel nodes: settings stay reachable in sheet and anchored body" {
   for sheet in [true, false] {
     @sfbase.reset()

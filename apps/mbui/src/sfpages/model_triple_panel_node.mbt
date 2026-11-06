@@ -258,6 +258,9 @@ fn triple_node_catalog(
   }, same=fn(_, _) { false })
   let data = fn() { computed.get() }
   parent.pick(fn() { data().all }, fn(part, all) {
+    part.grow(By(fn() {
+      if !all && !sheet() && items(state.pick.get(), "efforts").length() > 0 { 1.0 } else { 0.0 }
+    })) |> ignore
     if all {
       part.show(fn() { !data().searching && ((sheet() && state.kind.get() != "" && data().kinds.length() > 1) || !data().near.is_empty() || !data().liked.is_empty()) }, fn(back) {
         triple_node_row(back, fn() {
@@ -312,12 +315,12 @@ fn triple_node_catalog(
       }
       part.pick(fn() { (sheet(), up(), items(state.pick.get(), "efforts").length() > 0) }, fn(order, layout) {
         let (is_sheet, upwards, has_effort) = layout
-        order.gap(Is(12.0)) |> ignore
+        order.gap(Is(12.0)).grow(Is(if !is_sheet && has_effort { 1.0 } else { 0.0 })) |> ignore
         let scroll_rows = fn(into : @view.View, rows : (@view.View) -> Unit) {
           into.box(fn(room) {
             let scroll = @view.Scroll::new()
             room.max_height(By(fn() { Some(if is_sheet { dmax(room.window().1, triple_list_h) } else { triple_list_h }) }))
-            .shrink(Is(1.0)).min_height(Is(Some(0.0)))
+            .grow(Is(if !is_sheet && has_effort { 1.0 } else { 0.0 })).shrink(Is(1.0)).min_height(Is(Some(0.0)))
             .scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(list) {
               list.gap(Is(12.0)) |> ignore
               rows(list)
@@ -496,10 +499,12 @@ fn triple_node_body(
     })
   })
   parent.show(fn() { pick() is Some(_) }, fn(body) {
+    let has_efforts = fn() { !sheet() && !all() && items(pick(), "efforts").length() > 0 }
     body.box(fn(content) {
-      content.row(By(fn() { !sheet() })).gap(Is(8.0)) |> ignore
+      content.row(By(fn() { !sheet() })).gap(Is(4.0)) |> ignore
       content.box(fn(models) {
-        models.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        models.grow(Is(1.0)).basis(By(fn() { if sheet() { None } else { Some(0.0) } }))
+        .shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
         // This header and its input stay mounted while the sheet becomes an anchored panel or vice versa.
         models.box(fn(head) {
           head.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(8.0)) |> ignore
@@ -510,6 +515,9 @@ fn triple_node_body(
         }) |> ignore
         models.pick(fn() { (sheet(), up()) }, fn(part, layout) {
           let (is_sheet, upwards) = layout
+          part.grow(By(fn() {
+            if !sheet() && !all() && items(pick(), "efforts").length() > 0 { 1.0 } else { 0.0 }
+          })) |> ignore
           let head_width = fn() {
             part.words_redone() |> ignore
             let c = @ui.current()
@@ -542,7 +550,11 @@ fn triple_node_body(
           if is_sheet && upwards { how(part) }
         })
       }) |> ignore
-      content.show(fn() { !sheet() && !all() && items(pick(), "efforts").length() > 0 }, fn(efforts) {
+      content.show(has_efforts, fn(rule) {
+        rule.width(Is(Some(1.0))).margin(Is((0.0, -@sf.panel_pad, 0.0, -@sf.panel_pad)))
+        .ground(By(fn() { @ui.tree_theme().color(Line) })) |> ignore
+      })
+      content.show(has_efforts, fn(efforts) {
         (state.pick_anchor.val)("effort", efforts)
         efforts.box(fn(head) {
           @sf.words_node(head, fn() { @sf.t("web-main.model.effort") }, fn() { triple_picked }) |> ignore
