@@ -242,7 +242,13 @@ fn hist_look(
   let live = made.keys().collect()
   live.sort()
   let seen = {
-    past: scroll.past(tree),
+    // (what shows past its end as drawn at the moment looked at: a frame drawn ahead is drawn at it, its logic before)
+    past: @signals.untracked(fn() {
+      match scroll.past_at(tree.drawn_at()) {
+        Some((edge, x, _)) => x * edge.to_double()
+        None => 0.0
+      }
+    }),
     hit,
     rows,
     rests,

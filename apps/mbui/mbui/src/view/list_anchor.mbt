@@ -357,7 +357,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
     flinging.val = now
     if now != causes_held.val {
       causes_held.val = now
-      tree.before_causes = tree.before_causes + (if now { 1 } else { -1 })
+      // EXPERIMENT: tree.before_causes = tree.before_causes + (if now { 1 } else { -1 })
+      ignore(tree)
     }
   })
   self.owns(fn() {
