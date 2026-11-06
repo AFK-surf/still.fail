@@ -13,7 +13,7 @@ import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { handedOf } from "../src/store/rows.ts";
-import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { CREATE, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
 import { makeStore } from "../src/read/store.ts";
@@ -1217,21 +1217,20 @@ test("an agent opens a chat here: it begins with its message, goes to its starte
   await r.close();
 });
 
-test("an agent keeps at most a few chats it opened going at once", async () => {
+test("an agent can open more than eight unfinished chats without duplicating a key", async () => {
   const r = new Rig({ link: true });
   const a = say("<@UBOT> split it up");
   await r.accept(a);
   await settle();
   const keyA = sessionKey("cl", "C1", a.threadTs);
-  for (let i = 0; i < MAX_OPEN; i++) await r.call(keyA, "chat_create", { key: `part-${i}`, text: `part ${i}` });
-  assert.ok((await r.refused(keyA, "chat_create", { key: "one-more", text: "one more" })).includes("have not ended all_done"));
-  // One that ended all_done leaves room.
-  r.store.setOpenedState("", r.store.openedBy(keyA)[0]!.child, "all_done");
-  await r.call(keyA, "chat_create", { key: "one-more", text: "one more" });
-  // So does one archived.
-  assert.ok((await r.refused(keyA, "chat_create", { key: "two-more", text: "two more" })).includes("have not ended all_done"));
-  r.store.setArchived(r.store.openedBy(keyA)[1]!.child, true, "manual");
-  await r.call(keyA, "chat_create", { key: "two-more", text: "two more" });
+  for (let i = 0; i < 12; i++) await r.call(keyA, "chat_create", { key: `part-${i}`, text: `part ${i}` });
+  const opened = r.store.openedBy(keyA);
+  assert.equal(opened.length, 12);
+  assert.equal(new Set(opened.map((o) => o.child)).size, 12);
+  assert.ok(opened.every((o) => o.state !== "all_done"));
+  const again = await r.call(keyA, "chat_create", { key: "part-0", text: "part 0" });
+  assert.ok(again.includes("already opened"), again);
+  assert.equal(r.store.openedBy(keyA).length, 12);
   assert.ok((await r.refused(keyA, "chat_create", { text: "no key" })).includes("key is required"));
   await r.close();
 });
