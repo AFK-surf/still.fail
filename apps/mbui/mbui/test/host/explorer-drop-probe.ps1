@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Automation;
 
@@ -71,34 +72,46 @@ public static class ExplorerDropProbe {
     }
   }
 
-  static string Log(string path) {
-    using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-    using (var r = new StreamReader(f)) return r.ReadToEnd();
-  }
-  static void WaitLog(string path, string text, DateTime deadline) {
-    using (var changed = new AutoResetEvent(false))
-    using (var watcher = new FileSystemWatcher(Path.GetDirectoryName(path), Path.GetFileName(path))) {
-      watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size;
-      FileSystemEventHandler told = (s, e) => changed.Set();
-      watcher.Changed += told;
-      watcher.EnableRaisingEvents = true;
-      while (!Log(path).Contains(text)) {
+  sealed class ProbeOutput : IDisposable {
+    readonly object gate = new object();
+    readonly StringBuilder lines = new StringBuilder();
+    readonly AutoResetEvent changed = new AutoResetEvent(false);
+    readonly StreamWriter log;
+    public ProbeOutput(Process process, string path) {
+      log = new StreamWriter(new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite));
+      log.AutoFlush = true;
+      DataReceivedEventHandler line = (s, e) => {
+        if (e.Data == null) return;
+        lock (gate) { lines.AppendLine(e.Data); log.WriteLine(e.Data); }
+        changed.Set();
+      };
+      process.OutputDataReceived += line;
+      process.ErrorDataReceived += line;
+      process.BeginOutputReadLine();
+      process.BeginErrorReadLine();
+    }
+    public string Text() { lock (gate) return lines.ToString(); }
+    public void WaitFor(string text, DateTime deadline) {
+      while (!Text().Contains(text)) {
         TimeSpan left = deadline - DateTime.UtcNow;
-        if (left <= TimeSpan.Zero || !changed.WaitOne(left)) throw new Exception("log did not say " + text + "\n" + Log(path));
+        if ((left <= TimeSpan.Zero || !changed.WaitOne(left)) && !Text().Contains(text))
+          throw new Exception("log did not say " + text + "\n" + Text());
       }
     }
+    public void Dispose() { changed.Dispose(); log.Dispose(); }
   }
   static void Shot(string path) {
     int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
     using (var b = new Bitmap(w, h))
     using (var g = Graphics.FromImage(b)) { g.CopyFromScreen(0, 0, 0, 0, b.Size); b.Save(path); }
   }
-  public static int Run(int appId, string file, string log, string shot, int seconds) {
+  public static int Run(Process app, string file, string log, string shot, int seconds) {
     DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
     AutomationElement explorer = null;
     bool held = false;
-    var app = Process.GetProcessById(appId);
+    ProbeOutput output = null;
     try {
+      output = new ProbeOutput(app, log);
       SetProcessDPIAware();
       if (!app.WaitForInputIdle(seconds * 1000)) throw new Exception("probe window did not become ready");
       app.Refresh();
@@ -135,7 +148,7 @@ public static class ExplorerDropProbe {
             throw new Exception("cannot place Explorer");
           uint explorerProcess;
           GetWindowThreadProcessId(explorerWindow, out explorerProcess);
-          Console.WriteLine("EXPLORER window process={0}, probe process={1}", explorerProcess, appId);
+          Console.WriteLine("EXPLORER window process={0}, probe process={1}", explorerProcess, app.Id);
           if (!SetForegroundWindow(explorerWindow)) throw new Exception("cannot foreground Explorer");
           item.SetFocus();
           // The Details view can be scrolled to the right so a row's UIA click point lands on its date column. Switch
@@ -173,17 +186,18 @@ public static class ExplorerDropProbe {
             Console.WriteLine("EXPLORER mouse capture={0}, left button down={1}", capture, (GetAsyncKeyState(1) & 0x8000) != 0);
             if (!capture) throw new Exception("mouse down did not produce a system capture event");
             if (!SetCursorPos((int)source.X + 30, (int)source.Y)) throw new Exception("cannot start the drag");
-            bool drag = events.Drag.WaitOne(TimeSpan.FromSeconds(5));
-            Console.WriteLine("EXPLORER drag-start event={0}", drag);
+            bool dragCapture = events.Capture.WaitOne(TimeSpan.FromSeconds(10));
+            Console.WriteLine("EXPLORER drag capture={0}, drag-start event={1}", dragCapture, events.Drag.WaitOne(0));
+            if (!dragCapture) throw new Exception("Explorer did not transfer mouse capture while starting its drag");
             Shot(shot + ".start.png");
             if (!SetCursorPos(target.x, target.y)) throw new Exception("cannot drag to the probe");
-            WaitLog(log, "HOVER folder", deadline);
+            output.WaitFor("HOVER folder", deadline);
           }
           Shot(shot);
           mouse_event(MouseUp, 0, 0, 0, UIntPtr.Zero);
           held = false;
-          WaitLog(log, "READ folder " + Path.GetFileName(file), deadline);
-          string contents = Log(log);
+          output.WaitFor("READ folder " + Path.GetFileName(file), deadline);
+          string contents = output.Text();
           int dropCount = contents.Split(new [] {"DROP folder"}, StringSplitOptions.None).Length - 1;
           int readCount = contents.Split(new [] {"READ folder " + Path.GetFileName(file)}, StringSplitOptions.None).Length - 1;
           if (dropCount != 1 || readCount != 1) throw new Exception("expected one drop and one read\n" + contents);
@@ -199,12 +213,21 @@ public static class ExplorerDropProbe {
       if (held) mouse_event(MouseUp, 0, 0, 0, UIntPtr.Zero);
       if (explorer != null) try { ((WindowPattern)explorer.GetCurrentPattern(WindowPattern.Pattern)).Close(); } catch {}
       if (!app.HasExited) app.Kill();
+      app.WaitForExit();
+      if (output != null) output.Dispose();
     }
   }
 }
 '@
 $env:MBUI_BENCH = '-1'
 $env:MBUI_WIN = '560x400'
-$probe = Start-Process -FilePath $Executable -PassThru -RedirectStandardOutput $LogPath -RedirectStandardError ($LogPath + '.err')
+$start = New-Object System.Diagnostics.ProcessStartInfo
+$start.FileName = $Executable
+$start.UseShellExecute = $false
+$start.RedirectStandardOutput = $true
+$start.RedirectStandardError = $true
+$probe = New-Object System.Diagnostics.Process
+$probe.StartInfo = $start
+if (!$probe.Start()) { throw 'cannot start the retained-node probe' }
 Write-Output "EXPLORER probe PID $($probe.Id), executable $Executable"
-exit [ExplorerDropProbe]::Run($probe.Id, $FilePath, $LogPath, $ShotPath, $Seconds)
+exit [ExplorerDropProbe]::Run($probe, $FilePath, $LogPath, $ShotPath, $Seconds)

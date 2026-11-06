@@ -93,7 +93,6 @@ jobs:
           code=0
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$PWD/test/host/explorer-drop-probe.ps1")" -Executable "$(cygpath -w "$PWD/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe")" -FilePath "$(cygpath -w "$PWD/out/host/explorer/mbui-drag-source")" -LogPath "$(cygpath -w "$PWD/out/host/explorer/probe.log")" -ShotPath "$(cygpath -w "$PWD/out/host/explorer/hover.png")" || code=$?
           cat out/host/explorer/probe.log
-          cat out/host/explorer/probe.log.err
           exit "$code"
       - uses: actions/upload-artifact@v4
         if: always()
