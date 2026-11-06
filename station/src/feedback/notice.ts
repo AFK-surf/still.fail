@@ -65,8 +65,10 @@ export function readTail(path: string, most: number): string | null {
 export function failedTurnOf(store: Store, thread: number, at: number): { session: SessionRow; turn: TurnSummary | null } | null {
   let best: { session: SessionRow; turn: TurnSummary; off: number } | null = null;
   const sessions = store.threadSessions(thread).flatMap((m) => store.getSession(m.session) ?? []);
+  const from = at - 10 * 60_000, to = at + 5_000;
+  const bounded = [at, from, to].every(Number.isSafeInteger);
   for (const session of sessions) {
-    for (const { summary } of store.listTurns(session.key)) {
+    for (const { summary } of bounded ? store.failedTurnsNear(session.key, from, to, at) : store.listTurns(session.key)) {
       if (summary.outcome !== "failed" || summary.endedAt === null) continue;
       const off = at - summary.endedAt;
       if (off < -5_000 || off > 10 * 60_000) continue;

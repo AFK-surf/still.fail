@@ -24,6 +24,17 @@ export function workspaceWorking(store: Pick<Store, "getSession" | "runningJobsA
     || store.runningJobsAtLeast(key, 1) || store.lastTurn(key)?.declared === "waiting");
 }
 
+/// The live sessions whose workspaces should be measured this round.
+export function workspaceSessionsToMeasure(store: Pick<Store, "liveSessions" | "runningJobSessions" | "waitingOf">,
+  processState: (key: string) => string): ReturnType<Store["liveSessions"]> {
+  const live = store.liveSessions();
+  const idle = live.filter((s) => s.archivedAt === null && !s.running && processState(s.key) !== "running");
+  const jobsRunning = store.runningJobSessions(idle.map((s) => s.key));
+  const waiting = store.waitingOf(idle.filter((s) => !jobsRunning.has(s.key)).map((s) => s.key));
+  return live.filter((s) => s.archivedAt === null && (s.running || processState(s.key) === "running"
+    || jobsRunning.has(s.key) || waiting.has(s.key)));
+}
+
 export type WorkspaceSize = { bytes: number; complete: boolean };
 type Measurement = { size: WorkspaceSize | null; at: number; pending: boolean; limit: number };
 

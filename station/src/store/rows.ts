@@ -582,7 +582,9 @@ export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), 
 
 /// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
 /// readers' (who keeps watch).
-export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
+// The process watchers need a stable choice when equally large jobs start together. The former query's usual
+// jobs_up plan read ties by port and rowid; spell that order out so either query plan gives the same answer.
+export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC, port, rowid";
 
 /// The jobs running, and the services stopped on their own that hold their port (an exited one with a port), the latest
 /// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
