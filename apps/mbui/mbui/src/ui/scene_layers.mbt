@@ -1814,9 +1814,9 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
       // never its instances taken for the holder's own)
       Some(c) =>
         @view.fault(
-          "layer \{l.id} holds \{i} not drawn in it: seen \{c.seen} of \{scene.frame}, \{c.start}+\{c.count} outside \{k0}..\{self.ninst}",
+          "layer \{l.id.at} holds \{i.at} not drawn in it: seen \{c.seen} of \{scene.frame}, \{c.start}+\{c.count} outside \{k0}..\{self.ninst}",
         )
-      None => @view.fault("layer \{l.id} holds \{i}, no layer kept")
+      None => @view.fault("layer \{l.id.at} holds \{i.at}, no layer kept")
     }
   }
   held.sort_by(fn(a, b) { a.start.compare(b.start) })
