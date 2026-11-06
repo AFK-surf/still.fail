@@ -2036,6 +2036,63 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
   assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
 });
 
+// An image sent while it was going up and opened then is named by its upload (`upload:<id>`, its path till it is up);
+// once up, its message names it by where its station keeps it. The preview, opened before, still asks for the ones
+// beside it by its upload: they are the same file's (its `upload` the same before and after), so beside it the same.
+test("an_image_opened_while_going_up_has_the_same_ones_beside_it_once_up", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const before = { name: "before.png", path: "ws/k/before.png", size: 1 };
+  t.set(pageOf("ws/a", 7), { first: 1, last: 1, entries: [{ ...entry(1, ""), attachments: [before] }], thread: null });
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7 }]);
+  await t.read(u, 1);
+  const id = t.views.outboxAdd("ws/a", 7, { text: "", attachments: [], quotes: [], uploads: [
+    { id: "u1", name: "shot.png", size: 300, width: 1200, height: 800, sent: 100 },
+    { id: "u2", name: "next.png", size: 300, width: 1200, height: 800, sent: 100 },
+  ] });
+  await t.read(u, 1);
+  // (asked as the preview asks: by its path, where it was opened from among the chat's showings of it)
+  const at = `o:${id}/f`;
+  const shown = ui();
+  t.subscribe(2, { topic: "imageNear", station: "ws/a", thread: 7, session: null, path: "upload:u1", at });
+  const beside = async () => {
+    await t.read(shown, 2);
+    const v = shown.value;
+    return [v.before?.name ?? null, v.beforeAt ?? null, v.after?.name ?? null, v.afterAt ?? null, v.index ?? null, v.count];
+  };
+  // Going up: none of its own beside it (nor it among them): one beside it would be opened by where its station keeps
+  // it, and it is on none yet.
+  assert.deepEqual(await beside(), [null, null, null, null, null, 1]);
+  // Up: where its station keeps it now in its message, the preview asking by its upload still.
+  t.views.local.outboxUploaded("ws/a", 7, id, [
+    { name: "shot.png", path: "ws/k/uploads/shot.png", size: 300, width: 1200, height: 800 },
+    { name: "next.png", path: "ws/k/uploads/next.png", size: 300, width: 1200, height: 800 },
+  ]);
+  await t.readAll([[u, 1], [shown, 2]]);
+  assert.deepEqual(u.value.outbox[0].attachments.map((f: J) => [f.path, f.upload, f.owner]), [["ws/k/uploads/shot.png", "u1", "k"], ["ws/k/uploads/next.png", "u2", "k"]]);
+  assert.deepEqual(await beside(), ["before.png", "m:1.0/f", "next.png", at, 1, 3]);
+  // Delivered: its message the station's, its files where the station keeps them (theirs from here: their uploads), in
+  // the same place (its row the one it was sent as).
+  t.views.outboxSent("ws/a", 7, id, 2);
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), last: 2, entries: [...(p as J).entries, { ...entry(2, ""), attachments: [
+    { name: "shot.png", path: "ws/k/uploads/shot.png", size: 300, width: 1200, height: 800 },
+    { name: "next.png", path: "ws/k/uploads/next.png", size: 300, width: 1200, height: 800 },
+  ] }] }));
+  await t.host.time.pass(100);
+  await t.readAll([[u, 1], [shown, 2]]);
+  assert.deepEqual([u.value.outbox.length, u.value.messages.at(-1)?.attachments.map((f: J) => f.upload)], [0, ["u1", "u2"]]);
+  assert.deepEqual(await beside(), ["before.png", "m:1.0/f", "next.png", at, 1, 3]);
+  // (another showing of it is not this one)
+  t.subscribe(3, { topic: "imageNear", station: "ws/a", thread: 7, session: null, path: "upload:u1", at: "m:1.0/f" });
+  const elsewhere = ui();
+  await t.read(elsewhere, 3);
+  assert.deepEqual([elsewhere.value.index ?? null, elsewhere.value.count], [null, 3]);
+});
+
 // A video sent with a new chat's first message showed as a file card: a new chat's files go up
 // only as its message goes, so its video was still going up when its row came. Drawn as its message draws it once up:
 // in its place and shape, its still the one picked here.
