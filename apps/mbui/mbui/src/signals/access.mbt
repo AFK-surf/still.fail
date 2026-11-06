@@ -84,3 +84,77 @@ pub fn set_phase_guard(phase : AccessPhase, reason : String?) -> Unit {
     Layout => layout_guard.val = reason
   }
 }
+
+///|
+// kept across runs: what a stopped run told and had yet to run, held apart as a run begins (reset_globals) till what of
+// it is the stopped run's own is let go (run_told)
+let told_held : Array[ReactiveNode] = []
+
+///|
+/// What a run stopped half way leaves here put back (a run beginning: a Tester's): a phase's guard, a batch, a flush, a
+/// read or an effect under way are each put back as they end, but a run stopped in one (a test that aborts there, as it
+/// should) leaves it, and every run after it reads under a guard it never set, or holds back what it tells. What was
+/// being done as a change was told whole (after_flush), stopped part way, is let go, which of it was done not known.
+/// What the stopped run told and had yet to run is held apart, for its owner to let go what of it is the stopped run's
+/// own (a Tester's tree, its watches stopped) before it runs (run_told). Nothing it made is let go here: its signals and
+/// effects are kept, and the one an abort stopped in its own run stays as it stopped.
+pub fn reset_globals() -> Unit {
+  access_guard.val = None
+  build_guard.val = None
+  layout_guard.val = None
+  let draining = run.draining
+  run.run_depth = 0
+  run.batch_depth = 0
+  run.batch_changed = false
+  run.active_sub = None
+  run.owner = None
+  run.flushing = 0
+  run.afters_held = 0
+  run.draining = false
+  run.flush_trail.clear()
+  run.running = None
+  run.computing = 0
+  check_frames.clear()
+  propagate_frames.clear()
+  watch_reading.depth = 0
+  watch_reading.sets.clear()
+  setting.val = None
+  if draining {
+    run.afters.clear()
+    run.lasts.clear()
+  }
+  // (what was told and not yet run held apart: the first set as the run begins flushes the queue, and would run it
+  // there, before what of it is the stopped run's own is let go)
+  for i in run.notify_index..<run.queued_length {
+    if run.queued[i] is Some(e) {
+      told_held.push(e)
+    }
+    run.queued[i] = None
+  }
+  run.notify_index = 0
+  run.queued_length = 0
+}
+
+///|
+/// What a run stopped half way told and had yet to run (reset_globals), run as the batch or the set it was told in would
+/// have ended: each effect still following what it read, told again as it changes; one stopped since (what was the
+/// stopped run's own, let go) runs no more. Then what waits for a change told whole.
+pub fn run_told() -> Unit {
+  for e in told_held {
+    // (one stopped since follows nothing: let go, not run)
+    if e.deps is Some(_) {
+      if run.queued_length < run.queued.length() {
+        run.queued[run.queued_length] = Some(e)
+      } else {
+        run.queued.push(Some(e))
+      }
+      run.queued_length += 1
+    }
+  }
+  told_held.clear()
+  if run.notify_index < run.queued_length {
+    flush()
+  } else {
+    afters_drained()
+  }
+}
