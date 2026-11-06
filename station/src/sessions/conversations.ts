@@ -251,12 +251,16 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const thread = target(hub, key, args.to);
   if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
   const chat = hub.chat(thread.connect);
-  // A login card on a platform: a field for its page's code, so only for a login of this station that waits for one.
-  const loginHere = card?.type === "login" && chat.loginCards === true && card.station === undefined && hub.logins?.pastes(String(card.login)) === true;
+  // A login card on a platform: its page to open, with a field for the code that page gives or the device code to enter
+  // there; so only for a login of this station at such a step.
+  const page = card?.type === "login" && chat.loginCards === true && card.station === undefined ? (hub.logins?.page(String(card.login)) ?? null) : null;
+  const loginHere = page !== null;
+  // (the page goes only into what the platform shows, never into the card the chat keeps)
+  const shown = page !== null ? { ...card, page } : card;
   if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text")) && !loginHere) {
     throw new Error(
       card.type === "login" && chat.loginCards === true
-        ? 'a login card is shown here only for a login of this station that waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
+        ? 'a login card is shown here only for a login of this station that gives a device code, or waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
         : chat.cards === true
           ? 'a login card is shown only in still.fail chats (CHAT/… or EMBER/…); here post its link in the text and end with kind "need_human"'
           : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
@@ -297,7 +301,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   else {
     if (slack) {
       try {
-        posted = await chat.post(here, text, files, card);
+        posted = await chat.post(here, text, files, shown);
         text = placeFigures(text, files);
       } catch (error) {
         if (!String((error as Error).message).includes("missing_scope")) throw error;
@@ -305,7 +309,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
         posted = await chat.post(here, sent, []);
         text = kept;
       }
-    } else posted = await chat.post(here, text, files, card);
+    } else posted = await chat.post(here, text, files, shown);
     [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card, agentIdentity: identity });
   }
   const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
