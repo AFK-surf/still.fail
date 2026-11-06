@@ -2,7 +2,7 @@
 // BarTiming.kt): the host's (android/app/src/main/java/dev/mbui: Crashes.java, BarTiming.java), told here what only
 // the app knows: the account signed in (the crashes kept since the last report go as it), the core failing and started
 // again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. Where
-// no host takes them (macOS, iOS, Windows, the web: host_tell answers 0) none of it is set.
+// no host takes them (macOS, iOS, Windows, the web: host_tell answers 0) only UiFault is set, as the core's span.
 
 ///|
 /// Whether the account signed in was told (once a process, as Android's MainActivity does).
@@ -18,6 +18,12 @@ fn reports_start() -> Unit {
   // what a call in flight as the core failed says (StillFailCore.restartedText)
   @core.restarted_text.val = @sfapp.tr("android-misc.core.restarted")
   if host_tell("hello", "", "", 0, 0) == 0 {
+    // (no host's error report: what the UI could not do as asked goes as the core's `client.error` span, to Axiom
+    // with the rest of its traces, and to the host's log; a page showing 这部分显示出错了 said nothing otherwise)
+    @view.fault_told.val = Some(fn(said) {
+      @hostapi.log("ui fault: " + said)
+      @core.call("client.error", params={ "source": "ui_fault", "message": said })
+    })
     return
   }
   @core.on_failed.val = Some(fn(reason) { host_tell("core_failed", reason, "", 0, 0) |> ignore })
