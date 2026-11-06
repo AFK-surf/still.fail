@@ -1,0 +1,57 @@
+name: security-page-evidence
+on:
+  push:
+    branches: [codex/security-evidence-c3722238]
+permissions:
+  contents: read
+jobs:
+  pictures:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: before
+            ref: 5876fa3066a681094b4b3295daefd15e87c19891
+          - label: after
+            ref: 6e748ba84a612aac76c29e503dd5163d631b9b9a
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ matrix.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Build the offscreen scene renderer
+        shell: bash
+        run: |
+          set -eu
+          cd apps/mbui
+          mkdir -p out/wasm-film out/security-shots
+          bash scripts/wasm-film-build.sh "$PWD/out/wasm-film"
+          key=$(node ../../scripts/native.ts key mbui-film-wasm darwin-arm64)
+          jq -n --arg ref "${{ matrix.ref }}" --arg key "$key" '{commit:$ref,key:$key}' > out/wasm-film/manifest.json
+          printf 'exit\n' > out/security.drive
+      - name: Capture the same scenes and screen sizes
+        shell: bash
+        run: |
+          set -eu
+          cd apps/mbui
+          for item in 'small 390x844 2 finger' 'medium 720x900 0 mouse' 'large 1280x800 0 mouse'; do
+            set -- $item
+            size=$1; win=$2; platform=$3; native=$4
+            for fixture in settings-security lock-upgrade; do
+              MBUI_MEDIA_RUNTIME="$PWD/out/wasm-film/sffilm" MBUI_FIXTURE="$fixture" MBUI_WIN="$win" \
+                MBUI_FILM_SCALE=2 MBUI_FILM_PLATFORM="$platform" MBUI_NATIVE_INPUT="$native" \
+                bash scripts/media.sh picture "out/security-shots/${{ matrix.label }}-$fixture-$size.png" out/security.drive
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-pictures-${{ matrix.label }}
+          path: apps/mbui/out/security-shots/
+          if-no-files-found: warn
