@@ -82,6 +82,7 @@ let fdrag : FDrag = {
 
 ///|
 fn drag_reset() -> Unit {
+  drive_node_drag_reset()
   fdrag.press = None
   fdrag.item.set(None)
   fdrag.targets = []
@@ -235,7 +236,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
         fdrag.item.set(Some(item))
         fdrag.press = None
       }
-    (_, Some(item)) if !down => {
+    (_, Some(item)) if !down && !drive_node_window.val => {
       match fdrag_at(c, px, py) {
         Some(t) => fdrag_drop(c, src, ws, item, t, @ui.mods_held())
         None => ()
@@ -278,7 +279,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
   }
   fdrag.over = match (fdrag.item.get(), @ui.files_held()) {
     (Some(_), _) =>
-      match fdrag_at(c, px, py) {
+      match if drive_node_window.val { drive_node_old_at(c, px, py) } else { fdrag_at(c, px, py) } {
         Some(t) => t.key
         None => ""
       }
@@ -668,6 +669,7 @@ fn clash_foot(c : @ui.Ctx) -> Unit {
 /// What is carried, under the pointer (the drag's picture): its mark and its name on a raised chip, and what a drop
 /// where it is would do.
 fn drag_ghost(c : @ui.Ctx, page : Int) -> Unit {
+  if drive_node_window.val { return }
   let t = @sf.theme()
   match (fdrag.item.get(), c.rect_of(page)) {
     (Some(i), Some((x0, y0, _, _))) => {
