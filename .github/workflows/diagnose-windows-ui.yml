@@ -1,0 +1,56 @@
+name: diagnose-windows-ui
+on:
+  push:
+    branches: ["diag/windows-ui-timeout"]
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - run: git config --global core.autocrlf false
+        shell: bash
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Fetch signed Windows process dump tool
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'procdump.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'procdump'
+          Invoke-WebRequest 'https://download.sysinternals.com/files/Procdump.zip' -OutFile $zip
+          Expand-Archive $zip -DestinationPath $dir
+          $exe = Join-Path $dir 'procdump64.exe'
+          $signature = Get-AuthenticodeSignature $exe
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft') { throw 'ProcDump signature is not valid Microsoft' }
+          "DIAG_PROCDUMP=$exe" >> $env:GITHUB_ENV
+      - name: Observe the unmodified UI deadline
+        shell: bash
+        env:
+          RUST_LOG: debug
+        run: |
+          (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          export STILLFAIL_AGENT_DESKTOP="$(node scripts/native.ts file agent-desktop win32-x64)"
+          node .github/diagnostics/windows-ui-snapshot.mjs
+          cd station
+          for i in 1 2 3; do
+            printf 'Diagnostic run %s\n' "$i"
+            STILLFAIL_UI_LIVE=1 node --test --test-timeout=120000 test/ui-live.test.ts || exit $?
+          done
+      - name: Print a captured stack when debugger is installed
+        if: always()
+        shell: pwsh
+        run: |
+          $dumps = Get-ChildItem $env:RUNNER_TEMP -Filter 'agent-desktop-*.dmp'
+          $debugger = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dumps -and $debugger) {
+            foreach ($dump in $dumps) { & $debugger.FullName -z $dump.FullName -c '.symfix;.reload;~*kb;q' }
+          } elseif ($dumps) { Write-Output 'Dump captured; cdb is not installed on this runner.' }
+      - name: Preserve any captured dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ui-timeout-dump
+          path: ${{ runner.temp }}/agent-desktop-*.dmp
+          if-no-files-found: ignore
+          retention-days: 1
