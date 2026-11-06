@@ -30,7 +30,12 @@ fn answer_ys(t : @ui.Tester, ms : Double) -> Array[Double] {
 test "an agent's line gone from the chat's end: what is over it makes way, nothing dropped at once" {
   let t = linger_core()
   // its answer out of its avatar, its turn over: its line stays its moment from there
-  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms())
+  t.run_for(fix_deliver_ms + fix_answer_ms)
+  let em = emits_of(emit_chat)
+  assert_true(em.current is Some(_), msg="the answer has started its way out")
+  let until = t.time() + fix_turn_end_ms + emit_all_ms()
+  while em.current is Some(_) && t.time() < until { t.frame() }
+  assert_true(em.current is None, msg="the answer finishes before its line's stay is inspected")
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
   assert_true(t.at_end())
   let ys = answer_ys(t, linger_ms + 100.0)

@@ -89,7 +89,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
         t.touch_at(2, -100.0, -100.0, at)
         if at < returned_at {
           assert_false(shown(), msg="the real chat page is covered")
-          assert_true(physical_equal(em.current.unwrap(), held), msg="covering the page keeps its original phase and deadline")
+          assert_true(physical_equal(em.current.unwrap(), held), msg="covering the page keeps its original phase and deadline: \{width}/\{hz}, held \{(held.seq, held.pose, held.clock.starts_at(), held.clock.end(), held.span, held.timed)}, current \{em.current.map(fn(t) { (t.seq, t.pose, t.clock.starts_at(), t.clock.end(), t.span, t.timed) })}")
           assert_eq(em.queue.length(), 3)
           assert_true(em.queue.iter().all(fn(q) { q.3.end() < at }))
         }

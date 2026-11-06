@@ -183,24 +183,51 @@ test "the answer coming in does not end its own motion: float, spit and return e
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {
-    t.frame()
+    // Observe the Float's endpoints at its cause, before the row has grown on in a later sample.
+    match em.current {
+      Some(turn) if turn.pose == Fold && turn.clock.end() < t.next_frame_time() => t.frame_at(turn.clock.end())
+      _ => t.frame()
+    }
     match em.current {
       Some(turn) => {
         let k = turn.pose.to_string()
         let phase = (k, turn.clock.starts_at(), turn.clock.end(), turn.span)
-        if phases.last() != Some(phase) { phases.push(phase) }
+        match phases.last() {
+          Some(was) if was.0 == k =>
+            assert_eq(phase, was, msg="a phase keeps its declared route until it finishes")
+          Some(was) => {
+            assert_true(t.time() >= was.2, msg="\{was.0} ended before \{was.2}: \{t.time()}")
+            assert_eq(phase.1, was.2, msg="the next phase starts at the preceding phase's end")
+            if turn.pose == Float {
+              assert_eq(t.time(), phase.1)
+              let a = emit_place(t.ctx(), "emit-avatar/" + emit_chat + "/" + turn.agent).unwrap()
+              let b = emit_place(t.ctx(), "emit-landing/" + emit_chat + "/" + seq_s(turn.seq)).unwrap()
+              let distance = dmax((b.0 - a.0).abs(), (b.1 + 3.0 - a.1).abs())
+              // The existing distance rule scales a 440 ms, 100-point Float by the window's Move duration.
+              let expected = (440.0 * @ui.move_ms(distance) / @ui.move_ms(100.0)).round()
+              assert_eq(turn.span, expected, msg="Float endpoints \{a} → \{b}, distance \{distance}")
+            }
+            phases.push(phase)
+          }
+          None => phases.push(phase)
+        }
+        assert_true(t.time() >= phase.1 && t.time() < phase.2, msg="phase \{phase} at \{t.time()}")
         frames[k] = frames.get(k).unwrap_or(0) + 1
         // the flying copy is drawn in every pose after the fold (emit_flyer)
         if turn.pose != Fold {
           assert_true(emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, [turn.agent]) is Some(_))
         }
       }
-      None => ()
+      None =>
+        match phases.last() {
+          Some(was) => assert_true(t.time() >= was.2, msg="\{was.0} disappeared before \{was.2}: \{t.time()}")
+          None => fail("the answer disappeared before any phase was drawn")
+        }
     }
   }
-  // 16 ms frames: Float 440 ms, Spit 380 (ChatMotion.kt), Return at least 230 (as long as its way home: 320 over a
-  // row or two, a Move's least over none), each to its end
-  assert_true(frames.get("Float").unwrap_or(0) >= 26, msg="frames \{frames}; declared phases \{phases}")
+  // Float and Return take the time their distance declares. Every phase is drawn until that end, and handed to
+  // the next at exactly that end; fixed frame counts for a 440 ms Float would reject a shorter, complete route.
+  assert_eq(phases.map(fn(p) { p.0 }), ["Fold", "Float", "Spit", "Return"], msg="frames \{frames}; declared phases \{phases}")
   assert_true(frames.get("Spit").unwrap_or(0) >= 22, msg="frames \{frames}; declared phases \{phases}")
   assert_true(frames.get("Return").unwrap_or(0) >= 13, msg="frames \{frames}; declared phases \{phases}")
   assert_true(em.current is None)
