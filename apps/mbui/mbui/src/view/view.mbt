@@ -1769,7 +1769,9 @@ fn Tree::beat_set(self : Tree, ms : Double) -> Unit {
 /// cycle is (Ctx::cycle's `resident`): what hosts the tree wakes for its next step, said `later` (Tree::resident_next),
 /// not a frame after each frame.
 pub fn View::cycle_resident(self : View, period : Double) -> Double {
-  let t = self.tree.resident.get()
+  let step = self.tree.resident.get()
+  // (sampled at the moment shown: its step then, the resident clock followed as ever)
+  let t = match self.tree.sample { Some(s) => resident_of(s); None => step }
   self.tree.resident_readers[self.at] = (self.gen, t)
   if period <= 0.0 {
     return 0.0

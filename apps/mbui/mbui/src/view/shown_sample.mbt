@@ -13,6 +13,7 @@ fn Tree::sampled_shown(self : Tree, upto : Double) -> Unit {
   guard self.framing && shown > upto && self.sample is None else { return }
   let drawn = self.clock.drawn_by()
   drawn.append(self.beat.drawn_by())
+  drawn.append(self.resident.drawn_by())
   for m in self.drawn_marks {
     if (upto >= m.1) != (shown >= m.1) {
       drawn.append(m.2.drawn_by())
@@ -90,6 +91,7 @@ fn Tree::shown_owed(self : Tree, upto : Double) -> Bool {
   guard shown > upto else { return false }
   self.clock.drawn_by().length() > 0 ||
   self.beat.drawn_by().length() > 0 ||
+  self.resident.drawn_by().length() > 0 ||
   self.drawn_marks.iter().any(fn(m) { (upto >= m.1) != (shown >= m.1) && m.2.drawn_by().length() > 0 })
 }
 
@@ -154,6 +156,7 @@ fn Tree::shadow_shown(self : Tree, upto : Double) -> Unit {
   }
   let drawn = self.clock.drawn_by()
   drawn.append(self.beat.drawn_by())
+  drawn.append(self.resident.drawn_by())
   for m in self.drawn_marks {
     if (upto >= m.1) != (shown >= m.1) {
       drawn.append(m.2.drawn_by())
