@@ -38,12 +38,13 @@ pub fn file_tile_node(
       }
     }))
     .drawn_as(Is("file-tile")) |> ignore
-    tile.box(fn(words) {
-      words.over(Is(true)).offset(Is((0.0, 18.0))).width(Is(Some(tile_w)))
-      .words(By(fn() { if dir() { "" } else { ext() } }))
-      .words_centered(Is(true))
-      .words_look(By(fn() { { ..@ui.style_words(tile_ext), size: tile_ext_size } }))
-      .ink(By(fn() { @ui.style_ink(if error() { tile_ext_failed } else { tile_ext }) })) |> ignore
+    tile.box(fn(room) {
+      room.over(Is(true)).offset(Is((0.0, 18.0))).width(Is(Some(tile_w))).lines_up(Is(Some(Middle))) |> ignore
+      room.box(fn(words) {
+        words.words(By(fn() { if dir() { "" } else { ext() } }))
+        .words_look(By(fn() { { ..@ui.style_words(tile_ext), size: tile_ext_size } }))
+        .ink(By(fn() { @ui.style_ink(if error() { tile_ext_failed } else { tile_ext }) })) |> ignore
+      }) |> ignore
     }) |> ignore
   })
 }

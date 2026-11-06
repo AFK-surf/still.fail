@@ -137,3 +137,21 @@ test "a file tile node scales about its centre without changing its layout and i
   assert_true(tile.val.unwrap().alive())
   assert_true(tile.val.unwrap().id() != v.id())
 }
+
+///|
+test "a file tile centers a wide extension before cutting it to the sheet" {
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=120.0, h=120.0)
+  t.set_font_scale(2.0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.padding(Is((40.0, 40.0, 0.0, 0.0))) |> ignore
+    file_tile_node(root, fn() { "file.abcde" }) |> ignore
+  })
+  t.draw()
+  let line = t.text_runs().iter().find_first(fn(r) { r.text.has_suffix("…") }).unwrap()
+  // In the test font at twice its size, AB and the ellipsis fit; their first glyph starts at the sheet's left.
+  assert_eq(line.text, "AB…")
+  let glyphs = t.drawn_glyphs()
+  assert_eq(glyphs.length(), 3)
+  assert_eq(glyphs[0].0, 40.0)
+}
