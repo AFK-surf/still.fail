@@ -108,9 +108,9 @@ pub fn tools_row_node(
         }
       })
       |> ignore
-      // Close as the trigger or any of its holders leaves or is laid nowhere. The popup lives at the window root, so
-      // otherwise it could remain modal after an enclosing row is left out. Do not reopen it when the trigger returns.
-      slot.reacts(fn() { slot.leaving() || slot.laid_window_told() is None }, fn(unavailable) {
+      // Close when the trigger or any holder leaves or is omitted. The popup lives at the window root and would
+      // otherwise remain modal after its anchor disappeared. It stays closed when the anchor returns.
+      slot.reacts(fn() { slot.leaving() || slot.shown_nowhere() }, fn(unavailable) {
         if unavailable {
           opened.set(false)
         }
