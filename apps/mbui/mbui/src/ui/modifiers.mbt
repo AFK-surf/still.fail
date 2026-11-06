@@ -18,7 +18,6 @@ fn modifiers_said(mods : Int) -> Unit {
   if @signals.untracked(fn() { modifiers_now.get() }) == mods { return }
   modifiers_now.set(mods)
   input_taped("modifiers", h_now(), [mods.to_double()])
-  h_request_frame()
 }
 
 ///|

@@ -372,12 +372,15 @@ test "folder drag crosses between old and new targets once in either direction" 
         let source = c.id("old-source")
         let dest = c.id("old-dest")
         if c.pressed(source) { drag_press(c, src, from, entry) }
-        fdrag_target(c, dest, "old-dest", Some({ station: "ws/other", root: Some("/dest"), path: "old" }),
-          "old", true, true, 1, outside=false) |> ignore
+        let effect = fdrag_target(c, dest, "old-dest", Some({ station: "ws/other", root: Some("/dest"), path: "old" }),
+          "old", true, true, 1, outside=false)
         c.interact(source) |> ignore
         c.box(id=source, w=Px(180.0), h=Px(50.0), fn() { c.text("Old source") |> ignore }) |> ignore
         c.interact(dest) |> ignore
-        c.box(id=dest, w=Px(180.0), h=Px(50.0), fn() { c.text("Old destination") |> ignore }) |> ignore
+        c.box(id=dest, w=Px(180.0), h=Px(50.0), fn() {
+          c.text("Old destination") |> ignore
+          match effect { Some(e) => c.text("effect: " + e) |> ignore; None => () }
+        }) |> ignore
       }).over(Is(true)) |> @ui.old_takes_own |> ignore
     }) |> ignore
     root.box(fn(source) {
@@ -413,6 +416,14 @@ test "folder drag crosses between old and new targets once in either direction" 
   t.move(dx, dy)
   t.draw()
   assert_eq(fdrag.over, "old-dest")
+  assert_true(t.find("effect: copy") is Some(_))
+  // No pointer movement or forced draw: the old island must repaint for the current modifier too.
+  t.hold_mods(@ui.mod_cmd)
+  t.frames_owed()
+  assert_true(t.find("effect: move") is Some(_))
+  t.hold_mods(0)
+  t.frames_owed()
+  assert_true(t.find("effect: copy") is Some(_))
   t.release(dx, dy)
   let moves = calls.filter(fn(c) { c.0 == "drive.transfer" })
   assert_eq(moves.length(), 2)

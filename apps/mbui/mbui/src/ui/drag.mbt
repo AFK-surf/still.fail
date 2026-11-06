@@ -360,7 +360,15 @@ pub fn takes_let_go(v : @view.View, take : (Double, Double) -> Bool) -> Unit {
 /// input determines the chain, including press room, clipping and hosted old islands; an old root layer blocks it.
 /// A hosted island contributes its registered tree holders, not the old controls it contains (old_drop_within).
 pub fn drop_nodes_at(x : Double, y : Double, nodes : Array[@view.View]) -> Array[@view.View] {
+  guard !nodes.is_empty() else { return [] }
   old_input_brought()
+  drop_nodes_at_now(x, y, nodes)
+}
+
+///|
+// In a let-go event the tree was already brought to the event before the pressed control ran. Bringing it again
+// after the control changed its layout would advance its new motion before the event has finished.
+fn drop_nodes_at_now(x : Double, y : Double, nodes : Array[@view.View]) -> Array[@view.View] {
   guard !nodes.is_empty() && view_app.val is Some(t) && !old_layer_over(x, y) else { return [] }
   let target = match t.target_at(x, y) {
     Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) | Off(id) => Some(id)
@@ -423,7 +431,7 @@ pub fn let_go_here(v : @view.View) -> Bool {
 /// A button or a finger let go at (`x`, `y`), in its event (pointer_in), the window's tree brought to its moment.
 fn let_go_told(x : Double, y : Double) -> Unit {
   let takers = let_go_takers.copy()
-  let nodes = drop_nodes_at(x, y, takers.map(fn(h) { h.view }))
+  let nodes = drop_nodes_at_now(x, y, takers.map(fn(h) { h.view }))
   for v in nodes {
     for h in takers {
       if h.view.id() == v.id() && h.view.alive() && (h.take)(x, y) { return }
