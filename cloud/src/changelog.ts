@@ -88,13 +88,14 @@ export async function released(bucket: Bucket, channel: Channel): Promise<Releas
   const [station, android, desktop, web] = await Promise.all([
     read(bucket, beta ? "station-beta.json" : "station.json"),
     read(bucket, beta ? "android/beta/latest.json" : "android/latest.json"),
-    read(bucket, beta ? "desktop/stillfail-beta-mac.yml" : "desktop/stillfail-mac.yml"),
+    // (the Mac app's own updater's feed, which every product's has: monoid's never had electron-updater's .yml)
+    read(bucket, beta ? "mac/beta/latest.json" : "mac/latest.json"),
     read(bucket, beta ? "web-beta.json" : "web.json"),
   ]);
   return {
     station: build(json(station).build ?? json(station).version),
     android: build(json(android).versionCode),
-    desktop: build(/^version:\s*(\S+)\s*$/m.exec(desktop ?? "")?.[1]),
+    desktop: build(json(desktop).versionCode),
     web: build(json(web).build ?? json(web).version),
   };
 }

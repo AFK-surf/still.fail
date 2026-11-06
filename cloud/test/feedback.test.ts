@@ -192,7 +192,7 @@ test("the changelog is anyone's to read, with what each part has out on the host
     await bucket.put("changelog.json", JSON.stringify([{ version: 1340, commit: "b", at: 2, text: ["新功能：更新日志"], fixes: [], parts: ["web", "android"] }]));
     await bucket.put("web.json", JSON.stringify({ build: 1338 }));
     await bucket.put("web-beta.json", JSON.stringify({ build: 1340 }));
-    await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1300\npath: x.zip\n");
+    await bucket.put("mac/latest.json", JSON.stringify({ versionCode: 1300, file: "desktop/stillfail-0.1.1300-arm64-mac.zip" }));
     const stable = (await (await h.fetch("/v1/changelog")).json()) as any;
     assert.equal(stable.entries[0].text[0], "新功能：更新日志");
     assert.deepEqual(stable.released, { station: null, android: null, desktop: 1300, web: 1338 });

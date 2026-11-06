@@ -50,6 +50,19 @@ jobs:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/release.sh --stable android
+      # monoid's (build.monoid.android, the same key): from the same build, in the same warm cache (only the package is
+      # made again: its id, name and links are in its manifest and resources); put by monoid-android. Not a reason to hold
+      # still.fail's release back: monoid-android, apart from done, fails where this did.
+      - name: Build and sign monoid's stable Android app from the same build
+        continue-on-error: true
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          RELEASE_DIR: ${{ runner.temp }}/monoid
+        run: sh .github/release.sh --product monoid --stable android
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with: { name: "monoid-android-stable", path: "${{ runner.temp }}/monoid", if-no-files-found: error, retention-days: 1, compression-level: 0 }
 
   # The Mac app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, signed by the same team, so an installed
   # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26.
@@ -143,6 +156,85 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh scripts/release-put.sh "$RUNNER_TEMP/release"
+      # monoid's (build.monoid.desktop): the same program, linked again with its own resources (its id, name and
+      # environment: apps/mbui/scripts/win.sh), nothing compiled again; put by monoid-desktop-win.
+      - name: Pack and sign monoid's stable Windows app from the same build
+        continue-on-error: true
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_DIR: ${{ runner.temp }}/monoid
+        run: |
+          . "$RUNNER_TEMP/win-compiler.sh"
+          sh scripts/release.sh --product monoid desktop-win
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with: { name: "monoid-desktop-win-stable", path: "${{ runner.temp }}/monoid", if-no-files-found: error, retention-days: 1 }
+
+  # monoid's stable apps (apps/mbui's monoid variants on monoid's cloud: build.monoid.android, build.monoid.desktop), of
+  # the same reviewed release as still.fail's, made from theirs (nothing compiled again) and put in monoid's bucket in the
+  # company's Cloudflare account. Apart from done: still.fail's stable is recorded whatever they do.
+  monoid-android:
+    needs: [plan, android]
+    if: ${{ !cancelled() && needs.android.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "monoid-android-stable", path: "${{ runner.temp }}/monoid" }
+      - name: Put it in monoid's bucket (its files, then its feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
+
+  # monoid's Mac app: still.fail's stable one (as the desktop job put it) renamed, not built again: the same program,
+  # Hermes, bytecode and icon, its own Info.plist, program name and updater id (apps/mbui/scripts/mac-app.sh
+  # MBUI_MAC_FROM), signed and notarized as monoid, put in monoid's bucket.
+  monoid-desktop:
+    needs: [plan, desktop]
+    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
+    runs-on: macos-26
+    environment: production
+    timeout-minutes: 5
+    env:
+      MBUI_FRESH: 1
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
+      - uses: ./.github/actions/setup
+      - name: Rename, sign and notarize still.fail's stable Mac app as monoid's, and put it in monoid's bucket
+        env:
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: |
+          zip="stillfail-0.1.$(git rev-list --count HEAD)-arm64-mac.zip"
+          curl -fsS -o "$RUNNER_TEMP/$zip" "https://app.still.fail/releases/desktop/$zip"
+          export MBUI_MAC_FROM="$RUNNER_TEMP/$zip"
+          sh .github/release-desktop.sh --product monoid --stable
+
+  monoid-desktop-win:
+    needs: [plan, desktop-win]
+    if: ${{ !cancelled() && needs.desktop-win.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "monoid-desktop-win-stable", path: "${{ runner.temp }}/monoid" }
+      - name: Put it in monoid's bucket (its files, then its feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   web:
     needs: [plan, android, desktop, desktop-win]
