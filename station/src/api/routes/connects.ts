@@ -12,7 +12,8 @@ import { type Lang, tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
 import { hubConfig, runs } from "../../sessions/config.ts";
 import type { Hub } from "../../sessions/hub.ts";
-import { bindSingle } from "../../sessions/lifecycle.ts";
+import type { SessionChange } from "../../sessions/accounts.ts";
+import { bindSingle, configure } from "../../sessions/lifecycle.ts";
 import { runtimeKind, type RuntimeKind } from "../../agents/runtime.ts";
 import type { EntryEdit } from "../../connects/connections.ts";
 
@@ -98,9 +99,12 @@ export function connectEdits(deps: ConnectEditDeps) {
   };
 
   /// A connect added or edited (edits.rs `put_connect`): its kind's part as `deps.entry` makes it, its runtime as it
-  /// was made.
-  const putConnect = (r: Request, id: string, i: Input) =>
-    save(r, `connect ${id}`, (raw) => {
+  /// was made. Another model, effort or profile reaches a single-session connect's session too, from its next turn on,
+  /// as a chat's own change of model does (lifecycle.ts `configure`).
+  const putConnect = async (r: Request, id: string, i: Input) => {
+    const hub = deps.hub();
+    const follow: { session?: string; run?: SessionChange } = {};
+    change(r, `connect ${id}`, (raw) => {
       const lang = r.lang;
       const connects = connectsRaw(raw);
       const existing = connects.find((c) => c?.id === id);
@@ -156,6 +160,19 @@ export function connectEdits(deps: ConnectEditDeps) {
       if (effort !== null) b.effort = effort;
       if (profile !== null) b.profile = profile;
       next.bind = b;
+      // (checked before it is saved: a model its session cannot run is refused for both)
+      const bound = hub !== undefined && oldBind !== null && next.mode === "single-session" ? hub.store.binding(id) : null;
+      if (hub !== undefined && bound !== null) {
+        const run: SessionChange = {};
+        const differs = (key: string) => (oldBind[key] ?? null) !== (b[key] ?? null);
+        if (differs("model")) run.model = model;
+        if (differs("model") || differs("effort")) run.effort = effort;
+        if (differs("profile")) run.profile = profile;
+        if (Object.keys(run).length > 0) {
+          hub.accounts.change(bound, run, lang);
+          Object.assign(follow, { session: bound, run });
+        }
+      }
       // What this station does not know of it is kept (but its kind's part, and the part of a kind it was).
       const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "createdBy", "bind", next.kind, typeof existing?.kind === "string" ? existing.kind : "slack"]);
       for (const [k, v] of Object.entries(existing ?? {})) if (!known.has(k)) next[k] = v;
@@ -163,6 +180,12 @@ export function connectEdits(deps: ConnectEditDeps) {
       if (at >= 0) connects[at] = next;
       else connects.push(next);
     });
+    if (hub !== undefined && follow.session !== undefined && follow.run !== undefined) {
+      await configure(hub, follow.session, follow.run, r.lang);
+      log.info("admin", "single-session connect's session follows its run", { connect: id, session: follow.session });
+    }
+    return overview(r);
+  };
 
   return { overview, change, save, raw, connectsRaw, home, ofViewer, mine, putConnect };
 }

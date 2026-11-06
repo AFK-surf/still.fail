@@ -477,7 +477,7 @@
   "web-pages.connect.replaceToken": "更换 token",
   "web-pages.connect.retrying": "正在重新连接：{error}",
   "web-pages.connect.run": "运行方式",
-  "web-pages.connect.runtimeNote": "运行于 {runtime}，创建后无法更改；如需使用其他运行时，请新建连接。进行中的会话继续使用开始时的设置。",
+  "web-pages.connect.runtimeNote": "运行于 {runtime}，创建后无法更改；如需使用其他运行时，请新建连接。单会话时换模型，当前会话从下一条消息起就用新模型；多会话时，进行中的会话继续使用开始时的设置。",
   "web-pages.connect.saveConnect": "保存并连接",
   "web-pages.connect.saveFailedShort": "保存失败",
   "web-pages.connect.saveReconnect": "保存并重新连接",
