@@ -113,3 +113,139 @@ test "an image opened while it goes up: the ones beside it, going up and once up
   viewer.set(None)
   @sfbase.sent_pictures.clear()
 }
+
+///|
+/// Two images sent from here, each its own picture as picked (composer's writing_add: sent.mbt's sent_pictures), going up
+/// in their messages (the core's outbox, views.ts goingUp) with a long one between them: the first one's row far
+/// above, not in the tree. The second opened, then a swipe to the first: the preview shows the first's picture as
+/// picked, its own source, none of its row's; reads none of either through a station (none has them yet); and back.
+/// `frames`: the ms drawn between each swipe and the moment it is looked at, each frame looked at too; what is seen then
+/// said, the same whichever frames are drawn between.
+fn going_far(fps : Double) -> String raise {
+  // (the frames drawn between: at `fps` up to the moment, none at 0)
+  let frames : Array[Double] = if fps > 0.0 { Array::make((@ui.move_most_ms * fps / 1000.0).to_int() - 1, 1000.0 / fps) } else { [] }
+  @sfbase.sent_pictures.clear()
+  let read_through_station : Ref[Int] = Ref(0)
+  let calls : Array[Made] = []
+  let src : Ref[Source?] = Ref(None)
+  let id_of : Map[String, String] = {}
+  let file = fn(name : String, w : Int, h : Int) -> Json {
+    let id = id_of.get(name).unwrap_or("")
+    { "name": name, "path": "upload:" + id, "upload": id, "size": 3000, "width": w, "height": h }
+  }
+  let row = fn(id : String, text : String, files : Array[Json]) -> Json {
+    { "id": id, "text": text, "createdAt": 0, "state": "sending", "attachments": Json::array(files) }
+  }
+  let t = wide_tester(calls, mode="chat-many-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
+    let s = { ..base,
+      read_going: fn(name, params, on_value, done) {
+        if name == "station.file" && params.stringify().contains("upload:") {
+          read_through_station.val += 1
+        }
+        (base.read_going)(name, params, on_value, done)
+      },
+      topic: fn(name, params) {
+        let got = (base.topic)(name, params)
+        match (name, got.value) {
+          ("chat", Some(Object(m))) if id_of.length() == 2 => {
+            let v = m.copy()
+            v["outbox"] = [
+              row("o1", "", [file("first.png", 400, 640)]),
+              row("o2", "很长的一段说明，写在两张图中间。".repeat(160), []),
+              row("o3", "", [file("second.png", 600, 400)]),
+            ]
+            { ..got, value: Some(Json::object(v)), version: got.version + 7 }
+          }
+          ("imageNear", _) => {
+            // (as the fixed core tells it: each going up beside the other, by its upload)
+            let near : Json = match params.get("path") {
+              Some(String(p)) if p == "upload:" + id_of.get("second.png").unwrap_or("-") =>
+                { "before": file("first.png", 400, 640), "beforeAt": "o:o1/f", "index": 1, "count": 2 }
+              Some(String(p)) if p == "upload:" + id_of.get("first.png").unwrap_or("-") =>
+                { "after": file("second.png", 600, 400), "afterAt": "o:o3/f", "index": 0, "count": 2 }
+              _ => { "count": 1 }
+            }
+            { ..got, version: got.version + 7, value: Some(near) }
+          }
+          _ => got
+        }
+      },
+    }
+    src.val = Some(s)
+    s
+  })
+  t.check_looks(false)
+  t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
+  // (picked here: each its picture from its bytes, as the composer has it; then sent, the draft let go of them)
+  let s = src.val.unwrap()
+  let w = @sfbase.writing(s, "ws1/st1:s-c1")
+  for f in [("first.png", @sffixture.fixture_png(400, 640)), ("second.png", @sffixture.fixture_png(600, 400))] {
+    let before = @sfbase.writing_pictures.keys().collect()
+    @sfbase.writing_add(s, w, "ws1/st1", f.0, f.1)
+    let id = @sfbase.writing_pictures.keys().collect().filter(fn(k) { !before.contains(k) })[0]
+    id_of[f.0] = id
+  }
+  for _, id in id_of {
+    @sfbase.writing_remove(s, w, id)
+  }
+  let picked = fn(name : String) { @sfbase.sent_pictures.get("upload\u{1}" + id_of.get(name).unwrap_or("")).unwrap_or("?") }
+  t.frames_owed()
+  t.run_for(@ui.move_most_ms + @sfpages.reveal_ms)
+  // (the first's row far above: none of it in the tree, nothing of its picture noted where it is pressed)
+  let noted = fn(name : String) { @sfbase.pv_thumbs.values().any(fn(l) { l.picture == picked(name) }) }
+  assert_true(!noted("first.png"), msg="the first's row is still kept")
+  let second = t.semantics().filter(fn(x) { x.role == Button && x.label.contains("second.png") })
+  assert_eq(second.length(), 1, msg="\{second.map(fn(x) { x.label })}")
+  let (x, y, bw, bh) = second[0].rect
+  t.tap(x + bw / 2.0, y + bh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  // (the preview's picture on its stage, as wide as it: "none" not drawn at all, "[]" drawn only smaller (its row's))
+  let staged = fn(name : String) -> String raise {
+    let named = t.drawlist_images().filter(fn(d) { d.1 == picked(name) })
+    if named.length() == 0 {
+      return "none"
+    }
+    let on = picture_instances(t, picked(name)).filter(fn(p) { p.1[2] > 362.0 })
+    on.map(fn(p) { "\{p.1[2].round()}x\{p.1[3].round()}" }).to_string()
+  }
+  let step = fn(by : Double) raise {
+    t.drag(200.0 - by, 422.0, 200.0 + by, 422.0)
+    for f in frames {
+      t.run_for(f)
+      let v = viewer.get().unwrap()
+      assert_true(v.error.get() is None, msg="a frame of the step said it failed: \{v.error.get()}")
+    }
+    t.run_for(@ui.move_most_ms - frames.fold(init=0.0, fn(a, b) { a + b }))
+  }
+  let look = fn() raise {
+    let v = viewer.get().unwrap()
+    "\{v.file.name} \{v.file.path.has_prefix("upload:")} coming=\{v.coming()} failed=\{v.error.get() is Some(_)} first=\{staged("first.png")} second=\{staged("second.png")}"
+  }
+  let opened = look()
+  step(100.0)
+  let there = look()
+  let first_kept = noted("first.png")
+  step(-100.0)
+  let back = look()
+  let read = read_through_station.val
+  viewer.set(None)
+  @sfbase.sent_pictures.clear()
+  "opened: \{opened}\nthere: \{there}\nfirst's row kept: \{first_kept}\nback: \{back}\nread through a station: \{read}"
+}
+
+///|
+test "an image going up stepped to, its row not drawn: the preview shows the picture picked here, its own, and back" {
+  let jump = going_far(0.0)
+  inspect(
+    jump,
+    content=(
+      #|opened: second.png true coming=false failed=false first=none second=[366x244]
+      #|there: first.png true coming=false failed=false first=[366x586] second=[]
+      #|first's row kept: false
+      #|back: second.png true coming=false failed=false first=none second=[366x244]
+      #|read through a station: 0
+    ),
+  )
+  assert_eq(going_far(60.0), jump)
+  assert_eq(going_far(120.0), jump)
+}

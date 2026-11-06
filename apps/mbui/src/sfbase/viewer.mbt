@@ -1481,7 +1481,7 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     return
   }
   let want = !v.told_of() || v.asked
-  if want && v.bytes.get() is None && !v.fetching.get() && v.error.get() is None &&
+  if want && v.bytes.get() is None && !v.fetching.get() && v.error.get() is None && v.sent_whole() is None &&
     (v.kind is Some(_) || v.sniffed.get() is Some(_)) {
     v.fetching.set(true)
     v.read_whole(src, fn(r) {
@@ -1809,7 +1809,19 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
 ///|
 /// An image still coming (its thumbnail in its place meanwhile).
 pub fn Viewer::coming(self : Viewer) -> Bool {
-  self.shown_kind() == Some(KImage) && self.bytes.get() is None && self.error.get() is None
+  self.shown_kind() == Some(KImage) && self.bytes.get() is None && self.error.get() is None && self.sent_whole() is None
+}
+
+///|
+/// The whole picture of an image sent from here and still going up: the one picked here (sent.mbt sent_picture), its
+/// own source while no station has it, read through none; None for any other, or when it is not here (the app started
+/// again since it was picked).
+pub fn Viewer::sent_whole(self : Viewer) -> String? {
+  if self.chat_file() && self.file.upload != "" && self.file.path == upload_path(self.file.upload) {
+    sent_picture(self.station, self.file)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -2227,7 +2239,8 @@ fn Viewer::image_name(self : Viewer) -> String {
 }
 
 ///|
-/// What shows of an image: its whole picture once read, else what stands in for it; "" while none is here.
+/// What shows of an image: its whole picture once read (one going up from here, the one picked here), else what stands in
+/// for it; "" while none is here.
 pub fn Viewer::picture(self : Viewer, src : Source) -> String {
   match self.bytes.get() {
     Some(b) if self.image == "" => {
@@ -2238,6 +2251,10 @@ pub fn Viewer::picture(self : Viewer, src : Source) -> String {
   }
   if self.image != "" {
     return self.image
+  }
+  match self.sent_whole() {
+    Some(picked) => return picked
+    None => ()
   }
   self.stand_in(src)
 }
@@ -2264,12 +2281,13 @@ pub fn Viewer::stand_in(self : Viewer, src : Source) -> String {
 /// link. A step can still open either at once; those no longer beside it are let go.
 pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : Viewer?) -> Unit {
   let ids = []
-  let ready = self.bytes.get() is Some(_) || self.error.get() is Some(_)
+  let ready = self.bytes.get() is Some(_) || self.error.get() is Some(_) || self.sent_whole() is Some(_)
   for n in [before, after] {
     match n {
       Some(n) => {
         ids.push(n.thumb_id())
-        if ready && n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.file.size <= big_file {
+        if ready && n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.sent_whole() is None &&
+          n.file.size <= big_file {
           n.fetching.set(true)
           n.read_whole(src, fn(r) {
             n.fetching.set(false)
