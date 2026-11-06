@@ -55,7 +55,7 @@ jobs:
           cd apps/mbui/mbui
           moon test --target wasm-gc --release -p mbui/ui -f '*local font families*'
   page-test:
-    if: github.event.head_commit.message == 'Check retained font preview'
+    if: github.event.head_commit.message == 'Check retained font preview' || github.event.head_commit.message == 'Check font screen behavior'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -78,7 +78,13 @@ jobs:
           cp ../overlay/font-check/font_setting_node_wbtest.mbt apps/mbui/src/sfpages/font_setting_node_wbtest.mbt
           cp ../overlay/font-check/choice_row_node.mbt apps/mbui/src/sf/choice_row_node.mbt
           cd apps/mbui
-          if moon test --target wasm-gc --release -p stillfail/sfpages -f '*font preview keeps*' > "$RUNNER_TEMP/page-test.log" 2>&1; then
+          pattern='*font preview keeps*'
+          package=stillfail/sfpages
+          if [ '${{ github.event.head_commit.message }}' = 'Check font screen behavior' ]; then
+            pattern='*字体 is opened and a face is chosen*'
+            package=stillfail/sfapp
+          fi
+          if moon test --target wasm-gc --release -p "$package" -f "$pattern" > "$RUNNER_TEMP/page-test.log" 2>&1; then
             grep 'Total tests:' "$RUNNER_TEMP/page-test.log"
           else
             tail -c 20000 "$RUNNER_TEMP/page-test.log"
