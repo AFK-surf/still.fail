@@ -952,6 +952,9 @@ pub struct Tree {
   // (while the clock is set for a look at another moment than the one drawn (View::drawn_now, Tree::settled_at): the
   // structures' bindings it told, told again once it is set back, nothing of the look left for them)
   mut looking : Bool
+  // (laying out for a look at another moment than the one drawn, Tree::settled_at: what waits on a layout
+  // (Tree::once_laid_out, what is to be brought into sight) left for the layout as drawn after it)
+  mut look_laying : Bool
   look_told : Array[() -> Unit]
   /// a column's bar said anew to come out or not (View::bar_near): which the pointer is along to be told anew
   mut bars_due : Bool
@@ -1228,6 +1231,7 @@ pub fn Tree::new(
     bar_cols: [],
     drawn_marks: [],
     looking: false,
+    look_laying: false,
     look_told: [],
     bars_due: false,
     backing: None,
@@ -6794,7 +6798,14 @@ fn Tree::settled_at(self : Tree, at : Double, look? : () -> Unit) -> Bool {
     self.clock_to(at)
     self.beat.set(at)
     self.pull()
+    let was_laying = self.look_laying
+    self.look_laying = looks
     self.laid_out(at)
+    self.look_laying = was_laying
+    // (what it left for the layout as drawn, due in it, whether anything else marks it or not)
+    if looks && (self.laid_waits.length() > 0 || self.shows_due.length() > 0) {
+      self.due = true
+    }
     if look is Some(read) {
       read()
     }
@@ -7450,7 +7461,7 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
-  if self.laid_waits.length() > 0 {
+  if self.laid_waits.length() > 0 && !self.look_laying {
     let waits = self.laid_waits.copy()
     self.laid_waits.clear()
     for f in waits {
@@ -7462,7 +7473,7 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   }
   // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
   // this same pass)
-  if self.shows_due.length() > 0 {
+  if self.shows_due.length() > 0 && !self.look_laying {
     self.shown_now()
     if self.due {
       return (placing, ordered, "brought into sight")
