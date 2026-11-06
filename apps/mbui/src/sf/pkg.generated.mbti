@@ -706,6 +706,8 @@ pub fn first_one_node(@view.View, () -> String, (@view.View) -> Unit, art? : (@v
 
 pub fn fixed_anchor(@view.View, (Double, Double, Double, Double)) -> @view.View
 
+pub fn fixed_wide_head_node(@view.View, () -> String, () -> String, () -> Unit, frame~ : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, tips? : TipLayer) -> Unit
+
 pub let floating : Raised
 
 pub fn foot_across(Double) -> @ui.Style

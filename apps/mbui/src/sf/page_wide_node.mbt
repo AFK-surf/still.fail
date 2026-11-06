@@ -108,6 +108,45 @@ fn lane_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
+/// A fixed wide page head. Put it before the page's scrolling content, in the full width of the page: its column is
+/// centred and follows the page's width. The frame says whether there is a back and whether its own bar names the page;
+/// `back` supplies the words of the former as they change, and `on_back` does what that page needs. The caller keeps
+/// the frame's top and foot room. `lead`, `about`, and `actions` are the same as a wide page's head.
+pub fn fixed_wide_head_node(
+  parent : @view.View,
+  title : () -> String,
+  back : () -> String,
+  on_back : () -> Unit,
+  frame~ : () -> PageFrame,
+  lead? : () -> String = fn() { "" },
+  about? : () -> String = fn() { "" },
+  actions? : (@view.View) -> Unit,
+  tips? : TipLayer,
+) -> Unit {
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let own_tips = tips is None
+  let tips = match tips {
+    Some(t) => t
+    None => TipLayer::new(fn() { tips_at.val })
+  }
+  let head_frame = fn() {
+    let f = frame()
+    { ..f, back: if f.back is Some(_) { Some(back()) } else { None } }
+  }
+  parent.show(fn() { !frame().named }, fn(head) {
+    lane_node(head, fn(col) {
+      wide_head_node(col, title, on_back, head_frame, lead, actions, about, tips, settings=true)
+    })
+  })
+  if own_tips {
+    parent.show(fn() { !frame().named && about() != "" }, fn(layer) {
+      layer.over(Is(true)) |> ignore
+      tips_at.val = Some(layer)
+    })
+  }
+}
+
+///|
 /// A wide page's head (wide_page's: desk_head, 16 in, 12 under it; 40 over it, 20 with back over its title): back
 /// (desk_back's) where the frame says it goes, its title (cut short where its line has less, 80 at least), what it does
 /// at the line's end, what it is for under it (6 under the title, the meta's muted).
@@ -120,6 +159,7 @@ fn wide_head_node(
   actions : ((@view.View) -> Unit)?,
   about : () -> String,
   tips : TipLayer,
+  settings? : Bool = false,
 ) -> Unit {
   col
   .padding(By(fn() {
@@ -129,8 +169,8 @@ fn wide_head_node(
   |> ignore
   col.show(fn() { frame().back is Some(_) }, fn(line) {
     // (as wide as its words, its line the rest: what is pressed is back's own)
-    line.row(Is(true)).padding(Is((0.0, 0.0, 0.0, desk_back_foot))) |> ignore
-    desk_back_node(line, fn() { frame().back.unwrap_or("") }, on_back)
+    line.row(Is(true)).padding(Is((0.0, 0.0, 0.0, if settings { 0.0 } else { desk_back_foot }))) |> ignore
+    desk_back_node(line, fn() { frame().back.unwrap_or("") }, on_back, settings~)
   })
   col.box(fn(l) {
     l.row(Is(true)).gap(Is(desk_title_gap)).lines_up(Is(Some(Middle))) |> ignore
@@ -141,7 +181,11 @@ fn wide_head_node(
       |> ignore
       w.box(fn(t) {
         t.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-        styled_words(t, title, fn() { desk_title }) |> ignore
+        let words = styled_words(t, title, fn() { desk_title })
+        if settings {
+          // The fixed settings head's title has the original's 34-point line, at the system's size of words.
+          words.words_look(By(fn() { { ..@ui.style_words(desk_title), line: fixed_head_title_line } })) |> ignore
+        }
       })
       |> ignore
       w.show(fn() { about() != "" }, fn(m) { about_mark_node(m, about, fn() { t("web-main.about") }, tips) |> ignore })
@@ -191,14 +235,23 @@ let desk_about_gap : Double = 6.0
 ///|
 /// Back over a wide page's head (desk_back's, as a node): its chevron and where it goes (`label`), muted, the text's
 /// ink under the hand; `back` done as it is pressed; read out a link by where it goes.
-fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) -> Unit {
+fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit, settings? : Bool = false) -> Unit {
   parent.box(fn(b) {
     b.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))) |> ignore
+    // The settings head's old back owned the room beneath its words, so that room takes a press as well.
+    if settings { b.padding(Is((0.0, 0.0, 0.0, desk_back_foot))) |> ignore }
     presses_node(b, back)
     b.says(By(fn() { Some(@view.said(Link, label=label())) })) |> ignore
-    let ink = fn() { if lit_node(b) { theme().p.text } else { theme().p.muted } }
+    let ink = fn() { if !settings && lit_node(b) { theme().p.text } else { theme().p.muted } }
     icon_node(b, "chevron-left", desk_back_icon, By(ink)) |> ignore
-    b.box(fn(w) { styled_words(w, label, fn() { if lit_node(b) { desk_back_lit } else { desk_back_words } }) |> ignore })
+    b.box(fn(w) {
+      let style = fn() { if lit_node(b) { desk_back_lit } else { desk_back_words } }
+      let words = styled_words(w, label, style)
+      if settings {
+        // Ctx::text with no line uses the theme's multiple of the drawn size (a negative line means that in a node).
+        words.words_look(By(fn() { { ..@ui.style_words(style()), line: -@ui.tree_theme().text_line } })) |> ignore
+      }
+    })
     |> ignore
   })
   |> ignore
