@@ -1246,6 +1246,16 @@ fn copy_not(id : @view.NodeId, why : String) -> Bool {
 }
 
 ///|
+/// A Tester's: how many layers drawn otherwise than by the tree alone were drawn again where their reference is in one
+/// put together of what is kept (Ctx::scene_emitted), and of those how many moved with it.
+// kept across runs: counts on
+let scene_own_redrawn : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: counts on
+let scene_along_own : Ref[Int] = Ref(0)
+
+///|
 /// A layer drawn again in the frame for `why`: counted where a Tester records its frames as a host gets them
 /// (HostFrame::drawn_why).
 fn scene_drawn_why(why : String) -> Unit {
@@ -2387,7 +2397,9 @@ fn Ctx::scene_emitted(
     }
     // (wholly outside what it is drawn in and the window where it is put: left out, as the walk leaves it out)
     match scene.layers.get(cid) {
-      Some(c) if along =>
+      // (one drawn otherwise than by the tree alone never put as kept, moved with it or not: drawn again where its
+      // reference is, below)
+      Some(c) if along && !c.own_only =>
         // (moved with what holds it, never left out by the clip it began in as drawn: that may have moved with it; what
         // holds it is left out or not as a whole where it is put)
         {
@@ -2421,6 +2433,14 @@ fn Ctx::scene_emitted(
               }
             None => {
               let (k, s) = (self.ninst, self.segs.length() / 4)
+              // (a Tester's: one drawn otherwise than by the tree alone drawn again so, and of those, moved with what holds
+              // it)
+              if c.own_only {
+                scene_own_redrawn.val = scene_own_redrawn.val + 1
+                if along {
+                  scene_along_own.val = scene_along_own.val + 1
+                }
+              }
               // (why, told a Tester as the walk tells why one is not copied)
               copy_not(
                 c.id,
