@@ -309,7 +309,13 @@ for t in $targets; do
   done
   for p in "${pids[@]}"; do wait $p || code=1; done
   for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
-  grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  # An abort can leave many tests unrun. Their trailing reports must not hide the assertion or diagnostic that
+  # ended the program; keep that run's output on failure, while successful runs keep their short tail.
+  if [ "$code" -ne 0 ]; then
+    grep -v "$F" "$out" | grep -v '^Total tests'
+  else
+    grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  fi
   # (and every test that failed named, whatever that tail cut off: what failed is never left to how long another
   # failure's message is)
   grep -a '^\[[^]]*\] test .* failed' "$out" | sed 's/ failed: .*/ failed/'
