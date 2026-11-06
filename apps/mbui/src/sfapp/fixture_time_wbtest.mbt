@@ -30,10 +30,12 @@ test "a later input delivers due fixture replies at their own moments without a 
     let t = wide_tester([], mode="chat", w=390.0, h=844.0, platform=2)
     let tree = @ui.view_tree().unwrap()
     let start = tree.logic_at()
+    let first_at = start + 100.0
+    let nested_at = first_at + 50.0
     let seen : Array[Double] = []
     fix_later(100.0, fn() {
-      seen.push(tree.logic_at() - start)
-      fix_later(50.0, fn() { seen.push(tree.logic_at() - start) })
+      seen.push(tree.logic_at())
+      fix_later(50.0, fn() { seen.push(tree.logic_at()) })
     })
     t.record_host()
     if hz > 0 {
@@ -45,7 +47,7 @@ test "a later input delivers due fixture replies at their own moments without a 
       }
     }
     t.touch_at(0, -100.0, -100.0, start + 300.0)
-    assert_eq(seen, [100.0, 150.0])
+    assert_eq(seen, [first_at, nested_at])
     let frames = t.host_frames().map(fn(f) { f.at - start })
     if hz == 0 { assert_eq(frames, []) }
     println("fixture schedule \{hz} Hz (0: direct): frames \{frames}, replies \{seen}")
