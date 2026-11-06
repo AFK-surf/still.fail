@@ -1092,6 +1092,10 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
       l.bands_at[i] = moved_to(k)
     }
     l.bands_at.sort()
+    // (and where it put others' tops)
+    for i, t in l.tops_put {
+      l.tops_put[i] = (moved_to(t.0), t.1, t.2, t.3)
+    }
   })
   scene.layers.each(fn(_, l) {
     guard l.seen == scene.frame && l.start >= 0 && l.count > 0 else { return }
@@ -1919,6 +1923,17 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   }
   if !sorted {
     held.sort_by(fn(a, b) { a.start.compare(b.start) })
+  }
+  // (where it put others' tops, in the order they are in it: as put, but where what is over all moved since,
+  // scene_raised)
+  let mut tops_sorted = true
+  for i in 1..<l.tops_put.length() {
+    if l.tops_put[i - 1].0 > l.tops_put[i].0 {
+      tops_sorted = false
+    }
+  }
+  if !tops_sorted {
+    l.tops_put.sort_by(fn(a, b) { a.0.compare(b.0) })
   }
   let mut own = self.ninst - k0
   for c in held {
