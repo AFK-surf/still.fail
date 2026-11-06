@@ -20,7 +20,8 @@ import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type 
 import { liveRunners, listening, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import { Said, stationLang, tr } from "../ops/i18n.ts";
-import { run } from "../updates/runtimes.ts";
+import { findCommand, run } from "../updates/runtimes.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { versionIn } from "../updates/versions.ts";
 import { findMissingCodexHost } from "../updates/codex-repair.ts";
 
@@ -537,6 +538,15 @@ export class CodexDriver implements AgentDriver {
     return "codex";
   }
 
+  async updateMatchesStation(profile: Profile): Promise<boolean> {
+    if (this.command !== "codex") return false;
+    const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(profile, "codex"), profile.id) };
+    const [agentEnv, stationEnv] = await Promise.all([withShellCommand(this.command, env), withShellCommand(this.command, this.env)]);
+    const agent = findCommand(this.command, agentEnv);
+    const station = findCommand(this.command, stationEnv);
+    return agent !== null && station !== null && agent.onPath === station.onPath && agent.real === station.real;
+  }
+
   /// Has the app-server running on a profile renew its login now (its login is not renewed from outside meanwhile: it
   /// holds the refresh token); false: none runs on it.
   async renewLogin(profileId: string): Promise<boolean> {
@@ -611,13 +621,25 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// Codex installed or updated (from the station's pages): app-servers of the old one are replaced once idle.
-  async runtimeChanged(replaced = false) {
+  async runtimeChanged(replaced = false, drainBusy = false) {
     // Mark the old hosts before probing the new version, so a concurrent turn cannot join one during the probe.
     if (replaced) await this.serial(async () => { for (const host of this.hosts.values()) host.runtimeStale = true; });
     const installed = await this.installedVersion(true);
+    const draining: Host[] = [];
     await this.serial(async () => {
-      for (const id of [...this.hosts.keys()]) await this.retireStale(id, installed);
+      // Do not let new turns join a known older host while its existing turns are still finishing.
+      if (installed !== null) for (const host of this.hosts.values()) if (host.version !== null && host.version !== installed) host.runtimeStale = true;
+      for (const [id, host] of [...this.hosts]) {
+        if (drainBusy && host.runtimeStale && host.turns.size > 0) {
+          // As with an outgrown host, its running turns finish there; new ones can start on the updated executable.
+          host.draining = true;
+          this.hosts.delete(id);
+          this.draining.add(host);
+          draining.push(host);
+        } else await this.retireStale(id, installed);
+      }
     });
+    for (const host of draining) void this.drain(host).catch((error) => log.warn("agents::codex", "a codex app-server being replaced not let go of", { profile: host.profile, error: String(error) }));
   }
 
   /// A new sign-in must be loaded by every app-server of this profile, without interrupting its turns.
@@ -1210,6 +1232,14 @@ export class CodexSession implements AgentSession {
 
   id() {
     return this.threadId;
+  }
+
+  runtimeVersion() {
+    return this.host.version;
+  }
+
+  runtimeUpdateMatchesStation() {
+    return this.driver.updateMatchesStation(this.profile);
   }
 
   rememberTranscript(path: unknown) {
