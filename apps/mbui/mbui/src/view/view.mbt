@@ -887,6 +887,9 @@ pub struct Tree {
   mut committing : Int
   // what is to be done once the event being taken is committed whole (Tree::after_event), in order
   afters : Array[() -> Unit]
+  /// what waits for a change said in a layout (a followed point's, Tree::follow_point) committed whole, by that change's
+  /// moment: done once the outermost layout is over, before it returns (Tree::laid_out)
+  afters_laid : Array[(Double, Array[() -> Unit])]
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
@@ -1188,6 +1191,7 @@ pub fn Tree::new(
     modals: [],
     committing: 0,
     afters: [],
+    afters_laid: [],
     modals_due: false,
     held: None,
     gesture_tapped: false,
@@ -2226,9 +2230,16 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     self.cause_at = told_at.val
     told_at.val = -1.0
     @signals.untracked(fn() { then(v) })
-    // (what it said waits for its change committed whole, done as it ends where no change round it does: Tree::afters_done)
-    if was < 0.0 && self.cause_at >= 0.0 {
-      self.afters_done()
+    // (what it said waits for its change committed whole, done as it ends where no change round it does
+    // (Tree::afters_done); said in a layout (a frame's, as what it follows changed there), once that layout is over,
+    // at this change's moment: nothing done inside a layout)
+    if was < 0.0 && self.cause_at >= 0.0 && self.afters.length() > 0 {
+      if self.laying > 0 {
+        self.afters_laid.push((self.cause_at, self.afters.copy()))
+        self.afters.clear()
+      } else {
+        self.afters_done()
+      }
     }
     self.cause_at = was
   }
@@ -7445,6 +7456,15 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // event finding where things are, a change settled): once, by the outermost)
   if self.laying == 0 {
     self.tell_laid()
+    // (what waits for a change said in it committed whole, at that change's moment, the layout over: Tree::afters_done)
+    while self.afters_laid.length() > 0 {
+      let (at, fs) = self.afters_laid.remove(0)
+      let was = self.cause_at
+      self.cause_at = at
+      self.afters.append(fs)
+      self.afters_done()
+      self.cause_at = was
+    }
   }
 }
 
