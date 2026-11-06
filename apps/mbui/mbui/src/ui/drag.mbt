@@ -445,6 +445,12 @@ fn let_go_told(x : Double, y : Double) -> Unit {
 /// through. Meant for internal drags whose old targets were registered in the last old-view frame.
 pub fn old_drop_within(x : Double, y : Double) -> Array[Int] {
   old_input_brought()
+  old_drop_within_now(x, y)
+}
+
+///|
+// The same hit chain when the caller already brought the tree and placed the old frame for this event.
+fn old_drop_within_now(x : Double, y : Double) -> Array[Int] {
   guard !old_layer_over(x, y) else { return [] }
   let c = g()
   match view_app.val {
