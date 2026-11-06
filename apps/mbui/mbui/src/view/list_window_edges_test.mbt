@@ -217,8 +217,12 @@ test "scrolls_window: blocks come and gone over, in and under what shows: what s
   let c = edges(30, fn(_) { 40.0 }, 80.0)
   c.wheel(100.0)
   let layouts = [c.frame()]
+  // (its keys gone through none of them as it is first laid out, none of its blocks measured, nor as it scrolls)
+  let first = c.tree.work().keys_swept
   c.keys.set([-1, ..c.keys.get()])
   layouts.push(c.frame())
+  // (its keys changed, blocks measured: the 31 gone through twice, those measured counted anew, those gone forgotten)
+  let edited = c.tree.work().keys_swept - first
   let come_over = (c.rows(), c.hit(50.0))
   c.keys.set(c.keys.get().filter(fn(k) { k != 3 }))
   layouts.push(c.frame())
@@ -242,6 +246,7 @@ test "scrolls_window: blocks come and gone over, in and under what shows: what s
   assert_eq(come_in, ([(2, -20.0, 40.0), (4, 20.0, 40.0), (100, 60.0, 40.0)], Some(100)))
   assert_eq(c.rows(), come_in.0)
   assert_eq(layouts.filter(fn(n) { n > 1 }), [])
+  assert_eq((first, edited), (0, 62))
 }
 
 ///|

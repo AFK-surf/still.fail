@@ -443,6 +443,10 @@ pub(all) struct Work {
   mut drawn_boxes : Int
   /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes)
   mut settles : Int
+  /// the keys of a list laid out from its anchor gone through, all of them, as they changed or its rows were measured
+  /// otherwise (View::scrolls_anchored: those gone forgotten, the rows measured counted again): none while none of its
+  /// rows is named or measured, as its first keys are
+  mut keys_swept : Int
 } derive(Eq, Debug)
 
 ///|
@@ -1181,6 +1185,7 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      keys_swept: 0,
     },
   }
   let root = t.made(-1)
