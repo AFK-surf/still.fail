@@ -3024,7 +3024,7 @@ fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
   if self.corner_ladder.is_empty() || self.frame_by is Some(_) || self.motion_left || self.page_in_hand {
     return []
   }
-  self.with_tree_nodes(fn() { self.corner_faults() })
+  self.all_corner_faults()
 }
 
 ///|

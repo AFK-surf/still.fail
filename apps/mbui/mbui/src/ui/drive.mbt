@@ -1546,7 +1546,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       // what the frame shows breaking the corner rule (corners.mbt), a line each
       "corners" => {
-        for f in c.with_tree_nodes(fn() { c.corner_faults() }) {
+        for f in c.all_corner_faults() {
           h_log("DRIVE CORNER " + f)
         }
         next()

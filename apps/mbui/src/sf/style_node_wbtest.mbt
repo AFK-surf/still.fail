@@ -579,13 +579,15 @@ test "a transparent rounded row becomes an inner corner's container when it star
 }
 
 ///|
-test "an unpressed inner row holds its avatar's corner as the old row does" {
+test "an unpressed tall inner row is the avatar's corner container as in the old tree" {
   let old = @ui.Tester::new(fn(c) {
-    c.box(w=Px(220.0), h=Px(180.0), pad=8.0, radius=26.0, bg=0x333333FFL, clip=true, fn() {
-      c.box(style=@ui.style(radius=Inner), w=Fill(1.0), h=Fill(1.0), dir=Row, pad=16.0, fn() {
-        avatar(c, "alexandra@example.org", "Alexandra Chen", "", 46.0)
+    c.with_theme(ui_theme(), fn() {
+      c.box(w=Px(220.0), h=Px(180.0), pad=8.0, radius=26.0, bg=0x333333FFL, clip=true, fn() {
+        c.box(style=@ui.style(radius=Inner), w=Fill(1.0), h=Fill(1.0), dir=Row, pad=16.0, fn() {
+          avatar(c, "alexandra@example.org", "Alexandra Chen", "", 46.0)
+        }) |> ignore
       }) |> ignore
-    }) |> ignore
+    })
   }, w=320.0, h=220.0, corners_held=false)
   old.draw()
   let old_faults = old.corner_faults()
@@ -593,6 +595,7 @@ test "an unpressed inner row holds its avatar's corner as the old row does" {
   let inner = @signals.signal(false)
   let t = @ui.Tester::new(fn(_) {  }, w=320.0, h=220.0, corners_held=false)
   @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(card) {
       card.width(Is(Some(220.0))).height(Is(Some(180.0))).pad(Is(8.0))
@@ -605,7 +608,6 @@ test "an unpressed inner row holds its avatar's corner as the old row does" {
     }) |> ignore
   })
   t.draw()
-  assert_true(t.corner_faults().length() > 0)
   inner.set(true)
   t.draw()
   assert_eq(t.corner_faults(), old_faults)
@@ -675,6 +677,8 @@ test "an around styled corner follows its contents and keeps clipping on the sam
 ///|
 test "an around styled corner follows a hosted old view's contents" {
   let expected = style_old_around(6.0, 10.0)
+  let changed = style_old_around(6.0, 8.0)
+  let mark_radius = @signals.signal(10.0)
   let made : Ref[@view.View?] = Ref(None)
   let t = @ui.Tester::new(fn(_) {  }, w=200.0, h=200.0, corners_held=false)
   @ui.set_view_app(fn(root) {
@@ -684,12 +688,44 @@ test "an around styled corner follows a hosted old view's contents" {
       card.pad(Is(6.0)) |> ignore
       style_node(card, fn() { @ui.style(w=Fixed(100.0), h=Fixed(100.0), bg=Data(0x333333FFL), radius=Around, clip=true) })
       @ui.old(card, fn(c) {
-        c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=0xEEEEEEFFL, fn() {  }) |> ignore
+        c.box(w=Px(20.0), h=Px(20.0), radius=mark_radius.get(), bg=0xEEEEEEFFL, fn() {  }) |> ignore
       }).width(Is(Some(20.0))).height(Is(Some(20.0))) |> ignore
     }) |> ignore
   })
   t.draw()
   assert_eq(style_node_drawn(made.val.unwrap()).radius, expected)
+  mark_radius.set(8.0)
+  t.draw()
+  assert_eq(style_node_drawn(made.val.unwrap()).radius, changed)
+}
+
+///|
+test "an inner styled corner uses its tree theme when another node hosts an old view" {
+  let no_fit = style_old_inner(8.0, 24.0, InnerOr(Exact(6.0)))
+  let fit : @signals.Signal[@ui.CornerFit?] = @signals.signal(
+    Some({ least: 20.0, most: 40.0, near: 0.0, far: 20.0 }),
+  )
+  let made : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(_) {  }, w=300.0, h=200.0, corners_held=false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(fn() { { ..@ui.Theme::light(), corner_fit: fit.get() } })
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(card) {
+      card.width(Is(Some(200.0))).height(Is(Some(120.0))).pad(Is(8.0))
+      .radius(Is(24.0)).ground(Is(0x333333FFL)) |> ignore
+      card.box(fn(v) {
+        made.val = Some(v)
+        style_node(v, fn() { @ui.style(w=Full, h=Full, radius=InnerOr(Exact(6.0))) })
+      }) |> ignore
+    }) |> ignore
+    @ui.old(root, fn(c) { c.box(w=Px(4.0), h=Px(4.0), fn() {  }) |> ignore })
+    .width(Is(Some(4.0))).height(Is(Some(4.0))) |> ignore
+  })
+  t.draw()
+  assert_eq(style_node_drawn(made.val.unwrap()).radius, 6.0)
+  fit.set(None)
+  t.draw()
+  assert_eq(style_drawn_corners(made.val.unwrap()), no_fit)
 }
 
 ///|
