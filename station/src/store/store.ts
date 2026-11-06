@@ -68,6 +68,11 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export { SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME };
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// The closest failure in a notice's time window, breaking ties in listTurns' order.
+export const FAILED_TURN_NEAR = `SELECT * FROM turns INDEXED BY turns_by_end
+  WHERE session_key = ?1 AND ended_at >= ?2 AND ended_at <= ?3 AND outcome = 'failed'
+  ORDER BY ABS(ended_at - ?4), started_at, rowid LIMIT 1`;
+export const PROCESS_BY_GROUP = "SELECT * FROM processes WHERE pgid = ?";
 export const SESSION_THREAD_BY_ID = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
   WHERE ts.thread = ?1 AND ts.session = ?2`;
 export const THREAD_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home)
@@ -2473,6 +2478,11 @@ export class Store {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
   }
 
+  /// The closest failed turn in a time window, without reading a session's older turns.
+  failedTurnsNear(session: string, from: number, to: number, at: number): TurnRow[] {
+    return this.#all(FAILED_TURN_NEAR, session, from, to, at).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
+  }
+
   /// Latest turns for the named sessions: a missing session is omitted, even if an old turn remains for it.
   lastTurnsOf(keys: Iterable<string>): Map<string, TurnSummary | null> {
     const out = new Map<string, TurnSummary | null>();
@@ -2742,6 +2752,12 @@ export class Store {
 
   listProcesses(): ProcessRow[] {
     return this.#all("SELECT * FROM processes").map((r) => ({ pgid: r.pgid, startedAt: r.started_at, runtime: r.runtime, label: r.label }));
+  }
+
+  /// The process group with this id, if recorded by this or an earlier station.
+  processByGroup(pgid: number): ProcessRow | null {
+    const r = this.#one(PROCESS_BY_GROUP, pgid);
+    return r ? { pgid: r.pgid, startedAt: r.started_at, runtime: r.runtime, label: r.label } : null;
   }
 
   // ── widget states ──
