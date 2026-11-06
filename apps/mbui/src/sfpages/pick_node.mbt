@@ -33,7 +33,7 @@ fn pick_row_node(slot : @view.View, words : @view.View, row : () -> PickRow?) ->
   let at = words.id()
   pick_tree.val = Some(words.tree)
   pick_rows[at] = row
-  pick_rows_said()
+  pick_rows_said_in(words.tree)
   // (the same message actions as pickable's right click, including the viewer's own bubble; files and links
   // inside it keep their own innermost menu)
   words.on_menu(fn(mn) {
@@ -48,11 +48,12 @@ fn pick_row_node(slot : @view.View, words : @view.View, row : () -> PickRow?) ->
     }
   }) |> ignore
   // (let go with what made it, not once another made since in the same row has said it)
+  let tree = words.tree
   words.owns(fn() {
     match pick_rows.get(at) {
       Some(f) if physical_equal(f, row) => {
         pick_rows.remove(at)
-        pick_rows_said()
+        pick_rows_said_in(tree)
       }
       _ => ()
     }
@@ -84,6 +85,13 @@ let pick_rows_told : @signals.Signal[Int] = @signals.signal(0)
 ///|
 fn pick_rows_said() -> Unit {
   pick_rows_told.set(@signals.untracked(fn() { pick_rows_told.get() }) + 1)
+}
+
+///|
+/// The same told of rows made or let go in `tree`, as its rows are in a list's layout: once that layout is over, at
+/// its moment, never inside it (what reads which message is picked laid out elsewhere: the chat's bar).
+fn pick_rows_said_in(tree : @view.Tree) -> Unit {
+  tree.root().made_after_layout(pick_rows_said)
 }
 
 ///|
