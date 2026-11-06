@@ -245,3 +245,62 @@ test "开启安全模式, at each width and with either hand: its people, the de
     assert_false(app.nav.pages().contains(Setting(SecurityOpen)), msg=at)
   }
 }
+
+///|
+test "security follows the lock as it loads, is unavailable, and turns off and on" {
+  for (w, platform) in page_cases {
+    let state = Ref(0)
+    let t = setting_tester(Security, w, platform~, over=fn(base) {
+      {
+        ..base,
+        topic: fn(name, params) {
+          let topic = (base.topic)(name, params)
+          if name != "lock" { return topic }
+          let value : Json? = match state.val {
+            0 => None
+            1 => Some({ "available": false })
+            2 => Some({ "available": true, "locked": false, "owner": true, "canSign": true })
+            _ => Some({ "available": true, "locked": true, "owner": false, "signs": false, "members": [], "stations": [] })
+          }
+          { ..topic, value }
+        },
+      }
+    })
+    state.val = 1
+    @settings.fixture_changed()
+    t.frame()
+    assert_true(t.find(@sf.t("web-pages.security.unavailable")) is Some(_))
+    state.val = 2
+    @settings.fixture_changed()
+    t.frame()
+    assert_true(t.query(Button, label=@sf.t("web-pages.security.turnOn")) is Some(_))
+    state.val = 3
+    @settings.fixture_changed()
+    t.frame()
+    assert_true(t.find(@sf.t("web-pages.security.on")) is Some(_))
+    assert_true(t.query(Button, label=@sf.t("web-pages.security.turnOn")) is None)
+  }
+}
+
+///|
+test "security turn on opens the separate security open page" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Security, w, platform~, over=fn(base) {
+      {
+        ..base,
+        topic: fn(name, params) {
+          let topic = (base.topic)(name, params)
+          if name == "lock" {
+            { ..topic, value: Some({ "available": true, "locked": false, "owner": true, "canSign": true }) }
+          } else {
+            topic
+          }
+        },
+      }
+    })
+    let (x, y, width, height) = t.get(Button, label=@sf.t("web-pages.security.turnOn")).rect
+    t.tap(x + width / 2.0, y + height / 2.0)
+    t.frame()
+    assert_true(app.nav.top() is Setting(SecurityOpen))
+  }
+}

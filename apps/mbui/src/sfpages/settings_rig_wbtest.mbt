@@ -38,7 +38,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
+  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Security)
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -101,6 +101,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
   match route {
     About => about_node(p, core, on_back=core.pop, frame~, width~)
     Changelog => changelog_node(p, core, on_back=core.pop, frame~, width~)
+    Security => security_node(p, core, here, on_back=core.pop, frame~, width~)
     Memories => memories_node(p, core, here, on_back=core.pop, frame~, width~)
     Memory(a) => memory_node(p, core, here, a, on_back=core.pop, frame~, width~)
     Archiving => archiving_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
