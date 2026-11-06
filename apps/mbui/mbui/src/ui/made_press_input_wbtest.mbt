@@ -20,8 +20,8 @@ test "old press callbacks take accessibility and keyboard inputs in their event,
       t.ctx().ask_action(s.id, Focus)
       t.draw()
       assert_eq(t.focused().map(fn(n) { n.id }), Some(s.id))
-      t.advance(50.0)
-      let at = t.time()
+      let at = t.time() + 50.0
+      t.advance(at - t.time())
       t.record_host()
       if how == "activate" {
         t.ctx().ask_action(s.id, Activate)

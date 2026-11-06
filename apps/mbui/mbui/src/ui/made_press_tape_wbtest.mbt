@@ -35,7 +35,8 @@ test "a callback's page change sees its triggering key on the tape and replays o
     t.start_tape()
     let at = t.time() + 50.0
     // A host may hand the event over late; the tape and callback still use its own moment.
-    t.advance(100.0)
+    let delivered_at = at + 50.0
+    t.advance(delivered_at - t.time())
     t.key_told(code, 0, at)
     assert_eq(seen.length(), 1)
     assert_eq(seen[0].0, at)
