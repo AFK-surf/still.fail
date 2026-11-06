@@ -75,7 +75,7 @@ test "scrolls_anchored: flung down to its foot, rows taller and shorter than cou
 ///|
 /// The same list flung down to its foot, then up, with frames every `step` ms: where its rows are at each moment said
 /// (2000 ms after each fling, and at the end), and whether a frame's layout ran to the most.
-fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)], Bool) {
+fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)], Array[(Int?, Double?)], Bool) {
   let told : Array[String] = []
   @view.faults_stop.val = false
   @view.fault_told.val = Some(fn(said) { told.push(said) })
@@ -104,10 +104,22 @@ fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)
     }
   }
   let seen : Array[(Int, Double?)] = []
+  // (and at each: the row a finger at (150, 50) is on, by where the rows are put, and when what it is on by itself ends)
+  let ends : Array[(Int?, Double?)] = []
   let look = fn() {
     for k in c.made() {
       seen.push((k, c.top(k)))
     }
+    let on = c.made().iter().find_first(fn(k) {
+      match c.live.get(k) {
+        Some(b) => {
+          let (_, y, _, h) = b.rect()
+          y <= 50.0 && 50.0 < y + h
+        }
+        None => false
+      }
+    })
+    ends.push((on, c.scroll.glides_till()))
   }
   c.tree.wheel_at(150.0, 50.0, 0.0, -up, 0, 10.0) |> ignore
   fling(-speed, 1500.0)
@@ -124,18 +136,20 @@ fn flip_run(step : Double, up : Double, speed : Double) -> (Array[(Int, Double?)
   c.tree.dispose()
   @view.faults_stop.val = true
   @view.fault_told.val = None
-  (seen, told.iter().any(fn(s) { s.contains("layout passes in one") }))
+  (seen, ends, told.iter().any(fn(s) { s.contains("layout passes in one") }))
 }
 
 ///|
-test "scrolls_anchored flung to its foot and back, its rows not as tall as counted: where they are at each moment the same at 60, 144 and 30 frames a second" {
+test "scrolls_anchored flung to its foot and back, its rows not as tall as counted: where they are, the row a finger is on and when it comes to rest, at each moment the same at 60, 144 and 30 frames a second" {
   for cs in [(300.0, 140.0), (900.0, 60.0), (2500.0, 20.0)] {
     let (up, speed) = cs
-    let (at60, ran60) = flip_run(16.0, up, speed)
-    let (at144, ran144) = flip_run(7.0, up, speed)
-    let (at30, ran30) = flip_run(33.0, up, speed)
+    let (at60, end60, ran60) = flip_run(16.0, up, speed)
+    let (at144, end144, ran144) = flip_run(7.0, up, speed)
+    let (at30, end30, ran30) = flip_run(33.0, up, speed)
     assert_eq((ran60, ran144, ran30), (false, false, false), msg="up \{up} speed \{speed}: a frame's layout ran to the most")
     assert_eq(at144, at60, msg="up \{up} speed \{speed}: 144 against 60")
     assert_eq(at30, at60, msg="up \{up} speed \{speed}: 30 against 60")
+    assert_eq(end144, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 144 against 60")
+    assert_eq(end30, end60, msg="up \{up} speed \{speed}: the row under the finger and the end, 30 against 60")
   }
 }
