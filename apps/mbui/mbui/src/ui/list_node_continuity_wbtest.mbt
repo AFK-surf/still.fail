@@ -60,7 +60,7 @@ test "an unrelated omitted node does not remeasure a moving retained list" {
   let t = Tester::new(fn(_) { }, w=300.0, h=300.0)
   set_view_app(fn(root) {
     root.box(fn(list) {
-      list.laid_nowhere(By(fn() { list_hidden.get() })) |> ignore
+      list.shown(fn() { !list_hidden.get() }) |> ignore
       let rows = sizes.in_node(list, fn() { items.get() }, fn(k) { k }, fn(_) { "" }, moves=fn(_) { true })
       retained.val = Some(rows)
       list.height(Is(Some(200.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 },
@@ -75,7 +75,7 @@ test "an unrelated omitted node does not remeasure a moving retained list" {
   hidden.set(true)
   t.draw()
   assert_eq(sizes.rooms_worked(), before)
-  // The list's own omission is different: its running transition is forgotten while it is hidden.
+  // The list's declared participation is different: its running transition is forgotten while it is hidden.
   list_hidden.set(true)
   t.draw()
   assert_true((retained.val.unwrap().moving)().is_empty())

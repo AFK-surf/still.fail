@@ -614,7 +614,29 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double]) -> View {
 /// reader) or read out, a press held on it called off, from the layout that lays it out so; back, the same nodes, as
 /// it is laid out again. Layout's.
 pub fn View::laid_nowhere(self : View, on : Live[Bool]) -> View {
+  self.omits(on, None)
+}
+
+///|
+/// Keep this node and its descendants, showing them while `on` holds. `on` is causal state (a page selected,
+/// a gate opened), never a sampled motion or the drawn clock. Its declaration is followed by retained activities
+/// at that cause (declared_nowhere); layout leaves the subtree out while false. A motion's sampled omission alone
+/// is laid_nowhere, and does not declare whether an activity participates.
+pub fn View::shown(self : View, on : () -> Bool) -> View {
+  let hidden = fn() { !on() }
+  self.omits(By(hidden), Some(hidden))
+}
+
+///|
+fn View::omits(self : View, on : Live[Bool], declared : (() -> Bool)?) -> View {
+  guard self.live() is Some(n) else { return self }
+  // A By can sample a motion: only shown's explicit causal declaration controls retained activities.
+  n.nowhere_by = declared
   self.bind(Nowhere, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.display = if on { @flex.DisplayNone } else { @flex.Flex } })
+  match n.nowhere_said {
+    Some(said) => said.set(@signals.untracked(fn() { said.get() }) + 1)
+    None => ()
+  }
   self
 }
 

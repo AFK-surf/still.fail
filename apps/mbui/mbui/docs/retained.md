@@ -154,6 +154,24 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    once; a property given once (`Is`) makes no effect. A property has one binding at a time (another lets the one before
    go); its phase is the property's (width, words, ground, a transform), not the caller's. No `set` does layout,
    shaping or the host's work where it is set.
+
+   A timed change enters `Tree::event(at, ...)` before opening any signal batch. Each earlier deadline publishes its
+   structure before the next deadline or the new event runs. A raw signal batch groups writes at the current moment;
+   it is not a container for advancing time or dispatching another event. Its notification flush is still part of
+   that change, even after its batch depth reaches zero. Those calls fail at the entry boundary
+   instead of returning before handling the input, or running several deadlines with their intermediate rows still
+   unpublished. Geometry queries may still pull the current batch's property values at the current logical moment.
+   Nested input in a tree event stays in that cause and keeps its synchronous return value.
+   Structural readers of one unowned signal publication are committed together at its end, before after_flush
+   observers and before the set/batch returns. They are not read early: a parent or preceding deadline may first withdraw a child. A watch can deliver
+   another cause while that read is pending; a newer delivered change supersedes the older queued notification.
+   Structure notified inside an owned event or deadline is published there synchronously. This compatibility path
+   cannot recover signal values already overwritten by an unowned write. Timed producers must enter Tree::event
+   before writing so due work, including work at the same timestamp, sees the preceding state.
+   A host frame advances inside its resize checkpoint boundary, then publishes device/theme/room facts as one change
+   at its captured host moment. Those facts belong to the window and are taken once even if a deadline replaces or
+   disposes its tree; a replacement receives this frame's room before drawing. The predicted drawing sample does
+   not advance the logic.
 3. **What is done again is what the change is.** Structure, measure and place, what is drawn, how it is composed (a
    transform, an opacity, a cut), what is read out: each its own. A colour lays nothing out; a move measures no words; a
    node moved keeps what it holds where they are in it. Layout goes up to the first box that does not read what it

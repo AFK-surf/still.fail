@@ -180,6 +180,77 @@ pub fn Tree::laid_as_now(self : Tree) -> Unit {
 }
 
 ///|
+/// Finish `f` after the current tree change, signal publication and layout have returned. Work in a raw signal
+/// batch wakes at that batch's end. This is a publication completion, not a way to dispatch an input or postpone
+/// a deadline: those execute synchronously in their own callbacks. No frame is asked for and no deadline advanced
+/// here. The caller keeps its own lifetime guard.
+pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
+  if self.gone { return }
+  // The layout that requested this completion can have returned before publication finishes. Record its budget so
+  // the dispatch can retain its pass ancestry when it still belongs to the same operation.
+  // Only a request made under this drain's current stop flag is its descendant. A layout from another operation
+  // can have ended before its queued request is dispatched, even while a different completion is running.
+  let from_current = match (self.brought_budget, self.changes_owner) {
+    (Some((_, source_stop)), Some(owner_stop)) => physical_equal(source_stop, owner_stop)
+    _ => false
+  }
+  self.changes.push((self.logic_at(), f, self.brought_budget, from_current))
+  // Every request has a batch-end wake, including one made inside a tree commit nested in a raw signal batch.
+  // A tree event's own end also drains it, before the next deadline, once all its readers have returned.
+  @signals.after_flush(fn() { self.changes_done() |> ignore })
+}
+
+///|
+/// Complete one tree change, including the changes its completion publishes. Each callback's writes are told
+/// whole before the next callback reads them, even when the caller is itself a signal watcher. Never enter a
+/// layout or a partial tree commit. Disposal clears the remaining callbacks.
+fn Tree::changes_done(self : Tree) -> Bool {
+  if self.changes_running || self.committing > 0 || self.laying > 0 || self.layouts_active > 0 ||
+    @signals.batch_depth() > 0 || @signals.is_flushing() || self.changes.is_empty() {
+    return false
+  }
+  self.changes_running = true
+  let was = self.cause_at
+  let was_budget = self.brought_budget
+  let was_owner = self.changes_owner
+  defer {
+    self.cause_at = was
+    self.brought_budget = was_budget
+    self.changes_owner = was_owner
+    self.changes_running = false
+  }
+  let mut i = 0
+  while i < self.changes.length() && !self.gone {
+    let (at, f, budget, from_current) = self.changes[i]
+    i += 1
+    self.cause_at = at
+    // A completion can wait past its requesting operation. In a dispatch owned by a layout, keep ancestry only
+    // from that operation; in an unowned drain, each independent request starts a root, while descendants registered
+    // under a current root keep that root's stop flag and their own pass count.
+    let owned = match was_budget {
+      Some((_, dispatch_stop)) => match budget {
+        Some((passes, source_stop)) if physical_equal(source_stop, dispatch_stop) => (passes, source_stop)
+        _ => was_budget.unwrap()
+      }
+      None => match (budget, from_current) {
+        (Some(b), true) => b
+        _ => (Ref(0), Ref(false))
+      }
+    }
+    self.brought_budget = Some(owned)
+    self.changes_owner = Some(owned.1)
+    self.committing += 1
+    @signals.start_batch()
+    @signals.untracked(f)
+    @signals.end_batch()
+    self.committing -= 1
+    self.modals_settled()
+  }
+  self.changes.clear()
+  true
+}
+
+///|
 /// The node that scrolls by it now (View::scrolls: its column, its row), while it does; None where none does (not said
 /// yet, or let go).
 pub fn Scroll::shown_by(self : Scroll) -> View? {
@@ -195,4 +266,31 @@ pub fn Scroll::shown_by(self : Scroll) -> View? {
 pub fn View::shown_nowhere(self : View) -> Bool {
   self.tree.outs_said.get() |> ignore
   !self.alive() || self.tree.out_at(self.at)
+}
+
+///|
+/// Whether it or an ancestor is explicitly kept out by View::shown, as those declarations say now.
+/// Followed at their causes, without laying out or reading a previous layout's omissions. A retained activity
+/// uses this declaration, not shown_nowhere: laid_nowhere's sampled omission, a row squeezed out by drops, clipping and opacity
+/// are layout or paint results and do not start or cancel that activity. A node let go is nowhere.
+pub fn View::declared_nowhere(self : View) -> Bool {
+  guard self.alive() else { return true }
+  let mut i = self.at
+  while i >= 0 {
+    let n = self.tree.nodes[i]
+    let said = match n.nowhere_said {
+      Some(said) => said
+      None => {
+        let said = @signals.signal(0)
+        n.nowhere_said = Some(said)
+        said
+      }
+    }
+    said.get() |> ignore
+    if n.nowhere_by is Some(read) && read() {
+      return true
+    }
+    i = n.parent
+  }
+  false
 }

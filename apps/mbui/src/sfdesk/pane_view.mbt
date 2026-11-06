@@ -479,6 +479,7 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   pane_page_wait.follow(v, fn(p) { (fold_goes.ready)(p) }, fn() { fold_goes.most })
   // the chats' place landed on its chat, the sidebar kept as it is left: at their causes (wide_keeps)
   wide_keeps(v, src)
+  let looks = rail_looks(v, src)
   // another place's or workspace's sidebar as it was left (side_take), at that cause, as the tape takes it: not as the
   // frame after it is built, so what follows it before then (its place pressed again) finds it so
   v.reacts(
@@ -500,6 +501,11 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   )
   // the block moved for what it is moved for, at that moment: from where it is then; else what it goes to changed by
   // what is no cause of a move, put there at once
+  // Its retained sidebar participates through the declared closing end, regardless of a picture's sampled clip.
+  // Publish this with the fold's trajectory, never from a separate observer of half of that change.
+  let side_shown = @signals.signal(false, same=fn(a, b) { a == b })
+  let side_due = Ref(fn() { })
+  v.owns(fn() { (side_due.val)() }) |> ignore
   let first = Ref(true)
   v.reacts(
     fn() {
@@ -514,13 +520,15 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
             side: w.id + "\n" + group,
             native: @sf.native_on(),
           }
-          Some((cause, fold_look_of(r, fold_goes.shift)))
+          Some((cause, fold_look_of(r, fold_goes.shift), r.s > 0.0))
         }
         None => None
       }
     },
     fn(said) {
-      guard said is Some((cause, look)) else { return }
+      (side_due.val)()
+      side_due.val = fn() { }
+      guard said is Some((cause, look, has_side)) else { side_shown.set(false); return }
       let at = v.cause_at()
       let was = fold_goes.was
       fold_goes.was = Some(cause)
@@ -545,6 +553,13 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         }
         (None, Some(t)) if made && cause.bare => fold_moves_from(at, look, was_look=t)
         _ => fold_put(look, at)
+      }
+      let open = has_side && look.showing > 0.0
+      let closing = has_side && !open && fold_goes.way.goes_at(at) &&
+        fold_goes.from.map(fn(f) { f.showing > 0.0 }).unwrap_or(false)
+      side_shown.set(open || closing)
+      if closing {
+        side_due.val = v.at_moment(fold_goes.way.ends_at(), fn() { side_shown.set(false) })
       }
     },
   )
@@ -594,10 +609,10 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   })
   |> ignore
   // the block over them (reaching over the page shown a while), 更新: taking presses where they draw them
-  let block = @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
+  let block = @ui.old(v, fn(c) { pane_block_built(c, src, looks) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
   // the sidebar made once, the tree's, over the block where it lays its sidebar out (side_node)
   v.box(fn(sides) {
-    sides.over(Is(true)) |> ignore
+    sides.over(Is(true)).shown(fn() { side_shown.get() }) |> ignore
     side_node(sides, src, tips, fn() { pane_side_at(src, sides) })
   })
   |> ignore
@@ -804,7 +819,7 @@ fn fold_bars(f : FoldLook) -> Unit {
 /// The block off the tape (its island, the window's whole, taking presses where it draws them): the rail and the
 /// sidebar where its move has got; the sidebar's edge (dragged, unless on the fold or folded for the page's room); 更新
 /// where the closed bar's start leaves room for it.
-fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
+fn pane_block_built(c : @ui.Ctx, src : Source, looks : Map[String, RailLook]) -> Unit {
   let (now, all, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
   let (r, target) = fold_target(src, w, c.width)
@@ -815,7 +830,7 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
   wide.crowded = r.crowded
   let moving = fold_going(c.moment())
   let top = if side_full_height(r.bar) { 0.0 } else { r.top }
-  dock(c, src, w, all, r.bar, r.peek, r.s, f.col, top, r.foot, 0.0, held=true, fold=Some((f, moving)))
+  dock(c, src, w, all, looks, r.bar, r.peek, r.s, f.col, top, r.foot, 0.0, held=true, fold=Some((f, moving)))
   // (with the sidebar closed, where its first row is not shown: 更新 where the bar's start leaves room for it)
   if !r.gated && update_shown() && r.bar && !r.peek {
     update_button(c, src, @ui.window_inset(), r.top)

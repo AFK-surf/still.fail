@@ -23,6 +23,21 @@ priv struct NavHosted {
 }
 
 ///|
+// A retained page's participation is the stack's declared state, followed by
+// descendants even while that page is laid out nowhere.
+// kept across runs: the kind of value lent; each page removes its value when its node or tree is released
+let nav_page_shown : @view.Lent[() -> Bool] = @view.Lent::new()
+
+///|
+/// Whether the navigation page holding `v` is shown, read as navigation changes
+/// it, and whether an ancestor explicitly keeps it out (View::shown). This says nothing about clipping,
+/// room-dependent omissions or painted opacity. Outside a stack, only the explicit omissions apply;
+/// a nested stack also follows the page holding it.
+pub fn page_shown(v : @view.View) -> Bool {
+  !v.declared_nowhere() && v.lent(nav_page_shown).map_or(true, fn(shown) { shown() })
+}
+
+///|
 /// What shows of the stack changed (which pages, how they move): what reads it told.
 fn[P] Nav::shown_told(self : Nav[P]) -> Unit {
   self.shown.set(@signals.untracked(fn() { self.shown.get() }) + 1)
@@ -203,6 +218,10 @@ pub fn[P] nav_view(
       fn(pv, serial) {
         let k = @signals.untracked(fn() { serial.get() })
         let entry = nav.entry(k)
+        let outer_shown = pv.lent(nav_page_shown)
+        pv.lends(nav_page_shown, fn() {
+          outer_shown.map_or(true, fn(shown) { shown() }) && nav.shows(k)
+        }) |> ignore
         pv
           .over(Is(true))
           .shift(By(fn() { nav.shift_of(k, fn() { pv.drawn_at() }) }))
@@ -253,7 +272,7 @@ pub fn[P] nav_view(
                     shown.val
                   },
                   fn(m) {
-                    m.grow(Is(1.0)).laid_nowhere(By(fn() { !nav.shows(k) })) |> ignore
+                    m.grow(Is(1.0)).shown(fn() { nav.shows(k) }) |> ignore
                     nav.made(m, k, e, f, bg, edge)
                   },
                 )

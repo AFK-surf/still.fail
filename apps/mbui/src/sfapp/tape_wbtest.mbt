@@ -75,6 +75,7 @@ test "the layout by the window's width alone, on every screen: what a phone's or
     (1, 1024.0, 1366.0, "regular", "regular", Large),
   ] {
     let (platform, w, h, width, height, layout) = p
+    println("tape layout starts: platform \{platform}, \{w}x\{h}, \{width}/\{height}")
     let t = tape_chat(platform, w, h, width~, height~)
     let said = "platform \{platform} \{w}x\{h} \{width} \{height}"
     assert_eq(@sf.layout(w), layout, msg=said)

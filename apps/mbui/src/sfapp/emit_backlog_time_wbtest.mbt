@@ -1,0 +1,217 @@
+// A retained page keeps the deadlines of replies already in flight while it is
+// covered. Returning after several agents' turns expired must finish all of
+// them at that input, even when there is no following display frame.
+
+///|
+fn backlog_window(width : Double, ended : Ref[Bool]) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      guard name == "chat" && got.value is Some(Object(chat)) else { return got }
+      let agents = ["s-c1", "backlog-b", "backlog-c", "backlog-d"].map(fn(key) -> Json {
+        {
+          "session": {
+            "key": Json::string(key),
+            "runtime": "claude",
+            "maker": { "id": "anthropic", "name": "Anthropic" },
+            "agentText": Json::string(key),
+            "statusText": Json::string(if ended.val { "已完成" } else { "进行中" }),
+            "tone": "neutral",
+          },
+          "status": Json::string(if ended.val { "idle" } else { "running" }),
+          "started": true,
+          "since": 0,
+        }
+      })
+      let changed = chat.copy()
+      changed["agents"] = Json::array(agents)
+      { ..got, value: Some(Json::object(changed)) }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform=if width < 600.0 { 2 } else { 0 })
+  t.keep_parts(true)
+  t.run_for(@ui.move_most_ms)
+  t.ctx().blur()
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms)
+  t
+}
+
+///|
+test "returning to four agents' expired replies drains beyond one pose batch without another picture" {
+  for width in [390.0, 1280.0] {
+    let pictures : Array[String] = []
+    let words : Array[Array[(String, Double, Double, Double, Double, Double)]] = []
+    let hits : Array[Array[String]] = []
+    let covered_phases : Array[(Double?, Double, Pose, Double, Double)] = []
+    let resumed_phases : Array[Array[(Double, String, Double, Double, Double)]] = []
+    let queued_folds : Array[Array[(Double, Double, Double)]] = []
+    for hz in [0, 60, 120] {
+      let ended = Ref(false)
+      let t = backlog_window(width, ended)
+      let tree = @ui.view_tree().unwrap()
+      let rd = reading_of(emit_chat)
+      let shown = rd.shown_by.unwrap()
+      assert_true(shown(), msg="the chat is visible before replies arrive")
+      let agents = ["s-c1", "backlog-b", "backlog-c", "backlog-d"]
+      let arrived_at = t.time() + 1.0
+      let em = emits_of(emit_chat)
+      let declared : Array[(Double, String, Double, Double, Double)] = []
+      let stop_declared = @signals.effect(fn() {
+        em.read()
+        @signals.untracked(fn() {
+          match em.current {
+            Some(turn) => {
+              let phase = (turn.seq, turn.pose.to_string(), turn.clock.starts_at(), turn.clock.end(), turn.span)
+              if declared.last() != Some(phase) { declared.push(phase) }
+            }
+            None => ()
+          }
+        })
+      })
+      defer { stop_declared() }
+      fix_later(1.0, fn() {
+        ended.val = true
+        for i, key in agents {
+          fix_chat("s-c1").sent.push(msg(171 + i, "agent", @sffixture.by_agent("anthropic", "claude", key), more_said, "刚刚", {
+            "ts": Json::string("backlog\{i}"), "said": true,
+          }))
+        }
+      })
+      // This initial picture is common to every run: one agent in Float,
+      // three different agents waiting, hence more than one batch of expired poses
+      // to finish after the page returns (the later Folds have already ended).
+      t.frame_at(arrived_at + Pose::Fold.ms() + 1.0)
+      assert_true(em.current is Some(turn) && turn.pose == Float && turn.agent == agents[0])
+      assert_eq(em.queue.map(fn(q) { q.2 }), agents[1:].to_array())
+      // The waiting agents fold concurrently in the queue, not as `current` poses.
+      let folds = em.queue.map(fn(q) { (q.0, q.3.starts_at(), q.3.end()) })
+      assert_eq(folds.map(fn(f) { f.0 }), [172.0, 173.0, 174.0])
+      for fold in folds {
+        assert_eq(fold.1, arrived_at)
+        assert_eq(fold.2, arrived_at + Pose::Fold.ms())
+      }
+      queued_folds.push(folds)
+      // A page still beside the incoming page remains shown until navigation's declared end. The distance-based
+      // Float can finish in that interval. Observe the phase at the actual hide cause, without inserting a frame.
+      let covered : Ref[(@sfbase.Turn, Double?)?] = Ref(None)
+      let stop = @signals.effect(fn() {
+        let visible = shown()
+        @signals.untracked(fn() {
+          if !visible && covered.val is None && em.current is Some(turn) {
+            covered.val = Some((turn, tree.moment()))
+          }
+        })
+      })
+      defer { stop() }
+      let start = t.time()
+      let returned_at = start + agents.length().to_double() * (emit_all_ms() + @ui.move_most_ms)
+      fix_later(1.0, fn() { @sfbase.open_page_over(Setting(About)) })
+      fix_later(returned_at - start, fn() { @sfbase.back_pop() })
+      t.record_host()
+      let period = if hz == 0 { 1.0 } else { 1000.0 / hz.to_double() }
+      let mut frame = 1
+      for at in [returned_at - 1.0, returned_at + 1.0] {
+        if hz > 0 {
+          while start + frame.to_double() * period < at {
+            t.frame_at(start + frame.to_double() * period)
+            frame += 1
+          }
+        }
+        t.touch_at(0, -100.0, -100.0, at)
+        t.touch_at(2, -100.0, -100.0, at)
+        if at < returned_at {
+          assert_false(shown(), msg="the real chat page is covered")
+          guard covered.val is Some((held, hidden_at)) else { fail("the hide cause did not retain a phase") }
+          covered_phases.push((hidden_at, held.seq, held.pose, held.clock.starts_at(), held.clock.end()))
+          assert_true(physical_equal(em.current.unwrap(), held), msg="covering the page keeps its original phase and deadline: \{width}/\{hz}, held \{(held.seq, held.pose, held.clock.starts_at(), held.clock.end(), held.span, held.timed)}, current \{em.current.map(fn(t) { (t.seq, t.pose, t.clock.starts_at(), t.clock.end(), t.span, t.timed) })}")
+          assert_eq(em.queue.length(), 3)
+          assert_true(em.queue.iter().all(fn(q) { q.3.end() < at }))
+        }
+      }
+      let frames = t.host_frames()
+      println("backlog phases \{width}, \{hz} Hz: \{declared}")
+      println("backlog returned \{width}, \{hz} Hz at \{returned_at}: current \{em.current.map(fn(turn) { (turn.seq, turn.pose, turn.clock.end()) })}, queue \{em.queue.map(fn(q) { q.0 })}, done \{em.done.length()}, revealing \{em.out_at.length()}, due \{tree.due_count()}, frames \{frames.length()}")
+      if hz == 0 { assert_eq(frames.length(), 0) }
+      assert_true(frames.iter().all(fn(frame) { frame.at < returned_at }), msg="returning has no following picture in any history")
+      assert_true(shown() && physical_equal(rd.shown_by.unwrap(), shown), msg="returning keeps the same retained page")
+      assert_true(em.current is None && em.queue.is_empty() && em.out_at.is_empty(), msg="every expired reply finishes before the next picture")
+      for i in 0..<agents.length() { assert_true(em.done.contains("\{171 + i}")) }
+      assert_eq(declared.map(fn(p) { (p.0, p.1) }), [
+        (171.0, "Fold"), (171.0, "Float"), (171.0, "Spit"), (171.0, "Return"),
+        (172.0, "Float"), (172.0, "Spit"), (172.0, "Return"),
+        (173.0, "Float"), (173.0, "Spit"), (173.0, "Return"),
+        (174.0, "Float"), (174.0, "Spit"), (174.0, "Return"),
+      ], msg="every active phase must be observed in order")
+      assert_eq(declared[0].2, arrived_at)
+      assert_eq(declared[0].3, arrived_at + Pose::Fold.ms())
+      for i in 1..<declared.length() {
+        assert_eq(declared[i].2, declared[i - 1].3, msg="each phase begins at its predecessor's end")
+      }
+      resumed_phases.push(declared.copy())
+      // The final common picture is after the page's return and the ended
+      // activities' declared linger, not after another reply's running time.
+      t.frame_at(returned_at + linger_ms + 2.0 * @ui.move_most_ms)
+      t.assert_idle()
+      assert_true(tree.wake_waited() is None && t.next_wake() is None, msg="no expired reply is waiting for another callback")
+      println("backlog final \{width}, \{hz} Hz: reading \{(rd.top_seq, rd.top_off, rd.bottom_seq, rd.at_end)}, field focused \{t.ctx().field_focused()}")
+      // Compare glyphs by their content key, not the atlas positions assigned
+      // by earlier frames; all instances and their clipping stay in the text.
+      pictures.push(t.drawn_text())
+      words.push(t.words_said())
+      let targets : Array[String] = []
+      for y in 0..<22 {
+        for x in 0..<33 {
+          let target = t.press_target_at(width * x.to_double() / 32.0, 844.0 * y.to_double() / 21.0)
+          targets.push(target.map(fn(n) { "\{n.role}:\{n.label}:\{n.rect}" }).unwrap_or(""))
+        }
+      }
+      hits.push(targets)
+      assert_true(targets.iter().any(fn(s) { s != "" }), msg="the final picture has live input targets")
+      tree.dispose()
+      assert_true(rd.shown_by is None, msg="releasing the page removes its navigation reader")
+      assert_eq((tree.alive(), tree.bindings_held(), tree.due_count()), (0, 0, 0))
+    }
+    assert_true(covered_phases[0] == covered_phases[1], msg="navigation hides the same phase at the same cause without pictures: \{covered_phases}")
+    assert_true(covered_phases[0] == covered_phases[2], msg="navigation hides the same phase at 120 Hz: \{covered_phases}")
+    assert_eq(queued_folds[0], queued_folds[1], msg="queued agents fold at the same cause without pictures")
+    assert_eq(queued_folds[0], queued_folds[2], msg="queued agents fold at the same cause at 120 Hz")
+    assert_eq(resumed_phases[0], resumed_phases[1], msg="returning catches up the same phases and durations without intermediate pictures")
+    assert_eq(resumed_phases[0], resumed_phases[2], msg="returning catches up the same phases and durations at 120 Hz")
+    if pictures[0] != pictures[1] {
+      // Keep the complete comparison below, and name its first differing instances on CI instead of only the
+      // assertion's message. Atlas slots have already been replaced by glyph content keys by drawn_text.
+      let direct = pictures[0].split("\n").map(fn(s) { s.to_string() }).to_array()
+      let framed = pictures[1].split("\n").map(fn(s) { s.to_string() }).to_array()
+      let lines = if direct.length() > framed.length() { direct.length() } else { framed.length() }
+      let mut different = 0
+      for i in 0..<lines {
+        if direct.get(i) != framed.get(i) {
+          if different < 8 {
+            println("backlog picture \{width} line \{i}: 0 Hz \{direct.get(i)}; 60 Hz \{framed.get(i)}")
+          }
+          different += 1
+        }
+      }
+      println("backlog picture \{width}: lines \{direct.length()}/\{framed.length()}, different \{different}")
+      let mut changed_words = 0
+      let count = if words[0].length() > words[1].length() { words[0].length() } else { words[1].length() }
+      for i in 0..<count {
+        println("backlog words \{width} item \{i}: 0 Hz \{words[0].get(i)}; 60 Hz \{words[1].get(i)}")
+        if words[0].get(i) != words[1].get(i) {
+          changed_words += 1
+        }
+      }
+      println("backlog words \{width}: counts \{words[0].length()}/\{words[1].length()}, different \{changed_words}")
+    }
+    assert_eq(pictures[0], pictures[1], msg="all drawing instances at rest are independent of intermediate frames")
+    assert_eq(pictures[0], pictures[2])
+    assert_eq(words[0], words[1])
+    assert_eq(words[0], words[2])
+    assert_eq(hits[0], hits[1])
+    assert_eq(hits[0], hits[2])
+  }
+}

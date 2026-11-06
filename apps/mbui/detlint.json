@@ -154,6 +154,7 @@
       "src/sfdesk/pane_page.mbt",
       "src/sfdesk/pane_view.mbt",
       "src/sfdesk/rail.mbt",
+      "src/sfdesk/rail_look.mbt",
       "src/sfdesk/rail_native.mbt",
       "src/sfdesk/side.mbt",
       "src/sfdesk/side_node.mbt",

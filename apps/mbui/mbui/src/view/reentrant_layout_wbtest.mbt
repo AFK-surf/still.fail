@@ -324,6 +324,236 @@ test "a notification from a stopped event can lay out in the next frame" {
 }
 
 ///|
+fn held_past_stopped_measurement(modal : Bool) -> Unit raise {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let armed = Ref(false)
+  let marked = Ref(false)
+  let called = Ref(0)
+  let callback_layouts = Ref(-1)
+  let next : Ref[() -> Unit] = Ref(fn() {})
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && !marked.val {
+          marked.val = true
+          if modal { v.tree.modals_told() } else { v.tree.after_change(fn() { (next.val)() }) }
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  next.val = fn() {
+    called.val += 1
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    callback_layouts.val = t.work.computes - before
+  }
+  if modal { t.on_modals(fn() { (next.val)() }) }
+  // The geometry read is allowed inside a raw batch; its notifications wait until the entire batch is published.
+  // It faults and returns before that happens, so its stop flag no longer belongs to the later callback.
+  @signals.start_batch()
+  t.layout_marked_at(0)
+  armed.val = true
+  t.laid_as_now()
+  let marked_during = marked.val
+  let called_during = called.val
+  @signals.end_batch()
+  assert_true(marked_during)
+  assert_eq(called_during, 0, msg="notification held while the signal batch is open, modal=\{modal}")
+  assert_eq(called.val, 1, msg="the completed batch delivered the notification, modal=\{modal}")
+  assert_eq(callback_layouts.val, 1, msg="the later callback can lay out after the old fault, modal=\{modal}")
+  t.dispose()
+}
+
+///|
+test "a change held past a stopped measurement uses the next operation" {
+  held_past_stopped_measurement(false)
+}
+
+///|
+test "a modal notification held past a stopped measurement uses the next operation" {
+  held_past_stopped_measurement(true)
+}
+
+
+///|
+test "a deferred change that lays out and queues another keeps the layout pass guard" {
+  let faults : Array[String] = []
+  faults_stop.val = false
+  fault_told.val = Some(fn(s) { faults.push(s) })
+  defer {
+    faults_stop.val = true
+    fault_told.val = None
+  }
+  let width = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let armed = Ref(false)
+  let steps = Ref(0)
+  let next : Ref[() -> Unit] = Ref(fn() {})
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && steps.val < 100 {
+          v.tree.after_change(fn() { (next.val)() })
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  // Faults are reported once per host. Give this white-box chain its own diagnostic so a previous test's
+  // identical pass-limit fault does not hide this one.
+  t.laid_marked_at = "deferred after_change feedback"
+  next.val = fn() {
+    steps.val += 1
+    width.set((steps.val + 1).to_double())
+    t.laid_as_now()
+  }
+  armed.val = true
+  @signals.start_batch()
+  t.after_change(fn() { (next.val)() })
+  @signals.end_batch()
+  println("deferred change feedback: steps=\{steps.val}, faults=\{faults}, due=\{t.due}, layout_due=\{t.layout_due}")
+  assert_eq(steps.val, laid_passes_most + 1, msg="feedback must stop at the layout guard")
+  assert_true(faults.iter().any(fn(s) { s.contains("layout passes in one") }), msg="\{faults}")
+  t.dispose()
+}
+
+///|
+test "separate geometry reads in a deferred change each finish" {
+  let faults : Array[String] = []
+  faults_stop.val = false
+  fault_told.val = Some(fn(s) { faults.push(s) })
+  defer {
+    faults_stop.val = true
+    fault_told.val = None
+  }
+  let width = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let item : Ref[View?] = Ref(None)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      item.val = Some(v)
+      v.width(By(fn() { Some(width.get()) })).height(Is(Some(20.0))) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  let observed : Array[Double] = []
+  let requested = Array::makei(laid_passes_most + 1, fn(i) { (i + 2).to_double() })
+  @signals.start_batch()
+  t.after_change(fn() {
+    for w in requested {
+      width.set(w)
+      t.laid_as_now()
+      observed.push(item.val.unwrap().laid_size().0)
+    }
+  })
+  @signals.end_batch()
+  assert_eq(observed, requested, msg="each separate request completes; faults=\{faults}")
+  assert_true(faults.is_empty(), msg="\{faults}")
+  t.dispose()
+}
+
+///|
+test "a later independent change in the same batch can measure after a fault" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let armed = Ref(false)
+  let marked = Ref(false)
+  let first = Ref(-1)
+  let second = Ref(-1)
+  let calls = Ref(0)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && !marked.val {
+          marked.val = true
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  @signals.start_batch()
+  t.after_change(fn() {
+    calls.val += 1
+    armed.val = true
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    first.val = t.work.computes - before
+  })
+  t.after_change(fn() {
+    calls.val += 1
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    second.val = t.work.computes - before
+  })
+  @signals.end_batch()
+  println("independent changes after a fault: calls=\{calls.val}, first=\{first.val}, second=\{second.val}, marked=\{marked.val}, due=\{t.due}, layout_due=\{t.layout_due}")
+  assert_true(marked.val)
+  assert_eq(calls.val, 2)
+  assert_eq(first.val, 1)
+  assert_eq(second.val, 1, msg="the independent later callback can measure")
+  t.dispose()
+}
+
+///|
+test "a stopped change's descendant stays stopped beside an independent change" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let armed = Ref(false)
+  let marked = Ref(false)
+  let measured : Array[(String, Int)] = []
+  let descendant : Ref[() -> Unit] = Ref(fn() {})
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if armed.val && !marked.val {
+          marked.val = true
+          v.tree.after_change(fn() { (descendant.val)() })
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  descendant.val = fn() {
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    measured.push(("descendant", t.work.computes - before))
+  }
+  @signals.start_batch()
+  t.after_change(fn() {
+    armed.val = true
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    measured.push(("first", t.work.computes - before))
+  })
+  t.after_change(fn() {
+    t.layout_marked_at(0)
+    let before = t.work.computes
+    t.laid_as_now()
+    measured.push(("independent", t.work.computes - before))
+  })
+  @signals.end_batch()
+  let before = t.work.computes
+  t.laid_as_now()
+  measured.push(("next", t.work.computes - before))
+  println("interleaved stopped change: \{measured}")
+  assert_true(marked.val)
+  assert_eq(measured, [("first", 1), ("independent", 1), ("descendant", 0), ("next", 1)])
+  t.dispose()
+}
+
+///|
 test "a modal notification held past a stopped measurement can lay out" {
   faults_stop.val = false
   defer { faults_stop.val = true }
@@ -388,7 +618,8 @@ test "a modal notification held by a batch keeps independent geometry reads sepa
     }
   })
   @signals.start_batch()
-  t.event(10.0, fn() { t.modals_told() })
+  // A raw batch may notify at the current moment; a new timed event must start outside it.
+  t.modals_told()
   assert_true(observed.is_empty())
   @signals.end_batch()
   assert_eq(observed, requested)
@@ -425,10 +656,8 @@ test "modal feedback held by a batch keeps the layout pass guard" {
   })
   @signals.start_batch()
   armed.val = true
-  t.event(10.0, fn() {
-    t.layout_marked_at(0)
-    t.laid_as_now()
-  })
+  t.layout_marked_at(0)
+  t.laid_as_now()
   assert_eq(steps.val, 0)
   @signals.end_batch()
   // The first callback starts a new operation; its 65th requested pass reaches the existing 64-pass guard.
@@ -481,5 +710,64 @@ test "a modal descendant held past its stopped telling can lay out" {
   @signals.end_batch()
   assert_eq(called.val, 2)
   assert_eq(callback_layouts.val, 1, msg="the later modal telling can lay out, got \{callback_layouts.val}")
+  t.dispose()
+}
+
+///|
+test "an independent event between modal notifications cannot stop their layout" {
+  faults_stop.val = false
+  defer { faults_stop.val = true }
+  let source_armed = Ref(false)
+  let source_said = Ref(false)
+  let fault_armed = Ref(false)
+  let faulted = Ref(false)
+  let calls = Ref(0)
+  let after_fault = Ref(-1)
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(20.0))).height(Is(Some(20.0))).offset(Painted(fn(_) {
+        if source_armed.val && !source_said.val {
+          source_said.val = true
+          v.tree.modals_told()
+        }
+        if fault_armed.val && !faulted.val {
+          faulted.val = true
+          v.tree.layout_marked_at(0)
+        }
+        (0.0, 0.0)
+      })) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 100.0, now=0.0) |> ignore
+  t.on_modals(fn() {
+    calls.val += 1
+    if calls.val == 1 {
+      // The independent event is ahead of the descendant modal callback in the same after-flush queue.
+      @signals.after_flush(fn() {
+        t.event(15.0, fn() {
+          fault_armed.val = true
+          t.layout_marked_at(0)
+          t.laid_as_now()
+          fault_armed.val = false
+        })
+      })
+      source_armed.val = true
+      t.layout_marked_at(0)
+      t.laid_as_now()
+    } else {
+      t.layout_marked_at(0)
+      let before = t.work.computes
+      t.laid_as_now()
+      after_fault.val = t.work.computes - before
+    }
+  })
+  @signals.start_batch()
+  // A raw batch may notify at the current moment without starting another timed event.
+  t.modals_told()
+  @signals.end_batch()
+  assert_true(source_said.val)
+  assert_true(faulted.val, msg="the separate event self-marked its layout")
+  assert_eq(calls.val, 2)
+  assert_eq(after_fault.val, 1, msg="the descendant's layout is not stopped by the intervening event")
   t.dispose()
 }

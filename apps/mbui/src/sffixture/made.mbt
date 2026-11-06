@@ -1,4 +1,4 @@
-// The made-up core put back as the app is (its reset), and told each frame's Ctx (its timers then the runtime's): wires
+// The made-up core put back as the app is (its reset), and told each frame's Ctx (its timers then the window's): wires
 // given sfbase as this package is linked (a test's program, a tool's), the app calling them without knowing it is
 // there.
 
