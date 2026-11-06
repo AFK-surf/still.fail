@@ -2700,6 +2700,10 @@ pub let wide_bar_h : Double
 
 pub let wide_bar_h_size : @ui.Len
 
+pub fn wide_button_foot_node(@view.View, () -> FixedArray[Double]?, (@view.View) -> Unit) -> @view.View
+
+pub fn wide_button_node(@view.View, () -> String, () -> Bool, () -> Unit, busy? : () -> Bool, enabled? : () -> Bool, danger? : () -> Bool) -> @view.View
+
 pub let wide_heading : @ui.TextStyle
 
 pub let wide_list_note : @ui.TextStyle
