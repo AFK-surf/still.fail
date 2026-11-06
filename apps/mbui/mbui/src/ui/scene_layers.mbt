@@ -305,10 +305,6 @@ priv struct Scene {
   mut copy_why : String
   /// why the frames the old frame painted were (the first few told apart), for a test to say
   full_whys : Array[String]
-  /// while the tree tries to draw a frame alone (scene_alone): each layer drawn or moved, as it was before, put back
-  /// where it cannot (where it is, what it holds: what the frame the old frame paints then copies by)
-  mut trying : Bool
-  undo : Array[(SceneLayer, SceneLayer)]
   /// layers to draw again the frame after this (a glyph of theirs there was no room for in the atlas)
   again : Array[@view.NodeId]
   /// where what the last frame of the tree alone drew again reaches now (a test's to say)
@@ -370,8 +366,6 @@ let scene : Scene = {
   alone_why: "",
   copy_why: "",
   full_whys: [],
-  trying: false,
-  undo: [],
   again: [],
   alone_reach: (1.0e18, 1.0e18, -1.0e18, -1.0e18),
   scratch: [],
@@ -498,8 +492,6 @@ fn scene_forget() -> Unit {
   scene.over_scrim = @damage.nowhere
   scene.holding.clear()
   scene.again.clear()
-  scene.undo.clear()
-  scene.trying = false
   scene.owners = None
   scene.src_n = 0
   scene.src_seen = -1
@@ -1247,7 +1239,6 @@ fn scene_moved_to(l : SceneLayer, at : Int, seg : Int) -> Unit {
   }
   let todo = [l]
   while todo.pop() is Some(x) {
-    scene_keep_undo(x)
     go(x)
     for i in x.inner {
       match scene.layers.get(i) {
@@ -1415,7 +1406,6 @@ fn scene_drawn_begin(
   glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
   kept : Bool,
 ) -> Unit {
-  scene_keep_undo(l)
   if !kept || !scene_clip_same(l) {
     let (clip, window, apart) = clip_kept()
     l.clip = clip
@@ -1437,20 +1427,8 @@ fn scene_drawn_begin(
   l.own_only = false
   l.each = false
   l.told = false
-  // (drawn again into new tables while the frame is tried alone: those it had kept as they were, put back where the try
-  // does not come to be, scene_keep_undo)
-  if scene.trying {
-    l.inner = []
-    l.images = []
-    if !kept {
-      l.plots = []
-    }
-    l.bands = []
-    l.anchors = []
-  } else {
-    l.inner.clear()
-    l.anchors.clear()
-  }
+  l.inner.clear()
+  l.anchors.clear()
   // (drawn again alone, from what it began in: what holds it as it was)
   match outer {
     Some(o) => l.outer = Some(o.id)
