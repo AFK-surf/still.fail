@@ -412,10 +412,10 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 }
 
 ///|
-/// A press on target `id` (a tap, a click, Enter or Space where it takes the focus), let go on it, does `f`: then, as it
-/// is let go, outside any build, not read as the next frame is built (docs/retained.md, the model's 5: acting is a
-/// callback). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
-/// hand over it). What a frame read of the press (Ctx::clicked) it reads as before.
+/// A press on target `id` (a tap, a click, Enter, Space or a screen reader's Activate outside a build) does `f` then,
+/// outside any build, not read as the next frame is built (docs/retained.md, the model's 5: acting is a callback).
+/// Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's hand over it).
+/// What a frame read of the press (Ctx::clicked) it reads as before.
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   if id == 0 {
     return

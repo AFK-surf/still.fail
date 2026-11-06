@@ -935,8 +935,8 @@ pub fn tracking_underway() -> Bool {
 }
 
 ///|
-/// Deliver one input taken by the old frame, after that frame's builds. The outer frame's watch still runs, but no
-/// build is under way; a watch, computed or effect started inside the input remains a tracked computation. For the
+/// Deliver one input taken by the old frame, at its start or after its builds. The outer frame's watch still runs, but
+/// no build is under way; a watch, computed or effect started inside the input remains a tracked computation. For the
 /// UI framework's input delivery alone, not for app code or a layout's result.
 pub fn deliver_input(f : () -> Unit) -> Unit {
   untracked(fn() {

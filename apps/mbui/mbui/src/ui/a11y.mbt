@@ -204,7 +204,7 @@ fn a11y_took(json : String) -> Unit {
     _ => None
   }
   match action {
-    Some(a) => g().ask_action(id.to_int(), a)
+    Some(a) => g().ask_host_action(id.to_int(), a)
     None => ()
   }
 }

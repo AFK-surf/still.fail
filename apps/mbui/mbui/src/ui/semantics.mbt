@@ -133,7 +133,19 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 
 ///|
 /// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
+/// An old widget's registered `on_press` handles an allowed Activate from outside a build at the moment it is asked.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
+  self.ask_action_as(id, action, false)
+}
+
+///|
+/// A request from the host's accessibility channel, including one delivered at the start of an old frame.
+fn Ctx::ask_host_action(self : Ctx, id : Int, action : Action) -> Unit {
+  self.ask_action_as(id, action, true)
+}
+
+///|
+fn Ctx::ask_action_as(self : Ctx, id : Int, action : Action, host : Bool) -> Unit {
   // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
   // one already, that one's, nothing done ahead of it: what it is asked of found and judged as things are then)
   match view_app.val {
@@ -142,18 +154,18 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
       // (view_event_said, hand_turns.mbt); inside another's, that one says it as it ends)
       let alone = tree.moment() is None
       let at = view_moment()
-      tree.event(at, fn() { self.asked(id, action) })
+      tree.event(at, fn() { self.asked(id, action, host) })
       if alone {
         turns_said(self, at)
       }
     }
-    None => self.asked(id, action)
+    None => self.asked(id, action, host)
   }
 }
 
 ///|
 /// `action` asked of `id`, as things are now (Ctx::ask_action).
-fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
+fn Ctx::asked(self : Ctx, id : Int, action : Action, host : Bool) -> Unit {
   // (a node of the window's tree's: its own, as a press on it is)
   if tree_said_action(id, action) {
     return
@@ -167,7 +179,21 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
   hand_event()
   input_came()
-  inputs_taken.val = true
+  // Requests made by an old build or a frame's message handler can be state-driven, not a host input. They still reach
+  // action_asked as before, but may not borrow the input event's causal boundary.
+  if host || (!frame_running.val && !building.val && !@signals.tracking_underway()) {
+    inputs_taken.val = true
+    // A host message is handed on at the beginning of a frame, after on_frame took inputs_taken for that frame.
+    if host && frame_running.val { frame_inputs_taken.val = true }
+    // A callback registered by the last build is the old widget's press handler, just as for a tap or Enter. Only a
+    // currently accessible, enabled widget advertising Activate may receive it; old_said_allowed also checks the
+    // retained modal stack as it is now, even if no frame has been drawn since it changed.
+    if action == Activate && self.semantics_tree().iter().any(fn(s) {
+      s.id == id && !s.hidden && !s.disabled && s.actions.contains(Activate)
+    }) {
+      made_pressed(id)
+    }
+  }
 }
 
 ///|
