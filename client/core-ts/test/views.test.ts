@@ -386,6 +386,26 @@ test("a notice that a runtime is not installed is said under the viewer's messag
   assert.deepEqual(blockedUnder([said({ seq: 1, mine: true }), said({ seq: 2, system: true, install: { ...install, state: "installed" } })]).map((m) => m.seq), [1]);
 });
 
+test("a notice that a chat's run changed says what changed, what it runs on now where that has not the room, and both runs whole opened", () => {
+  const run = { runtime: "claude", model: "claude-opus-5-5", effort: "high", fast: null, profile: "cc", account: "a@x.com", pinned: false, context: null };
+  const shown = (was: J, now: J) => shownMessage({ authorKind: "ember", author: "ember", text: "已切换：…", change: { was, now } }, [], null, [], [], [], undefined).notice;
+  // Another model and effort: those alone, before and after; the station's words given way to the viewer's.
+  let notice = shown(run, { ...run, model: "claude-sonnet-5-5", effort: "medium" });
+  assert.equal(notice.words, "Opus 5.5 · 高 → Sonnet 5.5 · 中");
+  assert.equal(notice.short, "换成 Sonnet 5.5 · 中");
+  assert.deepEqual(notice.lines, ["之前：Claude Code · Opus 5.5 · 高 · 自动 · a@x.com", "现在：Claude Code · Sonnet 5.5 · 中 · 自动 · a@x.com"]);
+  assert.equal(notice.failed, false);
+  // Another runtime: its speed said only where both have one; the account kept to and the most context said whole.
+  notice = shown(run, { ...run, runtime: "codex", model: "gpt-6", effort: "high", fast: true, profile: "cx", account: "b@x.com", pinned: true, context: 200000 });
+  assert.equal(notice.words, "Claude Code · Opus 5.5 → Codex · GPT-6");
+  assert.equal(notice.lines[1], "现在：Codex · GPT-6 · 高 · Fast · b@x.com · 上下文 200K");
+  // An effort or a speed alone is named.
+  assert.equal(shown(run, { ...run, effort: "low" }).words, "思考深度：高 → 低");
+  assert.equal(shown({ ...run, fast: false }, { ...run, fast: true }).short, "速度：Fast");
+  // Not a change (an old station's notice, a message of an agent): as it was.
+  assert.equal(shownMessage({ authorKind: "ember", author: "ember", text: "已压缩上下文" }, [], null, [], [], [], undefined).notice.short, undefined);
+});
+
 test("canonical_and_legacy_station_notices_have_the_same_presentation", () => {
   const shown: J[] = [];
   for (const kind of ["ember", "stillfail"]) {

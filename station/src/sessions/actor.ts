@@ -20,7 +20,8 @@ import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
 import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
-import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
+import { type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
+import { runChangeWords } from "./run-change.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 import { WidgetSourcesUnavailable } from "../store/widget-sources.ts";
 import { STATION_AUTHOR, STILLFAIL_SURFACE } from "../store/rows.ts";
@@ -1742,10 +1743,16 @@ export class SessionActor {
     ).catch(() => undefined);
   }
 
+  /// Its run changed (lifecycle.ts `configure`): said in its chat, how it ran and how it runs now kept with the words
+  /// (the clients say what changed from them).
+  async runChanged(change: RunChange): Promise<void> {
+    await this.notice(runChangeWords(change, stationLang()), null, null, undefined, change);
+  }
+
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about
   /// a profile (`profile`, its id) is linked to that profile's page, one about a runtime not installed (`runtime`)
-  /// offers to install it.
-  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null, recorded?: (where: [number, number, string]) => void) {
+  /// offers to install it; one that its run changed keeps how (`change`).
+  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null, recorded?: (where: [number, number, string]) => void, change?: RunChange) {
     const store = this.deps.store;
     const latest = store.latestThread(this.key);
     const chat = latest ? this.deps.chat(latest.connect) : undefined;
@@ -1755,7 +1762,7 @@ export class SessionActor {
     }
     try {
       const ts = await chat.post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null, ...(change !== undefined ? { change } : {}) });
       recorded?.([latest.thread.id, n, ts]);
     } catch (error) {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });

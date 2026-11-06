@@ -1956,6 +1956,34 @@ test("where only what the archive review recommended is archived on its own, an 
 
 const withProfile = (id: string, name: string, models: string[]) => (raw: any) => raw.profiles.push({ ...raw.profiles[0], id, name, models });
 
+test("another runtime, model, effort or speed is said in the chat with how it ran and how it runs; another account alone is not", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  r.claude.last().complete();
+  await settle();
+  r.edit(withProfile("cc2", "another", ["opus", "sonnet"]));
+  r.edit((raw) => raw.profiles.filter((p: any) => p.id === "cc").forEach((p: any) => (p.models = [...(p.models ?? []), "sonnet"])));
+  const thread = r.store.latestThread(key)!.thread.id;
+  const notices = () => r.store.entriesAfter(thread, 0).filter((e) => e.authorKind === "ember");
+  const before = r.session(key);
+  await configure(r.hub, key, { model: "sonnet", effort: "low" });
+  const [said] = notices();
+  // Its words what changed alone (Slack, an app from before); kept with how it ran and runs, the account named.
+  assert.equal(r.chat.lastText(), `已切换：Opus · ${before.effort} → Sonnet · low`);
+  assert.equal(said?.text, r.chat.lastText());
+  const run = { runtime: "claude", fast: before.fast, profile: "cc", account: said?.change?.was.account, pinned: false, context: null };
+  assert.equal(typeof said?.change?.was.account, "string");
+  assert.deepEqual(said?.change, { was: { ...run, model: "opus", effort: before.effort }, now: { ...run, model: "sonnet", effort: "low" } });
+  // Kept to another account: nothing said.
+  await configure(r.hub, key, { profile: "cc2" });
+  assert.equal(notices().length, 1);
+  await r.close();
+});
+
 test("a session changes profile, model and effort by hand, and is taken on by another profile when its own cannot run", async () => {
   const r = new Rig();
   const m = say("<@UBOT> fix the build");

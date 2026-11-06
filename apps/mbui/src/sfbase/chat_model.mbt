@@ -382,6 +382,10 @@ pub(all) struct Message {
   notice_retry_session : String
   /// a failure's own words, as what failed said them, shown under its words when the notice is opened
   notice_detail : String
+  /// a chat's run changed: what it runs on now, said in place of its words where they have not the room on their line
+  /// ("": none), and how it ran and runs, whole, shown in place of its words once it is opened
+  notice_short : String
+  notice_lines : Array[String]
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -513,6 +517,13 @@ pub fn message_of(m : Json) -> Message {
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
     notice_detail: text(field(s, "notice"), "detail"),
+    notice_short: text(field(s, "notice"), "short"),
+    notice_lines: items(field(s, "notice"), "lines").filter_map(fn(l) {
+      match l {
+        String(l) => Some(l)
+        _ => None
+      }
+    }),
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
       { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }

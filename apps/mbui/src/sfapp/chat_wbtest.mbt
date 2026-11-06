@@ -656,3 +656,20 @@ test "a notice opened keeps the size of its words" {
   assert_true((after[0].2 - before[0].2).abs() < 0.5)
   assert_true((after[0].3 - before[0].3).abs() < 0.5)
 }
+
+///|
+test "a chat's run changed: what changed on a line, else what it runs on now; pressed, both runs whole" {
+  // (the user, 2026-11-06: 默认按最小差异显示，点击查看完整信息，如果差异太大一行显示不了，就只显示变化后的信息)
+  let t = chat_tester("chat-run-change")
+  assert_eq(t.lines_of("Opus 5.5 · 高 → Sonnet 5.5 · 中"), ["Opus 5.5 · 高 → Sonnet 5.5 · 中"])
+  // too long for a phone's line: what it runs on now alone
+  assert_eq(t.lines_of("Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"), [
+    "换成 Codex · GPT-6 Astra · 高 · Fast",
+  ])
+  let (x, y) = t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中").unwrap()
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com") is Some(_))
+  assert_true(t.find("现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com") is Some(_))
+  assert_true(t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中") is None)
+}

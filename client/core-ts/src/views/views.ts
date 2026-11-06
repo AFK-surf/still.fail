@@ -278,6 +278,10 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
   } else if (isStationAuthor(kind)) {
     m.by = { name: brandName() };
     m.notice = noticeOf(str(m.text) ?? "", str(m.profile) !== null);
+    // Its run changed: what changed as the viewer reads it, in place of the station's words.
+    const change = runChangeOf(m.change);
+    if (change !== null) m.notice = { ...m.notice, ...change };
+    delete m.change;
   }
   else {
     const member = members_.find((x) => typeof get(x, "email") === "string" && x.email.toLowerCase() === author.toLowerCase());
@@ -292,6 +296,7 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
 
 import * as brand from "../brand.ts";
 import { noticeOf } from "../notice.ts";
+import { runChangeOf } from "../run-change.ts";
 import { isOwnSurface, isStationAuthor } from "../titles.ts";
 export { noticeOf };
 const brandName = () => brand.name();

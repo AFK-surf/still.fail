@@ -516,6 +516,9 @@ export function addClientColumn(db: DatabaseSync): void {
   if (!has(db, "entries", "options")) db.exec("ALTER TABLE entries ADD COLUMN options TEXT");
   // A message's card; an options card is kept in `options` too, which stations from before cards read.
   if (!has(db, "entries", "card")) db.exec("ALTER TABLE entries ADD COLUMN card TEXT");
+  // How a session ran before a notice of its change and how it runs after (rows.ts RunChange); the `merged` view has no
+  // need of it.
+  if (!has(db, "entries", "change")) db.exec("ALTER TABLE entries ADD COLUMN change TEXT");
   // A chat's latest card is looked for on every list of chats: only its posts with one are read.
   db.exec("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");

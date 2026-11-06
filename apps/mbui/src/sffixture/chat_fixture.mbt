@@ -453,6 +453,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
           let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
+          } else if f.mode == "chat-run-change" {
+            with_run_change(rich_chat(f.older))
           } else if f.mode == "chat-md" {
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
@@ -1784,6 +1786,38 @@ pub fn with_message(v : Json, words : String) -> Json {
         }),
       )
       o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// A chat whose run was changed twice, as the core says the notices (run-change.ts): another model and effort, whose
+/// line has the room; another runtime and model, whose line has not on a phone, which says what it runs on now.
+fn with_run_change(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let notice = fn(words : String, short : String, was : String, now : String) -> Json {
+        { "failed": false, "words": Json::string(words), "short": Json::string(short), "lines": [Json::string(was), Json::string(now)] }
+      }
+      let was = "之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com"
+      let mid = "现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com"
+      let now = "现在：Codex · GPT-6 Astra · 高 · Fast · 自动 · lin@example.com"
+      let long = "Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "换个模型试试", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "已切换：Opus 5.5 · high → Sonnet 5.5 · medium", "刚刚", {
+          "notice": notice("Opus 5.5 · 高 → Sonnet 5.5 · 中", "换成 Sonnet 5.5 · 中", was, mid),
+        }),
+        msg(3, "ember", { "name": "still.fail" }, "已切换：" + long, "刚刚", {
+          "notice": notice(long, "换成 Codex · GPT-6 Astra · 高 · Fast", "之前：Claude Code · Sonnet 5.5 · 中 · 标准 · 自动 · lin@example.com", now),
+        }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
       Json::object(o)
     }
     _ => v

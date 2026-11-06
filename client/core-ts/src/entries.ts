@@ -43,6 +43,8 @@ export function merge(entries: unknown[], source?: (seq: number, entry: object) 
       if (isObject(entry.card)) message.card = entry.card;
       // What two chats' agents wrote each other (views.ts isLetter): which way, and the other chat.
       if (isObject(entry.letter)) message.letter = entry.letter;
+      // The station's notice that a chat's run changed: how it ran and runs (run-change.ts).
+      if (isObject(entry.change)) message.change = entry.change;
       messages.set(n, message);
       source?.(n, entry);
     } else if (kind === "edit") {
