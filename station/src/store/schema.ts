@@ -573,17 +573,25 @@ function addLoginCardIndex(db: DatabaseSync): void {
 /// whose `merged` view has the column.
 export function addLetterColumn(db: DatabaseSync): void {
   if (has(db, "entries", "letter")) return;
-  db.exec("ALTER TABLE entries ADD COLUMN letter TEXT");
-  db.exec("CREATE INDEX IF NOT EXISTS entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
-  const before = db.prepare(
+  const version = () => (db.prepare("PRAGMA main.data_version").get() as { data_version: number }).data_version;
+  const readHeadings = () => db.prepare(
     `SELECT thread, n, text FROM entries e WHERE kind = 'message' AND author_kind = 'agent' AND (text LIKE '来自 %' OR text LIKE 'From %')
      AND author NOT IN (SELECT session FROM thread_sessions WHERE thread = e.thread)`,
   ).all() as { thread: number; n: number; text: string }[];
-  if (before.length === 0) return;
-  const mark = db.prepare("UPDATE entries SET letter = ? WHERE thread = ? AND n = ?");
-  db.exec("BEGIN");
+  // Most upgrades can read the headings without holding the writer. If another connection commits in the meantime,
+  // read them again under the writer lock: entries or a session membership may have changed.
+  const readVersion = version();
+  let before = readHeadings();
+  db.exec("BEGIN IMMEDIATE");
   try {
-    for (const r of before) mark.run(JSON.stringify({ way: "in", ...headedFrom(r.text) }), r.thread, r.n);
+    // Another opener may have completed the same upgrade while the headings were being read.
+    if (!has(db, "entries", "letter")) {
+      if (version() !== readVersion) before = readHeadings();
+      db.exec("ALTER TABLE entries ADD COLUMN letter TEXT");
+      db.exec("CREATE INDEX IF NOT EXISTS entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
+      const mark = db.prepare("UPDATE entries SET letter = ? WHERE thread = ? AND n = ?");
+      for (const r of before) mark.run(JSON.stringify({ way: "in", ...headedFrom(r.text) }), r.thread, r.n);
+    }
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
