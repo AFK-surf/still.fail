@@ -8,6 +8,10 @@ jobs:
   observe:
     runs-on: windows-2025
     timeout-minutes: 5
+    strategy:
+      fail-fast: true
+      matrix:
+        runner: [1, 2, 3, 4]
     steps:
       - run: git config --global core.autocrlf false
         shell: bash
@@ -33,10 +37,7 @@ jobs:
           export STILLFAIL_AGENT_DESKTOP="$(node scripts/native.ts file agent-desktop win32-x64)"
           node .github/diagnostics/windows-ui-snapshot.mjs
           cd station
-          for i in 1 2 3; do
-            printf 'Diagnostic run %s\n' "$i"
-            STILLFAIL_UI_LIVE=1 node --test --test-timeout=120000 test/ui-live.test.ts || exit $?
-          done
+          STILLFAIL_UI_LIVE=1 node --test --test-timeout=120000 test/ui-live.test.ts
       - name: Print a captured stack when debugger is installed
         if: always()
         shell: pwsh
@@ -50,7 +51,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-ui-timeout-dump
+          name: windows-ui-timeout-dump-${{ matrix.runner }}
           path: ${{ runner.temp }}/agent-desktop-*.dmp
           if-no-files-found: ignore
           retention-days: 1
