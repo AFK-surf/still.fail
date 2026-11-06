@@ -16,6 +16,8 @@ case "${1:-}" in
   wait)
     while [ ! -s "$dir/status" ]; do
       if ! kill -0 "$(cat "$dir/pid")" 2>/dev/null; then
+        # The worker may have written its result after the loop's check and then exited.
+        [ ! -s "$dir/status" ] || break
         cat "$dir/log"
         echo 'Mac prebuild exited without reporting its result' >&2
         exit 1
@@ -29,7 +31,8 @@ case "${1:-}" in
     set +e
     bash "$0" build
     result=$?
-    printf '%s\n' "$result" > "$dir/status"
+    printf '%s\n' "$result" > "$dir/status.tmp"
+    mv "$dir/status.tmp" "$dir/status"
     exit "$result"
     ;;
   build)

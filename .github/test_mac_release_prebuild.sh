@@ -32,6 +32,26 @@ touch "$RUNNER_TEMP/app-built"
 [ "${FAIL_APP:-0}" = 0 ] || exit 8
 EOF
 }
+case_dir exit_race
+mkdir -p "$RUNNER_TEMP/mac-prebuild"
+printf '99999999\n' > "$RUNNER_TEMP/mac-prebuild/pid"
+: > "$RUNNER_TEMP/mac-prebuild/log"
+# The worker can write its result and exit after wait checks the file but before it probes the PID.
+kill() {
+  [ "$1" = -0 ] && [ "$2" = 99999999 ] || return 2
+  printf '0\n' > "$RUNNER_TEMP/mac-prebuild/status"
+  return 1
+}
+export -f kill
+bash "$script" wait
+unset -f kill
+
+case_dir dead_worker
+mkdir -p "$RUNNER_TEMP/mac-prebuild"
+printf '99999999\n' > "$RUNNER_TEMP/mac-prebuild/pid"
+: > "$RUNNER_TEMP/mac-prebuild/log"
+if bash "$script" wait; then echo 'a worker that exited without a result was not reported' >&2; exit 1; fi
+
 case_dir order
 echo 12.0 > "$GITHUB_WORKSPACE/apps/mbui/_build/.macos-min"
 bash "$script" start
