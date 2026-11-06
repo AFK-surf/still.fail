@@ -195,7 +195,8 @@ fn indexed_missing_from_source(whole : Bool) -> Double raise {
   src.keys.remove(0) |> ignore
   src.at.remove("m0")
   for i, k in src.keys { src.at[k] = i }
-  expired.val = true
+  // A whole replacement may not enumerate removals at all; an ordinary expired history instead returns None.
+  expired.val = !whole
   if whole { src.pending.push(Whole) }
   src.rev.set(src.rev.get() + 1)
   t.draw()
