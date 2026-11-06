@@ -1923,6 +1923,8 @@ fn window_key_taken(code : Int, mods : Int) -> Bool {
 
 ///|
 fn on_key_now(code : Int, mods : Int) -> Unit {
+  // Focus and modal ownership are read at this input's layout, as for a pointer or an accessibility action.
+  old_input_brought()
   // what the part over the field with the focus said it takes of its keys, at their moment, before the field, the
   // tree's Tab or the frame (Ctx::on_key): the one place a key is handed it or not
   if keys_taken_now(g().focus_allowed(), code, mods) {

@@ -254,9 +254,9 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
         code == key_end
       ) {
       self.rove(code)
-    } else if mods == 0 && (code == key_enter || code == key_space) {
-      self.press_focused(if code == key_enter { press_enter } else { press_space })
     } else {
+      // Enter and Space were offered to the focused stop at their input (press_key_now). A key it could not take
+      // then is still the app's to read, never a new press if the focus or its owner's availability changes.
       false
     }
     if used {
@@ -462,8 +462,7 @@ fn Ctx::press_focused(self : Ctx, key : Int, taken? : () -> Unit) -> Bool {
   }
   for f in self.last_focusables {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
-      // Record a newly delivered key once its route is known, before its application callback can stop the run.
-      // A key already queued by the old frame's input path was recorded on arrival and needs nothing here.
+      // Record the key once its route is known, before its application callback can stop the run.
       match taken { Some(tell) => tell(); None => () }
       self.clicked.push(f.id)
       made_pressed(f.id)
@@ -475,13 +474,13 @@ fn Ctx::press_focused(self : Ctx, key : Int, taken? : () -> Unit) -> Bool {
 }
 
 ///|
-/// A key pressing an old view's callback belongs to this input, before the next frame. Fields and catchers retain
+/// A key pressing an old view's focus stop belongs to this input, before the next frame. Fields and catchers retain
 /// their keys, and an old modal or a retained host that excludes the focus keeps the press from reaching it.
 fn Ctx::press_key_now(self : Ctx, code : Int, mods : Int) -> Bool {
   let focus = self.focus_allowed()
   guard mods == 0 && (code == key_enter || code == key_space) && focus != 0 else { return false }
   guard !self.editors.contains(focus) && !self.dev.catchers.contains(focus) &&
-    self.keys_reach(focus) && made_presses.contains(focus) else { return false }
+    self.keys_reach(focus) else { return false }
   self.press_focused(if code == key_enter { press_enter } else { press_space },
     taken=fn() { took_input("key", h_event_time(), [code.to_double(), mods.to_double()]) })
 }

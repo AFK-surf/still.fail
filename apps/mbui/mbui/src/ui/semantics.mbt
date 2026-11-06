@@ -155,6 +155,8 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
 ///|
 /// `action` asked of `id`, as things are now (Ctx::ask_action).
 fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
+  // The layer that allows this action is the one at the input's moment, including layout omission and return.
+  old_input_brought()
   // (a node of the window's tree's: its own, as a press on it is)
   if tree_said_action(id, action) {
     return

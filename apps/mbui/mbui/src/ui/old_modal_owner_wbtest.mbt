@@ -172,3 +172,132 @@ test "closing nested old portals at their owners' causes restores the surviving 
   assert_eq(calls, ["outer"])
   assert_eq(t.host_frames().length(), 0)
 }
+
+///|
+test "a portal's opening survives its owner being left out of a row and laid out again" {
+  let outcomes : Array[Bool] = []
+  let pictures : Array[String] = []
+  for framed in [false, true] {
+    let width = @signals.signal(40.0)
+    let owner : Ref[@view.View?] = Ref(None)
+    let layer = Ref(0)
+    let released = Ref(0)
+    let dismissed = Ref(0)
+    let calls : Array[Double] = []
+    let t = Tester::new(fn(_c) { }, w=400.0, h=200.0)
+    set_view_app(fn(root) {
+      root.box(fn(row) {
+        row.row(Is(true)).fits(Is(true)).width(By(fn() { Some(width.get()) }))
+          .height(Is(Some(40.0))) |> ignore
+        row.box(fn(filler) {
+          filler.width(Is(Some(20.0))).height(Is(Some(18.0))) |> ignore
+        }) |> ignore
+        row.box(fn(v) {
+          owner.val = Some(v)
+          v.drops(Is(1)).width(Is(Some(18.0))).height(Is(Some(18.0)))
+            .owns(fn() { released.val += 1 }) |> ignore
+          old(v, fn(c) {
+            c.with_dismissed(fn(_) { dismissed.val += 1 }, fn() {
+              let opened = c.overlay("kept portal", modal=true, outside=false, fn() {
+                let id = c.id("kept portal button")
+                let b = c.box(id~, w=Px(80.0), h=Px(40.0), fn() { c.text("kept portal") |> ignore })
+                c.semantics(b, Button, id~, label="kept portal", actions=[Activate])
+                c.focusable(id, node=b)
+                c.on_press(id, fn() { calls.push(v.cause_at()) })
+              })
+              layer.val = opened.id
+            })
+          }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    })
+    t.draw()
+    let portal = t.get(Button, label="kept portal")
+    let generation = t.ctx().layer_gen.get(layer.val)
+    assert_eq(t.focused().map(fn(s) { s.id }), Some(portal.id))
+    let hidden_at = t.time() + 50.0
+    let returned_at = hidden_at + 50.0
+    t.record_host()
+    t.advance(hidden_at - t.time())
+    host_event(fn() { width.set(20.0) })
+    if framed {
+      t.frame_at(hidden_at)
+      assert_true(owner.val.unwrap().left_out())
+    }
+    t.advance(returned_at - t.time())
+    host_event(fn() { width.set(40.0) })
+    let hit = t.press_target_at(20.0, 20.0).map(fn(s) { s.label })
+    let offered = t.query(Button, label="kept portal").map(fn(s) { s.actions.contains(Activate) }).unwrap_or(false)
+    let focused = t.focused().map(fn(s) { s.id })
+    let retired = t.ctx().layer_retired_now(layer.val)
+    let kept = t.ctx().layer_gen.get(layer.val) == generation
+    t.ctx().ask_action(portal.id, Activate)
+    let immediate = calls.copy()
+    assert_eq(t.host_frames().map(fn(f) { f.at }), if framed { [hidden_at] } else { [] })
+    t.draw()
+    println("owner returned framed \{framed} at \{returned_at}: offered \{offered}, hit \{hit}, focus \{focused}, retired \{retired}, kept \{kept}, calls \{immediate}/\{calls}, released \{released.val}, dismissed \{dismissed.val}")
+    outcomes.push(offered && hit == Some("kept portal") && focused == Some(portal.id) && !retired && kept &&
+      immediate == [returned_at] && calls == immediate && released.val == 0 && dismissed.val == 0)
+    pictures.push(t.drawn_text())
+  }
+  assert_true(outcomes.all(fn(ok) { ok }), msg="temporary layout omission does not end the owner's portal or lose its input")
+  assert_eq(pictures[0], pictures[1])
+}
+
+///|
+test "an omitted portal offers no input and the same opening takes each input again on return" {
+  for how in ["activate", "enter", "space", "pointer"] {
+    for framed in [false, true] {
+      let width = @signals.signal(40.0)
+      let calls : Array[Double] = []
+      let t = Tester::new(fn(_c) { }, w=400.0, h=200.0)
+      set_view_app(fn(root) {
+        root.box(fn(row) {
+          row.row(Is(true)).fits(Is(true)).width(By(fn() { Some(width.get()) }))
+            .height(Is(Some(40.0))) |> ignore
+          row.box(fn(v) { v.width(Is(Some(20.0))).height(Is(Some(18.0))) |> ignore }) |> ignore
+          row.box(fn(v) {
+            v.drops(Is(1)).width(Is(Some(18.0))).height(Is(Some(18.0))) |> ignore
+            old(v, fn(c) {
+              c.overlay("input portal", modal=true, outside=false, fn() {
+                let id = c.id("input portal button")
+                let b = c.box(id~, w=Px(80.0), h=Px(40.0), fn() { c.text("input portal") |> ignore })
+                c.semantics(b, Button, id~, label="input portal", actions=[Activate])
+                c.focusable(id, node=b)
+                c.on_press(id, fn() { calls.push(v.cause_at()) })
+              }) |> ignore
+            }) |> ignore
+          }) |> ignore
+        }) |> ignore
+      })
+      t.draw()
+      let id = t.get(Button, label="input portal").id
+      let input = fn(at : Double) {
+        match how {
+          "activate" => t.ctx().ask_action(id, Activate)
+          "enter" => t.key_told(key_enter, 0, at)
+          "space" => t.key_told(key_space, 0, at)
+          _ => { t.touch_at(0, 20.0, 20.0, at); t.touch_at(2, 20.0, 20.0, at) }
+        }
+      }
+      let hidden_at = t.time() + 50.0
+      let returned_at = hidden_at + 50.0
+      t.record_host()
+      t.advance(hidden_at - t.time())
+      host_event(fn() { width.set(20.0) })
+      if framed { t.frame_at(hidden_at) }
+      // The actual host input comes first: a semantics query must not repair its preparation.
+      input(hidden_at)
+      assert_eq(calls, [], msg="hidden \{how}, framed \{framed}")
+      assert_true(t.query(Button, label="input portal") is None)
+      assert_true(t.press_target_at(20.0, 20.0) is None)
+      t.advance(returned_at - t.time())
+      host_event(fn() { width.set(40.0) })
+      input(returned_at)
+      assert_eq(calls, [returned_at], msg="returned \{how}, framed \{framed}")
+      assert_eq(t.host_frames().map(fn(f) { f.at }), if framed { [hidden_at] } else { [] })
+      t.draw()
+      assert_eq(calls, [returned_at], msg="after drawing returned \{how}, framed \{framed}")
+    }
+  }
+}
