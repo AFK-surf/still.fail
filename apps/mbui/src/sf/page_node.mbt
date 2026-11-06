@@ -156,6 +156,19 @@ fn styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyl
 }
 
 ///|
+/// A row's words whose style can change after the node is made, including whether they are cut to one line.
+fn row_styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> Unit {
+  w
+  .words(By(words))
+  .words_look(By(fn() { @ui.style_words(style()) }))
+  .ink(By(fn() { @ui.style_ink(style()) }))
+  .min_width(Is(Some(0.0)))
+  .cuts(By(fn() { @ui.style_cut(style()) }))
+  .allow_ellipsis(By(fn() { @ui.style_cut(style()) }))
+  |> ignore
+}
+
+///|
 /// What a page made once holds, in its order (page_node's): what stands over it, back, its large title, what it is for,
 /// its blocks by their keys, the room at its foot.
 priv enum PageItem {
@@ -1073,6 +1086,55 @@ pub fn row_tag_node(parent : @view.View, words : () -> String) -> Unit {
 let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
+/// The title of a settings row, in its page's look. One line unless `wrap` is true, as settings' row_title and
+/// row_lines: body words on a narrow page; Ui on a wide page, or Body when they wrap.
+pub fn settings_row_title_style(parent : @view.View, wrap? : Bool = false) -> @ui.TextStyle {
+  match (look_node(parent), wrap) {
+    (Narrow, false) => settings_title_line
+    (Narrow, true) => settings_title_lines
+    (Wide, false) => settings_title_wide_line
+    (Wide, true) => settings_title_wide_lines
+  }
+}
+
+///|
+/// The explanation under a settings row's title, in its page's look. `wrap` lets it balance across lines, as
+/// settings' row_lines does; otherwise it is a single line.
+pub fn settings_row_note_style(parent : @view.View, wrap? : Bool = false) -> @ui.TextStyle {
+  match (look_node(parent), wrap) {
+    (Narrow, false) => settings_note_line
+    (Narrow, true) => settings_note_lines
+    (Wide, false) => settings_note_wide_line
+    (Wide, true) => settings_note_wide_lines
+  }
+}
+
+///|
+// kept across runs: values (no field of any changes)
+let settings_title_line : @ui.TextStyle = body.then(one_line).then(full_words)
+
+///|
+let settings_title_lines : @ui.TextStyle = body.then(full_words)
+
+///|
+let settings_title_wide_line : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full)
+
+///|
+let settings_title_wide_lines : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Full)
+
+///|
+let settings_note_lines : @ui.TextStyle = secondary.then(full_words).then(@ui.text_style(balance=true))
+
+///|
+let settings_note_line : @ui.TextStyle = settings_note_lines.then(one_line)
+
+///|
+let settings_note_wide_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Full)
+
+///|
+let settings_note_wide_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full, balance=true)
+
+///|
 /// A row on a group's card that goes somewhere (link_row's, narrow, in a card): `lead` before its title (`strong`
 /// where it names who or what it is), what it says at its end (`value`, in red where `value_bad`, a red dot before it
 /// where `value_dot`) and a chevron (none where not `chevron`; an arrow out where it goes `out` of the app); `note` under
@@ -1084,7 +1146,13 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// title on its line while `title_after_shown` says (a tag: whose it is), its title cut short where the line has not
 /// the room for both. `folds`: it
 /// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `tail` after what it
-/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). Its words as they are said.
+/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). `control` is an independent
+/// action at the end, shown while `control_shown` says; a face's lead and control stand at the middle of the whole row,
+/// with its note cut where the control leaves less. `lacks` colours the note as a warning. The optional title and note
+/// styles follow their callers, including their weight and balanced wrapping. `danger` colours the title red;
+/// `value_lit` puts the value in the link's ink. A busy row remains as it was but does not do its action again.
+/// `goes_now`, where given, follows whether the row goes somewhere without rebuilding its contents.
+/// Its words as they are said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -1109,11 +1177,34 @@ pub fn link_row_node(
   folds? : () -> Bool,
   tail? : (@view.View) -> Unit,
   tail_shown? : () -> Bool = fn() { true },
+  control? : (@view.View) -> Unit,
+  control_shown? : () -> Bool = fn() { true },
+  face? : () -> Bool = fn() { false },
+  lacks? : () -> Bool = fn() { false },
+  title_style? : () -> @ui.TextStyle,
+  note_style? : () -> @ui.TextStyle,
+  danger? : () -> Bool = fn() { false },
+  value_lit? : () -> Bool = fn() { false },
+  busy? : () -> Bool = fn() { false },
+  goes_now? : () -> Bool,
 ) -> Unit {
+  let can_go = match goes_now { Some(f) => f; None => fn() { goes } }
+  let dynamic_goes = goes_now is Some(_)
+  let may_go = goes || dynamic_goes
+  let do_press = fn() { if can_go() && !busy() { press() } }
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
-  let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
-  let titled_in = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
+  let titled = fn() {
+    let style = match title_style {
+      Some(f) => f()
+      None => if under() && value() != "" { pg_row_title_in } else { pg_row_title }
+    }
+    if danger() { style.then(bad) } else if strong { style.then(row_strong) } else { style }
+  }
+  let cut_note = fn() { note_cut || (face() && control is Some(_) && control_shown() && under()) }
+  let face_body = fn() { face() && control is Some(_) && control_shown() && under() }
+  let flexible_value = fn() { face_body() || value_lit() }
+  let under_visible = fn() { note() != "" || trouble() != "" || (below is Some(_) && below_open() > 0.0) }
   // (its chevron: down where it folds what follows it, up while that is open, as link_row's `folds`)
   let mark = fn() {
     match (out, folds) {
@@ -1122,7 +1213,7 @@ pub fn link_row_node(
       (false, None) => "chevron-right"
     }
   }
-  let ends = goes && (out || (chevron && !acts))
+  let ends = fn() { can_go() && (out || (chevron && !acts && (control is None || !control_shown()))) }
   if look_node(parent) is Wide {
     // (its note as a wide page says it, where it says it otherwise: `wide_note`)
     let note = match wide_note {
@@ -1130,24 +1221,49 @@ pub fn link_row_node(
       None => note
     }
     wide_link_row_node(
-      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, title_after_shown, folds, tail, tail_shown,
+      parent, title, do_press, value, value_bad, value_dot, note, trouble, strong, lead, may_go, can_go, dynamic_goes, ends, mark, acts, below, below_open,
+      note_cut, title_after, title_after_shown, folds, tail, tail_shown, control, control_shown, face, lacks, title_style,
+      note_style, danger, value_lit,
     )
     return
   }
+  let at = part_of(parent)
   parent.box(fn(r) {
+    // A panel's rows reach into its side room while their words stay on its column. Read the lent geometry in each
+    // binding so a row already in the tree follows a panel that changes its insets.
+    let panel_line = fn() { panel_row_layout(r, true, at.list) }
+    let corner = fn() {
+      if panel_line().inner {
+        if at.list {
+          if in_pane_node(r) { inner_corner(card_corner, corner_inset) } else { inner_corner(group_corner, list_pad) }
+        } else {
+          small_panel_inner(r_menu)
+        }
+      } else if in_panel_node(r) && !at.list {
+        0.0
+      } else {
+        inner_corner(group_corner, list_pad)
+      }
+    }
     r
     .row(Is(true))
     .gap(Is(12.0))
-    .padding(Is((text_in, text_in, text_in, text_in)))
-    .radius(Is(inner_corner(group_corner, list_pad)))
+    .margin(By(fn() { let out = panel_line().out; (-out, 0.0, -out, 0.0) }))
+    .padding(By(fn() { let x = panel_line().padding.unwrap_or(text_in); (x, text_in, x, text_in) }))
+    .radius(By(corner))
     .min_height(By(fn() { Some(theme().items.least) }))
-    .lines_up(By(fn() { Some(if under() { Start } else { Middle }) }))
+    .lines_up(By(fn() { Some(if under() && !face() { Start } else { Middle }) }))
     |> ignore
-    if goes {
-      r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      pressed_node(r, press, Is(row_corner), Link, title)
-      row_folds_said(r, title, folds)
+    if may_go {
+      r.ground(By(fn() { if can_go() && lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
+      pressed_node(r, do_press, By(fn() { if in_panel_node(r) { corner() } else { row_corner } }), Link, title)
+      r
+      .focusable(By(can_go))
+      .says(By(fn() { if can_go() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) } else { None } }))
+      |> ignore
+      if dynamic_goes {
+        r.takes(fn(w, h, _) { if can_go() { [(0.0, 0.0, w, h)] } else { [] } }) |> ignore
+      }
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as that line at least, across its
     // middle)
@@ -1161,7 +1277,7 @@ pub fn link_row_node(
           .row(Is(true))
           .lines_up(Is(Some(Middle)))
           .min_height(By(fn() {
-            if under() {
+            if under() && !face() {
               l.words_redone() |> ignore
               Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
             } else {
@@ -1179,81 +1295,212 @@ pub fn link_row_node(
     r.box(fn(words) {
       // (as wide as the row leaves it, narrower where what it holds is wider: its words wrapped there, as a row's are)
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-      words.box(fn(first) {
-        first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
-        // with words under it, its title and what it says in a line, what it says under the title where the line has not
-        // the room (pg_title_value, a row in lines: its ends the title's and what it says'); else all of it on one line,
-        // its title giving way (link_row's `!under`)
-        first.box(fn(tv) {
-          tv
-          .grow(Is(1.0))
-          .shrink(Is(1.0))
-          .min_width(Is(Some(0.0)))
-          .row(Is(true))
-          .gap(Is(12.0))
-          .wraps(By(fn() { if under() && value() != "" { Some(0.0) } else { None } }))
-          .lines_up(Is(Some(Middle)))
-          |> ignore
-          tv.box(fn(t) {
-            // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does;
-            // beside what it says, its words' own (pg_row_title_in), the line's room left between them: its line's ends
-            // the title's and what it says')
-            t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-            let plain = fn() { if under() && value() != "" { titled_in } else { titled } }
-            // (what follows its title on its line while it is said, 8 apart across their middle: the title cut short
-            // where the line leaves it less, link_row's title_line; its title the same words all along)
-            let after_now = fn() { title_after is Some(_) && title_after_shown() }
-            t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
-            t.box(fn(w) {
-              w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-              styled_words(w, title, fn() {
-                if after_now() || (note_cut && value() == "") { plain().then(cut_words) } else { plain() }
-              })
-              |> ignore
-              if acts {
-                w.ink(By(fn() { link_ink() })) |> ignore
-              }
+      // With words under it, its value can move to another line where there is not room beside the title.
+      let line = fn(tv : @view.View) {
+        tv
+        .grow(Is(1.0))
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        .row(Is(true))
+        .gap(Is(12.0))
+        .wraps(By(fn() { if (under() || value_lit()) && value() != "" { Some(0.0) } else { None } }))
+        .lines_up(Is(Some(Middle)))
+        |> ignore
+        tv.box(fn(t) {
+          // (giving way to what it says where the line has not the room, cut short, as link_row's title in a row does;
+          // beside what it says, its words' own (pg_row_title_in), the line's room left between them: its line's ends
+          // the title's and what it says')
+          // Keep enough of the title to recognise it; its time or action can move below before either is hidden.
+          t.grow(Is(1.0)).shrink(Is(1.0)).min_width_within(By(fn() {
+            if flexible_value() && value() != "" {
+              t.words_redone() |> ignore
+              Some(@ui.current().sp(@ui.style_words(titled()).size * 4.0))
+            } else { Some(0.0) }
+          })) |> ignore
+          let plain = titled
+          // (what follows its title on its line while it is said, 8 apart across their middle: the title cut short
+          // where the line leaves it less, link_row's title_line; its title the same words all along)
+          let after_now = fn() { title_after is Some(_) && title_after_shown() }
+          t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+          t.box(fn(w) {
+            w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            row_styled_words(w, title, fn() {
+              let style = plain()
+              if after_now() || face_body() || (cut_note() && value() == "") || !@ui.style_words(style).wrap {
+                style.then(cut_words)
+              } else { style }
             })
-            |> ignore
-            match title_after {
-              Some(after) =>
-                t.show(title_after_shown, fn(a) {
-                  a.margin(Is((8.0, 0.0, 0.0, 0.0))) |> ignore
-                  after(a)
-                })
-              None => ()
+            if acts {
+              w.ink(By(fn() { link_ink() })) |> ignore
             }
           })
           |> ignore
-          tv.show(fn() { value() != "" }, fn(said) {
-            said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
-            said.show(value_dot, fn(d) { status_dot_node(d) })
-            said.box(fn(w) {
-              styled_words(w, value, fn() { if value_bad() { pg_value.then(bad) } else { pg_value } }) |> ignore
-            })
-            |> ignore
-          })
+          match title_after {
+            Some(after) =>
+              t.show(title_after_shown, fn(a) {
+                a.margin(Is((8.0, 0.0, 0.0, 0.0))) |> ignore
+                after(a)
+              })
+            None => ()
+          }
         })
         |> ignore
+        tv.show(fn() { value() != "" }, fn(said) {
+          said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle)))
+          .shrink(By(fn() { if flexible_value() { 1.0 } else { 0.0 } }))
+          .min_width(By(fn() { if flexible_value() { Some(0.0) } else { None } })) |> ignore
+          said.show(value_dot, fn(d) { status_dot_node(d) })
+          said.box(fn(w) {
+            let style = fn() { if value_bad() { pg_value.then(bad) } else { pg_value } }
+            w.shrink(By(fn() { if flexible_value() { 1.0 } else { 0.0 } })) |> ignore
+            row_styled_words(w, value, fn() { if flexible_value() { style().then(in_lines) } else { style() } })
+            w.ink(By(fn() { if value_lit() { link_ink() } else { @ui.style_ink(style()) } })) |> ignore
+          })
+          |> ignore
+        })
+      }
+      let follow = fn(first : @view.View) {
         row_tail_node(first, tail, tail_shown)
-        if ends {
-          icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore
+        if control is None && !dynamic_goes {
+          if ends() { icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore }
+        } else {
+          first.show(ends, fn(end) { icon_node(end, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore })
         }
-      })
-      |> ignore
-      words.show(fn() { note() != "" }, fn(n) {
-        styled_words(n, note, fn() { if note_cut { pg_link_note.then(cut_words) } else { pg_link_note } }) |> ignore
-      })
-      // (what is wrong, in red under it: link_row's `trouble`)
-      words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { pg_link_note.then(bad) }) |> ignore })
-      match below {
-        Some(f) => row_below_node(words, f, below_open)
-        None => ()
+      }
+      let end = fn(first : @view.View) { row_control_node(first, control, control_shown, fn() { under() && !face() }, false) }
+      let more = fn(u : @view.View) {
+        row_under_node(u, note, trouble, below, below_open, lacks, note_style, cut_note, false)
+      }
+      if control is Some(_) {
+        row_controlled_content_node(words, line, follow, end, more, face_body, under_visible, false)
+      } else {
+        words.box(fn(first) {
+          first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
+          first.box(line) |> ignore
+          follow(first)
+        }) |> ignore
+        words.show(under_visible, more)
       }
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A controlled row's first line, its tail, its control and the lines under it, each kept as its place changes. A face
+/// puts the control beside the whole text column; the tail stays on the first line. Otherwise the lines under the first
+/// can use the row's full width. Keeping each part in one node preserves its state and focus when `face` changes.
+fn row_controlled_content_node(
+  words : @view.View,
+  line : (@view.View) -> Unit,
+  follow : (@view.View) -> Unit,
+  end : (@view.View) -> Unit,
+  under : (@view.View) -> Unit,
+  face : () -> Bool,
+  under_visible : () -> Bool,
+  wide : Bool,
+) -> Unit {
+  words.layout_box(By(fn() { (face(), under_visible()) }), sized=true, fn(l, state) {
+    let (face_now, visible_now) = state
+    let first = l.child("line", line)
+    let tail = l.child("tail", fn(e) {
+      e.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
+      follow(e)
+    })
+    let last = l.child("end", end)
+    let more = l.child("under", under)
+    let (end_w, end_h) = l.fit(last, l.width)
+    let text_w = dmax(0.0, l.width - end_w - (if end_w > 0.0 { 12.0 } else { 0.0 }))
+    let (tail_w, tail_h) = l.fit(tail, text_w)
+    let line_w = dmax(0.0, text_w - tail_w - (if tail_w > 0.0 { 12.0 } else { 0.0 }))
+    let (_, line_h) = l.measure(first, line_w)
+    let first_h = dmax(line_h, tail_h)
+    let (_, under_h) = l.measure(more, if face_now { text_w } else { l.width })
+    let under_gap = if wide && visible_now { desk_list_gap } else { 0.0 }
+    if face_now {
+      let text_h = first_h + under_gap + under_h
+      let total_h = dmax(text_h, end_h)
+      let top = (total_h - text_h) / 2.0
+      l.place(first, 0.0, top + (first_h - line_h) / 2.0)
+      l.place(tail, text_w - tail_w, top + (first_h - tail_h) / 2.0)
+      l.place(last, l.width - end_w, (total_h - end_h) / 2.0)
+      l.place(more, 0.0, top + first_h + under_gap)
+      l.size_to(total_h)
+    } else {
+      let head_h = dmax(first_h, end_h)
+      l.place(first, 0.0, (head_h - line_h) / 2.0)
+      l.place(tail, text_w - tail_w, (head_h - tail_h) / 2.0)
+      l.place(last, l.width - end_w, (head_h - end_h) / 2.0)
+      l.place(more, 0.0, head_h + under_gap)
+      l.size_to(head_h + under_gap + under_h)
+    }
+  }) |> ignore
+}
+
+///|
+/// The lines under a row's first line, in the text column when a face's control stands beside them, otherwise below it.
+fn row_under_node(
+  parent : @view.View,
+  note : () -> String,
+  trouble : () -> String,
+  below : ((@view.View) -> Unit)?,
+  below_open : () -> Double,
+  lacks : () -> Bool,
+  note_style : (() -> @ui.TextStyle)?,
+  cut_note : () -> Bool,
+  wide : Bool,
+) -> Unit {
+  if wide { parent.gap(Is(desk_list_gap)) |> ignore }
+  parent.show(fn() { note() != "" }, fn(n) {
+    row_styled_words(n, note, fn() {
+      let style = match note_style { Some(f) => f(); None => if wide { wide_list_note } else { pg_link_note } }
+      let style = if lacks() { style.then(lacking) } else { style }
+      if cut_note() { style.then(cut_words) } else { style }
+    })
+  })
+  parent.show(fn() { trouble() != "" }, fn(n) {
+    styled_words(n, trouble, fn() { if wide { desk_note_bad } else { pg_link_note.then(bad) } }) |> ignore
+  })
+  match below {
+    Some(f) => row_below_node(parent, f, below_open)
+    None => ()
+  }
+}
+
+///|
+/// A row-end control lends its place to a ghost button, whose hit area reaches the card's edge.
+let row_end_node : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// A control on the first line takes only that line's height while its own press room extends above and below it.
+fn row_control_node(
+  parent : @view.View,
+  control : ((@view.View) -> Unit)?,
+  shown : () -> Bool,
+  on_line : () -> Bool,
+  wide : Bool,
+) -> Unit {
+  match control {
+    Some(make) => parent.show(shown, fn(end) {
+      end
+      .row(Is(true))
+      .lines_up(Is(Some(Middle)))
+      .height(By(fn() {
+        if on_line() {
+          end.words_redone() |> ignore
+          let th = @ui.tree_theme()
+          Some(@ui.current().sp(if wide { th.leading(L6).unwrap_or(th.text_size(Ui).1) } else { th.text_size(Body).1 }))
+        } else {
+          None
+        }
+      }))
+      .lends(row_end_node, true)
+      |> ignore
+      make(end)
+    })
+    None => ()
+  }
 }
 
 ///|
@@ -1266,15 +1513,6 @@ fn row_tail_node(first : @view.View, tail : ((@view.View) -> Unit)?, shown : () 
         e.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
         f(e)
       })
-    None => ()
-  }
-}
-
-///|
-/// A row that `folds` what follows it read out as open or not, as it says (link_row's `expanded`), named `title`.
-fn row_folds_said(r : @view.View, title : () -> String, folds : (() -> Bool)?) -> Unit {
-  match folds {
-    Some(open) => r.says(By(fn() { Some(@view.said(Link, label=title(), expanded=open())) })) |> ignore
     None => ()
   }
 }

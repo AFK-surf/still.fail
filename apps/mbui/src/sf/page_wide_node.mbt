@@ -422,8 +422,10 @@ fn wide_link_row_node(
   trouble : () -> String,
   strong : Bool,
   lead : RowLead,
-  goes : Bool,
-  ends : Bool,
+  may_go : Bool,
+  can_go : () -> Bool,
+  dynamic_goes : Bool,
+  ends : () -> Bool,
   mark : () -> String,
   acts : Bool,
   below : ((@view.View) -> Unit)?,
@@ -434,14 +436,29 @@ fn wide_link_row_node(
   folds : (() -> Bool)?,
   tail : ((@view.View) -> Unit)?,
   tail_shown : () -> Bool,
+  control : ((@view.View) -> Unit)?,
+  control_shown : () -> Bool,
+  face : () -> Bool,
+  lacks : () -> Bool,
+  title_style : (() -> @ui.TextStyle)?,
+  note_style : (() -> @ui.TextStyle)?,
+  danger : () -> Bool,
+  value_lit : () -> Bool,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
-  let titled = if strong { desk_list_title.then(row_strong) } else { desk_list_title }
+  let titled = fn() {
+    let style = match title_style { Some(f) => f(); None => desk_list_title }
+    if danger() { style.then(bad) } else if strong { style.then(row_strong) } else { style }
+  }
+  let cut_note = fn() { note_cut || (face() && control is Some(_) && control_shown() && under()) }
+  let face_body = fn() { face() && control is Some(_) && control_shown() && under() }
+  let flexible_value = fn() { face_body() || value_lit() }
+  let under_visible = fn() { note() != "" || trouble() != "" || (below is Some(_) && below_open() > 0.0) }
   // (in a panel's card, pressed: its ground reaching `link_pane_out` past the row over and under, to the card's rows'
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
-  let reach = at.list && goes && in_pane_node(parent)
+  let reach = at.list && may_go && in_pane_node(parent)
   parent.box(fn(o) {
     if reach {
       o
@@ -451,20 +468,35 @@ fn wide_link_row_node(
       |> ignore
     }
     o.box(fn(r) {
+    let panel_line = fn() { panel_row_layout(r, false, at.list) }
     r
     .row(Is(true))
     .gap(Is(12.0))
     // (its words a row's room in at its sides, 10 over and under: the old view's wide_list_row_ground; in a panel's
     // card none of its own where it is not pressed, none in the card's corners: wide_list_row)
-    .padding(Is((text_in, wide_row_over, text_in, wide_row_over)))
-    .radius(By(fn() { if at.list { if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) } } else { @ui.tree_theme().corner(Xl2) } }))
+    .margin(By(fn() { let out = panel_line().out; (-out, 0.0, -out, 0.0) }))
+    .padding(By(fn() { let x = panel_line().padding.unwrap_or(text_in); (x, wide_row_over, x, wide_row_over) }))
+    .radius(By(fn() {
+      if panel_line().inner {
+        if at.list {
+          if in_pane_node(r) { inner_corner(card_corner, corner_inset) } else { inner_corner(group_corner, list_pad) }
+        } else { small_panel_inner(r_menu) }
+      } else if at.list {
+        if (in_pane_node(r) && !can_go()) || reach { 0.0 } else { list_row_corner(r) }
+      } else { @ui.tree_theme().corner(Xl2) }
+    }))
     .min_height(By(fn() { Some(theme().items.least) }))
-    .lines_up(By(fn() { Some(if under() { Start } else { Middle }) }))
+    .lines_up(By(fn() { Some(if under() && !face() { Start } else { Middle }) }))
     |> ignore
-    if goes {
-      (if reach { o } else { r }).ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
+    if may_go {
+      (if reach { o } else { r }).ground(By(fn() { if can_go() && lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
       presses_node(r, press)
-      r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
+      r.focusable(By(can_go)).says(By(fn() {
+        if can_go() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) } else { None }
+      })) |> ignore
+      if dynamic_goes {
+        r.takes(fn(w, h, _) { if can_go() { [(0.0, 0.0, w, h)] } else { [] } }) |> ignore
+      }
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as a list's title's line at least,
     // across its middle)
@@ -476,7 +508,7 @@ fn wide_link_row_node(
           .row(Is(true))
           .lines_up(Is(Some(Middle)))
           .min_height(By(fn() {
-            if under() {
+            if under() && !face() {
               l.words_redone() |> ignore
               Some(@ui.current().sp(@ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
             } else {
@@ -491,19 +523,29 @@ fn wide_link_row_node(
     }
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
-      words.box(fn(first) {
-        first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
-        first.box(fn(t) {
-          t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      let first_line = fn(line : @view.View) {
+        line.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0)))
+        .row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle)))
+        .wraps(By(fn() { if flexible_value() && value() != "" { Some(0.0) } else { None } })) |> ignore
+        line.box(fn(t) {
+          // Keep some of the title visible; let the time or action move below if there is too little room.
+          t.grow(Is(1.0)).shrink(Is(1.0)).min_width_within(By(fn() {
+            if flexible_value() && value() != "" {
+              t.words_redone() |> ignore
+              Some(@ui.current().sp(@ui.style_words(titled()).size * 4.0))
+            } else { Some(0.0) }
+          })) |> ignore
           // (what follows its title on its line while it is said, 8 apart across their middle, the title cut short where
           // the line leaves it less: link_row's title_line; its title the same words all along)
           t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
           t.box(fn(w) {
             w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-            styled_words(w, title, fn() {
-              if title_after is Some(_) && title_after_shown() { titled.then(cut_words) } else { titled }
+            row_styled_words(w, title, fn() {
+              let style = titled()
+              if face_body() || (title_after is Some(_) && title_after_shown()) || !@ui.style_words(style).wrap {
+                style.then(cut_words)
+              } else { style }
             })
-            |> ignore
             if acts {
               w.ink(By(fn() { link_ink() })) |> ignore
             }
@@ -519,25 +561,41 @@ fn wide_link_row_node(
           }
         })
         |> ignore
-        first.show(fn() { value() != "" }, fn(said) {
-          said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
+        line.show(fn() { value() != "" }, fn(said) {
+          said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle)))
+          .shrink(By(fn() { if flexible_value() { 1.0 } else { 0.0 } }))
+          .min_width(By(fn() { if flexible_value() { Some(0.0) } else { None } })) |> ignore
           said.show(value_dot, fn(d) { status_dot_node(d) })
-          said.box(fn(w) { styled_words(w, value, fn() { if value_bad() { wide_value.then(bad) } else { wide_value } }) |> ignore })
+          said.box(fn(w) {
+            let style = fn() { if value_bad() { wide_value.then(bad) } else { wide_value } }
+            w.shrink(By(fn() { if flexible_value() { 1.0 } else { 0.0 } })) |> ignore
+            row_styled_words(w, value, fn() { if flexible_value() { style().then(in_lines) } else { style() } })
+            w.ink(By(fn() { if value_lit() { link_ink() } else { @ui.style_ink(style()) } })) |> ignore
+          })
           |> ignore
         })
+      }
+      let follow = fn(first : @view.View) {
         row_tail_node(first, tail, tail_shown)
-        if ends {
-          icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
+        if control is None && !dynamic_goes {
+          if ends() { icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore }
+        } else {
+          first.show(ends, fn(end) { icon_node(end, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore })
         }
-      })
-      |> ignore
-      words.show(fn() { note() != "" }, fn(n) {
-        styled_words(n, note, fn() { if note_cut { wide_list_note.then(cut_words) } else { wide_list_note } }) |> ignore
-      })
-      words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { desk_note_bad }) |> ignore })
-      match below {
-        Some(f) => row_below_node(words, f, below_open)
-        None => ()
+      }
+      let end = fn(first : @view.View) { row_control_node(first, control, control_shown, fn() { under() && !face() }, true) }
+      let more = fn(u : @view.View) {
+        row_under_node(u, note, trouble, below, below_open, lacks, note_style, cut_note, true)
+      }
+      if control is Some(_) {
+        row_controlled_content_node(words, first_line, follow, end, more, face_body, under_visible, true)
+      } else {
+        words.box(fn(first) {
+          first.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
+          first.box(first_line) |> ignore
+          follow(first)
+        }) |> ignore
+        words.show(under_visible, more)
       }
     })
     |> ignore
