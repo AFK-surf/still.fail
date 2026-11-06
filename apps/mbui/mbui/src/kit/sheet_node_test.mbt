@@ -29,7 +29,7 @@ struct NodeSheetCase {
 }
 
 ///|
-fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = false, under? : Double = 0.0, draggable? : Bool = true, sticky? : @view.LayoutCap) -> (@ui.Tester, NodeSheetCase) {
+fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = false, under? : Double = 0.0, draggable? : Bool = true, sticky? : @view.LayoutCap, tall_now? : () -> Double) -> (@ui.Tester, NodeSheetCase) {
   let k : NodeSheetCase = {
     open: @signals.signal(true), content: @signals.signal(200.0), sinks: @signals.signal(0.0), extent: Ref(None),
     shown: Ref(0), gone: Ref(0), pressed: Ref(0), surface: Ref(None),
@@ -40,7 +40,7 @@ fn node_sheet_case(tall? : Double = 0.0, fit? : Bool = false, grows? : Bool = fa
     }) |> ignore
     @kit.sheet_node(
       root, fn() { k.open.get() }, fn() { k.open.set(false) },
-      tall~, fit~, grows~, under~, draggable~, sticky?, label=fn() { "Sheet" },
+      tall~, fit~, grows~, under~, draggable~, sticky?, tall_now?, label=fn() { "Sheet" },
       sinks=fn() { k.sinks.get() },
       extent=fn(v) { k.extent.val = Some(v) },
       shown=fn() { k.shown.val += 1 }, gone=fn() { k.gone.val += 1 },
@@ -267,6 +267,48 @@ test "tree sheet with a height share uses the window and excludes its extension 
   t.run_for(sheet_test_late_ms)
   assert_eq(k.extent.val.unwrap().rect().3, 422.0)
   assert_eq(k.surface.val.unwrap().rect().1, 422.0)
+}
+
+///|
+test "a changing share switches between natural and fixed height without replacing the sheet" {
+  let share = @signals.signal(0.0)
+  let (t, k) = node_sheet_case(tall_now=fn() { share.get() })
+  t.run_for(sheet_test_late_ms)
+  let sheet = k.surface.val.unwrap()
+  let extent = k.extent.val.unwrap()
+  assert_eq(extent.rect().3, 225.0)
+  share.set(0.66)
+  t.draw()
+  assert_true((extent.rect().3 - 844.0 * 0.66).abs() < 0.01)
+  k.content.set(40.0)
+  t.draw()
+  assert_true((extent.rect().3 - 844.0 * 0.66).abs() < 0.01)
+  share.set(0.0)
+  t.draw()
+  assert_eq(extent.rect().3, 65.0)
+  assert_eq(k.surface.val.unwrap().id(), sheet.id())
+  assert_eq(k.extent.val.unwrap().id(), extent.id())
+  assert_eq(k.shown.val, 1)
+  assert_eq(k.gone.val, 0)
+}
+
+///|
+test "a changing fitted share is used at drag release without an intermediate frame" {
+  for draw in [false, true] {
+    let share = @signals.signal(0.7)
+    let (t, k) = node_sheet_case(tall_now=fn() { share.get() }, fit=true, grows=true)
+    k.content.set(580.0)
+    t.run_for(sheet_test_late_ms)
+    let sheet = k.surface.val.unwrap()
+    let y = sheet.rect().1 + 10.0
+    t.touch(0, 190.0, y)
+    t.touch(1, 190.0, y - 80.0)
+    share.set(0.9)
+    if draw { t.draw() }
+    t.touch(2, 190.0, y - 80.0)
+    t.run_for(sheet_test_late_ms)
+    assert_eq(sheet.rect().3, 605.0, msg="frame=\{draw}")
+  }
 }
 
 ///|

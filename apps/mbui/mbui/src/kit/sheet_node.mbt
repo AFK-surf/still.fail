@@ -4,7 +4,8 @@
 ///|
 /// A bottom sheet in `parent` while `open` says so. `body` makes its contents once: a scrolling body should shrink in
 /// the room between its fixed head and foot. `tall` is a share of the window to fill (0: as tall as its contents),
-/// capped at 94%; with `fit`, a positive `tall` is a limit rather than a fixed height. An optional `sticky` keeps a
+/// capped at 94%; `tall_now`, when supplied, follows a changing share without replacing the sheet. With `fit`, a
+/// positive share is a limit rather than a fixed height. An optional `sticky` keeps a
 /// natural-height sheet at the cap after its contents first exceed it, and can be kept across presentation changes.
 /// `grows` allows the 55% and 94%
 /// detents; a fitted sheet can use them when its contents come to the limit. The system's bottom inset is included.
@@ -40,6 +41,7 @@ pub fn sheet_node(
   within? : () -> Bool = fn() { false },
   under? : Double = 0.0,
   sticky? : @view.LayoutCap,
+  tall_now? : () -> Double = fn() { tall },
 ) -> Unit {
   let surface : Ref[@view.View?] = Ref(None)
   let close : Ref[(Double) -> Double] = Ref(fn(_) { 0.0 })
@@ -197,6 +199,7 @@ pub fn sheet_node(
             if delta.abs() > @ui.touch_slop() { dragged.val = true }
             let total = @signals.untracked(fn() { sheet.window().1 })
             let normal = requested.laid_size().1
+            let tall = @signals.untracked(tall_now)
             let detents = grows && (!(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0)
             let top = if detents { total * 0.94 } else { base_h.val }
             let least = if detents { 120.0 } else { 0.0 }
@@ -216,6 +219,7 @@ pub fn sheet_node(
             let total = @signals.untracked(fn() { sheet.window().1 })
             let h = if @signals.untracked(fn() { size_mode.get() }) == 1 { @signals.untracked(fn() { held.get() }) } else { base_h.val }
             let normal = requested.laid_size().1
+            let tall = @signals.untracked(tall_now)
             let detents = grows && (!(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0)
             if dragged.val && (if detents { h / total < 0.3 } else { base_h.val - h > 80.0 }) {
               dismiss()
@@ -247,6 +251,7 @@ pub fn sheet_node(
             let h = dmax(0.0, sheet.laid_size().1 - under)
             let total = @signals.untracked(fn() { sheet.window().1 })
             let normal = requested.laid_size().1
+            let tall = @signals.untracked(tall_now)
             if !(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0 {
               let to = if h > total * (0.55 + 0.94) / 2.0 { total * 0.55 } else { total * 0.94 }
               settle(h, to, sheet.cause_at(), 0.0, true)
@@ -272,9 +277,9 @@ pub fn sheet_node(
           size_way.value_at(layer.logic_at())
         } else { size_way.target() }
       } else { held.get() }
-      (mode, current_h, layer.window().1)
+      (mode, current_h, layer.window().1, tall_now())
     }), fn(l, state) {
-      let (mode, current_h, wh) = state
+      let (mode, current_h, wh, tall) = state
       let cap = dmax(0.0, dmin(if fit && tall > 0.0 { tall } else { 0.94 }, 0.94) * wh)
       let wanted = dmax(0.0, l.measure(surface_node, l.width).1 - under)
       let normal = if tall > 0.0 && !fit {
