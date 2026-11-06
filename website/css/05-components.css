@@ -344,7 +344,7 @@
 :is(.stage .pane, .fpanel) .notif { animation: notif-in 420ms var(--ease-out) 360ms backwards; }
 
 /* ---- iPhone Duo: open, it is the desktop structure in the phone theme, the sidebar's edge on the fold ---- */
-.duo { position: relative; display: flex; width: min(100%, 470px); aspect-ratio: 1 / .93; padding: 8px; border-radius: 30px; background: #101113;
+.duo { position: relative; display: flex; width: min(100%, 470px); aspect-ratio: 1 / .93; min-height: 0; /* WebKit: the ratio, not the content, sets the height */ padding: 8px; border-radius: 30px; background: #101113;
   box-shadow: inset 0 0 0 1px #3A3B3F, 0 30px 60px -30px rgb(42 11 2 / .5); container: duo / inline-size; }
 .duo::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 50%; width: 2px; transform: translateX(-1px); z-index: 3; pointer-events: none;
   background: linear-gradient(to bottom, rgb(0 0 0 / .05), rgb(0 0 0 / .14), rgb(0 0 0 / .05)); }
@@ -364,7 +364,7 @@
 .duo .mk-sbd .bat { transform: scale(.85); }
 .duo .mk-page { flex: 1; background: var(--cv); }
 .duo .mk-bar { margin-top: 26px; padding-left: 16px; }
-.duo .mk-msgs { padding: 14px 18px 12px 46px; gap: 22px; }
+.duo .mk-msgs { padding: 14px 18px 12px 46px; gap: 22px; overflow: hidden; } /* a long thread ends at the composer, never under it */
 .duo .mk-composer { width: calc(100% - 20px); margin-bottom: 14px; background: rgb(255 255 255 / .8); box-shadow: 0 4px 14px -6px rgb(55 53 45 / .2); }
 /* Folded, the cover screen is the right half; its status bar runs down its right edge (the scroll scene's first stop). */
 .duo .mk-sbv { position: absolute; right: 0; top: 0; bottom: 0; width: 26px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 30px 0 34px;

@@ -118,3 +118,12 @@
   .formula b { font-size: 30px; }
   .formula > div > span { font-size: 14px; }
 }
+
+/* The headline breaks where its comma was; the comma stays for screen readers only. */
+#pool-title .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- The narrowest phones (iPhone SE): one figure per row, so the captions don't wrap to a word a line ---------- */
+@media (max-width: 374px) {
+  .formula { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .formula > div > span { max-width: none; }
+}

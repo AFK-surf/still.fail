@@ -33,8 +33,13 @@
 .term-body {
   padding: 18px 20px 22px; font-family: var(--mono); font-size: clamp(12.5px, .95vw, 14px); line-height: 1.8;
 }
-/* Long lines wrap with a hanging indent instead of hiding behind a scrollbar; the command stays selectable. */
+/* Output lines wrap with a hanging indent. The command never wraps on a wide screen (a wrapped shell line looks
+   broken): it is sized to fit, and scrolls sideways rather than wrap if a fallback font runs wider. */
 .term .row { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
+.term .row.cmd {
+  white-space: pre; overflow-wrap: normal; overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: thin; scrollbar-color: #3A3B3F transparent;
+}
 .term .row + .row { margin-top: 2px; }
 .term .cmd { color: #fff; margin-bottom: 6px; }
 .term code { font: inherit; }
@@ -109,6 +114,12 @@
 .tally > span::before { content: ""; width: 8px; height: 8px; background: #C9CACD; }
 .tally > span:first-child::before { background: var(--brand); }
 
+/* 961-1180: two columns but a narrow terminal; give it more of the card and step the mono down so the command
+   stays on one line (65 ch at .62 em). */
+@media (min-width: 961px) and (max-width: 1180px) {
+  .card.install { grid-template-columns: minmax(0, 8fr) minmax(0, 14fr); }
+  .term-body { padding-inline: 16px; font-size: clamp(11.5px, 1.18vw, 12.5px); }
+}
 @media (max-width: 960px) {
   .card.install, .post.feature { grid-template-columns: minmax(0, 1fr); }
   .card.install { gap: 24px; }
@@ -126,5 +137,12 @@
   .term-body { padding: 16px 16px 20px; font-size: 12.5px; line-height: 1.75; }
   .copy-btn { height: 36px; padding: 0 14px 0 12px; font-size: 14px; }
   .copy-btn::before { inset: -4px -6px; } /* 44 px */
+  /* A phone wraps the command, but only at its spaces and after the URL's slashes (<wbr>), never inside a word. */
+  .term .row.cmd { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: visible; }
   .hb { grid-template-columns: 4.6em minmax(0, 1fr); }
+}
+/* The narrowest phones drop the window title; the Copy button already says what the block is. */
+@media (max-width: 360px) {
+  .term-name { display: none; }
+  .copy-btn { margin-left: auto; }
 }
