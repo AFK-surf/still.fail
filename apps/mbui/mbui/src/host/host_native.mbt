@@ -460,6 +460,9 @@ fn local_station_act(a : String) -> Unit {
 extern "C" fn ffi_mods_held() -> Int = "mb_host_mods_held"
 
 ///|
+extern "C" fn set_modifiers(f : FuncRef[(Int) -> Unit]) -> Unit = "mb_host_set_modifiers"
+
+///|
 fn mods_held() -> Int {
   ffi_mods_held()
 }

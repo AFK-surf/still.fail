@@ -275,6 +275,8 @@ fn chat_over(
   let pane = c.box(style=chat_over_box, fn() { })
   if view is Some(_) {
     drop_hint(c, pane)
+  } else {
+    old_chat_drop_hint_forget(pane)
   }
   new_chat_after(c, src, w, r)
 }

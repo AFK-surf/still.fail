@@ -844,8 +844,10 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
             COREWEBVIEW2_KEY_EVENT_KIND kind;
             UINT key = 0;
             if (!view || view->closed || (view->kind != 2 && view->kind != 3) ||
-                FAILED(a->get_KeyEventKind(&kind)) || FAILED(a->get_VirtualKey(&key)) ||
-                (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN))
+                FAILED(a->get_KeyEventKind(&kind)) || FAILED(a->get_VirtualKey(&key)))
+              return S_OK;
+            mb_host_modifiers_changed();
+            if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
               return S_OK;
             int code = key == VK_LEFT ? 3 : key == VK_RIGHT ? 4 : key == VK_UP ? 5 : key == VK_DOWN ? 6 :
                        key == VK_RETURN ? 7 : key == VK_ESCAPE ? 17 : 0;

@@ -3009,13 +3009,10 @@ pub fn local_station_act(action : String) -> Unit {
 }
 
 ///|
-/// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
-/// them (Tester::hold_mods).
+/// The modifier keys held now (mod_shift_key, mod_ctrl, mod_alt, mod_cmd), followed as they change, including while the
+/// pointer rests. They are cleared when the window loses focus. A Tester changes them with Tester::hold_mods.
 pub fn mods_held() -> Int {
-  match fake.val {
-    Some(f) => f.mods
-    None => @hostapi.mods_held()
-  }
+  modifiers_now.get()
 }
 
 ///|

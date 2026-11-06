@@ -383,6 +383,17 @@ priv struct LetGoTaker {
 let let_go_takers : Array[LetGoTaker] = []
 
 ///|
+// kept across runs: changed as registrations or what is under the pointer change; readers need no particular number
+let let_go_changed : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+fn let_go_hits_changed() -> Unit {
+  if let_go_changed.watched() {
+    let_go_changed.set(@signals.untracked(fn() { let_go_changed.get() }) + 1)
+  }
+}
+
+///|
 /// Node `v` told a button or a finger let go on what it holds: `take` with where it was let go (in the window),
 /// saying whether it took it. The innermost visible taker is asked first, then those holding it until one takes it.
 /// A control or hosted view over it keeps the let-go for its own holders; a box only laying out content does not.
@@ -390,20 +401,30 @@ let let_go_takers : Array[LetGoTaker] = []
 pub fn takes_let_go(v : @view.View, take : (Double, Double) -> Bool) -> Unit {
   let taker = { view: v, take }
   let_go_takers.push(taker)
+  let_go_hits_changed()
   v.owns(fn() {
     match let_go_takers.search_by(fn(t) { physical_equal(t, taker) }) {
-      Some(i) => let_go_takers.remove(i) |> ignore
+      Some(i) => { let_go_takers.remove(i) |> ignore; let_go_hits_changed() }
       None => ()
     }
   }) |> ignore
 }
 
 ///|
-/// A button or a finger let go at (`x`, `y`), in its event (pointer_in), the window's tree brought to its moment.
-/// Take candidates in drawing order down to the topmost input target. A full-window layout box may be above the
-/// actual drop target; its window-wide taker must not take precedence over a more specific visible one below it.
-fn let_go_told(x : Double, y : Double) -> Unit {
-  guard !let_go_takers.is_empty() && view_app.val is Some(t) else { return }
+/// The registered nodes under (`x`, `y`), innermost first, then their holders. What is actually visible and takes
+/// input determines the chain, including press room, clipping and hosted old islands; an old root layer blocks it.
+/// A hosted island contributes its registered tree holders, not the old controls it contains (old_drop_within).
+pub fn drop_nodes_at(x : Double, y : Double, nodes : Array[@view.View]) -> Array[@view.View] {
+  guard !nodes.is_empty() else { return [] }
+  old_input_brought()
+  drop_nodes_at_now(x, y, nodes)
+}
+
+///|
+// In a let-go event the tree was already brought to the event before the pressed control ran. Bringing it again
+// after the control changed its layout would advance its new motion before the event has finished.
+fn drop_nodes_at_now(x : Double, y : Double, nodes : Array[@view.View]) -> Array[@view.View] {
+  guard !nodes.is_empty() && view_app.val is Some(t) && !old_layer_over(x, y) else { return [] }
   let target = match t.target_at(x, y) {
     Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) | Off(id) => Some(id)
     Nothing => None
@@ -411,18 +432,20 @@ fn let_go_told(x : Double, y : Double) -> Unit {
   let under = t.under(x, y)
   // A small control can be reached from outside its drawn box. In that case it is the input target even though its
   // id is absent from `under`; its holders, not the controls behind its press room, are asked.
-  let candidates : Array[LetGoTaker] = []
+  let candidates : Array[@view.View] = []
   if target is Some(id) && !under.contains(id) {
-    for h in let_go_takers {
-      if t.holds(h.view.id(), id) { candidates.push(h) }
+    for v in nodes {
+      if v.alive() && t.holds(v.id(), id) && !candidates.iter().any(fn(a) { a.id() == v.id() }) {
+        candidates.push(v)
+      }
     }
   } else {
     let mut k = under.length() - 1
     while k >= 0 {
       let id = under[k]
-      for h in let_go_takers {
-        if t.holds(h.view.id(), id) && !candidates.iter().any(fn(a) { physical_equal(a, h) }) {
-          candidates.push(h)
+      for v in nodes {
+        if v.alive() && t.holds(v.id(), id) && !candidates.iter().any(fn(a) { a.id() == v.id() }) {
+          candidates.push(v)
         }
       }
       if target == Some(id) { break }
@@ -433,18 +456,70 @@ fn let_go_told(x : Double, y : Double) -> Unit {
   // descendants; among unrelated takers the first encountered is the one drawn over the other.
   let first = candidates.iter().find_first(fn(h) {
     !candidates.iter().any(fn(other) {
-      h.view.id() != other.view.id() && t.holds(h.view.id(), other.view.id())
+      h.id() != other.id() && t.holds(h.id(), other.id())
     })
   })
-  guard first is Some(chosen) else { return }
-  let chain = candidates.filter(fn(h) { t.holds(h.view.id(), chosen.view.id()) })
+  guard first is Some(chosen) else { return [] }
+  let chain = candidates.filter(fn(h) { t.holds(h.id(), chosen.id()) })
+  let ordered : Array[@view.View] = []
   while !chain.is_empty() {
     let index = chain.search_by(fn(h) {
       !chain.iter().any(fn(other) {
-        h.view.id() != other.view.id() && t.holds(h.view.id(), other.view.id())
+        h.id() != other.id() && t.holds(h.id(), other.id())
       })
     }).unwrap()
-    let h = chain.remove(index)
-    if h.view.alive() && (h.take)(x, y) { return }
+    ordered.push(chain.remove(index))
+  }
+  ordered
+}
+
+///|
+/// Whether `v` is among the visible let-go takers at the current pointer. Followed as the pointer, registrations or
+/// the tree's input geometry change; a caller may additionally test whether its own item is eligible.
+pub fn let_go_here(v : @view.View) -> Bool {
+  let_go_changed.get() |> ignore
+  guard v.alive() && view_point.val is Some((x, y)) else { return false }
+  drop_nodes_at(x, y, let_go_takers.map(fn(h) { h.view })).iter().any(fn(h) { h.id() == v.id() })
+}
+
+///|
+/// A button or a finger let go at (`x`, `y`), in its event (pointer_in), the window's tree brought to its moment.
+fn let_go_told(x : Double, y : Double) -> Unit {
+  let takers = let_go_takers.copy()
+  let nodes = drop_nodes_at_now(x, y, takers.map(fn(h) { h.view }))
+  for v in nodes {
+    for h in takers {
+      if h.view.id() == v.id() && h.view.alive() && (h.take)(x, y) { return }
+    }
+  }
+}
+
+///|
+/// Old-view target ids under (`x`, `y`), outermost first, only where the visible old island owns that point. Their
+/// real hit clips, nested holders, the window tree and old modal layers decide; a newer overlay cannot be reached
+/// through. Meant for internal drags whose old targets were registered in the last old-view frame.
+pub fn old_drop_within(x : Double, y : Double) -> Array[Int] {
+  old_input_brought()
+  guard !old_layer_over(x, y) else { return [] }
+  let c = g()
+  match view_app.val {
+    Some(tree) => {
+      guard tree.target_at(x, y) is Hosted(island) else { return [] }
+      let k = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+      guard k >= 0 && old_hit_owner(k) == Some(island) else { return [] }
+      let within : Array[Int] = []
+      // During an old view's build its current nodes are only partly made. The previous frame's hit owners and
+      // nesting are complete, so use those rather than looking up ids in the current node array.
+      for j in 0..<k {
+        let id = c.hit_ids[j]
+        if j < c.hit_ends.length() && c.hit_ends[j] > k && id != c.hit_ids[k] &&
+          old_hit_owner(j) == Some(island) && !within.contains(id) {
+          within.push(id)
+        }
+      }
+      within.push(c.hit_ids[k])
+      within
+    }
+    None => drop_within(c, x, y)
   }
 }
