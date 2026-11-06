@@ -75,7 +75,8 @@ test "an old focused callback takes Enter and Space at each input without repeat
   t.draw()
   t.act(Button, Focus, label="Key target")
   let base = t.time()
-  t.advance(100.0)
+  let delivery_delay_ms = 100.0
+  t.advance(delivery_delay_ms)
   t.key_told(key_space, 0, base + 20.0)
   t.key_told(key_enter, 0, base + 30.0)
   assert_eq(seen, [(1, base + 20.0), (1, base + 30.0)])

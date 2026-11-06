@@ -228,7 +228,8 @@ test "an old press snapshots at the delayed click before a later change" {
   height.set(200.0)
   let pressed_at = base + 30.0
   let released_at = base + 40.0
-  t.advance(100.0)
+  let delivery_delay_ms = 100.0
+  t.advance(delivery_delay_ms)
   t.touch_at(0, 20.0, 20.0, pressed_at)
   t.touch_at(2, 20.0, 20.0, released_at)
   assert_eq(got.val, Some((released_at, 200.0)))
