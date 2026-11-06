@@ -770,9 +770,14 @@ pub fn emit_flight_by(
   match t.pose {
     Float => {
       // from its activity's avatar, or on from the message before it (where it let that one out)
+      // (that one's place gone before this sets out from it: where that one was aimed, as it came in there)
       let start = match t.from.bind(place) {
         Some(r) => (r.0, r.1 + 3.0)
-        None => avatar
+        None =>
+          match (t.from, e.aimed) {
+            (Some(from), Some(a)) if from == "emit-landing/" + key + "/" + seq_s(e.aimed_at) => a
+            _ => avatar
+          }
       }
       // The answer opens above the activity. That part of the trip is already moved by the list's common
       // height curve; carry it whole, and glide only the remaining distance (other activities between them).
