@@ -24,6 +24,8 @@ fn main {
   let noticed = @ui.env("MBUI_NOTICECHECK") == "1"
   // MBUI_PDFCHECK=<a PDF, base64>: its pages read and drawn by the host, said on the log (pdfcheck.mbt)
   let pdf = @ui.env("MBUI_PDFCHECK")
+  // MBUI_IMAGECHECK=<a PNG's path>: a picture told ready again in a new context, the window pictured there (imagecheck.mbt)
+  let imaged = @ui.env("MBUI_IMAGECHECK")
   // MBUI_PLAYCHECK=<a video, base64>: played by the host's player, its bytes read through the app (playcheck.mbt)
   let play = @ui.env("MBUI_PLAYCHECK")
   // MBUI_STATIONCHECK=read|stop: this machine's station as the host says it, and stopped (stationcheck.mbt)
@@ -36,6 +38,9 @@ fn main {
   let a11y = @ui.env("MBUI_A11YCHECK") == "1"
   // MBUI_FONTSCALECHECK=1: the system's size of words as the host gives it, on the log (fontscalecheck.mbt)
   let font_scaled = @ui.env("MBUI_FONTSCALECHECK") == "1"
+  if imaged != "" {
+    @gallery.image_check_follow()
+  }
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
@@ -46,6 +51,8 @@ fn main {
       @gallery.link_check_run(c)
     } else if noticed {
       @gallery.notice_check_run(c)
+    } else if imaged != "" {
+      @gallery.image_check_run(c, imaged)
     } else if pdf != "" {
       @gallery.pdf_check_run(c, pdf)
     } else if play != "" {
