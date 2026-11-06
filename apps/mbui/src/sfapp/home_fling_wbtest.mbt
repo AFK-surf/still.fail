@@ -27,6 +27,7 @@ test "the chats' list flung on a phone: no frame of it drawn again whole, rows c
       out.push("at \{f.at}: drawn again whole (\{f.whole_why})")
     }
   }
+  println("scene check: \{@ui.scene_check_said()}")
   assert_true(frames.length() > 100, msg="\{frames.length()} frames")
   assert_eq(out, [])
 }

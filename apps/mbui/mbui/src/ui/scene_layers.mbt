@@ -1687,16 +1687,36 @@ fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
 /// a layer something of changed and nothing told (a read not followed, a cause not said): the test fails, saying where.
 /// `copied`: the layers copied before the frame.
 fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
-  guard frame_checked() &&
-    (scene_work.copied > copied || tree_alone_drawn.val) &&
-    view_app.val is Some(tree) &&
-    // (told something since it was drawn (what the frame published after it painted: where an anchor is, what its
-    // build asked): the tree is no longer what the frame drew, and the next frame draws what changed and is checked)
-    !tree.told_since() &&
-    !tree.scene_told_since() &&
-    !scene_wanted() else {
+  // (each frame it is asked of counted, and why one is not compared: what of the frames it says it checked)
+  check_said.frames = check_said.frames + 1
+  let not = if !frame_checked() {
+    "not a frame checked"
+  } else if !(scene_work.copied > copied || tree_alone_drawn.val) {
+    "nothing kept copied"
+  } else if view_app.val is None {
+    "no tree"
+  } else {
+    ""
+  }
+  if not != "" {
+    check_said.why[not] = check_said.why.get_or_default(not, 0) + 1
     return
   }
+  guard view_app.val is Some(tree) else { return }
+  // (told something since it was drawn (what the frame published after it painted: where an anchor is, what its
+  // build asked): the tree is no longer what the frame drew, and the next frame draws what changed and is checked)
+  let not = if tree.told_since() || tree.scene_told_since() {
+    "told since it was drawn"
+  } else if scene_wanted() {
+    "more to draw"
+  } else {
+    ""
+  }
+  if not != "" {
+    check_said.why[not] = check_said.why.get_or_default(not, 0) + 1
+    return
+  }
+  check_said.compared = check_said.compared + 1
   let n = self.ninst
   let kept = FixedArray::make(n * inst_size + 1, 0.0)
   self.inst.blit_to(kept, len=n * inst_size)
@@ -1731,8 +1751,10 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
     let firsts : Array[Int] = []
     for k in 0..<least {
       if theirs[k] {
+        check_said.insts_skipped = check_said.insts_skipped + 1
         continue
       }
+      check_said.insts_compared = check_said.insts_compared + 1
       let mut d = false
       for j in 0..<inst_size {
         let (a, b) = (kept[k * inst_size + j], self.inst[k * inst_size + j])
@@ -1782,7 +1804,7 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
   }
   match differs {
     Some(said) => {
-      let s = "the scene kept a layer something of changed unsaid: as kept and drawn anew, \{said}"
+      let s = "the scene kept a layer something of changed unsaid: as kept and drawn anew, \{said}; \{scene_check_said()}"
       println(s)
       abort(s)
     }
@@ -2748,4 +2770,37 @@ fn scene_now_reach(l : SceneLayer) -> Unit {
       }
     }
   }
+}
+
+///|
+/// What the scene's check (Ctx::scene_check) did since a Tester was made: the frames it was asked of, those it compared
+/// instance for instance, why each other was not, and of the instances in those compared, how many were and how many
+/// passed over (in a layer drawn otherwise than by the tree: an old view's, the old frame's).
+priv struct CheckSaid {
+  mut frames : Int
+  mut compared : Int
+  why : Map[String, Int]
+  mut insts_compared : Int
+  mut insts_skipped : Int
+}
+
+///|
+// kept across runs: begun anew by each Tester (scene_check_begin)
+let check_said : CheckSaid = { frames: 0, compared: 0, why: {}, insts_compared: 0, insts_skipped: 0 }
+
+///|
+/// What the scene's check did since the Tester was made (check_said), as a line.
+pub fn scene_check_said() -> String {
+  let c = check_said
+  "checked \{c.compared} of \{c.frames} frames (not: \{c.why}), \{c.insts_compared} instances compared, \{c.insts_skipped} passed over"
+}
+
+///|
+/// The scene's check counted anew (a Tester made).
+fn scene_check_begin() -> Unit {
+  check_said.frames = 0
+  check_said.compared = 0
+  check_said.why.clear()
+  check_said.insts_compared = 0
+  check_said.insts_skipped = 0
 }

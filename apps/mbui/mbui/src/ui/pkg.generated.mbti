@@ -544,6 +544,8 @@ pub let same_moment_ms : Double
 
 pub fn scene_alone_why() -> String
 
+pub fn scene_check_said() -> String
+
 pub fn scene_done() -> SceneWork
 
 pub fn scene_parts() -> Array[(Double, Double, Double, Double)]

@@ -492,6 +492,8 @@ pub fn Tester::new(
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
+  // (what the scene's check does counted anew: scene_check_said)
+  scene_check_begin()
   said_log.on = false
   said_log.built.reset()
   said_log.sb.reset()
