@@ -307,6 +307,8 @@ export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM session
 /// named, the most used first, then the latest (`effortsUsedBy`).
 export const EFFORTS_USED_BY =
   "SELECT effort, COUNT(*) AS n, MAX(created_at) AS last FROM sessions INDEXED BY sessions_efforts WHERE created_by = ? AND runtime = ? AND model IS ? AND created_at >= ? AND effort IS NOT NULL AND effort != '' GROUP BY effort ORDER BY n DESC, last DESC";
+/// Large old stores without that index seek the same person's recent sessions using their existing model lookup.
+export const EFFORTS_USED_BY_BEFORE_INDEX = EFFORTS_USED_BY.replace("INDEXED BY sessions_efforts", "INDEXED BY sessions_models");
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
@@ -365,6 +367,7 @@ const optFlag = (b: boolean | null | undefined): number | null => (b === null ||
 export class Store {
   readonly db: DatabaseSync;
   readonly backfillPriority: SharedArrayBuffer;
+  readonly #effortsIndex: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -389,6 +392,7 @@ export class Store {
 
   private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock, backfillPriority: SharedArrayBuffer) {
     this.db = db;
+    this.#effortsIndex = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -1024,7 +1028,8 @@ export class Store {
   /// The efforts `createdBy`'s chats on `runtime` and `model` here since `since` ran at, the most used first (what
   /// chat_create runs when it is told no effort).
   effortsUsedBy(createdBy: string, runtime: string, model: string | null, since: number): { effort: string; n: number }[] {
-    return this.#all(EFFORTS_USED_BY, createdBy, runtime, model, since).map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
+    return this.#all(this.#effortsIndex ? EFFORTS_USED_BY : EFFORTS_USED_BY_BEFORE_INDEX, createdBy, runtime, model, since)
+      .map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
   }
 
   /// Who opened session `child` of this station, if another agent did.
