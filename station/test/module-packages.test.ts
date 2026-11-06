@@ -39,6 +39,21 @@ const until = async (what: () => boolean | Promise<boolean>) => {
   while (!(await what())) await new Promise((r) => setTimeout(r, 20));
 };
 
+test("a cancelled package wait stops while polling", async () => {
+  const cancel = new AbortController();
+  let polls = 0;
+  const waiting = until(() => ++polls >= 5, cancel.signal);
+  cancel.abort();
+  await assert.rejects(waiting, { name: "AbortError" });
+});
+
+test("a cancelled package wait stops while its check is still pending", async () => {
+  const cancel = new AbortController();
+  const waiting = until(() => new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 100)), cancel.signal);
+  cancel.abort();
+  await assert.rejects(waiting, { name: "AbortError" });
+});
+
 /// A release server: <dir>/<path> at /releases/<path>; what was asked, in order.
 async function releases(t: { after: (f: () => unknown) => void }) {
   const dir = temp("mp-r-");
