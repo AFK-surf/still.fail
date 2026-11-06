@@ -1725,11 +1725,29 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
   let differs = {
     let least = if self.ninst < n { self.ninst } else { n }
     let mut at = -1
-    for q in 0..<(least * inst_size) {
-      let (a, b) = (kept[q], self.inst[q])
-      if a != b && !(a != a && b != b) && !theirs[q / inst_size] {
-        at = q / inst_size
-        break
+    // (every instance gone through: how many differ, and the first few, not the first alone)
+    let mut differing = 0
+    let firsts : Array[Int] = []
+    for k in 0..<least {
+      if theirs[k] {
+        continue
+      }
+      let mut d = false
+      for j in 0..<inst_size {
+        let (a, b) = (kept[k * inst_size + j], self.inst[k * inst_size + j])
+        if a != b && !(a != a && b != b) {
+          d = true
+          break
+        }
+      }
+      if d {
+        differing = differing + 1
+        if at < 0 {
+          at = k
+        }
+        if firsts.length() < 8 {
+          firsts.push(k)
+        }
       }
     }
     if at < 0 && self.ninst == n {
@@ -1757,7 +1775,7 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
       }
       let kind = if at < self.ninst { self.inst[at * inst_size + 5] } else { -1.0 }
       Some(
-        "\{n} instances kept, \{self.ninst} drawn anew; instance \{at} (kind \{kind}) the first to differ, in the layer of node \{who}: \{slots.join(", ")}; the frame \{if tree_alone_drawn.val { "of the tree alone" } else { "the old frame painted" }}",
+        "\{differing} of \{least} instances differ (first at \{firsts}); \{n} instances kept, \{self.ninst} drawn anew; instance \{at} (kind \{kind}) the first to differ, in the layer of node \{who}: \{slots.join(", ")}; the frame \{if tree_alone_drawn.val { "of the tree alone" } else { "the old frame painted" }}",
       )
     }
   }
@@ -2731,4 +2749,18 @@ fn scene_now_reach(l : SceneLayer) -> Unit {
       }
     }
   }
+}
+
+///|
+/// PROBE: the layers the last frame drew, each with how many instances it holds of its own and with what it holds.
+pub fn scene_probe_counts() -> String {
+  let all : Array[(Int, Int, Int)] = []
+  for id, l in scene.layers {
+    if l.seen == scene.frame && l.count > 0 {
+      all.push((l.count, id.at, l.inner.length()))
+    }
+  }
+  all.sort_by(fn(a, b) { b.0.compare(a.0) })
+  let top = all.iter().take(20).map(fn(t) { "\{t.1}:\{t.0}(\{t.2})" }).collect()
+  "ninst \{g().ninst} layers \{all.length()} top \{top}"
 }
