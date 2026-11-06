@@ -133,6 +133,8 @@ pub fn reset_globals() -> Unit {
   run.computing = 0
   run.effects_held = 0
   run.held_effects.clear()
+  run.sampling = 0
+  run.sampled_reads.clear()
   check_frames.clear()
   propagate_frames.clear()
   watch_reading.depth = 0

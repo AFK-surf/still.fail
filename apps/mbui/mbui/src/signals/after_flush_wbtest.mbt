@@ -145,3 +145,19 @@ test "effects held: what waits for a change told whole is done after the effects
   stop()
   assert_eq(order, ["effect 1", "after"])
 }
+
+///|
+test "sampled: each computed worked out once in a sample, however many read it" {
+  let s = signal(1, same=fn(a, b) { a == b })
+  let runs = Ref(0)
+  let chain : Array[Computed[Int]] = [computed(fn(_) { runs.val += 1; s.get() })]
+  for _ in 0..<20 {
+    let below = chain[chain.length() - 1]
+    chain.push(computed(fn(_) { runs.val += 1; below.get() + below.get() }))
+  }
+  let top = chain[chain.length() - 1]
+  runs.val = 0
+  let v = sampled(fn() { top.get() + top.get() })
+  assert_eq(v, 2 * (1 << 20))
+  assert_eq(runs.val, 21)
+}

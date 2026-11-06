@@ -952,6 +952,9 @@ pub struct Tree {
   // (while the clock is set for a look at another moment than the one drawn (View::drawn_now, Tree::settled_at): the
   // structures' bindings it told, told again once it is set back, nothing of the look left for them)
   mut looking : Bool
+  // (the moment a look samples what is drawn at (View::drawn_now, Tree::settled_at): what is drawn read as of it, the
+  // clock as it was drawn)
+  mut sample : Double?
   // (laying out for a look at another moment than the one drawn, Tree::settled_at: what waits on a layout
   // (Tree::once_laid_out, what is to be brought into sight) left for the layout as drawn after it)
   mut look_laying : Bool
@@ -1231,6 +1234,7 @@ pub fn Tree::new(
     bar_cols: [],
     drawn_marks: [],
     looking: false,
+    sample: None,
     look_laying: false,
     look_told: [],
     bars_due: false,
@@ -1706,7 +1710,12 @@ pub fn Tree::logic_at(self : Tree) -> Double {
 /// The moment what is drawn is drawn at (a frame's, to be shown then; an input's, as it is pressed), followed: for a
 /// look worked out from the time (a fade, a place by the time), worked out again as it goes. Never for what is done.
 pub fn Tree::drawn_at(self : Tree) -> Double {
-  self.clock.get()
+  let drawn = self.clock.get()
+  // (in a look: its moment, the clock followed as ever)
+  match self.sample {
+    Some(t) => t
+    None => drawn
+  }
 }
 
 ///|
@@ -1714,7 +1723,11 @@ pub fn Tree::drawn_at(self : Tree) -> Double {
 /// it as long as it shows (a spinner's turn, a band of progress not known), which never ends and is no motion
 /// (Tree::cycle_read); as Ctx::cycle is an old view's.
 pub fn View::cycle(self : View, period : Double) -> Double {
-  let t = self.tree.beat.get()
+  let beat = self.tree.beat.get()
+  let t = match self.tree.sample {
+    Some(at) => at
+    None => beat
+  }
   if period <= 0.0 {
     return 0.0
   }
@@ -1883,7 +1896,12 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
       c
     }
   }
-  cell.get()
+  let past = cell.get()
+  // (in a look: as of its moment, the mark followed as ever)
+  match self.tree.sample {
+    Some(at) => at >= t
+    None => past
+  }
 }
 
 ///|
@@ -2233,7 +2251,12 @@ priv enum Phase {
 /// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+fn[T] Tree::queued(
+  self : Tree,
+  read : () -> T,
+  then : (T) -> Unit,
+  draws? : Bool = true,
+) -> () -> Unit {
   // (a node's own read, of what is laid out too, as told last: wherever a write set it off, reads_own)
   let read = fn() { reads_own(read) }
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
@@ -2253,6 +2276,9 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
       self.settle_after_change(told_at.val)
     }
   })
+  if draws {
+    w.reads_to_draw() |> ignore
+  }
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
@@ -2620,7 +2646,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
       // (what else it reads, followed: changed, what holds it laid out again)
-      let watch = @signals.watch(fn() { tree.layout_marked_at(at) })
+      let watch = @signals.watch(fn() { tree.layout_marked_at(at) }).reads_to_draw()
       let run = fn(w : Double, h : Double) {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
@@ -2662,7 +2688,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
       // (what it reads of signals, followed: changed, its node is to be painted again, a frame asked for)
-      let watch = @signals.watch(fn() { marked() })
+      let watch = @signals.watch(fn() { marked() }).reads_to_draw()
       let run = fn() {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
@@ -6794,35 +6820,65 @@ fn Tree::settled_at(self : Tree, at : Double, look? : () -> Unit) -> Bool {
   // see that same logical moment when they decide whether a finished way still needs the drawing clock.
   let cause = self.cause_at
   self.cause_at = at
-  @signals.untracked(fn() {
-    self.clock_to(at)
-    self.beat.set(at)
-    self.pull()
-    let was_laying = self.look_laying
-    self.look_laying = looks
-    self.laid_out(at)
-    self.look_laying = was_laying
-    // (what it left for the layout as drawn, due in it, whether anything else marks it or not)
-    if looks && (self.laid_waits.length() > 0 || self.shows_due.length() > 0) {
-      self.due = true
-    }
-    if look is Some(read) {
-      read()
-    }
-  })
-  self.cause_at = cause
-  if shown != at {
+  if looks {
+    // (a look: what is drawn worked out as of `at` as a sample, nothing set (the clock, a mark, a size told) and nothing
+    // that follows it told; then worked out and laid out as drawn again, as it was)
     @signals.untracked(fn() {
-      self.clock_to(shown)
-      self.beat.set(shown)
-      if looks {
-        self.cause_at = shown
+      // (what was due before it, due after it as it was: neither layout of it does what is left for that one)
+      let due_before = self.due
+      let drawn_due_before = self.drawn_due
+      let told = self.clock.drawn_by()
+      told.append(self.beat.drawn_by())
+      for m in self.drawn_marks {
+        told.append(m.2.drawn_by())
+      }
+      self.sample = Some(at)
+      @signals.sampled(fn() {
+        for w in told {
+          w.tell()
+        }
         self.pull()
-        self.laid_out(shown)
-        self.cause_at = cause
+        let was_laying = self.look_laying
+        self.look_laying = true
+        self.laid_out(at)
+        self.look_laying = was_laying
+        if look is Some(read) {
+          read()
+        }
+      })
+      self.sample = None
+      // (what it worked out told again as the sample was over: laid out as drawn again, as it was. What waits on a
+      // layout, what is to be brought into sight and what sizes tell, done by neither: left due for the layout that
+      // would have done them without the look, at its moment)
+      self.due = true
+      self.cause_at = shown
+      self.pull()
+      let was_laying = self.look_laying
+      self.look_laying = true
+      self.laid_out(shown)
+      self.look_laying = was_laying
+      self.due = due_before || !self.laid_waits.is_empty() || !self.shows_due.is_empty() || self.outs_changed
+      self.drawn_due = drawn_due_before
+    })
+  } else {
+    @signals.untracked(fn() {
+      self.clock_to(at)
+      self.beat.set(at)
+      self.pull()
+      self.laid_out(at)
+      if look is Some(read) {
+        read()
       }
     })
+    self.cause_at = cause
+    if shown != at {
+      @signals.untracked(fn() {
+        self.clock_to(shown)
+        self.beat.set(shown)
+      })
+    }
   }
+  self.cause_at = cause
   self.looking = was_looking
   self.standing = false
   if !self.looking && self.look_told.length() > 0 {
@@ -7449,14 +7505,14 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
   self.due = false
   // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
   // same pass: one result, the frame drawing all of it)
-  if self.outs_changed {
+  if self.outs_changed && !self.look_laying {
     self.outs_told()
     if self.due {
       return (placing, ordered, "rows left out told")
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
+  if self.sized.length() > 0 && !self.look_laying && self.sizes_told() && self.due {
     return (placing, ordered, "sizes told (owed_laid_size, owed_laid_window, owed_drawn_window, owed_went)")
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
@@ -9551,10 +9607,14 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
   let mine = self.point_said
-  let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
-    self.points_hover = found.1
-    then(found.0)
-  })
+  let stop = self.queued(
+    fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) },
+    fn(found) {
+      self.points_hover = found.1
+      then(found.0)
+    },
+    draws=false,
+  )
   if self.gone || self.point_said != mine {
     stop()
   } else {

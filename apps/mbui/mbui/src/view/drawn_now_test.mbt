@@ -166,31 +166,45 @@ test "drawn_now lays out as drawn again: what a size told in its look makes or l
 }
 
 ///|
-/// The width of a node drawn by whether the drawing is past 45, as what waits on the next layout reads it, asked for in
-/// an event at 40 that then asks where it is drawn now, a frame sampled for 50 with the host at 0 before.
-fn waited_width_past_45() -> Array[Double] {
-  let widths : Array[Double] = []
+/// What waits on the next layout reads when done (the node's width, the moment of its cause) and how often it is done
+/// before the next frame and after it, asked for in an event at 40 that then asks where the node is drawn now or not,
+/// a frame sampled for `drawn_for` with the host at 0 before. The node `moves` by the drawing's moment or not.
+fn waited(drawn_for : Double, asks : Bool, moves : Bool) -> (Array[(Double, Double)], Int) {
+  let seen : Array[(Double, Double)] = []
   let page : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
     page.val = Some(root.box(fn(v) {
-      v.width(By(fn() { Some(if v.drawn_past(45.0) { 40.0 } else { 20.0 }) })).height(Is(Some(10.0))) |> ignore
+      if moves {
+        v.width(By(fn() { Some(if v.drawn_past(45.0) { 40.0 } else { 20.0 }) })) |> ignore
+      } else {
+        v.width(Is(Some(30.0))) |> ignore
+      }
+      v.height(Is(Some(10.0))) |> ignore
     }))
   }, time=fn() { 0.0 })
   defer { tree.dispose() }
   tree.frame(400.0, 300.0, now=0.0) |> ignore
-  tree.at(50.0)
+  tree.at(drawn_for)
   tree.frame(400.0, 300.0, now=0.0) |> ignore
   let v = page.val.unwrap()
   tree.event(40.0, fn() {
-    v.owed_once_laid_out(fn() { widths.push(v.rect().2) })
-    v.drawn_now() |> ignore
+    v.owed_once_laid_out(fn() { seen.push((v.rect().2, v.cause_at())) })
+    if asks {
+      v.drawn_now() |> ignore
+    }
   })
-  widths
+  let before_frame = seen.length()
+  tree.frame(400.0, 300.0, now=40.0) |> ignore
+  (seen, before_frame)
 }
 
 ///|
-test "drawn_now's look does none of what waits on a layout: it is done in the layout as drawn" {
-  assert_eq(waited_width_past_45(), [40.0])
+test "drawn_now's look does none of what waits on a layout: done as it is without the look, at the same moment" {
+  for moves in [true, false] {
+    for drawn_for in [0.0, 50.0] {
+      assert_eq(waited(drawn_for, true, moves), waited(drawn_for, false, moves), msg="moves \{moves}, drawn for \{drawn_for}")
+    }
+  }
 }
 
 ///|
@@ -222,37 +236,60 @@ fn effect_runs_past_45(asks : Bool) -> (Int, Int) {
 }
 
 ///|
-test "drawn_now: an effect with a cleanup beside a property reading the same moment runs and is cleaned up once more for the look" {
-  // (the look's edge, said as it is: the property read the look's moment, so what the effect read changed and came back;
-  // the effect is run again, cleaned up first, reading it as drawn. Not told otherwise of the look)
-  assert_eq(effect_runs_past_45(false), (0, 0))
-  assert_eq(effect_runs_past_45(true), (1, 1))
+test "drawn_now: an effect with a cleanup beside a property reading the same moment is run and cleaned up as it is without the look" {
+  assert_eq(effect_runs_past_45(true), effect_runs_past_45(false))
 }
 
 ///|
-/// How often what waits on the next layout is done, asked for in an event at 40 that then asks where a node that moves
-/// by nothing is drawn now, a frame sampled for 50 with the host at 0 before; and before the next frame.
-fn waited_on_still_node() -> (Int, Int) {
-  let done = Ref(0)
+/// The width of a node as wide as where a cycle of 100 ms is as it is drawn, as an event at 40 reads it after a frame the
+/// host showed at 0 and sampled for `drawn_for`.
+fn width_by_cycle(drawn_for : Double) -> Double? {
   let page : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
-    page.val = Some(root.box(fn(v) { v.width(Is(Some(30.0))).height(Is(Some(10.0))) |> ignore }))
+    page.val = Some(root.box(fn(v) {
+      v.width(By(fn() { Some(10.0 + 100.0 * v.cycle(100.0)) })).height(Is(Some(10.0))) |> ignore
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(drawn_for)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let read : Ref[Double?] = Ref(None)
+  tree.event(40.0, fn() { read.val = page.val.unwrap().drawn_now().map(fn(d) { d.rect.2 }) })
+  read.val
+}
+
+///|
+test "drawn_now reads what is drawn by a cycle as of the event's moment, whichever frame was drawn before" {
+  assert_eq(width_by_cycle(0.0), Some(50.0))
+  assert_eq(width_by_cycle(50.0), width_by_cycle(0.0))
+}
+
+///|
+/// Whether a still tree (one node, its size followed, nothing by the time) has something to draw after an event at 40
+/// asking where it is drawn now or not, a frame sampled for 50 with the host at 0 before; and the layout's work and the
+/// nodes laid out by the next frame.
+fn still_after(asks : Bool) -> (Bool, Int, Int) {
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    page.val = Some(root.box(fn(v) {
+      v.width(Is(Some(30.0))).height(Is(Some(10.0))) |> ignore
+      v.reacts(fn() { v.owed_laid_size() }, fn(_) {  })
+    }))
   }, time=fn() { 0.0 })
   defer { tree.dispose() }
   tree.frame(400.0, 300.0, now=0.0) |> ignore
   tree.at(50.0)
   tree.frame(400.0, 300.0, now=0.0) |> ignore
-  let v = page.val.unwrap()
-  tree.event(40.0, fn() {
-    v.owed_once_laid_out(fn() { done.val += 1 })
-    v.drawn_now() |> ignore
-  })
-  let before_frame = done.val
+  tree.event(40.0, fn() { if asks { page.val.unwrap().drawn_now() |> ignore } })
+  let told = tree.told_since()
+  let before = tree.work()
   tree.frame(400.0, 300.0, now=40.0) |> ignore
-  (before_frame, done.val)
+  let after = tree.work()
+  (told, after.computes - before.computes, after.laid - before.laid)
 }
 
 ///|
-test "drawn_now's look leaves what waits on a layout of a node that moves by nothing done once, in the layout as drawn" {
-  assert_eq(waited_on_still_node(), (1, 1))
+test "drawn_now on a still tree leaves it as it is without the look: nothing to draw, no layout more" {
+  assert_eq(still_after(true), still_after(false))
 }
