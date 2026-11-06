@@ -123,6 +123,8 @@ export type HubOptions = {
   workspaces?: () => string[];
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
+  /// Another session being taken up: the launcher hears the station gets on with it (ops/launcher.ts `taking`).
+  taking?: () => void;
   cold?: ColdStorage;
   /// Its time, and its sessions' (a TestClock in tests).
   clock?: Clock.Clock;
@@ -482,6 +484,7 @@ export class Hub {
   }
 
   private async adoptOne(row: SessionRow, snap: Snapshot, withProcess: boolean) {
+    this.options.taking?.();
     let actor: SessionActor;
     try {
       actor = this.actor(row);
