@@ -734,14 +734,6 @@ priv struct ResizeCapture {
 }
 
 ///|
-/// A synchronous bring and any reentrant brings or layouts it calls share one bound and stop together on a fault.
-priv struct BroughtBudget {
-  passes : Ref[Int]
-  stopped : Ref[Bool]
-  mut notifications : Int
-}
-
-///|
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
   /// Callbacks for the few nodes that need to read their subtree before any of it is removed.
@@ -781,8 +773,8 @@ pub struct Tree {
   // The moment a frame or the clock brings the tree to while it does (Tree::brought, Tree::at), -1 outside one: what
   // is told meanwhile (a size laid out otherwise, a moment come) is of it
   mut bringing_at : Double
-  /// the outer bring's budget, reused by reentrant brings and layouts until that call returns
-  mut brought_budget : BroughtBudget?
+  /// the outer bring's layout-pass count and stop flag, shared by its reentrant layouts and modal notifications
+  mut brought_budget : (Ref[Int], Ref[Bool])?
   // The layout pass under way in one (Tree::laid_out), 0 outside one; what it told otherwise, where noted
   // (Tree::told_noted)
   mut laid_passes : Int
@@ -4204,7 +4196,6 @@ fn Tree::modals_settled(self : Tree) -> Unit {
         return
       }
       if self.modals_due {
-        if !self.brought_notification() { return }
         self.modals_due = false
         let was = self.cause_at
         self.cause_at = self.modals_at
@@ -7241,7 +7232,14 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
 pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
-  if self.brought_stopped() { return false }
+  let was_budget = self.brought_budget
+  let budget = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  if budget.1.val { return false }
+  self.brought_budget = Some(budget)
+  defer { self.brought_budget = was_budget }
   // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
@@ -7304,7 +7302,14 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
 /// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
 /// the tree has a size (its first frame).
 pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
-  if self.brought_stopped() { return }
+  let was_budget = self.brought_budget
+  let budget = match was_budget {
+    Some(b) => b
+    None => (Ref(0), Ref(false))
+  }
+  if budget.1.val { return }
+  self.brought_budget = Some(budget)
+  defer { self.brought_budget = was_budget }
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
@@ -7329,29 +7334,6 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
 }
 
 ///|
-/// Whether the layout of this synchronous bring or its notification chain already faulted.
-fn Tree::brought_stopped(self : Tree) -> Bool {
-  match self.brought_budget {
-    Some(b) => b.stopped.val
-    None => false
-  }
-}
-
-/// Bound modal notifications caused by one bring, including those queued after a change's flush. Outside one they
-/// retain their usual behavior. If the chain faults, leave the notification due for the next independent change.
-fn Tree::brought_notification(self : Tree) -> Bool {
-  guard self.brought_budget is Some(b) else { return true }
-  if b.stopped.val { return false }
-  b.notifications += 1
-  if b.notifications > laid_passes_most {
-    b.stopped.val = true
-    fault("view: a bring's modal notifications continued more than \{laid_passes_most} times in one change")
-    return false
-  }
-  true
-}
-
-///|
 /// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
 fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // (what it tells as it is laid out, and what that changes, of the frame's moment: no change told so has a moment of
@@ -7364,24 +7346,24 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // A notification can synchronously bring this same tree again after a layout returned. Keep its work in the
   // original call's bound too. A notification queued by this call carries the same budget to its callback.
   let was_budget = self.brought_budget
-  let budget = match was_budget {
+  let (passes, stopped) = match was_budget {
     Some(b) => b
-    None => { passes: Ref(0), stopped: Ref(false), notifications: 0 }
+    None => (Ref(0), Ref(false))
   }
-  self.brought_budget = Some(budget)
+  self.brought_budget = Some((passes, stopped))
   defer { self.brought_budget = was_budget }
-  if budget.stopped.val { return }
+  if stopped.val { return }
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   // Geometry sees the whole property's change. Publish input ownership only after its last layout pass, before
   // returning the frame or hit-test geometry. A notification may change focus styling or structure; finish that
   // work in the same call, with the same layout-pass guard rather than waiting for another picture.
-  while !self.gone && !budget.stopped.val {
+  while !self.gone && !stopped.val {
     self.modals_held += 1
     self.pull()
-    self.laid_out(upto, passes=budget.passes, stopped=budget.stopped)
+    self.laid_out(upto, passes~, stopped~)
     self.modals_released()
-    if budget.stopped.val || !self.due { break }
+    if stopped.val || !self.due { break }
   }
 }
 
@@ -7605,8 +7587,10 @@ fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, no
 /// passes never stopped (what it told taken at the host's clock, gone on: Tree::brought) ran the stack out, 2000 deep.
 fn Tree::laid_out(self : Tree, upto : Double, passes? : Ref[Int] = Ref(0), stopped? : Ref[Bool] = Ref(false)) -> Unit {
   // A geometry read nested in a modal callback is still part of the original synchronous bring.
-  let passes = self.brought_budget.map_or(passes, fn(b) { b.passes })
-  let stopped = self.brought_budget.map_or(stopped, fn(b) { b.stopped })
+  let (passes, stopped) = match self.brought_budget {
+    Some(b) => b
+    None => (passes, stopped)
+  }
   self.modals_held += 1
   defer { self.modals_released() }
   if stopped.val || !self.due {
