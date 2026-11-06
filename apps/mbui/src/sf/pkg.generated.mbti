@@ -888,6 +888,8 @@ pub fn in_pane() -> Bool
 
 pub fn in_panel() -> Bool
 
+pub fn in_panel_node(@view.View) -> Bool
+
 pub fn in_small_panel() -> Bool
 
 pub fn initial(String) -> String
@@ -1528,6 +1530,8 @@ pub fn panel_card_out() -> @ui.Style
 
 pub fn panel_card_room(@ui.Ctx, @ui.Style, () -> Unit) -> Int32
 
+pub fn panel_card_room_node(@view.View, (@view.View) -> Unit) -> @view.View
+
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
@@ -1574,9 +1578,15 @@ pub let panel_pill : Double
 
 pub let panel_radius : @ui.Radius
 
+pub fn panel_row_context(@view.View) -> PanelRowContext
+
 pub fn panel_row_in() -> @ui.Style
 
+pub fn panel_row_layout(@view.View, Bool, Bool) -> PanelRowLayout
+
 pub fn panel_row_reach() -> @ui.Style
+
+pub fn panel_rows_lent(@view.View, () -> PanelRowContext) -> Unit
 
 pub fn panel_rule_over() -> Double
 
@@ -3196,6 +3206,21 @@ pub(all) struct Palette {
   blue : Int64
   code_ink : Int64
   code_ground : Int64
+}
+
+#derive(Eq, Show)
+pub(all) struct PanelRowContext {
+  sides_in : Double
+  rows_out : Double
+  words_in : Double
+  small : Bool
+}
+
+#derive(Eq, Show)
+pub(all) struct PanelRowLayout {
+  out : Double
+  padding : Double?
+  inner : Bool
 }
 
 #derive(Eq)
