@@ -49,6 +49,7 @@ pub fn usage_tiles_node(
       @sf.style_node(tile, fn() { agent_card_tile }, in_row=true)
       let eligible = fn() { can_open() || !unknown() }
       tile.points(By(eligible)).presses(By(eligible)).focusable(By(eligible))
+      .cursor(By(fn() { if can_open() && !busy() { None } else { Some(Arrow) } }))
       .says(By(fn() {
         if can_open() {
           Some(@view.said(Button, label=@sf.t("web-pages.chat.contextActions"), disabled=busy()))
@@ -81,22 +82,31 @@ pub fn usage_tiles_node(
         }
       }
       tile.on_press(press) |> ignore
-      let held = Ref(false)
+      // 0: no hold, 1: the information tip, 2: an action held by a finger. A long hold on an action still
+      // presses it when released on the tile; only the information tip consumes its hold.
+      let held = Ref(0)
       let on_tile = fn(d : @view.Drag) { tile.finger_target(d.wx, d.wy) }
       tile.gesture(
         @ui.touch_slop(),
-        press=fn(_) { held.val = false },
-        tap=fn(d) { if on_tile(d) && !held.val { press() } },
+        press=fn(_) { held.val = 0 },
+        tap=fn(d) { if on_tile(d) && held.val == 0 { press() } },
         hold=(@ui.long_press_ms, fn(_) {
-          if @ui.pointing() is Finger && @signals.untracked(fn() { !can_open() && !unknown() }) {
-            held.val = true
-            (tip.hold)()
+          if @ui.pointing() is Finger {
+            if @signals.untracked(can_open) {
+              held.val = 2
+            } else if @signals.untracked(fn() { !unknown() }) {
+              held.val = 1
+              (tip.hold)()
+            }
           }
         }),
         drag=fn(d) {
-          if held.val {
-            if d.kind == Up { (tip.lift)(); held.val = false }
-            else if d.kind == Off { (tip.cancel)(); held.val = false }
+          if held.val == 1 {
+            if d.kind == Up { (tip.lift)(); held.val = 0 }
+            else if d.kind == Off { (tip.cancel)(); held.val = 0 }
+          } else if held.val == 2 {
+            if d.kind == Up && on_tile(d) { press() }
+            if d.kind == Up || d.kind == Off { held.val = 0 }
           } else if d.kind == Up && @ui.pointing() is Mouse && on_tile(d) {
             press()
           }
