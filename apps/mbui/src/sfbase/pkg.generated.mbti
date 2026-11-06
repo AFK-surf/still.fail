@@ -140,6 +140,8 @@ pub fn chat_link(String, String) -> String
 
 pub fn chat_params(ChatRef) -> Map[String, @json.Json]
 
+pub fn chat_play(@ui.Ctx, String, Reading, shown~ : Bool) -> Double
+
 pub fn chat_ref(String, String) -> ChatRef
 
 pub fn chat_ref_of(ChatItem) -> ChatRef
@@ -157,8 +159,6 @@ pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
 pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? : @view.Along) -> Unit
 
 pub fn chat_take(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
-
-pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_view_left(ChatRef) -> Unit
 
@@ -416,6 +416,8 @@ pub fn emit_ended(Emits, String) -> Double
 
 pub fn emit_flight(@ui.Ctx, String, Emits, Array[String]) -> (Double, Double, Double, Double)?
 
+pub fn emit_flight_by(String, Emits, Array[String], (String) -> (Double, Double, Double, Double)?) -> (Double, Double, Double, Double)?
+
 pub fn emit_folded(Emits, String) -> Bool
 
 pub fn emit_glyph_out(Double, Double, Double, @view.GlyphAt, (Double, Double, Double, Double)) -> @view.GlyphLook
@@ -442,13 +444,17 @@ pub let emit_out_ms : Double
 
 pub fn emit_place(@ui.Ctx, String) -> (Double, Double, Double, Double)?
 
-pub let emit_places : @sf.LiveMap[String, () -> (Double, Double, Double, Double)?]
+pub fn emit_place_drawn(@view.Laid, String) -> (Double, Double, Double, Double)?
+
+pub fn emit_place_now(String) -> (Double, Double, Double, Double)?
+
+pub let emit_places : @sf.LiveMap[String, EmitAt]
 
 pub fn emit_release(Emits) -> Unit
 
 pub let emit_rooms : @sf.LiveMap[String, () -> Double?]
 
-pub fn emit_step(@ui.Ctx, Emits, Turns, Double) -> Unit
+pub fn emit_step(@ui.Ctx, String, Emits, Turns, Double) -> Double
 
 pub fn emit_take(@ui.Ctx, Emits, ChatView, Map[String, Bool]) -> Unit
 
@@ -1318,7 +1324,7 @@ pub fn png_size(Bytes) -> (Int32, Int32)?
 
 pub fn pose_clock(Double, Double?) -> @motion.Anim
 
-pub fn pose_ms(Pose, (Double, Double)?) -> Double
+pub fn pose_ms(Pose, String?) -> Double
 
 pub fn poster_image_id(String, String, String) -> String
 
@@ -1692,7 +1698,7 @@ pub fn this_machine() -> String
 
 pub fn thumb_occurrence(String, String, String) -> String
 
-pub fn thumb_of(@ui.Ctx, String) -> Thumb?
+pub fn thumb_of(@ui.Ctx, String, laid? : @view.Laid) -> Thumb?
 
 pub fn thumb_place(String, String, String, String) -> String
 
@@ -2453,6 +2459,11 @@ pub(all) struct Elsewhere {
   time : Stamp?
 }
 
+pub(all) struct EmitAt {
+  node : @view.View
+  dy : Double
+}
+
 pub(all) struct Emits {
   decided : Map[String, Bool]
   done : Map[String, Bool]
@@ -2461,11 +2472,8 @@ pub(all) struct Emits {
   ended : Map[String, Double]
   mut aimed : (Double, Double)?
   mut aimed_at : Double
-  mut landed : (Double, Double)?
-  mut home : (Double, Double)?
   mut watched : Bool
   mut copied : String
-  mut trace : (Double, Double, Double)
   mover : @ui.Mover
   mut held_until : Double
   mut floor : Double
@@ -2693,7 +2701,7 @@ pub(all) struct Leaving {
 pub(all) struct Lingering {
   agent : Agent
   id : Int32
-  mut n : Int32
+  at : Double
 }
 
 pub(all) struct LinkMark {
@@ -3162,8 +3170,6 @@ pub(all) struct Reading {
   acts : Map[String, Bool]
   mut shown_frame : Int32
   mut shown_by : (() -> Bool)?
-  mut played : Int32
-  mut ticked : Int32
   fresh : Map[String, Bool]
   mut came_frame : Int32
   came : Map[String, (Int32, String)]
@@ -3531,10 +3537,11 @@ pub(all) struct Turn {
   ts : String
   agent : String
   pose : Pose
-  from : (Double, Double)?
+  from : String?
   clock : @motion.Anim
   span : Double
   warp : (Double, Double, Double)?
+  timed : Bool
 }
 
 pub(all) struct TurnAsk {
@@ -3740,7 +3747,7 @@ pub fn Viewer::draft_key(Self) -> String
 pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, Bool, Double) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
-pub fn Viewer::flight_from(Self, @ui.Ctx) -> Thumb?
+pub fn Viewer::flight_from(Self, @ui.Ctx, laid? : @view.Laid) -> Thumb?
 pub fn Viewer::flight_node(Self) -> Bool
 pub fn Viewer::flight_target(Self, @ui.Ctx, Source) -> (Double, Double, Double, Double)?
 pub fn Viewer::flow_stage(Self, @ui.Ctx, Source, Flow, PKind, Int32) -> Unit

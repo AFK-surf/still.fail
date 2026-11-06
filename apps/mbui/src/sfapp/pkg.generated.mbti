@@ -108,6 +108,8 @@ pub fn chat_link(String, String) -> String
 
 pub fn chat_params(@sfbase.ChatRef) -> Map[String, @json.Json]
 
+pub fn chat_play(@ui.Ctx, String, @sfbase.Reading, shown~ : Bool) -> Double
+
 pub fn chat_ref(String, String) -> @sfbase.ChatRef
 
 pub fn chat_ref_of(@sfbase.ChatItem) -> @sfbase.ChatRef
@@ -115,8 +117,6 @@ pub fn chat_ref_of(@sfbase.ChatItem) -> @sfbase.ChatRef
 pub fn chat_screens_driven(Array[@sfbase.ChatScreen]) -> Bool
 
 pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside, along? : @view.Along) -> Unit
-
-pub fn chat_tick(@ui.Ctx, String, @sfbase.Reading, @sfbase.ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_view_made(@json.Json) -> @sfbase.ChatView
 
@@ -302,7 +302,7 @@ pub fn emit_place(@ui.Ctx, String) -> (Double, Double, Double, Double)?
 
 pub fn emit_release(@sfbase.Emits) -> Unit
 
-pub fn emit_step(@ui.Ctx, @sfbase.Emits, @sfbase.Turns, Double) -> Unit
+pub fn emit_step(@ui.Ctx, String, @sfbase.Emits, @sfbase.Turns, Double) -> Double
 
 pub fn emit_take(@ui.Ctx, @sfbase.Emits, @sfbase.ChatView, Map[String, Bool]) -> Unit
 
@@ -932,7 +932,7 @@ pub fn term_color(String, Bool) -> Int64
 
 pub fn text(@json.Json?, String) -> String
 
-pub fn thumb_of(@ui.Ctx, String) -> @sfbase.Thumb?
+pub fn thumb_of(@ui.Ctx, String, laid? : @view.Laid) -> @sfbase.Thumb?
 
 pub fn thumb_shows(String) -> Double
 

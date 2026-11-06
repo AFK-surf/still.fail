@@ -121,7 +121,7 @@ pub fn tools_row_node(
     let gone : Array[MenuItem?] = []
     for tool in tools() {
       match slots.get(tool.key) {
-        Some(slot) if slot.left_out() => for item in (tool.instead)() { gone.push(Some(item)) }
+        Some(slot) if slot.owed_left_out() => for item in (tool.instead)() { gone.push(Some(item)) }
         _ => ()
       }
     }
