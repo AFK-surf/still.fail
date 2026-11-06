@@ -195,8 +195,12 @@ export interface ScreenSource {
   readonly peek?: boolean;
   /// The session that opened it (a tab of the browser an agent opened), when known.
   openedBy?(): string | undefined;
-  /// Closes it for good (a tab of the browser); none: it is not closed from a person's app (the desktop).
+  /// Closes it for good (a tab of the browser, a simulator shut down); none: it is not closed from a person's app (the
+  /// desktop).
   discard?(): Promise<void>;
+  /// Since when it has been up (ms; a simulator's boot): what costs the machine while nobody uses it, told so a person
+  /// sees one left running (the core's `longJobs`); none: not told.
+  since?(): number | undefined;
   /// Its display's scale (null when it is not had now); none: a source whose scale is not changed (macOS, a tab).
   scale?(): Promise<ScreenScale | null>;
   /// Sets its display's scale to one of its steps, and says it as `scale` does; until its last view ends, after which

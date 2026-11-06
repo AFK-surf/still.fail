@@ -139,6 +139,7 @@ using @sfbase {
   long_jobs,
   long_jobs_lit,
   long_jobs_seen,
+  long_stop,
   held_order,
   chats_of,
   app,

@@ -365,6 +365,7 @@ pub using @sfbase {
   relay_connect,
   relay_go,
   long_jobs,
+  long_stop,
   seq_key,
   stations_at_glance,
   agent_of,

@@ -725,18 +725,22 @@ each("a_read_only_member_only_looks", async (seed) => {
 });
 
 each("each_view_of_a_screen_says_its_device_and_a_member_lets_it_go_a_reader_does_not", async (seed) => {
-  const mine = { id: "v1", name: "a@x.com", control: true, at: 1000, device: "cb93bcd36171ffff", client: "youdid.wtf 桌面版 · pengx17", app: "desktop" };
+  const mine = { id: "v1", name: "a@x.com", control: true, at: 1000, instance: "view-run", device: "cb93bcd36171ffff", client: "youdid.wtf 桌面版 · pengx17", app: "desktop" };
   const older = { id: "v2", name: "Bob", control: false, at: 2000, device: "abcdef0123456789" };
   const agent = { id: "v3", name: "agent: 部署", control: true, at: 3000, agent: true };
   // (a person's name alone does not make a view an agent's: it stays theirs to let go of)
-  const named = { id: "v4", name: "agent: Eve", control: false, at: 4000 };
-  const answers = { ...base(), "GET /screens": { screens: [{ ...SCREENS.screens[0], viewers: ["a@x.com", "Bob", "agent: 部署"], controlledBy: ["a@x.com", "agent: 部署"], views: [mine, older, agent, named, { id: "", name: "broken" }] }] }, "POST /screens/desktop/views/v1/end": {}, "POST /screens/desktop/views/v1/watch": {}, "POST /screens/desktop/views/end": { ended: 2 } };
+  const named = { id: "v4", name: "agent: Eve", control: false, at: 4000, instance: "x".repeat(101) };
+  const answers = { ...base(), "GET /screens": { screens: [{ ...SCREENS.screens[0], instance: "screen-run", viewers: ["a@x.com", "Bob", "agent: 部署"], controlledBy: ["a@x.com", "agent: 部署"], views: [mine, older, agent, named, { id: "", name: "broken" }] }] }, "POST /screens/desktop/views/v1/end": {}, "POST /screens/desktop/views/v1/watch": {}, "POST /screens/desktop/views/end": { ended: 2 } };
   const { host, core, ui, views } = await viewing(seed, answers);
   const values = new Map<number, unknown>();
   subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
   await host.settle();
   apply(host, values);
   const [desktop] = (values.get(1) as J).screens;
+  assert.equal(desktop.instance, "screen-run", "the station's screen registration reaches the view");
+  assert.equal(desktop.views[0].instance, "view-run", "the station's connection identity reaches the view");
+  assert.equal("instance" in desktop.views[1], false, "an older station can omit the identity");
+  assert.equal("instance" in desktop.views[3], false, "an oversized identity is ignored");
   assert.deepEqual(desktop.views.map((v: J) => [v.id, v.name, v.device, v.app, v.control, v.may === true, v.agent === true]), [
     ["v1", "a@x.com", "youdid.wtf 桌面版 · pengx17", "desktop", true, true, false],
     ["v2", "Bob", "设备 abcdef01", "", false, true, false],

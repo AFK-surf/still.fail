@@ -7,6 +7,7 @@ import { Data, holds } from "../src/data.ts";
 import { apply as applyOps, type Op } from "../src/delta.ts";
 import * as format from "../src/format.ts";
 import { holdLanguage } from "../src/i18n.ts";
+import { LONG } from "../src/jobs.ts";
 import { merge } from "../src/entries.ts";
 import { topicKey, type Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
@@ -153,6 +154,62 @@ function stations(nowS: number): J {
   };
 }
 const oneStation = (): J => ({ id: "ws", stations: [{ id: "st", name: "studio", last_seen: null, version: null }] });
+
+test("a long-running screen appears at an hour and a removed screen leaves no reminder", async () => {
+  const t = setup();
+  const u = ui();
+  const screenTopic: Topic = { topic: "screens", station: "ws/st" };
+  const screen = (until: number) => ({ id: "simulator:A", title: "Test simulator", since: t.host.nowMs() - LONG + until, closable: true });
+  try {
+    t.subscribe(1, { topic: "longJobs", scope: "ws" });
+    t.set(workspace(), oneStation());
+    await t.read(u, 1);
+    t.set(link("ws/st"), { state: "online" });
+    t.set({ topic: "jobs", station: "ws/st" }, []);
+    t.set(screenTopic, { screens: [screen(3_000)] });
+    await t.read(u, 1);
+    assert.deepEqual(u.value.groups, []);
+    await t.host.time.pass(3_000, 200);
+    await t.read(u, 1);
+    assert.ok(u.value.groups.length > 0, JSON.stringify({ value: u.value, screen: t.store.get(screenTopic), started: t.router.started, sleeps: t.host.time.sleeps, now: t.host.nowMs() }));
+    assert.equal(u.value.groups[0].jobs[0].stop.call, "screen.close");
+
+    t.set(screenTopic, { screens: [screen(3_000)] });
+    await t.read(u, 1);
+    t.set(screenTopic, { screens: [] });
+    await t.read(u, 1);
+    const computed = t.router.computed;
+    await t.host.time.pass(3_000, 500);
+    await t.read(u, 1);
+    assert.deepEqual(u.value.groups, []);
+    assert.equal(t.router.computed, computed, "a screen removed before its deadline does not wake the view");
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
+test("a long-running screen's age changes without another station update", async () => {
+  const t = setup();
+  const u = ui();
+  try {
+    t.subscribe(1, { topic: "longJobs", scope: "ws" });
+    t.set(workspace(), oneStation());
+    await t.read(u, 1);
+    t.set(link("ws/st"), { state: "online" });
+    t.set({ topic: "jobs", station: "ws/st" }, []);
+    t.set({ topic: "screens", station: "ws/st" }, { screens: [{
+      id: "simulator:A", title: "Test simulator", since: t.host.nowMs() - 2 * LONG + 1_000, closable: true,
+    }] });
+    await t.read(u, 1);
+    assert.equal(u.value.groups[0].jobs[0].age, "1 小时");
+    await t.host.time.pass(600, 200);
+    await t.read(u, 1);
+    assert.equal(u.value.groups[0].jobs[0].age, "2 小时");
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
 const session = (key: string): J => ({ key, connect: "c1", profile: "p1", runtime: "claude", model: "opus", effort: null, process: "cold", pending: 0, lastTurn: null });
 const member = (thread: number, key: string, connect: string): J => ({ thread, session: key, connect, joinedAt: 1 });
 const fullSession = (key: string, patch: J = {}): J => ({

@@ -1604,6 +1604,16 @@ export interface JobChat {
 	station?: string;
 }
 
+/** How one of the open ones that is not a job is stopped (`Job.stop`). */
+export interface JobStop {
+	/** `screen.close` (a simulator shut down) or `screen.endView` (a person's view ended), with its station and these. */
+	call: string;
+	screen: string;
+	view?: string;
+	/** What its button says: 关闭, 断开. */
+	word: string;
+}
+
 /**
  * A background job an agent started (a web service when it has a port): shown by its name; the port is how the
  * station reaches a service, not for people.
@@ -1653,6 +1663,8 @@ export interface Job {
 	stationName?: string;
 	chat?: JobChat;
 	whereText?: string;
+	/** Among the open ones (`longJobs`), a simulator or a view of a screen in a job's shape: how it is stopped, in place of `job.stop`. */
+	stop?: JobStop;
 }
 
 /** An agent of a chat: its session, the connect that started it, its profile, and what it can move to. */
@@ -5029,7 +5041,7 @@ export interface LockView {
 }
 
 export interface LongJobsGroup {
-	/** services | jobs */
+	/** services | jobs | simulators | views */
 	key: string;
 	/** 开了很久的网页服务 · 3 */
 	head: string;
@@ -5048,8 +5060,8 @@ export interface LongJobsView {
 	 */
 	lit?: boolean;
 	/**
-	 * Each of them as `<station>/<id>`: what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`)
-	 * once the bell opens.
+	 * Each job as `<station>/<id>`, each screen or connection with its run identity (or its start time from an older station):
+	 * what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`) once the bell opens.
 	 */
 	ids?: string[];
 }
@@ -6144,7 +6156,7 @@ export interface PrefsView {
 	 */
 	trouble?: Record<string, string>;
 	/**
-	 * The jobs left up long the rail's bell has shown, by workspace: each `<station>/<id>`, as the
+	 * The long-running reminders the rail's bell has shown, by workspace, as the
 	 * `longJobs` view's `ids` were when it opened. They no longer light it.
 	 */
 	jobsSeen?: Record<string, string[]>;
@@ -6749,6 +6761,8 @@ export interface ScreenPresence {
 	app?: string;
 	/** When it opened, in ms since 1970. */
 	at: number;
+	/** The station's identity for this connection, when it says one. */
+	instance?: string;
 	/** How long ago, in words (3 分钟前), as of when this was said. */
 	ago: string;
 	/** Its input is taken. */
@@ -6810,6 +6824,10 @@ export interface ScreenItem {
 	chrome?: ScreenChrome[];
 	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
 	chat?: ScreenChat;
+	/** Since when it has been up, in ms since 1970: a simulator's boot, an emulator's start; none for the rest or from a station before it. */
+	since?: number;
+	/** The station's identity for this registration of a screen, when it says one. */
+	instance?: string;
 	/**
 	 * What the core says of it under its title: what it is, its size, the chat that opened it, who is on it; or, while its
 	 * station lacks a grant for it, what cannot be done now (core).

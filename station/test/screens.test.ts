@@ -731,7 +731,7 @@ test("who is on a screen: every view's person, told to all on it and in the list
   await settle();
   const { views, ...named } = hub.people("fake");
   assert.deepEqual(named, { viewers: ["Pat", "Vic"], controlledBy: ["Pat"] });
-  assert.deepEqual(views.map(({ at: _at, id: _id, ...v }) => v), [{ name: "Pat", control: true, device: member.device }, { name: "Vic", control: false, device: reader.device }]);
+  assert.deepEqual(views.map(({ at: _at, id: _id, instance: _instance, ...v }) => v), [{ name: "Pat", control: true, device: member.device }, { name: "Vic", control: false, device: reader.device }]);
   assert.ok(views.every((v) => v.at > 0 && v.id !== ""));
   assert.deepEqual(hub.listed("en").screens, [{ id: "fake", kind: "browser", title: "Tab", width: 1280, height: 720, viewers: ["Pat", "Vic"], controlledBy: ["Pat"], views }]);
   assert.equal(told, 2);
@@ -1983,23 +1983,61 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
   const listed = {
     devices: {
       "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [
-        { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", state: "Booted", deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17" },
+        { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", state: "Booted", deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17", lastBootedAt: "invalid", lastUsedAt: "2026-11-06T08:33:59Z" },
         { udid: "422DED77-9031-4A8D-93D7-67F1A7C4A272", name: "iPhone 17", state: "Shutdown" },
         { udid: "not a udid", name: "x", state: "Booted" },
       ],
-      "com.apple.CoreSimulator.SimRuntime.xrOS-27-0": [{ udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", state: "Booted" }],
+      "com.apple.CoreSimulator.SimRuntime.xrOS-27-0": [{ udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", state: "Booted", lastBootedAt: "2026-11-06T07:15:00Z" }],
       broken: "nothing",
     },
   };
   assert.deepEqual(bootedOf(listed), [
-    { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", runtime: "iOS 26.2", type: "com.apple.CoreSimulator.SimDeviceType.iPhone-17" },
-    { udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", runtime: "visionOS 27.0", type: "" },
+    { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", runtime: "iOS 26.2", type: "com.apple.CoreSimulator.SimDeviceType.iPhone-17", bootedAt: Date.parse("2026-11-06T08:33:59Z") },
+    { udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", runtime: "visionOS 27.0", type: "", bootedAt: Date.parse("2026-11-06T07:15:00Z") },
   ]);
   assert.deepEqual(bootedOf(null), []);
   assert.equal(runtimeName("com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"), "iOS 27.2");
   assert.equal(runtimeName("something else"), "something else");
   assert.deepEqual(screenOf({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } }), { width: 1206, height: 2622 });
   assert.deepEqual(screenOf({}), { width: 0, height: 0 });
+});
+
+test("a screen registration and a connection each have their own stable run identity", () => {
+  const hub = new ScreenHub();
+  const source = () => ({
+    id: "simulator:U", kind: "simulator" as const, title: () => "iPhone",
+    size: () => ({ width: 1, height: 1 }), since: () => 1000,
+    open: () => Promise.reject(new Error("not opened")),
+  });
+  const remove = hub.add(source());
+  const first = hub.listed("en").screens[0]!.instance;
+  assert.equal(typeof first, "string");
+  hub.changed();
+  assert.equal(hub.listed("en").screens[0]!.instance, first, "updates do not change the run");
+  remove();
+  hub.add(source());
+  const second = hub.listed("en").screens[0]!.instance;
+  assert.notEqual(second, first, "the same screen and start time can name a new registration");
+
+  const leave = hub.join("simulator:U", { name: "Pat", control: true, tell: () => {} });
+  const view = hub.people("simulator:U").views[0]!;
+  const run = view.instance;
+  assert.equal(typeof run, "string");
+  assert.equal(hub.people("simulator:U").views[0]!.instance, run);
+  leave();
+  hub.join("simulator:U", { name: "Pat", control: true, tell: () => {} });
+  assert.notEqual(hub.people("simulator:U").views[0]!.instance, run);
+  const anotherHub = new ScreenHub();
+  anotherHub.add(source());
+  anotherHub.join("simulator:U", { name: "Pat", control: true, tell: () => {} });
+  assert.notEqual(anotherHub.people("simulator:U").views[0]!.instance, run, "a station restart can reuse its view id");
+  const sameWatcher = { name: "Alex", control: false, tell: () => {} };
+  hub.join("simulator:U", sameWatcher);
+  const firstShared = hub.people("simulator:U").views.at(-1)!.instance;
+  hub.join("simulator:U", sameWatcher);
+  const shared = hub.people("simulator:U").views.slice(-2);
+  assert.equal(shared[0]!.instance, firstShared, "another join cannot change an existing identity");
+  assert.notEqual(shared[1]!.instance, firstShared);
 });
 
 test("a simulator says it can be debugged; other screens neither say so nor answer", () => {
@@ -2064,7 +2102,8 @@ test("a simulator a screen while it is booted: listed with its device's name and
   const run = async (file: string, args: string[]) => {
     runs.push([file, ...args].join(" "));
     if (file === SIMCTL && args.join(" ") === "list -j devices")
-      return JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [{ udid, name: "iPhone 17", state: booted ? "Booted" : "Shutdown", deviceTypeIdentifier: "t17" }] } });
+      return JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [{ udid, name: "iPhone 17", state: booted ? "Booted" : "Shutdown", deviceTypeIdentifier: "t17", lastUsedAt: "2026-11-06T08:33:59Z" }] } });
+    if (file === SIMCTL && args[0] === "shutdown") return "";
     if (file === SIMCTL && args.join(" ") === "list -j devicetypes") return JSON.stringify({ devicetypes: [{ identifier: "t17", bundlePath: "/t17.simdevicetype" }] });
     if (file === "plutil") return JSON.stringify({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } });
     throw new Error(`not run here: ${file}`);
@@ -2075,6 +2114,10 @@ test("a simulator a screen while it is booted: listed with its device's name and
   assert.equal(listed?.id, `simulator:${udid}`);
   assert.equal(listed?.title, "iPhone 17 · iOS 26.2");
   assert.deepEqual([listed?.width, listed?.height], [1206, 2622]);
+  // Up since its boot, and closed from a person's app as shut down.
+  assert.deepEqual([listed?.since, listed?.closable], [Date.parse("2026-11-06T08:33:59Z"), true]);
+  await hub.closeScreen(`simulator:${udid}`);
+  assert.ok(runs.includes(`${SIMCTL} shutdown ${udid}`));
   // Its size is asked once a device type, not again as the list is looked at again.
   await simulators.refresh();
   assert.equal(runs.filter((r) => r.includes("devicetypes")).length, 1);

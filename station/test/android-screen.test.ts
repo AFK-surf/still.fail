@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { makeScreens } from "../src/screens/source.ts";
 import { ScreenRefused } from "../src/screens/hub.ts";
 import { wall } from "../src/ops/fibers.ts";
-import { AndroidScreen, AndroidScreens, AndroidInput, KEYCODES, PEEKS_MOST, PEEK_BITRATE, PEEK_FPS, PeekCount, bitrateOf, viewArgs, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
+import { AndroidScreen, AndroidScreens, AndroidInput, KEYCODES, emulatorStart, startOf, PEEKS_MOST, PEEK_BITRATE, PEEK_FPS, PeekCount, bitrateOf, viewArgs, ScrcpyStream, adbEnv, avcCOf, avccOf, devicesOf, metaOf, nalsOf, panelsOf, shownDevice, sideOf, sizeOf } from "../src/screens/android.ts";
 
 const size = { width: 1000, height: 2000 };
 
@@ -48,6 +48,18 @@ test("a view's size: what it asked, at least 1280 to drive; a preview as small a
   assert.equal(sideOf({ ...options, maxWidth: 400, maxHeight: 800 }), 1280);
   assert.equal(sideOf({ ...options, maxWidth: 400, maxHeight: 800, peek: true }), 800);
   assert.equal(sideOf({ ...options, maxWidth: 3840, maxHeight: 2160 }), 2560);
+});
+
+test("an emulator's start, its qemu's as ps says it; none for a phone or one not found", async () => {
+  const ps = [
+    "Fri Nov  6 16:34:52 2026     /sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64-headless -avd fold -port 5580 -no-window",
+    "Fri Nov  6 10:00:00 2026     /sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64 -avd other -port 5554",
+    "Fri Nov  6 09:00:00 2026     /bin/zsh -c echo -port 5580",
+  ].join("\n");
+  assert.equal(startOf(ps, "5580"), new Date(2026, 10, 6, 16, 34, 52).getTime());
+  assert.equal(startOf(ps, "5556"), undefined);
+  if (process.platform !== "win32") assert.equal(await emulatorStart("emulator-5554", async () => ps), new Date(2026, 10, 6, 10, 0, 0).getTime());
+  assert.equal(await emulatorStart("R5CT10ABCDE", async () => ps), undefined);
 });
 
 test("a view's rate by its side: 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440, 8 above", () => {

@@ -87,7 +87,7 @@ JPEG frames are all key frames and their config has no `description`.
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
 - **List**: `GET /admin/api/screens` →
-  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, debug?, panels?, chrome?, openedBy?}]}`; changes come on
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, debug?, panels?, chrome?, openedBy?, since?}]}`; changes come on
   the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
   `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
   `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
@@ -96,8 +96,14 @@ JPEG frames are all key frames and their config has no `description`.
   drops into a view is put on the machine (with the drive's upload, `root` the folder: docs/drive.md) and whether the
   view can show it in the machine's file manager. `peek`: it can be previewed (a tab of the browser). A station from
   before them says none of these: clients offer none. `closable`: a member (not a viewer) may close it, a tab of the
-  browser: **Close** `POST /admin/api/screens/<id>/close` → `{}` (404 no such screen, 405 not closed from here, 502
-  the browser refused), and it leaves the list as Chrome tells it went. `openedBy`: the session that opened it (whose
+  browser, a simulator (shut down: `simctl shutdown`) or an emulator (`adb emu kill`; a phone is not): **Close** `POST
+  /admin/api/screens/<id>/close` → `{}` (404 no such screen, 405 not closed from here, 502 the browser refused), and it
+  leaves the list as Chrome, CoreSimulator or adb tells it went. `since`: a simulator's `lastBootedAt`, or `lastUsedAt`
+  on a simctl that supplies that instead (otherwise when the station listed it), or an emulator's qemu start as `ps`
+  says it (on Windows when the station listed it), in ms. The last-use or listing fallback can be later than the boot:
+  the core lists one an hour after this time among those left running (the rail's bell, `longJobs`:
+  2026-11-06, 「这些东西就是长期占用我的资源」), with a person's view of any screen open that long (ended from there as
+  `…/views/<view>/end`), and an agent's view or one on the asking device aside. `openedBy`: the session that opened it (whose
   a tab is, above); clients show the chat that session is in, among the viewer's chats, and open it. An old station answers this route 404: a client
   opens a view only on a station that listed the screen (an old one would read the view's head as a request whose
   body never ends).

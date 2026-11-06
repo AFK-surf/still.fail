@@ -1,6 +1,7 @@
 // The station's screens (docs/remote-screens.md): the registry its parts add their sources to (source.ts
 // `makeScreens`), and who is on each now. What members are told of them (GET /admin/api/screens, `screens` on the
 // event stream, the agents' `screen` tool) is said here; the views themselves go over the member link (mesh/screens.ts).
+import { randomUUID } from "node:crypto";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type ChromePictures, picturesOf, toldOf } from "./sim-chrome.ts";
@@ -16,7 +17,7 @@ export type Watcher = { name: string; control: boolean; tell(state: Record<strin
 
 /// One view as members are told of it (docs/remote-screens.md "Who is on a screen"): `id`, the hub's, to end it by; `at`,
 /// when it opened (ms).
-export type ViewShown = { id: string; name: string; control: boolean; at: number; device?: string; self?: string; client?: string; app?: string; agent?: boolean };
+export type ViewShown = { id: string; name: string; control: boolean; at: number; instance: string; device?: string; self?: string; client?: string; app?: string; agent?: boolean };
 
 /// Where a person's view is, for an agent to name it to them: the app, the device (its id's start), how long it has been open.
 export function viewOn(v: ViewShown): string {
@@ -76,8 +77,10 @@ export type HubOptions = {
 
 export class ScreenHub implements Screens {
   readonly #sources = makeScreens();
+  /// A source registration is a separate run even if the operating system reports the same start time.
+  readonly #instances = new WeakMap<ScreenSource, string>();
   readonly #o: HubOptions;
-  readonly #views = new Map<string, Map<string, Watcher & { at: number }>>();
+  readonly #views = new Map<string, Map<string, Watcher & { at: number; instance: string }>>();
   #viewCount = 0;
   /// Until when a device's views of a screen are held to only looking (`watchOnly`), by device and screen.
   readonly #held = new Map<string, number>();
@@ -91,6 +94,7 @@ export class ScreenHub implements Screens {
   }
 
   add(source: ScreenSource): () => void {
+    this.#instances.set(source, randomUUID());
     return this.#sources.add(source);
   }
   list(): ScreenSource[] {
@@ -131,16 +135,16 @@ export class ScreenHub implements Screens {
     return {
       viewers: on.map(([, w]) => w.name),
       controlledBy: on.filter(([, w]) => w.control).map(([, w]) => w.name),
-      views: on.map(([view, w]) => ({ id: view, name: w.name, control: w.control, at: w.at, ...(w.device ? { device: w.device } : {}), ...(w.self ? { self: w.self } : {}), ...(w.client ? { client: w.client } : {}), ...(w.app ? { app: w.app } : {}), ...(w.agent ? { agent: true } : {}) })),
+      views: on.map(([view, w]) => ({ id: view, name: w.name, control: w.control, at: w.at, instance: w.instance, ...(w.device ? { device: w.device } : {}), ...(w.self ? { self: w.self } : {}), ...(w.client ? { client: w.client } : {}), ...(w.app ? { app: w.app } : {}), ...(w.agent ? { agent: true } : {}) })),
     };
   }
 
   /// A view opened on `id`: everyone on it is told who is, and members are; the returned function leaves.
   join(id: string, watcher: Watcher): () => void {
-    const on = this.#views.get(id) ?? new Map<string, Watcher & { at: number }>();
+    const on = this.#views.get(id) ?? new Map<string, Watcher & { at: number; instance: string }>();
     this.#views.set(id, on);
     const view = `v${++this.#viewCount}`;
-    on.set(view, Object.assign(watcher, { at: wall.now() }));
+    on.set(view, { ...watcher, at: wall.now(), instance: randomUUID() });
     this.#tellPeople(id);
     let left = false;
     return () => {
@@ -276,7 +280,8 @@ export class ScreenHub implements Screens {
   /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had, `install` where a file to
-  /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab).
+  /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab); `since`, since when it has been up
+  /// (ms: a simulator's boot, an emulator's start).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
     return {
@@ -285,6 +290,7 @@ export class ScreenHub implements Screens {
         const access = accessShown(s.access?.(), lang);
         const clipboard = s.clipboard?.() ?? [];
         const by = s.openedBy?.();
+        const since = s.since?.();
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
@@ -295,6 +301,7 @@ export class ScreenHub implements Screens {
           ...(s.panels?.length ? { panels: s.panels } : {}),
           ...(s.chrome?.length ? { chrome: s.chrome.map(toldOf) } : {}),
           ...(by ? { openedBy: by } : {}),
+          ...(since !== undefined ? { since, instance: this.#instances.get(s) } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };
       }),

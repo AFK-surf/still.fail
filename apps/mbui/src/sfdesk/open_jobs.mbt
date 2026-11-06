@@ -81,7 +81,10 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     }
   }
   let stop = c.id("open-job-stop/" + station + "/" + id)
-  let (stopping, failed) = job_stopping(src, station, job)
+  // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
+  let (call, params, on) = long_stop(station, job)
+  let stopping = core_doing(src, [call], on)
+  let failed = core_failed(src, [call], on)
   // (no hover to tell: the stop shows over the time)
   let over = @sf.pointed_or_finger(c, c.lit(row) || c.lit(stop) || stopping || c.has_focus(stop))
   c.box(style=open_job_box, fn() {
@@ -101,9 +104,14 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
       c.layer(fn() {
         c.box(style=open_job_stop_at, fn() {
           if !stopping && c.clicked(stop) {
-            job_stop(src, station, job)
+            act(src, @sf.t("web-main.jobs.stopWhat", args=[("name", text(job, "name"))]), "", call, params)
           }
-          let label = @sf.t("web-main.jobs.stopNamed", args=[("name", text(job, "name"))])
+          let word = text(field(job, "stop"), "word")
+          let label = if word != "" {
+            word + " " + text(job, "name")
+          } else {
+            @sf.t("web-main.jobs.stopNamed", args=[("name", text(job, "name"))])
+          }
           let s = c.box(style=if c.lit(stop) && !stopping { open_job_stop_lit } else { open_job_stop }, id=stop, fn() {
             if stopping || failed is Some(_) {
               @settings.doing_mark(c, stopping, failed)
@@ -117,7 +125,7 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
             }
           })
           c.semantics(s, Button, id=stop, label~)
-          @sf.tip(c, "open-job-stop/" + station + "/" + id, stop, @sf.t("web-main.jobs.stop"), side=Top)
+          @sf.tip(c, "open-job-stop/" + station + "/" + id, stop, if word != "" { word } else { @sf.t("web-main.jobs.stop") }, side=Top)
         })
         |> ignore
       })

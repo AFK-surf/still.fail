@@ -125,18 +125,22 @@ fn open_job_row_node(r : @view.View, src : Source, job : @signals.Signal[Json]) 
         fn() {
           if !doing(skey()) {
             @ui.haptic(Confirm)
+            let (call, params, _) = long_stop(station(), j())
             act(
               src,
               fill("android-misc.jobs.stopWhat", [("name", text(j(), "name"))]),
               skey(),
-              "job.stop",
-              { "station": Json::string(station()), "id": Json::string(id()) },
+              call,
+              params,
             )
           }
         },
         Is(16.0),
         Button,
-        fn() { tr("android-misc.jobs.stop") },
+        fn() {
+          let word = text(field(j(), "stop"), "word")
+          if word == "" { tr("android-misc.jobs.stop") } else { word + " " + text(j(), "name") }
+        },
       )
       stop.show(fn() { doing(skey()) }, fn(s) { @sf.spinner_node(s, size=12.0) |> ignore })
       stop.show(fn() { !doing(skey()) }, fn(s) {

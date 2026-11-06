@@ -468,6 +468,10 @@ pub fn long_chat_last(Int32, Int32) -> @json.Json
 
 pub fn long_job() -> @json.Json
 
+pub fn long_screen(String, String, String, String, String, String, String, String) -> Json
+
+pub fn long_screens_view() -> Json
+
 pub let long_reply : String
 
 pub fn made_chat(String) -> @json.Json

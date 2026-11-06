@@ -5,6 +5,7 @@
 import { useState } from "react";
 import type { Job } from "../core/shapes.ts";
 import { chatPath, SHOWN, useLongJobs } from "../OpenJobs.tsx";
+import { openJobAction } from "../open-job-action.ts";
 import { JobDot } from "../Jobs.tsx";
 import { Stop } from "@stillfail/ui/icons.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
@@ -21,8 +22,14 @@ export function OpenJobs({ scope }: { scope: string }) {
   const doing = useDoingList();
   // Stopping: its spinner in the button's place until the station answers (the toast says if it could not), and the
   // failure mark before the button a few seconds after it could not.
-  const stopping = (job: Job) => doing.some((d) => !failed(d) && doingMatches(d, "job.stop", { station: job.station, id: job.id }));
-  const stopFailed = (job: Job) => failedIn(doing, "job.stop", { station: job.station, id: job.id });
+  const stopping = (job: Job) => {
+    const action = openJobAction(job);
+    return action !== null && doing.some((d) => !failed(d) && doingMatches(d, action.call, action.params));
+  };
+  const stopFailed = (job: Job) => {
+    const action = openJobAction(job);
+    return action === null ? undefined : failedIn(doing, action.call, action.params);
+  };
   if (groups.length === 0) return null;
   const open = (job: Job) => {
     const path = chatPath(job);
@@ -45,10 +52,10 @@ export function OpenJobs({ scope }: { scope: string }) {
                   <span className={css.mOpenWhere}>{job.whereText} · {job.age}</span>
                 </span>
                 {!stopping(job) && stopFailed(job) !== undefined && <FailedMark error={stopFailed(job)!} />}
-                <button type="button" className={css.mOpenStop} aria-label={t("web-mobile.openJobs.stop", { name: job.name })} disabled={stopping(job)} aria-busy={stopping(job) || undefined}
+                {openJobAction(job) && <button type="button" className={css.mOpenStop} aria-label={job.stop?.word ? `${job.stop.word} ${job.name}` : t("web-mobile.openJobs.stop", { name: job.name })} disabled={stopping(job)} aria-busy={stopping(job) || undefined}
                   onClick={(e) => { e.stopPropagation(); stop(job); }}>
                   {stopping(job) ? <Spinner /> : <Stop size={15} />}
-                </button>
+                </button>}
               </div>
             ))}
             {shown.length < list.length && <button type="button" className={css.mOpenMore} onClick={() => setAll({ ...all, [key]: true })}>{t("web-mobile.openJobs.more", { n: list.length - shown.length })}</button>}
