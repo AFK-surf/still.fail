@@ -344,6 +344,8 @@ pub fn code_face() -> Bytes
 
 pub fn code_ink(@ui.Ctx, String, String) -> String??
 
+pub fn code_ink_node(@view.View, () -> String, () -> String) -> () -> String??
+
 pub let columns : Columns
 
 pub fn coming_mark(@ui.Ctx, String, Double?, Double, Int64) -> Unit

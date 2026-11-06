@@ -90,3 +90,57 @@ test "bones: one said whole drawn as one piece only in its bones itself; out of 
   assert_eq(drawn("whole").map(fn(d) { d.bone_as }), Some(1))
   assert_eq(drawn("child").map(fn(d) { d.bone_as }), Some(2))
 }
+
+///|
+test "in_bones follows its own and its holders' states, and stops with its node" {
+  let outer = @signals.signal(0L, same=fn(a, b) { a == b })
+  let inner = @signals.signal(0L, same=fn(a, b) { a == b })
+  let outer_seen : Array[Bool] = []
+  let inner_seen : Array[Bool] = []
+  let child_seen : Array[Bool] = []
+  let child : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(a) {
+      a.bones(By(fn() { outer.get() })) |> ignore
+      a.reacts(fn() { a.in_bones() }, fn(b) { outer_seen.push(b) })
+      a.box(fn(b) {
+        b.bones(By(fn() { inner.get() })) |> ignore
+        b.reacts(fn() { b.in_bones() }, fn(value) { inner_seen.push(value) })
+        b.box(fn(c) {
+          child.val = Some(c)
+          c.reacts(fn() { c.in_bones() }, fn(value) { child_seen.push(value) })
+        }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, time=fn() { 0.0 })
+  assert_eq(outer_seen, [false])
+  assert_eq(inner_seen, [false])
+  assert_eq(child_seen, [false])
+  // (its own bones hide changes to a holder; once its own leave, it follows that holder again)
+  inner.set(1L)
+  outer.set(1L)
+  inner.set(0L)
+  outer.set(2L)
+  assert_eq(inner_seen, [false, true])
+  assert_eq(child_seen, [false, true])
+  outer.set(0L)
+  assert_eq(outer_seen, [false, true, false])
+  assert_eq(inner_seen, [false, true, false])
+  assert_eq(child_seen, [false, true, false])
+  // (a holder's bones hide its own; leaving the holder still sees its own)
+  outer.set(1L)
+  inner.set(1L)
+  outer.set(0L)
+  assert_eq(inner_seen, [false, true, false, true])
+  assert_eq(child_seen, [false, true, false, true])
+  inner.set(0L)
+  assert_eq(inner_seen, [false, true, false, true, false])
+  assert_eq(child_seen, [false, true, false, true, false])
+  t.dispose()
+  assert_false(child.val.unwrap().in_bones())
+  outer.set(1L)
+  inner.set(1L)
+  assert_eq(child_seen, [false, true, false, true, false])
+  assert_false(outer.watched())
+  assert_false(inner.watched())
+}

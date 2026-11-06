@@ -632,6 +632,8 @@ struct Node {
   mut said_hidden : Bool
   /// what it and all it holds are drawn in, as their bones (View::bones): 0 none
   mut bones : Int64
+  /// whether it is itself in its bones, followed by View::in_bones; made as first read, let go with it
+  mut bones_cell : @signals.Signal[Bool]?
   /// drawn in its bones as one piece of its own box, nothing in it drawn (View::bone_whole)
   mut bone_whole : Bool
   /// its words cut short across where what holds it has not the room (View::cuts)
@@ -1247,6 +1249,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.said = None
       n.said_hidden = false
       n.bones = 0L
+      n.bones_cell = None
       n.bone_whole = false
       n.cut = false
       n.look.alpha = 1.0
@@ -1452,6 +1455,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         said: None,
         said_hidden: false,
         bones: 0L,
+        bones_cell: None,
         bone_whole: false,
         cut: false,
         look_due: false,
@@ -5512,6 +5516,7 @@ fn View::let_go(self : View) -> Unit {
   n.said = None
   n.said_hidden = false
   n.bones = 0L
+  n.bones_cell = None
   n.bone_whole = false
   n.cut = false
   n.pressed_cell = None

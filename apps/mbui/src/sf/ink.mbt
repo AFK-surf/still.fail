@@ -138,10 +138,37 @@ let inks_budget : Int = 4000000
 let inks_asked : Map[String, Bool] = {}
 
 ///|
+/// A cell for each code and language read by a node, told when the core answers (including an old view's request).
+// kept across runs: cleared by on_reset
+let ink_answered : Map[String, @signals.Signal[Int]] = Map([])
+
+///|
+/// Readers hold their answer even if other answers push it out of the bounded cache.
+// kept across runs: cleared by on_reset
+let ink_readers : Map[String, Int] = Map([])
+
+///|
+// kept across runs: cleared by on_reset
+let ink_held : Map[String, String?] = Map([])
+
+///|
+/// Answers from an earlier run must not fill a new run's cache or answer its requests.
+// kept across runs: advanced by on_reset
+let ink_generation : Ref[Int] = Ref(0)
+
+///|
 fn init {
   @ui.on_reset(fn() {
+    ink_generation.val += 1
     inks.clear(); inks_order.clear(); inks_used.val = 0; inks_asked.clear(); ink_read.val = None
+    ink_answered.clear(); ink_readers.clear(); ink_held.clear()
   })
+}
+
+///|
+/// A pair's unambiguous key, including when a code or language contains the separator.
+fn ink_key(code : String, lang : String) -> String {
+  "\{lang.length()}:" + lang + code
 }
 
 ///|
@@ -158,6 +185,127 @@ fn ink_keep(key : String, ink : String?) -> Unit {
     inks.remove(old)
     inks_asked.remove(old)
   }
+  if ink_readers.contains(key) {
+    ink_held[key] = ink
+  }
+  match ink_answered.get(key) {
+    Some(c) => c.set(@signals.untracked(fn() { c.get() }) + 1)
+    None => ()
+  }
+}
+
+///|
+/// A reader came to or left this pair. Neither a cell nor an evicted answer outlives the last reader.
+fn ink_read_by(key : String, by : Int) -> Unit {
+  let n = ink_readers.get(key).unwrap_or(0) + by
+  if n > 0 {
+    ink_readers[key] = n
+    if !ink_answered.contains(key) {
+      ink_answered[key] = @signals.signal(0)
+    }
+    if !ink_held.contains(key) {
+      match inks.get(key) {
+        Some(ink) => ink_held[key] = ink
+        None => ()
+      }
+    }
+  } else {
+    ink_readers.remove(key)
+    ink_answered.remove(key)
+    ink_held.remove(key)
+  }
+}
+
+///|
+/// What is already known, including an answer held by a node after it left the bounded cache.
+fn ink_known(key : String) -> String?? {
+  match ink_held.get(key) {
+    Some(ink) => Some(ink)
+    None => inks.get(key)
+  }
+}
+
+///|
+/// A kept answer has the same meaning as one from a live core.
+fn ink_kept(kept : (String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?, code : String, lang : String) -> String? {
+  match kept("code.ink", { "code": Json::string(code), "lang": Json::string(lang) }, None) {
+    Some(Ok((Object(m), _))) =>
+      match m.get("ink") {
+        Some(String(s)) => Some(s)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// A node asks at the cause (its creation or its inputs changing), not while a property is read.
+fn ink_ask(code : String, lang : String) -> Unit {
+  let key = ink_key(code, lang)
+  if ink_known(key) is Some(_) || inks_asked.contains(key) {
+    return
+  }
+  match (ink_read.val, kept_call.val) {
+    (Some(read), _) => {
+      inks_asked[key] = true
+      let generation = ink_generation.val
+      read(code, lang, fn(ink) {
+        if ink_generation.val == generation { ink_keep(key, ink) }
+      })
+    }
+    (None, Some(kept)) => ink_keep(key, ink_kept(kept, code, lang))
+    (None, None) => ()
+  }
+}
+
+///|
+/// The core's ink followed by a real node. Its getter returns None while an answer is pending, Some(None) for plain
+/// code, and Some(Some(ink)) when coloured. Inputs are followed at their cause; an answer is shared with old views and
+/// other nodes and survives the node that asked for it. The node owns its reading, not the core's callback.
+pub fn code_ink_node(owner : @view.View, code : () -> String, lang : () -> String) -> () -> String?? {
+  let reading : Ref[(String, Int)?] = Ref(None)
+  // A binding can read new inputs before the tree has committed the reaction to them. Tell it when the new reader
+  // has been installed too, so it follows that pair's answer regardless of the order in which those bindings run.
+  let attached = @signals.signal(0)
+  // A synchronous core call can let the owner go while its first reaction is running.
+  owner.owns(fn() {
+    match reading.val {
+      Some((key, generation)) if generation == ink_generation.val => ink_read_by(key, -1)
+      Some(_) => ()
+      None => ()
+    }
+    reading.val = None
+  }) |> ignore
+  owner.reacts(fn() { (code(), lang(), owner.in_bones()) }, fn(pair) {
+    match reading.val {
+      Some((old, generation)) if generation == ink_generation.val => ink_read_by(old, -1)
+      Some(_) => ()
+      None => ()
+    }
+    reading.val = None
+    if !pair.2 {
+      let key = ink_key(pair.0, pair.1)
+      ink_read_by(key, 1)
+      reading.val = Some((key, ink_generation.val))
+      ink_ask(pair.0, pair.1)
+    }
+    attached.set(@signals.untracked(fn() { attached.get() }) + 1)
+  })
+  fn() {
+    attached.get() |> ignore
+    if !owner.alive() || owner.in_bones() {
+      return Some(None)
+    }
+    let key = ink_key(code(), lang())
+    match ink_answered.get(key) {
+      Some(c) => c.get() |> ignore
+      None => ()
+    }
+    match ink_known(key) {
+      Some(ink) => Some(ink)
+      None => if ink_read.val is None && kept_call.val is None { Some(None) } else { None }
+    }
+  }
 }
 
 ///|
@@ -168,8 +316,8 @@ pub fn code_ink(c : @ui.Ctx, code : String, lang : String) -> String?? {
   if c.in_bones() {
     return Some(None)
   }
-  let key = lang + "\u{1}" + code
-  match inks.get(key) {
+  let key = ink_key(code, lang)
+  match ink_known(key) {
     Some(ink) => return Some(ink)
     None => ()
   }
@@ -177,19 +325,19 @@ pub fn code_ink(c : @ui.Ctx, code : String, lang : String) -> String?? {
     (Some(read), _) => {
       if !inks_asked.contains(key) {
         inks_asked[key] = true
-        c.tell("ink/" + key, fn() { read(code, lang, fn(ink) { ink_keep(key, ink) }) })
+        let generation = ink_generation.val
+        c.tell("ink/" + key, fn() {
+          if ink_generation.val == generation {
+            read(code, lang, fn(ink) {
+              if ink_generation.val == generation { ink_keep(key, ink) }
+            })
+          }
+        })
       }
       None
     }
     (None, Some(kept)) => {
-      let ink = match kept("code.ink", { "code": Json::string(code), "lang": Json::string(lang) }, None) {
-        Some(Ok((Object(m), _))) =>
-          match m.get("ink") {
-            Some(String(s)) => Some(s)
-            _ => None
-          }
-        _ => None
-      }
+      let ink = ink_kept(kept, code, lang)
       ink_keep(key, ink)
       Some(ink)
     }

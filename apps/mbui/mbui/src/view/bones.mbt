@@ -27,10 +27,16 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
       return
     }
     let was = n.bones
+    // (readers see the whole change, including the input let go of below)
+    @signals.start_batch()
     n.bones = k
     self.tree.bones_marked_below(self.at)
     // (into them or out: what takes input in it is not there, or is again)
     if (was == 0L) != (k == 0L) {
+      match n.bones_cell {
+        Some(cell) => cell.set(k != 0L)
+        None => ()
+      }
       self.tree.hits = self.tree.hits + 1
       if k != 0L {
         self.tree.hold_lost_in(self.at)
@@ -39,6 +45,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
       }
       self.tree.modals_told()
     }
+    @signals.end_batch()
   }
   match color {
     Is(v) => set(v)
@@ -66,9 +73,25 @@ pub fn View::bone_whole(self : View, whole : Live[Bool]) -> View {
 
 ///|
 /// Whether it is made in its bones (View::bones, its own or what holds it's): what makes it does nothing a real one
-/// does (nothing asked of the core, no picture asked for, nothing opened, nothing moving on its own).
+/// does (nothing asked of the core, no picture asked for, nothing opened, nothing moving on its own). A reactive read
+/// follows its own and its holders' states, and is told when whether it is in its bones changes.
 pub fn View::in_bones(self : View) -> Bool {
-  self.tree.bones_of_at(self.at) != 0L
+  guard self.live() is Some(_) else { return false }
+  let mut at = self.at
+  while at >= 0 {
+    let n = self.tree.nodes[at]
+    let cell = match n.bones_cell {
+      Some(cell) => cell
+      None => {
+        let cell = @signals.signal(n.bones != 0L, same=fn(a, b) { a == b })
+        n.bones_cell = Some(cell)
+        cell
+      }
+    }
+    if cell.get() { return true }
+    at = n.parent
+  }
+  false
 }
 
 ///|
