@@ -1452,6 +1452,10 @@ pub fn page_block(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn page_card(@ui.Ctx, () -> Unit, footed? : Bool) -> Unit
 
+pub fn page_card_action_node(@view.View, () -> String, () -> String, () -> Bool, (@view.View) -> Unit) -> Unit
+
+pub fn page_card_heading_node(@view.View, () -> String, () -> String) -> @view.View
+
 pub fn page_card_node(@view.View, (@view.View) -> Unit, footed? : Bool, layered? : Bool) -> Unit
 
 pub fn page_choice(@ui.Ctx, String, Array[String], Int32, item_w? : Double) -> Int32

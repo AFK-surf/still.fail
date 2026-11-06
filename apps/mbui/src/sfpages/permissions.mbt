@@ -84,10 +84,8 @@ pub fn permissions_node(
             @sf.icon_node(mark, "bell", permission_glyph, By(fn() { @sf.theme().p.text })) |> ignore
           })
           |> ignore
-          row.box(fn(words) {
-            words.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(2.0)) |> ignore
-            @sf.words_node(words, fn() { @sf.t("web-pages.permissions.notify.name") }, fn() { desk_strong }) |> ignore
-            @sf.words_node(words, fn() { @sf.t("web-pages.permissions.notify.purpose") }, fn() { desk_muted }) |> ignore
+          @sf.page_card_heading_node(row, fn() { @sf.t("web-pages.permissions.notify.name") }, fn() {
+            @sf.t("web-pages.permissions.notify.purpose")
           })
           |> ignore
           row.box(fn(status) {
@@ -108,35 +106,27 @@ pub fn permissions_node(
         })
         |> ignore
         card.show(fn() { state() == "default" || state() == "denied" }, fn(row) {
-          // The action sits in the card's foot corner, concentric with its edge; keep the words at the normal inset.
-          let out = @sf.card_foot_in(@sf.button_height()) - @sf.card_pad
-          row.row(Is(true)).width_share(Is(1.0)).gap(Is(12.0)).lines_up(Is(None))
-          .margin(Is((0.0, 0.0, 0.0, out))) |> ignore
-          row.box(fn(words) {
-            words.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(2.0))
-            .lies_along(Is(Middle)) |> ignore
-            @sf.words_node(words, fn() { @sf.t("web-pages.permissions.notify.without") }, fn() { desk_words }) |> ignore
-            words.show(fn() { state() == "denied" }, fn(hint) {
-              @sf.words_node(hint, fn() {
-                @sf.t(
-                  if @ui.platform() == 0 { "web-pages.permissions.where.mac" } else { "web-pages.permissions.where.windows" },
-                  args=[("name", "still.fail")],
-                )
-              }, fn() { desk_muted })
-              |> ignore
-            })
-          })
-          |> ignore
-          row.show(fn() { state() == "default" }, fn(button) {
-            button.margin(Is((0.0, 0.0, out, 0.0))).lies_along(Is(End)) |> ignore
-            let control = @sf.button_node(button, fn() { @sf.t("web-pages.permissions.allow") }, fn() { (core.notify_ask)() }, tone=Primary)
-            @sf.page_focus_node(control, "permissions/notify/allow") |> ignore
-          })
-          row.show(fn() { state() == "denied" }, fn(button) {
-            button.margin(Is((0.0, 0.0, out, 0.0))).lies_along(Is(End)) |> ignore
-            let control = @sf.button_node(button, fn() { @sf.t("web-pages.permissions.open") }, fn() { @ui.notice_settings() |> ignore })
-            @sf.page_focus_node(control, "permissions/notify/open") |> ignore
-          })
+          @sf.page_card_action_node(
+            row,
+            fn() { @sf.t("web-pages.permissions.notify.without") },
+            fn() {
+              @sf.t(
+                if @ui.platform() == 0 { "web-pages.permissions.where.mac" } else { "web-pages.permissions.where.windows" },
+                args=[("name", "still.fail")],
+              )
+            },
+            fn() { state() == "denied" },
+            fn(action) {
+              action.show(fn() { state() == "default" }, fn(button) {
+                let control = @sf.button_node(button, fn() { @sf.t("web-pages.permissions.allow") }, fn() { (core.notify_ask)() }, tone=Primary)
+                @sf.page_focus_node(control, "permissions/notify/allow") |> ignore
+              })
+              action.show(fn() { state() == "denied" }, fn(button) {
+                let control = @sf.button_node(button, fn() { @sf.t("web-pages.permissions.open") }, fn() { @ui.notice_settings() |> ignore })
+                @sf.page_focus_node(control, "permissions/notify/open") |> ignore
+              })
+            },
+          )
         })
       })
     },
