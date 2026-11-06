@@ -30,12 +30,15 @@ export const DELIVERY_WINDOW_MS = 1000;
 /// The lowest bit rate asked; down to `DOWN` of what went through (and no lower than `CUT` of what it was) once frames
 /// stayed held back for two round trips and `HOLD_MS` (a packet lost and sent again holds the frames behind it for
 /// about a round trip, then they all come: that is not the link being too slow), and again each round trip and
-/// `HOLD_MS` it stays; up by `UP` each `UP_EVERY_MS` once nothing queued for `UP_AFTER_MS`.
+/// `HOLD_MS` it stays; up by `UP` each `UP_EVERY_MS` once nothing queued for `UP_AFTER_MS`, by `UP_FAST` once nothing
+/// queued for `UP_FAST_AFTER_MS` (a link with room climbs back sooner).
 export const MIN_RATE = 300_000;
 export const DOWN = 0.85;
 export const CUT = 0.5;
 export const HOLD_MS = 200;
 export const UP = 1.15;
+export const UP_FAST = 1.3;
+export const UP_FAST_AFTER_MS = 2000;
 export const UP_EVERY_MS = 500;
 export const UP_AFTER_MS = 1000;
 export const START_RATE = 1_500_000;
@@ -50,12 +53,15 @@ export const ownRate = (width: number, height: number) => Math.max(1_000_000, wi
 export type Quality = "smooth" | "hd" | "original";
 /// The most a view is asked at, whatever its 画质.
 export const MAX_RATE = 60_000_000;
-/// The most a picture of this size is asked at, by its 画质: 原画 its pixels × 8 a second, 高清 × 4 (at most MAX_RATE,
-/// at least its own), else its own (`ownRate`). On a LAN a desktop's text at its own rate stays soft as it moves.
+/// The most a picture of this size is asked at: its pixels × 16 a second (at most MAX_RATE, at least its own: 1080p 33
+/// Mbit/s), 流畅 × 6 (12.4). 自动 is the best the link carries, as 原画 and 高清 are (they choose the size alone): the
+/// link lowers it where it carries less. On a LAN a desktop's text at its own rate (× 3, about 0.05 bit a pixel at 60
+/// frames a second) stayed soft as it moved, and at 原画's × 8 too (2026-11-06); Moonlight asks 20 Mbit/s for 1080p
+/// at 60.
 export function rateCeiling(width: number, height: number, quality?: Quality): number {
   const own = ownRate(width, height);
-  const per = quality === "original" ? 8 : quality === "hd" ? 4 : 0;
-  return per === 0 ? own : Math.max(own, Math.min(MAX_RATE, width * height * per));
+  const per = quality === "smooth" ? 6 : 16;
+  return Math.max(own, Math.min(MAX_RATE, width * height * per));
 }
 
 /// The frame rates a view may ask (the client's `fps`, its 帧率): at most this many frames a second, fewer where the
@@ -262,7 +268,8 @@ export class Pacer {
     const starting = this.#down === -Infinity;
     if ((!starting && now - this.#down < UP_AFTER_MS) || now - this.#up < UP_EVERY_MS) return;
     this.#up = now;
-    this.#rate = Math.min(this.#ceiling, this.#rate * (starting ? START_UP : UP));
+    const step = starting ? START_UP : now - Math.max(this.#held, this.#down) >= UP_FAST_AFTER_MS ? UP_FAST : UP;
+    this.#rate = Math.min(this.#ceiling, this.#rate * step);
   }
 }
 

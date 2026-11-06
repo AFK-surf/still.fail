@@ -181,10 +181,12 @@ client, so any client that acknowledges what it drew is paced.
   kbit/s, again each round trip and 200 ms it stays. Only frames held back lower it: an acknowledgement late alone (a
   still screen's large picture, a screen that changes little, a packet lost and sent again, which holds the frames
   behind it for about a round trip and then they all come) lowers nothing, as what went through then says nothing of
-  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, to the most the view is asked at
-  (`rateCeiling`): the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s), or by the 画质
-  the view asked, 原画 its pixels × 8 and 高清 × 4 (at least its own, at most 60 Mbit/s: 1080p 16.6 and 8.3 Mbit/s,
-  4K 60): a desktop's text at its own rate stayed soft on a LAN even at 原画. So a slow link gets as many frames,
+  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, and by 30% once nothing was held back
+  for 2 s (`UP_FAST`: a link with room climbs back sooner), to the most the view is asked at (`rateCeiling`): its
+  pixels × 16 (at least the source's own, `ownRate`: its pixels × 3, at least 1 Mbit/s; at most 60 Mbit/s: 1080p 33,
+  4K 60), 流畅's × 6. 自动 is the best the link carries, as 高清 and 原画 are (they choose the picture's size alone). A
+  desktop's text at its own rate stayed soft on a LAN even at 原画, and at the × 8 原画 had and the × 4 高清 had
+  still soft as it moved (2026-11-06; Moonlight asks 20 Mbit/s for 1080p at 60). So a slow link gets as many frames,
   smaller, rather than fewer and late.
   A frame's round trip and the oldest's wait are counted without the moments the station's own loop stood still
   (screen-pace.ts `LoopStall`: a 10 ms tick, how late it came): a Mac host's loop stood still 40–140 ms every few
@@ -515,9 +517,9 @@ A view is a run of scrcpy's server on the device (`stillfail-scrcpy-<id>.jar` in
 over an `adb forward` of its own): H.264 only, its protocol pinned to the file's version (scrcpy keeps no compatibility
 between releases: the version goes up only with the file). Its encoder takes no new size or rate while running, so a
 view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side, and its rate goes by
-that side (`bitrateOf`): 1 Mbit/s at 480, 1.5 at 720, 2.5 at 1080, 3.5 at 1440, 4 above, while the picture moves (a still
-screen sends nothing). The pace's opening rate (`ViewOptions.bitrate`, 1.5 Mbit/s) is not taken: the encoder cannot
-climb from it, and at 1280 and up it left a phone's text soft. A client asks the size its picture shows at, in device
+that side (`bitrateOf`): 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440, 8 above (2026-11-06, twice what they were),
+while the picture moves (a still screen sends nothing). The pace's opening rate (`ViewOptions.bitrate`, 1.5 Mbit/s) is
+not taken: the encoder cannot climb from it, and at 1280 and up it left a phone's text soft. A client asks the size its picture shows at, in device
 pixels (web: `viewSize`), so the page does not scale a larger picture down. A slow link drops what it could not fetch up
 to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on, a view does; with the
 screen off no frame comes. A preview runs at the size its card asks (640), 2 frames a second and 300 kbit/s; at most two
@@ -720,7 +722,7 @@ device's round trip to the station (the `stationNet` view, in its colour), which
 bits a second as they came, packets lost, the way, the picture's size and codec, what captures it and whether it is encoded on the hardware); and 控制中心, a menu: 画质, the
 picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is in device pixels, the web at most 1920×1080 or 2560×1440, the mbui
 app as large as its stage has been, asked again as it grows a tenth a side; 流畅 1280×720, 高清 1920×1080, 原画
-the screen's own size; said to the station as `quality` too, 高清 and 原画 letting the bit rate go higher; another opens
+the screen's own size; said to the station as `quality` too, 流畅 holding the bit rate lower (Pace, "Bit rate"); another opens
 the view again), 帧率 (`prefs.screenFps`: 自动 as many as the station and the link give, or at most 120, 90, 60, 30 or
 15 a second, said to the station as `fps`; another opens the view again, `screen.bounds` saying it with the 画质), 组合键 while driving (the keys this device's system keeps for
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
