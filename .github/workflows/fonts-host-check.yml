@@ -108,7 +108,7 @@ jobs:
           gh run download 42193026190 -n fonts-baseline-renderer -D "$RUNNER_TEMP/inbox"
           printf 'until 登录页在 Safari 上点了没反应\nexit\n' > "$RUNNER_TEMP/fonts.drive"
           bash apps/mbui/scripts/media-job.sh picture "$RUNNER_TEMP/fonts.drive" "$RUNNER_TEMP/fonts-job"
-          export STILLFAIL_NATIVE_INBOX="$RUNNER_TEMP/inbox" MBUI_FIXTURE=settings-fonts MBUI_FILM_SCALE=2
+          export STILLFAIL_NATIVE_INBOX="$RUNNER_TEMP/inbox" MBUI_FIXTURE=settings-fonts MBUI_FILM_SCALE=2 MBUI_PICTURE_AT=500
           MBUI_WIN=390x844 MBUI_FILM_PLATFORM=2 MBUI_NATIVE_INPUT=finger bash "$RUNNER_TEMP/fonts-job/run.sh" "$RUNNER_TEMP/fonts-pictures/font-before-small.png"
           MBUI_WIN=720x900 MBUI_FILM_PLATFORM=0 MBUI_NATIVE_INPUT=mouse bash "$RUNNER_TEMP/fonts-job/run.sh" "$RUNNER_TEMP/fonts-pictures/font-before-medium.png"
           MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0 MBUI_NATIVE_INPUT=mouse bash "$RUNNER_TEMP/fonts-job/run.sh" "$RUNNER_TEMP/fonts-pictures/font-before-large.png"
