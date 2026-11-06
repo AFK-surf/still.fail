@@ -131,3 +131,17 @@ test "many asked by one change, each asking another and one more for all of it: 
   after_flush(fn() { log.push(-1) })
   assert_eq(log.length(), 2 * n + 1)
 }
+
+///|
+test "effects held: what waits for a change told whole is done after the effects held are run" {
+  let s = signal(0, same=fn(a, b) { a == b })
+  let order : Array[String] = []
+  let stop = effect(fn() { order.push("effect \{s.get()}") })
+  order.clear()
+  effects_held(fn() {
+    s.set(1)
+    after_flush(fn() { order.push("after") })
+  })
+  stop()
+  assert_eq(order, ["effect 1", "after"])
+}

@@ -1256,11 +1256,14 @@ pub fn afters_held(f : () -> Unit) -> Unit {
 
 ///|
 /// `f` done with the effects told meanwhile held back (`effect`'s; a watch is told as ever, what is computed worked out
-/// as ever): run as `f` is over, each that what it read is then otherwise than as it last ran, in the order told. For a
+/// as ever), and what waits for a change told whole after them: run as `f` is over, each that what it read is then otherwise than as it last ran, in the order told. For a
 /// look at another moment set and set back (a view's look at an event's moment: what reads it for its own sake not told
 /// of the look). An effect whose read changed and came back as it was can run again, reading it as it was.
 pub fn[T] effects_held(f : () -> T) -> T {
+  // (and what waits for a change told whole (after_flush, after_all_flushed): done once the effects held are run, as
+  // it says, after them)
   run.effects_held += 1
+  run.afters_held += 1
   let v = f()
   run.effects_held -= 1
   if run.effects_held == 0 && run.held_effects.length() > 0 {
@@ -1272,5 +1275,7 @@ pub fn[T] effects_held(f : () -> T) -> T {
     }
     end_batch()
   }
+  run.afters_held -= 1
+  afters_drained()
   v
 }

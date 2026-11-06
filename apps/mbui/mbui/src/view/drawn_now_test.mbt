@@ -118,3 +118,49 @@ test "drawn_now makes and lets go of nothing by the drawing's moment, and tells 
   assert_eq(made, 0)
   assert_true(read.iter().all(fn(past) { past }), msg="\{read}")
 }
+
+///|
+/// How often what shows while a node drawn by whether the drawing is past 45 is laid out wider than 30 is made and let
+/// go, a frame sampled for 50 with the host at 0, then where it is drawn asked in an event at 40 and in none, and the
+/// next frame drawn for 50; and whether it shows then.
+fn made_by_size_past_45() -> (Int, Int, Bool) {
+  let made = Ref(0)
+  let gone = Ref(0)
+  let shows = Ref(false)
+  let page : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore
+      let a = o.box(fn(a) {
+        a.width(By(fn() { Some(if a.drawn_past(45.0) { 40.0 } else { 20.0 }) })).height(Is(Some(10.0))) |> ignore
+      })
+      page.val = Some(a)
+      o.show(fn() { a.owed_laid_size().map(fn(z) { z.0 }).unwrap_or(0.0) > 30.0 }, fn(b) {
+        made.val += 1
+        shows.val = true
+        b.width(Is(Some(10.0))).height(Is(Some(10.0))) |> ignore
+        b.owns(fn() {
+          gone.val += 1
+          shows.val = false
+        })
+        |> ignore
+      })
+    })
+    |> ignore
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.at(50.0)
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let before = (made.val, gone.val)
+  tree.event(40.0, fn() { page.val.unwrap().drawn_now() |> ignore })
+  page.val.unwrap().drawn_now() |> ignore
+  tree.frame(400.0, 300.0, now=40.0) |> ignore
+  (made.val - before.0, gone.val - before.1, shows.val)
+}
+
+///|
+test "drawn_now lays out as drawn again: what a size told in its look makes or lets go of nothing" {
+  assert_eq(made_by_size_past_45(), (0, 0, true))
+}

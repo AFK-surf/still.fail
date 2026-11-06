@@ -6757,7 +6757,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
 /// Laid out and placed as of `at`, what was told so far worked out, as a frame would, nothing drawn (Tree::settle_now's,
 /// View::drawn_now's): false where it cannot be (inside such a settle already, or the window not sized yet), true where
 /// it is or nothing was due.
-fn Tree::settled_at(self : Tree, at : Double, look? : Bool = false) -> Bool {
+fn Tree::settled_at(self : Tree, at : Double, look? : () -> Unit) -> Bool {
   if self.standing || self.last_w <= 0.0 {
     return false
   }
@@ -6771,16 +6771,21 @@ fn Tree::settled_at(self : Tree, at : Double, look? : Bool = false) -> Bool {
   // frames came between)
   if shown == at &&
     !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+    if look is Some(read) {
+      @signals.untracked(read)
+    }
     return true
   }
   self.standing = true
   self.work.settles = self.work.settles + 1
   // (placed at `at` to be looked at (View::drawn_now): laid out and placed as of `at`, what is read there (View::drawn_past)
-  // read as of `at`, the clock set there and back; what a structure's binding is told of it (a reaction to the drawing's
-  // moment) told again once set back, nothing of the look done. A settle of what a change told (Tree::settle_now): of
-  // that moment, what follows it told so)
+  // read as of `at`, `look` reading it so; then laid out and placed as drawn again, the clock set back, what that
+  // layout tells (a size, View::owed_laid_size) as it was. What a structure's binding is told in it (a reaction to the
+  // drawing's moment, to a size) told again once it is over, nothing of the look done. A settle of what a change told
+  // (Tree::settle_now): of that moment, what follows it told so)
   let was_looking = self.looking
-  self.looking = was_looking || (look && shown != at)
+  let looks = look is Some(_) && shown != at
+  self.looking = was_looking || looks
   // A due change settles at its own moment, before the outer advance reaches its destination. Its looks must
   // see that same logical moment when they decide whether a finished way still needs the drawing clock.
   let cause = self.cause_at
@@ -6790,12 +6795,21 @@ fn Tree::settled_at(self : Tree, at : Double, look? : Bool = false) -> Bool {
     self.beat.set(at)
     self.pull()
     self.laid_out(at)
+    if look is Some(read) {
+      read()
+    }
   })
   self.cause_at = cause
   if shown != at {
     @signals.untracked(fn() {
       self.clock_to(shown)
       self.beat.set(shown)
+      if looks {
+        self.cause_at = shown
+        self.pull()
+        self.laid_out(shown)
+        self.cause_at = cause
+      }
     })
   }
   self.looking = was_looking
