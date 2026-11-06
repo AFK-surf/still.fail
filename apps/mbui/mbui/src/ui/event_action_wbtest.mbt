@@ -156,6 +156,29 @@ test "an action requested by an old build is not a host input" {
 }
 
 ///|
+test "an old build cannot activate a retained callback as an input" {
+  let request = @signals.signal(false)
+  let id = Ref(0)
+  let presses = Ref(0)
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      if request.get() { c.ask_action(id.val, Activate) }
+    }).height(Is(Some(40.0))) |> ignore
+    root.box(fn(button) {
+      button.height(Is(Some(40.0)))
+      .says(Is(Some(@view.said(Button, label="Retained", actions=[Activate]))))
+      .on_press(fn() { presses.val += 1 }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  id.val = t.get(Button, label="Retained").id
+  request.set(true)
+  t.draw()
+  assert_eq(presses.val, 0)
+}
+
+///|
 test "an action requested by a normal frame message is not a host input" {
   let target = Ref(0)
   let presses = Ref(0)

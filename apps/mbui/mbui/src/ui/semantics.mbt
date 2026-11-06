@@ -273,6 +273,12 @@ fn Ctx::focus_built(self : Ctx) -> Unit {
 ///|
 /// `action` asked of `id`, as things are now (Ctx::ask_action).
 fn Ctx::asked(self : Ctx, id : Int, action : Action, host : Bool) -> Unit {
+  // A build can synthesize actions from state, so it cannot borrow an input boundary. The host accessibility
+  // channel is a real input even when delivered at the start of a frame under its watch.
+  let input = host || (!frame_running.val && !building.val && !@signals.tracking_underway())
+  // Retained actions execute their callback immediately. A request made by an old build must not run that callback
+  // as an input; in particular, it must not turn a tracked computation into an event-time geometry read.
+  if !input && tree_said_ids.contains(id) { return }
   // The layer that allows this action is the one at the input's moment, including layout omission and return.
   old_input_brought()
   // (a node of the window's tree's: its own, as a press on it is)
@@ -284,15 +290,13 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action, host : Bool) -> Unit {
   if !old_said_allowed(self, id) {
     return
   }
-  // The retained declaration and its current host/layer state are the authority, as for the window tree. A
-  // remembered id alone cannot take focus or revive a hidden, disabled or no longer built control's callback.
-  if (action == Focus || (action == Activate && made_presses.contains(id))) &&
+  // The retained declaration and its current host/layer state are the authority for an immediate callback or focus.
+  // A synthetic build action keeps the legacy asked-action path, including a forward request for a control that has
+  // yet to be declared in this build; it cannot invoke the callback as though it came from an input.
+  if (action == Focus || (input && action == Activate && made_presses.contains(id))) &&
     !self.said_action_allowed(id, action) {
     return
   }
-  // A build can synthesize actions from state, so it cannot borrow an input boundary. The host accessibility
-  // channel is a real input even when delivered at the start of a frame under its watch.
-  let input = host || (!frame_running.val && !building.val && !@signals.tracking_underway())
   if input {
     inputs_taken.val = true
     if host && frame_running.val { frame_inputs_taken.val = true }
