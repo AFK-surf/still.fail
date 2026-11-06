@@ -2270,7 +2270,7 @@ priv enum Phase {
 /// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, sample? : (T) -> Unit) -> () -> Unit {
+fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, sample? : (() -> T) -> Unit) -> () -> Unit {
   // (a node's own read, of what is laid out too, as told last: wherever a write set it off, reads_own)
   let read = fn() { reads_own(read) }
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
@@ -2292,7 +2292,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, sample? : (T
   })
   // (a paint's or a place's: worked out again at the moment a frame is shown, Tree::sampled_shown)
   match sample {
-    Some(s) => w.draws_by(fn() { if b.live { s(@signals.sampled(read)) } }) |> ignore
+    Some(s) => w.draws_by(fn() { if b.live { s(fn() { @signals.sampled(read) }) } }) |> ignore
     None => ()
   }
   w.on_marked(fn() {
@@ -2638,9 +2638,9 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       },
       sample?=match phase {
         // (once a frame: the layout of a frame shown later samples what lays out alone, Tree::shadow_shown)
-        Paint | Place => Some(fn(v) { if !tree.shadow_sampling { tree.shown_set(at, gen, v, last, apply, marked) } })
+        Paint | Place => Some(fn(v) { if !tree.shadow_sampling { tree.shown_set(at, gen, v(), last, apply, marked) } })
         // (what lays out by the time: for the layout of a frame shown later alone, Tree::shadow_shown)
-        Layout | Both => Some(fn(v) { if tree.shadow_sampling { tree.shown_set(at, gen, v, last, apply, marked) } })
+        Layout | Both => Some(fn(v) { if tree.shadow_sampling { tree.shown_set(at, gen, v(), last, apply, marked) } })
         _ => None
       },
     )
@@ -2706,7 +2706,11 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       // (what it reads of signals, followed: changed, its node is to be painted again, a frame asked for)
       let watch = @signals.watch(fn() { marked() })
       // (worked out again at the moment a frame is shown, Tree::sampled_shown)
-      watch.draws_by(fn() { tree.shown_set(at, gen, @signals.sampled(fn() { f({ tree, }) }), last, apply, marked) }) |> ignore
+      watch.draws_by(fn() {
+        if !tree.shadow_sampling {
+          tree.shown_set(at, gen, @signals.sampled(fn() { f({ tree, }) }), last, apply, marked)
+        }
+      }) |> ignore
       let run = fn() {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
