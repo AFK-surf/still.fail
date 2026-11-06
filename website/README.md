@@ -56,9 +56,11 @@ top and scrolls inside.
 It fades and scales in from the button's corner and leaves faster; still under reduced motion.
 
 **Type.** Suisse Intl draws the Latin on every page; the rest comes from the system's fonts, per page
-(`:root:lang(zh-CN)` PingFang SC / Hiragino Sans GB / Noto Sans SC / Microsoft YaHei; `zh-TW` PingFang TC / Noto Sans TC
-/ Microsoft JhengHei; `ja` Hiragino Sans / Hiragino Kaku Gothic ProN / Noto Sans JP / Yu Gothic; `ko` Apple SD Gothic
-Neo / Noto Sans KR / Malgun Gothic). Language-specific rules key on `:lang()`: CJK is
+(`:root:lang(zh-CN)` PingFang SC / Hiragino Sans GB / Noto Sans SC / Noto Sans CJK SC / Source Han Sans SC / Microsoft
+YaHei; `zh-TW` PingFang TC / Noto Sans TC / Noto Sans CJK TC / Source Han Sans TC / Microsoft JhengHei; `ja` Hiragino
+Sans / Hiragino Kaku Gothic ProN / Noto Sans JP / Noto Sans CJK JP / Source Han Sans JP / Yu Gothic; `ko` Apple SD Gothic
+Neo / Noto Sans KR / Noto Sans CJK KR / Source Han Sans KR / Malgun Gothic: Apple's, then Noto as Android and Linux name
+it, then Windows'). Language-specific rules key on `:lang()`: CJK is
 `:root:is(:lang(zh), :lang(ja), :lang(ko))` (more leading, headline tracking −1%, the hero and closing headlines
 narrower), Latin the rest; Chinese and Japanese headlines use half-width punctuation (`halt`), Chinese and Korean keep
 words whole (`keep-all`), Japanese breaks between phrases (`auto-phrase`) where the browser can. A headline's text is
@@ -214,6 +216,8 @@ claims the product and its docs make. The hero has no label row: the headline, t
 - Bands below the first screen use `content-visibility: auto`, and so do the overview's cards on a phone, so the first
   layout covers little more than the first screen.
 - The script reads no layout while the page parses: first states are taken in the first frame or by `ResizeObserver`.
+- The devices scene's tweens read their start values once, at an idle moment while the reader is still above it, not
+  in the frames of the first scroll through it.
 - Lighthouse 12.6.1, the built page. Served compressed, as a host does (gzip, `_headers` cache lifetimes): mobile
   (simulated slow 4G) Performance 100, Accessibility 100, Best practices 100, SEO 100; FCP 1.2 s, LCP 1.7 s, TBT
   0–60 ms, CLS 0–0.001. Desktop 100 / 100 / 100 / 100. On a plain `python3 -m http.server` (no compression) mobile

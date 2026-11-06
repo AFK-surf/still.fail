@@ -207,7 +207,7 @@
   // the band found last, so a frame reads one or two boxes. Above the first band (the bar's own place at the top)
   // there is no tone, and the bar is paper.
   const bands = $$("main > section[data-tone], footer[data-tone]");
-  let barH = nav.offsetHeight, bi = 0;
+  let barH = 0, bi = 0; // the bar's height, from the ResizeObserver below (no layout read while the page parses)
   function at(y) {
     let i = bi;
     while (i > 0 && bands[i].getBoundingClientRect().top > y) i--;
@@ -510,6 +510,11 @@
       },
     });
     mark(0);
+    // Each tween reads its start values (getComputedStyle) the first time it renders. Do that once, while the reader is
+    // still above the scene and the browser is idle, rather than in the frames of the first scroll through it.
+    if (st.progress === 0) (window.requestIdleCallback || setTimeout)(() => {
+      if (st.progress === 0 && !st.isActive) { tl.progress(1, true); tl.progress(0, true); }
+    });
     // The rail scrolls to its device.
     rail.forEach((li) => $("button", li).addEventListener("click", () => {
       const i = Number(li.dataset.i);

@@ -67,11 +67,12 @@
   --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep); --ring: var(--brand-deep);
   color-scheme: light;
 }
-/* One page per language (<html lang>): Suisse Intl for Latin, then the system's fonts for the script. */
-:root:lang(zh-CN) { --font: "Suisse Intl", "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
-:root:lang(zh-TW) { --font: "Suisse Intl", "Inter", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
-:root:lang(ja) { --font: "Suisse Intl", "Inter", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; }
-:root:lang(ko) { --font: "Suisse Intl", "Inter", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif; }
+/* One page per language (<html lang>): Suisse Intl for Latin, then the system's fonts for the script (Apple's, then
+   Noto as Android and Linux name it, then Windows'). */
+:root:lang(zh-CN) { --font: "Suisse Intl", "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
+:root:lang(zh-TW) { --font: "Suisse Intl", "Inter", "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Source Han Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+:root:lang(ja) { --font: "Suisse Intl", "Inter", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", "Source Han Sans JP", "Yu Gothic", system-ui, sans-serif; }
+:root:lang(ko) { --font: "Suisse Intl", "Inter", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "Source Han Sans KR", "Malgun Gothic", system-ui, sans-serif; }
 [data-tone=paper] { --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep); --ring: var(--brand-deep); }
 [data-tone=mist] { --bg: var(--mist); --fg: var(--ink); --mut: var(--graphite); --hair: #D9D9DB; --hit: var(--brand-deep); --ring: var(--brand-deep); }
 [data-tone=brand] { --bg: var(--brand); --fg: var(--ink); --mut: var(--brand-ink); --hair: rgba(74,22,6,.22); --hit: #fff; --ring: var(--ink); }
