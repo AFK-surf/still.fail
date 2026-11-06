@@ -369,10 +369,11 @@ fn Scroll::list_fling(
 
 ///|
 /// The foot a fling down toward it is planned to: where it can go, or for a list that holds itself at its ends (reads_free)
-/// its foot in the hand's terms as measured where its last row was laid out (Scroll::foot_hand), none before.
+/// its foot in the hand's terms as measured where its last row was laid out (Scroll::foot_hand), before that as far from
+/// where the hand has it as it counts itself to be (planned again to the foot as measured once that is laid out).
 fn Scroll::foot_bound(self : Scroll) -> Double {
   if self.reads_free {
-    (self.foot_hand)().unwrap_or(@double.infinity)
+    (self.foot_hand)().unwrap_or(self.most() - (self.bar_off)())
   } else {
     self.most()
   }
@@ -569,12 +570,11 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
   // (a list that holds itself at its ends (reads_free) counts how far it can go in its own terms, its fling goes in the
   // hand's: its foot where the hand's terms have it, as measured where its last row is laid out (list_anchor.mbt's
-  // foot_hand); not measured yet, none: no fling is planned to a foot as it is counted, by the mean of the rows measured,
-  // which comes out otherwise as other rows are measured on the way, so otherwise by the frames drawn)
+  // foot_hand), else as far from where the hand has it as the list counts it to be)
   let measured = if self.reads_free { (self.foot_hand)() } else { None }
   let most = match measured {
     Some(foot) => foot
-    None => if self.reads_free { @double.infinity } else { most }
+    None => if self.reads_free { most - (self.bar_off)() } else { most }
   }
   // (a foot measured otherwise than the fling was planned to: planned again, if it met it already too, as it met it)
   guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
