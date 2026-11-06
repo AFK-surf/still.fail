@@ -86,6 +86,8 @@ export interface AdbGrant {
 	lastUsedAt?: number;
 	/** Last use in words, refreshed each minute. */
 	time?: Record<string, Stamp>;
+	/** Granted: whether this device, as the phone, takes it: signed by a device on the person's own lock pinned here (docs/personal-lock.md). */
+	held?: boolean;
 }
 
 /** This phone lent to one station for its chats' grants (the `adbShare` topic's `lends`): as `phase`, `adb`, `serial` and `message` are for the switch's. */
@@ -96,6 +98,32 @@ export interface AdbLend {
 	serial?: string;
 	message?: string;
 	tunnels: number;
+}
+
+/** A device on the person's own lock (`adb.personalRemove`). */
+export interface AdbPersonalDevice {
+	key: string;
+	label: string;
+	me: boolean;
+}
+
+/** How far this device's try to join the person's own lock got. */
+export interface AdbPersonalPair {
+	/** `finding`, `code`, `checking`, `wrong`, `none`, `failed`, `done`. */
+	state: string;
+	devices: number;
+	left?: number;
+	error?: string;
+	until?: number;
+	untilText?: string;
+}
+
+/** The person's own lock as this device has it (docs/personal-lock.md, the `adbShare` topic's `personal`). */
+export interface AdbPersonal {
+	/** `none` (no lock yet), `member`, `outside` (a lock this device is not on), `replaced` (the cloud has another than the one pinned here). */
+	standing: string;
+	devices?: AdbPersonalDevice[];
+	pair?: AdbPersonalPair;
 }
 
 /**
@@ -132,6 +160,8 @@ export interface AdbShareView {
 	lends?: AdbLend[];
 	/** The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them. */
 	screens?: string[];
+	/** The person's own lock as this device has it (docs/personal-lock.md). */
+	personal?: AdbPersonal;
 }
 
 export interface AgentCardLine {

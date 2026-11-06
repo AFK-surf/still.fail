@@ -135,7 +135,7 @@ export const AdbLive = Layer.effectDiscard(
         }
         const id = typeof ask.request === "string" ? ask.request : "";
         const scope = ask.scope === "hour" || ask.scope === "chat" ? (ask.scope as Scope) : null;
-        const why = ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace) : grants.revoke(email, id, viewer.workspace);
+        const why = ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace, ask.signed) : grants.revoke(email, id, viewer.workspace);
         const request = grants.get(id);
         return why === null ? reply(200, { request: request === null ? null : grants.shown(request) }) : reply(422, { message: why });
       }
