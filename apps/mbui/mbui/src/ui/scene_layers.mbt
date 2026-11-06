@@ -501,6 +501,10 @@ fn scene_unrecorded(f : () -> Unit) -> Unit {
   scene_work.full = was.full
   scene_work.moved = was.moved
   scene_work.moved_insts = was.moved_insts
+  scene_work.put_layers = was.put_layers
+  scene_work.put_insts = was.put_insts
+  scene_work.origin_insts = was.origin_insts
+  scene_work.origin_cuts = was.origin_cuts
   scene.parts.work_back(parts)
 }
 
@@ -1193,11 +1197,17 @@ fn copy_not(id : @view.NodeId, why : String) -> Bool {
   if scene.copy_why == "" {
     scene.copy_why = "\{id.at}: \{why}"
   }
-  // (a Tester recording its frames as a host gets them: each why counted, Tester_host's drawn_why)
+  scene_drawn_why(why)
+  false
+}
+
+///|
+/// A layer drawn again in the frame for `why`: counted where a Tester records its frames as a host gets them
+/// (HostFrame::drawn_why).
+fn scene_drawn_why(why : String) -> Unit {
   if host_record.val is Some(_) && !scene_checking() {
     scene_drawn_whys[why] = scene_drawn_whys.get_or_default(why, 0) + 1
   }
-  false
 }
 
 ///|

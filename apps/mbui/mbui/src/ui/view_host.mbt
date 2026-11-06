@@ -1023,6 +1023,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // old frame's layers under what it holds in their places; what it reads followed by the old frame's paint)
   // (where the root is drawn: its node's own place, as a walk from the window's top left composes it)
   let at_root = tree.root_place()
+  // (why, told a Tester as the walk tells why a layer is not copied)
+  scene_drawn_why("the root, drawn each frame the old frame paints")
   self.scene_drawn(
     tree.root_id(),
     None,
