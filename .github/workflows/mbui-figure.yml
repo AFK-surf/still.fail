@@ -12,6 +12,14 @@ on:
         description: Expected mbui-film-wasm source key
         required: true
         type: string
+      source_patch:
+        description: Optional gzip and base64 encoded worktree patch
+        required: false
+        type: string
+      patch_sha256:
+        description: SHA-256 of the uncompressed worktree patch
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -26,11 +34,26 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
+      - name: Apply the recorded worktree patch
+        env:
+          SOURCE_PATCH: ${{ inputs.source_patch }}
+          PATCH_SHA256: ${{ inputs.patch_sha256 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SOURCE_PATCH" ]; then
+            node -e 'require("fs").writeFileSync(process.argv[1], Buffer.from(process.env.SOURCE_PATCH, "base64"))' "$RUNNER_TEMP/source.patch.gz"
+            gzip -dc "$RUNNER_TEMP/source.patch.gz" > "$RUNNER_TEMP/source.patch"
+            printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/source.patch" | shasum -a 256 -c
+            git apply --check "$RUNNER_TEMP/source.patch"
+            git apply "$RUNNER_TEMP/source.patch"
+            git add -A
+          fi
       - uses: ./.github/actions/mbui-moonbit
       - name: Build the exact scene and its drawing host
         env:
           SOURCE_REF: ${{ inputs.source_ref }}
           SOURCE_KEY: ${{ inputs.source_key }}
+          PATCH_SHA256: ${{ inputs.patch_sha256 }}
         run: |
           set -euo pipefail
           sha=$(git rev-parse HEAD)
@@ -38,11 +61,13 @@ jobs:
           key=$(node scripts/native.ts key mbui-film-wasm darwin-arm64)
           [ "$key" = "$SOURCE_KEY" ]
           bash apps/mbui/scripts/wasm-film-build.sh "$RUNNER_TEMP/chat-renderer"
-          jq -n --arg commit "$sha" --arg key "$key" \
+          label="$sha"
+          if [ -n "$PATCH_SHA256" ]; then label="$sha+patch:$PATCH_SHA256"; fi
+          jq -n --arg commit "$label" --arg key "$key" \
             '{part:"mbui-film-wasm",target:"darwin-arm64",commit:$commit,key:$key,from:"github-hosted-ci"}' \
             > "$RUNNER_TEMP/chat-renderer/manifest.json"
           mkdir -p apps/mbui/out/chat-evidence
-          printf '%s\n%s\n' "$sha" "$key" > apps/mbui/out/chat-evidence/source.txt
+          printf '%s\n%s\n%s\n' "$sha" "$key" "$PATCH_SHA256" > apps/mbui/out/chat-evidence/source.txt
           printf 'exit\n' > apps/mbui/out/chat-evidence/action.drive
       - name: Capture attachment preview at each screen size
         run: |
@@ -63,3 +88,40 @@ jobs:
           name: chat-preview-evidence
           path: apps/mbui/out/chat-evidence/
           if-no-files-found: error
+  behavior:
+    if: ${{ inputs.source_patch != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Apply the recorded worktree patch
+        env:
+          SOURCE_PATCH: ${{ inputs.source_patch }}
+          PATCH_SHA256: ${{ inputs.patch_sha256 }}
+          SOURCE_KEY: ${{ inputs.source_key }}
+        run: |
+          set -euo pipefail
+          node -e 'require("fs").writeFileSync(process.argv[1], Buffer.from(process.env.SOURCE_PATCH, "base64"))' "$RUNNER_TEMP/source.patch.gz"
+          gzip -dc "$RUNNER_TEMP/source.patch.gz" > "$RUNNER_TEMP/source.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/source.patch" | shasum -a 256 -c
+          git apply --check "$RUNNER_TEMP/source.patch"
+          git apply "$RUNNER_TEMP/source.patch"
+          git add -A
+          [ "$(node scripts/native.ts key mbui-film-wasm darwin-arm64)" = "$SOURCE_KEY" ]
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Check the application and its tests
+        run: |
+          set -euo pipefail
+          cd apps/mbui
+          moon check --target wasm-gc
+      - name: Exercise the Chat attachment reader
+        run: |
+          set -euo pipefail
+          cd apps/mbui
+          moon test --target wasm-gc --release -p stillfail/sfapp -f "*a chat*reader*"
