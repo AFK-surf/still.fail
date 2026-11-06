@@ -1546,6 +1546,8 @@ pub fn panel_ground() -> Int64
 
 pub fn panel_group(@ui.Ctx, () -> Unit, label? : String, lead? : (@ui.Ctx) -> Unit) -> Unit
 
+pub fn panel_group_node(@view.View, (@view.View) -> Unit, label? : () -> String, lead? : (@view.View) -> Unit) -> @view.View
+
 pub fn panel_head(@ui.Ctx, String, note? : String, end? : (@ui.Ctx) -> Unit) -> Unit
 
 pub fn panel_held() -> Bool
