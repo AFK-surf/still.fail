@@ -3515,6 +3515,7 @@ dependencies = [
  "miniz_oxide 0.8.9",
  "moxcms",
  "n0-future",
+ "n0-mainline",
  "napi",
  "napi-build",
  "napi-derive",
