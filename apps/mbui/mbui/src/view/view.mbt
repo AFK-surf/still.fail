@@ -711,7 +711,7 @@ priv struct BeforeRemoval {
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
   /// Callbacks for the few nodes that need to read their subtree before any of it is removed.
-  before_removal : Array[BeforeRemoval]
+  priv before_removal : Array[BeforeRemoval]
   /// which node a row made anew for its key is now, by the name it is known by (View::row_known_as: one of
   /// Tree::row_name's, never a node's own)
   rows_known : Map[NodeId, Int]
