@@ -68,6 +68,9 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: windows-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -76,10 +79,12 @@ jobs:
       - run: git config --global core.autocrlf false
         working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/msvc
-      - uses: ./.github/actions/mbui-moonbit
-      - name: Build retained node probe
-        run: APP=drop_probe bash scripts/win.sh build
+      - uses: actions/download-artifact@v4
+        with:
+          name: explorer-drop-exe
+          run-id: 42258251075
+          github-token: ${{ github.token }}
+          path: apps/mbui/mbui/out/win/mod/_build/native/release/build/drop_probe
       - name: Drag from Explorer into the app
         timeout-minutes: 2
         run: |

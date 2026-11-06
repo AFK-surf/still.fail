@@ -19,7 +19,56 @@ public static class ExplorerDropProbe {
   [DllImport("user32.dll", SetLastError=true)] static extern bool ClientToScreen(IntPtr h, ref Point p);
   [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint process);
+  [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+  delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
+  [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SetWinEventHook(uint first, uint last, IntPtr module, WinEventProc callback, uint process, uint thread, uint flags);
+  [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
+  [StructLayout(LayoutKind.Sequential)] struct Message { public IntPtr hwnd; public uint message; public UIntPtr wparam; public IntPtr lparam; public uint time; public Point point; public uint reserved; }
+  [DllImport("user32.dll")] static extern int GetMessage(out Message message, IntPtr hwnd, uint first, uint last);
+  [DllImport("user32.dll")] static extern bool PeekMessage(out Message message, IntPtr hwnd, uint first, uint last, uint remove);
+  [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread, uint message, UIntPtr wparam, IntPtr lparam);
   const uint MouseDown = 0x0002, MouseUp = 0x0004, Show = 0x0040, NoZOrder = 0x0004;
+
+  sealed class DragEvents : IDisposable {
+    public readonly AutoResetEvent Capture = new AutoResetEvent(false);
+    public readonly AutoResetEvent Drag = new AutoResetEvent(false);
+    readonly AutoResetEvent ready = new AutoResetEvent(false);
+    readonly Thread pump;
+    readonly WinEventProc callback;
+    uint threadId;
+    IntPtr hook;
+    public DragEvents() {
+      callback = (h, ev, window, obj, child, thread, time) => {
+        uint process;
+        GetWindowThreadProcessId(window, out process);
+        Console.WriteLine("EXPLORER system event 0x{0:X} window={1} process={2} thread={3}", ev, window, process, thread);
+        if (ev == 0x0008) Capture.Set();
+        if (ev == 0x000E) Drag.Set();
+      };
+      pump = new Thread(() => {
+        threadId = GetCurrentThreadId();
+        Message msg;
+        PeekMessage(out msg, IntPtr.Zero, 0, 0, 0);
+        hook = SetWinEventHook(0x0008, 0x000E, IntPtr.Zero, callback, 0, 0, 0);
+        ready.Set();
+        if (hook != IntPtr.Zero) {
+          while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0) {}
+          UnhookWinEvent(hook);
+        }
+      });
+      pump.IsBackground = true;
+      pump.Start();
+      if (!ready.WaitOne(TimeSpan.FromSeconds(10)) || hook == IntPtr.Zero) throw new Exception("cannot install system event hook");
+    }
+    public void Dispose() {
+      PostThreadMessage(threadId, 0x0012, UIntPtr.Zero, IntPtr.Zero);
+      pump.Join();
+      ready.Dispose(); Capture.Dispose(); Drag.Dispose();
+    }
+  }
 
   static string Log(string path) {
     using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
@@ -83,17 +132,29 @@ public static class ExplorerDropProbe {
           IntPtr explorerWindow = new IntPtr(explorer.Current.NativeWindowHandle);
           if (!SetWindowPos(explorerWindow, IntPtr.Zero, 0, 15, sw / 2 - 55, sh - 45, NoZOrder | Show))
             throw new Exception("cannot place Explorer");
+          uint explorerProcess;
+          GetWindowThreadProcessId(explorerWindow, out explorerProcess);
+          Console.WriteLine("EXPLORER window process={0}, probe process={1}", explorerProcess, appId);
+          if (!SetForegroundWindow(explorerWindow)) throw new Exception("cannot foreground Explorer");
           item.SetFocus();
           if (!item.TryGetClickablePoint(out source)) throw new Exception("Explorer file is not visible");
           var target = new Point { x = 250, y = 150 };
           if (!ClientToScreen(appWindow, ref target)) throw new Exception("cannot locate the drop target");
+          deadline = DateTime.UtcNow.AddSeconds(seconds);
           Console.WriteLine("EXPLORER file {0},{1}; target {2},{3}; screen {4}x{5}", source.X, source.Y, target.x, target.y, sw, sh);
-          if (!SetCursorPos((int)source.X, (int)source.Y)) throw new Exception("cannot move to Explorer file");
-          mouse_event(MouseDown, 0, 0, 0, UIntPtr.Zero);
-          held = true;
-          if (!SetCursorPos((int)source.X + 30, (int)source.Y) || !SetCursorPos(target.x, target.y))
-            throw new Exception("cannot drag to the probe");
-          WaitLog(log, "HOVER folder", deadline);
+          using (var events = new DragEvents()) {
+            if (!SetCursorPos((int)source.X, (int)source.Y)) throw new Exception("cannot move to Explorer file");
+            mouse_event(MouseDown, 0, 0, 0, UIntPtr.Zero);
+            held = true;
+            bool capture = events.Capture.WaitOne(TimeSpan.FromSeconds(10));
+            Console.WriteLine("EXPLORER mouse capture={0}, left button down={1}", capture, (GetAsyncKeyState(1) & 0x8000) != 0);
+            if (!capture) throw new Exception("mouse down did not produce a system capture event");
+            if (!SetCursorPos((int)source.X + 30, (int)source.Y)) throw new Exception("cannot start the drag");
+            bool drag = events.Drag.WaitOne(TimeSpan.FromSeconds(5));
+            Console.WriteLine("EXPLORER drag-start event={0}", drag);
+            if (!SetCursorPos(target.x, target.y)) throw new Exception("cannot drag to the probe");
+            WaitLog(log, "HOVER folder", deadline);
+          }
           Shot(shot);
           mouse_event(MouseUp, 0, 0, 0, UIntPtr.Zero);
           held = false;
