@@ -109,6 +109,23 @@ test("a personal lock kept by an older cloud is read and migrated on its next ex
   } finally { await h.close(); }
 });
 
+test("guarded restore accepts a bounded batch including a valid multibyte entry", async () => {
+  const h = await harness();
+  try {
+    const tokens = await h.login("alice"), alice = h.as(tokens), sub = tokens.subject, ws = `person:${sub}`;
+    const a = key(), b = key(), first = entry(a, 0, null, "genesis", { sub, device: device(a) }, ws);
+    const path = "/v1/me/personal-lock", restore = `${path}/append`;
+    assert.equal((await alice("POST", path, { entries: [first] })).status, 200);
+    const added = entry(a, 1, hashOf(first), "device", { ...device(b), label: "长".repeat(3000) }, ws);
+    const payload = { entries: [added], expect: { length: 1, head: hashOf(first) } };
+    assert.ok(JSON.stringify(added).length < 4096 && Buffer.byteLength(JSON.stringify(payload)) > 8192);
+    assert.equal((await alice("POST", path, payload)).status, 400, "the ordinary endpoint retains its smaller request limit");
+    assert.equal((await alice("POST", restore, payload)).status, 200);
+    assert.deepEqual((await (await alice("GET", path)).json() as { entries: PersonalEntry[] }).entries, [first, added]);
+    assert.equal((await alice("POST", restore, { ...payload, extra: "x".repeat(256 * 1024) })).status, 400, "restore requests remain bounded");
+  } finally { await h.close(); }
+});
+
 test("the personal lock API requires its account, keeps each account's chain separate and rejects another's entry", async () => {
   const h = await harness();
   try {

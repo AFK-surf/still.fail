@@ -97,6 +97,8 @@ async function body(request: Request, maximum?: number): Promise<Record<string, 
 
 /** How large a change to a workspace or a station may be: it can carry a picture put up as its icon (icons.ts). */
 const MARK_BODY = ICON_URL_CHARS + 8192;
+/** A guarded personal-lock restore may carry several signed entries at a time, still with a fixed byte limit. */
+const PERSONAL_RESTORE_BODY = 256 * 1024;
 
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
   const path = url.pathname;
@@ -220,7 +222,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
-    input = await body(request, method === "PATCH" && path.startsWith("/v1/workspaces/") ? MARK_BODY : undefined);
+    const maximum = method === "POST" && path === "/v1/me/personal-lock/append" ? PERSONAL_RESTORE_BODY :
+      method === "PATCH" && path.startsWith("/v1/workspaces/") ? MARK_BODY : undefined;
+    input = await body(request, maximum);
   } catch {
     return reply({ error: "invalid_request" }, 400);
   }
