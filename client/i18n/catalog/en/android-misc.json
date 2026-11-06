@@ -663,5 +663,5 @@
   "android-misc.adb.personal.replaced.note": "This happens only if you started a new lock yourself. If you didn't, stop here: your account may be compromised.",
   "android-misc.adb.personal.forget": "I started it: use the new one",
   "android-misc.adb.personal.unsigned": "This grant has no personal key signature, so the phone won't lend itself. Take it back and have the agent ask again",
-  "android-misc.adb.ask.personal": "Add this device to your personal lock first"
+  "android-misc.adb.ask.personal": "Add this device to your personal lock"
 }

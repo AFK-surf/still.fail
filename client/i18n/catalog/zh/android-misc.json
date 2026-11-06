@@ -636,5 +636,5 @@
   "android-misc.adb.personal.replaced.note": "只有你自己新建过个人锁才会这样。如果不是你做的，不要继续，你的账号可能已经被盗。",
   "android-misc.adb.personal.forget": "是我新建的，改用新的",
   "android-misc.adb.personal.unsigned": "这条授权没有个人钥匙的签名，手机不会出借。收回后让 agent 重新申请",
-  "android-misc.adb.ask.personal": "先把这台设备加入个人锁"
+  "android-misc.adb.ask.personal": "把这台设备加入个人锁"
 }
