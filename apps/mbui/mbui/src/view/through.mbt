@@ -192,7 +192,7 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
       // (the finger's own events from where it went down, by their own times, as the one that held it first counted
       // them: how fast it goes as it is handed on, the move that handed it counted as it is told)
       let (dvx, dvy) = match self.held_tracks.get(th.finger) {
-        Some((tx, ty)) => (tx.velocity(), ty.velocity())
+        Some((tx, ty)) => (tx.velocity_at(now), ty.velocity_at(now))
         None => self.tracked(th.finger, true, [], th.down_at, dx, dy)
       }
       @signals.untracked(fn() {
@@ -217,7 +217,7 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
       if why is Moved(_, _) && self.held == Some(u) && bound_still(self.nodes[u.at], u, said) {
         // (the move that handed it on counted once already, as the one holding it was told it: its speed as of then)
         let (mvx, mvy) = match self.held_tracks.get(th.finger) {
-          Some((tx, ty)) => (tx.velocity(), ty.velocity())
+          Some((tx, ty)) => (tx.velocity_at(now), ty.velocity_at(now))
           None => (0.0, 0.0)
         }
         @signals.untracked(fn() {

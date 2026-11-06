@@ -813,9 +813,10 @@ fn[P] Nav::gesture(
     2 =>
       if self.mode == 3 {
         let dx = self.p * w
-        // where it was let go counts too: held still first, it was not flung
-        self.track.add(t, x)
-        self.vel = self.track.velocity()
+        // where it was let go counts where it moved there (Tracker::up); held still first, it was not flung
+        // (Tracker::velocity_at)
+        self.track.up(t, x)
+        self.vel = self.track.velocity_at(t)
         let flung = dx > 40.0 && self.vel > 0.6
         if self.p > 1.0 / 3.0 || flung {
           self.let_go(dmax(self.vel, 0.0) / w)

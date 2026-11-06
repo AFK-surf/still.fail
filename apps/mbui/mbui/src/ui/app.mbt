@@ -1249,9 +1249,12 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       return
     }
     if c.down {
-      track_x.add(t, x)
-      track_y.add(t, y)
+      track_x.up(t, x)
+      track_y.up(t, y)
     }
+    // how fast as it was let go (Tracker::velocity_at): none where it was held still first
+    let lift_x = dclamp(track_x.velocity_at(t), -max_fling, max_fling)
+    let lift_y = dclamp(track_y.velocity_at(t), -max_fling, max_fling)
     if c.edge == 2 {
       c.back_gesture(2, x, t) |> ignore
     }
@@ -1293,28 +1296,19 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         c.drag_scroll,
         x,
         y,
-        dclamp(track_x.velocity(), -max_fling, max_fling),
-        dclamp(track_y.velocity(), -max_fling, max_fling),
+        lift_x,
+        lift_y,
         c.taken_at == c.press_at,
       )
     }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
-        Some(st) =>
-          c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling), t)
+        Some(st) => c.release(st, -lift_y, t)
         None => ()
       }
-      sideways_up(
-        c,
-        c.drag_scroll,
-        dclamp(track_x.velocity(), -max_fling, max_fling),
-        dclamp(track_y.velocity(), -max_fling, max_fling),
-      )
+      sideways_up(c, c.drag_scroll, lift_x, lift_y)
       if pagers.contains(c.drag_scroll) {
-        c.pager_release(
-          c.drag_scroll,
-          dclamp(track_x.velocity(), -max_fling, max_fling),
-        )
+        c.pager_release(c.drag_scroll, lift_x)
       }
     }
     // a tap on a field (Android's): the focus and the caret where it was tapped, its handle under the caret

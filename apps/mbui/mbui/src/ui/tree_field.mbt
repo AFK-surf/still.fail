@@ -531,9 +531,10 @@ fn tree_field_let_go(id : @view.NodeId, x : Double, y : Double, up : Bool) -> Un
   // (its words scrolled by a finger, let go: flung on at its speed, as an old view's field's are, sideways_up)
   if tf.scrolling {
     if up {
-      tf.track.add(view_moment(), y)
+      tf.track.up(view_moment(), y)
     }
-    sideways_up(c, tree_said_id(id), 0.0, if up { dclamp(tf.track.velocity(), -max_fling, max_fling) } else { 0.0 })
+    let v = if up { dclamp(tf.track.velocity_at(view_moment()), -max_fling, max_fling) } else { 0.0 }
+    sideways_up(c, tree_said_id(id), 0.0, v)
   }
   if tf.handle != 0 {
     c.handle_drag = 0
