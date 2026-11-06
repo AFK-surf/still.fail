@@ -2108,6 +2108,21 @@ fn Ctx::scene_emitted(
     }
   }
   self.scene_block_put(l, ip, l.block_n, sp, l.block_segs.length() / 4, band, dseg, dx, dy, depth, soft) |> ignore
+  // (all it and what it holds reach now, what moved in it with it: as far as it reaches, whether it is left out next
+  // by it, Ctx::scene_layer_left_out)
+  match scene.reach.get(l.id) {
+    Some(e) =>
+      for r in l.block_refs {
+        let (_, _, cid, tops) = r
+        if !tops {
+          match scene.reach.get(cid) {
+            Some(ce) => e.reach.take(ce.reach)
+            None => ()
+          }
+        }
+      }
+    None => ()
+  }
   // (what it drew over everything: put where the window's stack has it next, Ctx::raise_tops)
   if l.tops.length() > 0 {
     scene.tops_now.push(l.id)
