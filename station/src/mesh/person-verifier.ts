@@ -1,6 +1,7 @@
 // Personal chains can contain 1024 signed entries. Check them on one reusable worker, not on the station's event loop.
 import { Worker } from "node:worker_threads";
 import type { Entry, Person, Role } from "../cloud/lock.ts";
+import { wall } from "../ops/fibers.ts";
 
 export type PersonWho = { sub: string; endpoint: string; base?: string; proof?: string };
 export type PersonRequest =
@@ -11,16 +12,16 @@ type Answer = { id: number; person?: Person; role?: Role; error?: string };
 export class PersonVerifier {
   readonly #data: string;
   #worker: Worker | null = null;
-  #idle: NodeJS.Timeout | null = null;
+  #idle: (() => void) | null = null;
   #next = 0;
   #closed = false;
-  readonly #waiting = new Map<number, { resolve: (answer: Answer) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
+  readonly #waiting = new Map<number, { resolve: (answer: Answer) => void; reject: (error: Error) => void; timer: () => void }>();
 
   constructor(data: string) { this.#data = data; }
 
   #start(): Worker {
     if (this.#closed) throw new Error("the personal lock verifier is stopped");
-    if (this.#idle) { clearTimeout(this.#idle); this.#idle = null; }
+    if (this.#idle) { this.#idle(); this.#idle = null; }
     if (this.#worker) return this.#worker;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./person-verifier-worker.ts" : "./mesh/person-verifier-worker.js", import.meta.url);
     const worker = new Worker(file, { workerData: { data: this.#data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
@@ -29,7 +30,7 @@ export class PersonVerifier {
       const waiter = this.#waiting.get(answer.id);
       if (!waiter) return;
       this.#waiting.delete(answer.id);
-      clearTimeout(waiter.timer);
+      waiter.timer();
       if (answer.error !== undefined) waiter.reject(new Error(answer.error));
       else waiter.resolve(answer);
       this.#rest(worker);
@@ -42,9 +43,9 @@ export class PersonVerifier {
   #stop(worker: Worker): void {
     if (this.#worker !== worker) return;
     this.#worker = null;
-    if (this.#idle) { clearTimeout(this.#idle); this.#idle = null; }
+    if (this.#idle) { this.#idle(); this.#idle = null; }
     for (const waiter of this.#waiting.values()) {
-      clearTimeout(waiter.timer);
+      waiter.timer();
       waiter.reject(new Error("the personal lock verifier stopped"));
     }
     this.#waiting.clear();
@@ -53,8 +54,7 @@ export class PersonVerifier {
 
   #rest(worker: Worker): void {
     if (this.#worker !== worker || this.#waiting.size !== 0 || this.#idle) return;
-    this.#idle = setTimeout(() => this.#stop(worker), 60_000);
-    this.#idle.unref();
+    this.#idle = wall.after(60_000, () => this.#stop(worker));
   }
 
   #ask(request: PersonRequest): Promise<Answer> {
@@ -64,11 +64,10 @@ export class PersonVerifier {
     try { worker = this.#start(); } catch (error) { return Promise.reject(error); }
     const id = this.#next++;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.#stop(worker), 30_000);
-      timer.unref();
+      const timer = wall.after(30_000, () => this.#stop(worker));
       this.#waiting.set(id, { resolve, reject, timer });
       try { worker.postMessage({ id, ...request }); }
-      catch (error) { clearTimeout(timer); this.#waiting.delete(id); reject(error); this.#rest(worker); }
+      catch (error) { timer(); this.#waiting.delete(id); reject(error); this.#rest(worker); }
     });
   }
 
