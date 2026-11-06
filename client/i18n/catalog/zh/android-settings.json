@@ -181,7 +181,7 @@
   "android-settings.flow.removeTokenText": "{app} 将不再使用它在此 Slack 工作区创建和修改 app；已创建的 app 和连接不受影响，以后可以重新添加。",
   "android-settings.flow.removeTokenTitle": "移除「{name}」的配置 token？",
   "android-settings.flow.removeTokenWhat": "移除配置 token",
-  "android-settings.flow.runtime": "运行时（创建后无法更改）",
+  "android-settings.flow.runtime": "运行时",
   "android-settings.flow.team": "工作区",
   "android-settings.flow.title": "添加连接",
   "android-settings.flow.tokenNote": "有了 Slack 配置 token，{app} 会替你在 Slack 中创建 app：名称、头像和权限都在这里填写，无需在 Slack 后台逐项配置。该 token 仅供你使用。",

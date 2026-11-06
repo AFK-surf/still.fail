@@ -561,7 +561,7 @@ pub fn fixture_page(mode : String) -> String {
       "profile:ws1/st1#cc"
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
-    "settings-connect-run" | "settings-slack-app" => "connect:ws1/st1#k1"
+    "settings-connect-run" | "settings-connect-switch" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
       "connects"
     "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" => "vault"
@@ -2274,6 +2274,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("station", str("ws1/st1")),
                 ("stationName", str("Willow")),
                 ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
+                ("runtimeChanges", Json::boolean(mode == "settings-connect-switch")),
                 (
                   "sessions",
                   [

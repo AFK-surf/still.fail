@@ -307,7 +307,7 @@ test("adding, disabling and deleting connects follows through to connections", a
     assert.deepEqual(t.slack.connections.ids().sort(), ["ds", "gpt"]);
     await until("gpt's socket", () => t.fake.sockets.length === 2);
     await t.ask("PUT", "/connects/gpt", { bind: { runtime: "claude" } });
-    assert.equal(t.saved().connects.find((c: Json) => c.id === "gpt").bind.runtime, "codex", "a connect's runtime stays as it was made");
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "gpt").bind.runtime, "claude", "a connect's runtime can change");
     await t.ask("PUT", "/connects/gpt", { enabled: false });
     await t.slack.reconcile();
     assert.deepEqual(t.slack.connections.ids(), ["ds"]);
@@ -383,6 +383,14 @@ test("a single-session connect can be set to wake without a mention, and pointed
     assert.deepEqual([t.store.getSession(bound.session)!.model, t.store.getSession(bound.session)!.effort], ["deepseek-flash", null]);
     await t.ask("PUT", "/connects/ds", { requireMention: true });
     assert.equal(t.store.getSession(bound.session)!.model, "deepseek-flash", "an edit that leaves the model alone leaves the session's");
+    // Another runtime too: what went with the old one is not kept, and the session moves with its history.
+    const [moved, whyNot] = await t.ask("PUT", "/connects/ds", { bind: { runtime: "codex" } });
+    assert.equal(moved, 200, JSON.stringify(whyNot));
+    assert.deepEqual(t.saved().connects[0].bind, { runtime: "codex" });
+    assert.deepEqual([t.store.getSession(bound.session)!.runtime, t.store.getSession(bound.session)!.model, t.store.getSession(bound.session)!.profile], ["codex", null, "cx"]);
+    t.config.update((raw) => (raw.profiles = raw.profiles.filter((p: Json) => p.id !== "cc")));
+    assert.equal((await t.ask("PUT", "/connects/ds", { bind: { runtime: "claude" } }))[0], 400, "no profile runs it: refused for both");
+    assert.equal(t.store.getSession(bound.session)!.runtime, "codex");
     await t.ask("PUT", "/connects/ds", { mode: "multi-session" });
     assert.equal(hubConfig(t.config.raw(), t.data).connects[0]!.requireMention, true, "multi-session always needs a mention");
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", {}), [500, { error: "connect ds is not single-session" }]);

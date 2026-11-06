@@ -3476,6 +3476,8 @@ export interface ConnectItem {
 	station: string;
 	stationName: string;
 	connect: Connect;
+	/** Its station lets its runtime change (one from before keeps it on the runtime it was made with). */
+	runtimeChanges?: boolean;
 	/** Its latest dozen; the one it delivers into; those it could deliver into instead. */
 	sessions: Session[];
 	bound?: Session;

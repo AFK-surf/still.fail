@@ -428,11 +428,12 @@ fn mode_choices(c : @ui.Ctx, key : String, words : Json?, mode : String, mention
 ///|
 /// How it runs, in one card (RunSection: runCard): the model it runs and who runs it (the core's pick of
 /// `connect:<id>`; none on its runtime: to its profiles), how its conversations become sessions (更改), in single-session
-/// the one they go into (切换; being switched, a ring beside it); under them that its runtime is its own for good.
+/// the one they go into (切换; being switched, a ring beside it); under them what a change reaches.
 fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station : String, item : Json?) -> Unit {
   let cv = field(item, "connect")
   let id = text(cv, "id")
   let runtime = text(field(cv, "bind"), "runtime")
+  let changes = flag(item, "runtimeChanges")
   // the models its station can run, each with the runtimes it runs on (the core's station view)
   let sv = match @settings.stations_of(core, here).value {
     Some(Array(a)) => a.iter().find_first(fn(s) { text(Some(s), "station") == station })
@@ -444,7 +445,7 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
         None => None
       },
       "models",
-    ).filter(fn(m) { strings(Some(m), "runtimes").contains(runtime) })
+    ).filter(fn(m) { changes || strings(Some(m), "runtimes").contains(runtime) })
   let single = text(cv, "mode") == "single-session"
   let bind_on = [("station", station), ("connect", id)]
   let binding = is_doing(core, ["connect.bindSession"], bind_on)
@@ -499,7 +500,7 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
         }
       }
     })
-    @sf.page_note(c, @sf.t("web-pages.connect.runtimeNote", args=[("runtime", text(cv, "runtimeText"))]))
+    @sf.page_note(c, @sf.t(if changes { "web-pages.connect.runtimeChanges" } else { "web-pages.connect.runtimeNote" }, args=[("runtime", text(cv, "runtimeText"))]))
   })
 }
 

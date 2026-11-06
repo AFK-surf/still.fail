@@ -180,7 +180,7 @@ export function sampleConnect(n: number, i = 0): Connect {
 
 /** The workspace's connects made up, each on a station. */
 export const sampleConnects = (): ConnectItem[] => [7, 5, 9].map((n, i) => ({
-  station: `sample/${i}`, stationName: sampleWords(4), connect: sampleConnect(n, i), sessions: [], candidates: [], running: 0, changes: [],
+  station: `sample/${i}`, stationName: sampleWords(4), connect: sampleConnect(n, i), runtimeChanges: true, sessions: [], candidates: [], running: 0, changes: [],
 }));
 
 /** A station's archive policy made up: its words, two options to archive by and two to keep by. */

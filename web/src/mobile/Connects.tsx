@@ -269,7 +269,7 @@ function ConnectBody({ item }: { item: ConnectItem }) {
           </ListRow>
         )}
       </ListCard>
-      <p className={settingsCss.mPageNote}>{t("web-mobile.connects.runtimeNote", { runtime: connect.runtimeText })}</p>
+      <p className={settingsCss.mPageNote}>{t(item.runtimeChanges ? "web-mobile.connects.runtimeChanges" : "web-mobile.connects.runtimeNote", { runtime: connect.runtimeText })}</p>
       {connect.feishu && (
         <>
           <SectionHeader title={t("web-mobile.connects.feishu.section")} start={24} />

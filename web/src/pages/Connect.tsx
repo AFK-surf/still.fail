@@ -243,7 +243,7 @@ function RunSection({ item }: { item: ConnectItem }) {
   const link = useLink();
   const [changingMode, setChangingMode] = useState(false);
   const [choosing, setChoosing] = useState(false);
-  const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime));
+  const models = useStationModels().filter((m) => item.runtimeChanges || m.runtimes.includes(connect.bind.runtime));
   // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
   const pick = usePick(station.address, `connect:${connect.id}`);
   const saveBind = useAction(() => pick.save(), ({ saved }) => { if (saved) toast(t("web-pages.connect.bindSaved")); });
@@ -279,7 +279,7 @@ function RunSection({ item }: { item: ConnectItem }) {
           </div>
         )}
         {(save.error ?? saveBind.error) && <p className={controlsCss.fieldError} role="alert">{(save.error ?? saveBind.error)!.message}</p>}
-        <p className={`${controlsCss.cardFoot} ${shellCss.muted}`}>{t("web-pages.connect.runtimeNote", { runtime: connect.runtimeText })}</p>
+        <p className={`${controlsCss.cardFoot} ${shellCss.muted}`}>{t(item.runtimeChanges ? "web-pages.connect.runtimeChanges" : "web-pages.connect.runtimeNote", { runtime: connect.runtimeText })}</p>
       </div>
       {changingMode && <ModeDialog item={item} onClose={() => setChangingMode(false)} />}
       {choosing && <ChooseSessionDialog item={item} onClose={() => setChoosing(false)} />}

@@ -163,7 +163,7 @@ function slack(): Connect {
 
 export const connects = (): ConnectsView => ({
   me: { id: "local" }, wait: { reading: false, failing: [], empty: false },
-  items: [{ station: STATION, stationName: "Willow", connect: slack(), sessions: [], candidates: [], running: 0, changes: [
+  items: [{ station: STATION, stationName: "Willow", connect: slack(), runtimeChanges: true, sessions: [], candidates: [], running: 0, changes: [
     { mode: "multi-session", requireMention: true, changed: false, effects: [], action: "确认更改" },
     { mode: "single-session", requireMention: true, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。"], action: "改为单会话" },
     { mode: "single-session", requireMention: false, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。", "无需 @：它可见的所有频道和私信中的每条消息都会发送给 agent，用量会明显增加。"], action: "改为单会话" },

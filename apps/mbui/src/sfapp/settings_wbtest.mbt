@@ -1003,6 +1003,19 @@ test "a connect's page: its model the one its station's profiles turned on, at i
 }
 
 ///|
+test "a connect's page says what another runtime reaches where its station lets it change" {
+  new_run()
+  @settings.fixture_page("settings-connect-switch") |> ignore
+  let src = fixture("settings-connect-switch")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
+  open_setting("connect:ws1/st1#k1")
+  t.draw()
+  assert_true(t.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is Some(_))
+  let before = settings_tester("connect:ws1/st1#k1")
+  assert_true(before.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is None)
+}
+
+///|
 /// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
