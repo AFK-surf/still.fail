@@ -1,0 +1,35 @@
+name: Appearance evidence (temporary)
+on:
+  push:
+    branches: [codex/appearance-evidence-c512729a0d]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pictures:
+    runs-on: [self-hosted, macos-ci]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Render the page at each screen size
+        shell: bash
+        run: |
+          set -eu
+          renderer=$(node scripts/native.ts file mbui-film-wasm darwin-arm64)
+          mkdir -p "$RUNNER_TEMP/appearance-evidence"
+          printf 'until 主题\nexit\n' > "$RUNNER_TEMP/appearance-evidence/appearance.drive"
+          for spec in 'small 390x844 2 finger' 'medium 800x900 2 finger' 'large 1280x900 0 mouse'; do
+            set -- $spec
+            env MBUI_MEDIA_RUNTIME="$renderer" MBUI_FIXTURE=settings-appearance MBUI_WIN="$2" \
+              MBUI_FILM_PLATFORM="$3" MBUI_NATIVE_INPUT="$4" MBUI_FILM_SCALE=1 \
+              bash apps/mbui/scripts/media.sh picture "$RUNNER_TEMP/appearance-evidence/$1.png" \
+              "$RUNNER_TEMP/appearance-evidence/appearance.drive"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appearance-evidence
+          path: ${{ runner.temp }}/appearance-evidence/
+          if-no-files-found: error
