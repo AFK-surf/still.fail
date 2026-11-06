@@ -154,7 +154,7 @@ jobs:
           # as asked. Once a day in one process (SFAPP_SHARDS=1), their files one after another: what one file leaves
           # behind that a later one trips on shows there, which shards' fewer files each partly hide. The screen
           # sweeps a process each beside them either way, test.sh)
-          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && format('{0}/app-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && format('{0}/app-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=10000 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       # (sfapp's test program and its tests' list, for the app job's runs)
       - if: env.GROUP == 'build'
         uses: actions/upload-artifact@v4
