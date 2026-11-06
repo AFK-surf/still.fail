@@ -26,7 +26,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
-import type { AgentDriver, AgentSession, RuntimeKind } from "../agents/runtime.ts";
+import { RUNTIME_KINDS, type AgentDriver, type AgentSession, type RuntimeKind } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
 import { allLeft, liveRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
@@ -437,7 +437,12 @@ export class Hub {
     // A shared Codex host can only have a session to recover when that session was marked running. Without a
     // session-owned runner there is no reason to load the station's idle and archived sessions.
     const ownRunners = [...runners].some((id) => !id.startsWith("codex-"));
-    const candidates = ownRunners ? this.store.listSessions() : this.store.runningSessions();
+    const parts = [...runners].flatMap((id) => {
+      const kind = RUNTIME_KINDS.find((k) => k !== "codex" && id.startsWith(`${k}-`));
+      return kind === undefined ? [] : [id.slice(kind.length + 1)];
+    });
+    const found = ownRunners ? this.sandboxNameLookup().takeUp(parts) : null;
+    const candidates = !ownRunners ? this.store.runningSessions() : found === "fallback" ? this.store.listSessions() : found!;
     for (const row of candidates) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
