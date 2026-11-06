@@ -4737,20 +4737,30 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
           // (taken, its press found and done as one event of this moment: Tree::activate_at)
           if tree.activate_at(nid, view_moment()) {
             h_frame_owed()
+          } else if tree.said_action_at(nid, action, view_moment()) {
+            h_frame_owed()
           }
         }
         // (the focus to it, as Tab would give it, at the moment it is asked, where a screen reader may give it then (read
         // out, able to take it; nothing of the old frame's modal over it): else the focus where it was)
         Focus if free => {
           tree.event(view_moment(), fn() {
-            if tree.focus_asked_takes(nid) {
+            if tree.said_takes_action(nid) && tree.focus_asked_takes(nid) {
               g().focus_moved(id, visible=true)
+            } else {
+              tree.said_action_at(nid, action, view_moment()) |> ignore
             }
           })
           h_frame_owed()
         }
         // (words put in a field of its own in place of what it held: as an old view's editor takes them, tree_field.mbt)
-        SetText(_) if free => tree.event(view_moment(), fn() { tree_field_asked(nid, action) |> ignore })
+        SetText(_) if free => tree.event(view_moment(), fn() {
+          if tree.said_takes_action(nid) && !tree_field_asked(nid, action) &&
+            tree.said_action_at(nid, action, view_moment()) {
+            h_frame_owed()
+          }
+        })
+        _ if free => if tree.said_action_at(nid, action, view_moment()) { h_frame_owed() }
         _ => ()
       }
       true
@@ -4861,8 +4871,15 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
         }
         // (what can be done to it, of what it said or would: Activate where a press does something, Focus where it can take the focus)
         let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }
-        if tree.can_focus(sn.id) {
-          actions.push(Focus)
+        if !sn.disabled {
+          if tree.can_focus(sn.id) {
+            actions.push(Focus)
+          }
+          for action in s.actions {
+            if !actions.contains(action) {
+              actions.push(action)
+            }
+          }
         }
         out.push({
           id: tree_said_id(sn.id),
