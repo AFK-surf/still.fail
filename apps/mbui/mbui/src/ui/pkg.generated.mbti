@@ -616,6 +616,8 @@ pub fn shared_in() -> String
 
 pub fn shared_in_file(Int32) -> Bytes
 
+pub fn sheet_typing_until_frame(@view.View, Bool) -> Unit
+
 pub let shot_wait_most : Double
 
 pub let site_backlog_max : Int32

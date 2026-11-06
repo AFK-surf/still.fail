@@ -1109,6 +1109,7 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
 fn tree_told_host(c : Ctx) -> Unit {
   c.a11y_after_paint()
   c.back_told_host()
+  sheet_typing_before_frame.clear()
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()

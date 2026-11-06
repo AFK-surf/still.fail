@@ -662,7 +662,13 @@ test "a tree sheet keeps covered editors focused and routes text as an old sheet
       open.set(false)
       t.text_told("y", t.time())
       assert_eq(t.ctx().focused_id(), before)
-      assert_eq(field.text(), if old_editor { "xy" } else { "y" }, msg="closed sheet must release the original editor")
+      let expected = if old_editor { "xy" } else if intermediate { "" } else { "y" }
+      assert_eq(field.text(), expected, msg="old editor=\{old_editor}, closing frame=\{intermediate}")
+      if intermediate {
+        t.draw()
+        t.text_told("z", t.time())
+        assert_eq(field.text(), if old_editor { "xyz" } else { "z" })
+      }
     }
   }
 }
@@ -702,6 +708,172 @@ test "old and tree sheets route a covered tree editor alike" {
 }
 
 ///|
+test "old and tree sheets keep a covered tree field from text until the state-close frame" {
+  for (old_sheet, frame) in [(true, false), (true, true), (false, false), (false, true)] {
+    let open = @signals.signal(false)
+    let field = @ui.Field::new()
+    let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+      @ui.field(root, field, placeholder="Page field") |> ignore
+      if old_sheet {
+        @ui.old(root, fn(c) {
+          @kit.sheet(c, "old sheet", open.get(), h=200.0, fn() {  }) |> ignore
+        }).over(Is(true)) |> ignore
+      } else {
+        @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
+          s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+        })
+      }
+    })
+    t.draw()
+    t.act(TextField, Focus, label="Page field")
+    open.set(true)
+    t.run_for(sheet_test_late_ms)
+    open.set(false)
+    if frame { t.draw() }
+    t.text_told("y", t.time())
+    assert_eq(field.text(), if frame { "y" } else { "" }, msg="old=\{old_sheet}, closing frame=\{frame}")
+  }
+}
+
+///|
+test "old and tree sheets dismissed by input return typing before the next frame" {
+  for (old_sheet, input) in [(true, 0), (true, 1), (true, 2), (false, 0), (false, 1), (false, 2)] {
+    let open = @signals.signal(false)
+    let field = @ui.Field::new()
+    let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+      @ui.field(root, field, placeholder="Page field") |> ignore
+      if old_sheet {
+        @ui.old(root, fn(c) {
+          c.with_dismissed(fn(_) { open.set(false) }, fn() {
+            @kit.sheet(c, "old sheet", open.get(), h=200.0, fn() {  }) |> ignore
+          })
+        }).over(Is(true)) |> ignore
+      } else {
+        @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
+          s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+        })
+      }
+    })
+    t.draw()
+    t.act(TextField, Focus, label="Page field")
+    open.set(true)
+    t.run_for(sheet_test_late_ms)
+    if input == 0 {
+      t.key_told(@ui.key_escape, 0, t.time())
+    } else if input == 1 {
+      t.touch(0, 10.0, 10.0)
+      t.touch(2, 10.0, 10.0)
+    } else {
+      t.back_raw(2, 0.0, t.time())
+    }
+    assert_false(open.get())
+    t.text_told("y", t.time())
+    assert_eq(field.text(), "y", msg="old=\{old_sheet}, input=\{input}")
+  }
+}
+
+///|
+test "old and tree sheet state closes expose the same input method across the next frame" {
+  for frame in [false, true] {
+    let states : Array[(Bool, Bool, Bool)] = []
+    for old_sheet in [true, false] {
+      let open = @signals.signal(false)
+      let field = @ui.Field::new()
+      let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+        @ui.field(root, field, placeholder="Page field") |> ignore
+        if old_sheet {
+          @ui.old(root, fn(c) {
+            @kit.sheet(c, "old sheet", open.get(), h=200.0, fn() {  }) |> ignore
+          }).over(Is(true)) |> ignore
+        } else {
+          @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
+            s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+          })
+        }
+      })
+      t.draw()
+      t.act(TextField, Focus, label="Page field")
+      let before = t.ime().0
+      open.set(true)
+      t.run_for(sheet_test_late_ms)
+      let covered = t.ime().0
+      open.set(false)
+      if frame { t.draw() }
+      states.push((before, covered, t.ime().0))
+    }
+    assert_eq(states[0], states[1], msg="old=\{states[0]}, tree=\{states[1]}, closing frame=\{frame}")
+  }
+}
+
+///|
+test "a sheet opened above a just closed sheet accepts its own field before a frame" {
+  for old_sheet in [true, false] {
+    let lower_open = @signals.signal(false)
+    let upper_open = @signals.signal(false)
+    let upper_field = @ui.Field::new()
+    let upper_focus : Ref[@view.View?] = Ref(None)
+    let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+      root.box(fn(lower) {
+        lower.stacked(Is(1)) |> ignore
+        if old_sheet {
+          @ui.old(lower, fn(c) {
+            @kit.sheet(c, "old sheet", lower_open.get(), h=200.0, fn() {  }) |> ignore
+          }).over(Is(true)) |> ignore
+        } else {
+          @kit.sheet_node(lower, fn() { lower_open.get() }, fn() { lower_open.set(false) }, fn(s) {
+            s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+          })
+        }
+      }) |> ignore
+      root.box(fn(upper) {
+        upper.stacked(Is(2)) |> ignore
+        @kit.sheet_node(upper, fn() { upper_open.get() }, fn() { upper_open.set(false) },
+          initial_focus=fn() { upper_focus.val }, fn(s) {
+            upper_focus.val = Some(@ui.field(s, upper_field, placeholder="Upper field"))
+          })
+      }) |> ignore
+    })
+    t.draw()
+    lower_open.set(true)
+    t.run_for(sheet_test_late_ms)
+    lower_open.set(false)
+    upper_open.set(true)
+    t.text_told("x", t.time())
+    assert_eq(upper_field.text(), "x", msg="old lower sheet=\{old_sheet}")
+  }
+}
+
+///|
+test "a state close during an old build releases sheet typing in that frame" {
+  for old_sheet in [true, false] {
+    let open = @signals.signal(false)
+    let closing = @signals.signal(false)
+    let field = @ui.Field::new()
+    let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+      @ui.field(root, field, placeholder="Page field") |> ignore
+      @ui.old(root, fn(c) {
+        if closing.get() { open.set(false) }
+        if old_sheet { @kit.sheet(c, "old sheet", open.get(), h=200.0, fn() {  }) |> ignore }
+      }).over(Is(true)) |> ignore
+      if !old_sheet {
+        @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(s) {
+          s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+        })
+      }
+    })
+    t.draw()
+    t.act(TextField, Focus, label="Page field")
+    open.set(true)
+    t.run_for(sheet_test_late_ms)
+    closing.set(true)
+    t.draw()
+    assert_false(open.get())
+    t.text_told("y", t.time())
+    assert_eq(field.text(), "y", msg="old sheet=\{old_sheet}")
+  }
+}
+
+///|
 test "a tree sheet can focus its own editor and return to the covered one" {
   for intermediate in [false, true] {
     let open = @signals.signal(false)
@@ -724,6 +896,54 @@ test "a tree sheet can focus its own editor and return to the covered one" {
     t.text_told("y", t.time())
     assert_eq((underneath.text(), inside.text()), ("y", "x"), msg="intermediate=\{intermediate}")
   }
+}
+
+///|
+test "a typing menu above a sheet cannot type through the sheet into its covered field" {
+  let open_sheet = @signals.signal(false)
+  let open_menu = @signals.signal(false)
+  let field = @ui.Field::new()
+  let t = @ui.Tester::new(fn(_) {  }, time=0.0, tree=fn(root : @view.View) {
+    @ui.field(root, field, placeholder="Page field") |> ignore
+    @kit.sheet_node(root, fn() { open_sheet.get() }, fn() { open_sheet.set(false) }, fn(s) {
+      s.box(fn(v) { v.height(Is(Some(200.0))) |> ignore }) |> ignore
+    })
+    root.show(fn() { open_menu.get() }, fn(menu) {
+      menu.over(Is(true)).stacked(Is(3)).modal(Is(true)).leaves_typing().focus_returns() |> ignore
+    })
+  })
+  t.draw()
+  t.act(TextField, Focus, label="Page field")
+  open_sheet.set(true)
+  open_menu.set(true)
+  t.text_told("x", t.time())
+  assert_eq(field.text(), "")
+  open_menu.set(false)
+  t.text_told("y", t.time())
+  assert_eq(field.text(), "")
+  open_sheet.set(false)
+  t.text_told("z", t.time())
+  assert_eq(field.text(), "z")
+}
+
+///|
+test "a typing menu can leave text to a field within the sheet below it" {
+  let open_menu = @signals.signal(false)
+  let field = @ui.Field::new()
+  let t = @ui.Tester::new(fn(_) {  }, time=0.0, tree=fn(root : @view.View) {
+    @kit.sheet_node(root, fn() { true }, fn() {  }, fn(s) {
+      @ui.field(s, field, placeholder="Sheet field") |> ignore
+    })
+    root.show(fn() { open_menu.get() }, fn(menu) {
+      menu.over(Is(true)).stacked(Is(3)).modal(Is(true)).leaves_typing().focus_returns() |> ignore
+    })
+  })
+  t.draw()
+  t.run_for(sheet_test_late_ms)
+  t.act(TextField, Focus, label="Sheet field")
+  open_menu.set(true)
+  t.text_told("x", t.time())
+  assert_eq(field.text(), "x")
 }
 
 ///|

@@ -4262,10 +4262,20 @@ fn Tree::modals_now(self : Tree) -> Unit {
 /// Whether the topmost modal layer leaves what is typed to a focused field under it (View::leaves_typing). `retained`
 /// asks whether it leaves text to a field of this tree rather than an old editor.
 pub fn Tree::typing_left_under(self : Tree, retained? : Bool = false) -> Bool {
-  match self.modal_top() {
-    Some(m) => self.nodes[m.at].leaves_typing && (!retained || !self.nodes[m.at].leaves_typing_old_only)
-    None => false
+  guard self.modal_top() is Some(top) && self.nodes[top.at].leaves_typing else { return false }
+  if retained {
+    guard self.focused is Some(focus) && self.alive_id(focus) else { return false }
+    // A menu over a sheet may leave typing, but it cannot send text through the sheet into a covered field. A field
+    // inside that sheet is not covered by the sheet itself, and may still take the menu's typing.
+    for at in self.modals {
+      let n = self.nodes[at]
+      if n.live && n.modal && n.leaves_typing_old_only && !self.leaving_at(at) &&
+        self.stack_at(focus.at) <= self.stack_at(at) && !self.holds({ at, gen: n.gen }, focus) {
+        return false
+      }
+    }
   }
+  true
 }
 
 ///|

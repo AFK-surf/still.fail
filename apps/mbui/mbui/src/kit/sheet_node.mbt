@@ -77,6 +77,26 @@ pub fn sheet_node(
     let hand_y = Ref(0.0)
     let dragged = Ref(false)
     let tracking = Ref(false)
+    let old_typing = Ref(false)
+    let was_drawn = Ref(false)
+    let waiting_draw = Ref(false)
+    let input_dismissal = Ref(false)
+    let note_drawn = fn() {
+      if !was_drawn.val && !waiting_draw.val {
+        waiting_draw.val = true
+        layer.on_first_drawn(fn() {
+          waiting_draw.val = false
+          if !layer.leaving() { was_drawn.val = true }
+        }) |> ignore
+      }
+    }
+    let dismiss_input = fn() {
+      input_dismissal.val = true
+      @ui.sheet_typing_until_frame(layer, false)
+      dismiss()
+      // Structure can commit after the input callback returns, including a leave deferred by layout.
+      @signals.after_all_flushed(fn() { input_dismissal.val = false })
+    }
     let current = fn(h : Double, at : Double) {
       if still {
         (0.0, 0.0)
@@ -97,6 +117,9 @@ pub fn sheet_node(
       }
     }
     close.val = fn(h) {
+      if old_typing.val && was_drawn.val && !input_dismissal.val {
+        @ui.sheet_typing_until_frame(layer, true)
+      }
       let at = layer.cause_at()
       let (x, v) = current(h, at)
       (size_done.val)()
@@ -118,20 +141,21 @@ pub fn sheet_node(
     .focusable(Is(true), keys=0, tab=false)
     .ground(By(fn() { if dims() { @ui.alpha(scrim(), fade_shown()) } else { 0L } }))
     .presses(Is(true))
-    .on_drag(fn(d) { if d.kind == Down && @signals.untracked(live) { dismiss() } })
+    .on_drag(fn(d) { if d.kind == Down && @signals.untracked(live) { dismiss_input() } })
     .on_key(fn(k) {
       if k.code == @ui.key_escape && @signals.untracked(live) {
-        if !within() { dismiss() }
+        if !within() { dismiss_input() }
         true
       } else {
         false
       }
     })
-    .takes_back(fn() { if @signals.untracked(live) && !within() { dismiss() } })
+    .takes_back(fn() { if @signals.untracked(live) && !within() { dismiss_input() } })
     |> ignore
     // On return while leaving, continue from where the closing way has got to, at that cause's moment.
     layer.reacts(fn() { layer.leaving() }, fn(leaving) {
       if !leaving && @signals.untracked(fn() { slide_mode.get() }) == 1 {
+        if old_typing.val { note_drawn() }
         let at = layer.cause_at()
         size_mode.set(0)
         slide.go(0.0, @motion.move(), at~)
@@ -222,7 +246,7 @@ pub fn sheet_node(
             let tall = @signals.untracked(tall_now)
             let detents = grows && (!(fit && tall > 0.0) || normal >= dmin(tall, 0.94) * total - 1.0)
             if dragged.val && (if detents { h / total < 0.3 } else { base_h.val - h > 80.0 }) {
-              dismiss()
+              dismiss_input()
             } else {
               let to = if detents {
                 if !dragged.val && d.oy < 30.0 {
@@ -299,7 +323,11 @@ pub fn sheet_node(
     }) |> ignore
     match initial_focus() {
       Some(target) => layer.focus_opens(target) |> ignore
-      None => layer.leaves_typing(old_only=true).focus_returns() |> ignore
+      None => {
+        old_typing.val = true
+        layer.leaves_typing(old_only=true).focus_returns() |> ignore
+        note_drawn()
+      }
     }
     layer.owns(fn() { (size_done.val)() }) |> ignore
   })

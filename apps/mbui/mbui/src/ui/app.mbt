@@ -604,6 +604,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // (and old-build press callbacks no longer said or kept: Ctx::on_press)
   ctx_presses_built()
   c.bars_frame_end()
+  // A sheet closed as this frame was built also releases the last-frame typing barrier in this frame.
+  sheet_typing_before_frame.clear()
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()

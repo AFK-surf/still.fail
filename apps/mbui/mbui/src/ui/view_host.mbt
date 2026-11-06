@@ -23,6 +23,26 @@
 let view_app : Ref[@view.Tree?] = Ref(None)
 
 ///|
+/// Tree editors covered by a sheet that closed by a state change keep the last old-frame routing until the next
+/// actual frame. Each entry is the sheet's node and its place in the window's stack, as it closed.
+let sheet_typing_before_frame : Array[(@view.NodeId, Int)] = []
+
+///|
+/// Keep (`hold=true`) or retire a sheet's last-frame text barrier until the next actual frame. It only applies to a
+/// retained field under the sheet: old editors and fields above it keep their own routing. A sheet uses this when its
+/// opening was last built in a frame and closes by state, matching an old sheet's last-frame input routing.
+pub fn sheet_typing_until_frame(v : @view.View, hold : Bool) -> Unit {
+  let id = v.id()
+  sheet_typing_before_frame.retain(fn(entry) { entry.0 != id })
+  if hold {
+    match view_app.val {
+      Some(tree) if tree.lives(id) => sheet_typing_before_frame.push((id, tree.stack_of(id)))
+      _ => ()
+    }
+  }
+}
+
+///|
 /// An old view in a node of the tree (`old`): the node, the name its subtree is kept by among the old frame's, what
 /// builds it, and what it is made once as there (made.mbt's made_island: its own watch, built again only as what it read
 /// changes).
@@ -383,6 +403,7 @@ pub fn view_painted() -> ViewPaintWork {
 fn view_forget() -> Unit {
   // A replacement tree can change who may type even if the numeric focus stays the same during an event.
   view_modals_version.val += 1
+  sheet_typing_before_frame.clear()
   view_read_tells.clear()
   view_shape_of.val = OfOld
   let c = g()
@@ -2653,6 +2674,13 @@ fn Ctx::focus_allowed(self : Ctx) -> Int {
 /// the topmost modal layer of the tree's leaves what is typed to (View::leaves_typing: a menu a finger
 /// opened beside it), its keys none the less the layer's (view_key).
 fn Ctx::typing_allowed(self : Ctx) -> Int {
+  match (tree_said_ids.get(self.focus), view_app.val) {
+    (Some(id), Some(tree)) if self.editors.contains(self.focus) &&
+      sheet_typing_before_frame.iter().any(fn(entry) {
+        tree.stack_of(id) <= entry.1 && !tree.holds(entry.0, id)
+      }) => return 0
+    _ => ()
+  }
   let focus = self.focus_allowed()
   if focus != 0 || !self.editors.contains(self.focus) {
     return focus

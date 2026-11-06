@@ -2111,8 +2111,8 @@ test "layout-read-back allows an event's size, but not a binding made by an even
         "  v.layout_box(Is(()), fn(_, _) { v.event_action(fn() { v.laid_size() |> ignore }) })\n" +
         "  v.layout_box(Is(()), fn(_, _) { v.owns(fn() { v.event_action(fn() { v.laid_size() |> ignore }) }) })\n" +
         "  @signals.deliver_input(fn() { () })\n" +
-        "  v.on_press(fn() { v.reacts(fn() { v.laid_size_told() }, fn(_) { () }) })\n" +
-        "  v.reacts(fn() { v.laid_size_told() }, fn(_) { () })\n" +
+        "  v.on_press(fn() { v.reacts(fn() { v.owed_laid_size() }, fn(_) { () }) })\n" +
+        "  v.reacts(fn() { v.owed_laid_size() }, fn(_) { () })\n" +
         "  v.on_press(fn() { c.laid_size(id) |> ignore })\n" +
         "  fake.on_press(fn() { fake.laid_size() |> ignore })\n" +
         "  fake.event_action(fn() { fake.laid_size() |> ignore })\n" +
