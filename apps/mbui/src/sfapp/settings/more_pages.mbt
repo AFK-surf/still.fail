@@ -723,17 +723,24 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
 }
 
 ///|
-/// A station's rule's draft (`decisionForm`) opened for what shows it (its rows made once, src/sfpages
-/// automatic_decisions.mbt), by the name it is then known by; dropped by decision_form_drop as they are let go.
-pub fn decision_form_open(core : Core, station : String) -> String {
+/// A new name for a station's rule's draft (`decisionForm`): what the page that asks for it holds it by from then on
+/// (decision_form_open).
+pub fn decision_form_name() -> String {
   profile_forms.val += 1
-  let f = "mbui-decision-" + profile_forms.val.to_string()
-  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
-  f
+  "mbui-decision-" + profile_forms.val.to_string()
 }
 
 ///|
-/// A station's rule's draft `form` (decision_form_open's) dropped: what showed it let go.
+/// A station's rule's draft `form` (decision_form_name's) opened for the page that shows it (src/sfpages
+/// automatic_decisions.mbt completion_node, once the station's section came in sight there; never by a section being
+/// made): what went wrong said, and told `failed`, the core not having opened it. Dropped by decision_form_drop as that
+/// page is let go: the core takes them in the order asked, one dropped before its opening was answered opened first.
+pub fn decision_form_open(core : Core, station : String, form : String, failed? : (Json) -> Unit = fn(_) {  }) -> Unit {
+  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]), failed~)
+}
+
+///|
+/// A station's rule's draft `form` (decision_form_open's) dropped: the page that opened it let go.
 pub fn decision_form_drop(core : Core, station : String, form : String) -> Unit {
   act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.drop", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]))
 }

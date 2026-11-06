@@ -339,8 +339,8 @@ pub fn Field::lines(self : Field) -> FieldLines? {
 /// The keyboard's focus given field `field` by what holds it now: a field of the window's tree, at once (where it can
 /// take it); an old view's editor drawn now, that one (where the old view it is in takes input); none, asked of the one
 /// that comes to hold it, given as it does (a field of the tree's as it is made; an old view's editor as it is built),
-/// the focus where it is till then.
-pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
+/// the focus where it is till then. With `ask_later=false`, an absent field does not keep a request for later.
+pub fn Ctx::focus_field(self : Ctx, field : Field, ask_later? : Bool = true) -> Unit {
   let st = field.st
   // (held by a field of the window's tree: its)
   match st.tree_node {
@@ -365,7 +365,7 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
     }
   }
   // (held by none now: asked of whichever comes to hold it, taken as it does (field(), Ctx::editor), nothing moved before)
-  st.focus_asked = true
+  if ask_later { st.focus_asked = true }
 }
 ///|
 /// Field node `id` given the keyboard's focus where it can take it now (the tree's: under no modal layer that does not
@@ -631,9 +631,10 @@ fn tree_field_let_go(id : @view.NodeId, x : Double, y : Double, up : Bool) -> Un
   // (its words scrolled by a finger, let go: flung on at its speed, as an old view's field's are, sideways_up)
   if tf.scrolling {
     if up {
-      tf.track.add(view_moment(), y)
+      tf.track.up(view_moment(), y)
     }
-    sideways_up(c, tree_said_id(id), 0.0, if up { dclamp(tf.track.velocity(), -max_fling, max_fling) } else { 0.0 })
+    let v = if up { dclamp(tf.track.velocity_at(view_moment()), -max_fling, max_fling) } else { 0.0 }
+    sideways_up(c, tree_said_id(id), 0.0, v)
   }
   if tf.handle != 0 {
     c.handle_drag = 0

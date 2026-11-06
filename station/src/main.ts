@@ -26,6 +26,7 @@ import { type Control, launcher } from "./ops/launcher.ts";
 import { hearErrors, hearLines, log } from "./ops/log.ts";
 import { stationLog } from "./ops/log-export.ts";
 import { ConfigFile } from "./ops/config.ts";
+import { InvalidJsonFile } from "./ops/json-file.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
@@ -142,11 +143,14 @@ const Loopback = (control: Control) =>
 function run() {
   const app = flag(args, "--app");
   if (!app) usage();
+  // Read the essential files before telling the launcher this process is ready. In particular, do not start with
+  // defaults when another program has made config.json unreadable.
+  const settings = new ConfigFile(data);
+  readState(data);
   const control = launcher(args);
   // Runners (agents', jobs') from copies under the data directory on Windows, out of reach of the app's installer.
   keepRunnerIn(join(data, "run", "bin"));
   // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
-  const settings = new ConfigFile(data);
   const stationId = () => {
     try {
       return JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null;
@@ -277,6 +281,7 @@ function run() {
   });
 }
 
+async function commandMain() {
 switch (command) {
   case "run":
     run();
@@ -344,4 +349,18 @@ switch (command) {
     break;
   default:
     usage();
+}
+}
+
+try {
+  await commandMain();
+} catch (error) {
+  if (!(error instanceof InvalidJsonFile)) throw error;
+  // A previous launcher only reports the exit code; the new release's installer reads this alongside that report.
+  // No file contents are written here. Its installer clears the previous attempt's report before each handover.
+  if (command === "run" && (flag(args, "--launcher-pipe") || flag(args, "--launcher-fds"))) {
+    try { writeFileSync(join(data, "run", "handoff-error"), error.message + "\n", { mode: 0o600 }); } catch {}
+  }
+  console.error(error.message);
+  process.exitCode = 1;
 }

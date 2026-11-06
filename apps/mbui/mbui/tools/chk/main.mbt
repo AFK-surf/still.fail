@@ -17,6 +17,8 @@
 //     chk views LOG HOST          a native view put where it was told (contracts.mbt)
 //     chk site LOG HOST           a site's page and a page speaking with the app, step by step (contracts.mbt)
 //     chk cache-prune [--dry-run] the Actions caches a newer one of the same kind replaced, deleted (cache_prune.mbt)
+//     chk tests-apart --files|WHOLE  moon's outline (moon test --outline) on stdin: its files; the programs its tests
+//                                 are run in on wasm-gc, each test that aborts as it should alone (testapart.mbt)
 
 ///|
 fn root() -> String {
@@ -101,6 +103,7 @@ fn main {
     ["images", .. rest] => images(rest.to_array())
     ["site", .. rest] => site(rest.to_array())
     ["cache-prune", .. rest] => cache_prune(rest.to_array())
+    ["tests-apart", .. rest] => tests_apart(rest.to_array())
     _ => {
       @sys.eprintln("chk: errs | corner-sl [--check] | outside-kinds [HOST…]")
       2

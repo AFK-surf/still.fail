@@ -26,6 +26,9 @@ pub(all) struct Writing {
   mut adopted : Int
   /// what `take` took, put back by `restore`
   mut taken : (String, Array[Json], Array[Json])?
+  /// which page's composer holds its field now (where it is made, sfpages' composer_on_page): the field is one
+  /// editor's, taken by another page's as this one lets it go, in the same change
+  held_by : @signals.Signal[@view.NodeId?]
 }
 
 ///|
@@ -131,6 +134,7 @@ pub fn writing(src : Source, key : String) -> Writing {
         seen_rev: -1.0,
         adopted: -1,
         taken: None,
+        held_by: @signals.signal(None),
       }
       writings[key] = w
       w

@@ -44,7 +44,7 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
     quote_words: Some(("quote", w)), quote_to: None, source_scale: 1.0, leaving: None, leaving_node: None,
     face: fn() { }, node: Some(fn(p) { make(p, Some(w)) |> ignore }),
   }
-  flight_start_from(t.ctx(), "quotes", "quotes", "row", "", 140.0, [ff], field.lines(), hold=fn(_) { }, desk=false)
+  flight_start_from(t.ctx(), "quotes", "quotes", "row", "", [ff], field.lines(), hold=fn(_) { }, desk=false)
   source.set(false)
   t.draw()
   assert_eq(t.glyphs_seen(), glyphs, msg="while the row is absent the source's words stay where they were")

@@ -60,6 +60,10 @@ pub struct Scroll {
   priv mut hand_v : Double
   /// taken over from what it went down on (View::claims): its first move from where it went down counted past the slop
   priv mut claimed : Bool
+  /// how many times it was moved at once (by the hand: a wheel's turn not eased in, a drag's move, its bar held and
+  /// moved; or put, a part of it brought into sight), not going on by itself: what a list laid out from where it is
+  /// tells a jump by from a way gone across (View::scrolls_window's `seen`)
+  priv mut moved_at_once : Int
   /// what is told as it scrolls (its bar), at the moment
   priv mut on_scrolled : (Double) -> Unit
   /// The hand's requested distance, before it moves or any new layout measures what it brings into sight.
@@ -158,6 +162,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     hand_t: 0.0,
     hand_v: 0.0,
     claimed: false,
+    moved_at_once: 0,
     on_scrolled: fn(_) {  },
     on_hand: fn(_) { },
     serial: {
@@ -472,6 +477,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
     Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
     _ => ()
   }
+  self.moved_at_once += 1
   self.x.set(dmax(to, 0.0))
 }
 
@@ -481,7 +487,10 @@ fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(was + d, 0.0, self.most())
-  if to != was { (self.on_hand)(to - was) }
+  if to != was {
+    self.moved_at_once += 1
+    (self.on_hand)(to - was)
+  }
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)
@@ -495,6 +504,9 @@ fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
   (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(to, 0.0, self.most())
+  if to != was {
+    self.moved_at_once += 1
+  }
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)
@@ -649,7 +661,8 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// holds' last line), none while it cannot. `for_field`: the editor these choices belong to; scrolling keeps
 /// that editor's keyboard, as an old view's capped column does. `content_extent`: a virtual list's counted content
 /// height (width across), available when its heights change, before those heights have been laid out in its holder.
-/// `bar_clear`: the top and foot room kept clear by the scroll bar.
+/// `bar_clear`: the top and foot room kept clear by the scroll bar. `bar_in_held`: across, `bar_in` as far in as what
+/// holds it all is padded at its start as last laid out (a padding worked out as it is laid out: Roomed), not as said.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
@@ -660,6 +673,7 @@ pub fn View::scrolls(
   for_field? : NodeId,
   content_extent? : () -> Double,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  bar_in_held? : Bool = false,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
@@ -757,7 +771,7 @@ pub fn View::scrolls(
           (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
+      self.scroll_bar(s, b, state, bar_in~, bar_clear~, bar_in_of?=if bar_in_held { Some(inner) } else { None })
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()

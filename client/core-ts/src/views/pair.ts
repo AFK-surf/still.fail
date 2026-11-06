@@ -10,6 +10,12 @@
 // nothing. Its prompt closed (`lockPrompt.hide`), it is no longer shown and the code still holds: a person closes it
 // once they have read the code.
 //
+// Someone made a member after the lock was turned on is in none of its entries: the cloud says they are a member, and
+// nothing signs that as it happens (a web page may add them; they may not have signed in yet). An owner's or admin's
+// device shows the code for their first device all the same, and the code typed makes them a member of the lock as it
+// signs that device in (2026-11-06: a colleague added to a workspace in security mode asked, and no device anywhere
+// showed a code: 「他请求安全码根本跳不出来」).
+//
 // A new device (`lock.pair`, its waiting page): dials them all, and once one or more show a code, proves the code typed
 // (`lock.pairCode`) to each; the one whose code it was approves it. `me.pair` says how far it got. A trusted device that
 // ends it while nothing is typed (turned away, the code too old, gone) is heard at once, not once a code is typed: the
@@ -27,13 +33,13 @@
 // code too old), `bad_share`; a trusted device from before `late` closes the stream then with no word. An `approved`
 // that signed it in nowhere (each workspace in `failed`, with why) is no approval: the new device says why.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Deferred, Effect, Queue } from "effect";
+import { Deferred, Effect, Fiber, Queue } from "effect";
 import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import type { IrohConnection, IrohStream } from "../iroh.ts";
-import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
+import { Signer, WEB_DEVICE_SECS, entryHash } from "../lock.ts";
 import { Lines } from "../mesh.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../pair.ts";
 import * as format from "../format.ts";
@@ -41,7 +47,8 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
+import { Priority } from "../sync/scheduler.ts";
+import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -102,7 +109,8 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 
 /// A new device showing this one's code: who, where it asks, the code, how to turn it away.
 /// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
-type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
+/// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on).
+type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -162,16 +170,46 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const upgrade = had !== undefined && had.kind === "app" && get(hello, "kind") === "app" && key !== null && had.sign_key !== key;
     if (lock.disabled || mine?.sign_key !== signer || !mine.own || (had !== undefined && !upgrade)) continue;
     const c = credentialOf(str(get(w, "credential")) ?? "", lock.cloudKeys, ws, peer, now);
-    if (c === null || !lock.members.has(c.sub) || (had !== undefined && c.sub !== had.sub)) continue;
+    if (c === null || c.sub === "" || (had !== undefined && c.sub !== had.sub)) continue;
     // Another person's: only their first device that signs, by an owner or admin (any later one they approve from a
     // device of their own: one approved for them would be no one's, signing nothing; lock-check.ts Device `own`).
     const role = lock.members.get(mine.sub);
     if (c.sub !== mine.sub && ((role !== "owner" && role !== "admin") || lock.signed.has(c.sub))) continue;
     who ??= c;
     if (c.sub !== who.sub) continue;
-    places.push({ ws, sub: c.sub, account });
+    // (not in the lock: the credential is the cloud's word they are a member; the person here, who gives them the code,
+    // is what makes it so)
+    places.push({ ws, sub: c.sub, account, ...(lock.members.has(c.sub) ? {} : { joins: true }) });
   }
   return { places, who };
+}
+
+/// The requested workspaces this app knows about whose cloud view names a lock it has not read yet. If its held chain
+/// already contains that head, it is further ahead than the view and does not need to wait for it.
+function locksToRead(inner: Inner, hello: J): string[] {
+  const workspaces = new Set<string>();
+  for (const w of arr(get(hello, "workspaces"))) {
+    const ws = str(get(w, "ws"));
+    if (ws === null || inner.workspaces.owner(ws) === null) continue;
+    const v = view(inner, ws);
+    if (!isObject(v) || !("lock" in v)) continue;
+    const hash = str(get(v.lock, "hash")) ?? "";
+    const h = held(inner, ws);
+    if (hash === (h?.head?.hash ?? "")) continue;
+    try {
+      if (hash !== "" && h?.entries.some((e) => entryHash(e) === hash)) continue;
+    } catch {
+      // An incomplete held chain cannot prove it is ahead of the cloud view.
+    }
+    workspaces.add(ws);
+  }
+  return [...workspaces];
+}
+
+/// Workspaces whose newer lock has not been read cannot yet be used to decide who may approve.
+function withoutLocks(hello: J, excluded: string[]): J {
+  const blocked = new Set(excluded);
+  return { ...hello, workspaces: arr(get(hello, "workspaces")).filter((w) => !blocked.has(str(get(w, "ws")) ?? "")) };
 }
 
 /// One new device, met: what it asks checked, its code shown until it is typed, turned away, or too late.
@@ -179,7 +217,51 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
   return Effect.gen(function* () {
     const hello = yield* Effect.timeoutOption(d.next(), "30 seconds");
     if (hello._tag === "None" || !isObject(hello.value) || hello.value.t !== "hello") return;
-    const { places, who } = placesFor(inner, hello.value, peer, me);
+    // An app can accept a connection while its kept signing key is still being read at startup. That is not a refusal:
+    // wait for the read, unless the new device goes away, before deciding whether this device may approve it.
+    const loading = signerLoading(inner);
+    const stale = locksToRead(inner, hello.value);
+    const initial = loading === null ? placesFor(inner, withoutLocks(hello.value, stale), peer, me) : null;
+    const needLock = initial === null || initial.places.length === 0;
+    let receive = () => d.next();
+    let asked = initial;
+    if ((loading !== null && arr(get(hello.value, "workspaces")).length > 0) || (needLock && stale.length > 0)) {
+      // A host stream read may continue after its waiting effect is interrupted. Keep the same read alive and use its
+      // result as the first message after showing the code, so it cannot consume that message behind another read.
+      const pending = yield* Effect.forkChild(Effect.orElseSucceed(d.next(), () => null));
+      const ready = Effect.gen(function* () {
+        if (loading !== null) yield* loading;
+        const stale = locksToRead(inner, hello.value);
+        let places = placesFor(inner, withoutLocks(hello.value, stale), peer, me);
+        // A newer lock is already known but still loading. If no other workspace can answer now, wait for that read:
+        // a device just approved in the newer lock can then show this try's code. A ready workspace can proceed now.
+        if (signerOf(inner) !== null && places.places.length === 0) {
+          const completed = yield* Queue.unbounded<void>();
+          yield* Effect.forkChild(Effect.forEach(stale, (ws) =>
+            Effect.andThen(Effect.result(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws))), Queue.offer(completed, undefined)),
+          { concurrency: "unbounded", discard: true }));
+          // Recheck after each read: an eligible workspace need not wait for an unrelated slow read. A read may
+          // succeed while the cloud view moves on again, so never use a lock still known to be behind.
+          for (const _ of stale) {
+            yield* Queue.take(completed);
+            places = placesFor(inner, withoutLocks(hello.value, locksToRead(inner, hello.value)), peer, me);
+            if (places.places.length > 0) break;
+          }
+        }
+        return places;
+      });
+      const result = yield* Effect.raceFirst(Effect.map(ready, (places) => ({ places }) as const), Effect.as(Fiber.join(pending), { away: true } as const));
+      if ("away" in result) return;
+      asked = result.places;
+      let first = true;
+      receive = () => {
+        if (!first) return d.next();
+        first = false;
+        return Fiber.join(pending);
+      };
+    }
+    asked ??= placesFor(inner, hello.value, peer, me);
+    const { places, who } = asked;
     if (places.length === 0 || who === null) return yield* d.send({ t: "no", error: "not_here" });
     const all = askingsOf(inner);
     const before = all.get(peer);
@@ -201,7 +283,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
         const wrong = Effect.suspend(() => (tries >= PAIR_TRIES ? d.send({ t: "no", error: "tries" }) : d.send({ t: "wrong", left: PAIR_TRIES - tries })));
         for (;;) {
           const next = yield* Effect.raceAllFirst([
-            Effect.map(d.next(), (m) => ({ m }) as const),
+            Effect.map(receive(), (m) => ({ m }) as const),
             Effect.as(Deferred.await(asking.away), { away: true } as const),
             Effect.as(Effect.sleep(Math.max(0, asking.until - inner.host.nowMs())), { late: true } as const),
           ]);
@@ -235,7 +317,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
 }
 
 /// The new device signed in where it asked and this device approves it: an app as one that signs too, a web page for
-/// WEB_DEVICE_SECS.
+/// WEB_DEVICE_SECS; its person made a member first where the lock has not heard of them.
 function approve(inner: Inner, a: Asking): Effect.Effect<J> {
   return Effect.gen(function* () {
     const done: string[] = [];
@@ -244,7 +326,8 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const body: J = { id: a.device, sub: p.sub, kind: a.kind, label: a.label };
       if (a.kind === "app" && a.signKey !== null) body.sign_key = a.signKey;
       if (a.kind === "web") body.exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
-      const signed = yield* Effect.result(new Lock(inner, p.ws, p.account, null, true).append("device", body));
+      const lock = new Lock(inner, p.ws, p.account, null, true);
+      const signed = yield* Effect.result(Effect.andThen(p.joins === true ? lock.admit(p.sub, a.email) : Effect.void, lock.append("device", body)));
       if (signed._tag === "Success") done.push(p.ws);
       else failed.push({ ws: p.ws, error: signed.failure.message });
       yield* Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" });
@@ -259,14 +342,19 @@ function shown(inner: Inner): J[] {
   return [...askingsOf(inner).values()]
     .filter((a) => !a.hidden)
     .sort((a, b) => a.at - b.at)
-    .map((a) => ({
-      device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
-      deviceText: deviceText(a), until: a.until, untilText: untilText(inner, a.until),
-      workspaces: a.places.map((p) => {
-        const v = view(inner, p.ws);
-        return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
-      }),
-    }));
+    .map((a) => {
+      // Who reads the code out decides this: that it also lets someone new into the lock is said as they do.
+      const joins = a.places.filter((p) => p.joins === true).map((p) => nameOf(inner, p.ws));
+      return {
+        device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
+        deviceText: deviceText(a) + (joins.length > 0 ? t("core-misc.lock.pairJoins", { names: joins.join(t("core-misc.lock.listSep")) }) : ""),
+        until: a.until, untilText: untilText(inner, a.until),
+        workspaces: a.places.map((p) => {
+          const v = view(inner, p.ws);
+          return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
+        }),
+      };
+    });
 }
 
 /// 14:05 前有效: when a code is too old, as the clock says it here.
@@ -295,7 +383,9 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]> };
+/// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
+/// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -303,6 +393,8 @@ let runs = 0;
 function mine(inner: Inner, ws: string): J | null {
   const y = tryings.get(inner);
   if (!y || !y.workspaces.includes(ws)) return null;
+  const credentialError = y.credentialErrors?.get(ws);
+  if (credentialError !== undefined) return { state: "failed", devices: 0, error: credentialError };
   // Signed in elsewhere, not here: no trusted device that answered approves it in this one (2026-11-04: a web page
   // waiting in three workspaces, approved in two, showed this one's page as it was, its code typed, as though nothing
   // had come of it).
@@ -330,10 +422,9 @@ function drop(y: Trying): void {
 /// The workspaces this device waits in (a lock without it, or, an app, one where it does not sign with its key), and
 /// the devices that may approve it in them: its person's own that sign, and the owners' and admins' while the person
 /// has none that signs (their first; as the checked lock says, where it checks out: views/pair.ts `placesFor`).
-/// `approvers`: those of each workspace; `trusted`: all of them, each once.
-function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted: string[]; approvers: Map<string, string[]> } {
+/// `approvers`: those of each workspace.
+function waitingIn(inner: Inner, base: string): { workspaces: string[]; approvers: Map<string, string[]> } {
   const workspaces: string[] = [];
-  const trusted = new Set<string>();
   const approvers = new Map<string, string[]>();
   const signer = signerOf(inner);
   for (const [ws, sub] of inner.workspaces.owned()) {
@@ -354,13 +445,12 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted:
       const role = f.members.get(d.sub)?.role;
       const own = checked === null || checked.devices.get(d.id)?.own === true;
       if (d.id !== base && own && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || (first && (role === "owner" || role === "admin")))) {
-        trusted.add(d.id);
         here.push(d.id);
       }
     }
     approvers.set(ws, here);
   }
-  return { workspaces, trusted: [...trusted], approvers };
+  return { workspaces, approvers };
 }
 
 /// Where the new device reaches a trusted one: its mesh's endpoint, dialling the trusted device's id on PAIR_ALPN
@@ -390,26 +480,124 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     const base = mesh.deviceId();
     const before = tryings.get(inner);
     if (before) drop(before);
-    const { workspaces, trusted, approvers } = waitingIn(inner, base);
+    const { workspaces, approvers } = waitingIn(inner, base);
     if (workspaces.length === 0) return yield* Effect.fail(CoreError.invalid("this device waits in no workspace"));
     const y = trying(inner, workspaces);
     y.approvers = approvers;
-    // What it says of itself, in each workspace: a credential for its main endpoint; an app's signing key.
-    const credentials: J[] = [];
-    for (const ws of workspaces) {
-      const c = yield* Effect.result(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)));
-      if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
-    }
-    const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))) : null;
+    // What it says of itself: an app's signing key, and each workspace's credential for its main endpoint.
+    const signer = inner.host.appKeys ? yield* Effect.tapError(
+      Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message }))),
+      (error) => Effect.sync(() => {
+        // A failed key read ends the request; leaving it as "finding" would imply devices were still being contacted.
+        // A cancelled or newer request must not be changed by this one's late failure.
+        if (tryings.get(inner) !== y) return;
+        y.state = "failed";
+        y.error = error.message;
+        changed(inner, y);
+      }),
+    ) : null;
     if (signer) signerKnown(inner, signer.id);
-    const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(
       Effect.gen(function* () {
-        yield* Effect.forEach(trusted, (id) => seek(inner, y, id, relays, hello), { concurrency: "unbounded", discard: true });
-        // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials.
+        // Without any credential the trusted devices must refuse the request. A brief cloud outage used to be silently
+        // dropped here, so even after it recovered each device was asked with no credential and showed no code.
+        // Retry until one workspace can be asked, on the same schedule as the device dials. Keep partial success: a
+        // workspace whose credential failed says why, while those with credentials can still be approved.
+        let credentials: J[] = [];
+        let failures = new Map<string, CoreError>();
+        for (let n = 0; n < PAIR_DIAL_TRIES && looking(inner, y); n++) {
+          const began = inner.host.nowMs();
+          credentials = [];
+          failures = new Map();
+          // A request can connect yet never answer. Bound each attempt to the existing retry interval and fetch the
+          // workspaces together, so one slow account cannot indefinitely prevent the others from asking for a code.
+          const fetched = yield* Effect.forEach(workspaces, (ws) => Effect.map(
+            Effect.result(Effect.timeoutOption(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)), PAIR_REDIAL_MS)),
+            (result) => ({ ws, result }),
+          ), { concurrency: "unbounded" });
+          if (!looking(inner, y)) break;
+          for (const { ws, result } of fetched) {
+            if (result._tag === "Failure") failures.set(ws, result.failure);
+            else if (result.success._tag === "Some") credentials.push({ ws, credential: result.success.value.credential });
+            else failures.set(ws, CoreError.plainly("timeout", "credential request timed out"));
+          }
+          if (credentials.length > 0 || !looking(inner, y)) break;
+          // A rejected or expired login will not recover by asking again, unlike a network failure or rate limit.
+          if ([...failures.values()].every((e) => e.status !== undefined && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429)) break;
+          const wait = PAIR_REDIAL_MS - (inner.host.nowMs() - began);
+          if (wait > 0 && n + 1 < PAIR_DIAL_TRIES) yield* Effect.sleep(wait);
+        }
+        if (!looking(inner, y)) return;
+        y.credentialErrors = new Map([...failures].map(([ws, error]) => [ws, error.message]));
+        if (credentials.length === 0 && failures.size > 0) {
+          y.state = "failed";
+          y.error = failures.values().next().value!.message;
+          changed(inner, y);
+          return;
+        }
+        changed(inner, y);
+        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
+        // A lock can move while credentials or devices are being sought. Follow it for this try, asking newly named
+        // approvers too, but never dial one a second time after its seek ended: it may already be showing a code.
+        const asked = new Set<string>();
+        const done = Deferred.makeUnsafe<void>();
+        let active = 1; // Hold completion until the initial seeks and any pending lock reads have been started.
+        y.searching = true;
+        const finish = () => {
+          if (--active === 0) {
+            y.searching = false;
+            delete y.lockMoved;
+            delete y.lockReading;
+            Deferred.doneUnsafe(done, Effect.void);
+          }
+        };
+        const track = (work: Effect.Effect<void>) => {
+          active++;
+          inner.runner.fork(Effect.ensuring(work, Effect.sync(finish)));
+        };
+        const credentialWorkspaces = new Set(credentials.map((c) => c.ws as string));
+        const reads = new Set<string>();
+        const watchRead = (ws: string) => {
+          if (!looking(inner, y) || !credentialWorkspaces.has(ws) || !locksToRead(inner, hello).includes(ws)) return;
+          // A later head may arrive while this workspace is already reading. Follow that head too; the scheduler
+          // folds requests for the same read together, while each wait has its own deadline.
+          const key = JSON.stringify([ws, str(get(get(view(inner, ws), "lock"), "hash"))]);
+          if (reads.has(key)) return;
+          reads.add(key);
+          const work = Effect.ignore(Effect.timeoutOption(inner.scheduler.ask("cloud", `lock/${ws}`, Priority.asked, read(inner, ws)), PAIR_DIAL_TRIES * PAIR_REDIAL_MS));
+          track(Effect.ensuring(work, Effect.sync(() => { reads.delete(key); })));
+        };
+        const refresh = () => {
+          if (!looking(inner, y)) return;
+          const current = waitingIn(inner, base);
+          y.approvers = current.approvers;
+          changed(inner, y);
+          for (const ws of y.workspaces) {
+            if (!credentialWorkspaces.has(ws)) continue;
+            for (const id of current.approvers.get(ws) ?? []) {
+              if (asked.has(id)) continue;
+              asked.add(id);
+              track(seek(inner, y, id, relays, hello));
+            }
+          }
+        };
+        y.lockMoved = (ws) => { if (y.workspaces.includes(ws)) refresh(); };
+        y.lockReading = (ws) => { if (y.workspaces.includes(ws)) watchRead(ws); };
+        // If a newer head is already known, wait a bounded time for its read even when the old approvers all answer
+        // immediately. A ready workspace can show its code meanwhile, without waiting for another workspace's read.
+        for (const ws of locksToRead(inner, hello)) watchRead(ws);
+        refresh();
+        finish();
+        yield* Deferred.await(done);
+        // Each reached without a code shown, or not reached in PAIR_DIAL_TRIES dials. If a code went away while the
+        // others were still being sought, say why it ended once none of the remaining devices can show one.
         if (tryings.get(inner) !== y || y.state !== "finding") return;
-        y.state = y.met.size > 0 ? "code" : "none";
+        if (y.met.size > 0) y.state = "code";
+        else if (y.lastEnds) {
+          y.state = "failed";
+          y.error = endedText(y.lastEnds);
+        } else y.state = "none";
         changed(inner, y);
       }),
     );
@@ -462,8 +650,8 @@ export function trying(inner: Inner, workspaces: string[]): Trying {
 
 /// A trusted device that shows a code, kept: what it says while no code is being checked (`no`: turned away, the code
 /// too old; its end), and its code's time up with no word from it (PAIR_WAIT_MS and PAIR_GRACE_MS since it came), end
-/// it here at once, and the last one ended says why (`endedText`), so the page asks again; what it answers a code
-/// typed is `tryOne`'s.
+/// it here at once. If another device is still being sought, keep looking; otherwise the last one ended says why
+/// (`endedText`), so the page asks again. What it answers a code typed is `tryOne`'s.
 export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspaces: string[]): Met {
   const heard = Effect.runSync(Queue.unbounded<J | null>());
   const closed = Deferred.makeUnsafe<void>();
@@ -482,8 +670,15 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
     d.close();
     y.met.delete(id);
     if (y.met.size === 0) {
-      y.state = "failed";
-      y.error = endedText([why]);
+      if (y.searching) {
+        y.state = "finding";
+        y.lastEnds = [why];
+        y.lost = true;
+        delete y.error;
+      } else {
+        y.state = "failed";
+        y.error = endedText([why]);
+      }
       delete y.left;
     } else y.lost = true;
     changed(inner, y);
@@ -527,7 +722,10 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     const base = (yield* inner.mesh()).deviceId();
     y.state = "checking";
     changed(inner, y);
-    const results = yield* Effect.forEach([...y.met.values()], (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
+    // A device can show its code while these are being checked. It did not receive this code and must not be reported
+    // as having rejected it.
+    const checked = [...y.met.values()];
+    const results = yield* Effect.forEach(checked, (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
     let approved: J | null = null;
     let left = 0;
     const ends: CoreError[] = [];
@@ -557,18 +755,31 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
       y.state = "done";
       y.approvedIn = arr(get(approved, "workspaces")).filter((w): w is string => typeof w === "string");
       for (const ws of y.approvedIn) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
-    } else if (y.met.size > 0) {
+    } else if (checked.some((m) => y.met.get(m.id) === m)) {
       y.state = "wrong";
       y.left = left;
       // Wrong at those still showing a code, while another ended as it was proved to: the code may well have been that
       // one's (its line gone, its app put away), not wrong at all.
       y.error = t(ends.length > 0 || y.lost ? "core-misc.lock.pairWrongOrGone" : "core-misc.lock.pairWrong", { n: left });
+    } else if (y.met.size > 0) {
+      // A new code arrived while the previous one was checked and lost. Leave it ready to be entered.
+      y.state = "code";
+      y.lost = true;
+      delete y.left;
+      delete y.error;
+    } else if (y.searching) {
+      // The checked code is gone, but other trusted devices or newer lock entries are still being sought.
+      y.state = "finding";
+      y.lastEnds = ends;
+      y.lost = true;
+      delete y.left;
+      delete y.error;
     } else {
       y.state = "failed";
       y.error = endedText(ends);
     }
     changed(inner, y);
-    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", y.error ?? "") : new CoreError("pair_ended", y.error ?? ""));
+    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", y.error ?? "") : new CoreError("pair_ended", endedText(ends)));
     return approved;
   });
 }
@@ -635,6 +846,8 @@ export function install(_inner: Inner): void {
   pairs.mine = mine;
   pairs.deny = deny;
   pairs.hide = hide;
+  pairs.moved = (inner, ws) => tryings.get(inner)?.lockMoved?.(ws);
+  pairs.reading = (inner, ws) => tryings.get(inner)?.lockReading?.(ws);
   pairs.run = (inner, name, _ws, params) => {
     if (name === "pair") return begin(inner);
     if (name === "pairCode") return prove(inner, str(params.code) ?? "");

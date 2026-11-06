@@ -15,8 +15,7 @@ fn rows_sized(
   comes~ : (Entry) -> Bool,
   middle~ : (Entry) -> Bool,
   grown~ : (Entry) -> Bool,
-  lead~ : (Entry, Int) -> Double,
-  lead_in_layout~ : (Entry, Int) -> (() -> Double),
+  lead_in_layout~ : (Entry, Int) -> (Double) -> Double,
   own~ : (Entry) -> Bool,
 ) -> @ui.NodeRowsIndexed[Entry] {
   // (the rows whose revisions are counted from `base` on, and the last revision said)
@@ -74,7 +73,6 @@ fn rows_sized(
     comes~,
     middle~,
     grown~,
-    lead~,
     lead_in_layout~,
     own~,
   )

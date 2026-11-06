@@ -336,7 +336,7 @@ pub let code_big_tracking : @ui.Tracking
 
 pub fn code_block(@ui.Ctx, String, String, colours? : String?, face? : Int32?) -> Unit
 
-pub fn code_block_node(@view.View, () -> String, () -> String, () -> String?) -> Unit
+pub fn code_block_node(@view.View, () -> String, () -> String, () -> String?, face? : () -> Int32?) -> Unit
 
 pub let code_edge : @ui.Color
 
@@ -888,6 +888,8 @@ pub fn in_pane() -> Bool
 
 pub fn in_panel() -> Bool
 
+pub fn in_panel_node(@view.View) -> Bool
+
 pub fn in_small_panel() -> Bool
 
 pub fn initial(String) -> String
@@ -1116,9 +1118,11 @@ pub let mark_yellow : Int64
 
 pub fn markdown(@ui.Ctx, String, key? : String, tree? : @json.Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, fit_tables? : Bool, paths? : Bool, text_face? : Int32?, code_face? : Int32?) -> Int32
 
-pub fn markdown_node(@view.View, () -> String, tree? : () -> @json.Json?, size? : () -> Double, line? : Double, ink? : () -> Int64, document? : Bool, bleed? : Double, copy? : Bool, paths? : Bool, found? : () -> Array[String], on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, links_made? : ((@view.View, @ui.RunsLinks, () -> Array[@text.Run]) -> Unit)?, chat_title? : (String) -> String?, code? : (String) -> ((@view.View, () -> String) -> Unit)?, files? : (String) -> PlacedNode?, screens? : ScreensNode, one_line? : Bool, tracking? : () -> @view.Spacing) -> @view.View
+pub fn markdown_node(@view.View, () -> String, tree? : () -> @json.Json?, size? : () -> Double, line? : Double, ink? : () -> Int64, document? : Bool, bleed? : Double, bleed_by? : (@view.View, (Double) -> Double), copy? : Bool, paths? : Bool, found? : () -> Array[String], on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, links_made? : ((@view.View, @ui.RunsLinks, () -> Array[@text.Run]) -> Unit)?, chat_title? : (String) -> String?, code? : (String) -> ((@view.View, () -> String) -> Unit)?, files? : (String) -> PlacedNode?, screens? : ScreensNode, one_line? : Bool, tracking? : () -> @view.Spacing, text_face? : () -> Int32?, code_face? : () -> Int32?) -> @view.View
 
 pub fn markdown_part(@ui.Ctx, String, Array[@json.Json], String, apart? : Bool, size? : Double, ink? : Int64, line? : Double, serif? : Bool, document? : Bool, found? : Array[String], on_link? : (String) -> Unit) -> Unit
+
+pub fn markdown_part_node(@view.View, String, Array[@json.Json], apart? : Bool, size? : () -> Double, line? : () -> Double, serif? : () -> Bool, ink? : () -> Int64, document? : Bool, found? : () -> Array[String], on_link? : (String) -> Unit, text_face? : () -> Int32?, code_face? : () -> Int32?) -> @view.View
 
 pub let markdown_read : @ref.Ref[((String, (@json.Json?) -> Unit) -> Unit)?]
 
@@ -1448,7 +1452,7 @@ pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
-pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer) -> Unit
+pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer, seen? : (Array[String]) -> Unit) -> Unit
 
 pub fn page_none_node(@view.View, () -> String) -> Unit
 
@@ -1526,6 +1530,8 @@ pub fn panel_card_out() -> @ui.Style
 
 pub fn panel_card_room(@ui.Ctx, @ui.Style, () -> Unit) -> Int32
 
+pub fn panel_card_room_node(@view.View, (@view.View) -> Unit) -> @view.View
+
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
@@ -1572,9 +1578,15 @@ pub let panel_pill : Double
 
 pub let panel_radius : @ui.Radius
 
+pub fn panel_row_context(@view.View) -> PanelRowContext
+
 pub fn panel_row_in() -> @ui.Style
 
+pub fn panel_row_layout(@view.View, Bool, Bool) -> PanelRowLayout
+
 pub fn panel_row_reach() -> @ui.Style
+
+pub fn panel_rows_lent(@view.View, () -> PanelRowContext) -> Unit
 
 pub fn panel_rule_over() -> Double
 
@@ -1964,6 +1976,8 @@ pub fn row_ripple(@ui.Ctx, Int32) -> Unit
 
 pub fn row_tag_node(@view.View, () -> String) -> Unit
 
+pub fn row_tool_of(String, (@view.View) -> Unit, drop? : Int32, instead? : () -> Array[MenuItem]) -> RowTool
+
 pub let row_top_in_y : Double
 
 pub fn row_words_foot() -> Double
@@ -2177,6 +2191,8 @@ pub fn slack_mark(@ui.Ctx, Double) -> Int32
 pub let sleep_ms : Double
 
 pub fn slider(@ui.Ctx, String, Double, Double, Double, step? : Double, ink? : Int64, accent? : Int64, ground? : Int64) -> Double
+
+pub fn slider_node(@view.View, () -> Double, () -> Double, () -> Double, (Double) -> Unit, (Double) -> Unit, step? : () -> Double, label? : () -> String, ink? : () -> Int64, accent? : () -> Int64, ground? : () -> Int64, disabled? : () -> Bool, cancel? : () -> Unit) -> @view.View
 
 pub let small_button : @ui.Len
 
@@ -2419,6 +2435,8 @@ pub let tools_apart : Double
 pub fn tools_line() -> @ui.Style
 
 pub fn tools_row(@ui.Ctx, String, Array[Tool], more? : Array[MenuItem?], label~ : String, style? : @ui.Style) -> Unit
+
+pub fn tools_row_node(@view.View, () -> Array[RowTool], () -> Array[MenuItem?], () -> String, tips? : TipLayer) -> @view.View
 
 pub fn top_bar_actions_lent(@view.View) -> Unit
 
@@ -3192,6 +3210,21 @@ pub(all) struct Palette {
   code_ground : Int64
 }
 
+#derive(Eq, Show)
+pub(all) struct PanelRowContext {
+  sides_in : Double
+  rows_out : Double
+  words_in : Double
+  small : Bool
+}
+
+#derive(Eq, Show)
+pub(all) struct PanelRowLayout {
+  out : Double
+  padding : Double?
+  inner : Bool
+}
+
 #derive(Eq)
 pub(all) enum PanelTone {
   Plainly
@@ -3357,6 +3390,13 @@ pub(all) enum RowLead {
   LeadMade((@view.View) -> Unit)
 }
 
+pub(all) struct RowTool {
+  key : String
+  drop : Int32
+  draw : (@view.View) -> Unit
+  instead : () -> Array[MenuItem]
+}
+
 pub(all) struct Rows {
   pick : Double
   title : @ui.TextStyle
@@ -3397,6 +3437,11 @@ pub fn Surface::radius(Self) -> @ui.Radius
 pub fn Surface::style(Self) -> @ui.Style
 
 type SyncRest
+
+pub(all) enum TableBleed {
+  Bleed(Double)
+  BleedBy(@view.View, (Double) -> Double)
+}
 
 #derive(Eq, @debug.Debug)
 pub(all) struct TextMatch {

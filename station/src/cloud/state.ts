@@ -5,6 +5,7 @@ import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync
 import { dirname, join } from "node:path";
 import { nowSecs, writePrivate } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
+import { readJsonFile } from "../ops/json-file.ts";
 import { log } from "../ops/log.ts";
 import { setStationCloud } from "../ops/i18n.ts";
 import { type Entry, type LockState, apply, asEntry, entryHash, fold } from "./lock.ts";
@@ -109,7 +110,7 @@ export function moveFormerHost(data: string) {
 /// The state as the file has it, its optional parts filled as the Rust station's serde defaults fill them.
 export function readState(data: string): CloudState | null {
   if (!existsSync(statePath(data))) return null;
-  const raw = JSON.parse(readFileSync(statePath(data), "utf8"));
+  const raw = readJsonFile(statePath(data));
   const state: CloudState = { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
   if (raw.joined !== undefined) state.joined = joinedOf(raw.joined);
   if (raw.provider !== undefined) state.provider = providerOf(raw.provider);
@@ -221,7 +222,13 @@ export class Cloud {
   /// The state read again from its file; told when it changed, or anyway (`tell`: the station joined a workspace, and
   /// what to pin there is to be asked for at once, cloud.json as the plane's frame left it or not).
   reload(tell = false) {
-    const next = readState(this.data);
+    let next: CloudState | null;
+    try {
+      next = readState(this.data);
+    } catch (error) {
+      log.warn("cloud", "cloud.json could not be read; keeping the previous state", { error: (error as Error).message });
+      return;
+    }
     if (tell || JSON.stringify(next) !== JSON.stringify(this.state)) {
       this.state = next;
       setStationCloud(next?.origin);

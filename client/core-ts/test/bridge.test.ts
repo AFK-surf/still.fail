@@ -9,11 +9,14 @@ import { DatabaseSync } from "node:sqlite";
 import { Effect, Fiber } from "effect";
 import { FakeCloud } from "../harness/cloud.ts";
 import { apply } from "../src/delta.ts";
+import { DecisionForms } from "../src/forms.ts";
 import { Bridge, BridgeHost, bridgeIroh, startBridged } from "../src/hosts/bridge.ts";
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
+import type { ClientId, Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
+import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
 import { Wakes } from "../src/wake.ts";
@@ -145,6 +148,68 @@ test("a_core_on_the_bridge_signs_in_and_hears_the_cloud", async () => {
   assert.deepEqual(fatal, []);
   for (const op of ["storage.get", "db.read", "fetch", "ws.open", "ws.next"]) assert.ok(native.calls.includes(op), op);
   await cloud.close();
+  native.host.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a_draft_opened_and_dropped_at_once_on_the_bridge_is_dropped_after_it_opened_and_lets_its_station_go", async (t) => {
+  // (each change of a draft as the core makes it, and as it is done; the store its drafts watch their station in)
+  const changes: string[] = [];
+  const got: { drafts?: DecisionForms; store?: Store } = {};
+  const change = DecisionForms.prototype.change;
+  DecisionForms.prototype.change = function (this: DecisionForms, topic: Topic, owner: ClientId, action: string, patch: J) {
+    got.drafts = this;
+    changes.push(action);
+    const out = change.call(this, topic, owner, action, patch);
+    changes.push(`${action} done`);
+    return out;
+  };
+  const watch = Store.prototype.watch;
+  Store.prototype.watch = function (this: Store, topic: Topic, onChange: () => void) {
+    if (topic.topic === "overview") got.store = this;
+    return watch.call(this, topic, onChange);
+  };
+  t.after(() => {
+    DecisionForms.prototype.change = change;
+    Store.prototype.watch = watch;
+  });
+  const dir = mkdtempSync(join(tmpdir(), "bridge-draft-"));
+  const native = new NodeShell(dir);
+  const fatal: string[] = [];
+  const core = startBridged(native, "http://127.0.0.1:1", false, "android", (r) => fatal.push(r));
+  native.bridge = core.bridge;
+  const client = core.connect();
+  const states = new Map<number, J>();
+  const answered: [number, J][] = [];
+  const read = () => {
+    for (const [, json] of native.emitted.splice(0)) {
+      const m = JSON.parse(json);
+      if ("value" in m) states.set(m.id, m.value);
+      else if ("delta" in m) states.set(m.id, apply(states.get(m.id), m.delta));
+      else if ("ok" in m || "error" in m) answered.push([m.id, "ok" in m ? { ok: m.ok } : { error: m.error }]);
+    }
+  };
+  const until = async (done: () => boolean) => {
+    for (read(); !done(); read()) await native.heard();
+  };
+  const form = { station: "ws1/st1", form: "ws1/st1" };
+  const topic = { topic: "decisionForm", ...form };
+  core.receive(client, JSON.stringify({ id: 1, subscribe: topic }));
+  await until(() => states.has(1));
+  // (opened, then dropped as its page is left before the core answered: the two one after the other as the app sends
+  // them, nothing waited for between)
+  core.receive(client, JSON.stringify({ id: 2, call: "automaticDecisions.form.open", params: form }));
+  core.receive(client, JSON.stringify({ id: 3, call: "automaticDecisions.form.drop", params: form }));
+  await until(() => answered.length === 2);
+  // each change made and done before the next is begun, in the order sent, each answered in that order
+  assert.deepEqual(changes, ["open", "open done", "drop", "drop done"]);
+  assert.deepEqual(answered.map(([id]) => id), [2, 3]);
+  assert.ok(answered.every(([, a]) => "ok" in a), JSON.stringify(answered));
+  // no draft held after (what the page reads of it); nothing holds its station's overview for it
+  assert.equal(got.drafts!.value(topic), null);
+  assert.ok(got.store, "its opening watched its station's overview");
+  assert.equal(got.store!.inUse({ topic: "overview", station: "ws1/st1" }), false);
+  assert.deepEqual(fatal, []);
   native.host.close();
   rmSync(dir, { recursive: true, force: true });
 });

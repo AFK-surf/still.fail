@@ -560,16 +560,27 @@ test "the app tells the core it is shown and in front, in which workspace, and w
 }
 
 ///|
+/// The room the composer takes at its page's foot as drawn: from its ground's top as painted (its laid box with its
+/// ground on its way to its shape, motion_wbtest's) to the window's foot.
+fn composer_drawn_room(t : @ui.Tester) -> Double {
+  let (_, window_h) = t.size()
+  let (cap, _) = composer_ground_node()
+  window_h - cap.tree.drawn_of(cap.id()).unwrap().y + cap.tree.ground_drawn_of(cap.id()).3
+}
+
+///|
 test "words sent as the composer grows a line hold its room where it is drawn, the list's foot not ahead of it" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
   t.type_text("第一行")
+  // (opened, one line, come to stand: the least room the list keeps under it)
+  t.run_for(@ui.move_most_ms)
   let foot = fn() {
     let rows = t.rows()
     rows[rows.length() - 1].2
   }
-  let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let before = composer_drawn_room(t)
   let over = foot() - before
   for line in ["第二行", "第三行", "第四行"] {
     t.enter()
@@ -578,15 +589,15 @@ test "words sent as the composer grows a line hold its room where it is drawn, t
   // half way through its growing, sent: the composer held as tall as it shows, the rows over it where they were, with
   // it, till the words let go of it
   t.run_for(@ui.row_size_ms / 2.0)
-  let growing = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let growing = composer_drawn_room(t)
   assert_true(growing > before)
   assert_eq(foot(), growing + over)
   tap_send(t)
   assert_eq(named(calls, "chat.send").length(), 1)
   // (a while on, the words still in it)
   t.run_for(@ui.row_size_ms / 4.0)
-  assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
-  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
+  assert_eq(foot(), composer_drawn_room(t) + over)
+  assert_eq(composer_drawn_room(t), growing)
   // (the words flown, the composer let go of)
   t.run_for(@ui.move_most_ms)
   t.run_for(draft_keep_ms)
@@ -599,27 +610,29 @@ test "the list keeps clear the room the composer takes in the very frame it grow
   let t = fake_core(calls)
   t.tap_text("发消息")
   t.type_text("第一行")
+  // (opened, one line, come to stand: the least room the list keeps under it)
+  t.run_for(@ui.move_most_ms)
   let foot = fn() {
     let rows = t.rows()
     rows[rows.length() - 1].2
   }
-  let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let before = composer_drawn_room(t)
   // (what the foot keeps over the composer's room: its 10, and the bell's room, the chat's cards waiting to be decided)
   let over = foot() - before
-  // lines enough that it outgrows the least room the list keeps (composer_room): in the frame that takes each, the
+  // lines enough that it outgrows the least room the list keeps (composer_room_in): in the frame that takes each, the
   // list's foot is already the room the composer takes then (not the one it took a frame before)
   for line in ["第二行", "第三行", "第四行", "第五行", "第六行"] {
     t.enter()
     t.type_text(line)
-    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
+    assert_eq(foot(), dmax(composer_drawn_room(t), before) + over)
   }
   // and each frame of its morph, as the display draws them, to its end
   let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
-    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
+    assert_eq(foot(), dmax(composer_drawn_room(t), before) + over)
   }
-  assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") > before)
+  assert_true(composer_drawn_room(t) > before)
   t.run_for(draft_keep_ms)
   t.assert_idle()
 }
@@ -815,8 +828,8 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   // every frame the rows steady (rows_steady.mbt: the foot's room opening at once, as the words' flight was over, put
   // every row over it up by it in one frame), and the foot where the composer comes to stand
   t.run_for(@ui.move_most_ms)
-  let over = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let over = foot() - composer_drawn_room(t)
   t.run_for(draft_keep_ms)
-  assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
+  assert_eq(foot() - composer_drawn_room(t), over)
   t.assert_idle()
 }
