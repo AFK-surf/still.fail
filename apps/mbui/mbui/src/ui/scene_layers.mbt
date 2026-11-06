@@ -73,6 +73,9 @@ priv struct SceneLayer {
   block_segs : Array[Double]
   mut block_seg_base : Int
   mut block_owners : OwnersRun?
+  /// where in its block each layer it holds goes (its instance and its piece there), and which: its block its own
+  /// drawing alone, what it holds each by its own block (Ctx::scene_emitted)
+  block_refs : Array[(Int, Int, @view.NodeId)]
 }
 
 ///|
@@ -1149,32 +1152,10 @@ fn Ctx::scene_copied(
   guard !scene.moved_layers.contains(id) else { return copy_not(id, "placed otherwise") }
   // (what it was drawn in, as it is drawn in now: its key; another, drawn anew)
   guard scene_began_same(l, held, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
-  // (from its own block: all it drew as it was last drawn, what it holds with it)
-  let n = l.block_n
-  while (self.ninst + n + 1) * inst_size > self.inst.length() {
-    self.grow()
-  }
-  let at = self.ninst
-  l.block.blit_to(self.inst, len=n * inst_size, dst_offset=at * inst_size)
-  let seg0 = self.segs.length() / 4
-  for v in l.block_segs {
-    self.segs.push(v)
-  }
-  let dseg = (seg0 - l.block_seg_base).to_double()
-  for b in l.bands {
-    let o = (at + b) * inst_size
-    self.inst[o + 12] = self.inst[o + 12] + dseg
-  }
-  self.ninst = at + n
-  match l.block_owners {
-    Some(o) if inst_owners_kept() => owners_put(o, at)
-    _ => ()
-  }
-  scene_moved_to(l, at, seg0)
-  // (its pictures kept as shown this frame: asked again, decoded as they were)
-  for i in l.images {
-    @signals.untracked(fn() { self.image_for(i.0, i.1) |> ignore })
-  }
+  // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
+  // shown, asked again)
+  self.scene_emitted(l)
+  let n = l.count
   scene_work.copied = scene_work.copied + 1
   scene_work.copied_insts = scene_work.copied_insts + n
   true
@@ -1223,29 +1204,6 @@ fn scene_place_now(tree : @view.Tree, l : SceneLayer) -> (Double, Double, Double
   match tree.placed_in(l.id, o.at, oa, os) {
     Some((x, y, a, s, ux, uy)) => Some((ox + x, oy + y, a, s, oux + ux, ouy + uy))
     None => None
-  }
-}
-
-///|
-/// Layer `l`, and all it holds, put with its first instance at `at` and its first piece at `seg`, as this frame has
-/// it.
-fn scene_moved_to(l : SceneLayer, at : Int, seg : Int) -> Unit {
-  let d = at - l.start
-  let ds = seg - l.seg_from
-  let go = fn(l : SceneLayer) {
-    l.start = l.start + d
-    l.seg_from = l.seg_from + ds
-    l.seen = scene.frame
-  }
-  let todo = [l]
-  while todo.pop() is Some(x) {
-    go(x)
-    for i in x.inner {
-      match scene.layers.get(i) {
-        Some(y) => todo.push(y)
-        None => ()
-      }
-    }
   }
 }
 
@@ -1302,6 +1260,7 @@ fn Ctx::scene_drawn(
         block_segs: [],
         block_seg_base: 0,
         block_owners: None,
+        block_refs: [],
       }
       scene.layers[id] = l
       l
@@ -1483,12 +1442,6 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
     l.anchors[i] = (a.0, a.1 - k0)
   }
   anchors_layer_said(l)
-  l.bands.clear()
-  for k in k0..<self.ninst {
-    if self.inst[k * inst_size + 5] == 11.0 {
-      l.bands.push(k - k0)
-    }
-  }
   // (an old view's plots the old frame's, drawn from each frame it paints)
   if l.own_only {
     l.plots.clear()
@@ -1848,19 +1801,133 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
 }
 
 ///|
-/// What layer `l` drew now (its instances from `k0`, its shapes' pieces from `s0`, who drew each where that is kept)
-/// kept as its own block: what it is copied from where it is kept (Ctx::scene_copied), never another frame's instances.
+/// What layer `l` drew now (its instances from `k0`, its shapes' pieces from `s0`) kept as its own block: its own
+/// drawing alone, each layer it holds put there by a reference (where it goes in the block, and which), never what
+/// that one drew (Flutter's PaintingContext appending a child's layer, Android's drawRenderNode of a child's). Its bands
+/// (kind 11) among its own instances, by where they are in the block, and who drew each of its own where that is kept.
 fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit {
-  let n = self.ninst - k0
-  if l.block.length() < n * inst_size {
-    l.block = FixedArray::make(n * inst_size * 2, 0.0)
+  // (the layers it holds, as this frame has them in it, in the order drawn)
+  let held : Array[SceneLayer] = []
+  for i in l.inner {
+    match scene.layers.get(i) {
+      Some(c) if c.seen == scene.frame && c.start >= k0 && c.start + c.count <= self.ninst => held.push(c)
+      _ => ()
+    }
   }
-  self.inst.blit_to(l.block, len=n * inst_size, src_offset=k0 * inst_size)
-  l.block_n = n
+  held.sort_by(fn(a, b) { a.start.compare(b.start) })
+  let own = self.ninst - k0 - held.fold(init=0, fn(n, c) { n + c.count })
+  if l.block.length() < own * inst_size {
+    l.block = FixedArray::make(own * inst_size * 2 + inst_size, 0.0)
+  }
+  l.block_n = 0
   l.block_segs.clear()
-  for q in (s0 * 4)..<self.segs.length() {
-    l.block_segs.push(self.segs[q])
+  l.block_refs.clear()
+  l.bands.clear()
+  let owners : OwnersRun? = if inst_owners_kept() {
+    Some({ owner: [], cell: [], tree: [], mark: [], bone: [] })
+  } else {
+    None
   }
+  let take = fn(from : Int, to : Int, sfrom : Int, sto : Int) {
+    if to > from {
+      self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
+      for k in from..<to {
+        if self.inst[k * inst_size + 5] == 11.0 {
+          l.bands.push(l.block_n + k - from)
+        }
+      }
+      match owners {
+        Some(o) => {
+          let r = owners_run(from, to)
+          o.owner.append(r.owner)
+          o.cell.append(r.cell)
+          o.tree.append(r.tree)
+          o.mark.append(r.mark)
+          o.bone.append(r.bone)
+        }
+        None => ()
+      }
+      l.block_n = l.block_n + to - from
+    }
+    for q in (sfrom * 4)..<(sto * 4) {
+      l.block_segs.push(self.segs[q])
+    }
+  }
+  let mut at = k0
+  let mut sat = s0
+  for c in held {
+    take(at, c.start, sat, c.seg_from)
+    l.block_refs.push((l.block_n, l.block_segs.length() / 4, c.id))
+    at = c.start + c.count
+    sat = c.seg_from + c.seg_count
+  }
+  take(at, self.ninst, sat, self.segs.length() / 4)
   l.block_seg_base = s0
-  l.block_owners = if inst_owners_kept() { Some(owners_run(k0, self.ninst)) } else { None }
+  l.block_owners = owners
+}
+
+///|
+/// Layer `l` put into the frame from its own block and those of the layers it holds, each where its reference in the
+/// block says, in the order drawn (Flutter's compositing a layer's children by their references): where each is in the
+/// frame said by this, its bands' first pieces told where its pieces are now, who drew each where that is kept.
+fn Ctx::scene_emitted(self : Ctx, l : SceneLayer) -> Unit {
+  let at = self.ninst
+  let seg0 = self.segs.length() / 4
+  // (its own pieces in the frame as they were in it as it was drawn: the same in between what it holds)
+  let dseg = (seg0 - l.block_seg_base).to_double()
+  let ip = Ref(0)
+  let sp = Ref(0)
+  let band = Ref(0)
+  let put = fn(to : Int, sto : Int) {
+    let n = to - ip.val
+    if n > 0 {
+      while (self.ninst + n + 1) * inst_size > self.inst.length() {
+        self.grow()
+      }
+      let k = self.ninst
+      l.block.blit_to(self.inst, len=n * inst_size, src_offset=ip.val * inst_size, dst_offset=k * inst_size)
+      while band.val < l.bands.length() && l.bands[band.val] < to {
+        let o = (k + l.bands[band.val] - ip.val) * inst_size
+        self.inst[o + 12] = self.inst[o + 12] + dseg
+        band.val = band.val + 1
+      }
+      match l.block_owners {
+        Some(o) if inst_owners_kept() =>
+          owners_put(
+            {
+              owner: o.owner[ip.val:to].to_owned(),
+              cell: o.cell[ip.val:to].to_owned(),
+              tree: o.tree[ip.val:to].to_owned(),
+              mark: o.mark[ip.val:to].to_owned(),
+              bone: o.bone[ip.val:to].to_owned(),
+            },
+            k,
+          )
+        _ => ()
+      }
+      self.ninst = k + n
+    }
+    for q in (sp.val * 4)..<(sto * 4) {
+      self.segs.push(l.block_segs[q])
+    }
+    ip.val = to
+    sp.val = sto
+  }
+  for r in l.block_refs {
+    let (ri, rs, cid) = r
+    put(ri, rs)
+    match scene.layers.get(cid) {
+      Some(c) => self.scene_emitted(c)
+      None => ()
+    }
+  }
+  put(l.block_n, l.block_segs.length() / 4)
+  l.start = at
+  l.count = self.ninst - at
+  l.seg_from = seg0
+  l.seg_count = self.segs.length() / 4 - seg0
+  l.seen = scene.frame
+  for i in l.images {
+    @signals.untracked(fn() { self.image_for(i.0, i.1) |> ignore })
+  }
 }
