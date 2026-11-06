@@ -261,8 +261,9 @@ fn publish_walk(c : @ui.Ctx, list : String, node : Int) -> Unit {
             return next()
           }
           // (under what is over the page at the top, over what is at its foot)
-          let top = @sf.viewer_act_head(c)
-          if y < top || y + h > c.height - @sf.viewer_act_foot(c) {
+          let native = @sf.native_on()
+          let top = publish_head(c, native)
+          if y < top || y + h > c.height - publish_foot_room(c, native) {
             c.list_scroll_by(list, y - top)
           }
           w.step = 1
@@ -363,8 +364,15 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
     list: None,
     core: None,
   }
+  // beside the system's bars (an iPhone Duo's): its tabs put away while it is open, its way back and its doing in
+  // their bars in place of its own bar or band (publish_native); the page clear of their column
+  let native = @sf.native_on()
+  let clear = @sf.native_clear()
+  if native && !leaving {
+    publish_native(c, p)
+  }
   // (the picture's width: the window's on a phone, less the column its boxes to tick stand in before it on the page)
-  let column = dmin(c.width - publish_tick_room(), publish_page_w)
+  let column = dmin(c.width - clear - publish_tick_room(), publish_page_w)
   // (dismissed by the hand: back, Escape; closed at that moment; not while its picture is being taken, back and Escape
   // its all the same then)
   let list_key = "publish/page/" + r.station + "/" + thread.to_string()
@@ -381,10 +389,10 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
             |> ignore
           _ =>
             list_node.val = c.list(list_key, 1, c.height, fn(_) {
-              c.box(style=publish_column_room, fn() {
+              c.box(style=publish_column_room.then(@ui.style(pr=@sf.room_of(clear))), fn() {
                 // (under what is over it at the top, over the band at the foot)
-                let top = @sf.room_of(@sf.viewer_act_head(c))
-                let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
+                let top = @sf.room_of(publish_head(c, native))
+                let foot = @sf.room_of(publish_page_under + publish_foot_room(c, native))
                 c.box(style=@ui.style(w=Full, max_w=Fixed(publish_page_w + publish_tick_room()), pt=top, pb=foot), fn() {
                   publish_picture(c, src, here, p, column, false)
                 })
@@ -394,8 +402,11 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
             })
         }
         // what it is for: on a wide screen the bar a file opened has (back to the chat), 复制图片 at its end; on a small
-        // one 取消 and 保存到相册 at the foot
+        // one 取消 and 保存到相册 at the foot; beside the system's bars, theirs
         c.layer(fn() {
+          if native {
+            return
+          }
           let (label, _) = @sf.picture_out_way()
           // (copied: 已复制 a moment after)
           let shown = publishing.copied.get() > 0 &&
@@ -431,6 +442,60 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
     })
     |> ignore
   })
+}
+
+///|
+/// Its way back and its doing where the system has bars of its own (an iPhone Duo's), as a picture opened has its
+/// (sfbase's vf_native): 分享图片 their title (with how much was hidden), close at their lead, 保存到相册 (复制图片, 已复制 a
+/// moment after) once there is something in the picture; neither while it is being taken.
+fn publish_native(c : @ui.Ctx, p : Json?) -> Unit {
+  let hidden = text(p, "hiddenText")
+  let title = @sf.t("web-pages.chat.shareImage") + (if hidden != "" { " · " + hidden } else { "" })
+  // (kept as said while it is open, built again or not)
+  if !@sf.native_over_up(title, alive=publish_open, owner="publish", over=1) {
+    return
+  }
+  let busy = publishing.busy.get()
+  @sf.native_over_act("close", @sf.t("common.close"), "close", fn() {
+    if !@signals.untracked(fn() { publishing.busy.get() }) {
+      publish_close()
+    }
+  }, lead=true)
+  if busy || p is None || publish_kept(p) == 0 {
+    return
+  }
+  let (label, icon) = @sf.picture_out_way()
+  let shown = publishing.copied.get() > 0 &&
+    !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
+  @sf.native_over_act("act", if shown { @sf.t("common.copied") } else { label }, icon, fn() {
+    c.tell("publish/go", fn() {
+      if !publishing.busy.get() {
+        publish_go(c)
+      }
+    })
+  })
+}
+
+///|
+/// How far down the page under what is over it starts: beside the system's bars their room (its own bar none), else
+/// viewer_frame_act's.
+fn publish_head(c : @ui.Ctx, native : Bool) -> Double {
+  if native {
+    (@sf.viewer_host().room)().0
+  } else {
+    @sf.viewer_act_head(c)
+  }
+}
+
+///|
+/// How much of the window's foot what is over the page takes: beside the system's bars their room (no band of its own),
+/// else viewer_frame_act's.
+fn publish_foot_room(c : @ui.Ctx, native : Bool) -> Double {
+  if native {
+    (@sf.viewer_host().room)().1
+  } else {
+    @sf.viewer_act_foot(c)
+  }
 }
 
 ///|

@@ -25,6 +25,8 @@ fn publish_core(
   menu? : Bool = false,
   platform? : Int = 2,
   width? : Double = 390.0,
+  height? : Double = 844.0,
+  nav_able? : Bool = false,
 ) -> @ui.Tester {
   new_run()
   let mode = if menu { "chat-detail" } else { "chat-info" }
@@ -51,7 +53,7 @@ fn publish_core(
   }
   publish_src.val = Some(src)
   open_fixture_over(mode, src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform~, finish~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=height, platform~, finish~, nav_able~)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -182,6 +184,49 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   t.click(Button, label="取消")
   t.run_for(@kit.pop_out_ms)
   assert_true(t.find("部署登录页") is None)
+}
+
+///|
+test "分享图片 on an iPhone Duo: the system's tabs put away, its way back and 保存到相册 in the system's bars, its own bar and band none; kept from there, closed from there, the tabs back" {
+  // (on its side, the system's column down its trailing edge; upright, its bars across the top)
+  for size in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0)] {
+    let (w, h, side) = size
+    let calls : Array[Made] = []
+    let t = publish_core(calls, menu=true, platform=1, width=w, height=h, nav_able=true)
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
+    t.run_for(@ui.move_most_ms)
+    open_publish_page()
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("部署登录页") is Some(_))
+    let said = t.nav_said()
+    for id in ["\"bare\":true", "分享图片", "lead/over/close", "over/act", "保存到相册"] {
+      if !said.contains(id) {
+        fail("\{size}: the bars handed hold no \{id}: \{said}")
+      }
+    }
+    // (none of the tabs' own buttons while it is up: the chat's)
+    assert_false(said.contains("page/chat/"), msg=said)
+    // (none of its own: no bar across the top, no band of 取消 and 保存到相册 at the foot)
+    assert_true(t.query(Button, label="保存到相册") is None)
+    assert_true(t.query(Button, label="复制图片") is None)
+    assert_true(t.query(Button, label="取消") is None)
+    // (its boxes to tick and the rest of it clear of the system's column)
+    for s in t.semantics() {
+      let (x, _, sw, _) = s.rect
+      if !s.hidden && s.label != "收起侧边栏" && s.role == @ui.Role::Button && s.label != "" && sw > 0.0 && x + sw > w - side + 0.5 {
+        fail("\{size}: \{s.label} under the system's column: \{s.rect}")
+      }
+    }
+    // 保存到相册 chosen there: the picture kept in the photo album
+    t.post(@hostapi.system_channel, "{\"nav\":\"over/act\"}")
+    t.run_for(@kit.presence_in_ms)
+    assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
+    // closed there: gone as a dialog goes, the tabs back
+    t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+    t.run_for(@kit.pop_out_ms)
+    assert_true(t.find("部署登录页") is None)
+    assert_true(t.nav_said().contains("\"bare\":false"), msg=t.nav_said())
+  }
 }
 
 ///|
