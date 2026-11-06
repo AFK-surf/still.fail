@@ -78,4 +78,9 @@ jobs:
           cp ../overlay/font-check/font_setting_node_wbtest.mbt apps/mbui/src/sfpages/font_setting_node_wbtest.mbt
           cp ../overlay/font-check/choice_row_node.mbt apps/mbui/src/sf/choice_row_node.mbt
           cd apps/mbui
-          moon test --target wasm-gc --release -p stillfail/sfpages -f '*font preview keeps*'
+          if moon test --target wasm-gc --release -p stillfail/sfpages -f '*font preview keeps*' > "$RUNNER_TEMP/page-test.log" 2>&1; then
+            grep 'Total tests:' "$RUNNER_TEMP/page-test.log"
+          else
+            tail -c 20000 "$RUNNER_TEMP/page-test.log"
+            exit 1
+          fi

@@ -135,7 +135,7 @@ static gboolean mb_font_watch_event(gint fd, GIOCondition condition, gpointer da
   gpointer path;
   g_hash_table_iter_init(&it, written);
   while (g_hash_table_iter_next(&it, &path, NULL)) {
-    FcCache *cache = FcDirCacheRescan((const FcChar8 *)path, FcConfigGetCurrent());
+    FcCache *cache = FcDirCacheRead((const FcChar8 *)path, FcTrue, FcConfigGetCurrent());
     if (cache) FcDirCacheUnload(cache);
   }
   g_hash_table_unref(written);
