@@ -112,8 +112,13 @@ fn[T] not_roomed() -> T {
 
 ///|
 /// What node `at` (made `gen`) works out of how big `of` is laid out (Live's Roomed), told as `of` is (its flex node's
-/// on_room), each in the order said.
+/// on_room), each in the order said; and at once where `of` was sized already (a node made under it as it is laid out,
+/// a list's row, after it was told its room: the room it was told then, in the same layout).
 fn Tree::roomed_add(self : Tree, of : Int, at : Int, gen : Int, run : (Double, Double) -> Unit) -> Unit {
+  match self.nodes[of].flex.room_now() {
+    Some((w, h)) => run(w, h)
+    None => ()
+  }
   match self.roomed.get(of) {
     Some(all) => all.push((at, gen, run))
     None => {
@@ -436,8 +441,21 @@ pub(all) struct Work {
   mut pulled : Int
   /// the boxes round what a node and what it holds draw worked out afresh (View::scale's Drawn: Tree::drawn_box_of)
   mut drawn_boxes : Int
-  /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes)
+  /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes),
+  /// or at a moment come due before what is due then is done (Tree::laid_before_due_at: View::laid_before_due)
   mut settles : Int
+  /// what asks to be laid out before what is done at a moment asked whether it went on by itself up to it (a moment come
+  /// due, an input's, an event's: View::laid_before_due): once a moment, each of them; none while none asks
+  mut due_asked : Int
+  /// the keys of a list laid out from its anchor gone through, all of them, as they changed or its rows were measured
+  /// otherwise (View::scrolls_anchored: those gone forgotten, the rows measured counted again): none while none of its
+  /// rows is named or measured, as its first keys are
+  mut keys_swept : Int
+  /// the rows a list that tells seen went through past those it laid out, to find what was in sight at the logic's
+  /// moment and what it went across since it last told (View::scrolls_window's `seen`), and of those the ones measured
+  /// for it, never measured before (the rest as tall as they were measured)
+  mut seen_walked : Int
+  mut seen_measured : Int
 } derive(Eq, Debug)
 
 ///|
@@ -462,6 +480,8 @@ struct Node {
   /// its properties' bindings, by property: what stops each
   props : Map[Prop, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// what a declared accessibility action does (View::on_action)
+  mut on_action : ((Action) -> Unit)?
   /// whether it is a top row of the app's own (View::moves_window: a press on it its own), and whether a press on it
   /// moves the window now
   mut top_row : Bool
@@ -564,6 +584,8 @@ struct Node {
   mut shows_across : Bool
   /// whether it takes over a hold that began on what it holds, moved so far from where it went down (View::claims)
   mut claims : ((Double, Double) -> Bool)?
+  /// whether it also takes the down itself, before it or a holder claims the drag (View::claims)
+  mut claims_down : Bool
   /// where a hold it takes over may have gone down, in its own terms (View::claims' `from`): none, anywhere
   mut claims_from : ((Double, Double) -> Bool)?
   /// how many times it was said to take over holds (View::claims): a hold asks it as it was said as it went down
@@ -604,6 +626,10 @@ struct Node {
   mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
+  /// a gesture that can be tapped or held reaches the press room around its drawn box
+  mut gesture_reaches : Bool
+  /// whether the current gesture went down outside its drawing, in its enlarged press room
+  mut gesture_from_room : Bool?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
   mut fingers : Int
   /// which saying of its on_drag it is (each said anew, or let go, another): what was told by one is that one's alone
@@ -693,8 +719,30 @@ struct Node {
 }
 
 ///|
+priv struct BeforeRemoval {
+  id : NodeId
+  run : () -> Unit
+  mut live : Bool
+}
+
+///|
+/// A list's position capture and deferred sighting during a window-size change.
+priv struct ResizeCapture {
+  id : NodeId
+  run : () -> Unit
+  finish : () -> Unit
+}
+
+///|
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
+  /// Callbacks for the few nodes that need to read their subtree before any of it is removed.
+  priv before_removal : Array[BeforeRemoval]
+  priv resize_captures : Array[ResizeCapture]
+  priv mut resize_positions : Int
+  priv mut preparing_resize_capture : Bool
+  priv mut using_resize_capture : Bool
+  priv mut removing_callbacks : Int
   /// which node a row made anew for its key is now, by the name it is known by (View::row_known_as: one of
   /// Tree::row_name's, never a node's own)
   rows_known : Map[NodeId, Int]
@@ -750,6 +798,12 @@ pub struct Tree {
   /// what is told once the frame is painted (Tree::take_after_paint: the host's side runs it then): a list's rows
   /// sighted, a node first drawn
   after_paint : Array[() -> Unit]
+  /// what a layout found to tell of its moment, told as it is done (Tree::said_after_laid): a windowed list's blocks
+  /// come in sight
+  after_laid : Array[() -> Unit]
+  /// how deep in Tree::laid_out it is (0: not laying out), and whether what layouts found is being told
+  mut laying : Int
+  mut telling_laid : Bool
   /// the nodes waiting to be first drawn (View::on_first_drawn): node, making, what is then told
   first_drawn : Array[(Int, Int, () -> Unit)]
   /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
@@ -784,8 +838,8 @@ pub struct Tree {
   mut last_h : Double
   /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
   room : @signals.Signal[(Double, Double)]
-  /// Each window press, with its number and window coordinates (Tree::went_down).
-  pressed_anywhere : @signals.Signal[(Int, Double, Double)]
+  /// Each window press, with its number, coordinates and logical target (Tree::went_down).
+  pressed_anywhere : @signals.Signal[(Int, Double, Double, NodeId?)]
   /// how many taps there have been anywhere in the window, as the host tells each (Tree::tapped): what a tap anywhere
   /// lets go of follows it
   tapped_anywhere : @signals.Signal[Int]
@@ -889,6 +943,8 @@ pub struct Tree {
   keys_said_at : Set[Int]
   mut focused : NodeId?
   mut focus_visible : Bool
+  /// changed by focus decisions and a loss of input, but not by a node going away for a structural replacement
+  mut focus_epoch : Int64
   /// the node that had the focus as it was laid out nowhere (and whether it showed), given it back as it is laid out again
   /// where nothing has taken it meanwhile (Tree::outs_told), as an old view's focus waits for its node
   mut focus_parked : (NodeId, Bool)?
@@ -907,9 +963,12 @@ pub struct Tree {
   /// (View::returns_focus_to)
   focus_backs : Map[NodeId, NodeId]
   /// the room under what it holds and its foot covered, given each node measured so (Layout::measure's `foot`), and
-  /// the box that reads it under it (Layout::given_foot)
+  /// the boxes that read it under it as their last layouts did (Layout::given_foot: a list's rows, what floats over
+  /// its foot), each by who it is, and the foot each box read in its last layout (one at most: what it read before
+  /// dropped as it is laid out again, as its place is made again)
   feet : Map[Int, (Double, Double)]
-  foot_readers : Map[Int, Int]
+  foot_readers : Map[Int, Array[NodeId]]
+  foot_read : Map[Int, Int]
   /// what each box's layout reported of what it laid out, by name (Layout::report)
   reports : Map[Int, Map[String, (Double, Double)]]
   /// what each node works out of how big a node holding it is laid out, by that node (Live's Roomed)
@@ -953,6 +1012,12 @@ pub struct Tree {
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
   mut before_causes : Int
+  /// what asks to be laid out where it is at a moment before what is done then (what is due, an input, an event), where
+  /// it says it has gone on by itself up to that moment since it was last laid out (View::laid_before_due), by the
+  /// number it was said with; how many were ever said; and the last moment they were asked at
+  before_due : Map[Int, (Double) -> Bool]
+  mut before_due_told : Int
+  mut due_asked_at : Double
   /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
@@ -1027,6 +1092,12 @@ pub fn Tree::new(
     None => 0.0
   }
   let t : Tree = {
+    before_removal: [],
+    resize_captures: [],
+    resize_positions: 0,
+    preparing_resize_capture: false,
+    using_resize_capture: false,
+    removing_callbacks: 0,
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     glyph_looks: {},
@@ -1034,7 +1105,7 @@ pub fn Tree::new(
     resident_readers: {},
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
-    pressed_anywhere: @signals.signal((0, -1.0, -1.0), same=fn(a, b) { a == b }),
+    pressed_anywhere: @signals.signal((0, -1.0, -1.0, None), same=fn(a, b) { a == b }),
     tapped_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -1062,6 +1133,9 @@ pub fn Tree::new(
     places_due: [],
     painted: [],
     after_paint: [],
+    after_laid: [],
+    laying: 0,
+    telling_laid: false,
     first_drawn: [],
     bindings_due: [],
     pulls_held: 0,
@@ -1115,6 +1189,7 @@ pub fn Tree::new(
     focused: None,
     focus_parked: None,
     focus_visible: false,
+    focus_epoch: 0L,
     on_focus_lost: fn(_) {  },
     on_focus_asked: None,
     focus_opened: [],
@@ -1123,6 +1198,7 @@ pub fn Tree::new(
     focus_backs: {},
     feet: {},
     foot_readers: {},
+    foot_read: {},
     reports: {},
     roomed: {},
     on_layers_focus: fn(_, _) {  },
@@ -1144,6 +1220,9 @@ pub fn Tree::new(
     ordered_pending: [],
     drawn_due: false,
     before_causes: 0,
+    before_due: {},
+    before_due_told: 0,
+    due_asked_at: -1.0,
     standing: false,
     settle_asked: false,
     settle_at: 0.0,
@@ -1176,6 +1255,10 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      due_asked: 0,
+      keys_swept: 0,
+      seen_walked: 0,
+      seen_measured: 0,
     },
   }
   let root = t.made(-1)
@@ -1208,6 +1291,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       // (what was given the one at this place before (Layout::measure's `foot`), none of its own)
       self.feet.remove(i)
       self.foot_readers.remove(i)
+      self.foot_unread(i)
       self.reports.remove(i)
       self.roomed.remove(i)
       n.flex = @flex.Node::new()
@@ -1280,6 +1364,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.hosted = false
       n.hosted_clips = false
       n.on_press = None
+      n.on_action = None
       n.top_row = false
       n.moves_window = false
       n.on_menu = None
@@ -1323,6 +1408,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.shows = None
       n.shows_across = false
       n.claims = None
+      n.claims_down = false
       n.claims_from = None
       n.claims_said = 0
       n.yields = false
@@ -1336,6 +1422,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.key_said = 0
       n.wheel_said = 0
       n.on_drag = None
+      n.gesture_reaches = false
+      n.gesture_from_room = None
       n.takes = None
       n.takes_units = []
       n.takes_ver = None
@@ -1375,6 +1463,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drop_next: 0,
         props: {},
         on_press: None,
+        on_action: None,
         top_row: false,
         moves_window: false,
         on_menu: None,
@@ -1422,6 +1511,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         shows: None,
         shows_across: false,
         claims: None,
+        claims_down: false,
         claims_from: None,
         claims_said: 0,
         yields: false,
@@ -1439,6 +1529,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         list_rows: false,
         focus_shown_cell: None,
         on_drag: None,
+        gesture_reaches: false,
+        gesture_from_room: None,
         fingers: 1,
         drag_said: 0,
         takes: None,
@@ -1757,12 +1849,20 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   // A child's cleanup may change state read by its parent or siblings. Publish those changes only once
   // every scope in this tree has stopped, as one removal; no observer may rebuild a half-disposed tree.
   @signals.start_batch()
+  if self.nodes.length() > 0 && self.nodes[0].live {
+    self.before_removing(self.root())
+  }
   // (what follows the pointer held by nothing of the tree's nodes: let go with it, told nothing more)
   self.point_stopped()
   if self.nodes.length() > 0 && self.nodes[0].live {
     self.root().let_go()
   }
+  self.before_removal.clear()
+  self.resize_captures.clear()
+  self.resize_positions = 0
   self.drawn_marks.clear()
+  // A checkpoint can lay out rows without painting them. A disposed tree must not later report those rows as drawn.
+  self.after_paint.clear()
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
@@ -1772,6 +1872,8 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.timeline.clear()
   self.changed.clear()
   self.composed.clear()
+  self.after_laid.clear()
+  self.before_due.clear()
   self.hosting = -1
   self.modals.clear()
   self.back_said_at.clear()
@@ -2359,7 +2461,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         if !n.live || n.gen != gen {
           return
         }
-        let v = watch.read(fn() { f(w, h) })
+        // (its own binding: what it reads laid out as told last, wherever its holder is laid out from, as By's: reads_own)
+        let v = reads_own(fn() { watch.read(fn() { f(w, h) }) })
         if last.val != Some(v) {
           last.val = Some(v)
           apply(v)
@@ -2671,7 +2774,8 @@ pub fn Tree::over_scrim_of(self : Tree, id : NodeId) -> Bool {
 /// press, on an old view hosted in it, on nothing that takes one): asked as the hold moves, given how far from where it
 /// went down (dx, dy, in the window's points), the innermost that holds what it went down on first (Tree::claimer_of);
 /// taken over, what had it is called off and the rest of it is this one's (View::on_drag: down where it is then).
-/// One that does takes none at its own down. `scrolls`: what it takes them over for is scrolling what it holds (what
+/// One that does takes none at its own down unless `at_down` is true: then its on_drag also takes the down and can
+/// yield the hold until it or a holder wins (View::yield_drag). `scrolls`: what it takes them over for is scrolling what it holds (what
 /// hosts the tree lets go of the keyboard for that, as a finger scrolling a list does: Tree::claims_scroll). `from`:
 /// whether it may take over a hold that went down there (in its own terms, as it was drawn then): one that went down
 /// elsewhere it is not asked of (a stack's page taking a swipe back from its edge alone); none, from anywhere.
@@ -2680,9 +2784,11 @@ pub fn View::claims(
   f : (Double, Double) -> Bool,
   scrolls? : Bool = false,
   from? : (Double, Double) -> Bool,
+  at_down? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.claims = Some(f)
+  n.claims_down = at_down
   n.claims_from = from
   n.claims_scroll = scrolls
   n.claims_said = n.claims_said + 1
@@ -2698,10 +2804,10 @@ pub fn View::claims(
 /// something of its own there (one with nothing there passed, as though it were not there: Tree::wheel_at's). Asked
 /// again as the hold moves (Tree::claimer_of).
 /// Whether the hold on node `id` may be taken over by what holds it as it moves (a gesture of its waiting on a tap, a
-/// hold or its own slop: View::gesture), as a press of a node's may (Tree::claimer_of); one of its own (its drag begun,
-/// a hold come; a node's raw on_drag: a slider, a picture zoomed, words picked), not.
+/// hold or its own slop: View::gesture, or a raw drag allowing it with View::yield_drag), as a press of a node's may
+/// (Tree::claimer_of); one of its own (its drag begun, a hold come), not.
 pub fn Tree::yields(self : Tree, id : NodeId) -> Bool {
-  self.alive_id(id) && self.nodes[id.at].yields
+  self.held == Some(id) && self.alive_id(id) && self.nodes[id.at].yields
 }
 
 ///|
@@ -4744,12 +4850,14 @@ pub(all) struct Drag {
 
 ///|
 /// What a finger or the pointer held on it does as it goes: put down on it, it is the node's till it is let go or
-/// called off (moved anywhere meanwhile), each event handled at its own moment as one change (Tree::event), outside
-/// any tracking. One let go meanwhile is told nothing more. Up to `fingers` held on it at once, each told by its own
+/// called off (moved anywhere meanwhile), unless it allows a holder to take it over (View::yield_drag). Each event is
+/// handled at its own moment as one change (Tree::event), outside any tracking. One let go meanwhile is told nothing more.
+/// Up to `fingers` held on it at once, each told by its own
 /// events (Drag's `finger`); one more down calls the hold off (each of those down told Off), the rest of it nobody's.
 pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> View {
   guard self.live() is Some(n) else { return self }
   n.fingers = if fingers < 1 { 1 } else { fingers }
+  n.gesture_reaches = false
   n.drag_said = n.drag_said + 1
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
@@ -4760,6 +4868,16 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
   n.on_drag = Some(f)
   self.tree.hits = self.tree.hits + 1
   self
+}
+
+///|
+/// Allow (or stop allowing) what holds this node to take over its current raw drag as it moves (View::claims). Called
+/// during a drag while it is held; no hold, nothing changes. Each new hold starts as its own. A control can therefore
+/// report the down and every move immediately, yield to a scroll in the other direction, and keep its own direction
+/// once it wins. Where this node itself claims the hold, it continues without an Off or another Down.
+pub fn View::yield_drag(self : View, on : Bool) -> Unit {
+  guard self.tree.held == Some(self.id()) && self.live() is Some(n) else { return }
+  n.yields = on
 }
 
 ///|
@@ -4901,6 +5019,7 @@ fn Tree::takes_off(self : Tree, n : Node) -> Unit {
 fn View::drag_ended(self : View) -> Unit {
   let n = self.tree.nodes[self.at]
   n.yields = false
+  n.gesture_from_room = None
   match n.drag_end {
     Some(end) => {
       n.drag_end = None
@@ -5116,6 +5235,7 @@ pub fn Tree::drag_at(
               off()
             }
           Down => {
+            n.yields = false
             self.held_to(Some(id))
             self.downs.clear()
             self.downs.push(finger)
@@ -5256,6 +5376,12 @@ pub fn View::gesture(
       Down => {
         over()
         down.val = Some(d)
+        // A gesture reached from outside its drawing may also be released in that room. One begun on its drawing
+        // retains the existing rule: a release outside it is not on it.
+        match self.live() {
+          Some(n) => n.gesture_from_room = Some(!self.tree.under(d.wx, d.wy).contains(id))
+          None => ()
+        }
         last.val = (d.wx, d.wy)
         moved.val = false
         held.val = false
@@ -5404,12 +5530,17 @@ pub fn View::gesture(
           }
           None => ()
         }
+        match self.live() {
+          Some(n) => n.gesture_from_room = None
+          None => ()
+        }
       }
     }
   })
   |> ignore
   // (said anew or let go: its hold's moment let go, nothing more told)
   guard self.live() is Some(n) else { return self }
+  n.gesture_reaches = tap is Some(_) || hold is Some(_)
   n.drag_end = Some(fn() {
     dead.val = true
     over()
@@ -5424,6 +5555,85 @@ pub fn View::owns(self : View, f : () -> Unit) -> View {
   n.drops[n.drop_next] = f
   n.drop_next = n.drop_next + 1
   self
+}
+
+///|
+/// Run once immediately before this node or any ancestor begins being removed, while its entire subtree still lives.
+/// It also runs before the whole tree is disposed. Signal writes are told after removal, with any enclosing structural
+/// change. The callback must not itself remove or rebuild this subtree. A callback registered on an already removed
+/// node is not kept.
+pub fn View::before_removed(self : View, f : () -> Unit) -> View {
+  guard self.alive() else { return self }
+  let tree = self.tree
+  let entry : BeforeRemoval = { id: self.id(), run: f, live: true }
+  tree.before_removal.push(entry)
+  self.owns(fn() {
+    entry.live = false
+    let mut i = 0
+    while i < tree.before_removal.length() {
+      if physical_equal(tree.before_removal[i], entry) {
+        tree.before_removal.remove(i) |> ignore
+        break
+      }
+      i += 1
+    }
+  }) |> ignore
+  self
+}
+
+///|
+/// Notify registered descendants before anything in the subtree is detached. Only registered nodes are visited, so
+/// removing ordinary rows does not walk the whole subtree. A callback is disarmed before it runs, including if it
+/// causes another removal.
+fn Tree::before_removing(self : Tree, root : View) -> Unit {
+  if !root.alive() || self.before_removal.is_empty() { return }
+  let entries = self.before_removal.copy()
+  for entry in entries {
+    if entry.live && self.alive_id(entry.id) {
+      let mut i = entry.id.at
+      while i >= 0 && i != root.at { i = self.nodes[i].parent }
+      if i == root.at {
+        entry.live = false
+        self.removing_callbacks += 1
+        @signals.untracked(entry.run)
+        self.removing_callbacks -= 1
+      }
+    }
+  }
+}
+
+///|
+/// Capture event-time state before a window resize, while the old window's constraints still apply.
+fn View::capture_before_resize(self : View, f : () -> Unit, finish : () -> Unit, position : Bool) -> Unit {
+  guard self.alive() else { return }
+  let tree = self.tree
+  let entry : ResizeCapture = { id: self.id(), run: f, finish }
+  tree.resize_captures.push(entry)
+  if position { tree.resize_positions += 1 }
+  self.owns(fn() {
+    let mut i = 0
+    while i < tree.resize_captures.length() {
+      if physical_equal(tree.resize_captures[i], entry) {
+        tree.resize_captures.remove(i) |> ignore
+        if position { tree.resize_positions -= 1 }
+        break
+      }
+      i += 1
+    }
+  }) |> ignore
+}
+
+///|
+fn Tree::has_before_removal(self : Tree, root : View) -> Bool {
+  if !root.alive() { return false }
+  for entry in self.before_removal {
+    if entry.live && self.alive_id(entry.id) {
+      let mut i = entry.id.at
+      while i >= 0 && i != root.at { i = self.nodes[i].parent }
+      if i == root.at { return true }
+    }
+  }
+  false
 }
 
 ///|
@@ -5472,6 +5682,8 @@ fn View::let_go(self : View) -> Unit {
     k.let_go()
   }
   n.live = false
+  // (no reader of a foot it read: Layout::given_foot)
+  self.tree.foot_unread(self.at)
   match self.tree.modals.search(self.at) {
     Some(i) => self.tree.modals.remove(i) |> ignore
     None => ()
@@ -5497,6 +5709,7 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.on_action = None
   n.top_row = false
   n.moves_window = false
   n.on_menu = None
@@ -5519,7 +5732,7 @@ fn View::let_go(self : View) -> Unit {
   n.on_pointer_moved = None
   n.pointed_in_cell = None
   // (the focus on it: let go of with it, what has it told so)
-  self.tree.focus_lost_in(self.at)
+  self.tree.focus_lost_in(self.at, replacement=true)
   n.focusable = false
   n.focus_typing = false
   n.focus_keys = 0
@@ -5725,13 +5938,32 @@ fn Tree::ordered_at(self : Tree, at : Int) -> Unit {
 ///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
+  if !self.tree.has_before_removal(v) {
+    v.let_go()
+    guard self.live() is Some(n) else { return }
+    match n.kids.search(v.at) {
+      Some(i) => n.kids.remove(i) |> ignore
+      None => ()
+    }
+    self.boxes_removed()
+    return
+  }
+  // Checkpoints may update state read by the tree. Tell those changes only after the removed subtree is gone, as one
+  // removal (or with the surrounding structured change when there is one).
+  @signals.start_batch()
+  self.tree.before_removing(v)
   v.let_go()
-  guard self.live() is Some(n) else { return }
-  match n.kids.search(v.at) {
-    Some(i) => n.kids.remove(i) |> ignore
+  match self.live() {
+    Some(n) => {
+      match n.kids.search(v.at) {
+        Some(i) => n.kids.remove(i) |> ignore
+        None => ()
+      }
+      self.boxes_removed()
+    }
     None => ()
   }
-  self.boxes_removed()
+  @signals.end_batch()
 }
 
 ///|
@@ -5962,7 +6194,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
   self.tree.hold_lost_in(v.at)
-  self.tree.focus_lost_in(v.at)
+  self.tree.focus_lost_in(v.at, replacement=true)
   self.tree.back_lost_in(v.at)
   self.tree.modals_told()
   self.tree.due_leaving(v.id())
@@ -6210,6 +6442,12 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
     return
   }
   self.settle(at)
+  // (what went on by itself laid out where it is at the event's moment before it is taken, where it says so, as before
+  // what is due then: what the event does (lets go of it, reads what it told) finds it as of then, a frame drawn on the
+  // way or none)
+  if self.moves_before_due(at) {
+    self.laid_before_due_at(at)
+  }
   let was = self.cause_at
   self.cause_at = at
   self.committing += 1
@@ -6305,6 +6543,74 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = false
   self.withins_restored()
+}
+
+///|
+/// Laid out as of `at`, a moment come on the timeline or an event's, before what is due then or the event is done
+/// (Tree::advance_loop, Tree::event_said), where asked (View::laid_before_due): what moves by the clock (a fling)
+/// placed where it is then and what that layout found told (Tree::tell_laid), what is done then (a page's leaving
+/// over, what is done once, what the event does) letting go of none of it first; a frame drawn at that moment or none.
+/// The clock put back where it was drawn at.
+fn Tree::laid_before_due_at(self : Tree, at : Double) -> Unit {
+  if self.standing || self.last_w <= 0.0 {
+    return
+  }
+  let shown = @signals.untracked(fn() { self.clock.get() })
+  self.standing = true
+  self.work.settles = self.work.settles + 1
+  let cause = self.cause_at
+  self.cause_at = at
+  @signals.untracked(fn() {
+    self.clock_to(at)
+    self.beat.set(at)
+    self.pull()
+    self.laid_out(at)
+  })
+  self.cause_at = cause
+  if shown != at {
+    @signals.untracked(fn() {
+      self.clock_to(shown)
+      self.beat.set(shown)
+    })
+  }
+  self.standing = false
+}
+
+///|
+/// Whether anything asking to be laid out before what is done at a moment (View::laid_before_due) says it has gone on by
+/// itself up to `at` since it was last laid out: each asked (each that says so marked to be laid out then), once a
+/// moment, none while none asks, none in a change under way (laid out as of its moment as it began).
+fn Tree::moves_before_due(self : Tree, at : Double) -> Bool {
+  if self.cause_at >= 0.0 || at <= self.due_asked_at || self.before_due.length() == 0 {
+    return false
+  }
+  self.due_asked_at = at
+  let mut moved = false
+  for _, moves in self.before_due {
+    self.work.due_asked = self.work.due_asked + 1
+    if moves(at) {
+      moved = true
+    }
+  }
+  moved
+}
+
+///|
+/// Each moment something is done at laid out as of it before that is done, a frame drawn at it or none: a moment come
+/// on the timeline (a node's leaving over, what is done once, a step: Tree::laid_before_due_at), an event's (the same),
+/// an input's (as an input brings the tree to its moment: Tree::bring_to), where `moves` says it has gone on by itself
+/// up to that moment since it was last laid out (a list's fling, its notches easing in, going back from past its end:
+/// Scroll::glides_till): where it is at that moment as what is done then is done, which may let go of what tells what
+/// came in sight or read what it told (View::scrolls_window's `seen`); at rest, or laid out at that moment or past it
+/// already, no moment laid out for it. What says so is to take anew what it reads of that moment as it is laid out
+/// then, the clock where it was or not (a frame drawn ahead for that very moment: Tree::at). As long as this node lives.
+fn View::laid_before_due(self : View, moves : (Double) -> Bool) -> Unit {
+  guard self.live() is Some(_) else { return }
+  let tree = self.tree
+  let k = tree.before_due_told
+  tree.before_due_told = k + 1
+  tree.before_due[k] = moves
+  self.owns(fn() { tree.before_due.remove(k) }) |> ignore
 }
 
 ///|
@@ -6477,6 +6783,13 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if next < 0 {
       return
     }
+    // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
+    // (View::laid_before_due): asked once a moment, however many are due then or are said at it as it comes, and not
+    // at all while none asks; what that layout said is due chosen among the rest again)
+    if self.moves_before_due(next_at) {
+      self.laid_before_due_at(next_at)
+      continue
+    }
     let d = self.timeline[next]
     let was = self.cause_at
     self.cause_at = next_at
@@ -6604,7 +6917,24 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
-  if w != self.last_w || h != self.last_h {
+  let resized = w != self.last_w || h != self.last_h
+  let was_using_resize_capture = self.using_resize_capture
+  let captured : Array[ResizeCapture] = []
+  if resized {
+    // A shell can replace a list as soon as room is told below. Capture its event-time position with the old
+    // window constraints first, including a scroll since the last painted frame. Nothing is captured on a first
+    // frame, or where no live removal callback can need it.
+    let capture = self.last_w > 0.0 && !self.before_removal.is_empty() && self.resize_positions > 0
+    if capture {
+      self.preparing_resize_capture = true
+      self.advance(upto)
+      captured.append(self.resize_captures.copy())
+      for entry in captured {
+        if self.alive_id(entry.id) { @signals.untracked(entry.run) }
+      }
+      self.preparing_resize_capture = false
+    }
+    self.using_resize_capture = capture
     self.last_w = w
     self.last_h = h
     let s = self.nodes[0].flex.style
@@ -6615,6 +6945,10 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     self.room.set((w, h))
   }
   self.brought(upto)
+  if resized { self.using_resize_capture = was_using_resize_capture }
+  for entry in captured {
+    if self.alive_id(entry.id) { @signals.untracked(entry.finish) }
+  }
   self.first_drawn_now()
   let drawn = self.drawn_due
   self.drawn_due = false
@@ -6638,6 +6972,10 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   // drawn again as of now, for where a press finds things), then what it marked)
   self.advance(at)
   self.clock_to(at)
+  // (what went on by itself and says so asked as of the input's moment, as before what is due (View::laid_before_due):
+  // laid out where it is then as the tree is brought below, what it reads of that moment taken anew, the clock where it
+  // was drawn or not)
+  self.moves_before_due(at) |> ignore
   // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
   // finds things where they are then, nothing else told before the change ends)
   self.pull()
@@ -6849,6 +7187,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
+  self.laying += 1
   let mut placing = false
   let mut ordered = false
   let mut passes = 0
@@ -6888,6 +7227,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.laid_out(upto)
     }
     self.withins_passing = false
+  }
+  self.laying -= 1
+  // (what it found to tell, told as it is done, of its moment, whatever laid it out (a frame, an input's moment, an
+  // event finding where things are, a change settled): once, by the outermost)
+  if self.laying == 0 {
+    self.tell_laid()
   }
 }
 
@@ -8239,7 +8584,7 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
   self.walk_taken(x, y, fn(c, cx, cy, _, s) {
     order.val = order.val + 1
     let n = self.nodes[c.id.at]
-    let target = if n.on_drag is Some(_) && n.claims is None {
+    let target = if n.on_drag is Some(_) && (n.claims is None || n.claims_down) {
       // (one that takes over holds (View::claims) takes none at its own down: it is found as it moves)
       Some(Dragged(c.id))
     } else if n.on_press is Some(_) {
@@ -8266,10 +8611,12 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
       top_rect.val = Some((cx, cy, cx + c.w * s, cy + c.h * s))
       top_order.val = order.val
     } else if least > 0.0 &&
-      // (what a press does something with: not what is only held (a sheet's grip, a slider's track), as the old frame's
-      // press_reach reaches only what takes a press)
-      t is Pressed(_) &&
+      // (a press, a tappable or holdable gesture, or a drag that explicitly takes its own down; not a raw drag alone)
+      (t is Pressed(_) || (t is Dragged(_) && (n.on_press is Some(_) || n.gesture_reaches || n.claims_down))) &&
       n.takes is None &&
+      !n.turned_off &&
+      // A resize strip is reached only where it is drawn, like the old frame's as_drawn targets.
+      n.cursor != Some(ResizeX) && n.cursor != Some(ResizeY) &&
       (c.w * s < least || c.h * s < least) &&
       c.w > 0.0 &&
       c.h > 0.0 &&
@@ -9172,6 +9519,36 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
   let out = self.after_paint.copy()
   self.after_paint.clear()
   out
+}
+
+///|
+/// `f` told as the layout being done is done, of its moment (Tree::laid_out, whatever lays it out: a frame, an input's
+/// moment, an event finding where things are, a change settled), before anything after it is handled, whether a frame
+/// is painted between or not: what starts a page's own work (a windowed list's blocks come in sight,
+/// View::scrolls_window's `seen`), never what asks the host for something only once it is drawn (Tree::said_after_paint).
+/// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
+/// those said before it are told, of the same moment (Tree::tell_laid).
+fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
+  self.after_laid.push(f)
+}
+
+///|
+/// What layouts said to tell of their moments (Tree::said_after_laid), told, one after another in the order said; what
+/// a telling lays out at once (an event reading where things are) said after those said before it and told in its
+/// turn, never within another's telling: so how deep it goes is not how many follow one another.
+fn Tree::tell_laid(self : Tree) -> Unit {
+  if self.telling_laid {
+    return
+  }
+  self.telling_laid = true
+  while !self.after_laid.is_empty() {
+    let now = self.after_laid.copy()
+    self.after_laid.clear()
+    for f in now {
+      f()
+    }
+  }
+  self.telling_laid = false
 }
 
 ///|

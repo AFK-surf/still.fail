@@ -127,7 +127,9 @@ fn Pick::faked(self : Pick) -> Array[@hostapi.Picked]? {
       let a = f.pick_asks[self.fake]
       if a.taken {
         Some([])
-      } else if g().frame_no <= a.frame {
+      } else if g().frame_no <= a.frame && !host_said_asking.val {
+        // (from the next frame: its build, or as it begins where what the host has once is asked (host_said_arrive),
+        // which is before that frame is counted, as shared_in's)
         None
       } else {
         a.taken = true

@@ -133,8 +133,8 @@ fn picked_row() -> (@ui.TreePicked, PickRow)? {
 ///|
 /// Over a chat's list in `layer` (all of its page: what is picked is said in the window's terms): the bar over what a
 /// finger picked of a message, the pill over what a mouse did (pick_layer's, pick_pop's); quoted into draft `draft`.
-/// `top` the bar's room over the list, `foot` the composer's under it.
-pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () -> Double, foot : () -> Double) -> Unit {
+/// `top` the bar's room over the list, `foot` the composer's under it as this frame laid it out (read as it is painted).
+pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () -> Double, foot : (@view.Laid) -> Double) -> Unit {
   let quote = fn(t : @ui.TreePicked, r : PickRow) {
     let text = t.words.trim(chars=" \n\t").to_string()
     if text != "" {
@@ -199,7 +199,7 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
       picked_at.set((@signals.untracked(@ui.picked_box), @signals.untracked(@ui.picked_end)))
     })
     // (where it stands in the layer laid out at `at`)
-    let place = fn(at : (Double, Double, Double, Double)?) -> (Double, Double) {
+    let place = fn(at : (Double, Double, Double, Double)?, foot : Double) -> (Double, Double) {
       let (lx, ly, _, lh) = at.unwrap_or((0.0, 0.0, 0.0, 0.0))
       let (picked, end) = picked_at.get()
       match picked {
@@ -209,7 +209,7 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
             let least = ly + top() + 8.0
             let over = y - 52.0
             let yy = if over < least { y + h + 28.0 } else { over }
-            let yy = dmax(least, dmin(yy, dmax(ly + lh - foot() - 48.0, least)))
+            let yy = dmax(least, dmin(yy, dmax(ly + lh - foot - 48.0, least)))
             (x + w / 2.0 - lx, yy - ly)
           } else {
             // (8 over where the pointer let it go, its middle there: pick_pop's)
@@ -227,7 +227,7 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
       // (from where this frame laid the layer and it out, read as it is painted)
       b.offset(Painted(fn(laid) {
         let at = laid.rect(layer)
-        let (x, y) = place(at)
+        let (x, y) = place(at, foot(laid))
         let half = laid.size(b).map(fn(z) { z.0 / 2.0 }).unwrap_or(0.0)
         let w = at.map(fn(r) { r.2 }).unwrap_or(0.0)
         // (kept on the screen, 8 in from its sides)

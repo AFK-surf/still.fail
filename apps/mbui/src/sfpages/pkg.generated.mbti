@@ -78,7 +78,7 @@ pub fn chat_flight_layer_made(@sfbase.ChatRef, @view.View) -> Unit
 
 pub fn chat_key(@sfbase.ChatRef) -> String
 
-pub fn chat_list_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, @settings.Core, foot_gap? : Double, composer_across? : () -> Double, follows? : @signals.Signal[Bool]) -> ChatListNode
+pub fn chat_list_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, @settings.Core, foot_gap? : Double, composer_across? : (Double) -> Double, follows? : @signals.Signal[Bool]) -> ChatListNode
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
 
@@ -124,19 +124,19 @@ pub let composer_field_key : String
 
 pub fn composer_foot_in(Double) -> Double
 
-pub fn composer_foot_room(@ui.Ctx, String, Double, let_go~ : Bool) -> Double
 
 pub fn composer_geometry(Double, FixedArray[Double]?) -> (Double, Double, ComposerPlace)
 
 pub fn composer_node(@view.View, @sfbase.Source, String, () -> ComposerSpec, (@sfbase.Writing) -> Unit, (@view.View, (Double, Double) -> Double), (@view.View, @sfbase.Writing, () -> Double, (@view.View) -> Unit) -> Unit, place? : () -> ComposerPlace, place_in? : (@view.View, (Double) -> ComposerPlace), toolbar? : (@view.View) -> Unit, tail? : (@view.View) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ComposerNode
 
-pub fn composer_on_page(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
+pub fn composer_on_page(@view.View, @sfbase.Source, String, () -> Bool, (@view.View) -> Unit) -> Unit
 
 pub fn composer_open_room(Double) -> Double
 
 pub fn composer_place(Double) -> ComposerPlace
 
-pub fn composer_room(@ui.Ctx, String, settled? : Bool, held? : Bool) -> Double
+
+pub fn composer_room_in(Double, Double, (Double, Double)) -> Double
 
 pub fn composer_side() -> Double
 
@@ -472,7 +472,7 @@ pub let pf_tag : @ui.Style
 
 pub let pf_tag_words : @ui.TextStyle
 
-pub fn pick_bar_node(@view.View, @sfbase.Source, String, () -> Double, () -> Double) -> Unit
+pub fn pick_bar_node(@view.View, @sfbase.Source, String, () -> Double, (@view.Laid) -> Double) -> Unit
 
 pub fn pick_files(@sfbase.Writing) -> Unit
 
@@ -748,12 +748,13 @@ pub fn xshare_key(String, String) -> String
 pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
-  room : () -> Double
+  room_of : () -> (Double, Double)
 }
 
 pub(all) struct ChatListNode {
   to_latest : () -> Unit
   follows : @signals.Signal[Bool]
+  lift : () -> Double
   landing_of : (String) -> MineLanding?
 }
 

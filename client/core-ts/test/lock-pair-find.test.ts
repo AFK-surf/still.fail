@@ -8,7 +8,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
-import { CoreError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
+import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
@@ -18,7 +19,7 @@ const LAPTOP_APP = "e2".repeat(32);
 
 /// How a trusted device answers when dialled: not there (the dial fails at once), not answering (the dial hangs), a
 /// code shown, that it approves this one nowhere it asks, or nothing (reached, its answer lost).
-type Way = "away" | "silent" | "code" | "credential" | "no" | "mute";
+type Way = "away" | "silent" | "code" | "code-ends-on-proof" | "code-ends-after-another" | "credential" | "no" | "mute";
 
 /// A core waiting in `ws` (its device not in the lock, the owner's two apps in it), its mesh's base key ME, and the
 /// trusted devices' ends as `ways` says now: each dial of each counted.
@@ -37,6 +38,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   r.core.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const dials: Record<string, number> = {};
   const hellos: unknown[] = [];
+  const peers: Record<string, Duplex> = {};
   const open = (id: string): Effect.Effect<Duplex, CoreError> =>
     Effect.suspend(() => {
       dials[id] = (dials[id] ?? 0) + 1;
@@ -45,13 +47,22 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
       if (way === "silent") return Effect.never;
       return Effect.flatMap(Effect.promise(() => pipe()), ([here, there]) =>
         Effect.sync(() => {
+          peers[id] = there;
           r.core.inner.runner.fork(
             Effect.gen(function* () {
               const hello = yield* there.next();
               hellos.push(hello);
               if (way === "mute") return;
               const hasCredential = way === "credential" && (hello as { workspaces?: { ws: string; credential: string }[] }).workspaces?.some((w) => w.ws === "ws" && w.credential === "signed-member");
-              yield* there.send(way === "code" || hasCredential ? { t: "code", workspaces: ["ws"] } : { t: "no", error: "not_here" });
+              yield* there.send(way === "code" || way === "code-ends-on-proof" || way === "code-ends-after-another" || hasCredential ? { t: "code", workspaces: ["ws"] } : { t: "no", error: "not_here" });
+              if (way === "code-ends-on-proof" || way === "code-ends-after-another") {
+                yield* there.next(); // It disconnects while the new device is checking the code.
+                if (way === "code-ends-after-another") {
+                  ways[LAPTOP_APP] = "code";
+                  yield* Effect.sleep(PAIR_REDIAL_MS + 1_000);
+                }
+                there.close();
+              }
             }),
           );
           return here;
@@ -61,8 +72,144 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
   const secondLock = secondWorkspace ? await r.watch({ topic: "lock", workspace: "w2" }) : null;
   const pair = async () => (await lock()).me.pair;
-  return { ...r, ways, dials, hellos, lock, pair, secondLock };
+  return { ...r, owner, ways, dials, hellos, peers, lock, pair, secondLock };
 }
+
+test("a signing key that cannot be read ends the request with its error, and a retry can ask again", async () => {
+  const w = await waiting({ [PHONE_APP]: "code" });
+  const secureGet = w.host.secureGet!;
+  w.host.secureGet = (key, opts) => key === "lock-signer"
+    ? Effect.fail(new HostError("钥匙暂不可用", true))
+    : secureGet(key, opts);
+  await assert.rejects(w.ask("lock.pair", { workspace: "ws" }), { code: "lock_key" });
+  const failed = await w.pair();
+  assert.equal(failed.state, "failed");
+  assert.match(failed.error, /钥匙暂不可用/);
+  assert.deepEqual(w.dials, {});
+  w.host.secureGet = secureGet;
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1);
+});
+
+test("a cancelled key read failing late cannot end a newer pairing request", async () => {
+  const w = await waiting({ [PHONE_APP]: "code" });
+  const secureGet = w.host.secureGet!;
+  const release = Deferred.makeUnsafe<void>();
+  w.host.secureGet = (key, opts) => key === "lock-signer"
+    ? Effect.andThen(Deferred.await(release), Effect.fail(new HostError("钥匙暂不可用", true)))
+    : secureGet(key, opts);
+  const first = w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(500);
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  w.host.secureGet = secureGet;
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  Deferred.doneUnsafe(release, Effect.void);
+  await assert.rejects(first, { code: "lock_key" });
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1);
+});
+
+function addApprover(w: Awaited<ReturnType<typeof waiting>>, addedDevice: string) {
+  const entry = next("ws", w.cloud.head("ws"), w.host.nowMs() / 1000, "device", {
+    id: addedDevice, sub: "s1", kind: "app", label: "new trusted device", sign_key: w.owner.id,
+  });
+  const signed: Entry = { ...entry, sig: { key: w.owner.id, alg: "Ed25519", sig: w.owner.signBytes(signedBytes(entryHash(entry))) } };
+  w.cloud.chains.set("ws", [...w.cloud.chains.get("ws")!, signed]);
+  const topic = { topic: "workspace", workspace: "ws" };
+  w.core.inner.data.set(topic, { ...(w.core.inner.data.shared(topic) as object), lock: w.cloud.head("ws") });
+}
+
+test("a newly trusted device becomes available while the new device is looking: it is also asked", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal(w.dials[addedDevice], undefined);
+  release();
+  await w.host.time.pass(2 * PAIR_REDIAL_MS, 100);
+  assert.equal(w.dials[addedDevice], 1, "the new trusted device is asked when its lock has been read");
+  assert.equal((await w.pair()).state, "code");
+});
+
+test("a newer lock still being read is followed even when all old devices immediately say no", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "no", [LAPTOP_APP]: "no", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "finding");
+  release();
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], 1);
+  assert.equal((await w.pair()).state, "code");
+});
+
+test("an unreadable newer lock does not leave the search waiting forever", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "no", [LAPTOP_APP]: "no", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass((PAIR_DIAL_TRIES + 1) * PAIR_REDIAL_MS, 100);
+  assert.equal((await w.pair()).state, "none");
+  release();
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], undefined);
+});
+
+test("an approver added after looking began is asked without repeating an existing code", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away", [addedDevice]: "code" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], 1);
+  assert.equal(w.dials[PHONE_APP], 1, "the existing code is not replaced");
+  assert.equal((await w.pair()).devices, 2);
+});
+
+test("a lock begins updating during a search: the search follows its pending read", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "mute", [LAPTOP_APP]: "no", [addedDevice]: "code" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  // The old devices have answered or timed out, but the newer record is still being read.
+  await w.host.time.pass(35_000, 100);
+  assert.equal((await w.pair()).state, "finding");
+  release();
+  await w.host.time.pass(2_000);
+  assert.equal(w.dials[addedDevice], 1);
+  assert.equal((await w.pair()).state, "code");
+});
+
+test("cancelling while a newer lock is read never asks a newly added device", async () => {
+  const addedDevice = "e3".repeat(32);
+  const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away", [addedDevice]: "code" });
+  const release = w.host.hold("/v1/workspaces/ws/lock?after=0");
+  addApprover(w, addedDevice);
+  await w.host.time.pass(500);
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  release();
+  await w.host.time.pass(2 * PAIR_REDIAL_MS, 100);
+  assert.equal(w.dials[addedDevice], undefined);
+  assert.equal(await w.pair(), undefined);
+});
 
 test("a trusted device opened after the new device asked shows its code: dialled again every PAIR_REDIAL_MS", async () => {
   const w = await waiting({ [PHONE_APP]: "away", [LAPTOP_APP]: "away" });
@@ -96,6 +243,85 @@ test("the laptop opened before its last try: it shows its code beside the phone'
   const p = await w.pair();
   assert.deepEqual([p.devices, p.approvers.map((a: { showing: boolean }) => a.showing)], [2, [true, true]]);
   assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [1, 4]);
+});
+
+test("a code disappears during the search: another device opened afterwards can still show one", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "finding", "the other device is still being sought");
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1, "the device whose code was shown is not asked again");
+  assert.equal(w.dials[LAPTOP_APP], 2);
+});
+
+test("a code disappears while it is checked: another device opened afterwards can still show one", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-on-proof", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code");
+  const error = await w.ask("lock.pairCode", { workspace: "ws", code: "123456" }).then(() => null, (e) => e as { code: string });
+  assert.equal(error?.code, "pair_ended");
+  assert.equal((await w.pair()).state, "finding", "the other device is still being sought");
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS);
+  assert.equal((await w.pair()).state, "code");
+  assert.equal(w.dials[PHONE_APP], 1);
+  assert.equal(w.dials[LAPTOP_APP], 2);
+});
+
+test("a code disappears while it is checked and no other device answers: say why it ended", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-on-proof", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  await assert.rejects(w.ask("lock.pairCode", { workspace: "ws", code: "123456" }), { code: "pair_ended" });
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS);
+  const p = await w.pair();
+  assert.equal(p.state, "failed");
+  assert.ok(p.error, "the page explains why the previous code went away");
+  assert.equal(w.dials[LAPTOP_APP], PAIR_DIAL_TRIES);
+});
+
+test("another device shows a code while the first one's code is being checked", async () => {
+  const w = await waiting({ [PHONE_APP]: "code-ends-after-another", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  const error = await w.ask("lock.pairCode", { workspace: "ws", code: "123456" }).then(() => null, (e) => e as { code: string });
+  assert.equal(w.dials[LAPTOP_APP], 2);
+  assert.equal((await w.pair()).state, "code", "the newly shown code was not tested and is not wrong");
+  assert.equal(error?.code, "pair_ended");
+});
+
+test("a code disappears during the search and no other device answers: say why it ended", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(PAIR_DIAL_TRIES * PAIR_REDIAL_MS);
+  const p = await w.pair();
+  assert.equal(p.state, "failed");
+  assert.ok(p.error, "the page explains why the previous code went away");
+  assert.equal(w.dials[PHONE_APP], 1);
+  assert.equal(w.dials[LAPTOP_APP], PAIR_DIAL_TRIES);
+});
+
+test("cancelling after a code disappears stops looking for the remaining devices", async () => {
+  const w = await waiting({ [PHONE_APP]: "code", [LAPTOP_APP]: "away" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  w.peers[PHONE_APP]!.close();
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "finding");
+  await w.ask("lock.pairCancel", { workspace: "ws" });
+  w.ways[LAPTOP_APP] = "code";
+  await w.host.time.pass(PAIR_REDIAL_MS * 2);
+  assert.equal(await w.pair(), undefined);
+  assert.equal(w.dials[LAPTOP_APP], 1);
 });
 
 test("a dial that hangs is given up after PAIR_DIAL_MS and made again", async () => {

@@ -75,8 +75,6 @@ priv struct Composing {
   restore_errors : @sf.LiveMap[String, String]
   /// The source box held until the send lets go, across a new-chat page becoming its chat.
   held_boxes : @sf.LiveMap[String, @motion.Way]
-  /// A retained chat's measured room, read by the same composer_room query as an old chat's.
-  node_rooms : Map[String, (Bool) -> Double]
   /// what its field says while empty as it was last drawn, till another is to be said and it has faded out
   /// (composer_text)
   hint_shown : @signals.Signal[String]
@@ -130,7 +128,6 @@ let composing : Composing = {
   restoring: @sf.LiveMap::new(),
   restore_errors: @sf.LiveMap::new(),
   held_boxes: @sf.LiveMap::new(),
-  node_rooms: {},
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
   taking: @signals.signal(false, same=fn(a, b) { a == b }),
   cc_open: @signals.signal(false),
@@ -165,7 +162,6 @@ fn composing_reset() -> Unit {
   composing.restoring.clear()
   composing.restore_errors.clear()
   composing.held_boxes.clear()
-  composing.node_rooms.clear()
   ref_keyed.val = ""
   composing.cc_open.set(false)
   composing.cold_open.set("")
@@ -502,6 +498,17 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 }
 
 ///|
+/// How many composers of the tree's were made (each one's own kind of what the host says to it: composer_node).
+// kept across runs: only counted on, never read for its number but to tell them apart
+let composer_made : Ref[Int] = Ref(0)
+
+///|
+fn composer_made_next() -> Int {
+  composer_made.val += 1
+  composer_made.val
+}
+
+///|
 /// What comes into the draft from outside the field before the box is laid out: the files the system's picker
 /// answered (for this draft), the files pasted into the field (⌘V with files or a picture on the clipboard, as the
 /// web's paste takes the clipboard's files), the rows the 文件 tab's 添加到消息 put in (named by their path, or as files where this chat
@@ -509,12 +516,20 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool, focus? : () -> Unit = fn() { c.focus_editor(composer_field_key) }) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
   @sfbase.drafts_given_read()
+  // (what the system's picker gave, asked for this draft: only its own composer takes it, none of another draft's
+  // takes it from it)
   match composing.picking.get() {
-    Some((key, picker)) =>
+    Some((key, picker)) if key == w.key =>
       match picker.files() {
         Some(files) => {
           composing.picking.set(None)
-          if key == w.key && !no_files {
+          if no_files {
+            let list = shared_into.get(w.key).unwrap_or([])
+            for f in files {
+              list.push(f)
+            }
+            shared_into[w.key] = list
+          } else {
             for f in files {
               writing_add_picked(src, w, spec.station, f)
             }
@@ -522,7 +537,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
         }
         None => ()
       }
-    None => ()
+    _ => ()
   }
   // files shared into the app from another, for this draft (share.mbt)
   match shared_into.get(w.key) {
@@ -610,9 +625,11 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     }
     _ => ()
   }
-  let sent = @sfbase.files_taken(w.key)
-  if !sent.is_empty() && !no_files {
-    writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+  if !no_files {
+    let sent = @sfbase.files_taken(w.key)
+    if !sent.is_empty() {
+      writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+    }
   }
 }
 
@@ -1934,7 +1951,6 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
         rk,
         row,
         words,
-        room,
         flying,
         field=composer_field_key,
         hold=fn(ms) { composer_hold(w.key, room, box, ms) },
@@ -2042,22 +2058,6 @@ fn composer_least(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// The room under a chat's list for draft `draft`'s composer, `room` as its page has it (composer_room's): let go by
-/// words sent from it, where it comes to stand (opened with one line, emptied), the list's foot going there on the
-/// list's way as they leave it, one move with their row (sfbase's shown_rows, which says when: `let_go`); else as
-/// it is.
-pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
-  if let_go {
-    // (where it comes to stand: as tall as it is laid out once they let go of it, a line or more typed meanwhile
-    // with it; not a line always, its room opening on as the way was over)
-    ignore(room)
-    composer_room(c, draft, settled=true, held=false)
-  } else {
-    room
-  }
-}
-
-///|
 /// How long the composer takes to open from a capsule or to be let go to one: its field passing by its ＋ and send is
 /// kept off them on this clock (composer_hint_wbtest).
 let composer_shape_ms : Double = 300.0
@@ -2103,39 +2103,6 @@ fn composer_held_box_node(owner : @view.View, draft : String) -> Double {
       w.value_at(if owner.drawn_past(w.end()) { w.end() } else { owner.drawn_at() })
     }
     None => 0.0
-  }
-}
-
-///|
-/// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
-/// tall as its place (chat_composer_node: its box, what it says under it, its margins) with its ground as drawn (a line
-/// more or less: the list's rows go with the ground as it reshapes, the frame it does), at least as tall as that opened
-/// with one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its
-/// ground's curve.
-pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held? : Bool = true) -> Double {
-  match composing.node_rooms.get(draft) {
-    Some(room) => return room(settled)
-    None => ()
-  }
-  // (not laid out yet: a capsule's)
-  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
-  // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
-  // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
-  // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
-  let least = composer_least(c)
-  // (`settled`: as it comes to stand, not where its shape is on its way: a new chat become its chat, the composer
-  // coming down from the middle of the pane to its foot, the chat's rows standing over its foot from the first, not over
-  // the middle of the pane where the new chat's scene still is)
-  let now = dmax(foot + (if settled { 0.0 } else { @motion.reshaped_over(c, "composer/box") }), least)
-  if !held {
-    return now
-  }
-  let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
-  let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
-  if held > now {
-    now + (held - now) * share
-  } else {
-    now
   }
 }
 

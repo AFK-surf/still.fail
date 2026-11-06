@@ -7,14 +7,19 @@ test "a message newly uncovered by the composer is read without moving its row" 
   let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=700.0, platform=2)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(@sf.ui_theme_now)
-    root.box(fn(b) {
-      b.width(Is(Some(390.0))).height(Is(Some(700.0))) |> ignore
-      match workspace_in_view(src).0 {
-        Some(w) => @sfpages.chat_list_node(
-          b, src, r, fn() { view_of_chat(src, r).0 }, fn() { 0.0 }, fn() { foot.get() }, settings_core(src, w),
-        ) |> ignore
-        None => ()
-      }
+    root.box(fn(o) {
+      o.width(Is(Some(390.0))).height(Is(Some(700.0))) |> ignore
+      let b = o.box(fn(b) {
+        match workspace_in_view(src).0 {
+          Some(w) => @sfpages.chat_list_node(b, src, r, fn() { view_of_chat(src, r).0 }, fn() { 0.0 }, settings_core(src, w)) |> ignore
+          None => ()
+        }
+      })
+      // (the composer's room under it given it as its page's layout gives it: Layout::measure's `foot`)
+      o.layout_box(By(fn() { foot.get() }), fn(l, f) {
+        l.measure(b, l.width, height=l.height, foot=(0.0, f)) |> ignore
+        l.place(b, 0.0, 0.0)
+      }) |> ignore
     }) |> ignore
   })
   t.run_for(@ui.move_most_ms)

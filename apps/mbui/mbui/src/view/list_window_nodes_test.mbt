@@ -11,7 +11,7 @@ test "scrolls_window: a long column's tree is as big as what shows; one kept far
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, from_end=true, kept=fn(k) { kept.get() == k }, fn(b, k) {
+      o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, from_end=true, kept_keys=fn() { if kept.get() >= 0 { [kept.get()] } else { [] } }, fn(b, k) {
         live[k] = true
         b.owns(fn() { live.remove(k) }) |> ignore
         b.height(Is(Some(40.0))) |> ignore

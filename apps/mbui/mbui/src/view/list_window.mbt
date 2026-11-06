@@ -1,9 +1,15 @@
 // A column that scrolls (View::scrolls) holding blocks by their keys, each made only while it shows (retained.md's
-// lists; as an old view's list builds only the rows in view, ui's Ctx::list): which show is worked out from where the
-// column is scrolled to, how tall it shows and each block's height (as laid out while it showed, kept by its key as wide
-// as the column was then; one never laid out counted as `est`), so a block that does not show is not made and nothing of
-// it measured. As what is over what shows changes height (a block laid out again taller than it was counted, one come
-// or gone over it), the column is moved with it: what shows stays where it is.
+// lists; as an old view's list builds only the rows in view, ui's Ctx::list): laid out in the column's own layout from
+// where it is scrolled to, as a list from its anchor is (View::scrolls_anchored, retained.md rule 11), each block made
+// and measured as that layout comes to it, in that same layout, till what shows is filled; one never laid out counted
+// as `est` (its height kept by its key as wide as the column was as it was laid out). A block a scroll goes past is
+// made too, only to be measured, and let go in the same layout (so it stops where many smaller scrolls would): what a
+// block's make does is make its nodes and read what they show, never start what lasts (retained.md: what a layout
+// makes is a cache of the picture); what a page keeps for a block it starts as the block is told seen. Nothing a block
+// measures is told back to lay the column out again. As what
+// is over what shows changes height (a block laid out again taller than it was counted, one come or gone over it), what
+// shows stays where it is: the column is where its anchor is. ui's ListRows::in_node alone is laid out the way before
+// it still, its blocks' heights told back (View::scrolls_window_rooms).
 
 ///|
 /// A block's room in a windowed list, apart from its natural measured height: its height now and where its content
@@ -25,16 +31,111 @@ pub fn list_room(height : Double) -> ListRoom {
 }
 
 ///|
-let windowed_room : Lent[() -> ListRoom] = Lent::new()
+let windowed_room : Lent[(View, () -> ListRoom, Bool)] = Lent::new()
 
 ///|
 /// The room allocated to the enclosing windowed block in this frame. Something carried into that block can use
 /// its opening displacement directly, rather than easing a second time toward its already moving content.
 pub fn View::list_room(self : View) -> ListRoom? {
-  self.lent(windowed_room).map(fn(f) { f() })
+  self.lent(windowed_room).map(fn(r) { (r.1)() })
 }
 
 ///|
+/// Apply the enclosing list room's displacement, scale and opacity to this node. For a row with a ground that
+/// stays in place, use `room_transforms=false` on the list and apply this to the row's content instead.
+pub fn View::list_room_content(self : View) -> View {
+  guard self.lent(windowed_room) is Some((_, room_now, true)) else { return self }
+  self
+  .offset(By(fn() { (0.0, room_now().offset) }))
+  .scale(By(fn() { room_now().scale }), about=Drawn)
+  .alpha(By(fn() { room_now().alpha }))
+}
+
+///|
+/// Draw this row's ground clear of the enclosing room's soft edge. It remains clipped to the room's height and
+/// follows any fading or stretching outside the list's row.
+pub fn View::list_room_ground(self : View) -> View {
+  match self.lent(windowed_room) {
+    Some((slot, _, true)) => self.drawn_clear_of(slot)
+    _ => self
+  }
+}
+
+///|
+/// A page's list (`s`: Scroll::list) scrolling up and down in it (View::scrolls, `slop` and `bar` as there) holding the
+/// blocks `keys` names, in their order, one under another from its top, nothing else: each made by `make` in a node of
+/// its own as it comes to show (its room, from the column's top to its foot, met by any of it), let go as it no more
+/// does, as tall in the column meanwhile as it was last laid out (`est` where it never was); one a scroll goes past made
+/// too, only to be measured, and let go in the same layout. So `make` makes a block's nodes and reads what they show,
+/// and starts nothing outside them (a draft, a call to the core, anything said): what is kept for a block is started
+/// as `seen` tells it came in sight, told as the layout that found it is done, of the logic's moment, whether a frame
+/// is painted before what comes next or not (laid out within another's telling: in its turn after it, to the list if
+/// it is still there): in sight then (at an input's moment, an event's, one come due, or a frame's: where a frame is
+/// drawn ahead of what the host has come to, where it is at that, not where it is drawn), or gone across as it went
+/// on by itself (a fling, a wheel's notches easing in), whether the frames between were many or one, whatever moment
+/// each was drawn at; never one gone past as it was moved at once (a wheel's turn, a drag's move, its bar, put) nor as
+/// it was first laid out where it was scrolled to. How tall each that does not show was is forgotten as the column is
+/// laid out at another width or all words are measured anew.
+/// `from_end` (a chat's, an old view's list's `from_end` and `stick_end`): shorter than the column, its blocks at its
+/// foot; first shown at its end; at its end, kept there as what it holds grows or what shows is laid out taller,
+/// no longer once it is scrolled from there, again once it is back. `follows` says, followed, whether it is kept at its
+/// end so. With `align_end=false`, a shorter list starts at its top while retaining end-following; the option has no
+/// effect without `from_end`. `shown` is told the keys of the blocks in sight, in order, as they change (what is read, how far from its
+/// end). `put`, said, puts it at once where that block's top is that far under its top (it follows its end no more),
+/// and is said none again. `put_fraction` and `position` restore and read a measured fraction of a row as in
+/// `scrolls_anchored`; `put_fraction_lead_within_row` keeps its lead within that row. A block come at its end while it follows that `fresh` says is new to it is glided after, not
+/// there at once; one come that is taller than what shows under `cover` (what lies over its top: a bar) is glided to
+/// only as far as its top under that, read from its top (Follow.kt), and it follows its end no more. `read_from_top`
+/// may say false for a block whose end should stay in view even when tall, such as the reader's own message.
+/// `rooms`: the blocks' rooms as they are now (read before the column is laid out: a block's room by its key and the
+/// height and width it measured in that layout), where heights themselves follow a shared motion; the list follows those rooms
+/// directly, without another glide over their motion. `room_transforms=false` leaves displacement, scale and opacity
+/// to `list_room_content` on the content; `list_room_ground` keeps a separate ground clear of the room's soft edge.
+/// `kept_keys`: blocks needed outside the visible window too, such
+/// as a send's landing while the list glides towards it, laid out in their own slots, still cut by the list, not among
+/// those `shown` reports in sight. `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last
+/// block, laid out even while the last block is off screen. Where its host sets a page's list's rows on its pixels
+/// (Tree::set_rows_grid), each block's room is as tall as whole pixels.
+pub fn[K : Hash + Eq] View::scrolls_window(
+  self : View,
+  s : Scroll,
+  keys : () -> Array[K],
+  make : (View, K) -> Unit,
+  est? : Double = 80.0,
+  slop? : Double,
+  bar? : ScrollBar,
+  from_end? : Bool = false,
+  align_end? : Bool = true,
+  follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
+  shown? : @signals.Signal[Array[K]],
+  put? : @signals.Signal[(K, Double)?],
+  put_fraction? : @signals.Signal[(K, Double, Double)?],
+  put_fraction_lead_within_row? : Bool = false,
+  fresh? : (K) -> Bool = fn(_) { false },
+  read_from_top? : (K) -> Bool = fn(_) { true },
+  cover? : () -> Double = fn() { 0.0 },
+  rooms? : () -> (K, Double, Double) -> ListRoom,
+  room_transforms? : Bool = true,
+  kept_keys? : () -> Array[K],
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  foot_room? : () -> Double = fn() { 0.0 },
+  seen? : (Array[K]) -> Unit,
+  position? : AnchoredPosition[K],
+) -> View {
+  // (only what shows: nothing made ahead of it; each never laid out counted as `est`, not as the mean of those laid out)
+  self.scrolls_anchored_impl(
+    s, keys, make, est~, from_end~, align_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
+    put?=put, put_fraction?=put_fraction, put_fraction_lead_within_row~, rooms?=rooms, room_transforms~,
+    fresh~, read_from_top~, cover~, kept_keys?=kept_keys, bar_clear~, foot_room~, fixed_estimate=true, on_grid=true,
+    seen?=seen, position?=position,
+  )
+}
+
+///|
+/// The same list laid out the way before it, its blocks' heights told back as each is laid out and the column laid out
+/// again by them, where its blocks' rooms follow a shared motion read as each is worked out (`room`, as ui's
+/// ListRows::in_node gives it; `moving`, the keys whose rooms move): ListRows::in_node's lists alone, no page's, till
+/// those rooms are read before the layout as View::scrolls_window's `rooms` are. As it was:
 /// A page's list (`s`: Scroll::list, what it holds above moved with it as it grows: Scroll::grew_above) scrolling up and
 /// down in it (View::scrolls, `slop` and `bar` as there) holding the
 /// blocks `keys` names, in their order, one under another from its top, nothing else: each made by `make` in a node of
@@ -56,10 +157,12 @@ pub fn View::list_room(self : View) -> ListRoom? {
 /// as their heights are told) while it follows, glided from where it was drawn; not as the column is laid out shorter.
 /// `room`: a block's room as its measured height changes, where heights themselves follow a shared motion. The
 /// list follows those rooms directly, without another glide over their motion; natural heights remain cached.
+/// `room_transforms`: false leaves a room's displacement, scale and opacity to a part of the row marked with
+/// `list_room_content`; a ground marked `list_room_ground` stays clear of its soft edge.
 /// `kept`: a block needed outside the visible window too, such as a send's landing while the list glides towards it.
 /// It is laid out in its own slot, still cut by the list, and does not change which rows `shown` reports in sight.
 /// `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last block, laid out even while the last block is off screen.
-pub fn[K : Hash + Eq] View::scrolls_window(
+pub fn[K : Hash + Eq] View::scrolls_window_rooms(
   self : View,
   s : Scroll,
   keys : () -> Array[K],
@@ -75,6 +178,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
   room? : (K, Double) -> ListRoom,
+  room_transforms? : Bool = true,
   kept? : (K) -> Bool,
   moving? : () -> Array[K],
   kept_keys? : () -> Array[K],
@@ -567,7 +671,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       }
       let room_now = fn() { laid_now().map(fn(b) { b.4 }).unwrap_or(list_room(0.0)) }
-      slot.lends(windowed_room, room_now) |> ignore
+      slot.lends(windowed_room, (slot, room_now, room is Some(_))) |> ignore
       // (as tall as it is counted, showing or not: as what it holds was told laid out, est before; never as tall as
       // what it holds is while that is still to be laid out, the column's end gone up and back in one frame)
       slot
@@ -583,10 +687,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       slot.show(shows, fn(v) {
         // (as tall as what it holds, whatever its slot is counted as till that is told)
         v.shrink(Is(0.0)) |> ignore
-        if room is Some(_) {
-          v.offset(By(fn() { (0.0, room_now().offset) }))
-          .scale(By(fn() { room_now().scale }), about=Drawn)
-          .alpha(By(fn() { room_now().alpha })) |> ignore
+        if room is Some(_) && room_transforms {
+          v.list_room_content() |> ignore
         }
         showing[k] = true
         v.owns(fn() { showing.remove(k) }) |> ignore

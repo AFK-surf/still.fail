@@ -30,6 +30,8 @@ priv struct Hand {
   pointer : @signals.Signal[(Double, Double)]
   down : @signals.Signal[Bool]
   pointing : @signals.Signal[Pointing]
+  /// whether a physical keyboard is at hand (keyboard), independent of the pointer's current input
+  keyboard : @signals.Signal[Bool]
   /// whether a finger or a button held down is past the slop of where the press was seen going down (Ctx::press's
   /// `moved`): what reads the press is built again as it goes past, not as it moves
   beyond : @signals.Signal[Bool]
@@ -58,6 +60,7 @@ let hand : Hand = {
   pointer: @signals.signal((0.0, 0.0), same=fn(a, b) { a.0 == b.0 && a.1 == b.1 }),
   down: @signals.signal(false),
   pointing: @signals.signal(Finger),
+  keyboard: @signals.signal(false, same=fn(a, b) { a == b }),
   beyond: @signals.signal(false),
   events: @signals.signal(0),
   presses: @signals.signal(0),
@@ -87,6 +90,10 @@ fn hand_arrive(c : Ctx) -> Unit {
   let p = c.press_seen
   hand.beyond.set(c.down && ((c.px - p.x).abs() > press_slop || (c.py - p.y).abs() > press_slop))
   hand.pointing.set(pointing())
+  // Asking the Android host enumerates input devices: do it each frame only while something follows the answer.
+  if hand.keyboard.watched() {
+    hand.keyboard.set(keyboard_now())
+  }
   hand.asked.set(c.asked_actions.map(fn(a) { a.0 }))
   @signals.end_batch()
 }

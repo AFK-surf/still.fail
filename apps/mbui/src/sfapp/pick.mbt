@@ -70,25 +70,3 @@ fn pickable(
 fn desk_picks() -> Bool {
   @sfbase.mouse_picks()
 }
-
-///|
-/// Over the phone's list: the picked passage's handles and its bar (sfbase's pick_layer), quoted into its draft.
-fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  let draft = draft_key(r)
-  @sfbase.pick_layer(c, list_key(r), bar_foot(), dmax(@sfpages.composer_room(c, draft), tabletop_clear(c)), desk_picks(), fn(
-    author,
-    words,
-    ts,
-    role,
-  ) {
-    // into the chat's draft, as the core keeps it (the composer's: sfpages)
-    c.tell("pick/quote", fn() {
-      @sfbase.writing_quote(src, @sfbase.writing(src, draft), {
-        "author": Json::string(author),
-        "text": Json::string(words),
-        "ts": Json::string(ts),
-        "role": Json::string(role),
-      })
-    })
-  })
-}
