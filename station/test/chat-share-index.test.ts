@@ -127,3 +127,61 @@ test("a failed share batch rolls its index entries and cursor back together", ()
     assert.equal(db.prepare("SELECT count(*) AS n FROM chat_share_targets").get()?.n, 3);
   } finally { store.close(); }
 });
+
+test("each share decision and its pending changes use one snapshot", () => {
+  const dir = mkdtempSync(join(tmpdir(), "share-snapshot-")), path = join(dir, "store.db");
+  const store = Store.open(path), db = store.db, old = new DatabaseSync(path), now = 10_000;
+  try {
+    old.prepare(add).run("first", share({ workspace: "one", used: now - XSHARE_IDLE_MS - 100 }), now);
+    installChatShareIndex(db); finish(db);
+    const observed = (change: () => void) => {
+      let changed = false;
+      return new Proxy(db, { get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!sql.startsWith("SELECT 1 FROM chat_share_index_meta")) return statement;
+          return new Proxy(statement, { get(stmt, part) {
+            if (part === "get") return (...args: Parameters<typeof statement.get>) => {
+              const result = stmt.get(...args);
+              if (!changed) { changed = true; change(); }
+              return result;
+            };
+            const value = Reflect.get(stmt, part, stmt);
+            return typeof value === "function" ? value.bind(stmt) : value;
+          } });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      } });
+    };
+    const insert = old.prepare(add), update = old.prepare("UPDATE chat_shares SET shared = ? WHERE session = ?");
+    const beforeInsert = observed(() => insert.run("later", share({ workspace: "two", used: now - 1 }), now));
+    assert.deepEqual(liveChatShareRows(beforeInsert, now)?.map((row) => row.session), []);
+    assert.deepEqual(liveChatShareRows(db, now)?.map((row) => row.session), ["later"]);
+    const beforeChange = observed(() => update.run(share({ workspace: "three", used: now - 10 }), "first"));
+    assert.deepEqual(dueChatShareRows(beforeChange, now - 200, now)?.rows.map((row) => row.session).sort(), ["first", "later"]);
+    // The overlay includes the still-dirty later row, but the deadline filter rejects it.
+    const afterChange = dueChatShareRows(db, now - 200, now)!;
+    assert.deepEqual(afterChange.rows.filter((row) => toChatShare(row).to.some((t) => t.used + XSHARE_IDLE_MS > now - 200 && t.used + XSHARE_IDLE_MS <= now)), []);
+    finish(db);
+    const beforeLapse = observed(() => update.run(share({ workspace: "one", used: now - XSHARE_IDLE_MS - 1 }), "first"));
+    assert.deepEqual([...lapsedChatShareWorkspaces(beforeLapse, ["one", "three"], now)!], []);
+    assert.deepEqual([...lapsedChatShareWorkspaces(db, ["one", "three"], now)!], ["one"]);
+  } finally { old.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a share with two targets tells its chat once when one lapses and keeps its other target", () => {
+  const time = testClock(), store = Store.open(":memory:", null, time.clock), db = store.db, now = store.now();
+  try {
+    db.prepare(add).run("chat", share({ workspace: "due", used: now - XSHARE_IDLE_MS - 100 },
+      { workspace: "live", used: now - 1000 }), now);
+    installChatShareIndex(db); finish(db);
+    const changes: unknown[] = [], stop = store.subscribe((change) => changes.push(change));
+    assert.equal(store.lapseChatShares(now - 200), now - 1000 + XSHARE_IDLE_MS);
+    stop();
+    assert.deepEqual(changes, [
+      { type: "session", key: "chat" },
+      { type: "chatMark", thread: null, session: "chat", share: { to: [{ workspace: "live", name: "live" }], write: false } },
+    ]);
+  } finally { store.close(); }
+});

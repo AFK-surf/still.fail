@@ -63,6 +63,10 @@ export function installChatShareIndex(db: DatabaseSync): void {
         BEGIN ${dirty("OLD.session")} ${dirty("NEW.session")} ${conflicts} END;
       CREATE TRIGGER chat_share_index_before_drop BEFORE DELETE ON chat_shares BEGIN ${dirty("OLD.session")} END;
     `);
+    else {
+      const meta = db.prepare("SELECT version FROM chat_share_index_meta WHERE id = 1").get() as { version: number } | undefined;
+      if (meta?.version !== VERSION) throw new Error(`chat share index version ${meta?.version ?? "missing"} is incompatible with ${VERSION}`);
+    }
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
