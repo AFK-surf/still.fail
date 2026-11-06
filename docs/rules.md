@@ -27,6 +27,8 @@
 
 `sh rules/protocol/check.sh`（PATH 上要有 tamarin-prover 和 maude，`MAUDE_LIB` 指到 Maude 的目录）：每条引理各证一遍，再把三处判断各改错一份（station 收没签名的记录、没看码就批准、封给没人认证的箱钥匙），每份都要被 Tamarin 找出攻击。CI 的 `rules` 工作流 `protocol` 跑它，约 15 秒，Tamarin 1.12.0 和 Maude 3.5.1 从各自的 GitHub release 取、进缓存。
 
+`rules/protocol/person.spthy` 单独写个人锁（绑定、沿链收设备、面对面批准）。放进 `lock.spthy` 时状态空间变大，那边原本能证的引理在一分钟内跑不完，所以分开（2026-11-06）。
+
 ## 写证明的坑
 - MoonBit 翻成 WhyML 时**不加括号**：`a && (b || c)` 翻出来是 `a /\ b \/ c`，意思变了。每个公式只用一种连接词，其余拆成具名的 `predicate`。
 - `by` 是 WhyML 的关键字，不能当参数名。
