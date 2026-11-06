@@ -644,10 +644,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     }
     last_moving.val = now_moving
-    // (those made whose contents changed, or that are to be laid out anew: laid out again, counted as they come to)
+    // (those made whose contents changed, or that are to be laid out anew, or whose layout flex forgot since (what holds
+    // them laid out nowhere, a page under another: @flex.Node::holds_layout): laid out again, counted as they come to)
     @signals.untracked(fn() {
       for k, b in blocks {
-        if anew || tree.nodes[b.slot.at].flex.dirty {
+        if anew || !tree.nodes[b.slot.at].flex.holds_layout() {
           lay_block(k, b, w) |> ignore
         }
       }
@@ -818,7 +819,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       vh == laid_vh.val &&
       !watch.is_stale() &&
       !moves.is_stale() &&
-      !blocks.values().any(fn(b) { tree.nodes[b.slot.at].flex.dirty }) {
+      blocks.values().all(fn(b) { tree.nodes[b.slot.at].flex.holds_layout() }) {
       put_blocks(ox, oy, vh)
       return laid_reach.val
     }

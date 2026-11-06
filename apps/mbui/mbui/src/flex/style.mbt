@@ -1135,6 +1135,14 @@ pub fn Node::left_out(self : Node) -> Bool {
 }
 
 ///|
+/// Whether its last layout still holds: nothing of it changed since (not dirty, nor found so by this compute), and it
+/// was not laid out nowhere since (its layout forgotten then, laid out again as it comes back: left_out's forget). What
+/// lays out its own children (layout_children) lays out again those whose layout does not hold.
+pub fn Node::holds_layout(self : Node) -> Bool {
+  !self.dirty && self.p_ok
+}
+
+///|
 /// Whether the last compute() laid this node out again, rather than
 /// reusing its layout from before (or not reaching it, its parent's being
 /// reused): when it did not, nothing under it moved or changed size.
