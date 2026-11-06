@@ -19,16 +19,32 @@ for pair in $pairs; do
     rm -f "$O/$name.dl" "$O/$name.png" "$O/$name.whole.png" "$O/$name.render.log"
   done
 done
-code=0
-# The producer has no host: use the same Wasm test program on every rendering machine. Native UI tests run in the
-# test jobs already; compiling them again here needlessly spends the renderer job's build budget.
-MBUI_PAINT_DAMAGE_PRINT=1 moon test --target wasm-gc --release src/ui/field_present_wbtest.mbt > "$O/frames.log" 2>&1 || code=1
-awk -v out="$O" '/^DLEND/{p=0; close(file)} p{print > file} /^DLBEGIN /{file=out "/" $2 ".dl"; p=1}' "$O/frames.log"
 renderer=${MBUI_PAINT_DAMAGE_RENDERER:-}
 if [ -z "$renderer" ]; then
   (unset MBUI_APP_MOD; APP=render bash "$D/mac.sh" build) > "$O/build.log" 2>&1
   renderer="$PWD/$(pkg_build render native release)/render.exe"
 fi
+code=0
+# The producer has no host: first use its fixed text to request the same words from this renderer. Cluster numbers
+# and boxes from one font system cannot name glyphs in another. Then run the same inputs with this host's replies.
+# Both runs use the Wasm test program; no second native UI test build is needed in the rendering job.
+MBUI_PAINT_DAMAGE_PRINT=1 MBUI_PAINT_DAMAGE_TEXT= moon test --target wasm-gc --release src/ui/field_present_wbtest.mbt > "$O/seed.log" 2>&1 || code=1
+MBUI_DL_RECORD_TEXT=1 MBUI_DL="$O/seed.log" "$renderer" > "$O/text.log" 2>&1 || {
+  echo "paint damage: host text recording failed (see $O/text.log)"
+  exit 1
+}
+if ! grep -q 'mbui-render: text recorded' "$O/text.log"; then
+  echo "paint damage: host text recording did not finish (see $O/text.log)"
+  exit 1
+fi
+sed -n 's/^.*TEXTREC /TEXTREC /p' "$O/text.log" > "$O/host.textrec"
+if [ ! -s "$O/host.textrec" ]; then
+  echo "paint damage: host text recording is empty (see $O/text.log)"
+  exit 1
+fi
+MBUI_PAINT_DAMAGE_PRINT=1 MBUI_PAINT_DAMAGE_TEXT="$(cat "$O/host.textrec")" \
+  moon test --target wasm-gc --release src/ui/field_present_wbtest.mbt > "$O/frames.log" 2>&1 || code=1
+awk -v out="$O" '/^DLEND/{p=0; close(file)} p{print > file} /^DLBEGIN /{file=out "/" $2 ".dl"; p=1}' "$O/frames.log"
 for pair in $pairs; do
   before=${pair%:*}
   after=${pair#*:}
@@ -43,8 +59,8 @@ for pair in $pairs; do
       code=1
       continue
     }
-  if grep -Eq '[1-9][0-9]* not known here' "$O/$after.render.log"; then
-    echo "paint damage: $after has glyphs the host could not render (see $O/$after.render.log)"
+  if grep -Eq '[1-9][0-9]* (not known here|another size here)' "$O/$after.render.log"; then
+    echo "paint damage: $after has glyphs that do not match the host's text (see $O/$after.render.log)"
     code=1
   elif [ ! -s "$O/$after.png" ] || [ ! -s "$O/$after.whole.png" ]; then
     echo "paint damage: $after did not produce both pictures (see $O/$after.render.log)"

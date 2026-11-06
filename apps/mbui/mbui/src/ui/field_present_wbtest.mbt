@@ -37,7 +37,7 @@ fn paint_damage_local(frame : HostFrame) -> Unit raise {
 ///|
 test "typing into an existing line tells the host to redraw the changed text" {
   let f = Field::new(text="one\ntwo\nthree\nfour\nfive\n")
-  let t = Tester::new(fn(_c) { }, w=300.0, h=300.0, platform=2, text=paint_damage_text)
+  let t = Tester::new(fn(_c) { }, w=300.0, h=300.0, platform=2, text=paint_damage_text())
   set_view_app(fn(root) {
     root.box(fn(box) {
       box.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
@@ -72,7 +72,7 @@ test "typing into an existing line tells the host to redraw the changed text" {
 ///|
 test "a retained field's timed caret redraws where it disappears and appears" {
   let f = Field::new()
-  let t = Tester::new(fn(_c) { }, w=300.0, h=300.0, platform=2, text=paint_damage_text)
+  let t = Tester::new(fn(_c) { }, w=300.0, h=300.0, platform=2, text=paint_damage_text())
   set_view_app(fn(root) {
     root.ground(Is(0xF5F5F7FFL)) |> ignore
     // A stationary layer keeps the caret-hidden draw list renderable, too; the root's ground is the clear colour.
@@ -115,7 +115,7 @@ test "paint invalidation covers a field moved, shrunk, removed and first shown, 
   let width = @signals.signal(120.0)
   let shown = @signals.signal(true)
   let f = Field::new(text="word")
-  let t = Tester::new(fn(_c) { }, w=400.0, h=300.0, platform=2, text=paint_damage_text)
+  let t = Tester::new(fn(_c) { }, w=400.0, h=300.0, platform=2, text=paint_damage_text())
   set_view_app(fn(root) {
     root.box(fn(still) {
       still.over(Is(true)).offset(Is((320.0, 20.0))).width(Is(Some(60.0))).height(Is(Some(60.0)))
@@ -164,7 +164,7 @@ test "paint invalidation covers a field moved, shrunk, removed and first shown, 
 ///|
 fn paint_damage_under(glass : Bool) -> Unit raise {
   let f = Field::new(text="one\ntwo\nthree\nfour\nfive\n")
-  let t = Tester::new(fn(_c) { }, w=400.0, h=300.0, platform=2, scale=2.0, text=paint_damage_text)
+  let t = Tester::new(fn(_c) { }, w=400.0, h=300.0, platform=2, scale=2.0, text=paint_damage_text())
   set_view_app(fn(root) {
     root.box(fn(outer) {
       outer.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))).height(Is(Some(180.0)))
@@ -219,10 +219,18 @@ test "paint invalidation includes glass sampling the changed text and keeps unre
   paint_damage_under(true)
 }
 
+///|
+fn paint_damage_text() -> String {
+  let text = @env.get_env_var("MBUI_PAINT_DAMAGE_TEXT").unwrap_or("")
+  if text == "" { paint_damage_coretext } else { text }
+}
+
 // Core Text, macOS 27.0.1, 2026-11-06, scale 2: MBUI_TEXT_RECORD=1 from the fields above.
 // These are host replies, not invented glyph metrics; the renderer rejects a draw list with missing glyphs.
+// Unit tests use these fixed replies. Pixel checks first record the rendering host's own replies and supply them
+// through MBUI_PAINT_DAMAGE_TEXT, so cluster numbers, glyph boxes and layout all belong to the host drawing them.
 ///|
-let paint_damage_text : String =
+let paint_damage_coretext : String =
   #|TEXTREC {"g":0,"r":[0,0,9.5,10.5,0,-9.5,0]}
   #|TEXTREC {"g":1,"r":[0,0,8.5,10,0.5,-9.5,0]}
   #|TEXTREC {"g":10,"r":[0,0,9,9.5,0,-9,0]}

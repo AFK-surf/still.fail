@@ -149,6 +149,10 @@ fn main {
   }
   // (a tool's arguments, from the process: not an app's reads of where it runs)
   let path = arg("MBUI_DL")
+  if path != "" && arg("MBUI_DL_RECORD_TEXT") == "1" {
+    record_text(read_text(path))
+    return
+  }
   let out = arg("MBUI_DL_PNG")
   if path == "" || out == "" {
     say("mbui-render: MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png>")

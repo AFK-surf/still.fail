@@ -54,7 +54,7 @@ test "the same text input at the same moments has the same drawing at 60 Hz, 120
   let pictures : Array[Array[Int64]] = []
   for hz in [0, 60, 120] {
     let f = Field::new(text="one\ntwo\nthree\nfour\nfive\n")
-    let t = Tester::new(fn(_) { }, w=300.0, h=300.0, platform=2, text=paint_damage_text)
+    let t = Tester::new(fn(_) { }, w=300.0, h=300.0, platform=2, text=paint_damage_text())
     set_view_app(fn(root) {
       root.box(fn(n) {
         n.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
@@ -97,7 +97,7 @@ test "the same text input at the same moments has the same drawing at 60 Hz, 120
 test "a field redrawn and moved before its caret wakes erases its old places and repaints its current place" {
   let x = @signals.signal(20.0)
   let f = Field::new(text="word")
-  let t = Tester::new(fn(_) { }, w=400.0, h=300.0, platform=2, text=paint_damage_text)
+  let t = Tester::new(fn(_) { }, w=400.0, h=300.0, platform=2, text=paint_damage_text())
   set_view_app(fn(root) {
     root.box(fn(n) {
       n.over(Is(true)).offset(By(fn() { (x.get(), 20.0) })).width(Is(Some(100.0))) |> ignore
