@@ -42,6 +42,10 @@ fn Tree::sampled_shown(self : Tree, upto : Double) -> Unit {
 /// What a sample at the moment shown set on the nodes set back to the logic's (Tree::sampled_shown): before the tree is
 /// brought to a moment of its own (an event, a frame, a look), what it then reads and draws the logic's.
 fn Tree::unsample(self : Tree) -> Unit {
+  // (inside a layout, its own or a frame's: what it samples is its own, put back as the tree is next brought)
+  if self.look_laying || self.shadow_sampling || self.laying > 0 {
+    return
+  }
   guard self.sample_restores.length() > 0 || self.shadow_saved is Some(_) else { return }
   let restores = self.sample_restores.copy()
   self.sample_restores.clear()

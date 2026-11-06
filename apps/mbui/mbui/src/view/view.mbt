@@ -3763,6 +3763,8 @@ fn Tree::measured_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
+  // (the logic's geometry measured: what a frame shown later laid out put back first, Tree::shadow_shown)
+  self.unsample()
   let shown = @signals.untracked(fn() { self.clock.get() })
   // A measure requested by the sampling already under way belongs to that sample. Rewinding it to the input
   // clock and restoring it can notify the same visual threshold again, asking for this measure without end.
@@ -6806,6 +6808,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
 /// View::drawn_now's): false where it cannot be (inside such a settle already, or the window not sized yet), true where
 /// it is or nothing was due.
 fn Tree::settled_at(self : Tree, at : Double) -> Bool {
+  self.unsample()
   if self.standing || self.last_w <= 0.0 {
     return false
   }
