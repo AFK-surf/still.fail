@@ -26,4 +26,46 @@ test "a rolling cache's kind" {
 test "a time of GitHub's in seconds" {
   assert_eq(iso_s("1970-01-01T00:00:00Z"), 0.0)
   assert_eq(iso_s("2026-10-22T05:37:59.731503Z"), 1792647479.0)
+  for t in [
+    "2026-11-xxT00:00:00Z", "2026-02-30T00:00:00Z", "2026-13-01T00:00:00Z",
+    "2026-01-01T24:00:00Z", "2026-01-01T00:60:00Z", "2026-01-01T00:00:60Z",
+    "2026/01/01T00:00:00Z", "2026-01-01T00:00:00", "2026-01-01T00:00:00+01:00",
+    "2026-01-01T00:00:00.Z", "2026-01-01T00:00:00.1xZ",
+  ] {
+    assert_eq(iso_s(t), 0.0, msg=t)
+  }
+  assert_true(iso_s("2024-02-29T23:59:59Z") > 0.0)
+  assert_eq(iso_s("2025-02-29T23:59:59Z"), 0.0)
+}
+
+///|
+test "cache sizes are non-negative integers without overflow or rounding" {
+  assert_eq(cache_size("0"), Some(0L))
+  assert_eq(cache_size("2000000"), Some(2000000L))
+  assert_eq(cache_size("9007199254740993"), Some(9007199254740993L))
+  assert_eq(cache_size("9223372036854775807"), Some(9223372036854775807L))
+  for s in ["", "-1", "+1", "1.5", "1x", "9223372036854775808"] {
+    assert_eq(cache_size(s), None, msg=s)
+  }
+}
+
+///|
+test "only old caches of deleted branches are removed" {
+  let heads : Map[String, Bool] = { "refs/heads/main": true, "refs/heads/live": true }
+  let cache : Cache = {
+    id: "1", key: "any-key", ref_: "refs/heads/gone", size: 10L, created: 1000.0, accessed: 1000.0,
+  }
+  assert_true(deleted_head_cache(cache, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, ref_: "refs/heads/live" }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, ref_: "refs/pull/123/merge" }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, ref_: "refs/tags/old" }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, created: 1001.0 }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, accessed: 1001.0 }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, created: 0.0 }, heads, 2800.0))
+  assert_false(deleted_head_cache({ ..cache, accessed: 0.0 }, heads, 2800.0))
+}
+
+///|
+test "a branch name is one shell argument" {
+  assert_eq(shell_arg("can't;$(echo bad)"), "'can'\\''t;$(echo bad)'")
 }
