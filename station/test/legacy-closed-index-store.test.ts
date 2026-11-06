@@ -32,6 +32,68 @@ test("an empty answer scope does not query the database", () => {
   assert.deepEqual(answersSince({ db } as ReturnType<typeof makeStore>, 50, []), []);
 });
 
+for (const reopened of [false,true]) test(`deleting a prepared chat removes its closed-card state (reopened ${reopened})`, () => {
+  const dir = mkdtempSync(join(tmpdir(),"closed-cards-delete-")), { path,threads } = oldStore(dir);
+  let store = Store.open(path);
+  try {
+    const thread = threads[0]!;
+    while (!closedCardsStep(store.db,thread).done) { /* prepare */ }
+    if (reopened) {
+      // An already deployed sidecar did not have a thread-deletion trigger.
+      store.db.exec("DROP TRIGGER IF EXISTS legacy_closed_drop_thread");
+      store.close();
+      store = Store.open(path);
+    }
+    store.insertSession({ key:"delete-me",connect:"ember",runtime:"claude",profile:"cc",workspace:"/w",
+      token:"delete-me",createdAt:1,lastActiveAt:1 });
+    store.joinThread(thread,"delete-me","ember");
+    store.deleteSession("delete-me");
+    assert.equal(store.db.prepare("SELECT 1 FROM threads WHERE id=?").get(thread),undefined);
+    assert.equal(store.db.prepare("SELECT 1 FROM legacy_closed_scopes WHERE thread=?").get(thread),undefined);
+    assert.deepEqual(closedCardsStep(store.db,thread),{ done:true, visited:0 });
+    assert.equal(store.db.prepare("SELECT 1 FROM legacy_closed_scopes WHERE thread=?").get(thread),undefined);
+  } finally { store.close(); rmSync(dir,{ recursive:true, force:true }); }
+});
+
+test("a queued closed-card request does not recreate state after its chat is deleted", async () => {
+  const dir = mkdtempSync(join(tmpdir(),"closed-cards-deleted-worker-")), { path,threads } = oldStore(dir);
+  const store = Store.open(path), previous = Promise.withResolvers<void>();
+  const builder = new ClosedCardsBuilder(path,{ previousGone:previous.promise });
+  try {
+    const thread = threads[0]!;
+    assert.deepEqual(closedCardsStep(store.db,thread,2),{ done:false, visited:2 });
+    store.insertSession({ key:"delete-me",connect:"ember",runtime:"claude",profile:"cc",workspace:"/w",
+      token:"delete-me",createdAt:1,lastActiveAt:1 });
+    store.joinThread(thread,"delete-me","ember");
+    const ready = builder.ready([thread]);
+    store.deleteSession("delete-me");
+    previous.resolve();
+    await ready;
+    assert.equal(store.db.prepare("SELECT 1 FROM legacy_closed_scopes WHERE thread=?").get(thread),undefined);
+    assert.equal(store.db.prepare("SELECT 1 FROM legacy_closed_scopes WHERE thread=?").get(threads[1]!),undefined);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir,{ recursive:true, force:true }); }
+});
+
+test("an older prepared deletion uses the cleanup installed on reopen", () => {
+  const dir = mkdtempSync(join(tmpdir(),"closed-cards-old-delete-")), { path,threads } = oldStore(dir);
+  let store = Store.open(path);
+  const thread = threads[0]!;
+  while (!closedCardsStep(store.db,thread).done) { /* prepare */ }
+  store.db.exec("DROP TRIGGER legacy_closed_drop_thread");
+  store.close();
+  const old = new DatabaseSync(path);
+  const dropCards = old.prepare("DELETE FROM closed_cards WHERE thread=?");
+  const dropThread = old.prepare("DELETE FROM threads WHERE id=?");
+  store = Store.open(path);
+  try {
+    old.exec("BEGIN IMMEDIATE");
+    dropCards.run(thread);
+    dropThread.run(thread);
+    old.exec("COMMIT");
+    assert.equal(store.db.prepare("SELECT 1 FROM legacy_closed_scopes WHERE thread=?").get(thread),undefined);
+  } finally { old.close(); store.close(); rmSync(dir,{ recursive:true, force:true }); }
+});
+
 test("old prepared writes and read snapshots agree as requested chats are prepared", async () => {
   const dir = mkdtempSync(join(tmpdir(), "closed-cards-store-"));
   const { path, threads } = oldStore(dir);

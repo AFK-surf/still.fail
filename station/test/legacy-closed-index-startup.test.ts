@@ -94,3 +94,48 @@ test("a failed installation rolls back its tables without touching old closed ca
     assert.equal(hasLegacyClosedCards(db), true);
   } finally { db.close(); }
 });
+
+test("a native index can coexist with newer closed-card metadata", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`CREATE TABLE threads(id INTEGER PRIMARY KEY);
+      CREATE TABLE closed_cards(thread INTEGER NOT NULL,n INTEGER NOT NULL,viewer TEXT NOT NULL,at INTEGER NOT NULL,PRIMARY KEY(thread,n));
+      CREATE INDEX closed_cards_thread_at ON closed_cards(thread,at);
+      CREATE TABLE legacy_closed_meta(id INTEGER PRIMARY KEY,version INTEGER NOT NULL);
+      CREATE TABLE legacy_closed_scopes(thread INTEGER PRIMARY KEY);
+      INSERT INTO legacy_closed_meta VALUES(1,2); INSERT INTO legacy_closed_scopes VALUES(1);`);
+    installClosedCardsIndex(db);
+    assert.equal(db.prepare("SELECT version FROM legacy_closed_meta").get()?.version,2);
+    assert.equal(db.prepare("SELECT thread FROM legacy_closed_scopes").get()?.thread,1);
+    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='legacy_closed_drop_thread'").get(),undefined);
+  } finally { db.close(); }
+});
+
+test("two openers can install closed-card cleanup concurrently", () => {
+  const dir = mkdtempSync(join(tmpdir(),"closed-cards-cleanup-race-")), file = join(dir,"old.db");
+  const db = new DatabaseSync(file), old = new DatabaseSync(file);
+  try {
+    db.exec(`PRAGMA journal_mode=WAL; CREATE TABLE threads(id INTEGER PRIMARY KEY);
+      CREATE TABLE closed_cards(thread INTEGER NOT NULL,n INTEGER NOT NULL,viewer TEXT NOT NULL,at INTEGER NOT NULL,PRIMARY KEY(thread,n));`);
+    const put = db.prepare("INSERT INTO closed_cards VALUES(1,?,'p',?)");
+    for (let n=1;n<=64;n++) put.run(n,n);
+    installClosedCardsIndex(db);
+    db.exec("DROP TRIGGER legacy_closed_drop_thread");
+    let raced = false;
+    const intercepted = new Proxy(db,{ get(target,key) {
+      if (key === "exec") return (sql: string) => {
+        if (sql === "BEGIN IMMEDIATE" && !raced) {
+          raced = true;
+          old.exec(`CREATE TRIGGER legacy_closed_drop_thread AFTER DELETE ON threads BEGIN
+            DELETE FROM legacy_closed_scopes WHERE thread=OLD.id; END`);
+        }
+        return target.exec(sql);
+      };
+      const value = Reflect.get(target,key,target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    installClosedCardsIndex(intercepted);
+    assert.equal(raced,true);
+    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='legacy_closed_drop_thread'").get());
+  } finally { old.close(); db.close(); rmSync(dir,{ recursive:true, force:true }); }
+});
