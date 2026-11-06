@@ -70,7 +70,7 @@ priv struct SceneLayer {
   /// where another frame had it
   mut block : FixedArray[Double]
   mut block_n : Int
-  mut block_segs : Array[Double]
+  block_segs : Array[Double]
   mut block_seg_base : Int
   mut block_owners : OwnersRun?
 }
