@@ -50,7 +50,8 @@ pub fn View::list_room(self : View) -> ListRoom? {
 /// as `seen` tells it came in sight, told once the frame is painted: in sight as it was laid out (at an input's moment
 /// or a frame's), or gone across as it went on by itself (a fling, a wheel's notches easing in), whether the frames
 /// between were many or one; never one gone past as it was moved at once (a wheel's turn, a drag's move, its bar,
-/// put) nor as it was first laid out where it was scrolled to. How tall each that does not show was is forgotten as the
+/// put) nor as it was first laid out where it was scrolled to, nor anything once the list is let go before the frame
+/// is painted. How tall each that does not show was is forgotten as the
 /// column is laid out at another width or all words are measured anew.
 /// `from_end` (a chat's, an old view's list's `from_end` and `stick_end`): shorter than the column, its blocks at its
 /// foot; first shown at its end; at its end, kept there as what it holds grows or what shows is laid out taller,

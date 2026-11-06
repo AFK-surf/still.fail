@@ -133,3 +133,62 @@ test "scrolls_window flung: every block it glides across told seen (each in sigh
   assert_eq(told, Array::makei(last + 1, fn(i) { i }))
   assert_true(last > 10, msg="glided on: \{sight}")
 }
+
+///|
+/// A column 300 by 100 holding, while `there` says so, a list of `0..<400` 40 tall from its top: windowed (what it told
+/// seen pushed to `told`) or anchored (what it told sighted as come, there): its tree, and its frame `at` drawn with what
+/// it said to tell once it is painted told.
+fn gone_case(windowed : Bool, there : @signals.Signal[Bool], told : Array[Int]) -> (@view.Tree, (Double) -> Unit) {
+  let scroll = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.show(fn() { there.get() }, fn(p) {
+        p.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+        let keys = fn() { Array::makei(400, fn(i) { i }) }
+        let row = fn(b : @view.View, _k : Int) { b.height(Is(Some(40.0))) |> ignore }
+        if windowed {
+          p.scrolls_window(scroll, keys, est=40.0, seen=fn(came) { told.append(came) }, row) |> ignore
+        } else {
+          p.scrolls_anchored(scroll, keys, est=40.0, ahead=0.0, from_end=false, sighted=fn(s) { told.append(s.came) }, row)
+          |> ignore
+        }
+      })
+    })
+    |> ignore
+  })
+  let frame = fn(at : Double) {
+    tree.frame(300.0, 100.0, now=at) |> ignore
+    for f in tree.take_after_paint() {
+      f()
+    }
+  }
+  (tree, frame)
+}
+
+///|
+test "scrolls_window, scrolls_anchored: a list let go after it was laid out at an input's moment, before the frame is painted, tells nothing of what came in sight then; one still there tells it as the frame is painted" {
+  for windowed in [true, false] {
+    for let_go in [false, true] {
+      let there = @signals.signal(true)
+      let told : Array[Int] = []
+      let (tree, frame) = gone_case(windowed, there, told)
+      frame(0.0)
+      let first = told.length()
+      // (a wheel down 400, then another: laid out at the second's moment, rows 10 to 12 in sight then)
+      tree.wheel_at(150.0, 50.0, 0.0, 400.0, 0, 1.0) |> ignore
+      tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, 2.0) |> ignore
+      if let_go {
+        there.set(false)
+      }
+      frame(16.0)
+      let after = told[first:].to_array()
+      if let_go {
+        assert_eq(after, [], msg="windowed \{windowed}")
+      } else {
+        assert_true(after.contains(10), msg="windowed \{windowed}: \{after}")
+      }
+      tree.dispose()
+    }
+  }
+}
