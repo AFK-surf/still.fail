@@ -14,14 +14,15 @@ pub(all) struct ComposerNode {
 
 ///|
 /// The composer of this draft. The page supplies its retained extras, choices and tail. A send reads the current
-/// specification; `place` and `height` describe the page's current room, never an old frame's construction values.
+/// specification; `place` and `room` describe the page's current room (`room`: composer_field_node's), never an old
+/// frame's construction values.
 pub fn composer_node(
   parent : @view.View,
   src : Source,
   draft : String,
   spec : () -> ComposerSpec,
   send : (Writing) -> Unit,
-  height : () -> Double,
+  room : (@view.View, (Double, Double) -> Double),
   extras : (@view.View, Writing, () -> Double, (@view.View) -> Unit) -> Unit,
   place? : () -> ComposerPlace = fn() { composer_alone },
   place_in? : (@view.View, (Double) -> ComposerPlace),
@@ -99,7 +100,7 @@ pub fn composer_node(
       fn(p, moves) { extras(p, w, inner, moves) },
       fn(p) {
         let field = composer_field_node(p, src, w, fn() { spec().station }, fn() { spec().locked }, fn() { spec().offline },
-          hint_words, submit, changed, height, hint_alpha=fn() { hint_alpha() * words_alpha() }, caret_alpha~,
+          hint_words, submit, changed, room, hint_alpha=fn() { hint_alpha() * words_alpha() }, caret_alpha~,
           keys=fn(code, mods) { (ref_keys.val)(code, mods) || composer_input_key(src, spec, w, active, neighbour, code, mods) })
         field_at.val = Some(field)
         field.reacts(fn() { (field.focused(), composing.cold_open.get() == notice_choice_key(draft, "wait")) }, fn(state) {

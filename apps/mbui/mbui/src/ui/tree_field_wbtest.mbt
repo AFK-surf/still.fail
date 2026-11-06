@@ -1660,3 +1660,27 @@ test "words typed into a field of the tree's build nothing of the old frame in t
   }
   assert_eq((f.text(), built), ("abcd", []))
 }
+
+///|
+test "a field of the tree's as many lines at most as its holder's room leaves it (max_lines_in): the window made shorter, fewer in the same layout" {
+  let f = Field::new(text="one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten")
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  let at : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(Is(Some(200.0))) |> ignore
+      // (a line every 20, as many as a fifth of the window's height takes: 8 in 200, 5 in 125)
+      at.val = Some(field(b, f, font_size=10.0, line=20.0, max_lines_in=(root, fn(_, h) { (h / 25.0).to_int() })))
+    })
+    |> ignore
+  })
+  t.draw()
+  let v = at.val.unwrap()
+  assert_eq(v.laid_size().1, 160.0)
+  let tree = view_tree().unwrap()
+  let was = tree.work()
+  t.resize(300.0, 125.0)
+  assert_eq(v.laid_size().1, 100.0)
+  // (worked out as its holder is laid out: one layout, nothing of it read back and laid out again)
+  assert_eq(tree.work().computes - was.computes, 1)
+}

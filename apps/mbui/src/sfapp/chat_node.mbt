@@ -71,7 +71,8 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         r,
         view,
         fn() { @sfpages.composer_side() },
-        height,
+        // (its lines as many as the page's height gives them)
+        (p, fn(_, h) { h }),
         fn(pane) { @sfpages.composer_foot_in(pane) },
         fn() { @sfpages.composer_alone },
         // (words sent: the list to its end, following it)

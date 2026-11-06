@@ -61,7 +61,7 @@ fn jobs_toggle() -> Unit {
 
 ///|
 fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, stint : Int,
-  view : () -> ChatView?, width : () -> Double, corners : () -> FixedArray[@ui.CornerOf]?,
+  view : () -> ChatView?, corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64) -> Unit {
   let chat = fn() { (src.topic)("chat", chat_params(r)).value }
   let station = fn() {
@@ -97,7 +97,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
           bar_fills(title.row(Is(true)).lines_up(Is(Some(Middle))))
           .padding(Is((@ui.Space::px(S2), 0.0, @ui.Space::px(S1), 0.0)))
           .gap(Is(@ui.Space::px(S2_5))).fits(Is(true)) |> ignore
-          chat_title_node(title, src, r, view, width, tips)
+          chat_title_node(title, src, r, view, parent, tips)
           title.show(fn() { view().map_or(false, fn(v) { v.agents.length() == 0 }) && station() is Some(_) }, fn(s) {
             chat_station_node(s, r.station, fn() { station().unwrap() }, fn() { stint })
           })
@@ -208,7 +208,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
 }
 
 ///|
-fn chat_title_node(parent : @view.View, src : Source, r : ChatRef, view : () -> ChatView?, width : () -> Double, tips : @sf.TipLayer) -> Unit {
+fn chat_title_node(parent : @view.View, src : Source, r : ChatRef, view : () -> ChatView?, page : @view.View, tips : @sf.TipLayer) -> Unit {
   let on = [("station", r.station), ("session", r.session)]
   let renaming = fn() {
     items((src.topic)("doing", {}).value, "doing").iter().find_first(fn(d) {
@@ -219,7 +219,7 @@ fn chat_title_node(parent : @view.View, src : Source, r : ChatRef, view : () -> 
   parent.box(fn(t) {
     t.words(By(fn() { if renaming() != "" { renaming() } else { view().map(fn(v) { v.title }).unwrap_or(r.title) } }))
     .words_look(By(fn() { @ui.style_words(chat_title_words) })).ink(By(fn() { @ui.style_ink(chat_title_words) }))
-    .max_width(By(fn() { Some(dmax(chat_title_least, width() * chat_title_part)) }))
+    .max_width(Roomed(page, fn(w, _) { Some(dmax(chat_title_least, w * chat_title_part)) }))
     .cuts(Is(true), keep=true).allow_ellipsis(Is(true)) |> ignore
   }) |> ignore
   let failed = fn() { core_failed(src, ["chat.rename"], on) }
