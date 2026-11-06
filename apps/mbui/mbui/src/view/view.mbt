@@ -4166,9 +4166,13 @@ fn Tree::withins_settled(self : Tree) -> Unit {
 ///|
 fn Tree::withins_ready(self : Tree) -> Unit {
   // A clock reaction can commit another structure while an immediate layout is standing. That layout will finish
-  // the work; entering it again here can alternate the drawn clock and exhaust the stack.
+  // the work; entering it again here can alternate the drawn clock and exhaust the stack. So can a change committed
+  // inside a pass laying the tree out (Tree::laid_out, its own told as it lays out): that pass tells what is under the
+  // pointer once all of it is placed, and one laid out inside it would move the clock to the logic's moment as what it
+  // laid out is told, what reads the clock (a glide) marking its layout from inside the pass (docs/retained.md rule 10).
   if self.committing == 0 &&
     !self.standing &&
+    !self.laying &&
     !self.withins_passing &&
     (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
     (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {

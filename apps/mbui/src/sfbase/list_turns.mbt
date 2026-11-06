@@ -296,9 +296,8 @@ pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
   self.list_rest = list_rest
   self.stepped = c.frame_number()
-  let mut steps = 0
-  while steps < 16 {
-    steps = steps + 1
+  // (each whose turn has come, one taken off the asks at a time: as many as have come by now)
+  while true {
     let i = match self.next_ask() {
       Some(i) => i
       None => return

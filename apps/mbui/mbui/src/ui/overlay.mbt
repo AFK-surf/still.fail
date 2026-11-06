@@ -292,14 +292,15 @@ fn Ctx::trapping_layer(self : Ctx) -> Int {
 }
 
 ///|
-/// Whether layer `l` is `outer` or was built in it (0: the page holds every layer).
+/// Whether layer `l` is `outer` or was built in it (0: the page holds every layer). Up what each was built in, as the
+/// last frame built them: each said as it opened, in the one open then, said before it (Ctx::layer), so the way up
+/// comes to the page's.
 fn Ctx::layer_within(self : Ctx, l : Int, outer : Int) -> Bool {
   if outer == 0 {
     return true
   }
   let mut at = l
-  let mut steps = 0
-  while at != 0 && steps < 64 {
+  while at != 0 {
     if at == outer {
       return true
     }
@@ -307,7 +308,6 @@ fn Ctx::layer_within(self : Ctx, l : Int, outer : Int) -> Bool {
       Some(x) => x.parent
       None => 0
     }
-    steps = steps + 1
   }
   false
 }
@@ -316,8 +316,8 @@ fn Ctx::layer_within(self : Ctx, l : Int, outer : Int) -> Bool {
 /// Whether layer `l` (or one it was built in) was leaving the last frame.
 fn Ctx::layer_inert(self : Ctx, l : Int) -> Bool {
   let mut at = l
-  let mut steps = 0
-  while at != 0 && steps < 64 {
+  // (up what it was built in, as layer_within goes)
+  while at != 0 {
     match self.last_layer(at) {
       Some(x) => {
         if !self.layer_takes(x) {
@@ -327,7 +327,6 @@ fn Ctx::layer_inert(self : Ctx, l : Int) -> Bool {
       }
       None => return false
     }
-    steps = steps + 1
   }
   false
 }
@@ -423,7 +422,8 @@ fn Ctx::focus_in_layer(self : Ctx, id : Int) -> Bool {
   match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
     Some(f) => {
       let mut at = f.layer
-      for _ in 0..<64 {
+      // (up what it was built in, as layer_within goes)
+      while true {
         if at == id {
           return true
         }
@@ -452,7 +452,8 @@ pub fn Ctx::pointer_in_overlay(self : Ctx, id : Int) -> Bool {
     guard self.rect_of(f.id) is Some((x, y, w, h)) else { continue }
     if px < x || px >= x + w || py < y || py >= y + h { continue }
     let mut at = f.layer
-    for _ in 0..<64 {
+    // (up what it was built in, as layer_within goes)
+    while true {
       if at == id { return true }
       match self.last_layers.iter().find_first(fn(l) { l.id == at && self.layer_takes(l) }) {
         Some(l) if at != 0 => at = l.parent
@@ -476,8 +477,9 @@ fn Ctx::keys_here(self : Ctx) -> Bool {
     return true
   }
   let mut at = self.layer_cur
-  // (up the layers it was built in, as this frame and the one before built them)
-  for _ in 0..<64 {
+  // (up the layers it was built in, as this frame and the one before built them: each open one said as it opened, in
+  // the one open then, so this frame's way up stays in this frame's and comes to the page's, Ctx::layer_within)
+  while true {
     if at == self.keys_layer {
       return true
     }
@@ -706,7 +708,9 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
 /// Whether layer `l` is `outer` or was built in it, as this frame built them (as the last did, for one not built yet).
 fn Ctx::layer_built_in(self : Ctx, l : Int, outer : Int) -> Bool {
   let mut at = l
-  for _ in 0..<64 {
+  // (up what it was built in: the last frame's where this one has not built it yet, then this one's, each coming to the
+  // page's, Ctx::keys_here)
+  while true {
     if at == outer {
       return true
     }

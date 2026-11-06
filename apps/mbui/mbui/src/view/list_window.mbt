@@ -663,68 +663,102 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if from_end && !laid_once.val && held_at.val is None && following() {
       s.x.set(dmax(0.0, extent_at(vh) - vh))
     }
-    // what shows made and laid out, as many as fill it: each made counted as it comes to, what shows moved with what
-    // over it as it is, again till what shows is all made
-    let mut rounds = 0
-    let mut sight : Array[K] = []
-    while rounds < 512 {
-      rounds = rounds + 1
-      hold(vh)
-      if held_at.val is None {
-        held_by_anchor()
-      }
+    // what shows made and laid out, as many as fill it, in one pass: each block made and laid out as it is come to, from
+    // the one what shows is held by (put there, the first in sight as last laid out, else the first there) up to the top
+    // of what shows and down to its foot, the column moved with what shows as each over that block is laid out other
+    // than it was counted (hold, held_by_anchor), so that each is put where those over it end as they are counted then
+    // and none is made or looked at again (as Flutter's RenderSliverList.performLayout lays out from its leading child
+    // those before it, up to the scroll offset, and those after it, till the viewport is full: its scrollOffsetCorrection
+    // the column moved here). From its end as it follows it, what fills what shows there first, up from its last: what
+    // came at its end laid out as it is, followed so (Follow's) where it is then.
+    let view_top = fn() {
       // (where it shows from, within how far it can go as it is counted now: where it is drawn from once it is put
       // there, Scroll's room)
       let most = dmax(0.0, extent_at(vh) - vh)
       let x = x_now()
-      let xa = (if x > most { most } else if x < 0.0 { 0.0 } else { x }) - lead_of(vh)
-      sight = sight_of(all, xa, vh)
-      // (moved from where it was left as last laid out (the hand, a glide, put): the first in sight that was laid out
-      // before, its top as counted now, held where it is drawn as what comes into sight over it is laid out other than
-      // it was counted, the column moved with it, till it is moved so again (none in sight: nothing drawn there to
-      // hold, the column where it was put))
-      if held_at.val is None && moved.val {
-        moved.val = false
-        anchor.val = match sight.iter().find_first(fn(k) { blocks.contains(k) }) {
-          Some(k) => place_of.val.get(k).map(fn(i) { (k, index.val.top(i)) })
-          None => None
-        }
-      }
-      let made = Ref(false)
-      @signals.untracked(fn() {
-        // (the first in sight not made: made and laid out, what shows looked at again as it comes to before the next
-        // is made, none made for room another takes)
-        match sight.iter().find_first(fn(k) { !blocks.contains(k) && place_of.val.contains(k) }) {
-          Some(k) => {
-            made_block(k, place_of.val.get(k).unwrap(), w)
-            made.val = true
-          }
-          None => ()
-        }
-        if made.val {
-          return
-        }
-        for k in kept_keys_now {
-          if !blocks.contains(k) {
-            match place_of.val.get(k) {
-              Some(i) => {
-                made_block(k, i, w)
-                made.val = true
-              }
-              None => ()
-            }
-          }
-        }
-      })
-      if made.val {
-        continue
-      }
-      // (kept at its end as it follows it: moved there at once, what shows there made in turn)
-      if from_end && follow(all, vh) {
-        continue
-      }
-      break
+      (if x > most { most } else if x < 0.0 { 0.0 } else { x }) - lead_of(vh)
     }
+    // (whether block `i` meets what shows from `xa` down: its room, one as tall as nothing at its top with them, and at
+    // its foot where rooms open and close: sight_of's)
+    let meets = fn(i : Int, xa : Double) -> Bool {
+      let top = index.val.top(i)
+      let h = index.val.get(i)
+      let xb = xa + vh
+      (top < xb || (room is Some(_) && h == 0.0 && top == xb)) && (top + h > xa || (h == 0.0 && top >= xa))
+    }
+    // (block `i` made and laid out where it is not, what shows held where it is as that changes what is over it)
+    let made_at = fn(i : Int) {
+      let k = all[i]
+      if !blocks.contains(k) {
+        @signals.untracked(fn() { made_block(k, i, w) })
+        hold(vh)
+        if held_at.val is None {
+          held_by_anchor()
+        }
+      }
+    }
+    // (what shows at where it shows from now made: up from the block it is held by, then down from it)
+    let fill = fn() {
+      let xa = view_top()
+      let held = match held_at.val {
+        Some((k, _)) => place_of.val.get(k)
+        None => anchor.val.bind(fn(a) { place_of.val.get(a.0) })
+      }
+      let p = match held {
+        Some(i) if meets(i, xa) => i
+        _ => index.val.reaching(xa)
+      }
+      let mut j = p - 1
+      while j >= 0 && meets(j, view_top()) {
+        made_at(j)
+        j = j - 1
+      }
+      let mut j = p
+      while j < all.length() && meets(j, view_top()) {
+        made_at(j)
+        j = j + 1
+      }
+    }
+    // (put at a block: there, as the blocks over it are counted now; else what shows held where it is)
+    hold(vh)
+    if held_at.val is None {
+      held_by_anchor()
+    }
+    // (moved from where it was left as last laid out (the hand, a glide, put): the first in sight that was laid out
+    // before, its top as counted now, held where it is drawn as what comes into sight over it is laid out other than it
+    // was counted, the column moved with it, till it is moved so again (none in sight: nothing drawn there to hold, the
+    // column where it was put))
+    if held_at.val is None && moved.val {
+      moved.val = false
+      anchor.val = match sight_of(all, view_top(), vh).iter().find_first(fn(k) { blocks.contains(k) }) {
+        Some(k) => place_of.val.get(k).map(fn(i) { (k, index.val.top(i)) })
+        None => None
+      }
+    }
+    // (those kept made outside what shows: made, what shows held where it is as they are laid out)
+    for k in kept_keys_now {
+      match place_of.val.get(k) {
+        Some(i) => made_at(i)
+        None => ()
+      }
+    }
+    // (kept at its end as it follows it: what fills what shows there made first, up from its last)
+    if from_end && held_at.val is None && following() && !gliding() {
+      let mut j = all.length() - 1
+      let mut filled = 0.0
+      while j >= 0 && filled < vh {
+        made_at(j)
+        filled = filled + index.val.get(j)
+        j = j - 1
+      }
+    }
+    fill()
+    // (kept at its end as it follows it, by what is laid out now: moved there at once, what shows there made, of those
+    // that fill it there; else glided after what came, from where it is)
+    if from_end && follow(all, vh) {
+      fill()
+    }
+    let sight = sight_of(all, view_top(), vh)
     laid_once.val = true
     // (what shows held where it is as what is over it changes height: the block it was held by while it is in sight,
     // else the first in sight, its top as counted now)

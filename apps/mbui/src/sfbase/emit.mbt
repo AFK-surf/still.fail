@@ -450,11 +450,10 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     }
     emit_next(c, e, "", at=turns.started_at(emits_turn))
   }
-  // a pose's end reached: the next pose, from its own beginning in this frame
+  // a pose's end reached: the next pose, from its own beginning in this frame; as many as have ended by now, each from
+  // where the one before was declared to end, a message of the queue taken at each spit: one not over yet, or none
   let was = e.current
-  let mut steps = 0
-  while steps < 6 {
-    steps = steps + 1
+  while true {
     // (none left: still on to say no copy flies, its activity's avatar back)
     let t = match e.current {
       Some(t) => t
