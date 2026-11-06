@@ -48,6 +48,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
     let hits : Array[Array[String]] = []
     let covered_phases : Array[(Double?, Double, Pose, Double, Double)] = []
     let resumed_phases : Array[Array[(Double, String, Double, Double, Double)]] = []
+    let queued_folds : Array[Array[(Double, Double, Double)]] = []
     for hz in [0, 60, 120] {
       let ended = Ref(false)
       let t = backlog_window(width, ended)
@@ -57,21 +58,7 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
       assert_true(shown(), msg="the chat is visible before replies arrive")
       let agents = ["s-c1", "backlog-b", "backlog-c", "backlog-d"]
       let arrived_at = t.time() + 1.0
-      fix_later(1.0, fn() {
-        ended.val = true
-        for i, key in agents {
-          fix_chat("s-c1").sent.push(msg(171 + i, "agent", @sffixture.by_agent("anthropic", "claude", key), more_said, "刚刚", {
-            "ts": Json::string("backlog\{i}"), "said": true,
-          }))
-        }
-      })
-      // This initial picture is common to every run: one agent in Float,
-      // three different agents waiting, hence more than one batch of expired poses
-      // to finish after the page returns (the later Folds have already ended).
-      t.frame_at(arrived_at + Pose::Fold.ms() + 1.0)
       let em = emits_of(emit_chat)
-      assert_true(em.current is Some(turn) && turn.pose == Float && turn.agent == agents[0])
-      assert_eq(em.queue.map(fn(q) { q.2 }), agents[1:].to_array())
       let declared : Array[(Double, String, Double, Double, Double)] = []
       let stop_declared = @signals.effect(fn() {
         em.read()
@@ -86,6 +73,28 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
         })
       })
       defer { stop_declared() }
+      fix_later(1.0, fn() {
+        ended.val = true
+        for i, key in agents {
+          fix_chat("s-c1").sent.push(msg(171 + i, "agent", @sffixture.by_agent("anthropic", "claude", key), more_said, "刚刚", {
+            "ts": Json::string("backlog\{i}"), "said": true,
+          }))
+        }
+      })
+      // This initial picture is common to every run: one agent in Float,
+      // three different agents waiting, hence more than one batch of expired poses
+      // to finish after the page returns (the later Folds have already ended).
+      t.frame_at(arrived_at + Pose::Fold.ms() + 1.0)
+      assert_true(em.current is Some(turn) && turn.pose == Float && turn.agent == agents[0])
+      assert_eq(em.queue.map(fn(q) { q.2 }), agents[1:].to_array())
+      // The waiting agents fold concurrently in the queue, not as `current` poses.
+      let folds = em.queue.map(fn(q) { (q.0, q.3.starts_at(), q.3.end()) })
+      assert_eq(folds.map(fn(f) { f.0 }), [172.0, 173.0, 174.0])
+      for fold in folds {
+        assert_eq(fold.1, arrived_at)
+        assert_eq(fold.2, arrived_at + Pose::Fold.ms())
+      }
+      queued_folds.push(folds)
       // A page still beside the incoming page remains shown until navigation's declared end. The distance-based
       // Float can finish in that interval. Observe the phase at the actual hide cause, without inserting a frame.
       let covered : Ref[(@sfbase.Turn, Double?)?] = Ref(None)
@@ -124,12 +133,24 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
         }
       }
       let frames = t.host_frames()
+      println("backlog phases \{width}, \{hz} Hz: \{declared}")
       println("backlog returned \{width}, \{hz} Hz at \{returned_at}: current \{em.current.map(fn(turn) { (turn.seq, turn.pose, turn.clock.end()) })}, queue \{em.queue.map(fn(q) { q.0 })}, done \{em.done.length()}, revealing \{em.out_at.length()}, due \{tree.due_count()}, frames \{frames.length()}")
       if hz == 0 { assert_eq(frames.length(), 0) }
       assert_true(frames.iter().all(fn(frame) { frame.at < returned_at }), msg="returning has no following picture in any history")
       assert_true(shown() && physical_equal(rd.shown_by.unwrap(), shown), msg="returning keeps the same retained page")
       assert_true(em.current is None && em.queue.is_empty() && em.out_at.is_empty(), msg="every expired reply finishes before the next picture")
       for i in 0..<agents.length() { assert_true(em.done.contains("\{171 + i}")) }
+      assert_eq(declared.map(fn(p) { (p.0, p.1) }), [
+        (171.0, "Fold"), (171.0, "Float"), (171.0, "Spit"), (171.0, "Return"),
+        (172.0, "Float"), (172.0, "Spit"), (172.0, "Return"),
+        (173.0, "Float"), (173.0, "Spit"), (173.0, "Return"),
+        (174.0, "Float"), (174.0, "Spit"), (174.0, "Return"),
+      ], msg="every active phase must be observed in order")
+      assert_eq(declared[0].2, arrived_at)
+      assert_eq(declared[0].3, arrived_at + Pose::Fold.ms())
+      for i in 1..<declared.length() {
+        assert_eq(declared[i].2, declared[i - 1].3, msg="each phase begins at its predecessor's end")
+      }
       resumed_phases.push(declared.copy())
       // The final common picture is after the page's return and the ended
       // activities' declared linger, not after another reply's running time.
@@ -156,7 +177,8 @@ test "returning to four agents' expired replies drains beyond one pose batch wit
     }
     assert_true(covered_phases[0] == covered_phases[1], msg="navigation hides the same phase at the same cause without pictures: \{covered_phases}")
     assert_true(covered_phases[0] == covered_phases[2], msg="navigation hides the same phase at 120 Hz: \{covered_phases}")
-    assert_true(resumed_phases[0].length() > 1, msg="the resumed replies publish their declared phases")
+    assert_eq(queued_folds[0], queued_folds[1], msg="queued agents fold at the same cause without pictures")
+    assert_eq(queued_folds[0], queued_folds[2], msg="queued agents fold at the same cause at 120 Hz")
     assert_eq(resumed_phases[0], resumed_phases[1], msg="returning catches up the same phases and durations without intermediate pictures")
     assert_eq(resumed_phases[0], resumed_phases[2], msg="returning catches up the same phases and durations at 120 Hz")
     if pictures[0] != pictures[1] {
