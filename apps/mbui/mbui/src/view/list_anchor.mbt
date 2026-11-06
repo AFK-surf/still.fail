@@ -353,9 +353,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // (gone on by itself since it was last laid out (a fling, going back from past its end): laid out where it is at each
   // moment something is done at, before it is done (View::laid_before_due): a moment come due (its own rest), an
   // event's, an input's; the foot it meets measured then, a frame drawn on the way or none)
-  // (the rows it holds changed: at that change's moment, a frame drawn after or none)
+  // (the rows it holds changed (its keys, or an indexed source's revision and length): at that change's moment, a
+  // frame drawn after or none)
   let keys_seen = Ref(false)
-  self.reacts(fn() { current_keys.get() }, fn(_) {
+  self.reacts(fn() { (current_keys.get(), indexed.map(fn(src) { (src.snapshot)() })) }, fn(_) {
     if keys_seen.val {
       held_since.val = self.tree.logic_at()
     }
