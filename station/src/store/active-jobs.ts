@@ -15,6 +15,10 @@ export const RUNNING_LIMIT = `SELECT job FROM (
   UNION ALL
   SELECT job FROM active_other_jobs WHERE session = ?1
 ) LIMIT 1 OFFSET ?2`;
+/// Of the sessions named by a workspace sweep, only those with work running; each seek stops at its first job.
+export const RUNNING_JOB_SESSIONS = `SELECT c.value AS session FROM json_each(?1) c
+  WHERE EXISTS (SELECT 1 FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = c.value)
+    OR EXISTS (SELECT 1 FROM active_other_jobs WHERE session = c.value)`;
 /// A stopped wait ends its running watches and commands, but leaves services running. Ties keep watches before
 /// ordinary jobs, and job order within each group, as the active lookups previously returned them.
 export const RUNNING_WAIT_JOBS = `SELECT j.id FROM (
@@ -54,6 +58,8 @@ export const AWAKE_JOBS_BEFORE_UPGRADE = `SELECT session_key, started_at FROM jo
   WHERE state = 'running' AND (watch <> 0 OR port IS NULL)`;
 export const RUNNING_LIMIT_BEFORE_UPGRADE = `SELECT id FROM jobs INDEXED BY jobs_by_session
   WHERE session_key = ?1 AND state = 'running' LIMIT 1 OFFSET ?2`;
+export const RUNNING_JOB_SESSIONS_BEFORE_UPGRADE = `SELECT c.value AS session FROM json_each(?1) c
+  WHERE EXISTS (SELECT 1 FROM jobs INDEXED BY jobs_by_session WHERE session_key = c.value AND state = 'running')`;
 export const RUNNING_WAIT_JOBS_BEFORE_UPGRADE = `SELECT id FROM jobs INDEXED BY jobs_by_session
   WHERE session_key = ?1 AND state = 'running' AND (watch <> 0 OR port IS NULL)
   ORDER BY started_at DESC, (watch = 0), id`;
