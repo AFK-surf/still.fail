@@ -529,11 +529,17 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           const began = inner.host.nowMs();
           credentials = [];
           failures = new Map();
-          for (const ws of workspaces) {
-            if (!looking(inner, y)) break;
-            const c = yield* Effect.result(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)));
-            if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
-            else failures.set(ws, c.failure);
+          // A request can connect yet never answer. Bound each attempt to the existing retry interval and fetch the
+          // workspaces together, so one slow account cannot indefinitely prevent the others from asking for a code.
+          const fetched = yield* Effect.forEach(workspaces, (ws) => Effect.map(
+            Effect.result(Effect.timeoutOption(inner.cloudSync.credential(ws, base, false, base, mesh.lockClaim(ws, base)), PAIR_REDIAL_MS)),
+            (result) => ({ ws, result }),
+          ), { concurrency: "unbounded" });
+          if (!looking(inner, y)) break;
+          for (const { ws, result } of fetched) {
+            if (result._tag === "Failure") failures.set(ws, result.failure);
+            else if (result.success._tag === "Some") credentials.push({ ws, credential: result.success.value.credential });
+            else failures.set(ws, CoreError.plainly("timeout", "credential request timed out"));
           }
           if (credentials.length > 0 || !looking(inner, y)) break;
           // A rejected or expired login will not recover by asking again, unlike a network failure or rate limit.
