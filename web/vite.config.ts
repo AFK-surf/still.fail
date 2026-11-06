@@ -36,8 +36,8 @@ function buildNumber(): string | null {
 }
 
 // Two builds of one client. Default (or --mode cloud): still.fail cloud's web app at /, into dist/cloud-web, the static
-// Worker ember-web's assets (the desktop app carries it too); `pnpm dev:web` serves it. --mode cloud-admin: the admin's
-// console (admin/index.html), at / on its own host, into dist/cloud-admin (ember-admin's). A station serves no page.
+// Worker stillfail-web's assets (the desktop app carries it too); `pnpm dev:web` serves it. --mode cloud-admin: the admin's
+// console (admin/index.html), at / on its own host, into dist/cloud-admin (stillfail-admin's). A station serves no page.
 // STILLFAIL_PROFILE=1: a build to measure React's work in (test/perf/renders.mjs), into dist/profile: React's profiling
 // build, which times each render, and nothing minified, so what rendered is told by its component's name.
 const profiling = process.env.STILLFAIL_PROFILE === "1";

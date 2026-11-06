@@ -28,7 +28,7 @@ globalStyle(":root", {
   },
 });
 /**
- * Zork's approved desktop tokens (apps/zork-design-pc/tokens), so ember reads as
+ * Zork's approved desktop tokens (apps/zork-design-pc/tokens), so still.fail reads as
  * part of the same family: white canvas, warm sidebar, ink text, brand orange,
  * status colours with their own tinted grounds. Dark follows the Zork client.
  */

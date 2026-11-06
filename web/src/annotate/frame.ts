@@ -100,7 +100,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
 
   const cursor = () => {
     if (!doc) return;
-    const id = "ember-annotate-cursor";
+    const id = "stillfail-annotate-cursor";
     const had = doc.getElementById(id);
     if (on && !had) {
       const style = doc.createElement("style");

@@ -32,7 +32,7 @@ const darkVars = {
 
 /**
  * The narrow screen, as the Android app draws it (apps/android/…/ui/Theme.kt, Glass.kt, Parts.kt, Sheet.kt and the
- * screens): warm paper, ink, and one ember orange that means "this needs you". A dp or an sp is a pixel here.
+ * screens): warm paper, ink, and one still.fail orange that means "this needs you". A dp or an sp is a pixel here.
  */
 export const m = style({
   position: "fixed", inset: "0", overflow: "hidden", background: "var(--m-bg)", color: "var(--m-ink)",

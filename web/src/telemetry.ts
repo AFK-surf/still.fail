@@ -194,7 +194,7 @@ export function captureException(error: unknown, properties: Record<string, stri
   use((ph) => ph.captureException(error, properties));
 }
 
-/** Who is using the page: the signed-in account in view, by its ember account id alone (not its email). */
+/** Who is using the page: the signed-in account in view, by its still.fail account id alone (not its email). */
 export function identify(account: { sub: string }): void {
   use((ph) => {
     if (ph.get_distinct_id() !== account.sub) ph.identify(account.sub);

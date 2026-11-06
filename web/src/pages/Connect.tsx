@@ -1,6 +1,6 @@
 import type { SlackAppSettings } from "../api.ts";
 import { useConnectFlow } from "../connect-flow.ts";
-// A connect: where people reach ember (a Slack app today), the model it is
+// A connect: where people reach still.fail (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "@stillfail/ui/icons.tsx";
@@ -387,7 +387,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
 
 
 /**
- * A new connect. Slack first: its app (made by ember with the workspace's configuration token, or by hand) and its
+ * A new connect. Slack first: its app (made by still.fail with the workspace's configuration token, or by hand) and its
  * two tokens; the connect is named as its bot is in Slack, and its id comes from that. Then the model it runs.
  */
 type NewStep = "team" | "app" | "install" | "manual" | "bind";

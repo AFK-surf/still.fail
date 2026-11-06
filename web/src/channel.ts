@@ -1,5 +1,5 @@
 // Which channel the page is on, decided as it loads (one build serves both, so a build tried on the test channel is
-// promoted unchanged): the test channel's page (app.youdid.wtf) is marked by ember-web-beta with
+// promoted unchanged): the test channel's page (app.youdid.wtf) is marked by stillfail-web-beta with
 // <meta name="stillfail-beta" content="<the stable origin>"> (cloud/src/web.ts); the desktop app's beta build says so
 // through its preload. Kept free of React and the core so the core's opener (core/client.ts) can use it too.
 

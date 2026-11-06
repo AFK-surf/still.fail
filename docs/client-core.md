@@ -280,8 +280,8 @@ that only notifications change it:
 
 - `accounts`, `workspaces` and `workspace`: while `workspaces` or any
   `workspace` is live (a view resting on one counts), each signed-in account
-  holds still.fail cloud's `/v1/events` socket (subprotocols `ember-events` and
-  `ember-token.<access token>`, a token good now asked of the accounts module
+  holds still.fail cloud's `/v1/events` socket (subprotocols `stillfail-events` and
+  `stillfail-token.<access token>`, a token good now asked of the accounts module
   at every (re)connect; auth, events and shapes in `docs/station-storage.md`).
   `{"type":"workspaces"}` reads that account's `/v1/me` again (the
   `workspaces` value), `{"type":"workspace","id"}` that workspace, and

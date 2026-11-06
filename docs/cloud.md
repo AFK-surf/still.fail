@@ -80,14 +80,14 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 ## 连接 station 与成员凭证
 
-设备连 station 靠一张 **成员凭证**（`POST /v1/workspaces/:ws/credential {device}`）：still.fail cloud 用 Ed25519 签的 JWT（`typ: ember-member+jwt`），写明账号、邮箱、名字、workspace、角色、设备公钥和登录会话（`sid`），30 天有效。
+设备连 station 靠一张 **成员凭证**（`POST /v1/workspaces/:ws/credential {device}`）：still.fail cloud 用 Ed25519 签的 JWT（`typ: stillfail-member+jwt`），写明账号、邮箱、名字、workspace、角色、设备公钥和登录会话（`sid`），30 天有效。
 
 - station 离线校验：签名来自登记时保存的公钥、workspace 是自己的、设备公钥等于这条 iroh 连接对端的公钥、没过期、没被吊销。同一张凭证进这个 workspace 的每一台 station。
 - 设备把凭证存在本地（`credential/<账号>/<workspace>`，记着签给哪台设备），一天内直接用，过了一天向 still.fail cloud 换新的；still.fail cloud 连不上时，旧的一直用到过期。station 拒绝时（被吊销、过期）立刻换新的。退出账号时一并删掉。
 - **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，still.fail cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 still.fail cloud 时从 `state` 里补上。
 - still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。
 
-连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: zstd` 时，512 字节以上的 JSON 和文本回应用 zstd 压缩，回应头带 `content-encoding: zstd`，SSE 每个事件后 flush 一次、窗口 1 MB（station/src/mesh/compress.ts）；preview 的回应原样转发。
+连接上优先用 ALPN `stillfail/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: zstd` 时，512 字节以上的 JSON 和文本回应用 zstd 压缩，回应头带 `content-encoding: zstd`，SSE 每个事件后 flush 一次、窗口 1 MB（station/src/mesh/compress.ts）；preview 的回应原样转发。
 
 station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在它的 Node 插件 station/native/mesh 里）：把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
@@ -125,7 +125,7 @@ relay 转发的是包，不替收方攒：一个包在发给某个客户端的�
 
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
-- **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
+- **局域网**：mDNS（服务名 `stillfail`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
 - **公网**：station 把自己所在的 relay 发布到 Mainline DHT，设备查得到它换过的 relay。
 - 浏览器（wasm）只能走 relay：still.fail 的，或下面说的 workspace 自己的。
 

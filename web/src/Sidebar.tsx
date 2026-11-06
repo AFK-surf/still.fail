@@ -116,7 +116,7 @@ export function useGlassBands(): (el: HTMLElement | null) => (() => void) | void
 /**
  * The stations at the top of the sidebar's foot, always: their glyph (./StationGlyph.tsx) and a line beside it, how many
  * and who works while all is well, or what is wrong (the core's `trouble`: which, or how many; red while one fails). It
- * leads to the stations. Short of a station down, the line says what the core has been waiting on for a while, or ember
+ * leads to the stations. Short of a station down, the line says what the core has been waiting on for a while, or still.fail
  * cloud not reached (the core's `status`: what, how long, how fast; each thing on hover). The glyph sleeps only while
  * every station is down as the device's network is (the core's `glyph.asleep`), not for still.fail cloud alone. Cloud
  * not reached, it offers to try again at once; a station down does not.
@@ -313,7 +313,7 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
           {saving.error !== undefined && !editing && <span className={nav.sessionKind}><DoingShown state={{ running: false, error: saving.error }} inline /></span>}
-          {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
+          {/* Only an agent that came from elsewhere (Slack) says so; one made on still.fail needs no mark. */}
           {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A
               spinner on a row is only ever something its person did, under way. */}
           {item.offline || item.reconnecting

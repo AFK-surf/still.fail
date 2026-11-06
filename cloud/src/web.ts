@@ -1,10 +1,10 @@
-// The web app's Worker (ember-web, wrangler.web.jsonc): its static files, and on its old host (ember.3720.org, from
+// The web app's Worker (stillfail-web, wrangler.web.jsonc): its static files, and on its old host (ember.3720.org, from
 // before the rename) the pages moved to the new one — the same path and query on PUBLIC_ORIGIN, so links already sent
 // (Slack's, invitations, bookmarks) open the app where it now lives. Only the pages: the API's and the relay's paths
 // on the old host are routes of their own (wrangler.jsonc), which stations and apps from before the rename keep
 // calling, and never reach this Worker. 302, not 301, which browsers would remember for good.
-// The same code and the same files are the test channel's Worker too (ember-web-beta, wrangler.web-beta.jsonc, on
-// BETA_ORIGIN): a build tried there is promoted to ember-web byte for byte (deploy.py promote-web). On that host every
+// The same code and the same files are the test channel's Worker too (stillfail-web-beta, wrangler.web-beta.jsonc, on
+// BETA_ORIGIN): a build tried there is promoted to stillfail-web byte for byte (deploy.py promote-web). On that host every
 // answer says not to index it, /robots.txt disallows everything, and each page gets
 // <meta name="stillfail-beta" content="<PUBLIC_ORIGIN>">, by which the page knows it is the test channel and where the
 // stable one is (web/src/cloud/beta.tsx); what the files call the product before any script runs (the title, the

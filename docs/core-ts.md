@@ -315,7 +315,7 @@ cloud 的端口、`doing` 的 `since`。
   utilityProcess + MessagePort 跑通订阅和调用、`core.db` 写入；`node harness/handover.ts <Rust addon>`：Rust 写的目录 TS
   打开、TS 写的目录 Rust 打开，账号/workspace/偏好/草稿都一样。
 - 网页：worker（`web/src/core/worker.ts`）跑 TS core（`src/hosts/web.ts`：fetch、WebSocket、IndexedDB 同库
-  `stillfail-core` v2 的 `values` 放小值，第一次打开照旧从 `ember-core` 搬；账号的库是 OPFS 上的 SQLite WASM，见
+  `stillfail-core` v2 的 `values` 放小值；账号的库是 OPFS 上的 SQLite WASM，见
   docs/core-db.md），iroh 来自新的 `client/iroh-wasm`
   （只有 iroh，2.7 MB；整个 Rust core 的 wasm 同样的编法是 8.0 MB，见「测量」），在 mesh 第一次 bind 时才加载。web 的 tsconfig 更严，所以 worker
   经 `@stillfail/core-ts/web` 引用（vite alias 指到源码，类型见 `web/src/core/core-ts.d.ts`），core-ts 用自己的 tsconfig 检查。
@@ -433,7 +433,7 @@ stillfail-shell`；web 的 build:cloud；桌面 `UNSIGNED=1 sh apps/desktop/buil
 Node 2.9 s → 0.10 s、Hermes 23.6 s → 0.13 s、Chrome 2.6 s → 0.16 s，首屏时内存 Node 1.16 GB → 168 MB、Hermes
 716 MB → 36 MB；web 包多 1.08 MB（gzip 467 KB，只有跑 core 的标签页加载）。
 
-接手：分支 `core-ts` 等用户看过证据后合进 main（照 ember 的合并流程，部署时注意 web、桌面、安卓三个包都换成 TS core；
+接手：分支 `core-ts` 等用户看过证据后合进 main（照 still.fail 的合并流程，部署时注意 web、桌面、安卓三个包都换成 TS core；
 旧记录库原样留着，可以随时退回）。本机存储不设上限（2026-10-04 用户定：「为啥清掉，我们不是存 db 吗」）：能到的 station
 的数据全部留在库里。可以接着做的：安卓真机上量首屏和内存（模拟器上的 uiautomator 一次要 2–3 s，量不细）；dist 里
 sqlite-wasm 带出来但不加载的 246 KB（Worker1、`opfs` VFS 的 proxy）可以去掉；`connects` 页仍整表载入 sessions/threads

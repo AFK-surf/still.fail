@@ -91,7 +91,7 @@ launchd / 桌面 app
 - 命令行：`run --app --port --data --with-parent --handoff`、`enroll`、`status`、`id`、`handoff-version`、`channel`；退出码 3、2；`bin/stillfail` 的用法。
 - 信号与文件：SIGTERM/USR1/USR2/HUP；`run/station.json`（单行，安装器用 sed 读）、`presence.json`、`ports.json`、`drained`、`handoff-failed`、`channel-ask/answer`、`update.*`。
 - 数据目录：`mesh/secret.key`、`mesh/cloud.json`（字段和权限）、`config.json`（保留未知字段，0600）、`stillfail.db`、`slack-names.json`、`sessions/`、`jobs/`、`thumbs/`、`uploads/`、`archive/`、`remote/`。
-- mesh：ALPN（含 `ember/admin/1`）、首个流的 credential/续期、请求头行格式、关闭码 1–4、头 16K、mDNS 两个名字、DHT、keeper、peer 协议。
+- mesh：ALPN、首个流的 credential/续期、请求头行格式、关闭码 1–4、头 16K、mDNS 两个名字、DHT、keeper、peer 协议。
 - cloud：`/v1/stations/enroll|connect|notify|feedback|feedback/fixed`、`/v1/telemetry/traces` 的签名和头。
 - admin API：全部路由与字段（含给老客户端留的 `decision`、`declared` 旧词、`footprint`、`follows`）、幂等、语言头。
 - MCP：全部工具名和参数、旧写法。

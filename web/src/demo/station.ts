@@ -185,7 +185,7 @@ export class NeedsReal extends Error {
 const OWN = new Set(["session.warm", "session.stop", "session.evict", "session.compact", "session.clear", "session.settings"]);
 
 /** The station's operations (client/core-ts/src/ops.ts), by name: what is read answers; what would reach out needs a real
- *  ember; what stays in the station answers the overview (what most writes answer with) and changes nothing. */
+ *  still.fail; what stays in the station answers the overview (what most writes answer with) and changes nothing. */
 export function op(name: string): unknown {
   if (name === "memory.get") return data.memory;
   if (name === "machineSessions.list") return now(data.machineSessions);
