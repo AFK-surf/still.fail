@@ -97,6 +97,23 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
   return { data, path, config, store, accounts, call, profile, view, close: () => accounts.close() };
 }
 
+/// The sign-in as its page reads it, once in `state`: read again each time the accounts say something changed.
+async function waitFor(t: Rig, id: string, state: string): Promise<any> {
+  let last: any;
+  try {
+    return await upon(
+      (wake) => t.accounts.onChange(wake),
+      async () => {
+        [, last] = await t.call("GET", `/profiles/${id}/login`);
+        return last.job?.state === state ? last.job : undefined;
+      },
+      `${id} ${state}`,
+    );
+  } catch {
+    throw new Error(`login of ${id} never reached ${state}: ${JSON.stringify(last)}`);
+  }
+}
+
 describe("the accounts routes", { concurrency: true }, () => {
   test("a profile serves every workspace the station joined but those withheld from it; a joined workspace's members do all its own do", async () => {
     const t = await rig({ workspaces: ["W1", "W2", "W3"] });
@@ -265,23 +282,6 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("DELETE", "/profiles/sub/login"))[1].job.state, "cancelled");
     await t.close();
   });
-
-  /// The sign-in as its page reads it, once in `state`: read again each time the accounts say something changed.
-  async function waitFor(t: Rig, id: string, state: string): Promise<any> {
-    let last: any;
-    try {
-      return await upon(
-        (wake) => t.accounts.onChange(wake),
-        async () => {
-          [, last] = await t.call("GET", `/profiles/${id}/login`);
-          return last.job?.state === state ? last.job : undefined;
-        },
-        `${id} ${state}`,
-      );
-    } catch {
-      throw new Error(`login of ${id} never reached ${state}: ${JSON.stringify(last)}`);
-    }
-  }
 
   test("a sign-in after its profile was deleted makes a profile beside the home left behind", async () => {
     const t = await rig();
@@ -690,7 +690,10 @@ describe("the accounts routes", { concurrency: true }, () => {
     await chatgpt.close();
     await t.close();
   });
+});
 
+// These time-limited tests run after the concurrent fixtures have finished.
+describe("borrowed reset expiry details", () => {
   test("an older host's fresh reset count gets its missing expiry details through the borrowed login", { timeout: 10_000 }, async () => {
     const data = temp("borrowed-reset-expiries");
     const home = join(data, "homes", "bx");
@@ -762,7 +765,9 @@ describe("the accounts routes", { concurrency: true }, () => {
     await chatgpt.close();
     await t.close();
   });
+});
 
+describe("the remaining accounts routes", { concurrency: true }, () => {
   test("a revoked borrowed login is replaced from its host, or remains unusable if the host cannot lend", async () => {
     const data = temp("borrowed-revoked");
     const home = join(data, "homes", "bx");

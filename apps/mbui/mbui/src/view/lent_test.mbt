@@ -2,6 +2,28 @@
 // (View::shown_across).
 
 ///|
+test "shown nowhere follows an ancestor being omitted and restored" {
+  let hidden = @signals.signal(false)
+  let said : Array[Bool] = []
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(holder) {
+      holder.laid_nowhere(By(fn() { hidden.get() })) |> ignore
+      holder.box(fn(child) {
+        child.width(Is(Some(20.0))).height(Is(Some(20.0))) |> ignore
+        child.reacts(fn() { child.shown_nowhere() }, fn(now) { said.push(now) })
+      }) |> ignore
+    }) |> ignore
+  })
+  t.frame(100.0, 100.0) |> ignore
+  hidden.set(true)
+  t.frame(100.0, 100.0) |> ignore
+  hidden.set(false)
+  t.frame(100.0, 100.0) |> ignore
+  assert_eq(said, [false, true, false])
+  t.dispose()
+}
+
+///|
 test "lent: what a node lends found by what it holds, made with it or shown later, the nearest lender's; none outside it; let go with it" {
   let kind : @view.Lent[String] = @view.Lent::new()
   let shown = @signals.signal(false, same=fn(a, b) { a == b })

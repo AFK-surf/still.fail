@@ -1964,6 +1964,8 @@ pub fn row_ripple(@ui.Ctx, Int32) -> Unit
 
 pub fn row_tag_node(@view.View, () -> String) -> Unit
 
+pub fn row_tool_of(String, (@view.View) -> Unit, drop? : Int32, instead? : () -> Array[MenuItem]) -> RowTool
+
 pub let row_top_in_y : Double
 
 pub fn row_words_foot() -> Double
@@ -2419,6 +2421,8 @@ pub let tools_apart : Double
 pub fn tools_line() -> @ui.Style
 
 pub fn tools_row(@ui.Ctx, String, Array[Tool], more? : Array[MenuItem?], label~ : String, style? : @ui.Style) -> Unit
+
+pub fn tools_row_node(@view.View, () -> Array[RowTool], () -> Array[MenuItem?], () -> String, tips? : TipLayer) -> @view.View
 
 pub fn top_bar_actions_lent(@view.View) -> Unit
 
@@ -3355,6 +3359,13 @@ pub(all) enum RowLead {
   NoLead
   LeadIcon(String)
   LeadMade((@view.View) -> Unit)
+}
+
+pub(all) struct RowTool {
+  key : String
+  drop : Int32
+  draw : (@view.View) -> Unit
+  instead : () -> Array[MenuItem]
 }
 
 pub(all) struct Rows {
