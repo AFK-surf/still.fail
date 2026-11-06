@@ -537,6 +537,9 @@ fn scene_forget() -> Unit {
   scene.checking = false
   scene.alone_why = ""
   scene.copy_why = ""
+  if !scene_checking() {
+    probe_left.clear()
+  }
   scene.full_whys.clear()
   scene.over_scrim_said = false
   tree_alone_drawn.val = false
@@ -1765,6 +1768,9 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
     Some(said) => {
       let s = "the scene kept a layer something of changed unsaid: as kept and drawn anew, \{said}"
       println(s)
+      for pl in probe_left {
+        println("PROBE left out \{pl}")
+      }
       abort(s)
     }
     None => ()
@@ -2669,6 +2675,9 @@ fn scene_skip_may(l : SceneLayer) -> Bool {
 /// kept as it is, said seen in it with nothing in it, so the frame after leaves it out or puts it where it comes to;
 /// what holds it (`outer`, where one is being drawn) keeps a reference to it.
 fn scene_left_out(l : SceneLayer, outer : SceneLayer?, k : Int, s : Int) -> Unit {
+  if !scene_checking() {
+    probe_left.push("\{l.id.at} now \{l.now_reach.rect()} held \{l.held} shown \{l.shown} outer \{l.outer.map(fn(o) { o.at })}")
+  }
   l.start = k
   l.count = 0
   l.seg_from = s
@@ -2736,3 +2745,7 @@ fn scene_now_reach(l : SceneLayer) -> Unit {
     }
   }
 }
+
+///|
+// PROBE
+let probe_left : Array[String] = []
