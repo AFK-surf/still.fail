@@ -1,33 +1,96 @@
-/* ---------- Downloads ---------- */
+/* ---------- Downloads: this device's card first, in Base; the rest as quiet cards (a grouped list on a phone) ---------- */
 .dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
-.dl a, .dl .soon-card { position: relative; display: flex; flex-direction: column; gap: 10px; text-decoration: none; padding: clamp(20px, 2vw, 32px); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--line); background: #fff; min-height: 200px; transition: box-shadow .15s, transform .15s; }
-.dl a:hover { box-shadow: inset 0 0 0 1px var(--ink); }
-.dl .os { width: 40px; height: 40px; border-radius: 10px; background: var(--mist); display: grid; place-items: center; }
+.dl a {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto 1fr auto;
+  grid-template-areas: "os tags go" ". . ." "txt txt txt"; column-gap: 12px;
+  min-height: 208px; padding: clamp(20px, 2vw, 32px); border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink); text-decoration: none;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: box-shadow var(--dur-ui) ease, background-color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.dl a:active { transform: scale(.985); }
+.dl a:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 16px; }
+.dl .os { grid-area: os; width: 44px; height: 44px; border-radius: 12px; background: var(--mist); display: grid; place-items: center; }
 .dl .os svg { width: 22px; height: 22px; }
-.dl b { font-size: clamp(19px, 1.6vw, 24px); font-weight: 600; letter-spacing: -.015em; margin-top: auto; }
-.dl small { color: var(--graphite); font-size: var(--t-small); }
-.dl .go { position: absolute; top: clamp(20px, 2vw, 32px); right: clamp(20px, 2vw, 32px); width: 20px; height: 20px; color: var(--silver); transition: color .15s, transform .15s; }
-.dl a:hover .go { color: var(--ink); transform: translate(2px, -2px); }
-.dl .primary { background: var(--brand); color: var(--ink); box-shadow: none; }
-.dl .primary .os { background: rgba(255,255,255,.4); color: var(--ink); }
+.dl .tags { grid-area: tags; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.dl .go { grid-area: go; width: 20px; height: 20px; color: var(--silver); transition: color var(--dur-ui) ease, transform var(--dur-ui) var(--ease-out); }
+.dl .txt { grid-area: txt; display: flex; flex-direction: column; gap: 6px; padding-top: 28px; min-width: 0; }
+.dl b { font-size: clamp(19px, 1.6vw, 24px); font-weight: 600; letter-spacing: -.015em; line-height: 1.2; }
+.dl small { color: var(--graphite); font-size: var(--t-small); line-height: 1.45; }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; line-height: 1; font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); color: var(--graphite); width: max-content; white-space: nowrap; }
+.dl .primary { background: var(--brand); box-shadow: none; }
+.dl .primary .os { background: rgba(255,255,255,.4); }
 .dl .primary small { color: var(--brand-ink); }
 .dl .primary .go { color: var(--ink); }
-.dl .primary:hover { box-shadow: none; background: #E5562A; }
-.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); color: var(--graphite); width: max-content; }
+.dl .primary .tag { box-shadow: inset 0 0 0 1px rgba(74,22,6,.28); color: var(--brand-ink); }
+.dl .primary .tag.mine { background: var(--ink); color: #fff; box-shadow: none; }
+.dl .primary:focus-visible { outline-color: var(--brand-deep); }
+@media (hover: hover) and (pointer: fine) {
+  .dl a:hover { box-shadow: inset 0 0 0 1px var(--ink); }
+  .dl a:hover .go { color: var(--ink); transform: translate(2px, -2px); }
+  .dl a[href^="#"]:hover .go { transform: translateX(3px); }
+  .dl .primary:hover { box-shadow: none; background: #E5562A; }
+}
+
 /* ---------- FAQ ---------- */
 .faq { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 14fr); gap: clamp(24px, 4vw, 80px); }
 .faq .qa { border-top: 1px solid var(--ink); }
 .faq details { border-bottom: 1px solid var(--line); }
-.faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 24px; align-items: center; padding: clamp(18px, 1.6vw, 24px) 0; font-size: clamp(17px, 1.35vw, 21px); font-weight: 500; letter-spacing: -.01em; }
+.faq summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 24px;
+  min-height: 64px; padding: clamp(14px, 1.3vw, 20px) 0;
+  font-size: clamp(17px, 1.35vw, 21px); line-height: 1.35; font-weight: 500; letter-spacing: -.01em;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary svg { width: 20px; height: 20px; flex: none; transition: transform .2s; color: var(--graphite); }
-.faq details[open] summary svg { transform: rotate(45deg); }
-.faq details p { color: var(--graphite); padding-bottom: 22px; max-width: 46em; text-wrap: pretty; }
+.faq summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 6px; }
+:root[data-lang=en] :is(.faq summary .q, .faq .a p) { text-wrap: pretty; }
+.faq summary svg {
+  width: 32px; height: 32px; padding: 7px; flex: none; border-radius: 50%; color: var(--graphite); box-shadow: inset 0 0 0 1px var(--line);
+  transition: transform var(--dur-ui) var(--ease-out), color var(--dur-ui) ease, box-shadow var(--dur-ui) ease, scale var(--dur-press) var(--ease-out);
+}
+.faq details.is-open summary svg { transform: rotate(45deg); color: var(--ink); }
+.faq summary:active svg { scale: .9; }
+@media (hover: hover) and (pointer: fine) {
+  .faq summary:hover svg { color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+}
+/* The answer grows on a grid row (0fr to 1fr), so the height is the content's own and the move is interruptible.
+   Opening takes a little longer than closing; both stay under 300 ms. */
+.faq .a { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 200ms var(--ease-out); }
+.faq .a > div { min-height: 0; overflow: hidden; }
+.faq .a p {
+  padding: 0 56px 24px 0; max-width: 46em; color: var(--graphite);
+  opacity: 0; transform: translateY(-4px); transition: opacity 160ms ease, transform 200ms var(--ease-out);
+}
+.faq details.is-open .a { grid-template-rows: 1fr; transition-duration: 280ms; }
+.faq details.is-open .a p { opacity: 1; transform: none; transition-duration: 240ms, 280ms; transition-delay: 40ms; }
+.faq .a a { color: var(--hit); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .22em; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+@media (hover: hover) and (pointer: fine) { .faq .a a:hover { text-decoration-color: currentColor; } }
+
 @media (max-width: 960px) {
   .faq { grid-template-columns: minmax(0, 1fr); }
   .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Phone: this device's card stays large and first, in reach; the others become a grouped list of 72 px rows. */
 @media (max-width: 640px) {
-  .dl { grid-template-columns: minmax(0, 1fr); }
-  .dl a, .dl .soon-card { min-height: 150px; }
+  .dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .dl a.primary { min-height: 176px; margin-bottom: 12px; padding: 20px; }
+  .dl a.primary b { font-size: 22px; }
+  .dl a:not(.primary) {
+    min-height: 72px; padding: 14px 16px; border-radius: 0; margin-top: -1px; column-gap: 14px;
+    grid-template-rows: auto auto; grid-template-areas: "os tags go" "os txt go"; align-items: center;
+  }
+  .dl a:not(.primary) .txt { padding-top: 0; gap: 2px; }
+  .dl a:not(.primary) .tags:empty { display: none; }
+  .dl a:not(.primary) .tags:not(:empty) { margin-bottom: 4px; }
+  .dl a:not(.primary) .os { width: 40px; height: 40px; border-radius: 10px; }
+  .dl a:not(.primary) .go { width: 18px; height: 18px; }
+  .dl a:not(.primary) b { font-size: 17px; }
+  .dl a:not(.primary) small { font-size: 14px; }
+  .dl a:not(.primary):active { transform: none; background: var(--mist); }
+  .dl > a:first-child:not(.primary), .dl > .primary + a { border-radius: 16px 16px 0 0; margin-top: 0; }
+  .dl > a:last-child { border-radius: 0 0 16px 16px; }
+  .dl a:not(.primary):focus-visible { outline-offset: -2px; border-radius: inherit; z-index: 1; }
+  .faq summary { min-height: 60px; font-size: 17px; gap: 16px; }
+  .faq .a p { padding-right: 0; font-size: 16px; }
 }

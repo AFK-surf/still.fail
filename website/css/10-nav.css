@@ -1,26 +1,49 @@
 /* ---------- Nav ----------
    A translucent material over the page (Apple's materials): content scrolls under it and fades out at its lower edge
-   (the scroll-edge effect) instead of meeting a hard line. The edge appears only once something is under it. */
-.nav { position: sticky; top: 0; z-index: 30; isolation: isolate; }
+   (the scroll-edge effect) instead of meeting a hard line. The edge appears only once something is under it.
+   The bar takes the tone of the band behind it (main.js sets data-under, and data-below for the band meeting its
+   lower edge): a dark material over Ink, so it never turns a grey smear; over Base it stays paper, a little denser so
+   it does not tint peach. Where Base or a change of tone meets the edge, the fade is dropped: that boundary is the
+   edge. Its colours are local variables, so one switch recolours every part. */
+.nav {
+  position: sticky; top: 0; z-index: 30; isolation: isolate;
+  --n-mat: rgba(255,255,255,.86); --n-edge: rgba(255,255,255,.72);
+  --n-fg: var(--ink); --n-mut: var(--graphite); --n-thumb: var(--ink); --n-on-thumb: #fff;
+  --n-line: var(--line); --n-hover: var(--mist); --n-cta: var(--ink); --n-on-cta: #fff; --n-cta-hover: #000;
+}
+.nav[data-under=brand] { --n-mat: rgba(255,255,255,.94); }
+.nav[data-under=ink]:not([data-open]) {
+  --n-mat: rgba(26,27,30,.78); --n-edge: rgba(26,27,30,.6);
+  --n-fg: #fff; --n-mut: #C9CACD; --n-thumb: #fff; --n-on-thumb: var(--ink);
+  --n-line: rgba(255,255,255,.2); --n-hover: rgba(255,255,255,.1); --n-cta: #fff; --n-on-cta: var(--ink); --n-cta-hover: #E6E6E8;
+  --ring: var(--brand);
+}
 .nav::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: rgba(255,255,255,.86); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  background: var(--n-mat); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  transition: background-color var(--dur-ui) ease;
 }
 .nav::after {
   content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 18px; pointer-events: none;
-  background: linear-gradient(rgba(255,255,255,.72), rgba(255,255,255,0));
+  background: linear-gradient(var(--n-edge), transparent);
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   -webkit-mask-image: linear-gradient(#000, transparent); mask-image: linear-gradient(#000, transparent);
   opacity: 0; transition: opacity var(--dur-ui) ease;
 }
 .nav[data-scrolled]::after { opacity: 1; }
+.nav[data-under=brand]::after, .nav[data-below=brand]::after,
+.nav[data-under=ink]:not([data-below=ink])::after, .nav:not([data-under=ink])[data-below=ink]::after { opacity: 0; }
 .nav .w { position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
 .brand {
-  display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: none;
-  transition: transform var(--dur-press) var(--ease-out);
+  display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; color: var(--ink); flex: none;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
 }
+.nav .brand { color: var(--n-fg); }
 .brand:active { transform: scale(.97); }
-.brand img { width: 26px; height: 26px; border-radius: 6px; }
+.brand img { width: 26px; height: 26px; border-radius: 6px; transition: box-shadow var(--dur-ui) ease; }
+/* Over Ink the dark mark gets a hairline, so its square still reads. */
+.nav[data-under=ink]:not([data-open]) .brand img { box-shadow: 0 0 0 1px rgba(255,255,255,.22); }
 /* The wordmark sits 1 px high so its x-height centres on the mark, not its cap height. */
 .wordmark { font-weight: 600; font-size: 22px; letter-spacing: -.035em; line-height: 1; transform: translateY(-1px); }
 
@@ -28,37 +51,51 @@
 .nav-list { position: relative; display: flex; align-self: stretch; gap: clamp(14px, 1.6vw, 28px); flex: 1; min-width: 0; }
 .nav-list a {
   display: flex; align-items: center; text-decoration: none; font-size: 15px; font-weight: 500; letter-spacing: -.003em;
-  color: var(--graphite); white-space: nowrap; transition: color var(--dur-ui) ease;
+  color: var(--n-mut); white-space: nowrap; transition: color var(--dur-ui) ease;
 }
-.nav-list a[aria-current=true] { color: var(--ink); }
+.nav-list a[aria-current=true] { color: var(--n-fg); }
 .nav-list a:focus-visible { outline-offset: -2px; border-radius: 6px; }
 .nav-ind {
-  position: absolute; left: 0; bottom: 0; width: 1px; height: 2px; background: var(--ink); pointer-events: none;
+  position: absolute; left: 0; bottom: 0; width: 1px; height: 2px; background: var(--n-fg); pointer-events: none;
   transform-origin: 0 0; transform: translateX(var(--x, 0px)) scaleX(var(--w, 0));
-  opacity: 0; transition: transform 280ms var(--ease-out), opacity var(--dur-ui) ease;
+  opacity: 0; transition: transform 280ms var(--ease-out), opacity var(--dur-ui) ease, background-color var(--dur-ui) ease;
 }
 .nav-ind[data-on] { opacity: 1; }
-.nav-ind[data-jump] { transition: opacity var(--dur-ui) ease; }
+.nav-ind[data-jump] { transition: opacity var(--dur-ui) ease, background-color var(--dur-ui) ease; }
 .nav-list .nav-cta { display: none; }
 
 .nav-tools { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
 /* Language: a segmented control whose thumb slides to the chosen side. */
-.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 34px; padding: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); }
+.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 34px; padding: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--n-line); transition: box-shadow var(--dur-ui) ease; }
 .seg::before {
-  content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: 34px; border-radius: 999px; background: var(--ink);
-  transition: transform var(--dur-ui) var(--ease-out);
+  content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: 34px; border-radius: 999px; background: var(--n-thumb);
+  transition: transform var(--dur-ui) var(--ease-out), background-color var(--dur-ui) ease;
 }
 :root[data-lang=en] .seg::before { transform: translateX(100%); }
 .seg button {
   position: relative; border: 0; background: transparent; height: 32px; padding: 0; border-radius: 999px;
-  font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer; color: var(--graphite);
+  font-size: 13px; font-weight: 500; line-height: 1; cursor: pointer; color: var(--n-mut);
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
   transition: color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
 }
-.seg button[aria-pressed=true] { color: #fff; }
+.seg button[aria-pressed=true] { color: var(--n-on-thumb); }
+/* Hit areas reach past the drawing (to 44 px tall on touch), so the row keeps its size. The two halves already touch,
+   so they grow only up and down; the round buttons grow on every side. */
+.seg button::after, .icon-link::after, .menu-btn::after { content: ""; position: absolute; inset: -6px -4px; }
+.seg button::after { inset: -6px 0; }
 .seg button:active { transform: scale(.92); }
 .icon-link, .menu-btn {
-  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--ink); border: 0; background: transparent;
-  transition: background-color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+  position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--n-fg); border: 0; background: transparent;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
+}
+.nav-tools > .btn-ink { background: var(--n-cta); color: var(--n-on-cta); }
+/* Touch: the controls themselves are 44 px; the round ones give back 4 px each side, so the row is no wider. */
+@media (pointer: coarse) {
+  .seg button { height: 36px; }
+  .seg button::after { inset: -4px 0; }
+  .icon-link, .menu-btn { width: 44px; height: 44px; margin-inline: -4px; }
+  .icon-link::after, .menu-btn::after { content: none; }
 }
 .icon-link:active, .menu-btn:active { transform: scale(.92); }
 .icon-link svg { width: 20px; height: 20px; }
@@ -71,9 +108,10 @@
 .nav[data-open] .menu-btn .m3 { transform: rotate(-45deg) translateY(-5px); }
 .nav-scrim { display: none; }
 @media (hover: hover) and (pointer: fine) {
-  .nav-list a:hover { color: var(--ink); }
-  .seg button[aria-pressed=false]:hover { color: var(--ink); }
-  .icon-link:hover, .menu-btn:hover { background: var(--mist); }
+  .nav-list a:hover { color: var(--n-fg); }
+  .seg button[aria-pressed=false]:hover { color: var(--n-fg); }
+  .icon-link:hover, .menu-btn:hover { background: var(--n-hover); }
+  .nav-tools > .btn-ink:hover { background: var(--n-cta-hover); }
 }
 
 /* Narrow screens: the sections move into a sheet that slides down from under the bar (the way it goes back), over a
@@ -106,6 +144,10 @@
   .nav .nav-tools > .btn-ink { display: none; }
   .nav-tools { gap: 4px; }
 }
+/* Phone on its side: a short bar (--nav is 48 px, 00-base) without the call to action, which the menu sheet holds. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .nav .nav-tools > .btn-ink { display: none; }
+}
 /* Reduced motion: the sheet and scrim cross-fade in place. */
 @media (prefers-reduced-motion: reduce) and (max-width: 980px) {
   .nav-list { transform: none; opacity: 0; }
@@ -116,6 +158,7 @@
 /* Reduced transparency: a solid bar. */
 @media (prefers-reduced-transparency: reduce) {
   .nav::before { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .nav[data-under=ink]:not([data-open])::before { background: var(--ink); }
   .nav::after { display: none; }
   .nav[data-scrolled]::before { box-shadow: 0 1px 0 var(--line); }
 }

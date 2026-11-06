@@ -130,6 +130,24 @@
     mark(on && links.get(on.id));
   }, { rootMargin: "-45% 0px -50% 0px" });
   for (const s of $$("main > section")) spy.observe(s);
+  // The bar takes the tone of the band behind it, so its material reads as part of that band: dark over Ink, paper
+  // elsewhere. Two 1 px lines decide: the bar's middle (data-under, what is behind it) and its lower edge (data-below,
+  // what meets it; where the two differ, the band's own boundary is the edge and the fade is dropped).
+  // An observer keeps the one or two bands near the top (WebKit's root for a pixel-thin margin is not innerHeight, so
+  // the lines themselves are measured), and only those are measured as the page scrolls.
+  const bands = $$("main > section[data-tone], footer[data-tone]");
+  const near = new Set();
+  let barH = nav.offsetHeight;
+  const at = (y) => { for (const b of near) { const r = b.getBoundingClientRect(); if (r.top <= y && r.bottom > y) return b.dataset.tone; } };
+  const setTone = (k, t) => { if (t && nav.dataset[k] !== t) nav.dataset[k] = t; };
+  const tone = () => { setTone("under", at(barH / 2)); setTone("below", at(barH)); };
+  const nearIO = new IntersectionObserver((entries) => {
+    for (const e of entries) e.isIntersecting ? near.add(e.target) : near.delete(e.target);
+    tone();
+  }, { rootMargin: "0px 0px -70% 0px" });
+  for (const b of bands) nearIO.observe(b);
+  addEventListener("scroll", tone, { passive: true });
+  addEventListener("resize", () => { barH = nav.offsetHeight; tone(); }, { passive: true });
   new ResizeObserver(() => placeInd(false)).observe(sheet);
   document.fonts?.ready.then(() => placeInd(false));
   setLang(root.dataset.lang === "en" ? "en" : "zh", false);
@@ -526,29 +544,75 @@
   }
 
   // ---- Copy the install command ----
+  // The icon and label cross-fade to a check and "Copied" (.is-copied), and a status line tells a screen reader. If the
+  // clipboard is refused, the command itself is selected so a keyboard copy works.
   for (const b of $$("[data-copy]")) {
+    const term = b.closest(".term"), live = term && $(".copy-live", term);
+    let t = 0;
     b.addEventListener("click", async () => {
-      const label = b.innerHTML;
-      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = root.dataset.lang === "en" ? "Copied" : "已复制"; }
-      catch { b.textContent = root.dataset.lang === "en" ? "Select it" : "请手动复制"; }
-      setTimeout(() => { b.innerHTML = label; }, 1400);
+      const en = root.dataset.lang === "en";
+      let ok = true;
+      try { await navigator.clipboard.writeText(b.dataset.copy); } catch { ok = false; }
+      if (!ok) {
+        const code = term && $("code", term);
+        if (code) { const r = document.createRange(); r.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(r); }
+      }
+      if (live) live.textContent = ok ? (en ? "Command copied" : "命令已复制") : (en ? "Command selected; copy it with your keyboard" : "命令已选中，用键盘复制");
+      b.classList.toggle("is-copied", ok);
+      clearTimeout(t);
+      t = setTimeout(() => { b.classList.remove("is-copied"); if (live) live.textContent = ""; }, 1800);
     });
   }
 
-  // ---- Downloads: the one for this device first, in Blue ----
+  // ---- Downloads: the one for this device first, in Base, marked as this device's ----
   const ua = navigator.userAgent;
   const platform = /Android/i.test(ua) ? "android"
     : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ios"
     : /Macintosh/.test(ua) ? "mac" : /Windows/.test(ua) ? "windows" : /Linux|X11|CrOS/.test(ua) ? "web" : "mac";
   const mine = $(`#dl [data-for="${platform}"]`);
-  if (mine) { mine.classList.add("primary"); mine.parentElement.prepend(mine); }
+  if (mine) {
+    mine.classList.add("primary");
+    mine.parentElement.prepend(mine);
+    const tags = $(".tags", mine);
+    if (tags) tags.insertAdjacentHTML("afterbegin", '<span class="tag mine"><span class="zh">这台设备</span><span class="en">This device</span></span>');
+  }
+
+  // ---- FAQ: details that open and close smoothly, and can be turned around mid-way ----
+  // The answer's height runs on a grid row (0fr to 1fr), a transition, so a second click reverses it from where it is.
+  // [open] is set at once on opening (so the content exists to grow into) and removed only once closing has finished.
+  // Keyboard (Enter, Space on the summary) goes through the same click; find-in-page opening an answer is followed.
+  {
+    const still = matchMedia("(prefers-reduced-motion: reduce)");
+    for (const d of $$(".faq details")) {
+      const s = $("summary", d), a = $(".a", d);
+      if (!s || !a) continue;
+      d.classList.toggle("is-open", d.open);
+      let t = 0;
+      s.addEventListener("click", (e) => {
+        e.preventDefault();
+        clearTimeout(t);
+        if (!d.classList.contains("is-open")) {
+          if (!d.open) { d.open = true; void a.offsetHeight; }
+          d.classList.add("is-open");
+        } else {
+          d.classList.remove("is-open");
+          const dur = still.matches ? 0 : parseFloat(getComputedStyle(a).transitionDuration) * 1000 || 0;
+          t = setTimeout(() => { if (!d.classList.contains("is-open")) d.open = false; }, dur);
+        }
+      });
+      d.addEventListener("toggle", () => { if (d.open && !d.classList.contains("is-open")) d.classList.add("is-open"); if (!d.open) d.classList.remove("is-open"); });
+    }
+  }
 
   // ---- The field: the mark taken apart ----
   // Each cell holds one of the mark's parts, an eye (a white dot) or a cheek (a peach pill), in diagonal runs of dot,
   // dot, pill. A ripple runs out from one cell and, as it reaches each cell, that cell turns to the next part of its
   // run: a dot closes to a pill, a pill opens to a dot. One ask, every device answering in turn. The ripple is an
   // explanation, so it takes its time to cross (about 3 s), but each cell's own change is a blink of about 250 ms.
+  // The ripple starts from one cell in Ink, the mark's own ground: you. It stays a dot and only swells as the ripple
+  // leaves it. Its place is fixed: a sixth of the way in, on the second row (the hero and the closing band share it).
   const EYE = [255, 255, 255], CHEEK = [246, 188, 159]; // the mark's own white and peach
+  const INK = "#1A1B1E"; // --ink
   const DOT = .26, PILL_W = .44, PILL_H = .154; // in cells; the pill is the mark's cheek (.59 of an eye high), a little longer
   const SPEED = 9, BAND = 2.2, GAP = 3.4; // cells a second; cells over which one cell changes; seconds between ripples
   const part = (c, r, s) => ((c + 2 * r + s) % 3 === 2 ? 1 : 0); // 0 an eye, 1 a cheek
@@ -563,7 +627,6 @@
 
   function field(wrap, { loop, delay }) {
     const canvas = $("canvas", wrap), ctx = canvas.getContext("2d");
-    const origin = $("[data-origin]", wrap);
     let w = 0, h = 0, cols = 24, cell = 0, rows = 0, oc = 0, or = 0, far = 0;
     // at: seconds into the ripple under way, or null between ripples; wait: seconds until the next one.
     let shift = 0, at = null, wait = loop ? delay : Infinity;
@@ -579,27 +642,28 @@
       canvas.width = Math.round(w * d); canvas.height = Math.round(h * d);
       ctx.setTransform(d, 0, 0, d, 0, 0);
       measure();
-      // Drawn: the hero fades the field in and brings its notes after it (CSS); until now the canvas was blank.
+      // Drawn: the hero fades the field in (CSS); until now the canvas was blank.
       canvas.dataset.drawn = "";
     }
-    // The cells under each note's label and under the pause button are left empty, so they sit in a clean lane. The
-    // ripple starts at the note marked data-origin, or, with none showing, in the middle of the top row.
+    // The cell under the pause button is left empty, so the button sits on clear ground. The ripple's origin is fixed
+    // (4 of 24 columns, 2 of 12 on a phone; the second row).
     function measure() {
       if (!cell) return;
       empty.clear();
       const box = wrap.getBoundingClientRect();
-      for (const el of $$(".ft-l, .fpause", wrap)) {
+      // A cell is left out when its dot would touch the ring (the ring's radius plus a third of a cell), so on a phone,
+      // where the 32 px ring is wider than a cell, it clears one cell, not the six its box grazes.
+      for (const el of $$(".fpause", wrap)) {
         const b = el.getBoundingClientRect();
         if (!b.width) continue;
-        for (let r = Math.floor((b.top - box.top) / cell); r <= Math.floor((b.bottom - box.top - 1) / cell); r++)
-          for (let c = Math.floor((b.left - box.left) / cell); c <= Math.floor((b.right - box.left - 1) / cell); c++) empty.add(r * cols + c);
+        const x = (b.left + b.right) / 2 - box.left, y = (b.top + b.bottom) / 2 - box.top, reach = b.width / 2 + cell / 3;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
+          if (Math.hypot((c + .5) * cell - x, (r + .5) * cell - y) < reach) empty.add(r * cols + c);
       }
-      if (origin?.offsetWidth) { oc = Math.round(origin.offsetLeft / cell); or = Math.round(origin.offsetTop / cell); }
-      else { oc = (cols - 1) / 2; or = 0; }
+      oc = Math.floor(cols / 6); or = Math.min(1, rows - 1);
       far = Math.max(Math.hypot(oc, or), Math.hypot(cols - 1 - oc, or), Math.hypot(oc, rows - 1 - or), Math.hypot(cols - 1 - oc, rows - 1 - or));
       draw();
     }
-    if (origin) new ResizeObserver(() => measure()).observe($(".ft-l", origin)); // a label changes width with the language
     function draw() {
       ctx.clearRect(0, 0, w, h);
       const front = at === null ? -1 : at * SPEED;
@@ -608,6 +672,7 @@
       const still = [new Path2D(), new Path2D()];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         if (empty.has(r * cols + c)) continue;
+        if (c === oc && r === or) continue; // you: drawn last, in Ink
         const a = part(c, r, shift), b = part(c, r, shift + 1);
         const k = front < 0 ? 0 : Math.min(1, Math.max(0, (front - Math.hypot(c - oc, r - or)) / BAND));
         const t = a + (b - a) * smooth(k), s = cell * (1 + .32 * Math.sin(Math.PI * k));
@@ -621,6 +686,9 @@
       }
       ctx.fillStyle = "#FFFFFF"; ctx.fill(still[0]);
       ctx.fillStyle = "#F6BC9F"; ctx.fill(still[1]);
+      const k0 = front < 0 ? 0 : Math.min(1, front / BAND), s0 = cell * DOT * (1 + .32 * Math.sin(Math.PI * k0));
+      ctx.beginPath(); pill(ctx, (oc + .5) * cell, (or + .5) * cell, s0, s0);
+      ctx.fillStyle = INK; ctx.fill();
     }
     // At most 30 frames a second, only while a ripple is under way; between ripples nothing runs but one timer.
     const active = () => running && inView && ready && !document.hidden;

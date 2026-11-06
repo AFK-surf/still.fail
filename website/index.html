@@ -12,7 +12,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://monoid.build/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#EF6334">
+<meta name="theme-color" content="#ffffff">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -107,13 +107,13 @@
 
 <main id="top">
 
-<!-- ============ Hero: Blue ground, the field of the mark below ============ -->
+<!-- ============ Hero: Base ground, the field of the mark below ============ -->
 <section class="band hero" data-tone="brand" aria-labelledby="hero-title">
   <div class="w">
     <h1 id="hero-title" class="display">One devices</h1>
     <div class="hero-body">
       <p class="lead">
-        <span class="zh">把每台电脑上的 agent 连成一台。<b>一个号池</b>装下所有订阅，<b>一个团队</b>在 Slack 里指挥，<b>每台设备</b>都能接着干。</span>
+        <span class="zh">把每台电脑上的 agent 连成一台。<b>一个号池</b>装下所有订阅，<b>一个团队</b>在 Slack 里指挥，<b>每台设备</b>都能<span class="nb">接着干。</span></span>
         <span class="en">monoid joins the agents on all your computers into one. <b>One account pool</b> for your subscriptions, <b>one team</b> directing them from Slack, <b>every device</b> picking up where you left&nbsp;off.</span>
       </p>
       <div class="actions">
@@ -123,13 +123,10 @@
     </div>
   </div>
   <!-- The field: the mark taken apart, its eyes (dots) and cheeks (pills) one to a cell on the 24U grid. A ripple runs
-       out from the cell marked "you" and every cell answers in turn. Notes ring a real cell (--c column, --r row from
-       the top; --ct/--rt on a tablet; --cm/--rm on a phone, where only the first shows) and a leader runs to a label. -->
+       out from one Ink cell (you; main.js places it) and every cell answers in turn. No labels: the picture is abstract,
+       and the canvas's label carries the meaning. -->
   <div class="field-wrap">
     <canvas class="field" id="field" role="img" aria-label="你交代一次，波纹传到每一台设备：station 周六凌晨还在跑，号池额度用到 80% 就换号。" data-aria-en="You ask once and a ripple reaches every device: a station still running at 3 a.m. on Saturday, the pool moving to the next account at 80%."></canvas>
-    <span class="ftag" data-origin style="--c:4;--r:1;--ct:2;--rt:1;--cm:1;--rm:1" aria-hidden="true"><span class="ft-l"><i></i><span class="zh">你 · 交代一次</span><span class="en">you · ask once</span></span></span>
-    <span class="ftag" style="--c:10;--r:3;--ct:5;--rt:3" aria-hidden="true"><span class="ft-l"><i></i><span class="zh">station · 周六 03:00 · 3 个 agent 在跑</span><span class="en">station · Sat 03:00 · 3 agents running</span></span></span>
-    <span class="ftag" style="--c:16;--r:2;--ct:9;--rt:5" aria-hidden="true"><span class="ft-l"><i></i><span class="zh">号池 · 额度到 80% · 换号</span><span class="en">pool · 80% used · next account</span></span></span>
     <button class="fpause" type="button" id="pause" aria-pressed="false" aria-label="暂停动画" data-aria-en="Pause the animation" hidden><svg viewBox="0 0 10 10" aria-hidden="true"><rect class="ps" x="1.6" y="1.2" width="2.3" height="7.6" rx=".7"/><rect class="ps" x="6.1" y="1.2" width="2.3" height="7.6" rx=".7"/><path class="pl" d="M2.6 1.7v6.6a.6.6 0 0 0 .9.5l5.3-3.3a.6.6 0 0 0 0-1L3.5 1.2a.6.6 0 0 0-.9.5Z"/></svg></button>
   </div>
 </section>
@@ -971,20 +968,25 @@
       <p class="lead"><span class="zh">station 支持 macOS（Apple 芯片）、Linux（x64、arm64）和 Windows（x64）。agent 以这台电脑的用户权限运行。</span><span class="en">Stations run on macOS (Apple silicon), Linux (x64, arm64) and Windows (x64). Agents run with that computer's user permissions.</span></p>
     </div>
     <div class="card install rv">
-      <div class="install-term">
-        <div class="copy-row" style="justify-content:space-between"><h3><span class="zh">在电脑上运行</span><span class="en">Run it on the computer</span></h3><button class="copy-btn" type="button" data-copy="curl -fsSL https://app.monoid.build/install.sh | sh -s -- &lt;token&gt;"><span class="zh">复制</span><span class="en">Copy</span></button></div>
-        <div class="term" role="group" aria-label="Terminal">
-          <div class="row"><span class="p">$ </span>curl -fsSL https://app.monoid.build/install.sh | sh -s -- &lt;token&gt;</div>
-          <div class="row dim"><span class="zh">→ 下载 station · 加入 workspace “Acme”</span><span class="en">→ Downloading the station · joining workspace “Acme”</span></div>
-          <div class="row dim"><span class="zh">→ 注册为登录启动的服务</span><span class="en">→ Registering it to start at login</span></div>
-          <div class="row ok"><span class="zh">✓ station 已上线 · 号池里有 2 个账号</span><span class="en">✓ Station online · 2 accounts in the pool</span></div>
-        </div>
-      </div>
       <ol class="steps">
         <li><b>01</b><span class="zh">打开 App，新建 workspace</span><span class="en">Open the app and create a workspace</span></li>
-        <li><b>02</b><span class="zh">点「添加 station」，在电脑上运行它给的命令</span><span class="en">Choose Add station and run its command on the computer</span></li>
-        <li><b>03</b><span class="zh">登录 Claude Code、Codex，账号进号池</span><span class="en">Sign in to Claude Code or Codex; the accounts join the pool</span></li>
+        <li class="now"><b>02</b><span class="zh">点「添加 station」，在电脑上运行它给的命令</span><span class="en">Choose Add station and run its command on the computer</span></li>
+        <li><b>03</b><span class="zh">登录 Claude Code 或 Codex，账号进号池</span><span class="en">Sign in to Claude Code or Codex; the account joins the pool</span></li>
       </ol>
+      <div class="term" role="group" aria-label="终端" data-aria-en="Terminal">
+        <div class="term-bar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="term-name" aria-hidden="true">station · install</span>
+          <button class="copy-btn" type="button" data-copy="curl -fsSL https://app.monoid.build/install.sh | sh -s -- &lt;token&gt;" aria-label="复制安装命令" data-aria-en="Copy the install command"><span class="cb-ico" aria-hidden="true"><svg class="cb-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg><svg class="cb-done" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="cb-l" aria-hidden="true"><span class="cb-a"><span class="zh">复制</span><span class="en">Copy</span></span><span class="cb-b"><span class="zh">已复制</span><span class="en">Copied</span></span></span></button>
+        </div>
+        <div class="term-body">
+          <div class="row cmd"><span class="p" aria-hidden="true">$ </span><code>curl -fsSL https://app.monoid.build/install.sh | sh -s -- &lt;token&gt;</code></div>
+          <div class="row out dim"><span class="zh">→ 下载 station，加入 workspace “Acme”</span><span class="en">→ Downloading the station, joining workspace “Acme”</span></div>
+          <div class="row out dim"><span class="zh">→ 注册为登录时启动的服务</span><span class="en">→ Registering it to start at login</span></div>
+          <div class="row out ok"><span class="zh">✓ station 已上线，号池里有 2 个账号</span><span class="en">✓ Station online, 2 accounts in the pool</span></div>
+        </div>
+        <span class="copy-live" role="status"></span>
+      </div>
     </div>
   </div>
 </section>
@@ -1051,29 +1053,28 @@
     </div>
     <div class="dl rv" id="dl">
       <a href="https://app.monoid.build/releases/latest/mac" data-for="mac">
-        <span class="os"><svg><use href="#b-apple"/></svg></span><svg class="ico go"><use href="#i-out"/></svg>
-        <b>Mac</b><small><span class="zh">Apple 芯片 · 桌面 App</span><span class="en">Apple silicon · desktop app</span></small>
+        <span class="os"><svg aria-hidden="true"><use href="#b-apple"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>Mac</b><small><span class="zh">Apple 芯片 · 桌面 App</span><span class="en">Apple silicon · desktop app</span></small></span>
       </a>
       <a href="https://app.monoid.build/releases/latest/win" data-for="windows">
-        <span class="os"><svg><use href="#b-windows"/></svg></span><svg class="ico go"><use href="#i-out"/></svg>
-        <b>Windows</b><small><span class="zh">x64 · 桌面 App</span><span class="en">x64 · desktop app</span></small>
+        <span class="os"><svg aria-hidden="true"><use href="#b-windows"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>Windows</b><small><span class="zh">x64 · 桌面 App</span><span class="en">x64 · desktop app</span></small></span>
       </a>
       <a href="https://app.monoid.build/releases/latest/android" data-for="android">
-        <span class="os"><svg><use href="#b-android"/></svg></span><svg class="ico go"><use href="#i-out"/></svg>
-        <b>Android</b><small><span class="zh">手机 App · 可借给 agent 测试</span><span class="en">Phone app · can be lent to agents</span></small>
+        <span class="os"><svg aria-hidden="true"><use href="#b-android"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>Android</b><small><span class="zh">手机 App · 可借给 agent 测试</span><span class="en">Phone app · can be lent to agents</span></small></span>
       </a>
       <a href="https://app.monoid.build" data-app data-for="ios">
-        <span class="os"><svg class="ico"><use href="#i-duo"/></svg></span><svg class="ico go"><use href="#i-out"/></svg>
-        <span class="tag"><span class="zh">App Store 即将上架</span><span class="en">App Store soon</span></span>
-        <b>iPhone · iPhone Duo</b><small><span class="zh">现在用网页版，添加到主屏幕</span><span class="en">Use the web app on your home screen for now</span></small>
+        <span class="os"><svg class="ico" aria-hidden="true"><use href="#i-duo"/></svg></span><span class="tags"><span class="tag"><span class="zh">App Store 即将上架</span><span class="en">App Store soon</span></span></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>iPhone · iPhone Duo</b><small><span class="zh">先用网页版，添加到主屏幕</span><span class="en">For now, the web app on your home screen</span></small></span>
       </a>
       <a href="https://app.monoid.build" data-app data-for="web">
-        <span class="os"><svg class="ico"><use href="#i-globe"/></svg></span><svg class="ico go"><use href="#i-out"/></svg>
-        <b><span class="zh">网页版</span><span class="en">Web app</span></b><small><span class="zh">不用安装 · Linux 也能用</span><span class="en">Nothing to install · works on Linux</span></small>
+        <span class="os"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b><span class="zh">网页版</span><span class="en">Web app</span></b><small><span class="zh">不用安装 · Linux 也能用</span><span class="en">Nothing to install · works on Linux</span></small></span>
       </a>
       <a href="#install" data-for="station">
-        <span class="os"><svg class="ico"><use href="#i-term"/></svg></span><svg class="ico go"><use href="#i-arrow"/></svg>
-        <b>Station</b><small><span class="zh">macOS · Linux · Windows，一条命令</span><span class="en">macOS · Linux · Windows, one command</span></small>
+        <span class="os"><svg class="ico" aria-hidden="true"><use href="#i-term"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-arrow"/></svg>
+        <span class="txt"><b>Station</b><small><span class="zh">macOS · Linux · Windows，一条命令</span><span class="en">macOS · Linux · Windows, one command</span></small></span>
       </a>
     </div>
   </div>
@@ -1087,41 +1088,35 @@
       <h2 id="faq-title"><span class="zh">问得最多的</span><span class="en">Asked most</span></h2>
     </div>
     <div class="qa rv">
-      <details open><summary><span class="zh">号池怎么决定用哪个账号？</span><span class="en">How does the pool choose an account?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">新对话只在启用了所选模型的账号里挑，跳过登录失效、密钥被拒或额度用尽的；5 小时额度用到 80% 的排最后。其余按「本周额度要花多快才不浪费」乘以 5 小时剩余额度分摊，快重置、剩得多的号多分。</span><span class="en">A new chat considers only accounts with the chosen model, skipping any that are signed out, have a refused key or are out of quota; those at 80% of their 5-hour limit go last. The rest share chats by how fast each must spend its weekly limit, times what's left of its 5-hour limit, so accounts that reset soon with more left get more.</span></p></details>
-      <details><summary><span class="zh">中途换账号，会丢上下文吗？</span><span class="en">Does switching accounts lose context?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">进行中的对话尽量留在原账号。原账号不能用了才换；要提前换，只挑上下文刚压缩过、或已接近压缩点的时候，agent 会读回之前的聊天记录。后台命令还在跑时不提前换。</span><span class="en">A running chat stays on its account where it can, and moves only when that account can't be used. It moves early only right after its context was compacted or when it is near the compaction point, and the agent reads its earlier history back. It never moves early while background commands are running.</span></p></details>
-      <details><summary><span class="zh">和直接在终端里用 Claude Code 有什么不同？</span><span class="en">How is it different from Claude Code in a terminal?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">终端里的 agent 只能坐在那台电脑前用。monoid 把你每台电脑上的 agent 放到一处：账号进号池，在手机或 Slack 里随时交代和查看，看每台电脑的负载，密钥在 agent 使用前由你批准。agent 本身不变。</span><span class="en">An agent in a terminal is used at that computer. monoid puts the agents on all your computers in one place: accounts share a pool, you direct and follow them from your phone or Slack, see each computer's load, and approve a key before an agent uses it. The agents themselves are unchanged.</span></p></details>
-      <details><summary><span class="zh">要付费吗？</span><span class="en">Does it cost anything?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">目前免费，套餐限制 workspace 和成员数量，每个 workspace 最多 64 台 station。agent 用的是你自己的订阅账号或 API 密钥。</span><span class="en">It's free for now. Plans limit workspaces and members, and each workspace can have up to 64 stations. Agents use your own subscriptions or API keys.</span></p></details>
-      <details><summary><span class="zh">代码和对话会传到云端吗？</span><span class="en">Do my code and chats go to the cloud?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">不会。对话、文件和记录保存在你的电脑上，云端只负责账号和中继。中继只转发加密数据，看不到内容。</span><span class="en">No. Chats, files and history stay on your computers; the cloud only handles accounts and relays. A relay passes on encrypted data it can't read.</span></p></details>
-      <details><summary><span class="zh">电脑要一直开着吗？</span><span class="en">Does my computer have to stay on?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">agent 在你的电脑上运行，所以电脑要开着、联网。station 随登录启动，不用开着窗口。</span><span class="en">Agents run on your computer, so it has to be on and online. The station starts at login; no window needs to stay open.</span></p></details>
-      <details><summary><span class="zh">不在同一个网络里，能连上吗？</span><span class="en">Does it work across networks?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">能。设备之间先直接连接，连不通时经加密中继转发，不用配置端口、VPN 或内网穿透。</span><span class="en">Yes. Devices connect directly, and through an encrypted relay when they can't. No ports, VPN or tunnels to set up.</span></p></details>
-      <details><summary><span class="zh">会影响我的 agent 账号吗？</span><span class="en">Does it affect my agent accounts?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">monoid 运行的是这些 agent 的官方命令行，和你在终端里用它们一样，不修改它们，也不绕过它们的限制。</span><span class="en">monoid runs each agent's official command-line tool, the same as you would in a terminal, without changing it or working around its limits.</span></p></details>
-      <details><summary><span class="zh">iPhone 和 iPhone Duo 能用吗？</span><span class="en">Can I use it on an iPhone or iPhone Duo?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">iPhone App 即将上架。现在可以用网页版，添加到主屏幕后像 App 一样打开。station 上的 iOS 模拟器（包括 iPhone Duo 的两块屏和折叠姿态）可以在对话旁远程操作。</span><span class="en">The iPhone app is coming to the App Store. Until then, use the web app; added to the home screen, it opens like an app. The iOS Simulator on a station, iPhone Duo's two screens and fold included, can be driven beside the chat.</span></p></details>
-      <details><summary><span class="zh">开源吗？</span><span class="en">Is it open source?</span><svg class="ico"><use href="#i-plus"/></svg></summary>
-        <p><span class="zh">开源，采用 MIT 许可，代码在 GitHub。</span><span class="en">Yes, under the MIT license. The code is on GitHub.</span></p></details>
+      <details open><summary><span class="q"><span class="zh">号池怎么决定用哪个账号？</span><span class="en">How does the pool choose an account?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">只在启用了所选模型、还能用的账号里挑；5 小时额度用到 80% 的排最后。其余按本周额度要花多快、5 小时额度还剩多少来分：快重置、剩得多的号多分。</span><span class="en">Only accounts that have the chosen model and still work are considered; those at 80% of their 5-hour limit go last. The rest are weighted by how fast each must spend its weekly limit and what's left of its 5-hour limit, so accounts that reset soon with more left get more chats.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">中途换账号，会丢上下文吗？</span><span class="en">Does switching accounts lose context?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">换号后 agent 会读回之前的聊天记录。对话尽量留在原账号，不能用了才换；提前换只挑上下文刚压缩过或快要压缩的时候，后台命令在跑时不换。</span><span class="en">After a switch, the agent reads its earlier history back. A chat stays on its account until that account can't be used; it moves early only right after or near a compaction, and never while background commands are running.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">和直接在终端里用 Claude Code 有什么不同？</span><span class="en">How is it different from Claude Code in a terminal?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">终端里的 agent 只能坐在那台电脑前用。monoid 把每台电脑上的 agent 放到一处：账号进号池，用手机或 Slack 交代和查看，每台电脑的负载一处看全，密钥经你批准才给 agent 用。agent 本身不变。</span><span class="en">A terminal agent is used at that computer. monoid brings the agents on all your computers into one place: accounts share a pool, you direct them from your phone or Slack, see every computer's load, and approve each key before an agent uses it. The agents themselves are unchanged.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">要付费吗？</span><span class="en">Does it cost anything?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">目前免费。套餐限制 workspace 和成员数，每个 workspace 最多 64 台 station。agent 用你自己的订阅账号或 API 密钥。</span><span class="en">Free for now. Plans limit workspaces and members; a workspace holds up to 64 stations. Agents use your own subscriptions or API keys.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">代码和对话会传到云端吗？</span><span class="en">Do my code and chats go to the cloud?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">不会。对话、文件和记录留在你的电脑上；云端只管账号和中继，中继转发的是它看不到内容的加密数据。</span><span class="en">No. Chats, files and history stay on your computers. The cloud handles accounts and relays, and a relay passes on encrypted data it can't read.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">电脑要一直开着吗？</span><span class="en">Does my computer have to stay on?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">要。agent 在你的电脑上运行，电脑得开着、联网。station 随登录启动，不用开着窗口。</span><span class="en">Yes. Agents run on it, so it has to be on and online. The station starts at login; no window has to stay open.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">不在同一个网络里，能连上吗？</span><span class="en">Does it work across networks?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">能。设备之间直连，连不通就走加密中继，不用配端口、VPN 或内网穿透。</span><span class="en">Yes. Devices connect directly, or through an encrypted relay when they can't. No ports, VPN or tunnels to set up.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">会影响我的 agent 账号吗？</span><span class="en">Does it affect my agent accounts?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">monoid 运行的是各家 agent 的官方命令行，和你在终端里用一样：不改它们，也不绕开它们的限制。</span><span class="en">monoid runs each agent's official CLI, just as you would in a terminal: unmodified, and within its own limits.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">iPhone 和 iPhone Duo 能用吗？</span><span class="en">Can I use it on an iPhone or iPhone Duo?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">能。App Store 版即将上架，现在用网页版，添加到主屏幕后像 App 一样打开。station 上的 iOS 模拟器（包括 iPhone Duo 的两块屏和折叠姿态）可以在对话旁远程操作。</span><span class="en">Yes. The App Store app is coming; until then, add the web app to your home screen and it opens like an app. The iOS Simulator on a station, iPhone Duo's two screens and fold included, can be driven beside the chat.</span></p></div></div></details>
+      <details><summary><span class="q"><span class="zh">开源吗？</span><span class="en">Is it open source?</span></span><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <div class="a"><div><p><span class="zh">开源，MIT 许可，代码在 <a href="https://github.com/AFK-surf/still.fail">GitHub</a>。</span><span class="en">Yes, under the MIT license. The code is on <a href="https://github.com/AFK-surf/still.fail">GitHub</a>.</span></p></div></div></details>
     </div>
   </div>
 </section>
 
-<!-- ============ End: Blue, the mark put together, the field below ============ -->
+<!-- ============ End: Base ground, the headline leads, the field below ============ -->
 <section class="band end" data-tone="brand" aria-labelledby="end-title">
   <div class="w end-in">
-    <!-- The mark put together: its four parts come in from empty cells of the grid (--x/--y: where each starts, in px
-         from its place) and land in the tile; the loose parts, one to a cell like the field's, drift in to their cells.
-         --c/--r: the part's centre on the 12 px lattice (cell centres are 2 + 4n). -->
-    <div class="tile-wrap rv" aria-hidden="true">
-      <div class="parts"><i style="--c:2;--r:2;--d:.04s"></i><i class="p" style="--c:10;--r:2;--d:.16s"></i><i style="--c:22;--r:2;--d:.1s"></i><i class="p" style="--c:6;--r:6;--d:.22s"></i><i class="k" style="--c:26;--r:6;--d:.06s"></i><i style="--c:6;--r:10;--d:.28s"></i><i class="p" style="--c:22;--r:10;--d:.12s"></i><i style="--c:2;--r:14;--d:.18s"></i><i style="--c:26;--r:14;--d:.24s"></i><i class="p" style="--c:6;--r:18;--d:.08s"></i><i style="--c:14;--r:18;--d:.2s"></i><i class="p" style="--c:22;--r:18;--d:.3s"></i></div>
-      <div class="tile"><i class="eye" style="--x:-75px;--y:-93px"></i><i class="eye" style="--x:27px;--y:-93px"></i><i class="cheek" style="--x:-109px;--y:70px"></i><i class="cheek" style="--x:109px;--y:-26px"></i></div>
-    </div>
-    <h2 id="end-title"><span class="zh">加一台电脑，剩下的交给它</span><span class="en">Add a computer, it does the rest</span></h2>
+    <!-- A poster's two lines: the break stands in for the comma (kept for screen readers only). -->
+    <h2 id="end-title"><span class="zh">加一台电脑<span class="vh">，</span><br>剩下的交给它</span><span class="en">Add a computer, it does the rest</span></h2>
     <p class="lead"><span class="zh">交代一次，你的电脑一直干到完。</span><span class="en">Ask once. Your computers work until it’s done.</span></p>
     <div class="actions">
       <a class="btn btn-ink lg" data-app href="https://app.monoid.build"><span class="zh">打开 monoid</span><span class="en">Open monoid</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>

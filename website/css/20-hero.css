@@ -13,8 +13,10 @@
    their bottom on the lead's last line. */
 .hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px var(--u); align-items: end;
   padding-block: clamp(20px, calc(var(--u) * .7), 52px) clamp(24px, calc(var(--u) * .7), 52px); }
-.hero .lead { max-width: max(calc(var(--u) * 11), 20em); color: var(--brand-ink); }
+.hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 28em); color: var(--brand-ink); text-wrap: pretty; } /* zh: two lines, the break after 订阅， */
+:root[data-lang=en] .hero .lead { max-width: min(max(calc(var(--u) * 11), 20em), 30em); }
 .hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.hero .lead .nb { white-space: nowrap; } /* no lone 干。 on the last line (WebKit has no text-wrap: pretty yet) */
 .hero .actions { justify-content: flex-end; }
 
 /* ---------- The field ----------
@@ -25,18 +27,8 @@
 .hero .field-wrap { flex: 1 0 auto; min-height: calc(var(--fc) * 4); max-height: calc(var(--fc) * 14); }
 .field { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 
-/* A note rings a real cell, with the corners of the mark's own square, and a leader runs from the ring to a mono label.
-   main.js leaves the cells under each label empty, so a label sits in a clean lane. */
-.ftag { position: absolute; left: calc(var(--c) * var(--fc)); top: calc(var(--r) * var(--fc)); width: var(--fc); aspect-ratio: 1; pointer-events: none; }
-.ftag::before { content: ""; position: absolute; inset: 6%; border-radius: 22.5%; box-shadow: 0 0 0 1px #fff; }
-.ftag::after { content: ""; position: absolute; top: 50%; left: 94%; width: 46%; height: 1px; margin-top: -.5px; background: #fff; transform-origin: 0 50%; }
-.ft-l { position: absolute; left: 140%; top: 50%; display: inline-flex; align-items: center; gap: 7px; height: 24px; margin-top: -12px; padding: 0 9px 0 8px;
-  border-radius: 4px; background: #fff; color: var(--ink); font-family: var(--mono); font-size: 12px; line-height: 1; letter-spacing: 0; white-space: nowrap;
-  box-shadow: 0 6px 16px -8px rgba(42,11,2,.45); }
-.ft-l i { width: 8px; height: 8px; flex: none; border-radius: 1.5px; background: var(--brand); }
-
 /* Pause: the field moves on its own, so it can be stopped. It takes a cell of its own, the second from the right on the
-   top row, a ring like the notes' (32 px; 44 px to a finger). main.js shows it only where the field moves. */
+   top row, a thin white ring (32 px; 44 px to a finger). main.js shows it only where the field moves. */
 .fpause {
   position: absolute; z-index: 1; top: calc(var(--fc) / 2 - 16px); right: max(calc(var(--fc) * 1.5 - 16px), env(safe-area-inset-right, 0px));
   display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
@@ -60,13 +52,10 @@
 /* ---------- Entrance, once, on load ----------
    The words are painted at the first frame and rise into place on a strong ease-out, one after another; the headline
    and the lead (the largest text, what LCP measures) start fading at once, so their paint is never held back. The
-   field fades in once main.js has drawn it (the canvas is blank until then), and its notes follow: ring, leader, label. */
+   field fades in once main.js has drawn it (the canvas is blank until then). */
 @keyframes hero-fade { from { opacity: 0; } }
 @keyframes hero-dim { from { opacity: .25; } } /* never 0: an element painted transparent is not an LCP candidate */
 @keyframes hero-rise { from { transform: translateY(14px); } }
-@keyframes ft-ring { from { opacity: 0; transform: scale(.88); } }
-@keyframes ft-lead { from { transform: scaleX(0); } }
-@keyframes ft-label { from { opacity: 0; transform: translateX(-6px); } }
 .hero :is(h1, .lead, .actions) {
   animation: hero-fade 560ms var(--ease-out) both, hero-rise 900ms var(--ease-out) both;
   animation-delay: var(--fd, 0ms), calc(var(--hi, 0) * var(--stagger));
@@ -75,19 +64,12 @@
 .hero .lead { --hi: 1; }
 .hero :is(h1, .lead) { animation-name: hero-dim, hero-rise; }
 .hero .actions { --hi: 2; --fd: 120ms; }
-.field:not([data-drawn]), .field:not([data-drawn]) ~ :is(.ftag, .fpause) { visibility: hidden; }
+.field:not([data-drawn]), .field:not([data-drawn]) ~ .fpause { visibility: hidden; }
 .hero .field[data-drawn] { animation: hero-fade 800ms var(--ease-out) 120ms both; }
 .hero .field[data-drawn] ~ .fpause { animation: hero-fade 420ms var(--ease-out) 900ms both; }
-.field[data-drawn] ~ .ftag::before { animation: ft-ring 420ms var(--ease-out) both; animation-delay: calc(560ms + var(--n) * 160ms); }
-.field[data-drawn] ~ .ftag::after { animation: ft-lead 360ms var(--ease-out) both; animation-delay: calc(700ms + var(--n) * 160ms); }
-.field[data-drawn] ~ .ftag .ft-l { animation: ft-label 420ms var(--ease-out) both; animation-delay: calc(820ms + var(--n) * 160ms); }
-.ftag:nth-of-type(1) { --n: 0; }
-.ftag:nth-of-type(2) { --n: 1; }
-.ftag:nth-of-type(3) { --n: 2; }
-/* Reduced motion: nothing moves; the words, the field and its notes only fade in, briefly. */
+/* Reduced motion: nothing moves; the words and the field only fade in, briefly. */
 @media (prefers-reduced-motion: reduce) {
   .hero :is(h1, .lead, .actions), .hero .field[data-drawn] { animation: hero-fade 300ms ease both !important; }
-  .field[data-drawn] ~ .ftag::before, .field[data-drawn] ~ .ftag::after, .field[data-drawn] ~ .ftag .ft-l { animation: hero-fade 300ms ease 200ms both !important; }
 }
 
 /* ---------- Smaller screens ---------- */
@@ -95,15 +77,21 @@
   .hero-body { grid-template-columns: minmax(0, 1fr); }
   .hero .actions { justify-content: flex-start; }
 }
-/* A tablet: 16 cells across (a dot of 1U would be a speck), the notes re-placed on them (--ct/--rt). */
+/* A tablet: 16 cells across (a dot of 1U would be a speck). */
 @media (min-width: 641px) and (max-width: 1023px) {
   .hero { --cols: 16; }
-  .hero .ftag { left: calc(var(--ct, var(--c)) * var(--fc)); top: calc(var(--rt, var(--r)) * var(--fc)); }
 }
-/* A phone: 12 cells across, the calls to action in reach of a thumb, one note (where the ripple starts). */
+/* A phone: 12 cells across, the calls to action in reach of a thumb. */
 @media (max-width: 640px) {
   .hero { --cols: 12; }
   .hero .actions .btn { flex: 1 1 0; min-width: max-content; } /* equal halves, or full width each when they don't fit */
-  .hero .ftag { left: calc(var(--cm, var(--c)) * var(--fc)); top: calc(var(--rm, var(--r)) * var(--fc)); }
-  .hero .ftag:not([data-origin]) { display: none; }
+}
+/* A phone on its side: a short screen, so the lead and the calls to action sit side by side again, as at 1440, and the
+   headline steps down, so both calls to action are on the first screen and the field starts on it. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hero > .w { padding-top: 24px; }
+  .hero h1 { font-size: 44px; }
+  .hero-body { grid-template-columns: minmax(0, 1fr) auto; align-items: end; padding-block: 16px 20px; }
+  .hero .actions { flex-direction: column; align-items: stretch; justify-content: flex-end; }
+  .hero .actions .btn { flex: none; }
 }

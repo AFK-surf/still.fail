@@ -1,56 +1,130 @@
-/* ---------- Install + shipped ---------- */
-.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); }
-.card { background: #fff; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--line); padding: clamp(24px, 2.6vw, 44px); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.card h3 { font-size: clamp(22px, 2vw, 32px); letter-spacing: -.018em; }
-.term { background: var(--ink); color: #E6E7EA; border-radius: 14px; padding: 18px 20px; font-family: var(--mono); font-size: clamp(12.5px, .95vw, 14.5px); line-height: 1.75; overflow-x: auto; }
-.term .p { color: var(--silver); user-select: none; }
+/* ---------- Install: the three steps, and the command from step 02 in a terminal beside them ---------- */
+.card { background: #fff; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--hair); padding: clamp(20px, 2.6vw, 44px); min-width: 0; }
+.card.install {
+  --g: clamp(32px, 3.4vw, 64px);
+  display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); gap: var(--g); align-items: center;
+}
+.steps { counter-reset: none; }
+.steps li {
+  position: relative; display: grid; grid-template-columns: 3.2em minmax(0, 1fr); align-items: baseline;
+  padding: 18px 0; border-top: 1px solid var(--line); font-size: var(--t-body); line-height: 1.45; color: var(--ink);
+}
+.steps li:last-child { border-bottom: 1px solid var(--line); }
+.steps li b { font-family: var(--mono); font-size: 13px; font-weight: 400; color: var(--silver); font-feature-settings: "tnum"; }
+.steps li.now b { color: var(--brand-deep); }
+/* Step 02's leader: a dashed rail from the step across the gap to the terminal it describes, ending in a square. */
+@media (min-width: 961px) {
+  .steps li.now::after {
+    content: ""; position: absolute; top: 50%; left: calc(100% + 10px); width: calc(var(--g) - 20px); height: 0;
+    border-top: 1px dashed var(--silver);
+  }
+  .steps li.now::before {
+    content: ""; position: absolute; top: calc(50% - 3px); left: calc(100% + var(--g) - 16px); width: 6px; height: 6px;
+    border-radius: 1px; background: var(--brand);
+  }
+}
+
+/* The terminal: a window with three grey lights; the copy button lives in its title bar, next to what it copies. */
+.term { position: relative; background: var(--ink); color: #E6E7EA; border-radius: 14px; min-width: 0; overflow: hidden; }
+.term-bar { display: flex; align-items: center; gap: 14px; height: 48px; padding: 0 8px 0 16px; box-shadow: inset 0 -1px 0 rgba(255,255,255,.08); }
+.lights { display: flex; gap: 7px; }
+.lights i { width: 10px; height: 10px; border-radius: 50%; background: #3A3B3F; }
+.term-name { font-family: var(--mono); font-size: 12px; color: #8E9096; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term-body {
+  padding: 18px 20px 22px; font-family: var(--mono); font-size: clamp(12.5px, .95vw, 14px); line-height: 1.8;
+}
+/* Long lines wrap with a hanging indent instead of hiding behind a scrollbar; the command stays selectable. */
+.term .row { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
+.term .row + .row { margin-top: 2px; }
+.term .cmd { color: #fff; margin-bottom: 6px; }
+.term code { font: inherit; }
+.term .p { color: var(--silver); user-select: none; -webkit-user-select: none; }
 .term .ok { color: #7EE2B0; }
 .term .dim { color: #8E9096; }
-.term .row { white-space: pre; }
-.copy-row { display: flex; align-items: center; gap: 10px; }
-.copy-btn { border: 0; background: transparent; box-shadow: inset 0 0 0 1px var(--line); height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; }
-.copy-btn:hover { box-shadow: inset 0 0 0 1px var(--ink); }
-.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: auto; }
-.steps li { border-top: 1px solid var(--line); padding-top: 12px; font-size: var(--t-small); color: var(--graphite); }
-.steps li b { display: block; color: var(--ink); font-weight: 600; font-feature-settings: "tnum"; }
-.chart-top { display: flex; justify-content: space-between; gap: 12px; color: var(--graphite); font-size: var(--t-small); }
-.figure { font-size: clamp(44px, 4.2vw, 68px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; font-feature-settings: "tnum"; }
-.hb { display: grid; grid-template-columns: 5.6em minmax(0, 1fr); align-items: center; gap: 14px; min-height: 40px; font-size: var(--t-small); }
-.hb .track { display: flex; align-items: center; gap: 22px; }
-.hb .bar { position: relative; height: 12px; border-radius: 6px 0 0 6px; background: var(--c, var(--line)); }
-.hb .bar i { position: absolute; right: -11px; top: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--c, var(--line)); }
-.hb .val { font-feature-settings: "tnum"; font-weight: 500; }
-.changes { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px; }
-.changes li { display: flex; gap: 10px; font-size: var(--t-small); color: var(--ink); }
-.changes li svg { width: 18px; height: 18px; flex: none; margin-top: 2px; }
-@media (max-width: 960px) {
-  .two { grid-template-columns: minmax(0, 1fr); }
+/* On reveal the output follows the command, line by line: the command ran. */
+.card.install.rv-wait .out { opacity: 0; }
+.card.install.rv-in .out { transition: opacity 220ms var(--ease-out); transition-delay: calc(140ms + var(--k, 0) * 90ms); }
+.card.install .out:nth-child(3) { --k: 1; }
+.card.install .out:nth-child(4) { --k: 2; }
+
+.copy-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 10px; border: 0; border-radius: 8px;
+  background: rgba(255,255,255,.08); color: #E6E7EA; font-size: 13px; font-weight: 500; letter-spacing: .004em; cursor: pointer;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, transform var(--dur-press) var(--ease-out);
 }
-@media (max-width: 640px) {
-  .steps { grid-template-columns: minmax(0, 1fr); }
-  .hb { grid-template-columns: 4.6em minmax(0, 1fr); }
+.copy-btn::before { content: ""; position: absolute; inset: -8px -4px; } /* a 48 px tall target on a 32 px button */
+.copy-btn:active { transform: scale(.96); }
+.copy-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cb-ico { position: relative; width: 15px; height: 15px; flex: none; }
+.cb-ico svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out), filter var(--dur-ui) var(--ease-out); }
+.cb-done { opacity: 0; transform: scale(.6); filter: blur(2px); }
+.cb-l { display: grid; }
+.cb-l > * { grid-area: 1 / 1; transition: opacity var(--dur-ui) var(--ease-out), filter var(--dur-ui) var(--ease-out); } /* both labels share a cell: no width jump */
+.cb-b { opacity: 0; filter: blur(2px); }
+.copy-btn.is-copied { color: #7EE2B0; background: rgba(126,226,176,.12); }
+.copy-btn.is-copied .cb-copy { opacity: 0; transform: scale(.6); filter: blur(2px); }
+.copy-btn.is-copied .cb-done { opacity: 1; transform: none; filter: none; }
+.copy-btn.is-copied .cb-a { opacity: 0; filter: blur(2px); }
+.copy-btn.is-copied .cb-b { opacity: 1; filter: none; }
+@media (hover: hover) and (pointer: fine) {
+  .copy-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+  .copy-btn.is-copied:hover { background: rgba(126,226,176,.16); color: #7EE2B0; }
 }
-/* ---------- Install ---------- */
-.card.install { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: clamp(24px, 3vw, 56px); align-items: center; }
-.install-term { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.card.install .steps { grid-template-columns: minmax(0, 1fr); margin: 0; gap: 0; }
-.card.install .steps li { padding: 16px 0; font-size: var(--t-body); color: var(--ink); display: grid; grid-template-columns: 3em 1fr; align-items: baseline; }
-.card.install .steps li b { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--brand-deep); }
-/* ---------- Changelog: Reducto's latest articles, with pixel covers ---------- */
+.copy-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- Changelog: the nightly releases, with dithered pixel covers ---------- */
 .posts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.post { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: clamp(20px, 2.4vw, 40px); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.post { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: clamp(20px, 2.4vw, 40px); display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .post.feature { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 3vw, 56px); align-items: start; }
 .post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; box-shadow: inset 0 0 0 1px var(--line); }
 .post .cover svg { width: 100%; height: 100%; display: block; }
-.post-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.post-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--graphite); }
-.post h3 { font-size: clamp(20px, 1.7vw, 28px); letter-spacing: -.018em; line-height: 1.2; }
-.post.feature h3 { font-size: clamp(24px, 2.2vw, 36px); }
-.post p { color: var(--graphite); font-size: var(--t-small); text-wrap: pretty; }
-.hbs { display: flex; flex-direction: column; }
+.post-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; flex: 1; }
+.post-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; line-height: 1.3; color: var(--graphite); }
+.post h3 { font-size: clamp(20px, 1.7vw, 28px); letter-spacing: -.018em; line-height: 1.25; text-wrap: balance; }
+.post.feature h3 { font-size: clamp(24px, 2.2vw, 36px); line-height: 1.18; }
+.post p { color: var(--graphite); font-size: var(--t-small); line-height: var(--lh-small); }
+/* Chinese breaks at its spaces and punctuation, never inside a word; balance and pretty wrapping are for Latin. */
+.post h3 .zh { word-break: keep-all; overflow-wrap: anywhere; }
+:root[data-lang=en] :is(.post p, .changes li, .steps li) { text-wrap: pretty; }
+/* The counts as pixels: one square per change, so the bar is the list's length, not a scale. */
+.hbs { display: flex; flex-direction: column; padding: 4px 0; }
+.hb { display: grid; grid-template-columns: 5.6em minmax(0, 1fr); align-items: center; gap: 14px; min-height: 34px; font-size: var(--t-small); color: var(--graphite); }
+.hb .track { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hb .bar {
+  flex: none; height: 10px; width: calc(var(--n) * 14px - 4px); max-width: 100%;
+  background: repeating-linear-gradient(90deg, var(--c, #C9CACD) 0 10px, transparent 10px 14px);
+}
+.hb .val { font-feature-settings: "tnum"; font-weight: 500; color: var(--ink); }
+.posts.rv-wait .bar { clip-path: inset(0 100% 0 0); }
+.posts.rv-in .bar { transition: clip-path 300ms steps(var(--n)); transition-delay: calc(140ms + var(--r, 0) * 60ms); }
+.hb:nth-child(2) { --r: 1; }
+.hb:nth-child(3) { --r: 2; }
+.changes { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 18px; }
+.changes li { display: flex; gap: 10px; font-size: var(--t-small); line-height: 1.5; color: var(--ink); }
+.changes li svg { width: 18px; height: 18px; flex: none; margin-top: 2px; }
+/* A small release's tally, in mono, each count keyed by its square. */
+.post p.tally { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: auto; padding-top: 4px; font-family: var(--mono); font-size: 12px; line-height: 1.4; color: var(--graphite); font-feature-settings: "tnum"; }
+.tally > span { display: inline-flex; align-items: center; gap: 7px; }
+.tally > span::before { content: ""; width: 8px; height: 8px; background: #C9CACD; }
+.tally > span:first-child::before { background: var(--brand); }
+
 @media (max-width: 960px) {
   .card.install, .post.feature { grid-template-columns: minmax(0, 1fr); }
+  .card.install { gap: 24px; }
 }
 @media (max-width: 640px) {
-  .posts { grid-template-columns: minmax(0, 1fr); }
+  .posts { grid-template-columns: minmax(0, 1fr); border-left: 0; }
+  .post { border-right: 0; padding: 24px 0; gap: 18px; }
+  .post.feature { gap: 20px; }
+  .card.install { padding: 8px; border-radius: 20px; gap: 8px; }
+  .card.install .steps { padding: 4px 12px 0; }
+  .steps li { padding: 14px 0; font-size: 16px; grid-template-columns: 2.6em minmax(0, 1fr); }
+  .steps li:first-child { border-top: 0; }
+  .steps li:last-child { border-bottom: 0; }
+  .term { border-radius: 14px; }
+  .term-body { padding: 16px 16px 20px; font-size: 12.5px; line-height: 1.75; }
+  .copy-btn { height: 36px; padding: 0 14px 0 12px; font-size: 14px; }
+  .copy-btn::before { inset: -4px -6px; } /* 44 px */
+  .hb { grid-template-columns: 4.6em minmax(0, 1fr); }
 }

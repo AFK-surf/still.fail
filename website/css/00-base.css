@@ -1,5 +1,5 @@
 /* monoid · official site.
-   Visual system: Comma Visual Identity v1.0 (2026-11), its roles kept and its brand colour monoid's Base, #EF6334. One
+   Visual system: monoid's brand colour Base, #EF6334, and its roles. One
    colour leads each band; no warm colours; emphasis by lightness. Layout runs on the 24-unit grid: 1U = page width / 24 (80 px at 1920), margins are 1U. */
 /* Suisse Intl, the brand face: Regular for running text, Book for UI and labels, Medium for headlines (CSS 400 / 500 / 600,
    as in the VI). Latin only: Chinese is set in the system's PingFang SC / Microsoft YaHei, nothing downloaded for it.
@@ -22,7 +22,7 @@
   --silver: #A4A5A9;
   --line: #E3E3E4;
   --mist: #F1F1F2;
-  --brand-haze: #F68B64; /* the Week's unlit commas on Base */
+  --brand-haze: #F68B64; /* a lighter Base, for marks at rest on Base */
   --brand-tint: #FFB599; /* accent on Ink */
   --night: #2A0B02;
   /* Status only */
@@ -118,7 +118,7 @@ h3 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: 600; le
 h1 .zh, h2 .zh, .display .zh { font-feature-settings: "halt"; word-break: keep-all; letter-spacing: -.01em; }
 /* Chinese: square glyphs fill the em, so lines need more air than Latin at the same size. */
 :root:not([data-lang=en]) { --lh-display: 1.08; --lh-title: 1.14; --lh-lead: 1.62; --lh-small: 1.7; }
-/* The open sentence: a brand headline rests on a comma, which alone may take a colour (once per band). */
+/* The band's accent colour, for a word or a mark that leads; at most once per band. */
 .hit { color: var(--hit); }
 .lead { font-size: clamp(18px, 1.55vw, 24px); line-height: var(--lh-lead); letter-spacing: -.004em; color: var(--mut); max-width: 36em; text-wrap: pretty; }
 .note { font-size: var(--t-small); line-height: var(--lh-small); letter-spacing: var(--tr-small); color: var(--mut); text-wrap: pretty; }
@@ -194,6 +194,12 @@ section[id] { scroll-margin-top: var(--nav); }
 @media (max-width: 640px) {
   :root { --nav: 56px; --tr-display: -.028em; --tr-title: -.02em; --lh-title: 1.1; --lh-display: 1.04; }
   h1 .zh, h2 .zh, .display .zh { overflow-wrap: anywhere; }
+  /* Chinese leads fill the line on phones: WebKit's "pretty" ends every CJK line well short of a narrow column. */
+  :root:not([data-lang=en]) .lead { text-wrap: wrap; }
+}
+/* Phone on its side: a short bar, so the headings keep the little height there is. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --nav: 48px; }
 }
 html, body { overflow-x: clip; }
 .typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--silver); animation: dot 1s ease-in-out infinite; }
