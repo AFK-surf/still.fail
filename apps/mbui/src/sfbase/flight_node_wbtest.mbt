@@ -125,8 +125,8 @@ fn sent_cut_frame(retained : Bool, up : Double) -> Array[Array[Double]] {
   }, w=400.0, h=600.0)
   if retained {
     @ui.set_view_app(fn(root) {
-      flight_visible_node(root, Some(shown), from, fn() { (100.0, 110.0, 160.0, 80.0) },
-        fn() { up }, fn() { (0.0, 0.0, 400.0, 600.0) }).ground(Is(0x335599FFL)) |> ignore
+      flight_visible_node(root, Some(shown), from, fn() { (160.0, 80.0) }, fn(_) { (100.0, 110.0) },
+        fn() { up }, fn(_) { (0.0, 0.0) }).ground(Is(0x335599FFL)) |> ignore
     })
   }
   t.draw()
