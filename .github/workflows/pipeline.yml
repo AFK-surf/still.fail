@@ -1,5 +1,5 @@
 # still.fail's pipeline (docs/operations.md, "CI"), on AFK-surf's Linux runners and self-hosted Macs:
-#   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
+#   a branch: the full check (scripts/check.sh) of what it changes from its integration base, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
 #             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview, share and youdid.wtf,
@@ -78,7 +78,7 @@ jobs:
       - id: plan
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then base=$(git rev-parse -q --verify "refs/tags/deployed/beta^{commit}" || true)
-          else base=$(git merge-base origin/main HEAD); fi
+          else base=$(sh scripts/branch-base.sh HEAD "$GITHUB_REF"); fi
           if [ -n "$base" ]; then range="$base..$GITHUB_SHA"; changed=$(git diff --name-only "$base" "$GITHUB_SHA"); else range=all; changed=$(git ls-files); fi
           # Part by part: scripts/plan.sh.
           printf '%s\n' "$changed" | range=$range bash scripts/plan.sh > "$RUNNER_TEMP/plan"
@@ -245,9 +245,11 @@ jobs:
       - name: Full check (station, core)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
-          # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
-          # a squash onto a main that moved (scripts/undone.sh), and the changelog's trailers (scripts/changelog.ts: no
+          github_range=$range
+          if [ "$GITHUB_REF" = refs/heads/main ]; then github_range="$(git merge-base origin/main HEAD)..HEAD"; fi
+          if [ "$github_range" != all ] && git diff --name-only "$github_range" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          # Its guards beside it: the stable release's selection, and (a branch) nothing on the branch base taken back by
+          # a squash onto a base that moved (scripts/undone.sh), and the changelog's trailers (scripts/changelog.ts: no
           # `Changelog: none`, the parts said).
           python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
           stable=$!
@@ -255,7 +257,7 @@ jobs:
           mac_prebuild_test=$!
           undone=""
           if [ "$GITHUB_REF" != refs/heads/main ]; then
-            sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
+            sh scripts/undone.sh "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
             undone=$!
           fi
           status=0
@@ -268,10 +270,10 @@ jobs:
           if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
           if wait $mac_prebuild_test; then echo "· Mac release prebuild … ok"; else echo "· Mac release prebuild … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/mac-prebuild-test.log"; status=1; fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
-            if node scripts/changelog.ts --refuse "$(git merge-base HEAD origin/main)..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
+            if node scripts/changelog.ts --refuse "$(sh scripts/branch-base.sh HEAD "$GITHUB_REF")..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
           fi
           if [ -n "$undone" ]; then
-            if wait $undone; then echo "· undoes nothing on main … ok"; else echo "· undoes nothing on main … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
+            if wait $undone; then echo "· undoes nothing on the base … ok"; else echo "· undoes nothing on the base … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
           fi
           exit $status
 
@@ -302,7 +304,9 @@ jobs:
       - name: Full check (ts)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          github_range=$range
+          if [ "$GITHUB_REF" = refs/heads/main ]; then github_range="$(git merge-base origin/main HEAD)..HEAD"; fi
+          if [ "$github_range" != all ] && git diff --name-only "$github_range" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
           # says then which steps were still running and where each had got to.
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
@@ -339,7 +343,9 @@ jobs:
       - name: Full check (browser, ${{ matrix.share }})
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          github_range=$range
+          if [ "$GITHUB_REF" = refs/heads/main ]; then github_range="$(git merge-base origin/main HEAD)..HEAD"; fi
+          if [ "$github_range" != all ] && git diff --name-only "$github_range" | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
           # exec: the runner's signal when the job's time is up goes to this shell alone; so it reaches the check, which
           # says then which steps were still running and where each had got to.
           if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
