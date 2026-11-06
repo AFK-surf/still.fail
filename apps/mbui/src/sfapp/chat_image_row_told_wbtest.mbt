@@ -119,6 +119,19 @@ fn row_told_preview(frames : Array[Double]) -> Array[String] raise {
       }
     }
   }
+  // (the one picture of 乙's proportion drawn, between `a` and `b`: its width between theirs, its middle between
+  // theirs)
+  let between = fn(at : String, a : (Double, Double, Double, Double), b : (Double, Double, Double, Double)) raise {
+    let ups = t.drawn_images().filter(fn(i) { i[8] > 0.5 && (i[3] / i[2] - 640.0 / 480.0).abs() < 0.01 })
+    assert_eq(ups.length(), 1, msg="\{at}: \{ups.map(fn(i) { (i[0], i[1], i[2], i[3]) })}")
+    let i = ups[0]
+    let within = fn(v : Double, p : Double, q : Double) { v > dmin(p, q) + 0.5 && v < dmax(p, q) - 0.5 }
+    assert_true(
+      within(i[2], a.2, b.2) && within(i[0] + i[2] / 2.0, a.0 + a.2 / 2.0, b.0 + b.2 / 2.0) &&
+      within(i[1] + i[3] / 2.0, a.1 + a.3 / 2.0, b.1 + b.3 / 2.0),
+      msg="\{at}: \{(i[0], i[1], i[2], i[3])} not between \{a} and \{b}",
+    )
+  }
   let seen : Array[String] = []
   let half = @ui.move_most_ms / 2.0
   let open = @ui.move_most_ms * 1.5
@@ -129,6 +142,9 @@ fn row_told_preview(frames : Array[Double]) -> Array[String] raise {
   t.frame_at(t0 + half)
   look("halfway out")
   let to = v.zoom.rect().unwrap()
+  // (halfway out still flying: its picture between 乙 and its place on the stage, in size and in place)
+  assert_true(v.flies && !v.fly_back && pv_hidden.get() == now_id, msg="halfway out: not flying")
+  between("halfway out", (th.x, th.y, th.w, th.h), to)
   seen.push("halfway out: \{upright()}, hidden \{pv_hidden.get() == now_id}")
   through(half, open)
   t.frame_at(t0 + open)
@@ -141,7 +157,18 @@ fn row_told_preview(frames : Array[Double]) -> Array[String] raise {
   t.back()
   assert_true(v.fly_back, msg="the preview flies back")
   look("closed")
-  through(close, landed)
+  through(close, close + half)
+  t.frame_at(t0 + close + half)
+  look("halfway back")
+  // (halfway back still flying: its picture between its place on the stage and where 乙 is)
+  let at_b = match thumb_of(t.ctx(), now_id) {
+    Some(h) => (h.x, h.y, h.w, h.h)
+    None => fail("halfway back: no thumbnail of 乙")
+  }
+  assert_true(pv_leaving.get() is Some(_) && pv_hidden.get() == now_id, msg="halfway back: not flying")
+  between("halfway back", to, at_b)
+  seen.push("halfway back: \{upright()}, hidden \{pv_hidden.get() == now_id}")
+  through(close + half, landed)
   t.frame_at(t0 + landed)
   look("landed")
   assert_true(pv_leaving.get() is None && viewer.get() is None)
