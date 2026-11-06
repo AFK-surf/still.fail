@@ -621,3 +621,19 @@ test("a station in several workspaces: a connect is the workspace's it was added
     await t.close();
   }
 });
+
+test("a new Slack connect named as a Feishu connect takes another id: the Feishu one stays", async () => {
+  const s = await rig();
+  try {
+    const feishu = { appId: "cli_a", appSecret: "secret", domain: "lark", botName: "ember" };
+    s.config.update((raw) => raw.connects.push({ id: "ember", kind: "feishu", mode: "multi-session", bind: { runtime: "claude" }, feishu }));
+    bot(s.fake, { name: "ember" });
+    const [ok, made] = await s.ask("POST", "/connects", { bind: { runtime: "codex" }, slack: { appToken: "xapp-2-x", botToken: "xoxb-2-y" } });
+    assert.equal(ok, 200, JSON.stringify(made));
+    assert.equal(made.id, "ember-2");
+    const kept = s.saved().connects.find((c: Json) => c.id === "ember");
+    assert.deepEqual([kept.kind, kept.feishu], ["feishu", feishu]);
+  } finally {
+    await s.close();
+  }
+});
