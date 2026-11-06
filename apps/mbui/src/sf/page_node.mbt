@@ -1288,7 +1288,18 @@ pub fn link_row_node(
           icon_node(l, name, row_icon, By(fn() { theme().p.muted })) |> ignore
         })
         |> ignore
-      LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
+      LeadMade(f) =>
+        r.box(fn(l) {
+          if control is Some(_) {
+            l.lies_along(Is(Middle)).min_height(By(fn() {
+              if under() && !face() {
+                l.words_redone() |> ignore
+                Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
+              } else { None }
+            })) |> ignore
+          }
+          f(l)
+        }) |> ignore
     }
     // its words: its title (as wide as the row leaves it) and what it says, then its chevron; its note under them, and
     // what is below

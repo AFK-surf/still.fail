@@ -519,7 +519,18 @@ fn wide_link_row_node(
           icon_node(l, name, desk_mark, By(fn() { theme().p.muted })) |> ignore
         })
         |> ignore
-      LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
+      LeadMade(f) =>
+        r.box(fn(l) {
+          if control is Some(_) {
+            l.lies_along(Is(Middle)).min_height(By(fn() {
+              if under() && !face() {
+                l.words_redone() |> ignore
+                Some(@ui.current().sp(@ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
+              } else { None }
+            })) |> ignore
+          }
+          f(l)
+        }) |> ignore
     }
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore

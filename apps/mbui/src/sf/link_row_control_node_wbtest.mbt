@@ -453,6 +453,35 @@ test "link row: narrow account controls leave names readable and stay independen
 }
 
 ///|
+test "link row: a custom authorization mark lines up with its title" {
+  for look in [Narrow, Wide] {
+    let t = @ui.Tester::new(fn(_c) {  }, w=320.0, h=700.0, platform=2)
+    @ui.set_view_app(fn(root) {
+      root.padding(Is((48.0, 0.0, 48.0, 0.0))) |> ignore
+      root.box(fn(b) {
+        look_lent(b, look)
+        group_node(b, fn(g) {
+          link_row_node(
+            g, fn() { "Data export helper" }, fn() {  }, goes=false,
+            note=fn() { "Signed · workspace · granted 2 days ago" },
+            lead=LeadMade(fn(l) { icon_node(l, "key", 16.0, By(fn() { theme().p.muted })) |> ignore }),
+            control=fn(e) { button_node(e, fn() { "Revoke" }, fn() {  }, tone=Ghost) |> ignore },
+          )
+        })
+      }) |> ignore
+    })
+    for scale in [1.0, 2.0] {
+      t.set_font_scale(scale)
+      t.draw()
+      let title = controlled_word("Data export helper")
+      let tree = @ui.view_tree().unwrap()
+      let mark = tree.drawn().iter().find_first(fn(d) { tree.drawn_name(d.id) == "/icon/key/" }).unwrap()
+      assert_true(mark.y >= title.y - 0.01 && mark.y + mark.h <= title.y + title.h + 0.01, msg="\{look} \{scale}: mark \{(mark.y, mark.h)}, title \{(title.y, title.h)}")
+    }
+  }
+}
+
+///|
 test "link row: an open part below keeps its node and focus as its face or control changes" {
   for look in [Narrow, Wide] {
     let face = @signals.signal(false)
