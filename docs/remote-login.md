@@ -280,9 +280,9 @@ login {id, cancel: true}            // 结束它
 ### `login` 卡片
 
 - 新卡片类型 `{"type": "login", "login": "<id>", "station"?: "<id>", "assignee"?}`（`station/src/sessions/args.ts` 的 `cardArg` 加一种；`station` 是登录在别的 station 上时）。登录结束时 station 把带这个 id 的卡片记进 `closed_cards`（像 agent 自己撤回，不算谁答了，也不叫醒谁：叫醒它的是那条 station 通知）。
-- 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、待处理都不会带它们走 still.fail cloud 或 Slack。
+- 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、待处理都不会带它们走 still.fail cloud（Slack 的卡片例外，见下）。
 - 推送通知只说「需要在 test-a 上登录 gh」这类话（agent 写的正文）。
-- Slack 和飞书里的 chat：agent 只贴登录链接，链接在客户端里打开（Slack 要输入码时发卡片，见上）。
+- Slack 和飞书里的 chat：agent 只贴登录链接，链接在客户端里打开。Slack 里贴码型和设备码型的登录，链接和卡片一起发：卡片上直接放登录页的按钮（设备码型还写出码），不必先打开客户端，登录页地址和设备码因此经过 Slack（2026-11-06 Peng Xiao 定：打开整个网页版只为拿到登录页太慢；地址里没有能完成登录的东西，station 对 workspace 公开，码放在 thread 里也不比放在 station 页上更公开）。和别的组织共享的频道不放。细节见 docs/operations.md「在 Slack 里使用」。
 
 ## 界面（web、桌面、安卓，文字）
 

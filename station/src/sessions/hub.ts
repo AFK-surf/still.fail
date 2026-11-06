@@ -38,6 +38,7 @@ import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
 import { threadCommand } from "./args.ts";
+import type { CardPage } from "../logins/index.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
@@ -165,9 +166,10 @@ export class Hub {
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
   /// Prepare an old session's up-job lookup before its archived actor stops its jobs.
   prepareSessionUpJobs: ((session: string) => Promise<void>) | null = null;
-  /// The station's logins (logins/module.ts sets it): whether one waits for a code from its page (a Slack login card
-  /// takes one only then), and that code handed to it, entered by `by` on its card. Unset: no logins here.
-  logins: { pastes(id: string): boolean; answer(id: string, code: string, by?: Person): void } | null = null;
+  /// The station's logins (logins/module.ts sets it): the page a Slack login card opens for one (null: no card there,
+  /// as for a loopback login), and the code from that page handed to it, entered by `by` on its card. Unset: no logins
+  /// here.
+  logins: { page(id: string): CardPage | null; answer(id: string, code: string, by?: Person): void } | null = null;
   /// Stops following the store's sessions starting and stopping (live.ts `running`).
   private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();

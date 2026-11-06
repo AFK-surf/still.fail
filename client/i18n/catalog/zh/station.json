@@ -583,6 +583,8 @@
   "station.admin.updateApp": "这个 app 版本太旧，这台 station 已不再支持。请更新 app。",
   "station.card.asking": "✍️ 需要你回答",
   "station.slack.replyHint": "在这个线程里回复作答",
+  "station.slack.loginOpen": "打开 {domain} 登录",
+  "station.slack.loginDeviceCode": "在登录页输入这个码：",
   "station.slack.loginCode": "登录页给的码",
   "station.slack.loginCodeHint": "粘贴到这里，不要发到线程里",
   "station.slack.loginSubmit": "提交",

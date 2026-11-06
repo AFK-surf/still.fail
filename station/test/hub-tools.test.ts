@@ -10,6 +10,7 @@ import { basename, join } from "node:path";
 import { test } from "node:test";
 import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
+import type { CardPage } from "../src/logins/index.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { handedOf } from "../src/store/rows.ts";
@@ -1614,11 +1615,19 @@ test("a login card in Slack: only for a login here waiting for its page's code; 
   const key = sessionKey("cl", "C1", m.threadTs);
   const to = `C1/${m.threadTs}`;
   const answered: [string, string, unknown][] = [];
-  r.hub.logins = { pastes: (id) => id === "l1", answer: (id, code, by) => void answered.push([id, code, by]) };
-  // A login that waits for no code: no card here.
-  assert.match(await r.refused(key, "chat_post", { to, text: "登录", card: { type: "login", login: "l2" } }), /waits for a code from its page/);
+  const pages: Record<string, CardPage> = {
+    l1: { url: "https://accounts.google.com/o/oauth2/auth?x=1", domain: "accounts.google.com", paste: true },
+    l3: { url: "https://github.com/login/device", domain: "github.com", code: "ABCD-1234", paste: false },
+  };
+  r.hub.logins = { page: (id) => pages[id] ?? null, answer: (id, code, by) => void answered.push([id, code, by]) };
+  // A login at no such step (a loopback one): no card here.
+  assert.match(await r.refused(key, "chat_post", { to, text: "登录", card: { type: "login", login: "l2" } }), /gives a device code, or waits for a code/);
+  await r.call(key, "chat_post", { to, text: "登录 gh", card: { type: "login", login: "l3" } });
   await r.call(key, "chat_post", { to, text: "登录 gcloud", card: { type: "login", login: "l1" } });
+  // The platform is given the page; the chat keeps the card without it.
+  assert.deepEqual(r.chat.carried.slice(-2), [{ type: "login", login: "l3", page: pages.l3 }, { type: "login", login: "l1", page: pages.l1 }]);
   const thread = r.store.threadAt(r.hub.surface("cl"), "C1", m.threadTs)!;
+  assert.deepEqual(r.store.messagesBefore(thread.id, null, 2).map((x) => r.store.cardAt(thread.id, x.ts)), [{ type: "login", login: "l3" }, { type: "login", login: "l1" }]);
   const posted = r.store.messagesBefore(thread.id, null, 1)[0]!.ts;
   // Pressed on any other message: refused, nothing handed over.
   await assert.rejects(r.hub.receive("cl", { type: "loginCode", channel: "C1", threadTs: m.threadTs, ts: m.ts, user: "U1", code: "c0" }), /no login card/);

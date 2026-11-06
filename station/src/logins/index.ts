@@ -94,6 +94,19 @@ function stationPage(r: LoginRun): string | null {
   return webPage(url) ? url : null;
 }
 
+/// What a Slack login card shows of a login (sessions/hub.ts `logins.page`): the page a person opens and, for a device
+/// code, the code they enter there; `paste` when that page gives a code to enter back on the card. Null when its step
+/// cannot be taken from Slack (a loopback one, nothing to open yet) or it ended.
+export type CardPage = { url: string; domain: string; code?: string; paste: boolean };
+export function slackPage(login: Login): CardPage | null {
+  if (login.endedAt !== undefined || login.state === "verifying") return null;
+  const url = login.step === "device" ? (login.codeUrl ?? login.url) : login.step === "open" && login.paste === true ? login.url : null;
+  if (!webPage(url)) return null;
+  const domain = domainOf(url) ?? url;
+  if (login.step === "open") return { url, domain, paste: true };
+  return login.code ? { url, domain, code: login.code, paste: false } : null;
+}
+
 export class Logins {
   readonly #data: string;
   readonly #env: () => Record<string, string>;

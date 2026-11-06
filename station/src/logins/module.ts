@@ -14,7 +14,7 @@ import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Peers, Readers, ScreenRegistry, Store } from "../services.ts";
 import { act, endedNotice, loginTools, promptNotice, type Where } from "./tool.ts";
-import { Logins, type Starter } from "./index.ts";
+import { Logins, slackPage, type Starter } from "./index.ts";
 import { LoginPages } from "./pages.ts";
 
 export const LoginsLive = Layer.effectDiscard(
@@ -94,11 +94,12 @@ export const LoginsLive = Layer.effectDiscard(
         }
       }),
     ];
-    // A Slack login card (a login whose page gives a code): shown only for such a login, its field handed to it.
+    // A Slack login card: shown only for a login waiting for a code from its page or entered on a device code's page,
+    // that page and the device code on it (its field handed to the login).
     hub.logins = {
-      pastes: (id) => {
+      page: (id) => {
         const login = logins.get(id);
-        return login?.paste === true && login.endedAt === undefined;
+        return login ? slackPage(login) : null;
       },
       answer: (id, code, by) => void logins.answer(id, code, by),
     };

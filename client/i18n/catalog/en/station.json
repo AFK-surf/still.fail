@@ -589,6 +589,8 @@
   "station.admin.updateApp": "This app is too old for this station. Update the app.",
   "station.card.asking": "✍️ Your answer needed",
   "station.slack.replyHint": "Reply in this thread to answer",
+  "station.slack.loginOpen": "Sign in at {domain}",
+  "station.slack.loginDeviceCode": "Enter this code on the sign-in page:",
   "station.slack.loginCode": "The code the login page gives",
   "station.slack.loginCodeHint": "Paste it here, not in the thread",
   "station.slack.loginSubmit": "Submit",

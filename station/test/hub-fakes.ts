@@ -36,6 +36,8 @@ export class FakeChat implements ChatSurface {
   earlier = new Map<string, ChatMessage[]>();
   /// The names of the files each post carried.
   files: string[][] = [];
+  /// The card each post carried (null: none).
+  carried: Json[] = [];
   /// Like a Slack app without files:write.
   noFiles = false;
   /// The bytes of files shared in messages, by file id (others cannot be read); the ids fetched, in order.
@@ -62,9 +64,10 @@ export class FakeChat implements ChatSurface {
   workspace() {
     return "T1";
   }
-  async post(thread: ThreadRef, message: string, files: Attachment[]) {
+  async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null) {
     if (files.length > 0 && this.noFiles) throw new Error("slack files.getUploadURLExternal: missing_scope");
     this.files.push(files.map((f) => f.name));
+    this.carried.push(card ?? null);
     this.posts.push([thread, message]);
     return `${9_000_000 + next()}.000200`;
   }
