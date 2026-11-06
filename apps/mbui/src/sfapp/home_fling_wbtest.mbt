@@ -55,15 +55,35 @@ test "the chats' list flung on a phone: no layer drawn again but for what change
   let frames = t.host_frames()
   let causes = ["not kept", "not drawn the frame before", "marked or told"]
   let out : Array[String] = []
+  // (each kind of frame counted: drawing what differs, the old frame built again, drawing the same as before)
+  let mut drew = 0
+  let mut built = 0
+  let mut same = 0
   for f in frames {
-    if f.changed && !f.old_built {
-      for w in f.drawn_why {
-        if !causes.contains(w.0) {
-          out.push("at \{f.at}: \{w.1} drawn again: \{w.0}")
-        }
+    if f.old_built {
+      built = built + 1
+    } else if f.changed {
+      drew = drew + 1
+    } else {
+      same = same + 1
+    }
+    // (in each, the old frame built again or not: a layer drawn again for what changed of it)
+    for w in f.drawn_why {
+      if !causes.contains(w.0) {
+        out.push("at \{f.at}: \{w.1} drawn again: \{w.0}")
       }
     }
+    // (every layer drawn again said why: as many whys as layers drawn)
+    let whys = f.drawn_why.fold(init=0, fn(n, w) { n + w.1 })
+    if whys != f.layers_drawn {
+      out.push("at \{f.at}: \{f.layers_drawn} layers drawn again, \{whys} said why")
+    }
+    // (one drawing what it drew before: nothing of the tree drawn again, nothing of the window told its host)
+    if !f.changed && !f.old_built && (f.layers_drawn > 0 || !f.damage.is_empty()) {
+      out.push("at \{f.at}: the same as before, \{f.layers_drawn} layers drawn again, parts \{f.damage}")
+    }
   }
-  assert_true(frames.length() > 100, msg="\{frames.length()} frames")
+  println("frames: \{frames.length()}, drawing what differs \{drew}, the old frame built \{built}, the same \{same}")
+  assert_true(frames.length() > 100 && drew > 100, msg="\{frames.length()} frames, \{drew} drawing what differs")
   assert_eq(out, [])
 }
