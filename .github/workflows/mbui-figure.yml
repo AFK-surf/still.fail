@@ -30,12 +30,7 @@ on:
         default: "*a chat*reader*"
         type: string
       sf_test_filters:
-        description: Optional shared component test name filters, one per line
-        required: false
-        default: ""
-        type: string
-      sfpages_test_filters:
-        description: Optional shared page test name filters, one per line
+        description: Shared component filters; prefix a line pages: for sfpages
         required: false
         default: ""
         type: string
@@ -244,8 +239,10 @@ jobs:
           cd apps/mbui
           while IFS= read -r filter || [ -n "$filter" ]; do
             [ -n "$filter" ] || continue
-            printf 'Testing %s\n' "$filter"
-            if ! moon test --target wasm-gc --release -p stillfail/sf -f "$filter" > "$RUNNER_TEMP/chat-moon-sf-test.log" 2>&1; then
+            pkg=stillfail/sf
+            case "$filter" in pages:*) pkg=stillfail/sfpages; filter=${filter#pages:} ;; esac
+            printf 'Testing %s in %s\n' "$filter" "$pkg"
+            if ! moon test --target wasm-gc --release -p "$pkg" -f "$filter" > "$RUNNER_TEMP/chat-moon-sf-test.log" 2>&1; then
               awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-sf-test.log"
               tail -n 50 "$RUNNER_TEMP/chat-moon-sf-test.log"
               exit 1
@@ -255,26 +252,6 @@ jobs:
               exit 1
             fi
             tail -n 5 "$RUNNER_TEMP/chat-moon-sf-test.log"
-          done <<< "$TEST_FILTERS"
-      - name: Exercise the selected shared-page cases
-        env:
-          TEST_FILTERS: ${{ inputs.sfpages_test_filters }}
-        run: |
-          set -euo pipefail
-          cd apps/mbui
-          while IFS= read -r filter || [ -n "$filter" ]; do
-            [ -n "$filter" ] || continue
-            printf 'Testing %s\n' "$filter"
-            if ! moon test --target wasm-gc --release -p stillfail/sfpages -f "$filter" > "$RUNNER_TEMP/chat-moon-pages-test.log" 2>&1; then
-              awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-pages-test.log"
-              tail -n 50 "$RUNNER_TEMP/chat-moon-pages-test.log"
-              exit 1
-            fi
-            if grep -aF "kept-answers-ask {" "$RUNNER_TEMP/chat-moon-pages-test.log"; then
-              echo "::error::a core answer was not kept for this test"
-              exit 1
-            fi
-            tail -n 5 "$RUNNER_TEMP/chat-moon-pages-test.log"
           done <<< "$TEST_FILTERS"
       - name: Exercise the selected retained-view cases
         env:
