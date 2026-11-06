@@ -30,7 +30,7 @@ on:
         default: "*a chat*reader*"
         type: string
       sf_test_filters:
-        description: Shared component filters; prefix a line pages: for sfpages
+        description: "Shared component filters; prefix a line pages: for sfpages"
         required: false
         default: ""
         type: string
