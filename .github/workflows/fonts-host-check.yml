@@ -1,0 +1,55 @@
+name: fonts-host-check
+on:
+  push:
+    branches: [codex/fonts-host-check-cf8ab5ce]
+    paths: ["font-check/**", ".github/workflows/fonts-host-check.yml"]
+jobs:
+  linux-watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: overlay
+      - uses: actions/checkout@v4
+        with:
+          ref: 080435c926011270bc8b0654a3e86ded8bf8c444
+          path: repo
+      - uses: ./repo/.github/actions/apt
+        with:
+          name: mbui-fonts-experiment
+          packages: libglib2.0-dev libfontconfig1-dev libpango1.0-dev libcairo2-dev
+      - uses: ./repo/.github/actions/mbui-moonbit
+      - name: Apply the worktree snapshot and check the Linux host
+        shell: bash
+        run: |
+          set -eu
+          cd repo
+          gzip -dc ../overlay/font-check/change.patch.gz | git apply -
+          cp ../overlay/font-check/linux_font_watch.h apps/mbui/mbui/src/host/linux_font_watch.h
+          cp ../overlay/font-check/linux_font_watch.c apps/mbui/mbui/test/host/linux_font_watch.c
+          cd apps/mbui/mbui
+          cc -std=c11 -Wall -Wextra -Werror test/host/linux_font_watch.c -o "$RUNNER_TEMP/linux-font-watch" $(pkg-config --cflags --libs glib-2.0 fontconfig)
+          "$RUNNER_TEMP/linux-font-watch" ../assets/fonts/jetbrains_mono.ttf
+          cc -std=c11 -fsyntax-only -I "$MOON_HOME/include" $(pkg-config --cflags pangocairo pangoft2 fontconfig) src/host/linux_text.c
+  ui-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: overlay
+      - uses: actions/checkout@v4
+        with:
+          ref: 080435c926011270bc8b0654a3e86ded8bf8c444
+          path: repo
+      - uses: ./repo/.github/actions/mbui-moonbit
+      - name: Check and exercise the retained font-list signal
+        shell: bash
+        run: |
+          set -eu
+          cd repo
+          gzip -dc ../overlay/font-check/change.patch.gz | git apply -
+          cd apps/mbui/mbui
+          moon check --target wasm-gc --no-mbti
+          moon test --target wasm-gc --release -p mbui/ui -f '*local font families*'
