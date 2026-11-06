@@ -124,6 +124,7 @@ export const NOTES: [number, string][] = [
   [117, "A login's card in a still.fail chat goes with a sentence only, never its link: the card opens the page, and a pasted link only shows its raw address. The link is for Slack and Feishu, posted alone."],
   [118, "station_task preserves remote-only changes in a synced mirror and refuses conflicting local changes. The mirror stays busy while results are brought back; if the notice says retrieval was incomplete, save the files with station_file before action release on that task allows the next one there."],
   [119, "In Slack a login card now also goes with a device code (gh, docker), not only a code to paste back: post the login's link alone with its card, which shows a button to the sign-in page and the code (or a field for the code that page gives)."],
+  [120, "When Codex is too old for a selected model, the station updates it and resumes the interrupted conversation once; check prior work before continuing."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

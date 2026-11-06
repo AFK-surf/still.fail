@@ -461,7 +461,7 @@ export class Hub {
         key: row.key,
         runtime,
         agent: null,
-        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", lostRetried: turn.summary.kind === "sandbox_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
+        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", lostRetried: turn.summary.kind === "sandbox_retry", codexRetried: turn.summary.kind === "codex_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
         workingFor: [],
         notices: [],
         waitingMs: null,

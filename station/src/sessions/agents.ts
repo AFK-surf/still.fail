@@ -59,7 +59,7 @@ import { agentsRoutes } from "../api/admin.ts";
 import type { ChatSurface } from "./chat.ts";
 import { rootViewThrough } from "../drive/drive.ts";
 import type { Viewer } from "../mesh/credential.ts";
-import type { Lang } from "../ops/i18n.ts";
+import { stationLang, tr, type Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
@@ -581,6 +581,13 @@ export const AgentsLive = (control: Control) =>
         // Codex updated: its app-servers of the old version are replaced (their files are gone).
         void codex.runtimeChanged(kind === "codex" && replaced).catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
       });
+      hub.deps.updateOldCodex = async (version) => {
+        // The sandbox has its own executables: updating the station's Codex would not change the one that failed.
+        if (sandboxed(data)) throw new Error(tr(stationLang(), "station.notice.codexUpdateSandbox"));
+        await updates.updateOldCodex(version);
+        // Wait until old hosts are marked before any conversation can retry; other turns keep running there.
+        await codex.runtimeChanged(version === null, true);
+      };
       // A session found its runtime not installed: the pages read it again (removed since they last did).
       hub.onRuntimeMissing((runtime) => updates.missing(runtime));
       // What the overview shows changes: told on the event streams.

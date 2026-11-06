@@ -84,6 +84,17 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("the software page only updates the installation this profile actually runs", { skip: process.platform === "win32" }, async () => {
+    const p = profile();
+    const stationBin = join(data, `station-bin-${p.id}`), otherBin = join(data, `profile-bin-${p.id}`);
+    mkdirSync(stationBin);
+    mkdirSync(otherBin);
+    for (const bin of [stationBin, otherBin]) writeFileSync(join(bin, "codex"), "#!/bin/sh\necho codex-cli\n", { mode: 0o755 });
+    const d = driver({ env: { PATH: stationBin } });
+    assert.equal(await d.updateMatchesStation({ ...p, env: { PATH: stationBin } }), true);
+    assert.equal(await d.updateMatchesStation({ ...p, env: { PATH: otherBin } }), false);
+  });
+
   for (const resumed of [false, true]) test(`a ${resumed ? "resumed" : "new"} thread uses the transcript path Codex gave, before and after the file appears`, async () => {
     const d = driver();
     const p = profile();
@@ -525,18 +536,19 @@ describe("the Codex driver", { concurrency: true }, () => {
     // Updated: the files of the one running are gone (its version is not the one installed now).
     installed = "2.0.0";
     writeFileSync(`${p.dump}.version`, "2.0.0");
-    await d.runtimeChanged();
+    await d.runtimeChanged(false, true);
     assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    const c = listen();
+    const three = await d.open(options(p), c.push);
+    assert.equal(starts(p.dump).length, 2, "new threads use the updated host while the old turn finishes");
+    await three.prompt("say:back");
+    await c.until(ended(1));
     await one.abort();
     await a.until(ended(1));
     // The turn over, it is replaced: its threads closed, to be opened again with their next turn.
     await a.until((e) => e.some((x) => x.type === "closed"));
     await b.until((e) => e.some((x) => x.type === "closed"));
-    const c = listen();
-    const three = await d.open(options(p), c.push);
     assert.equal(starts(p.dump).length, 2);
-    await three.prompt("say:back");
-    await c.until(ended(1));
   });
 
   test("a same-version replacement waits for its turn and starts a new app-server", async () => {
