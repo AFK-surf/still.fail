@@ -103,3 +103,28 @@ test("an old prepared writer and the native fallback stay usable while login key
     assert.deepEqual(store.closeLoginCards("after"),["old-writer"]);
   } finally { store?.close(); old.close(); rmSync(dir,{recursive:true,force:true}); }
 });
+
+test("a login lookup falls back if another connection removes the native index at preparation", () => {
+  const dir=mkdtempSync(join(tmpdir(), "normal-login-index-race-")), path=join(dir, "station.db");
+  const initial=Store.open(path);
+  fill(initial,2);
+  initial.close();
+  const old=new DatabaseSync(path,{timeout:5000});
+  let store: Store | null=null;
+  try {
+    withoutLoginKeys(old);
+    store=Store.open(path);
+    let removed=false;
+    const prepare=DatabaseSync.prototype.prepare;
+    DatabaseSync.prototype.prepare=function (this: DatabaseSync, sql: string) {
+      if (sql === LEGACY_LOGIN_CARDS_NATIVE && !removed) {
+        old.exec("DROP INDEX entries_login_cards");
+        removed=true;
+      }
+      return prepare.call(this,sql);
+    };
+    try { assert.deepEqual(store.closeLoginCards("wanted"),["agent"]); }
+    finally { DatabaseSync.prototype.prepare=prepare; }
+    assert.ok(removed, "the native index disappeared after the lookup checked for it");
+  } finally { store?.close(); old.close(); rmSync(dir,{recursive:true,force:true}); }
+});
