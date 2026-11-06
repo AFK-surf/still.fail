@@ -672,3 +672,25 @@ test("a device brings what put it in the lock to a station that has not heard of
   const otherEnd = ed().hex;
   assert.throws(() => inLockBringing(cloud, admitted(at(other, otherEnd)), "member", otherEnd, { lock: { entries: [approval] } }), LockRefusal);
 });
+
+test("a device brings what made its person a member too: a station takes no device of someone it has not heard of", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const at = (who: { sub: string; base: Key }, endpoint: string) => ({ sub: who.sub, email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: who.base.hex, proof: who.base.sign(endpointBytes(WS, endpoint)) } });
+  const admitted = (v: ReturnType<typeof at>) => ({ viewer: v, exp: 4102444800 }) as any;
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { ...at(w.alice, ed().hex), role: "owner" } as any)[0], 200);
+  // dave, added to the workspace since the lock was turned on: alice approved his first device, here no one has heard.
+  const phone = { sub: "dave", base: ed() };
+  const endpoint = ed().hex;
+  const v = at(phone, endpoint);
+  const made = signed(after({ seq: 0, head: entryHash(w.first) }, "member", { sub: "dave", email: "dave@example.com", role: "member" }), w.alice.signer);
+  const approval = signed(after({ seq: 1, head: entryHash(made) }, "device", { id: phone.base.hex, sub: "dave", kind: "app", label: "phone" }), w.alice.signer);
+  // The approval alone does not go on from what the station has.
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [approval] } }), LockRefusal);
+  assert.equal(cloud.locked()?.state?.seq, 0);
+  // With what made him a member: taken, and his phone let in on it, as a member.
+  assert.equal(inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [made, approval] } }).viewer.role, "member");
+  assert.equal(cloud.locked()?.state?.seq, 2);
+  // His credential calling him more: the lock's the lower.
+  assert.equal(inLockBringing(cloud, admitted(v), "admin", endpoint, {}).viewer.role, "member");
+});

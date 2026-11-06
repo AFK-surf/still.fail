@@ -5,7 +5,9 @@
 // for another device, nothing; a new device that dialled someone else (its idea of the other end not the trusted one's)
 // cannot prove even the right code. The code is good for PAIR_WAIT_MS from when it is shown, wrong ones not putting it
 // off; the new device hears its trusted devices end it while nothing is typed (turned away, too old, gone, silent past
-// its time) and says why at once. On the test clock, the trusted core's lock at a cloud that keeps chains.
+// its time) and says why at once. Someone made a member since the lock was turned on is shown a code by an owner's
+// device, and made a member as the code signs their device in. On the test clock, the trusted core's lock at a cloud
+// that keeps chains.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
@@ -16,10 +18,13 @@ import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
+import { Signer, next } from "../src/lock.ts";
 import { pairs } from "../src/views/lock.ts";
+import { checkLock } from "../src/vault/lock-check.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
-import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { Status, stationReplies } from "./station-fixture.ts";
 
 const random = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) b[i] = (Math.random() * 256) | 0;
@@ -71,6 +76,7 @@ test("a new device met face to face: the code the trusted device shows, typed ri
   assert.equal(shown.length, 1);
   assert.equal(shown[0].device, PHONE);
   assert.equal(shown[0].name, "李二");
+  assert.equal(shown[0].deviceText, "Pixel 8");
   assert.deepEqual(shown[0].workspaces.map((w: { id: string; name: string }) => [w.id, w.name]), [["ws", "W"]]);
   const done = await m.prove(shown[0].code);
   assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
@@ -90,6 +96,93 @@ test("the owner approves a member's first device that signs, not a later one: th
   // Their web page only (it signs nothing): the first that signs is still the owner's to approve.
   const n = await met(undefined, [{ id: "ee".repeat(32), sub: "s2", kind: "web", label: "Chrome", exp: 1000 + 86400 }]);
   assert.deepEqual(await n.hello(), { ok: { t: "code", workspaces: ["ws"] } });
+});
+
+test("someone made a member after the lock was turned on: an owner's device shows a code, and the code typed makes them a member as it signs their device in", async () => {
+  // In the workspace at the cloud, in no entry of the lock: their credential is all that says so.
+  const m = await met();
+  assert.deepEqual(await m.hello(m.g.credential("ws", PHONE, "s3")), { ok: { t: "code", workspaces: ["ws"] } });
+  const shown = (await m.prompts()).pairing;
+  assert.deepEqual(shown.map((p: { name: string; email: string; device: string }) => [p.name, p.email, p.device]), [["s3", "s3@x.com", PHONE]]);
+  assert.equal(shown[0].deviceText, "Pixel 8（还没加入「W」的安全模式，批准后以成员身份加入）", "who gives the code is told it lets someone new in");
+  assert.equal(m.cloud.posted.length, 0, "nothing signed before the code is typed");
+  const done = await m.prove(shown[0].code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "member", undefined], ["ws", "device", PHONE]]);
+  const chain = m.cloud.chains.get("ws")!;
+  assert.deepEqual(chain.at(-2)!.body, { sub: "s3", email: "s3@x.com", role: "member" });
+  assert.deepEqual(chain.at(-1)!.body, { id: PHONE, sub: "s3", kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) });
+  // As the stations take it: theirs, and a device of their own that signs (the next they approve themselves).
+  const lock = checkLock(chain, m.host.nowMs() / 1000);
+  assert.equal(lock.members.get("s3"), "member");
+  assert.equal(lock.devices.get(PHONE)?.own, true);
+  assert.ok(lock.signed.has("s3"));
+});
+
+test("their code typed wrong, or turned away: not made a member either", async () => {
+  const m = await met();
+  await m.hello(m.g.credential("ws", PHONE, "s3"));
+  const code = (await m.prompts()).pairing[0].code;
+  assert.deepEqual(await m.prove(code === "222222" ? "333333" : "222222"), { ok: { left: PAIR_TRIES - 1 } });
+  await m.ask("lockPrompt.deny", { device: PHONE });
+  assert.deepEqual(await m.run(m.phone.next()), { ok: { t: "no", error: "denied" } });
+  assert.deepEqual(m.cloud.posted, []);
+});
+
+test("made a member by a person approving them, the lock says member whatever the cloud calls them: it lowers roles and raises none", async () => {
+  const m = await met();
+  assert.deepEqual(await m.hello(m.g.credential("ws", PHONE, "s3", 4102444800, "admin")), { ok: { t: "code", workspaces: ["ws"] } });
+  const done = await m.prove((await m.prompts()).pairing[0].code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.equal(checkLock(m.cloud.chains.get("ws")!, m.host.nowMs() / 1000).members.get("s3"), "member");
+});
+
+test("the lock has heard of them by the time the code is typed (another device got there first): only their device is signed", async () => {
+  const m = await met();
+  await m.hello(m.g.credential("ws", PHONE, "s3"));
+  const code = (await m.prompts()).pairing[0].code;
+  const chain = m.cloud.chains.get("ws")!;
+  const signer = Effect.runSync(Signer.make(m.host));
+  m.cloud.chains.set("ws", [...chain, signer.sign(next("ws", m.cloud.head("ws"), m.host.nowMs() / 1000, "member", { sub: "s3", email: "s3@x.com", role: "admin" }))]);
+  const done = await m.prove(code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted.map((p) => [p.kind, p.id]), [["device", PHONE]]);
+  assert.equal(checkLock(m.cloud.chains.get("ws")!, m.host.nowMs() / 1000).members.get("s3"), "admin", "left as they are");
+});
+
+test("their being made a member refused: their device is not signed in, and the new device is told why", async () => {
+  const m = await met();
+  await m.hello(m.g.credential("ws", PHONE, "s3"));
+  const code = (await m.prompts()).pairing[0].code;
+  stationReplies(m.host, (req) => (req.method === "POST" && req.url.includes("/lock") ? new Status(409, { error: "lock_refused" }) : m.cloud.reply(req)));
+  const done = await m.prove(code);
+  assert.ok("err" in done && done.err.code === "pair_unsigned", JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted, []);
+  assert.equal(m.cloud.chains.get("ws")!.length, 1);
+});
+
+test("someone the lock has not heard of: a member's device shows no code, nor does a credential for no one", async () => {
+  // A device of an ordinary member's, that signs: it approves only its own person's.
+  const g = grant();
+  const owner = elsewhere();
+  const r = await rig((me) => ({ ws: genesis("ws", owner, false, [], g.keys, ME, [{ id: "aa".repeat(32), sub: "s1", kind: "app", label: "theirs", sign_key: owner.id }, { id: ME, sub: "s2", kind: "app", label: "this", sign_key: me.id }]) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const asks = async (credential: string) => {
+    const [trusted, phone] = await pipe();
+    r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, trusted));
+    await Effect.runPromise(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }));
+    const out: unknown[] = [];
+    r.core.inner.runner.fork(Effect.map(phone.next(), (x) => out.push(x)));
+    for (let i = 0; i < 500 && out.length === 0; i++) await r.host.time.pass(10);
+    return out[0];
+  };
+  assert.deepEqual(await asks(g.credential("ws", PHONE, "s3")), { t: "no", error: "not_here" });
+  assert.deepEqual((await prompts()).pairing, []);
+
+  const m = await met();
+  assert.deepEqual(await m.hello(m.g.credential("ws", PHONE, "")), { ok: { t: "no", error: "not_here" } });
+  assert.deepEqual(m.cloud.posted, []);
 });
 
 test("typed wrong: tries left said, the right one still signs it in; PAIR_TRIES wrong ones, nothing", async () => {

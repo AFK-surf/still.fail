@@ -379,7 +379,8 @@ function unconfirmed(inner: Inner, ws: string): CoreError {
 }
 
 /// What this device brings a station of the workspace as it connects (its hello's `lock.entries`): the entries from the
-/// one that put it in the lock on, as held here, while that was lately (RECENT_SECS): a station that has not heard of
+/// one that put it in the lock on (from the one that made its person a member, lately too: a station takes no device of
+/// someone it has not heard of), as held here, while that was lately (RECENT_SECS): a station that has not heard of
 /// them yet takes them and lets it in (docs/workspace-lock.md 新设备), the approval coming with the device that needs
 /// it. None when it is not in the lock, was put there long ago or by the genesis, or they would not fit a first line.
 function carried(inner: Inner, ws: string): Entry[] | null {
@@ -391,6 +392,13 @@ function carried(inner: Inner, ws: string): Entry[] | null {
   let at = h.entries.length - 1;
   while (at >= 0 && !(h.entries[at]!.kind === "device" && get(h.entries[at]!.body, "id") === base)) at--;
   if (at < 0 || now(inner) - h.entries[at]!.at > RECENT_SECS) return null;
+  const sub = get(h.entries[at]!.body, "sub");
+  for (let i = at - 1; i >= 0 && now(inner) - h.entries[i]!.at <= RECENT_SECS; i--) {
+    if (h.entries[i]!.kind === "member" && get(h.entries[i]!.body, "sub") === sub) {
+      at = i;
+      break;
+    }
+  }
   const tail = h.entries.slice(at);
   return JSON.stringify(tail).length <= CARRY_BYTES ? tail : null;
 }
@@ -889,6 +897,17 @@ export class Lock {
         if (theirs !== null) return theirs;
       }
       return head;
+    });
+  }
+
+  /// Someone the cloud has made a member, in the lock now, as a person approves their first device: a member, whatever
+  /// the cloud calls them (it lowers roles and raises none; a role above that takes someone's signature saying so). One
+  /// the lock has heard of since (another device got there first) is left as they are.
+  admit(sub: string, email: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const { entries } = yield* self.#chain();
+      return fold(entries).members.has(sub) ? null : yield* self.append("member", { sub, email, role: "member" });
     });
   }
 
