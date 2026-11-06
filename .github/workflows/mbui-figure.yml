@@ -145,7 +145,7 @@ jobs:
           set -euo pipefail
           cd apps/mbui
           while IFS= read -r filter || [ -n "$filter" ]; do
-            [ -n "$filter" ] || continue
+            [ -n "$filter" ] && [ "$filter" != "-" ] || continue
             printf 'Testing %s\n' "$filter"
             if ! moon test --target wasm-gc --release -p stillfail/sfapp -f "$filter" > "$RUNNER_TEMP/chat-moon-test.log" 2>&1; then
               awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-test.log"
