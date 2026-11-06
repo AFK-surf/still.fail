@@ -20,10 +20,20 @@ on:
         description: SHA-256 of the uncompressed worktree patch
         required: false
         type: string
+      render:
+        description: Build and render the three preview sizes
+        type: boolean
+        default: true
+      test_filters:
+        description: Test name filters, one per line
+        required: false
+        default: "*a chat*reader*"
+        type: string
 permissions:
   contents: read
 jobs:
   evidence:
+    if: ${{ inputs.render }}
     runs-on: macos-15
     timeout-minutes: 5
     steps:
@@ -123,13 +133,19 @@ jobs:
             awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-check.log"
             exit 1
           fi
-      - name: Exercise the Chat attachment reader
+      - name: Exercise the selected Chat cases
+        env:
+          TEST_FILTERS: ${{ inputs.test_filters }}
         run: |
           set -euo pipefail
           cd apps/mbui
-          if ! moon test --target wasm-gc --release -p stillfail/sfapp -f "*a chat*reader*" > "$RUNNER_TEMP/chat-moon-test.log" 2>&1; then
-            awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-test.log"
-            tail -n 50 "$RUNNER_TEMP/chat-moon-test.log"
-            exit 1
-          fi
-          tail -n 5 "$RUNNER_TEMP/chat-moon-test.log"
+          while IFS= read -r filter || [ -n "$filter" ]; do
+            [ -n "$filter" ] || continue
+            printf 'Testing %s\n' "$filter"
+            if ! moon test --target wasm-gc --release -p stillfail/sfapp -f "$filter" > "$RUNNER_TEMP/chat-moon-test.log" 2>&1; then
+              awk '/^Error:/ { n=9 } n>0 { print; n-- }' "$RUNNER_TEMP/chat-moon-test.log"
+              tail -n 50 "$RUNNER_TEMP/chat-moon-test.log"
+              exit 1
+            fi
+            tail -n 5 "$RUNNER_TEMP/chat-moon-test.log"
+          done <<< "$TEST_FILTERS"
