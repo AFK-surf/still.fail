@@ -36,11 +36,9 @@
    the account lit, a dotted line down to the station it runs on, the station ringed. A round: everything lifts off
    together (0.5 s), three new chats appear on the top plate, and they drop one after another (0.8 s apart), each
    along its dotted route onto the account it is given; the account lights as the chat lands, then the line to its
-   station and the station's ring follow. The round ends where it began. Three rounds play once the band is revealed
-   (.pool.in), then it rests on the outcome. With the on-screen observer (.pool-fig.play) it loops while visible; off
-   screen it goes no further than those three rounds. */
+   station and the station's ring follow. The round ends where it began. It loops only while on screen (.pool-fig.play,
+   main.js) and holds where it is off screen. */
 .pool-fig [data-n] { animation-duration: 7.2s; animation-iteration-count: infinite; animation-play-state: paused; animation-fill-mode: both; }
-.pool.in .pool-fig [data-n] { animation-play-state: running; animation-iteration-count: 3; }
 .pool .pool-fig.play [data-n] { animation-play-state: running; animation-iteration-count: infinite; }
 .pl-chat[data-n="0"] { animation-name: pl-chat-0; } .pl-chat[data-n="1"] { animation-name: pl-chat-1; } .pl-chat[data-n="2"] { animation-name: pl-chat-2; }
 .pl-route[data-n="0"] { animation-name: pl-route-0; } .pl-route[data-n="1"] { animation-name: pl-route-1; } .pl-route[data-n="2"] { animation-name: pl-route-2; }
@@ -118,4 +116,13 @@
   .formula { margin-top: 48px; gap: 28px 16px; }
   .formula b { font-size: 30px; }
   .formula > div > span { font-size: 14px; }
+}
+
+/* The headline breaks where its comma was; the comma stays for screen readers only. */
+#pool-title .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- The narrowest phones (iPhone SE): one figure per row, so the captions don't wrap to a word a line ---------- */
+@media (max-width: 374px) {
+  .formula { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .formula > div > span { max-width: none; }
 }
