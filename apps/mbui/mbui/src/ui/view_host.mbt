@@ -1169,16 +1169,16 @@ fn Ctx::tree_close_past(self : Ctx, p : TreePaint, deep : Int, clips : Int, ring
           break
         }
       }
-      // (in the window's terms, where what is drawn now is drawn from a place of its own: scene_frame_origin)
       let ring = @damage.Rect::none()
       scene.parts.reach_add(self.inst, k, self.ninst, ring)
-      scene_reach_in_window(ring)
-      into.take(ring)
-      // (and the layer being drawn: its own, drawn as its node is closed)
+      // (and the layer being drawn: its own, drawn as its node is closed, in the terms it is drawn in)
       match scene.drawing {
         Some(l) => l.own_reach.take(ring)
         None => ()
       }
+      // (in the window's terms, where what is drawn now is drawn from a place of its own: scene_frame_origin)
+      scene_reach_in_window(ring)
+      into.take(ring)
     }
   }
 }
@@ -1284,7 +1284,8 @@ fn Ctx::tree_walk(
       let (x, y, a, s, ux, uy) = at
       l.has_origin = true
       l.origin = (x, y)
-      scene_origin_push(x, y)
+      l.origin_now = (x, y)
+      scene_origin_push()
       l.base_lvl = clip_top() / clip_n
       let (fx, fy) = scene_frame_origin.val
       scene_frame_origin.val = (fx + x, fy + y)
@@ -1296,6 +1297,7 @@ fn Ctx::tree_walk(
     Some(l) if from != 0 && l.id.at == from => {
       l.has_origin = false
       l.origin = (0.0, 0.0)
+      l.origin_now = (0.0, 0.0)
       l.base_lvl = clip_top() / clip_n
       self.tree_walk_in(p, from, at, depth, kept)
     }
@@ -1495,13 +1497,14 @@ fn Ctx::tree_step(
   // anew with it: of a layer kept, only its own node may be, the rest of it marking it)
   e.reach.clear()
   scene.parts.reach_add(self.inst, k0, self.ninst, e.reach)
-  // (in the window's terms, where what is drawn now is drawn from a place of its own: scene_frame_origin)
-  scene_reach_in_window(e.reach)
-  // (and the layer being drawn told how far what it draws itself reaches, as worked out here once)
+  // (and the layer being drawn told how far what it draws itself reaches, as worked out here once: in the terms it is
+  // drawn in, where it is left out by what it is drawn in, Ctx::scene_reach_out)
   match scene.drawing {
     Some(l) => l.own_reach.take(e.reach)
     None => ()
   }
+  // (in the window's terms, where what is drawn now is drawn from a place of its own: scene_frame_origin)
+  scene_reach_in_window(e.reach)
   let moved = (made || c.id.at == from) && scene.moved.contains(c.id)
   e.moved = moved
   p.open.push(e)
