@@ -390,6 +390,7 @@ fn view_forget() -> Unit {
     Some(t) => t.dispose()
     None => ()
   }
+  tree_natives.clear()
   // (what was said of its nodes' corners its own: tree_corners_linked)
   tree_links.clear()
   view_app.val = None
@@ -1722,6 +1723,10 @@ fn Ctx::tree_draw_own(
     self.emit_bone(x, y, c.w * s, c.h * s, bone_shape_r(c.radius * s, c.w * s, c.h * s), c.bones, a)
     return -1
   }
+  // A system surface is placed each time the frame is painted, including after an ancestor moves or clips it.
+  if c.native_surface && tree_natives.contains(c.id) {
+    scene_own_only()
+  }
   if c.hosted {
     // (the old frame's: drawn otherwise than by the tree alone, what it reaches the old view's)
     scene_own_only()
@@ -1807,6 +1812,17 @@ fn Ctx::tree_draw_own(
   if s != 1.0 {
     let (outer, outer_r, outer_s) = clip_at(clip_top())
     self.transform_insts(i0, self.ninst, x, y, s, s, 0.0, 0.0, outer, outer_r, outer_s)
+  }
+  match tree_natives.get(c.id) {
+    Some(native) if c.bones == 0L => {
+      let content = (native.content)(c.w, c.h)
+      match native.page_scale {
+        Some(scale) => native.view.set_scale(scale())
+        None => ()
+      }
+      self.paint_tree_native(native.view, c, x, y, s, content)
+    }
+    _ => ()
   }
   // (its picture, each frame where it is drawn and as big, over what its block draws: its decode the one for that
   // size, asked for as an old view's is, its own kept as one shown this frame, View::image; not in its block, whose

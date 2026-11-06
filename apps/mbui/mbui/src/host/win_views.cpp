@@ -330,6 +330,13 @@ static void stood(View *v) {
   mb_host_request_frame();
 }
 
+// A site's URL, history or title can change without changing view_info. Tell the app at that event too.
+static void site_changed(View *v) {
+  if (!v || v->closed || v->kind != 3) return;
+  if (std::find(stoods.begin(), stoods.end(), v->vid) == stoods.end()) stoods.push_back(v->vid);
+  mb_host_request_frame();
+}
+
 static void tell(View *v, int state) {
   if (v->told && state > 0) return;
   v->told = state > 0;
@@ -689,6 +696,7 @@ static void on_nav_start(View *v, ICoreWebView2NavigationStartingEventArgs *a) {
     v->loading = true;
     v->there = false;
   }
+  site_changed(v);
   mb_host_request_frame();
 }
 
@@ -720,6 +728,7 @@ static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
   int code = 0;
   if (!ok && SUCCEEDED(a->QueryInterface(IID_PPV_ARGS(&a2)))) a2->get_HttpStatusCode(&code);
   v->loading = false;
+  site_changed(v);
   mb_host_request_frame();
   if (v->closed) return;
   if (ok || code > 0) {
@@ -930,13 +939,15 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
             return S_OK;
           }).Get(),
       &tok);
-  v->web->add_HistoryChanged(Callback<ICoreWebView2HistoryChangedEventHandler>([](ICoreWebView2 *, IUnknown *) -> HRESULT {
+  v->web->add_HistoryChanged(Callback<ICoreWebView2HistoryChangedEventHandler>([vid](ICoreWebView2 *, IUnknown *) -> HRESULT {
+                               site_changed(find(vid));
                                mb_host_request_frame();
                                return S_OK;
                              }).Get(),
                              &tok);
   v->web->add_DocumentTitleChanged(
-      Callback<ICoreWebView2DocumentTitleChangedEventHandler>([](ICoreWebView2 *, IUnknown *) -> HRESULT {
+      Callback<ICoreWebView2DocumentTitleChangedEventHandler>([vid](ICoreWebView2 *, IUnknown *) -> HRESULT {
+        site_changed(find(vid));
         mb_host_request_frame();
         return S_OK;
       }).Get(),

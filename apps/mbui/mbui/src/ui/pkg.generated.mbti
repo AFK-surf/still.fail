@@ -376,6 +376,8 @@ pub fn native_call(String, @json.Json) -> NativeCall
 
 pub fn native_pointing() -> Pointing
 
+pub fn native_view(@view.View, NativeView, content? : (Double, Double) -> (Double, Double, Double, Double)?, page_scale? : () -> Double) -> @view.View
+
 pub let native_unsupported : String
 
 pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String, head? : (@view.View, Int32, Bool) -> Unit, gone? : (Int32) -> Unit, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?, shown? : (Array[Int32]) -> Unit) -> @view.View

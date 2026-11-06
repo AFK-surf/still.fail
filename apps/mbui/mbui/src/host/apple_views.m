@@ -216,6 +216,7 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double seekMs, chaseMs;
 @property(nonatomic) BOOL chaseNear;  // the one asked meanwhile is to go about there (seekTo:near:)
 @property(nonatomic) BOOL observing, readyLogged, frameLogged;
+@property(nonatomic) BOOL observingSite;
 @property(nonatomic, strong) NSMutableArray<MBRead *> *pending;                  // not yet taken
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered to its end
 @property(nonatomic, strong) NSMutableArray<NSNumber *> *lettingGo;  // taken, then let go of: not told yet
@@ -281,7 +282,7 @@ static int64_t next_z;  // the z the next view opened or raised takes: over all 
 // a view put elsewhere on the screen since the canvas's last frame was presented (moved, shown, hidden, closed): that
 // frame is presented in the transaction that puts it there (apple.h mb_views_take_moved)
 static int views_moved;
-static void *kStatus = &kStatus, *kReady = &kReady;
+static void *kStatus = &kStatus, *kReady = &kReady, *kSiteState = &kSiteState;
 
 static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long long total) {
   AVAssetResourceLoadingContentInformationRequest *ci = req.contentInformationRequest;
@@ -718,7 +719,11 @@ static int32_t player_failure(NSError *error) {
 - (void)observeValueForKeyPath:(NSString *)path
                       ofObject:(id)o
                         change:(NSDictionary *)change
-                       context:(void *)ctx {
+                        context:(void *)ctx {
+  if (ctx == kSiteState) {
+    if (!self.closed) mb_host_outside(MB_OUTSIDE_STOOD, self.vid, 0);
+    return;
+  }
   if (ctx != kStatus && ctx != kReady) {
     [super observeValueForKeyPath:path ofObject:o change:change context:ctx];
     return;
@@ -1376,6 +1381,11 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
                                                                                         : open_stream_view(vid, a.intValue);
   v.vid = vid;
   v.kind = kind;
+  if (kind == 3) {
+    v.observingSite = YES;
+    for (NSString *key in @[ @"URL", @"title", @"loading", @"canGoBack", @"canGoForward" ])
+      [v.web addObserver:v forKeyPath:key options:0 context:kSiteState];
+  }
   v.z = ++next_z;
   v.box = new_box();
   [v.box addSubview:v.content];
@@ -1587,6 +1597,11 @@ void mb_host_view_close(int32_t vid) {
   if (!v) return;
   [views removeObjectForKey:@(vid)];
   v.closed = YES;
+  if (v.observingSite) {
+    v.observingSite = NO;
+    for (NSString *key in @[ @"URL", @"title", @"loading", @"canGoBack", @"canGoForward" ])
+      [v.web removeObserver:v forKeyPath:key context:kSiteState];
+  }
   if (v.kind == 1) {
     if (v.webVideo) {
       [v.webVideo close];

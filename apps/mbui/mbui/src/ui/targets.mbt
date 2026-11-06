@@ -54,6 +54,7 @@ fn Ctx::node_targets(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       Some((v, _, _)) if !v.closed && v.id != 0 => {
         v.hits_before = self.next_hit_ids.length()
         v.island = targets_island.val
+        v.tree_surface = false
       }
       _ => ()
     }

@@ -255,6 +255,8 @@ pub(all) struct Look {
   mut glyphs_at : Double?
   /// where the host puts a control of its own, by this name, wherever this node is drawn (View::native_anchor; "": none)
   mut native_anchor : String
+  /// the node draws a system surface supplied by its host (View::native_surface)
+  mut native_surface : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -322,6 +324,8 @@ pub(all) struct Content {
   bone_as : Int
   /// the name of the host's control put where it is drawn (View::native_anchor; "": none)
   native_anchor : String
+  /// this node draws a system surface supplied by its host
+  native_surface : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -339,7 +343,8 @@ pub fn Content::draws(self : Content) -> Bool {
   self.glass is Some(_) ||
   self.shadow.0 > 0.0 ||
   self.hosted ||
-  self.native_anchor != ""
+  self.native_anchor != "" ||
+  self.native_surface
 }
 
 ///|
@@ -1365,7 +1370,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, clip_drawn: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "", native_surface: false },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2273,6 +2278,7 @@ priv enum Prop {
   Edge
   EdgeDashed
   NativeAnchor
+  NativeSurface
   Image
   ImageFor
   ImageCover
@@ -2872,6 +2878,14 @@ pub fn View::ground(self : View, ink : Live[Int64]) -> View {
 /// Paint's.
 pub fn View::native_anchor(self : View, name : Live[String]) -> View {
   self.bind(NativeAnchor, name, Paint, fn(a) { self.tree.nodes[self.at].look.native_anchor = a })
+  self
+}
+
+///|
+/// Whether this node draws a system surface supplied by the tree's host. The host owns its drawing and lifetime;
+/// this tells the tree the node has content of its own, including when it checks whether another node is alone.
+pub fn View::native_surface(self : View, on : Live[Bool]) -> View {
+  self.bind(NativeSurface, on, Paint, fn(on) { self.tree.nodes[self.at].look.native_surface = on })
   self
 }
 
@@ -7435,6 +7449,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     bones: self.bones_of_at(at),
     bone_as: self.bone_as_at(at),
     native_anchor: n.look.native_anchor,
+    native_surface: n.look.native_surface,
   })
   self.changed.push(id)
   self.pending.push(id)

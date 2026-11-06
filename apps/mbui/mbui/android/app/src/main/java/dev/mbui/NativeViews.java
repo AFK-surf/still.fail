@@ -2613,6 +2613,7 @@ final class NativeViews {
 
         /** Where the page is now, its history, whether it loads: on the main thread. */
         void moved(WebView w, Boolean busy) {
+            String was = state();
             String url = w.getUrl();
             if (url != null) {
                 Uri u = Uri.parse(url);
@@ -2623,6 +2624,12 @@ final class NativeViews {
             if (busy != null) loading = busy;
             String t = w.getTitle();
             title = t == null ? "" : t;
+            if (!java.util.Objects.equals(was, state())) {
+                MBView mv = Host.view;
+                if (mv != null) mv.toGL(() -> {
+                    if (!closed) Native.outside(Native.OUTSIDE_STOOD, id, 0);
+                });
+            }
             Host.requestFrame();
         }
 
@@ -2638,6 +2645,11 @@ final class NativeViews {
             st.setAllowContentAccess(false);
             // (all of its page drawn, as a page's: its picture is moved by the canvas)
             st.setOffscreenPreRaster(true);
+            web.setWebChromeClient(new android.webkit.WebChromeClient() {
+                @Override public void onReceivedTitle(WebView view, String title) {
+                    moved(view, null);
+                }
+            });
             CookieManager.getInstance().setAcceptCookie(true);
             bridge(web);
             web.setWebViewClient(new WebViewClient() {

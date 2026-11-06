@@ -728,6 +728,7 @@ static void on_load(GtkWidget *web, int event, gpointer data) {
   (void)web;
   View *v = find(GPOINTER_TO_INT(data));
   if (!v) return;
+  if (v->kind == 3) g_queue_push_tail(&stoods, GINT_TO_POINTER(v->vid));
   mb_host_request_frame();
   if (event == WK_LOAD_STARTED) {
     // (a site's page going elsewhere, not set off by the person: stopped, said; the page it was stays)
@@ -771,7 +772,9 @@ static gboolean on_load_failed(GtkWidget *web, int event, const char *uri, GErro
 }
 
 static void on_changed(GObject *o, GParamSpec *p, gpointer data) {
-  (void)o, (void)p, (void)data;
+  (void)o, (void)p;
+  View *v = find(GPOINTER_TO_INT(data));
+  if (v && v->kind == 3) g_queue_push_tail(&stoods, GINT_TO_POINTER(v->vid));
   mb_host_request_frame();
 }
 

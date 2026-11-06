@@ -1161,6 +1161,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
   }
   // (the looks by the clock, and the tree's resident clock's next step, asked as any frame asks them)
   looks_apply(c)
+  c.sync_native_covers()
   // (the streams' frames taken in it said shown, as a frame painted says them: stream.mbt; what the widgets are, read out,
   // and what takes back, the keys and the field's menu told the host, as a frame painted tells them)
   streams_after_paint()

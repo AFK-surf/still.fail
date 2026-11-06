@@ -61,11 +61,7 @@ pub struct NativeView {
   priv serve : ((SiteRequest, SiteReply) -> Unit)?
   priv leave : (String) -> Unit
   priv replies : Map[Int, SiteReply]
-  priv mut path : String
-  priv mut can_back : Bool
-  priv mut can_forward : Bool
-  priv mut loading : Bool
-  priv mut title : String
+  priv page : @signals.Signal[(String, Bool, Bool, Bool, String)]
   priv mut scale : Double
   priv mut told_zoom : Double
   priv mut told_page_scale : Double
@@ -81,6 +77,8 @@ pub struct NativeView {
   priv mut hits_before : Int
   /// the node of the window's tree hosting the old view it is in, as its targets were last found (none: no tree)
   priv mut island : @view.NodeId?
+  /// whether `island` is the surface's own tree node, rather than an old view that contains it
+  priv mut tree_surface : Bool
   priv mut told_covers : String
 }
 
@@ -221,17 +219,14 @@ fn NativeView::make(
     keeps_cookies: false,
     hits_before: 0,
     island: None,
+    tree_surface: false,
     told_covers: "",
     read,
     reading: {},
     serve,
     leave,
     replies: {},
-    path: if kind == 3 { arg } else { "" },
-    can_back: false,
-    can_forward: false,
-    loading: kind == 3,
-    title: "",
+    page: @signals.signal((if kind == 3 { arg } else { "" }, false, false, kind == 3, ""), same=fn(a, b) { a == b }),
     scale: 1.0,
     told_zoom: 1.0,
     told_page_scale: 1.0,
@@ -384,7 +379,8 @@ pub fn NativeView::reload(self : NativeView) -> Unit {
 /// A site's page at `path` of its host.
 pub fn NativeView::load(self : NativeView, path : String) -> Unit {
   if self.id != 0 && !self.closed {
-    self.path = path
+    let (_, back, forward, loading, title) = @signals.untracked(fn() { self.page.get() })
+    self.page.set((path, back, forward, loading, title))
     h_view_site_load(self.id, path)
   }
 }
@@ -402,9 +398,9 @@ pub fn NativeView::set_scale(self : NativeView, k : Double) -> Unit {
 
 ///|
 /// Where a site's page is: its path on its host (or the address it went to elsewhere), whether it can go back and
-/// forward, whether it is loading, its title.
+/// forward, whether it is loading, its title. A tracked read follows the host's changes and `load`.
 pub fn NativeView::page_at(self : NativeView) -> (String, Bool, Bool, Bool, String) {
-  (self.path, self.can_back, self.can_forward, self.loading, self.title)
+  self.page.get()
 }
 
 ///|
@@ -428,6 +424,16 @@ pub fn NativeView::close(self : NativeView) -> Unit {
     return
   }
   self.closed = true
+  // If the caller closes a view while its node is still present, the hole must disappear even without another input.
+  if self.tree_surface {
+    match self.island {
+      Some(id) => {
+        scene_paint_told(id)
+        h_frame_owed()
+      }
+      None => ()
+    }
+  }
   // its reads under way stopped: nothing more of them is wanted
   let reading = self.reading.values().collect()
   self.reading.clear()
@@ -749,6 +755,55 @@ pub fn Ctx::native(
 let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?, FixedArray[Double])] = Map([])
 
 ///|
+/// A system view in the window's tree. The view remains the caller's; the node only places it while drawn.
+priv struct TreeNative {
+  view : NativeView
+  content : (Double, Double) -> (Double, Double, Double, Double)?
+  page_scale : (() -> Double)?
+}
+
+///|
+// kept across runs: entries are let go with their nodes and cleared when the window's tree is forgotten
+let tree_natives : Map[@view.NodeId, TreeNative] = {}
+
+///|
+/// A node showing `view`, filling the room its parent gives it by default. `content`, evaluated as it is painted with
+/// the node's laid-out width and height, gives the view's rectangle in the node's coordinates; None fills the node.
+/// Its reads are followed. The node's radius or corners round the content; it and its ancestors cut it as drawn. The
+/// caller owns the view and closes it; letting the node go hides it without closing it. `page_scale`, where supplied,
+/// is read at the same paint moment and sent to the page before its placement.
+pub fn native_view(
+  parent : @view.View,
+  view : NativeView,
+  content? : (Double, Double) -> (Double, Double, Double, Double)? = fn(_, _) { None },
+  page_scale? : () -> Double,
+) -> @view.View {
+  parent.box(fn(node) {
+    let id = node.id()
+    for other, held in tree_natives {
+      if other != id && physical_equal(held.view, view) {
+        node.fault("native_view: one NativeView cannot be shown by two tree nodes")
+      }
+    }
+    tree_natives[id] = { view, content, page_scale }
+    node.grow(Is(1.0)).native_surface(Is(true)) |> ignore
+    node.owns(fn() {
+      tree_natives.remove(id)
+      // A node may leave between frames. Do not let its page keep taking input until the next paint.
+      if !view.closed && view.tree_surface && view.island == Some(id) && view.told_shown {
+        view.told_shown = false
+        h_view_place(
+          view.id,
+          view.at[0], view.at[1], view.at[2], view.at[3],
+          view.at[4], view.at[5], view.at[6], view.at[7],
+          view.at[8], view.at[9], view.at[10], view.at[11], false,
+        )
+      }
+    }) |> ignore
+  })
+}
+
+///|
 fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   // (a shot shows no native view: it is the window's, where the page has it)
   if shooting.val {
@@ -761,16 +816,55 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   if v.closed || v.id == 0 {
     return
   }
+  v.tree_surface = false
+  self.paint_native_area(v, (n.x, n.y, n.fw, n.fh), content, radii)
+}
+
+///|
+/// Paint a native view at a tree node's actual place and scale. Stream's system layer uses this same path after it
+/// chooses, at paint time, between its system layer and its texture.
+fn Ctx::paint_tree_native(
+  self : Ctx,
+  v : NativeView,
+  c : @view.Content,
+  x : Double,
+  y : Double,
+  s : Double,
+  content : (Double, Double, Double, Double)?,
+) -> Unit {
+  if shooting.val || v.closed || v.id == 0 || s <= 0.0 {
+    return
+  }
+  let r = match c.corners {
+    Some((a, b, d, e)) => FixedArray::from_array([dmax(a, 0.0) * s, dmax(b, 0.0) * s, dmax(d, 0.0) * s, dmax(e, 0.0) * s])
+    None => FixedArray::make(4, dmax(c.radius, 0.0) * s)
+  }
+  let inside = content.map(fn(r) { (r.0 * s, r.1 * s, r.2 * s, r.3 * s) })
+  self.paint_native_area(v, (x, y, c.w * s, c.h * s), inside, r)
+  v.island = Some(c.id)
+  v.tree_surface = true
+}
+
+///|
+/// The common native drawing in window coordinates, cut to its node and the current clip.
+fn Ctx::paint_native_area(
+  self : Ctx,
+  v : NativeView,
+  frame : (Double, Double, Double, Double),
+  content : (Double, Double, Double, Double)?,
+  radii : FixedArray[Double],
+) -> Unit {
+  let (nx, ny, nw, nh) = frame
   let (x, y, w, h) = match content {
-    Some((cx, cy, cw, ch)) => (n.x + cx, n.y + cy, cw, ch)
-    None => (n.x, n.y, n.fw, n.fh)
+    Some((cx, cy, cw, ch)) => (nx + cx, ny + cy, cw, ch)
+    None => (nx, ny, nw, nh)
   }
   // seen within the node and the clip it is painted in, as that shows (not a recording's band: clip_shown)
   let ((cx0, cy0, cx1, cy1), _) = clip_shown()
-  let x0 = dmax(n.x, cx0)
-  let y0 = dmax(n.y, cy0)
-  let x1 = dmin(n.x + n.fw, cx1)
-  let y1 = dmin(n.y + n.fh, cy1)
+  let x0 = dmax(nx, cx0)
+  let y0 = dmax(ny, cy0)
+  let x1 = dmin(nx + nw, cx1)
+  let y1 = dmin(ny + nh, cy1)
   if x1 <= x0 || y1 <= y0 {
     return
   }
@@ -795,6 +889,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
       (hx0, hy0, hx1 - hx0, hy1 - hy0)
     }
     // (its image the view's, the part of its content there: a host that draws the view's picture draws that)
+    push_clip(x0, y0, x1, y1)
     self.push_inst(
       sx,
       sy,
@@ -813,12 +908,14 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     )
     self.corners_last_each(radii[0], radii[1], radii[2], radii[3])
     self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
+    pop_clip()
     v.hole[0] = sx
     v.hole[1] = sy
     v.hole[2] = sw
     v.hole[3] = sh
   } else {
     v.hole[2] = 0.0
+    return
   }
   // (by build: a frame built again paints again, and what the last build did not paint is not shown; what draws it drawn
   // as the old frame paints, scene_layers.mbt)
@@ -927,6 +1024,9 @@ fn views_arrive() -> Unit {
   for v in open_views {
     if ids.contains(v.id) {
       v.stood()
+      if v.kind == 3 && !v.closed {
+        v.take_site()
+      }
     }
   }
 }
@@ -1111,6 +1211,8 @@ fn Ctx::follow_holes(self : Ctx) -> Unit {
       Some(b) => b
       None => continue
     }
+    // Layers may have been raised after they were painted; the host stacks by the final frame order.
+    v.seq = b / inst_size
     let (kx, ky) = (a[b + 2] / v.hole[2], a[b + 3] / v.hole[3])
     let (bx, by) = (a[b] - kx * v.hole[0], a[b + 1] - ky * v.hole[1])
     if kx == 1.0 && ky == 1.0 && bx == 0.0 && by == 0.0 {
@@ -1139,7 +1241,7 @@ let covers_most : Int = 32
 /// ground that puts it away, a bar's button over a page scrolled under it): a finger there is the canvas's, not the
 /// page's, as the app's own presses go to what is on top. The host is told them as they change (view_tell 4: "x0 y0
 /// x1 y1 …" in points, the window's; "" none), each cut to where the view is seen.
-fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
+fn NativeView::tell_covers(self : NativeView, c : Ctx, framed? : Bool = false) -> Unit {
   let v = self
   let seen = (v.at[4], v.at[5], v.at[6], v.at[7])
   let over : Array[(Double, Double, Double, Double)] = []
@@ -1156,10 +1258,29 @@ fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
   }
   // (what of the old views' takes a press after it: each where the node hosting its old view takes a finger, where it
   // is drawn, as big: painted where it is laid out, placed as its targets are, old_hits_moved)
-  let rects = c.next_hit_rects
-  for j in v.hits_before..<c.next_hit_ids.length() {
+  let rects = if framed { old_hits_rects } else { c.next_hit_rects }
+  let ids = if framed { c.hit_ids } else { c.next_hit_ids }
+  let old = if framed { old_hits } else { next_old_hits }
+  let layers = if framed { layer_hits } else { next_layer_hits }
+  let from = if v.tree_surface { 0 } else { v.hits_before }
+  for j in from..<ids.length() {
     let r = (rects[j * 4], rects[j * 4 + 1], rects[j * 4 + 2], rects[j * 4 + 3])
-    let island = next_old_hits.iter().find_first(fn(o) { j >= o.from && j < o.to })
+    let island = old.iter().find_first(fn(o) { j >= o.from && j < o.to })
+    // A tree surface is not visited while the old views' targets are found. Compare their tree order (or an old
+    // root layer's stack) with the surface's node instead of treating every old target as above it.
+    if v.tree_surface {
+      match (tree, v.island, island) {
+        (Some(t), Some(h), Some(o)) if !t.drawn_later(o.id, h) => continue
+        (Some(t), Some(h), None) => {
+          let layer = layers.iter().find_first(fn(k) { j >= k.0 && j < k.1 })
+          match layer {
+            Some(k) if k.2 >= t.stack_of(h) => ()
+            _ => continue
+          }
+        }
+        _ => ()
+      }
+    }
     let r = match island {
       Some(o) => {
         let (at_x, at_y, on, _) = old_hits_moved(c, o, tree)
@@ -1205,6 +1326,18 @@ fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
   if said != v.told_covers {
     v.told_covers = said
     h_view_tell(v.id, 4, said)
+  }
+}
+
+///|
+/// A frame of the tree alone may move a button over an unchanged native surface. The surface's own layer cannot be
+/// redrawn alone, but its covers must still be told in that frame, using the old frame's published targets. This holds
+/// for a surface in an old view too.
+fn Ctx::sync_native_covers(self : Ctx) -> Unit {
+  for v in open_views {
+    if !v.closed && v.island is Some(_) && v.told_shown {
+      v.tell_covers(self, framed=true)
+    }
   }
 }
 
@@ -1387,20 +1520,19 @@ fn NativeView::take_site(self : NativeView) -> Unit {
     match (try Some(@json.parse(st)) catch { _ => None }) {
       Some(Object(m)) => {
         let flag = fn(k : String) { m.get(k) is Some(True) }
-        let was = (v.path, v.can_back, v.can_forward, v.loading, v.title)
-        match m.get("path") {
-          Some(String(p)) if p != "" => v.path = p
-          _ => ()
+        let was = @signals.untracked(fn() { v.page.get() })
+        let path = match m.get("path") {
+          Some(String(p)) if p != "" => p
+          _ => was.0
         }
         v.keeps_cookies = flag("cookies")
-        v.can_back = flag("back")
-        v.can_forward = flag("forward")
-        v.loading = flag("loading")
-        match m.get("title") {
-          Some(String(t)) => v.title = t
-          _ => ()
+        let title = match m.get("title") {
+          Some(String(t)) => t
+          _ => was.4
         }
-        if was != (v.path, v.can_back, v.can_forward, v.loading, v.title) {
+        let now = (path, flag("back"), flag("forward"), flag("loading"), title)
+        v.page.set(now)
+        if was != now {
           g().read_changed("view \{v.id}'s page (where it is, its title, whether it loads)")
         }
       }
